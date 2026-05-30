@@ -7,6 +7,7 @@ import type { BacktestRequest, Period, Benchmark } from "@/types";
 import GrowthChart from "@/components/charts/GrowthChart";
 import DrawdownChart from "@/components/charts/DrawdownChart";
 import MetricTooltip from "@/components/ui/MetricTooltip";
+import ScoreCard from "@/components/ui/ScoreCard";
 import { AllocationPie, MonthlyReturnsChart, CorrelationHeatmap } from "@/components/charts";
 import MonteCarloPanel from "@/components/ui/MonteCarloPanel";
 
@@ -258,6 +259,7 @@ export default function HomePage() {
                 <div className="p-6">
                   {activeTab==="overview" && (
                     <div className="space-y-4">
+                      {data.score && <ScoreCard score={data.score as any} locale={locale} />}
                       {[
                         {key:"performance", cards:[
                           {label:t("metrics.totalReturn"), value:fmtPctSigned(data.portfolio.total_return), color:returnColor(data.portfolio.total_return), metric:"totalReturn", locale},
@@ -339,6 +341,7 @@ export default function HomePage() {
                   )}
                   {activeTab==="correlation" && (
                     <div className="space-y-4">
+
                       <p className="text-sm text-slate-500">{t("correlation.description")}</p>
                       <CorrelationHeatmap data={data.correlation}/>
                     </div>

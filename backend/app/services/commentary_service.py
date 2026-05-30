@@ -276,3 +276,91 @@ def _drawdown(mdd: float, t: dict) -> str:
     elif mdd_pct < 50: severity = "severe"
     else: severity = "extreme"
     return t["drawdown"].format(mdd=mdd_pct, severity=t["dd_severity"][severity], context=t["dd_context"][severity])
+
+
+def compute_portfolio_score(
+    portfolio,
+    benchmark,
+    avg_correlation: float,
+    n_assets: int,
+) -> dict:
+    scores = {}
+    cagr_pct = portfolio.cagr * 100
+    if cagr_pct > 20: scores["performance"] = 25
+    elif cagr_pct > 15: scores["performance"] = 22
+    elif cagr_pct > 10: scores["performance"] = 18
+    elif cagr_pct > 5: scores["performance"] = 13
+    elif cagr_pct > 0: scores["performance"] = 8
+    else: scores["performance"] = 2
+    if benchmark.excess_return > 0.02: scores["performance"] = min(25, scores["performance"] + 3)
+    vol = portfolio.annualized_volatility * 100
+    mdd = abs(portfolio.max_drawdown) * 100
+    risk_score = 25
+    if vol > 30: risk_score -= 12
+    elif vol > 20: risk_score -= 7
+    elif vol > 15: risk_score -= 3
+    if mdd > 50: risk_score -= 10
+    elif mdd > 30: risk_score -= 6
+    elif mdd > 20: risk_score -= 3
+    scores["risk"] = max(0, risk_score)
+    s = portfolio.sharpe_ratio
+    if s > 2: scores["risk_adjusted"] = 25
+    elif s > 1.5: scores["risk_adjusted"] = 22
+    elif s > 1: scores["risk_adjusted"] = 18
+    elif s > 0.5: scores["risk_adjusted"] = 13
+    elif s > 0: scores["risk_adjusted"] = 7
+    else: scores["risk_adjusted"] = 2
+    div_score = 25
+    if avg_correlation > 0.80: div_score -= 15
+    elif avg_correlation > 0.60: div_score -= 10
+    elif avg_correlation > 0.40: div_score -= 5
+    if n_assets == 1: div_score -= 10
+    elif n_assets == 2: div_score -= 5
+    elif n_assets >= 5: div_score = min(25, div_score + 3)
+    scores["diversification"] = max(0, div_score)
+    global_score = sum(scores.values())
+    vol_pct = portfolio.annualized_volatility * 100
+    mdd_pct = abs(portfolio.max_drawdown) * 100
+    if vol_pct < 8 and mdd_pct < 10:
+        profile = "Défensif"; profile_en = "Defensive"; profile_emoji = "🛡️"
+        profile_desc = "Portefeuille très peu risqué, priorité à la préservation du capital."
+        profile_desc_en = "Very low-risk portfolio, capital preservation priority."
+    elif vol_pct < 12 and mdd_pct < 20:
+        profile = "Modéré"; profile_en = "Moderate"; profile_emoji = "⚖️"
+        profile_desc = "Équilibre rendement/risque raisonnable. Convient à la majorité des investisseurs."
+        profile_desc_en = "Reasonable risk/return balance. Suitable for most investors."
+    elif vol_pct < 18 and mdd_pct < 35:
+        profile = "Équilibré"; profile_en = "Balanced"; profile_emoji = "📊"
+        profile_desc = "Portefeuille dynamique avec exposition actions significative. Horizon 5 ans minimum."
+        profile_desc_en = "Dynamic portfolio with significant equity exposure. Minimum 5-year horizon."
+    elif vol_pct < 25 and mdd_pct < 50:
+        profile = "Dynamique"; profile_en = "Dynamic"; profile_emoji = "🚀"
+        profile_desc = "Forte exposition aux actifs risqués. Potentiel élevé mais drawdowns importants."
+        profile_desc_en = "High exposure to risky assets. High potential but significant drawdowns."
+    else:
+        profile = "Agressif"; profile_en = "Aggressive"; profile_emoji = "⚡"
+        profile_desc = "Portefeuille spéculatif. Réservé aux investisseurs expérimentés."
+        profile_desc_en = "Speculative portfolio. For experienced investors only."
+    if global_score >= 80:
+        synthesis = f"Excellent portefeuille {profile.lower()} — performance solide, risque maîtrisé et bonne diversification."
+        synthesis_en = f"Excellent {profile_en.lower()} portfolio — solid performance, controlled risk and good diversification."
+    elif global_score >= 65:
+        synthesis = f"Bon portefeuille {profile.lower()} avec des points d'amélioration identifiables."
+        synthesis_en = f"Good {profile_en.lower()} portfolio with identifiable improvement areas."
+    elif global_score >= 50:
+        synthesis = f"Portefeuille {profile.lower()} correct mais des ajustements amélioreraient le profil risque/rendement."
+        synthesis_en = f"{profile_en} portfolio acceptable but adjustments could improve the risk/return profile."
+    else:
+        synthesis = f"Portefeuille {profile.lower()} présentant des faiblesses — revoir l'allocation."
+        synthesis_en = f"{profile_en} portfolio with significant weaknesses — review allocation."
+    return {
+        "global_score": global_score,
+        "scores": scores,
+        "profile": profile,
+        "profile_en": profile_en,
+        "profile_emoji": profile_emoji,
+        "profile_desc": profile_desc,
+        "profile_desc_en": profile_desc_en,
+        "synthesis": synthesis,
+        "synthesis_en": synthesis_en,
+    }

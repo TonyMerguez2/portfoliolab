@@ -30,7 +30,7 @@ from app.services.data_service import (
     compute_returns,
     BENCHMARK_NAMES,
 )
-from app.services.commentary_service import generate_commentary
+from app.services.commentary_service import generate_commentary, compute_portfolio_score
 from app.utils import finance as fin
 
 logger = logging.getLogger(__name__)
@@ -202,6 +202,12 @@ def run_backtest(req: BacktestRequest) -> BacktestResponse:
         drawdown_series=drawdown_pts,
         monthly_returns=monthly_ret_pts,
         correlation=corr_matrix,
+        score=compute_portfolio_score(
+            portfolio=portfolio_metrics,
+            benchmark=benchmark_comparison,
+            avg_correlation=avg_corr,
+            n_assets=len(asset_tickers),
+        ),
         commentary=commentary,
     )
 
