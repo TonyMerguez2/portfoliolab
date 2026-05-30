@@ -6,6 +6,7 @@ import { fmtDate, fmtPctSigned, fmtPct, fmtRatio, returnColor, sharpeColor } fro
 import type { BacktestRequest, Period, Benchmark } from "@/types";
 import GrowthChart from "@/components/charts/GrowthChart";
 import DrawdownChart from "@/components/charts/DrawdownChart";
+import MetricTooltip from "@/components/ui/MetricTooltip";
 import { AllocationPie, MonthlyReturnsChart, CorrelationHeatmap } from "@/components/charts";
 import MonteCarloPanel from "@/components/ui/MonteCarloPanel";
 
@@ -28,10 +29,10 @@ const DEFAULT_ASSETS = [
 const TABS = ["overview","charts","assets","correlation","commentary","projections"] as const;
 type Tab = typeof TABS[number];
 
-function MetricCard({ label, value, sub, color="text-slate-900", tooltip }: { label:string; value:string; sub?:string; color?:string; tooltip?:string }) {
+function MetricCard({ label, value, sub, color="text-slate-900", tooltip, metric, locale }: { label:string; value:string; sub?:string; color?:string; tooltip?:string; metric?:string; locale?:string }) {
   return (
     <div className="bg-slate-50 rounded-xl p-4 border border-slate-100 hover:border-slate-200 transition-colors" title={tooltip}>
-      <p className="text-xs font-medium text-slate-500 mb-1">{label}</p>
+      <div className="flex items-center gap-0.5 mb-1"><p className="text-xs font-medium text-slate-500">{label}</p>{metric && locale && <MetricTooltip metric={metric} lang={locale} />}</div>
       <p className={`text-xl font-bold tabular-nums ${color}`}>{value}</p>
       {sub && <p className="text-xs text-slate-400 mt-0.5">{sub}</p>}
     </div>
@@ -259,19 +260,19 @@ export default function HomePage() {
                     <div className="space-y-4">
                       {[
                         {key:"performance", cards:[
-                          {label:t("metrics.totalReturn"), value:fmtPctSigned(data.portfolio.total_return), color:returnColor(data.portfolio.total_return)},
-                          {label:t("metrics.cagr"), value:fmtPctSigned(data.portfolio.cagr), sub:t("metrics.cagrSub"), color:returnColor(data.portfolio.cagr)},
+                          {label:t("metrics.totalReturn"), value:fmtPctSigned(data.portfolio.total_return), color:returnColor(data.portfolio.total_return), metric:"totalReturn", locale},
+                          {label:t("metrics.cagr"), value:fmtPctSigned(data.portfolio.cagr), sub:t("metrics.cagrSub"), color:returnColor(data.portfolio.cagr), metric:"cagr", locale},
                           {label:t("metrics.vsBenchmark"), value:fmtPctSigned(data.benchmark.excess_return), sub:`vs. ${data.benchmark.name}`, color:returnColor(data.benchmark.excess_return)},
                         ]},
                         {key:"risk", cards:[
-                          {label:t("metrics.volatility"), value:fmtPct(data.portfolio.annualized_volatility), sub:t("metrics.volatilitySub")},
-                          {label:t("metrics.maxDrawdown"), value:fmtPctSigned(data.portfolio.max_drawdown), color:"text-red-500"},
-                          {label:t("metrics.var95"), value:fmtPctSigned(data.portfolio.var_95_historical), sub:t("metrics.var95Sub"), color:"text-orange-500"},
+                          {label:t("metrics.volatility"), value:fmtPct(data.portfolio.annualized_volatility), sub:t("metrics.volatilitySub"), metric:"volatility", locale},
+                          {label:t("metrics.maxDrawdown"), value:fmtPctSigned(data.portfolio.max_drawdown), color:"text-red-500", metric:"maxDrawdown", locale},
+                          {label:t("metrics.var95"), value:fmtPctSigned(data.portfolio.var_95_historical), sub:t("metrics.var95Sub"), color:"text-orange-500", metric:"var95", locale},
                         ]},
                         {key:"riskAdjusted", cards:[
-                          {label:t("metrics.sharpe"), value:fmtRatio(data.portfolio.sharpe_ratio), color:sharpeColor(data.portfolio.sharpe_ratio)},
-                          {label:t("metrics.sortino"), value:fmtRatio(data.portfolio.sortino_ratio), color:sharpeColor(data.portfolio.sortino_ratio)},
-                          {label:t("metrics.calmar"), value:fmtRatio(data.portfolio.calmar_ratio)},
+                          {label:t("metrics.sharpe"), value:fmtRatio(data.portfolio.sharpe_ratio), color:sharpeColor(data.portfolio.sharpe_ratio), metric:"sharpe", locale},
+                          {label:t("metrics.sortino"), value:fmtRatio(data.portfolio.sortino_ratio), color:sharpeColor(data.portfolio.sortino_ratio), metric:"sortino", locale},
+                          {label:t("metrics.calmar"), value:fmtRatio(data.portfolio.calmar_ratio), metric:"calmar", locale},
                         ]},
                         {key:"statistics", cards:[
                           {label:t("metrics.bestDay"), value:fmtPctSigned(data.portfolio.best_day), color:"text-emerald-600"},
