@@ -1,6 +1,6 @@
 "use client";
-import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { useState, useEffect, Suspense } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useBacktest } from "@/hooks/useBacktest";
 import { useTranslation, LOCALE_LABELS, type Locale } from "@/hooks/useTranslation";
 import { fmtDate, fmtPctSigned, fmtPct, fmtRatio, returnColor, sharpeColor } from "@/lib/format";
@@ -36,16 +36,31 @@ function MetricCard({ label, value, sub, color="text-slate-900", metric, locale 
   );
 }
 
-export default function DashboardPage() {
+function DashboardContent() {
   const { data, isLoading, error, run } = useBacktest();
   const { t, locale, setLocale } = useTranslation();
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [activeTab, setActiveTab] = useState<Tab>("overview");
-  const [assets, setAssets] = useState(DEFAULT_ASSETS);
   const [period, setPeriod] = useState<Period>("5y");
   const [benchmark, setBenchmark] = useState<Benchmark>("^GSPC");
   const [riskFreeRate, setRiskFreeRate] = useState(3.5);
   const [showTickerHelp, setShowTickerHelp] = useState(false);
+
+  const getInitialAssets = () => {
+    try {
+      const raw = searchParams.get("assets");
+      if (raw) {
+        const parsed = JSON.parse(decodeURIComponent(raw));
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          return parsed.map((a: any) => ({ ticker: a.ticker, weight: a.weight }));
+        }
+      }
+    } catch {}
+    return DEFAULT_ASSETS;
+  };
+
+  const [assets, setAssets] = useState(getInitialAssets);
 
   const totalWeight = assets.reduce((s,a) => s+(a.weight||0), 0);
   const isBalanced = Math.abs(totalWeight-100) < 0.01;
@@ -74,11 +89,10 @@ export default function DashboardPage() {
 
   return (
     <div className="min-h-screen bg-slate-50">
-      {/* Nav */}
       <header className="bg-white border-b border-slate-200 sticky top-0 z-10">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 h-14 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <button onClick={() => router.push("/")} className="flex items-center gap-2 hover:opacity-80 transition-opacity">
+            <button onClick={() => router.push("/build")} className="flex items-center gap-2 hover:opacity-80 transition-opacity">
               <div className="w-7 h-7 bg-indigo-600 rounded-lg flex items-center justify-center">
                 <svg className="w-4 h-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"/>
@@ -87,20 +101,24 @@ export default function DashboardPage() {
               <span className="font-bold text-slate-900 text-base tracking-tight">Quantfolio</span>
             </button>
             <span className="text-slate-300">|</span>
-            <span className="text-xs text-slate-400 hidden sm:block">{t("nav.subtitle")}</span>
+            <span className="text-xs text-slate-400 hidden sm:block">Analyse</span>
           </div>
-          <select value={locale} onChange={e => setLocale(e.target.value as Locale)}
-            className="text-xs border border-slate-200 rounded-lg px-2 py-1.5 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500">
-            {(Object.entries(LOCALE_LABELS) as [Locale,string][]).map(([v,l]) => (
-              <option key={v} value={v}>{l}</option>
-            ))}
-          </select>
+          <div className="flex items-center gap-3">
+            <button onClick={() => router.push("/build")} className="text-xs text-slate-500 hover:text-indigo-600 border border-slate-200 hover:border-indigo-300 px-3 py-1.5 rounded-lg transition-colors">
+              ← Modifier le portefeuille
+            </button>
+            <select value={locale} onChange={e => setLocale(e.target.value as Locale)}
+              className="text-xs border border-slate-200 rounded-lg px-2 py-1.5 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500">
+              {(Object.entries(LOCALE_LABELS) as [Locale,string][]).map(([v,l]) => (
+                <option key={v} value={v}>{l}</option>
+              ))}
+            </select>
+          </div>
         </div>
       </header>
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 py-8">
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* Builder */}
           <aside className="lg:col-span-1 space-y-4">
             <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
               <div className="flex items-center justify-between mb-6">
@@ -135,47 +153,17 @@ export default function DashboardPage() {
                 ))}
               </div>
               <div className="flex items-center justify-between mb-2">
-                <div className="flex items-center gap-3">
-                  <button onClick={addAsset} disabled={assets.length>=20}
-                    className="flex items-center gap-1.5 text-sm text-indigo-600 hover:text-indigo-800 disabled:opacity-40">
-                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4"/>
-                    </svg>
-                    {t("builder.addAsset")}
-                  </button>
-                  <button onClick={() => setShowTickerHelp(p => !p)} className="text-xs text-slate-400 hover:text-slate-600 underline underline-offset-2">
-                    {t("tickerHelp.title")}
-                  </button>
-                </div>
+                <button onClick={addAsset} disabled={assets.length>=20}
+                  className="flex items-center gap-1.5 text-sm text-indigo-600 hover:text-indigo-800 disabled:opacity-40">
+                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4"/>
+                  </svg>
+                  {t("builder.addAsset")}
+                </button>
                 <span className={`text-sm font-semibold tabular-nums ${isBalanced?"text-emerald-600":totalWeight>100?"text-red-500":"text-amber-500"}`}>
                   {totalWeight.toFixed(1)}% / 100%
                 </span>
               </div>
-              {showTickerHelp && (
-                <div className="mb-4 p-3 bg-indigo-50 border border-indigo-100 rounded-xl">
-                  <div className="grid grid-cols-2 gap-1">
-                    {[
-                      {ticker:"^GSPC",labelKey:"tickerHelp.sp500"},
-                      {ticker:"CW8.PA",labelKey:"tickerHelp.msciWorld"},
-                      {ticker:"^NDX",labelKey:"tickerHelp.nasdaq"},
-                      {ticker:"^FCHI",labelKey:"tickerHelp.cac40"},
-                      {ticker:"^STOXX50E",labelKey:"tickerHelp.eurostoxx"},
-                      {ticker:"BTC-USD",labelKey:"tickerHelp.bitcoin"},
-                      {ticker:"AAPL",labelKey:"tickerHelp.apple"},
-                    ].map(({ticker,labelKey}) => (
-                      <button key={ticker} onClick={() => {
-                        const empty = assets.findIndex(a => !a.ticker);
-                        if (empty>=0) updateAsset(empty,"ticker",ticker);
-                        else setAssets(p => [...p, {ticker, weight:0}]);
-                        setShowTickerHelp(false);
-                      }} className="flex items-center gap-2 text-xs p-1.5 rounded-lg hover:bg-indigo-100 transition-colors text-left">
-                        <span className="font-mono font-bold text-indigo-700 w-20 flex-shrink-0">{ticker}</span>
-                        <span className="text-slate-500">{t(labelKey)}</span>
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              )}
               <div className="w-full h-1.5 bg-slate-100 rounded-full mb-6 overflow-hidden">
                 <div className={`h-full rounded-full transition-all ${isBalanced?"bg-emerald-500":totalWeight>100?"bg-red-400":"bg-amber-400"}`}
                   style={{width:`${Math.min(totalWeight,100)}%`}}/>
@@ -224,16 +212,10 @@ export default function DashboardPage() {
                     <span>{label}</span><span className="font-medium text-slate-700">{value}</span>
                   </div>
                 ))}
-                {data.tickers_failed.length>0 && (
-                  <div className="mt-3 p-2 bg-amber-50 border border-amber-200 rounded-lg text-xs text-amber-700">
-                    ⚠ {t("meta.failedTickers")}: {data.tickers_failed.join(", ")}
-                  </div>
-                )}
               </div>
             )}
           </aside>
 
-          {/* Results */}
           <div className="lg:col-span-2">
             {error && <div className="bg-red-50 border border-red-200 rounded-2xl p-4 text-red-700 text-sm mb-4"><strong>Error: </strong>{error}</div>}
             {isLoading && !data && (
@@ -256,10 +238,7 @@ export default function DashboardPage() {
             )}
             {data && (
               <div className="space-y-4">
-                {/* Score card en premier */}
                 {data.score && <ScoreCard score={data.score as any} locale={locale}/>}
-
-                {/* Tabs */}
                 <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
                   <div className="flex border-b border-slate-200 overflow-x-auto">
                     {TABS.map(tab => (
@@ -383,5 +362,13 @@ export default function DashboardPage() {
         </div>
       </main>
     </div>
+  );
+}
+
+export default function DashboardPage() {
+  return (
+    <Suspense fallback={<div className="min-h-screen bg-slate-50 flex items-center justify-center"><div className="w-8 h-8 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin"/></div>}>
+      <DashboardContent/>
+    </Suspense>
   );
 }

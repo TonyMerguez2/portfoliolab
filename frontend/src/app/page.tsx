@@ -116,7 +116,7 @@ export default function LandingPage() {
             </div>
             <span className="font-bold text-slate-900 text-base tracking-tight">Quantfolio</span>
           </div>
-          <button onClick={() => router.push("/dashboard")}
+          <button onClick={() => router.push("/build")}
             className="bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold px-4 py-2 rounded-lg transition-colors">
             Commencer gratuitement
           </button>
@@ -136,7 +136,7 @@ export default function LandingPage() {
           Backtesting, analyse du risque, simulations Monte Carlo, objectifs financiers et pédagogie intégrée — le tout gratuitement.
         </p>
         <div className="flex items-center justify-center gap-4">
-          <button onClick={() => router.push("/dashboard")}
+          <button onClick={() => router.push("/build")}
             className="bg-indigo-600 hover:bg-indigo-700 text-white font-semibold px-8 py-3.5 rounded-xl text-base transition-colors shadow-lg shadow-indigo-200 flex items-center gap-2">
             <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z"/>
@@ -198,7 +198,7 @@ export default function LandingPage() {
         <div className="max-w-2xl mx-auto px-6">
           <h2 className="text-3xl font-bold text-slate-900 mb-4">Prêt à analyser votre portefeuille ?</h2>
           <p className="text-slate-500 mb-8">Gratuit, sans inscription, sans publicité.</p>
-          <button onClick={() => router.push("/dashboard")}
+          <button onClick={() => router.push("/build")}
             className="bg-indigo-600 hover:bg-indigo-700 text-white font-semibold px-8 py-4 rounded-xl text-base transition-colors shadow-lg shadow-indigo-200">
             Commencer maintenant →
           </button>

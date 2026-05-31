@@ -121,3 +121,44 @@ async def monte_carlo_advanced(
     except Exception as e:
         logger.error(f"Advanced Monte Carlo error: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail="Simulation failed")
+
+
+@router.get("/search", tags=["Search"])
+async def search_assets(q: str = "") -> dict:
+    """Search assets via Yahoo Finance."""
+    if not q or len(q) < 1:
+        return {"results": []}
+    try:
+        import httpx
+        url = f"https://query1.finance.yahoo.com/v1/finance/search?q={q}&lang=en-US&region=US&quotesCount=8&newsCount=0&listsCount=0"
+        headers = {"User-Agent": "Mozilla/5.0"}
+        async with httpx.AsyncClient(timeout=5.0) as client:
+            resp = await client.get(url, headers=headers)
+            data = resp.json()
+        quotes = data.get("quotes", [])
+        results = []
+        for q in quotes:
+            qtype = q.get("quoteType", "")
+            if qtype not in ("EQUITY", "ETF", "CRYPTOCURRENCY", "MUTUALFUND"):
+                continue
+            exchange = q.get("exchange", "")
+            ALLOWED = {"NMS","NYQ","NGM","PCX","PAR","GER","FRA","LSE","AMS","EBS","TOR","ASX","STO","MIL","BRU"}
+            if qtype in ("ETF","EQUITY") and exchange not in ALLOWED:
+                continue
+            score = 0
+            if exchange in ("NMS", "NYQ", "NGM", "PCX"): score = 3
+            elif exchange in ("PAR", "GER", "FRA", "LSE", "AMS", "EBS"): score = 2
+            elif exchange in ("TOR", "ASX", "STO", "MIL", "BRU"): score = 1
+            results.append({
+                "ticker": q.get("symbol", ""),
+                "name": q.get("longname") or q.get("shortname", ""),
+                "type": qtype,
+                "exchange": exchange,
+                "score": score,
+            })
+        results.sort(key=lambda x: x["score"], reverse=True)
+        for r in results: r.pop("score", None)
+        return {"results": results[:8]}
+    except Exception as e:
+        logger.error(f"Search error: {e}")
+        return {"results": []}
