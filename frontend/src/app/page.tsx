@@ -109,11 +109,7 @@ export default function LandingPage() {
       <nav className="bg-white border-b border-slate-200 sticky top-0 z-10">
         <div className="max-w-6xl mx-auto px-6 h-14 flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <div className="w-7 h-7 bg-indigo-600 rounded-lg flex items-center justify-center">
-              <svg className="w-4 h-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"/>
-              </svg>
-            </div>
+            <img src="/logo.png" alt="Quantfolio" className="w-8 h-8 object-contain"/>
             <span className="font-bold text-slate-900 text-base tracking-tight">Quantfolio</span>
           </div>
           <button onClick={() => router.push("/build")}

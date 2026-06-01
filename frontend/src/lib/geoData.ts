@@ -1,6 +1,5 @@
-// Pays d'origine des actions (pas la place de cotation)
+// STOCK_COUNTRY — Pays d'origine des actions
 export const STOCK_COUNTRY: Record<string, string> = {
-  // 🇺🇸 États-Unis
   "AAPL": "🇺🇸 États-Unis", "MSFT": "🇺🇸 États-Unis", "NVDA": "🇺🇸 États-Unis",
   "GOOGL": "🇺🇸 États-Unis", "GOOG": "🇺🇸 États-Unis", "AMZN": "🇺🇸 États-Unis",
   "META": "🇺🇸 États-Unis", "TSLA": "🇺🇸 États-Unis", "BRK-B": "🇺🇸 États-Unis",
@@ -16,110 +15,87 @@ export const STOCK_COUNTRY: Record<string, string> = {
   "BAC": "🇺🇸 États-Unis", "WFC": "🇺🇸 États-Unis", "GS": "🇺🇸 États-Unis",
   "MS": "🇺🇸 États-Unis", "C": "🇺🇸 États-Unis", "UBER": "🇺🇸 États-Unis",
   "ABNB": "🇺🇸 États-Unis", "COIN": "🇺🇸 États-Unis", "PLTR": "🇺🇸 États-Unis",
-  "SHOP": "🇨🇦 Canada",
-
-  // 🇫🇷 France
+  "NOW": "🇺🇸 États-Unis", "QCOM": "🇺🇸 États-Unis", "TXN": "🇺🇸 États-Unis",
+  "LMT": "🇺🇸 États-Unis", "BA": "🇺🇸 États-Unis", "CAT": "🇺🇸 États-Unis",
+  "UPS": "🇺🇸 États-Unis", "PFE": "🇺🇸 États-Unis", "LLY": "🇺🇸 États-Unis",
+  "AMGN": "🇺🇸 États-Unis", "GILD": "🇺🇸 États-Unis", "SHOP": "🇨🇦 Canada",
   "MC.PA": "🇫🇷 France", "OR.PA": "🇫🇷 France", "TTE.PA": "🇫🇷 France",
-  "TTE": "🇫🇷 France", "TOT": "🇫🇷 France",
-  "SAN.PA": "🇫🇷 France", "AI.PA": "🇫🇷 France", "BNP.PA": "🇫🇷 France",
-  "ACA.PA": "🇫🇷 France", "GLE.PA": "🇫🇷 France", "CAP.PA": "🇫🇷 France",
-  "DSY.PA": "🇫🇷 France", "KER.PA": "🇫🇷 France", "RMS.PA": "🇫🇷 France",
-  "SGO.PA": "🇫🇷 France", "VIE.PA": "🇫🇷 France", "EN.PA": "🇫🇷 France",
-  "CS.PA": "🇫🇷 France", "SAF.PA": "🇫🇷 France", "AIR.PA": "🇫🇷 France",
-
-  // 🇩🇪 Allemagne
-  "SAP": "🇩🇪 Allemagne", "SAP.DE": "🇩🇪 Allemagne",
-  "VOW3.DE": "🇩🇪 Allemagne", "BMW.DE": "🇩🇪 Allemagne",
-  "SIE.DE": "🇩🇪 Allemagne", "BAYN.DE": "🇩🇪 Allemagne",
-  "ALV.DE": "🇩🇪 Allemagne", "DTE.DE": "🇩🇪 Allemagne",
-  "MBG.DE": "🇩🇪 Allemagne", "ADS.DE": "🇩🇪 Allemagne",
-  "DHER.DE": "🇩🇪 Allemagne", "HEI.DE": "🇩🇪 Allemagne",
-
-  // 🇳🇱 Pays-Bas
-  "ASML": "🇳🇱 Pays-Bas", "ASML.AS": "🇳🇱 Pays-Bas",
-  "PHIA.AS": "🇳🇱 Pays-Bas", "HEIA.AS": "🇳🇱 Pays-Bas",
-  "INGA.AS": "🇳🇱 Pays-Bas", "NN.AS": "🇳🇱 Pays-Bas",
-
-  // 🇨🇭 Suisse
-  "NESN.SW": "🇨🇭 Suisse", "ROG.SW": "🇨🇭 Suisse",
-  "NOVN.SW": "🇨🇭 Suisse", "UHR.SW": "🇨🇭 Suisse",
-  "ZURN.SW": "🇨🇭 Suisse", "UBSG.SW": "🇨🇭 Suisse",
-
-  // 🇬🇧 Royaume-Uni
-  "SHEL.L": "🇬🇧 Royaume-Uni", "AZN.L": "🇬🇧 Royaume-Uni",
-  "HSBA.L": "🇬🇧 Royaume-Uni", "BP.L": "🇬🇧 Royaume-Uni",
-  "GSK.L": "🇬🇧 Royaume-Uni", "ULVR.L": "🇬🇧 Royaume-Uni",
-  "AZN": "🇬🇧 Royaume-Uni", "BP": "🇬🇧 Royaume-Uni",
-
-  // 🇯🇵 Japon
-  "7203.T": "🇯🇵 Japon", "6758.T": "🇯🇵 Japon",
-  "9984.T": "🇯🇵 Japon", "7974.T": "🇯🇵 Japon",
-  "6861.T": "🇯🇵 Japon", "8306.T": "🇯🇵 Japon",
-
-  // 🇰🇷 Corée du Sud
+  "TTE": "🇫🇷 France", "TOT": "🇫🇷 France", "SAN.PA": "🇫🇷 France",
+  "AI.PA": "🇫🇷 France", "BNP.PA": "🇫🇷 France", "ACA.PA": "🇫🇷 France",
+  "GLE.PA": "🇫🇷 France", "CAP.PA": "🇫🇷 France", "DSY.PA": "🇫🇷 France",
+  "KER.PA": "🇫🇷 France", "RMS.PA": "🇫🇷 France", "SGO.PA": "🇫🇷 France",
+  "VIE.PA": "🇫🇷 France", "SAF.PA": "🇫🇷 France", "AIR.PA": "🇫🇷 France",
+  "STM.PA": "🇫🇷 France", "STM": "🇫🇷 France", "PUB.PA": "🇫🇷 France",
+  "RI.PA": "🇫🇷 France", "ORA.PA": "🇫🇷 France", "ENGI.PA": "🇫🇷 France",
+  "SAP": "🇩🇪 Allemagne", "SAP.DE": "🇩🇪 Allemagne", "VOW3.DE": "🇩🇪 Allemagne",
+  "BMW.DE": "🇩🇪 Allemagne", "SIE.DE": "🇩🇪 Allemagne", "BAYN.DE": "🇩🇪 Allemagne",
+  "ALV.DE": "🇩🇪 Allemagne", "DTE.DE": "🇩🇪 Allemagne", "MBG.DE": "🇩🇪 Allemagne",
+  "ADS.DE": "🇩🇪 Allemagne", "RWE.DE": "🇩🇪 Allemagne", "IFX.DE": "🇩🇪 Allemagne",
+  "ASML": "🇳🇱 Pays-Bas", "ASML.AS": "🇳🇱 Pays-Bas", "PHIA.AS": "🇳🇱 Pays-Bas",
+  "HEIA.AS": "🇳🇱 Pays-Bas", "ADYEN.AS": "🇳🇱 Pays-Bas", "INGA.AS": "🇳🇱 Pays-Bas",
+  "NESN.SW": "🇨🇭 Suisse", "ROG.SW": "🇨🇭 Suisse", "NOVN.SW": "🇨🇭 Suisse",
+  "UBSG.SW": "🇨🇭 Suisse", "ZURN.SW": "🇨🇭 Suisse", "ABBN.SW": "🇨🇭 Suisse",
+  "SHEL.L": "🇬🇧 Royaume-Uni", "AZN.L": "🇬🇧 Royaume-Uni", "HSBA.L": "🇬🇧 Royaume-Uni",
+  "BP.L": "🇬🇧 Royaume-Uni", "GSK.L": "🇬🇧 Royaume-Uni", "ULVR.L": "🇬🇧 Royaume-Uni",
+  "AZN": "🇬🇧 Royaume-Uni", "BP": "🇬🇧 Royaume-Uni", "RIO.L": "🇬🇧 Royaume-Uni",
+  "7203.T": "🇯🇵 Japon", "6758.T": "🇯🇵 Japon", "9984.T": "🇯🇵 Japon",
+  "7974.T": "🇯🇵 Japon", "6861.T": "🇯🇵 Japon", "8306.T": "🇯🇵 Japon",
   "005930.KS": "🇰🇷 Corée du Sud", "000660.KS": "🇰🇷 Corée du Sud",
-
-  // 🇨🇳 Chine
-  "BABA": "🇨🇳 Chine", "9988.HK": "🇨🇳 Chine",
-  "TCEHY": "🇨🇳 Chine", "JD": "🇨🇳 Chine",
-  "BIDU": "🇨🇳 Chine", "NIO": "🇨🇳 Chine",
-
-  // 🇩🇰 Danemark
+  "BABA": "🇨🇳 Chine", "9988.HK": "🇨🇳 Chine", "TCEHY": "🇨🇳 Chine",
+  "0700.HK": "🇨🇳 Chine", "JD": "🇨🇳 Chine", "BIDU": "🇨🇳 Chine",
+  "NIO": "🇨🇳 Chine", "PDD": "🇨🇳 Chine", "NTES": "🇨🇳 Chine",
+  "2330.TW": "🇹🇼 Taïwan", "TSM": "🇹🇼 Taïwan",
+  "INFY": "🇮🇳 Inde", "WIT": "🇮🇳 Inde", "HDB": "🇮🇳 Inde",
   "NOVO-B.CO": "🇩🇰 Danemark", "NVO": "🇩🇰 Danemark",
-
-  // 🇸🇪 Suède
-  "VOLV-B.ST": "🇸🇪 Suède", "ERIC-B.ST": "🇸🇪 Suède",
-
-  // 🇨🇦 Canada
-  "RY.TO": "🇨🇦 Canada", "TD.TO": "🇨🇦 Canada", "CNR.TO": "🇨🇦 Canada",
-
-  // 🇦🇺 Australie
-  "BHP.AX": "🇦🇺 Australie", "CBA.AX": "🇦🇺 Australie",
+  "VOLV-B.ST": "🇸🇪 Suède", "ERIC-B.ST": "🇸🇪 Suède", "HM-B.ST": "🇸🇪 Suède",
+  "RY.TO": "🇨🇦 Canada", "TD.TO": "🇨🇦 Canada", "ENB.TO": "🇨🇦 Canada",
+  "BHP.AX": "🇦🇺 Australie", "CBA.AX": "🇦🇺 Australie", "CSL.AX": "🇦🇺 Australie",
+  "VALE": "🇧🇷 Brésil", "ITUB": "🇧🇷 Brésil", "PBR": "🇧🇷 Brésil",
+  "ITX.MC": "🇪🇸 Espagne", "SAN.MC": "🇪🇸 Espagne", "BBVA.MC": "🇪🇸 Espagne",
+  "ENI.MI": "🇮🇹 Italie", "ENEL.MI": "🇮🇹 Italie", "ISP.MI": "🇮🇹 Italie",
 };
 
-// Composition géographique des ETF majeurs
 export const ETF_GEO: Record<string, Record<string, number>> = {
-  // MSCI World
   "CW8.PA":   { "🇺🇸 États-Unis": 71, "🇯🇵 Japon": 6, "🇬🇧 Royaume-Uni": 4, "🇫🇷 France": 3, "🇨🇦 Canada": 3, "🇩🇪 Allemagne": 2, "🇨🇭 Suisse": 2, "🌍 Autres": 9 },
   "EWLD.PA":  { "🇺🇸 États-Unis": 71, "🇯🇵 Japon": 6, "🇬🇧 Royaume-Uni": 4, "🇫🇷 France": 3, "🇨🇦 Canada": 3, "🇩🇪 Allemagne": 2, "🇨🇭 Suisse": 2, "🌍 Autres": 9 },
   "WPEA.PA":  { "🇺🇸 États-Unis": 71, "🇯🇵 Japon": 6, "🇬🇧 Royaume-Uni": 4, "🇫🇷 France": 3, "🇨🇦 Canada": 3, "🇩🇪 Allemagne": 2, "🇨🇭 Suisse": 2, "🌍 Autres": 9 },
   "IWDA.AS":  { "🇺🇸 États-Unis": 71, "🇯🇵 Japon": 6, "🇬🇧 Royaume-Uni": 4, "🇫🇷 France": 3, "🇨🇦 Canada": 3, "🇩🇪 Allemagne": 2, "🇨🇭 Suisse": 2, "🌍 Autres": 9 },
   "VWCE.DE":  { "🇺🇸 États-Unis": 62, "🇯🇵 Japon": 5, "🇬🇧 Royaume-Uni": 4, "🇨🇳 Chine": 4, "🇫🇷 France": 3, "🇨🇦 Canada": 3, "🌍 Autres": 19 },
   "URTH":     { "🇺🇸 États-Unis": 71, "🇯🇵 Japon": 6, "🇬🇧 Royaume-Uni": 4, "🇫🇷 France": 3, "🇨🇦 Canada": 3, "🇩🇪 Allemagne": 2, "🌍 Autres": 11 },
-
-  // S&P 500 / US
+  "ACWI":     { "🇺🇸 États-Unis": 62, "🇯🇵 Japon": 5, "🇬🇧 Royaume-Uni": 4, "🇨🇳 Chine": 4, "🇫🇷 France": 3, "🌍 Autres": 22 },
   "SPY":      { "🇺🇸 États-Unis": 100 },
   "QQQ":      { "🇺🇸 États-Unis": 100 },
   "IVV":      { "🇺🇸 États-Unis": 100 },
   "VOO":      { "🇺🇸 États-Unis": 100 },
   "VTI":      { "🇺🇸 États-Unis": 100 },
-
-  // Marchés émergents
+  "IWM":      { "🇺🇸 États-Unis": 100 },
+  "MEUD.PA":  { "🇬🇧 Royaume-Uni": 22, "🇨🇭 Suisse": 14, "🇫🇷 France": 13, "🇩🇪 Allemagne": 13, "🇸🇪 Suède": 6, "🇳🇱 Pays-Bas": 6, "🇩🇰 Danemark": 5, "🌍 Autres Europe": 21 },
+  "EXSA.DE":  { "🇬🇧 Royaume-Uni": 22, "🇨🇭 Suisse": 14, "🇫🇷 France": 13, "🇩🇪 Allemagne": 13, "🇸🇪 Suède": 6, "🇳🇱 Pays-Bas": 6, "🇩🇰 Danemark": 5, "🌍 Autres Europe": 21 },
+  "EWG":      { "🇩🇪 Allemagne": 100 },
+  "EWQ":      { "🇫🇷 France": 100 },
+  "EWU":      { "🇬🇧 Royaume-Uni": 100 },
+  "EWJ":      { "🇯🇵 Japon": 100 },
+  "JPAN.PA":  { "🇯🇵 Japon": 100 },
   "ESEA.PA":  { "🇨🇳 Chine": 27, "🇮🇳 Inde": 18, "🇧🇷 Brésil": 6, "🇸🇦 Arabie Saoudite": 5, "🇹🇼 Taïwan": 15, "🇰🇷 Corée du Sud": 12, "🌍 Autres": 17 },
   "PAEEM.PA": { "🇨🇳 Chine": 27, "🇮🇳 Inde": 18, "🇧🇷 Brésil": 6, "🇸🇦 Arabie Saoudite": 5, "🇹🇼 Taïwan": 15, "🇰🇷 Corée du Sud": 12, "🌍 Autres": 17 },
   "EEM":      { "🇨🇳 Chine": 27, "🇮🇳 Inde": 18, "🇧🇷 Brésil": 6, "🇹🇼 Taïwan": 15, "🇰🇷 Corée du Sud": 12, "🌍 Autres": 22 },
   "VWO":      { "🇨🇳 Chine": 27, "🇮🇳 Inde": 18, "🇧🇷 Brésil": 6, "🇹🇼 Taïwan": 15, "🇰🇷 Corée du Sud": 12, "🌍 Autres": 22 },
-
-  // Asie ex-Japon
   "AAXJ":     { "🇨🇳 Chine": 30, "🇮🇳 Inde": 19, "🇹🇼 Taïwan": 17, "🇰🇷 Corée du Sud": 13, "🇭🇰 Hong Kong": 6, "🌍 Autres": 15 },
   "AEJ.PA":   { "🇨🇳 Chine": 28, "🇮🇳 Inde": 19, "🇹🇼 Taïwan": 16, "🇰🇷 Corée du Sud": 13, "🇦🇺 Australie": 8, "🌍 Autres": 16 },
-
-  // STOXX Europe 600
-  "MEUD.PA":  { "🇬🇧 Royaume-Uni": 22, "🇨🇭 Suisse": 14, "🇫🇷 France": 13, "🇩🇪 Allemagne": 13, "🇸🇪 Suède": 6, "🇳🇱 Pays-Bas": 6, "🇩🇰 Danemark": 5, "🌍 Autres Europe": 21 },
-  "EXSA.DE":  { "🇬🇧 Royaume-Uni": 22, "🇨🇭 Suisse": 14, "🇫🇷 France": 13, "🇩🇪 Allemagne": 13, "🇸🇪 Suède": 6, "🇳🇱 Pays-Bas": 6, "🇩🇰 Danemark": 5, "🌍 Autres Europe": 21 },
-
-  // Obligations
-  "TLT":      { "🇺🇸 États-Unis": 100 },
-  "AGG":      { "🇺🇸 États-Unis": 100 },
-
-  // Or
+  "MCHI":     { "🇨🇳 Chine": 100 },
+  "FXI":      { "🇨🇳 Chine": 100 },
+  "INDA":     { "🇮🇳 Inde": 100 },
+  "EWY":      { "🇰🇷 Corée du Sud": 100 },
+  "EWT":      { "🇹🇼 Taïwan": 100 },
+  "EWS":      { "🇸🇬 Singapour": 100 },
   "GLD":      { "🥇 Or (mondial)": 100 },
   "IAU":      { "🥇 Or (mondial)": 100 },
+  "TLT":      { "🇺🇸 États-Unis": 100 },
+  "AGG":      { "🇺🇸 États-Unis": 100 },
 };
 
-// Crypto = décentralisé
 export const CRYPTO_TICKERS = new Set([
   "BTC-USD", "ETH-USD", "SOL-USD", "BNB-USD", "ADA-USD",
   "XRP-USD", "DOT-USD", "AVAX-USD", "MATIC-USD", "LINK-USD",
-  "DOGE-USD", "LTC-USD", "UNI-USD", "ATOM-USD",
+  "DOGE-USD", "LTC-USD", "UNI-USD", "ATOM-USD", "SHIB-USD",
 ]);
