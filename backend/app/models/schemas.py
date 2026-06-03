@@ -163,6 +163,7 @@ class BacktestResponse(BaseModel):
     # Time series
     portfolio_growth: list[TimeSeriesPoint]    # normalized to 10,000
     benchmark_growth: list[TimeSeriesPoint] = []
+    benchmark_drawdown_series: list[dict] = []
     drawdown_series: list[DrawdownPoint]
     monthly_returns: list[MonthlyReturn]
 

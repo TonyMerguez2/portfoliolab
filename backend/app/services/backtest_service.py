@@ -118,6 +118,14 @@ def run_backtest(req: BacktestRequest) -> BacktestResponse:
     else:
         benchmark_comparison = None
 
+    # ── 6b. Benchmark drawdown ────────────────────────────────────────
+    bm_drawdown_pts = []
+    if benchmark_ret is not None:
+        bm_growth = fin.growth_curve(benchmark_ret)
+        bm_rolling_max = bm_growth.cummax()
+        bm_dd = ((bm_growth - bm_rolling_max) / bm_rolling_max * 100)
+        bm_drawdown_pts = [{"date": str(d.date()), "drawdown": round(float(v), 4)} for d, v in bm_dd.items()]
+
     # ── 7. Time series ─────────────────────────────────────────────
     portfolio_growth = fin.growth_curve(portfolio_ret)
     portfolio_growth_pts = [
@@ -197,6 +205,7 @@ def run_backtest(req: BacktestRequest) -> BacktestResponse:
             returns_df=returns_all[asset_tickers],
             risk_free_rate=req.risk_free_rate,
         ),
+        benchmark_drawdown_series=bm_drawdown_pts,
         risk_contribution=fin.compute_risk_contribution(
             returns_df=returns_all[asset_tickers],
             weights=[next(a.weight for a in req.assets if a.ticker == t) / 100 for t in asset_tickers],

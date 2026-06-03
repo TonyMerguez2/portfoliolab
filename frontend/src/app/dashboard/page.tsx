@@ -302,6 +302,7 @@ function DashboardContent() {
                         benchmarkName={data.benchmark?.name || ""}
                         portfolioLabel="Portefeuille"
                         drawdownData={data.drawdown_series}
+                        benchmarkDrawdownData={(data as any).benchmark_drawdown_series}
                       />
                     )}
                     {chartView === "drawdown" && <DrawdownChart data={data.drawdown_series}/>}

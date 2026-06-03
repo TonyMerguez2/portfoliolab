@@ -10,9 +10,10 @@ interface Props {
   benchmarkName: string;
   portfolioLabel: string;
   drawdownData?: { date: string; drawdown: number }[];
+  benchmarkDrawdownData?: { date: string; drawdown: number }[];
 }
 
-export default function GrowthChart({ portfolioData, benchmarkData, benchmarkName, portfolioLabel, drawdownData }: Props) {
+export default function GrowthChart({ portfolioData, benchmarkData, benchmarkName, portfolioLabel, drawdownData, benchmarkDrawdownData }: Props) {
   const [hoverData, setHoverData] = useState<{value: number, bValue: number, date: string} | null>(null);
   const [periodFilter, setPeriodFilter] = useState<"1M"|"3M"|"6M"|"1A"|"3A"|"Max">("Max");
   const sampled = (() => {
@@ -23,6 +24,21 @@ export default function GrowthChart({ portfolioData, benchmarkData, benchmarkNam
     if (arr.length <= 300) return arr;
     const step = Math.ceil(arr.length / 300);
     return arr.filter((_,i) => i % step === 0 || i === arr.length - 1);
+  })();
+
+  const bmDrawdownSampled = (() => {
+    if (!benchmarkDrawdownData || benchmarkDrawdownData.length === 0) return [];
+    const months = {"1M":1,"3M":3,"6M":6,"1A":12,"3A":36,"Max":0}[periodFilter] || 0;
+    let filtered = benchmarkDrawdownData;
+    if (periodFilter !== "Max") {
+      const cutoff = new Date();
+      cutoff.setMonth(cutoff.getMonth() - months);
+      const cutoffStr = cutoff.toISOString().slice(0,10);
+      filtered = benchmarkDrawdownData.filter(p => p.date >= cutoffStr);
+    }
+    if (filtered.length <= 300) return filtered;
+    const step = Math.ceil(filtered.length / 300);
+    return filtered.filter((_,i) => i % step === 0 || i === filtered.length - 1);
   })();
 
   const drawdownSampled = (() => {
@@ -84,11 +100,11 @@ export default function GrowthChart({ portfolioData, benchmarkData, benchmarkNam
         <p className="text-slate-400 font-medium mb-2">{new Date(label).toLocaleDateString('fr-FR', {day:'numeric', month:'short', year:'numeric'})}</p>
         {ptfVal && <div className="flex justify-between mb-1">
           <span className="text-indigo-500 font-semibold">Portefeuille</span>
-          <span className="font-bold text-slate-800">{formatYAxis(ptfVal)}</span>
+          <span className="font-bold text-indigo-500">{formatYAxis(ptfVal)}</span>
         </div>}
         {bmVal && <div className="flex justify-between mb-2">
-          <span className="text-slate-400">{benchmarkName}</span>
-          <span className="font-medium text-slate-600">{formatYAxis(bmVal)}</span>
+          <span className="text-amber-500 font-semibold">{benchmarkName}</span>
+          <span className="font-bold text-amber-500">{formatYAxis(bmVal)}</span>
         </div>}
         {ptfPct !== null && <div className="flex justify-between border-t border-slate-100 pt-2 mb-1">
           <span className="text-slate-500">Perf. ptf</span>
@@ -96,7 +112,7 @@ export default function GrowthChart({ portfolioData, benchmarkData, benchmarkNam
         </div>}
         {bmPct !== null && <div className="flex justify-between mb-1">
           <span className="text-slate-500">Perf. idx</span>
-          <span className={`font-medium ${bmPct >= 0 ? "text-slate-500" : "text-red-400"}`}>{bmPct >= 0 ? "+" : ""}{bmPct.toFixed(1)}%</span>
+          <span className={`font-medium ${bmPct >= 0 ? "text-emerald-500" : "text-red-400"}`}>{bmPct >= 0 ? "+" : ""}{bmPct.toFixed(1)}%</span>
         </div>}
         {alpha !== null && <div className="flex justify-between mb-1">
           <span className="text-slate-500">Alpha</span>
@@ -118,6 +134,17 @@ export default function GrowthChart({ portfolioData, benchmarkData, benchmarkNam
       </div>
     );
   };
+
+  const mergedDrawdown = (() => {
+    if (!drawdownSampled.length) return drawdownSampled;
+    if (!bmDrawdownSampled.length) return drawdownSampled;
+    const bmMap: Record<string, number> = {};
+    bmDrawdownSampled.forEach(p => { bmMap[p.date] = p.drawdown; });
+    return drawdownSampled.map(p => ({
+      ...p,
+      bmDrawdown: bmMap[p.date] !== undefined ? bmMap[p.date] : null,
+    }));
+  })();
 
   const displayedData = (() => {
     const months = {"1M":1,"3M":3,"6M":6,"1A":12,"3A":36,"Max":0}[periodFilter] || 0;
@@ -207,6 +234,10 @@ export default function GrowthChart({ portfolioData, benchmarkData, benchmarkNam
                 <stop offset="5%" stopColor="#4f46e5" stopOpacity={0.25}/>
                 <stop offset="95%" stopColor="#4f46e5" stopOpacity={0}/>
               </linearGradient>
+              <linearGradient id="benchmarkGradient" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="5%" stopColor="#f59e0b" stopOpacity={0.15}/>
+                <stop offset="95%" stopColor="#f59e0b" stopOpacity={0}/>
+              </linearGradient>
             </defs>
             <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9"/>
             <XAxis dataKey="date" tickFormatter={formatDate} tick={{fontSize:10,fill:"#94a3b8"}} tickLine={false} axisLine={false} interval="preserveStartEnd"/>
@@ -217,7 +248,7 @@ export default function GrowthChart({ portfolioData, benchmarkData, benchmarkNam
             <ReferenceLine y={10000} stroke="#e2e8f0" strokeDasharray="4 4"/>
 
             <Area type="monotone" dataKey={portfolioLabel} stroke="#4f46e5" strokeWidth={2} fill="url(#portfolioGradient)" dot={false} activeDot={{r:4}}/>
-            {benchmarkData.length > 0 && <Line type="monotone" dataKey={benchmarkName} stroke="#94a3b8" strokeWidth={1.5} dot={false} strokeDasharray="4 4" activeDot={{r:3}}/>}
+            {benchmarkData.length > 0 && <Area type="monotone" dataKey={benchmarkName} stroke="#f59e0b" strokeWidth={2} fill="url(#benchmarkGradient)" dot={false} activeDot={{r:4}}/>}
           </ComposedChart>
         </ResponsiveContainer>
       </div>
@@ -243,6 +274,8 @@ export default function GrowthChart({ portfolioData, benchmarkData, benchmarkNam
               <Tooltip content={() => null} wrapperStyle={{display:"none"}}/>
               <ReferenceLine y={0} stroke="#64748b" strokeWidth={1.5}/>
               <Area type="monotone" dataKey="drawdown" stroke="#ef4444" fill="#fee2e2" strokeWidth={1.5} dot={false}/>
+
+
               {(() => {
                 if (!drawdownSampled.length) return null;
                 const minPoint = drawdownSampled.reduce((min, p) => p.drawdown < min.drawdown ? p : min, drawdownSampled[0]);
@@ -266,6 +299,7 @@ export default function GrowthChart({ portfolioData, benchmarkData, benchmarkNam
           </ResponsiveContainer>
         </div>
       )}
+
     </div>
   );
 }
