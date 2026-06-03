@@ -1,5 +1,5 @@
 "use client";
-import { ResponsiveContainer, LineChart, AreaChart, Area, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ReferenceLine, Synchronizer } from "recharts";
+import { ResponsiveContainer, LineChart, AreaChart, ComposedChart, Area, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ReferenceLine, ReferenceDot } from "recharts";
 
 interface DataPoint { date: string; [key: string]: number | string; }
 
@@ -69,16 +69,22 @@ export default function GrowthChart({ portfolioData, benchmarkData, benchmarkNam
       {/* Performance chart — 75% height */}
       <div style={{flex: "0 0 75%"}}>
         <ResponsiveContainer width="100%" height="100%">
-          <LineChart data={sampled} margin={{top:4,right:16,bottom:0,left:8}} syncId="chart">
+          <ComposedChart data={sampled} margin={{top:4,right:16,bottom:0,left:8}} syncId="chart">
+            <defs>
+              <linearGradient id="portfolioGradient" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="5%" stopColor="#4f46e5" stopOpacity={0.25}/>
+                <stop offset="95%" stopColor="#4f46e5" stopOpacity={0}/>
+              </linearGradient>
+            </defs>
             <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9"/>
             <XAxis dataKey="date" tickFormatter={formatDate} tick={{fontSize:10,fill:"#94a3b8"}} tickLine={false} axisLine={false} interval="preserveStartEnd" hide={!!drawdownSampled.length}/>
             <YAxis tickFormatter={formatYAxis} tick={{fontSize:10,fill:"#94a3b8"}} tickLine={false} axisLine={false} width={48}/>
             <Tooltip content={<CustomTooltip/>}/>
             <Legend formatter={(value) => <span className="text-xs text-slate-500">{value}</span>}/>
             <ReferenceLine y={10000} stroke="#e2e8f0" strokeDasharray="4 4"/>
-            <Line type="monotone" dataKey={portfolioLabel} stroke="#4f46e5" strokeWidth={2} dot={false} activeDot={{r:4}}/>
+            <Area type="monotone" dataKey={portfolioLabel} stroke="#4f46e5" strokeWidth={2} fill="url(#portfolioGradient)" dot={false} activeDot={{r:4}}/>
             <Line type="monotone" dataKey={benchmarkName} stroke="#94a3b8" strokeWidth={1.5} dot={false} strokeDasharray="4 4" activeDot={{r:3}}/>
-          </LineChart>
+          </ComposedChart>
         </ResponsiveContainer>
       </div>
 
@@ -91,7 +97,28 @@ export default function GrowthChart({ portfolioData, benchmarkData, benchmarkNam
               <XAxis dataKey="date" tickFormatter={formatDate} tick={{fontSize:10,fill:"#94a3b8"}} tickLine={false} axisLine={false} interval="preserveStartEnd"/>
               <YAxis tickFormatter={(v) => `${v.toFixed(1)}%`} tick={{fontSize:10,fill:"#94a3b8"}} tickLine={false} axisLine={false} width={48} domain={["auto", 0]}/>
               <Tooltip content={<DrawdownTooltip/>}/>
-              <Area type="monotone" dataKey="drawdown" stroke="#ef4444" fill="#fee2e2" strokeWidth={1} dot={false}/>
+              <ReferenceLine y={0} stroke="#64748b" strokeWidth={1.5}/>
+              <Area type="monotone" dataKey="drawdown" stroke="#ef4444" fill="#fee2e2" strokeWidth={1.5} dot={false}/>
+              {(() => {
+                if (!drawdownSampled.length) return null;
+                const minPoint = drawdownSampled.reduce((min, p) => p.drawdown < min.drawdown ? p : min, drawdownSampled[0]);
+                const CustomDot = (props: any) => {
+                  const { cx, cy } = props;
+                  if (!cx || !cy) return null;
+                  return (
+                    <g>
+                      <circle cx={cx} cy={cy} r={12} fill="#ef4444" opacity={0.15}>
+                        <animate attributeName="r" values="8;14;8" dur="2s" repeatCount="indefinite"/>
+                        <animate attributeName="opacity" values="0.3;0.05;0.3" dur="2s" repeatCount="indefinite"/>
+                      </circle>
+                      <circle cx={cx} cy={cy} r={5} fill="#ef4444" stroke="white" strokeWidth={2}/>
+                      <rect x={cx+10} y={cy-11} width={62} height={22} rx={5} fill="white" stroke="#ef4444" strokeWidth={1.5}/>
+                      <text x={cx+41} y={cy+5} textAnchor="middle" fill="#dc2626" fontSize={12} fontWeight="bold">{minPoint.drawdown.toFixed(1)}%</text>
+                    </g>
+                  );
+                };
+                return <ReferenceDot x={minPoint.date} y={minPoint.drawdown} r={0} shape={<CustomDot/>}/>;
+              })()}
             </AreaChart>
           </ResponsiveContainer>
         </div>
