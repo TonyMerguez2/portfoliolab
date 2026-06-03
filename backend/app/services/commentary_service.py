@@ -210,7 +210,7 @@ def generate_commentary(
         "overall": _overall(portfolio, t),
         "risk": _risk(portfolio, t),
         "diversification": _diversification(n_assets, avg_correlation, t),
-        "vs_benchmark": _vs_benchmark(portfolio, benchmark, t),
+        "vs_benchmark": _vs_benchmark(portfolio, benchmark, t) if benchmark else "",
         "sharpe_interpretation": _sharpe(portfolio.sharpe_ratio, t),
         "drawdown_note": _drawdown(portfolio.max_drawdown, t),
     }
@@ -247,6 +247,7 @@ def _diversification(n_assets: int, avg_corr: float, t: dict) -> str:
 
 
 def _vs_benchmark(p: PerformanceMetrics, b: BenchmarkComparison, t: dict) -> str:
+    if b is None: return t("commentary.noBenchmark", default="Aucun benchmark sélectionné.")
     excess = b.excess_return * 100
     sign = "+" if excess >= 0 else ""
     direction = t["outperformed"] if excess >= 0 else t["underperformed"]
@@ -292,7 +293,7 @@ def compute_portfolio_score(
     elif cagr_pct > 5: scores["performance"] = 13
     elif cagr_pct > 0: scores["performance"] = 8
     else: scores["performance"] = 2
-    if benchmark.excess_return > 0.02: scores["performance"] = min(25, scores["performance"] + 3)
+    if benchmark and benchmark and benchmark.excess_return > 0.02: scores["performance"] = min(25, scores["performance"] + 3)
     vol = portfolio.annualized_volatility * 100
     mdd = abs(portfolio.max_drawdown) * 100
     risk_score = 25

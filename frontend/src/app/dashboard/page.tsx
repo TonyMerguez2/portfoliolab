@@ -50,7 +50,7 @@ function DashboardContent() {
   const searchParams = useSearchParams();
   const [chartView, setChartView] = useState<ChartView>("performance");
   const [period, setPeriod] = useState<Period>("5y");
-  const [benchmark, setBenchmark] = useState<Benchmark>("^GSPC");
+  const [benchmark, setBenchmark] = useState<string>("^GSPC");
   const [riskFreeRate, setRiskFreeRate] = useState(3.5);
   const [dark, setDark] = useState(false);
   const [openSection, setOpenSection] = useState<string|null>("performance");
@@ -89,7 +89,7 @@ function DashboardContent() {
   };
   const handleSubmit = () => {
     if (!isBalanced || assets.some(a => !a.ticker)) return;
-    run({ assets: assets.filter(a => a.ticker), period, benchmark, risk_free_rate: riskFreeRate/100, lang: locale });
+    run({ assets: assets.filter(a => a.ticker), period, benchmark: benchmark === "none" ? null : benchmark as Benchmark, risk_free_rate: riskFreeRate/100, lang: locale });
   };
 
   const bg = dark ? "bg-[#0f1117]" : "bg-slate-50";
@@ -99,7 +99,8 @@ function DashboardContent() {
   const borderColor = dark ? "border-slate-700" : "border-slate-200";
 
   const periods: Period[] = ["1y","3y","5y","10y","max"];
-  const benchmarks: {value:Benchmark, label:string}[] = [
+  const benchmarks: {value:Benchmark|"none", label:string}[] = [
+    {value:"none", label:"Sans benchmark"},
     {value:"^GSPC", label:"S&P 500"},
     {value:"URTH", label:"MSCI World"},
     {value:"^NDX", label:"Nasdaq"},
@@ -297,8 +298,8 @@ function DashboardContent() {
                     {chartView === "performance" && (
                       <GrowthChart
                         portfolioData={data.portfolio_growth}
-                        benchmarkData={data.benchmark_growth}
-                        benchmarkName={data.benchmark.name}
+                        benchmarkData={data.benchmark_growth || []}
+                        benchmarkName={data.benchmark?.name || ""}
                         portfolioLabel="Portefeuille"
                         drawdownData={data.drawdown_series}
                       />
@@ -378,7 +379,7 @@ function DashboardContent() {
                         <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 pt-4">
                           <MetricCard label="Rendement Total" value={fmtPctSigned(data.portfolio.total_return)} color={returnColor(data.portfolio.total_return)} metric="totalReturn" locale={locale} dark={dark}/>
                           <MetricCard label="TCAC" value={fmtPctSigned(data.portfolio.cagr)} sub="annualisé" color={returnColor(data.portfolio.cagr)} metric="cagr" locale={locale} dark={dark}/>
-                          <MetricCard label="vs Benchmark" value={fmtPctSigned(data.benchmark.excess_return)} sub={`vs ${data.benchmark.name}`} color={returnColor(data.benchmark.excess_return)} dark={dark}/>
+                          {data.benchmark && <MetricCard label="vs Benchmark" value={fmtPctSigned(data.benchmark.excess_return)} sub={`vs ${data.benchmark.name}`} color={returnColor(data.benchmark.excess_return)} dark={dark}/>}
                           <MetricCard label="Meilleure journée" value={fmtPctSigned(data.portfolio.best_day)} color="text-emerald-500" dark={dark}/>
                           <MetricCard label="Pire journée" value={fmtPctSigned(data.portfolio.worst_day)} color="text-red-500" dark={dark}/>
                           <MetricCard label="Jours positifs" value={fmtPct(data.portfolio.positive_days_pct)} dark={dark}/>

@@ -17,7 +17,7 @@ export interface AssetInput {
 export interface BacktestRequest {
   assets: AssetInput[];
   period: Period;
-  benchmark: Benchmark;
+  benchmark?: Benchmark | null;
   risk_free_rate: number;
   lang?: string;
 }

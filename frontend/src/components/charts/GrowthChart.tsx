@@ -13,7 +13,7 @@ interface Props {
 }
 
 export default function GrowthChart({ portfolioData, benchmarkData, benchmarkName, portfolioLabel, drawdownData }: Props) {
-  const [hoverData, setHoverData] = useState<{value: number, date: string} | null>(null);
+  const [hoverData, setHoverData] = useState<{value: number, bValue: number, date: string} | null>(null);
   const [periodFilter, setPeriodFilter] = useState<"1M"|"3M"|"6M"|"1A"|"3A"|"Max">("Max");
   const sampled = (() => {
     const merged: Record<string, DataPoint> = {};
@@ -107,16 +107,42 @@ export default function GrowthChart({ portfolioData, benchmarkData, benchmarkNam
           <span className={`text-2xl font-bold tabular-nums ${perfPct >= 0 ? "text-emerald-500" : "text-red-500"}`}>
             {perfPct >= 0 ? "+" : ""}{perfPct.toFixed(1)}%
           </span>
+          {hoverData && (() => {
+            const bPoint = benchmarkData.find(p => p.date === hoverData.date);
+            if (!bPoint) return null;
+            const firstDisplayedDate = displayedData.length > 0 ? displayedData[0].date as string : null;
+            const bInitialPoint = firstDisplayedDate ? benchmarkData.find(p => p.date >= firstDisplayedDate) : benchmarkData[0];
+            if (!bInitialPoint) return null;
+            const bInitial = bInitialPoint.value;
+            const bPct = ((bPoint.value - bInitial) / bInitial) * 100;
+            return (
+              <span className="text-sm font-medium text-slate-400 tabular-nums">
+                vs {benchmarkName} {bPct >= 0 ? "+" : ""}{bPct.toFixed(1)}%
+              </span>
+            );
+          })()}
           {hoverData && (
             <span className="text-xs text-slate-400">{new Date(hoverData.date).toLocaleDateString("fr-FR", {month:"short", year:"numeric"})}</span>
           )}
         </div>
         <div className="flex gap-1">
-          {(["1M","3M","6M","1A","3A","Max"] as const).map(p => (
-            <button key={p} onClick={() => setPeriodFilter(p)}
-              className={`text-xs px-2 py-0.5 rounded-lg transition-colors ${periodFilter === p ? "bg-indigo-600 text-white" : "text-slate-400 hover:text-slate-600 border border-slate-200 hover:border-slate-300"}`}>
-              {p}
-            </button>
+          {([
+            {key:"1M", label:"1M", title:"Dernier mois"},
+            {key:"3M", label:"3M", title:"3 derniers mois"},
+            {key:"6M", label:"6M", title:"6 derniers mois"},
+            {key:"1A", label:"1A", title:"Dernière année"},
+            {key:"3A", label:"3A", title:"3 dernières années"},
+            {key:"Max", label:"Max", title:"Période complète"},
+          ] as const).map(({key, label, title}) => (
+            <div key={key} className="relative group">
+              <button onClick={() => setPeriodFilter(key)}
+                className={`text-xs px-2 py-0.5 rounded-lg transition-colors ${periodFilter === key ? "bg-indigo-600 text-white" : "text-slate-400 hover:text-slate-600 border border-slate-200 hover:border-slate-300"}`}>
+                {label}
+              </button>
+              <div className="absolute bottom-full right-0 mb-1 px-2 py-1 bg-slate-800 text-white text-xs rounded whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-50">
+                {title}
+              </div>
+            </div>
           ))}
         </div>
       </div>
@@ -142,11 +168,12 @@ export default function GrowthChart({ portfolioData, benchmarkData, benchmarkNam
             <XAxis dataKey="date" tickFormatter={formatDate} tick={{fontSize:10,fill:"#94a3b8"}} tickLine={false} axisLine={false} interval="preserveStartEnd" hide={!!drawdownSampled.length}/>
             <YAxis tickFormatter={formatYAxis} tick={{fontSize:10,fill:"#94a3b8"}} tickLine={false} axisLine={false} width={48}/>
             <Tooltip content={<CustomTooltip/>} wrapperStyle={{zIndex: 10}}/>
-            <Legend formatter={(value) => <span className="text-xs text-slate-500">{value}</span>}/>
+
+            <Legend formatter={(value) => <span className="text-xs text-slate-400">{value}</span>} iconSize={8}/>
             <ReferenceLine y={10000} stroke="#e2e8f0" strokeDasharray="4 4"/>
 
             <Area type="monotone" dataKey={portfolioLabel} stroke="#4f46e5" strokeWidth={2} fill="url(#portfolioGradient)" dot={false} activeDot={{r:4}}/>
-            <Line type="monotone" dataKey={benchmarkName} stroke="#94a3b8" strokeWidth={1.5} dot={false} strokeDasharray="4 4" activeDot={{r:3}}/>
+            {benchmarkData.length > 0 && <Line type="monotone" dataKey={benchmarkName} stroke="#94a3b8" strokeWidth={1.5} dot={false} strokeDasharray="4 4" activeDot={{r:3}}/>}
           </ComposedChart>
         </ResponsiveContainer>
       </div>
@@ -160,7 +187,7 @@ export default function GrowthChart({ portfolioData, benchmarkData, benchmarkNam
                 if (e?.activeLabel) {
                   const match = sampled.find((p:any) => p.date === e.activeLabel);
                   if (match && match[portfolioLabel]) {
-                    setHoverData({value: match[portfolioLabel] as number, date: e.activeLabel});
+                    setHoverData({value: match[portfolioLabel] as number, bValue: match[benchmarkName] as number || 0, date: e.activeLabel});
                   }
                 }
               }}

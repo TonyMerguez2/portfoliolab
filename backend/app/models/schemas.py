@@ -42,7 +42,7 @@ class AssetInput(BaseModel):
 class BacktestRequest(BaseModel):
     assets: list[AssetInput] = Field(..., min_length=1, max_length=20)
     period: Period = Period.FIVE_YEARS
-    benchmark: Benchmark = Benchmark.SP500
+    benchmark: Benchmark | None = Benchmark.SP500
     risk_free_rate: float = Field(
         default=0.035, ge=0, le=0.20,
         description="Annual risk-free rate (e.g. 0.035 = 3.5%)"
@@ -158,11 +158,11 @@ class BacktestResponse(BaseModel):
     assets: list[AssetMetrics]
 
     # Benchmark
-    benchmark: BenchmarkComparison
+    benchmark: BenchmarkComparison | None = None
 
     # Time series
     portfolio_growth: list[TimeSeriesPoint]    # normalized to 10,000
-    benchmark_growth: list[TimeSeriesPoint]
+    benchmark_growth: list[TimeSeriesPoint] = []
     drawdown_series: list[DrawdownPoint]
     monthly_returns: list[MonthlyReturn]
 

@@ -46,10 +46,9 @@ def run_backtest(req: BacktestRequest) -> BacktestResponse:
     4. Build response
     """
     # ── 1. Fetch data ──────────────────────────────────────────────
-    all_tickers = [a.ticker for a in req.assets] + [req.benchmark.value]
+    benchmark_ticker = req.benchmark.value if req.benchmark else None
+    all_tickers = [a.ticker for a in req.assets] + ([benchmark_ticker] if benchmark_ticker else [])
     prices_all, successful, failed = fetch_prices(all_tickers, req.period)
-
-    benchmark_ticker = req.benchmark.value
     asset_tickers = [t for t in [a.ticker for a in req.assets] if t in successful]
 
     if not asset_tickers:
@@ -117,19 +116,7 @@ def run_backtest(req: BacktestRequest) -> BacktestResponse:
             information_ratio=info_ratio,
         )
     else:
-        # Fallback with zeros if benchmark data unavailable
-        zero_metrics = PerformanceMetrics(
-            total_return=0, cagr=0, annualized_volatility=0,
-            max_drawdown=0, sharpe_ratio=0, sortino_ratio=0,
-            calmar_ratio=0, var_95_historical=0, var_95_parametric=0,
-            best_day=0, worst_day=0, positive_days_pct=0,
-        )
-        benchmark_comparison = BenchmarkComparison(
-            ticker=benchmark_ticker,
-            name=BENCHMARK_NAMES.get(benchmark_ticker, benchmark_ticker),
-            performance=zero_metrics,
-            excess_return=0, tracking_error=0, information_ratio=0,
-        )
+        benchmark_comparison = None
 
     # ── 7. Time series ─────────────────────────────────────────────
     portfolio_growth = fin.growth_curve(portfolio_ret)
