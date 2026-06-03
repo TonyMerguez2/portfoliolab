@@ -1,1 +1,119 @@
-{"nav":{"subtitle":"Moteur de Backtesting de Portefeuille"},"builder":{"title":"Constructeur de Portefeuille","subtitle":"Ajoutez des actifs et répartissez les poids","equalize":"Égaliser les poids","ticker":"Ticker","weight":"Poids (%)","addAsset":"Ajouter un actif","period":"Période","benchmark":"Indice de référence","riskFreeRate":"Taux sans risque","runBacktest":"Lancer le Backtest","running":"Récupération des données…","weightsError":"Les poids doivent totaliser exactement 100%","periodLabel":{"1y":"1 An","3y":"3 Ans","5y":"5 Ans","10y":"10 Ans","max":"Maximum disponible"},"benchmarkLabel":{"^GSPC":"S&P 500","URTH":"MSCI World","^NDX":"Nasdaq 100","^FCHI":"CAC 40"}},"meta":{"period":"Période","from":"Du","to":"Au","years":"ans","failedTickers":"Données indisponibles"},"tabs":{"overview":"Aperçu","charts":"Graphiques","assets":"Actifs","correlation":"Corrélation","commentary":"Commentaires","projections":"Projections"},"metrics":{"performance":"Performance","risk":"Risque","riskAdjusted":"Rendement ajusté","statistics":"Statistiques","totalReturn":"Rendement Total","cagr":"TCAC","vsBenchmark":"vs. Référence","cagrSub":"annualisé","volatility":"Volatilité","volatilitySub":"annualisée","maxDrawdown":"Drawdown Max","var95":"VaR 95%","var95Sub":"historique, quotidien","sharpe":"Ratio de Sharpe","sortino":"Ratio de Sortino","calmar":"Ratio de Calmar","bestDay":"Meilleure journée","worstDay":"Pire journée","positiveDays":"% Jours positifs"},"charts":{"growthTitle":"Croissance du portefeuille (investissement initial 10 000 €)","drawdownTitle":"Drawdown Historique","allocationTitle":"Répartition","monthlyTitle":"Rendements mensuels (24 derniers mois)","portfolio":"Portefeuille"},"assets":{"ticker":"Ticker","weight":"Poids","totalReturn":"Rendement Total","cagr":"TCAC","volatility":"Volatilité","sharpe":"Sharpe","contribution":"Contribution"},"correlation":{"description":"Corrélation de Pearson entre les rendements quotidiens."},"commentary":{"overall":"Performance Globale","risk":"Évaluation du Risque","diversification":"Diversification","vs_benchmark":"vs. Référence","sharpe_interpretation":"Ratio de Sharpe","drawdown_note":"Drawdown"},"empty":{"title":"Construisez votre portefeuille","subtitle":"Ajoutez des tickers, définissez les poids et cliquez sur Lancer le Backtest.","examples":["AAPL · Apple","CW8.PA · MSCI World","BTC-USD · Bitcoin"]},"loading":{"title":"Récupération des données…","subtitle":"Téléchargement des prix et calcul des métriques"},"tickerHelp":{"title":"Tickers courants","sp500":"S&P 500","msciWorld":"ETF MSCI World","nasdaq":"Nasdaq 100","cac40":"CAC 40","bitcoin":"Bitcoin","apple":"Apple","eurostoxx":"EuroStoxx 50"}}
+{
+  "nav": {
+    "subtitle": "Moteur de Backtesting de Portefeuille"
+  },
+  "builder": {
+    "title": "Constructeur de Portefeuille",
+    "subtitle": "Ajoutez des actifs et répartissez les poids",
+    "equalize": "Égaliser les poids",
+    "ticker": "Ticker",
+    "weight": "Poids (%)",
+    "addAsset": "Ajouter un actif",
+    "period": "Période",
+    "benchmark": "Indice de référence",
+    "riskFreeRate": "Taux sans risque",
+    "runBacktest": "Lancer le Backtest",
+    "running": "Récupération des données…",
+    "weightsError": "Les poids doivent totaliser exactement 100%",
+    "periodLabel": {
+      "1y": "1 An",
+      "3y": "3 Ans",
+      "5y": "5 Ans",
+      "10y": "10 Ans",
+      "max": "Maximum disponible"
+    },
+    "benchmarkLabel": {
+      "^GSPC": "S&P 500",
+      "URTH": "MSCI World",
+      "^NDX": "Nasdaq 100",
+      "^FCHI": "CAC 40"
+    }
+  },
+  "meta": {
+    "period": "Période",
+    "from": "Du",
+    "to": "Au",
+    "years": "ans",
+    "failedTickers": "Données indisponibles"
+  },
+  "tabs": {
+    "overview": "Aperçu",
+    "charts": "Graphiques",
+    "assets": "Actifs",
+    "correlation": "Corrélation",
+    "commentary": "Commentaires",
+    "projections": "Projections",
+    "markowitz": "Markowitz"
+  },
+  "metrics": {
+    "performance": "Performance",
+    "risk": "Risque",
+    "riskAdjusted": "Rendement ajusté",
+    "statistics": "Statistiques",
+    "totalReturn": "Rendement Total",
+    "cagr": "TCAC",
+    "vsBenchmark": "vs. Référence",
+    "cagrSub": "annualisé",
+    "volatility": "Volatilité",
+    "volatilitySub": "annualisée",
+    "maxDrawdown": "Drawdown Max",
+    "var95": "VaR 95%",
+    "var95Sub": "historique, quotidien",
+    "sharpe": "Ratio de Sharpe",
+    "sortino": "Ratio de Sortino",
+    "calmar": "Ratio de Calmar",
+    "bestDay": "Meilleure journée",
+    "worstDay": "Pire journée",
+    "positiveDays": "% Jours positifs"
+  },
+  "charts": {
+    "growthTitle": "Croissance du portefeuille (investissement initial 10 000 €)",
+    "drawdownTitle": "Drawdown Historique",
+    "allocationTitle": "Répartition",
+    "monthlyTitle": "Rendements mensuels (24 derniers mois)",
+    "portfolio": "Portefeuille"
+  },
+  "assets": {
+    "ticker": "Ticker",
+    "weight": "Poids",
+    "totalReturn": "Rendement Total",
+    "cagr": "TCAC",
+    "volatility": "Volatilité",
+    "sharpe": "Sharpe",
+    "contribution": "Contribution"
+  },
+  "correlation": {
+    "description": "Corrélation de Pearson entre les rendements quotidiens."
+  },
+  "commentary": {
+    "overall": "Performance Globale",
+    "risk": "Évaluation du Risque",
+    "diversification": "Diversification",
+    "vs_benchmark": "vs. Référence",
+    "sharpe_interpretation": "Ratio de Sharpe",
+    "drawdown_note": "Drawdown"
+  },
+  "empty": {
+    "title": "Construisez votre portefeuille",
+    "subtitle": "Ajoutez des tickers, définissez les poids et cliquez sur Lancer le Backtest.",
+    "examples": [
+      "AAPL · Apple",
+      "CW8.PA · MSCI World",
+      "BTC-USD · Bitcoin"
+    ]
+  },
+  "loading": {
+    "title": "Récupération des données…",
+    "subtitle": "Téléchargement des prix et calcul des métriques"
+  },
+  "tickerHelp": {
+    "title": "Tickers courants",
+    "sp500": "S&P 500",
+    "msciWorld": "ETF MSCI World",
+    "nasdaq": "Nasdaq 100",
+    "cac40": "CAC 40",
+    "bitcoin": "Bitcoin",
+    "apple": "Apple",
+    "eurostoxx": "EuroStoxx 50"
+  }
+}

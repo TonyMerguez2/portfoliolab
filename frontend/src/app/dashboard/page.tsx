@@ -18,7 +18,7 @@ const DEFAULT_ASSETS = [
   { ticker: "CW8.PA", weight: 40 },
 ];
 
-const TABS = ["overview","charts","assets","correlation","commentary","projections"] as const;
+const TABS = ["overview","charts","assets","correlation","markowitz","commentary","projections"] as const;
 type Tab = typeof TABS[number];
 
 function MetricCard({ label, value, sub, color="text-slate-900", metric, locale }: {
@@ -368,6 +368,91 @@ function DashboardContent() {
                         <CorrelationHeatmap data={data.correlation}/>
                       </div>
                     )}
+                    {activeTab==="markowitz" && data.markowitz && (
+                      <div className="space-y-6">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                          {/* Max Sharpe */}
+                          <div className="bg-indigo-50 border border-indigo-200 rounded-2xl p-5">
+                            <div className="flex items-center gap-2 mb-4">
+                              <span className="text-lg">🎯</span>
+                              <div>
+                                <h3 className="text-sm font-bold text-indigo-900">Portefeuille Optimal</h3>
+                                <p className="text-xs text-indigo-600">Sharpe maximum</p>
+                              </div>
+                            </div>
+                            <div className="space-y-2 mb-4">
+                              {Object.entries((data.markowitz as any).max_sharpe.weights)
+                                .sort((a:any,b:any) => b[1]-a[1])
+                                .map(([ticker, w]:any) => (
+                                <div key={ticker}>
+                                  <div className="flex justify-between text-xs mb-1">
+                                    <span className="font-mono font-bold text-indigo-700">{ticker}</span>
+                                    <span className="font-semibold">{(w*100).toFixed(1)}%</span>
+                                  </div>
+                                  <div className="w-full h-1.5 bg-indigo-100 rounded-full overflow-hidden">
+                                    <div className="h-full bg-indigo-500 rounded-full" style={{width:`${w*100}%`}}/>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                            <div className="grid grid-cols-3 gap-2 pt-3 border-t border-indigo-200">
+                              <div className="text-center">
+                                <p className="text-xs text-indigo-500">Rendement</p>
+                                <p className="text-sm font-bold text-indigo-800">{((data.markowitz as any).max_sharpe.expected_return*100).toFixed(1)}%</p>
+                              </div>
+                              <div className="text-center">
+                                <p className="text-xs text-indigo-500">Volatilité</p>
+                                <p className="text-sm font-bold text-indigo-800">{((data.markowitz as any).max_sharpe.expected_volatility*100).toFixed(1)}%</p>
+                              </div>
+                              <div className="text-center">
+                                <p className="text-xs text-indigo-500">Sharpe</p>
+                                <p className="text-sm font-bold text-indigo-800">{(data.markowitz as any).max_sharpe.sharpe_ratio.toFixed(2)}</p>
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* Min Variance */}
+                          <div className="bg-emerald-50 border border-emerald-200 rounded-2xl p-5">
+                            <div className="flex items-center gap-2 mb-4">
+                              <span className="text-lg">🛡️</span>
+                              <div>
+                                <h3 className="text-sm font-bold text-emerald-900">Portefeuille Défensif</h3>
+                                <p className="text-xs text-emerald-600">Variance minimale</p>
+                              </div>
+                            </div>
+                            <div className="space-y-2 mb-4">
+                              {Object.entries((data.markowitz as any).min_variance.weights)
+                                .sort((a:any,b:any) => b[1]-a[1])
+                                .map(([ticker, w]:any) => (
+                                <div key={ticker}>
+                                  <div className="flex justify-between text-xs mb-1">
+                                    <span className="font-mono font-bold text-emerald-700">{ticker}</span>
+                                    <span className="font-semibold">{(w*100).toFixed(1)}%</span>
+                                  </div>
+                                  <div className="w-full h-1.5 bg-emerald-100 rounded-full overflow-hidden">
+                                    <div className="h-full bg-emerald-500 rounded-full" style={{width:`${w*100}%`}}/>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                            <div className="grid grid-cols-2 gap-2 pt-3 border-t border-emerald-200">
+                              <div className="text-center">
+                                <p className="text-xs text-emerald-500">Rendement</p>
+                                <p className="text-sm font-bold text-emerald-800">{((data.markowitz as any).min_variance.expected_return*100).toFixed(1)}%</p>
+                              </div>
+                              <div className="text-center">
+                                <p className="text-xs text-emerald-500">Volatilité</p>
+                                <p className="text-sm font-bold text-emerald-800">{((data.markowitz as any).min_variance.expected_volatility*100).toFixed(1)}%</p>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                        <p className="text-xs text-slate-400 text-center">
+                          Optimisation basée sur les données historiques · Les performances passées ne préjugent pas des performances futures
+                        </p>
+                      </div>
+                    )}
+
                     {activeTab==="commentary" && (
                       <div className="space-y-3">
                         {(Object.keys(data.commentary) as (keyof typeof data.commentary)[]).map(key => (

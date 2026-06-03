@@ -583,3 +583,60 @@ def compute_risk_contribution(returns_df, weights: list[float]) -> dict:
         "portfolio_volatility": float(port_vol),
         "assets": result,
     }
+
+
+def optimize_markowitz(returns_df, risk_free_rate: float = 0.035) -> dict:
+    """
+    Markowitz mean-variance optimization.
+    Finds weights that maximize the Sharpe ratio.
+    """
+    import numpy as np
+    from scipy.optimize import minimize
+
+    n = returns_df.shape[1]
+    tickers = returns_df.columns.tolist()
+
+    mu = returns_df.mean() * 252
+    cov = returns_df.cov() * 252
+
+    def neg_sharpe(w):
+        ret = w @ mu.values
+        vol = np.sqrt(w @ cov.values @ w)
+        return -(ret - risk_free_rate) / vol
+
+    def portfolio_vol(w):
+        return np.sqrt(w @ cov.values @ w)
+
+    def portfolio_ret(w):
+        return w @ mu.values
+
+    constraints = [{"type": "eq", "fun": lambda w: np.sum(w) - 1}]
+    bounds = [(0.0, 1.0)] * n
+    w0 = np.ones(n) / n
+
+    res = minimize(neg_sharpe, w0, method="SLSQP", bounds=bounds, constraints=constraints,
+                   options={"maxiter": 1000, "ftol": 1e-9})
+
+    w_opt = res.x
+    opt_ret = portfolio_ret(w_opt)
+    opt_vol = portfolio_vol(w_opt)
+    opt_sharpe = (opt_ret - risk_free_rate) / opt_vol
+
+    res_mv = minimize(portfolio_vol, w0, method="SLSQP", bounds=bounds, constraints=constraints)
+    w_mv = res_mv.x
+    mv_ret = portfolio_ret(w_mv)
+    mv_vol = portfolio_vol(w_mv)
+
+    return {
+        "max_sharpe": {
+            "weights": {tickers[i]: round(float(w_opt[i]), 4) for i in range(n)},
+            "expected_return": round(float(opt_ret), 4),
+            "expected_volatility": round(float(opt_vol), 4),
+            "sharpe_ratio": round(float(opt_sharpe), 4),
+        },
+        "min_variance": {
+            "weights": {tickers[i]: round(float(w_mv[i]), 4) for i in range(n)},
+            "expected_return": round(float(mv_ret), 4),
+            "expected_volatility": round(float(mv_vol), 4),
+        },
+    }

@@ -202,6 +202,10 @@ def run_backtest(req: BacktestRequest) -> BacktestResponse:
         drawdown_series=drawdown_pts,
         monthly_returns=monthly_ret_pts,
         correlation=corr_matrix,
+        markowitz=fin.optimize_markowitz(
+            returns_df=returns_all[asset_tickers],
+            risk_free_rate=req.risk_free_rate,
+        ),
         risk_contribution=fin.compute_risk_contribution(
             returns_df=returns_all[asset_tickers],
             weights=[next(a.weight for a in req.assets if a.ticker == t) / 100 for t in asset_tickers],

@@ -1,1 +1,119 @@
-{"nav":{"subtitle":"Portfolio-Backtesting-Engine"},"builder":{"title":"Portfolio-Ersteller","subtitle":"Vermögenswerte hinzufügen und Gewichte festlegen","equalize":"Gewichte angleichen","ticker":"Ticker","weight":"Gewicht (%)","addAsset":"Vermögenswert hinzufügen","period":"Zeitraum","benchmark":"Benchmark","riskFreeRate":"Risikofreier Zinssatz","runBacktest":"Backtest starten","running":"Daten werden abgerufen…","weightsError":"Gewichte müssen genau 100% ergeben","periodLabel":{"1y":"1 Jahr","3y":"3 Jahre","5y":"5 Jahre","10y":"10 Jahre","max":"Maximum"},"benchmarkLabel":{"^GSPC":"S&P 500","URTH":"MSCI World","^NDX":"Nasdaq 100","^FCHI":"CAC 40"}},"meta":{"period":"Zeitraum","from":"Von","to":"Bis","years":"Jahre","failedTickers":"Nicht verfügbar"},"tabs":{"overview":"Übersicht","charts":"Diagramme","assets":"Vermögenswerte","correlation":"Korrelation","commentary":"Kommentar","projections":"Prognosen"},"metrics":{"performance":"Performance","risk":"Risiko","riskAdjusted":"Risikoadjustiert","statistics":"Statistiken","totalReturn":"Gesamtrendite","cagr":"KAGR","vsBenchmark":"vs. Benchmark","cagrSub":"annualisiert","volatility":"Volatilität","volatilitySub":"annualisiert","maxDrawdown":"Max. Drawdown","var95":"VaR 95%","var95Sub":"historisch, täglich","sharpe":"Sharpe-Ratio","sortino":"Sortino-Ratio","calmar":"Calmar-Ratio","bestDay":"Bester Tag","worstDay":"Schlechtester Tag","positiveDays":"% Positive Tage"},"charts":{"growthTitle":"Portfolio-Wachstum (Startinvestition 10.000 €)","drawdownTitle":"Historischer Drawdown","allocationTitle":"Allokation","monthlyTitle":"Monatliche Renditen (letzte 24 Monate)","portfolio":"Portfolio"},"assets":{"ticker":"Ticker","weight":"Gewicht","totalReturn":"Gesamtrendite","cagr":"KAGR","volatility":"Volatilität","sharpe":"Sharpe","contribution":"Beitrag"},"correlation":{"description":"Paarweise Pearson-Korrelation der Tagesrenditen."},"commentary":{"overall":"Gesamtperformance","risk":"Risikobewertung","diversification":"Diversifikation","vs_benchmark":"vs. Benchmark","sharpe_interpretation":"Sharpe-Ratio","drawdown_note":"Drawdown"},"empty":{"title":"Portfolio erstellen","subtitle":"Ticker hinzufügen, Gewichte festlegen und Backtest starten.","examples":["AAPL · Apple","CW8.PA · MSCI World","BTC-USD · Bitcoin"]},"loading":{"title":"Marktdaten werden abgerufen…","subtitle":"Preise werden heruntergeladen und Kennzahlen berechnet"},"tickerHelp":{"title":"Gängige Ticker","sp500":"S&P 500","msciWorld":"MSCI World ETF","nasdaq":"Nasdaq 100","cac40":"CAC 40","bitcoin":"Bitcoin","apple":"Apple","eurostoxx":"EuroStoxx 50"}}
+{
+  "nav": {
+    "subtitle": "Portfolio-Backtesting-Engine"
+  },
+  "builder": {
+    "title": "Portfolio-Ersteller",
+    "subtitle": "Vermögenswerte hinzufügen und Gewichte festlegen",
+    "equalize": "Gewichte angleichen",
+    "ticker": "Ticker",
+    "weight": "Gewicht (%)",
+    "addAsset": "Vermögenswert hinzufügen",
+    "period": "Zeitraum",
+    "benchmark": "Benchmark",
+    "riskFreeRate": "Risikofreier Zinssatz",
+    "runBacktest": "Backtest starten",
+    "running": "Daten werden abgerufen…",
+    "weightsError": "Gewichte müssen genau 100% ergeben",
+    "periodLabel": {
+      "1y": "1 Jahr",
+      "3y": "3 Jahre",
+      "5y": "5 Jahre",
+      "10y": "10 Jahre",
+      "max": "Maximum"
+    },
+    "benchmarkLabel": {
+      "^GSPC": "S&P 500",
+      "URTH": "MSCI World",
+      "^NDX": "Nasdaq 100",
+      "^FCHI": "CAC 40"
+    }
+  },
+  "meta": {
+    "period": "Zeitraum",
+    "from": "Von",
+    "to": "Bis",
+    "years": "Jahre",
+    "failedTickers": "Nicht verfügbar"
+  },
+  "tabs": {
+    "overview": "Übersicht",
+    "charts": "Diagramme",
+    "assets": "Vermögenswerte",
+    "correlation": "Korrelation",
+    "commentary": "Kommentar",
+    "projections": "Prognosen",
+    "markowitz": "Markowitz"
+  },
+  "metrics": {
+    "performance": "Performance",
+    "risk": "Risiko",
+    "riskAdjusted": "Risikoadjustiert",
+    "statistics": "Statistiken",
+    "totalReturn": "Gesamtrendite",
+    "cagr": "KAGR",
+    "vsBenchmark": "vs. Benchmark",
+    "cagrSub": "annualisiert",
+    "volatility": "Volatilität",
+    "volatilitySub": "annualisiert",
+    "maxDrawdown": "Max. Drawdown",
+    "var95": "VaR 95%",
+    "var95Sub": "historisch, täglich",
+    "sharpe": "Sharpe-Ratio",
+    "sortino": "Sortino-Ratio",
+    "calmar": "Calmar-Ratio",
+    "bestDay": "Bester Tag",
+    "worstDay": "Schlechtester Tag",
+    "positiveDays": "% Positive Tage"
+  },
+  "charts": {
+    "growthTitle": "Portfolio-Wachstum (Startinvestition 10.000 €)",
+    "drawdownTitle": "Historischer Drawdown",
+    "allocationTitle": "Allokation",
+    "monthlyTitle": "Monatliche Renditen (letzte 24 Monate)",
+    "portfolio": "Portfolio"
+  },
+  "assets": {
+    "ticker": "Ticker",
+    "weight": "Gewicht",
+    "totalReturn": "Gesamtrendite",
+    "cagr": "KAGR",
+    "volatility": "Volatilität",
+    "sharpe": "Sharpe",
+    "contribution": "Beitrag"
+  },
+  "correlation": {
+    "description": "Paarweise Pearson-Korrelation der Tagesrenditen."
+  },
+  "commentary": {
+    "overall": "Gesamtperformance",
+    "risk": "Risikobewertung",
+    "diversification": "Diversifikation",
+    "vs_benchmark": "vs. Benchmark",
+    "sharpe_interpretation": "Sharpe-Ratio",
+    "drawdown_note": "Drawdown"
+  },
+  "empty": {
+    "title": "Portfolio erstellen",
+    "subtitle": "Ticker hinzufügen, Gewichte festlegen und Backtest starten.",
+    "examples": [
+      "AAPL · Apple",
+      "CW8.PA · MSCI World",
+      "BTC-USD · Bitcoin"
+    ]
+  },
+  "loading": {
+    "title": "Marktdaten werden abgerufen…",
+    "subtitle": "Preise werden heruntergeladen und Kennzahlen berechnet"
+  },
+  "tickerHelp": {
+    "title": "Gängige Ticker",
+    "sp500": "S&P 500",
+    "msciWorld": "MSCI World ETF",
+    "nasdaq": "Nasdaq 100",
+    "cac40": "CAC 40",
+    "bitcoin": "Bitcoin",
+    "apple": "Apple",
+    "eurostoxx": "EuroStoxx 50"
+  }
+}
