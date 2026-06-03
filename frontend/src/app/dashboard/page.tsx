@@ -18,11 +18,10 @@ const DEFAULT_ASSETS = [
   { ticker: "CW8.PA", weight: 40 },
 ];
 
-type ChartView = "performance"|"drawdown"|"montecarlo"|"monthly"|"correlation"|"frontier";
+type ChartView = "performance"|"montecarlo"|"monthly"|"correlation"|"frontier";
 
 const CHART_VIEWS: {key: ChartView, label: string}[] = [
   {key:"performance", label:"Performance"},
-  {key:"drawdown", label:"Drawdown"},
   {key:"montecarlo", label:"Monte Carlo"},
   {key:"monthly", label:"Mensuel"},
   {key:"correlation", label:"Corrélation"},
@@ -294,9 +293,15 @@ function DashboardContent() {
                   </div>
 
                   {/* Graphique */}
-                  <div style={{height: "420px", padding: "16px", boxSizing: "border-box"}}>
+                  <div style={{height: "500px", padding: "16px", boxSizing: "border-box"}}>
                     {chartView === "performance" && (
-                      <GrowthChart portfolioData={data.portfolio_growth} benchmarkData={data.benchmark_growth} benchmarkName={data.benchmark.name} portfolioLabel="Portefeuille"/>
+                      <GrowthChart
+                        portfolioData={data.portfolio_growth}
+                        benchmarkData={data.benchmark_growth}
+                        benchmarkName={data.benchmark.name}
+                        portfolioLabel="Portefeuille"
+                        drawdownData={data.drawdown_series}
+                      />
                     )}
                     {chartView === "drawdown" && <DrawdownChart data={data.drawdown_series}/>}
                     {chartView === "montecarlo" && (
