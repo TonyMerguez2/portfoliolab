@@ -57,16 +57,55 @@ export default function GrowthChart({ portfolioData, benchmarkData, benchmarkNam
 
   const CustomTooltip = ({ active, payload, label }: any) => {
     if (!active || !payload?.length) return null;
+    const ptfPayload = payload.find((p:any) => p.dataKey === portfolioLabel);
+    const bmPayload = payload.find((p:any) => p.dataKey === benchmarkName);
+    const ptfVal = ptfPayload?.value;
+    const bmVal = bmPayload?.value;
+
+    const firstVal = displayedData.length > 0 ? (displayedData[0][portfolioLabel] as number) : 10000;
+    const ptfPct = ptfVal ? ((ptfVal - firstVal) / firstVal * 100) : null;
+
+    const bFirstPoint = benchmarkData.length > 0 ? benchmarkData.find(p => p.date >= (displayedData[0]?.date as string || "")) : null;
+    const bFirst = bFirstPoint?.value || bmVal;
+    const bmPct = bmVal && bFirst ? ((bmVal - bFirst) / bFirst * 100) : null;
+    const alpha = ptfPct !== null && bmPct !== null ? ptfPct - bmPct : null;
+
+    const ddPoint = (() => {
+      if (!drawdownData?.length) return null;
+      const exact = drawdownData.find(p => p.date === label);
+      if (exact) return exact;
+      // Trouver le point le plus proche
+      const sorted = [...drawdownData].sort((a,b) => Math.abs(new Date(a.date).getTime() - new Date(label).getTime()) - Math.abs(new Date(b.date).getTime() - new Date(label).getTime()));
+      return sorted[0] || null;
+    })();
+
     return (
-      <div className="bg-white border border-slate-200 rounded-xl shadow-lg p-3 text-xs">
-        <p className="text-slate-400 mb-1.5">{formatDate(label)}</p>
-        {payload.map((p: any) => (
-          <div key={p.dataKey} className="flex items-center gap-2 mb-0.5">
-            <div className="w-2 h-2 rounded-full" style={{backgroundColor: p.color}}/>
-            <span className="text-slate-600">{p.dataKey}</span>
-            <span className="font-bold text-slate-800 ml-auto">{formatYAxis(p.value)}</span>
-          </div>
-        ))}
+      <div className="bg-white border border-slate-200 rounded-xl shadow-lg p-3 text-xs min-w-[180px]">
+        <p className="text-slate-400 font-medium mb-2">{new Date(label).toLocaleDateString('fr-FR', {day:'numeric', month:'short', year:'numeric'})}</p>
+        {ptfVal && <div className="flex justify-between mb-1">
+          <span className="text-indigo-500 font-semibold">Portefeuille</span>
+          <span className="font-bold text-slate-800">{formatYAxis(ptfVal)}</span>
+        </div>}
+        {bmVal && <div className="flex justify-between mb-2">
+          <span className="text-slate-400">{benchmarkName}</span>
+          <span className="font-medium text-slate-600">{formatYAxis(bmVal)}</span>
+        </div>}
+        {ptfPct !== null && <div className="flex justify-between border-t border-slate-100 pt-2 mb-1">
+          <span className="text-slate-500">Perf. ptf</span>
+          <span className={`font-semibold ${ptfPct >= 0 ? "text-emerald-500" : "text-red-500"}`}>{ptfPct >= 0 ? "+" : ""}{ptfPct.toFixed(1)}%</span>
+        </div>}
+        {bmPct !== null && <div className="flex justify-between mb-1">
+          <span className="text-slate-500">Perf. idx</span>
+          <span className={`font-medium ${bmPct >= 0 ? "text-slate-500" : "text-red-400"}`}>{bmPct >= 0 ? "+" : ""}{bmPct.toFixed(1)}%</span>
+        </div>}
+        {alpha !== null && <div className="flex justify-between mb-1">
+          <span className="text-slate-500">Alpha</span>
+          <span className={`font-bold ${alpha >= 0 ? "text-emerald-500" : "text-red-500"}`}>{alpha >= 0 ? "+" : ""}{alpha.toFixed(1)}%</span>
+        </div>}
+        {ddPoint && <div className="flex justify-between border-t border-slate-100 pt-2 mt-1">
+          <span className="text-slate-500">Drawdown</span>
+          <span className="font-medium text-red-500">{ddPoint.drawdown.toFixed(1)}%</span>
+        </div>}
       </div>
     );
   };
@@ -104,9 +143,14 @@ export default function GrowthChart({ portfolioData, benchmarkData, benchmarkNam
       {/* Badge performance flottant */}
       <div className="flex items-center justify-between px-1 pb-2">
         <div className="flex items-center gap-3">
-          <span className={`text-2xl font-bold tabular-nums ${perfPct >= 0 ? "text-emerald-500" : "text-red-500"}`}>
-            {perfPct >= 0 ? "+" : ""}{perfPct.toFixed(1)}%
-          </span>
+          <div>
+            <span className={`text-2xl font-bold tabular-nums ${perfPct >= 0 ? "text-emerald-500" : "text-red-500"}`}>
+              {perfPct >= 0 ? "+" : ""}{perfPct.toFixed(1)}%
+            </span>
+            <div className="text-xs text-slate-400 mt-0.5">
+              {formatYAxis(initialValue)} → <span className="font-semibold text-slate-600">{formatYAxis(currentValue)}</span>
+            </div>
+          </div>
           {hoverData && (() => {
             const bPoint = benchmarkData.find(p => p.date === hoverData.date);
             if (!bPoint) return null;
@@ -165,7 +209,7 @@ export default function GrowthChart({ portfolioData, benchmarkData, benchmarkNam
               </linearGradient>
             </defs>
             <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9"/>
-            <XAxis dataKey="date" tickFormatter={formatDate} tick={{fontSize:10,fill:"#94a3b8"}} tickLine={false} axisLine={false} interval="preserveStartEnd" hide={!!drawdownSampled.length}/>
+            <XAxis dataKey="date" tickFormatter={formatDate} tick={{fontSize:10,fill:"#94a3b8"}} tickLine={false} axisLine={false} interval="preserveStartEnd"/>
             <YAxis tickFormatter={formatYAxis} tick={{fontSize:10,fill:"#94a3b8"}} tickLine={false} axisLine={false} width={48}/>
             <Tooltip content={<CustomTooltip/>} wrapperStyle={{zIndex: 10}}/>
 
@@ -195,7 +239,8 @@ export default function GrowthChart({ portfolioData, benchmarkData, benchmarkNam
               <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9"/>
               <XAxis dataKey="date" tickFormatter={formatDate} tick={{fontSize:10,fill:"#94a3b8"}} tickLine={false} axisLine={false} interval="preserveStartEnd"/>
               <YAxis tickFormatter={(v) => `${v.toFixed(1)}%`} tick={{fontSize:10,fill:"#94a3b8"}} tickLine={false} axisLine={false} width={48} domain={["auto", 0]}/>
-              <Tooltip content={<DrawdownTooltip/>} position={{y: 5}} wrapperStyle={{zIndex: 10}}/>
+
+              <Tooltip content={() => null} wrapperStyle={{display:"none"}}/>
               <ReferenceLine y={0} stroke="#64748b" strokeWidth={1.5}/>
               <Area type="monotone" dataKey="drawdown" stroke="#ef4444" fill="#fee2e2" strokeWidth={1.5} dot={false}/>
               {(() => {
