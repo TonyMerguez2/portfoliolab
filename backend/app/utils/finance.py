@@ -543,3 +543,43 @@ def monte_carlo_advanced(
         "annualized_return": float((mu_daily * TRADING_DAYS)),
         "annualized_volatility": float(sigma_daily * np.sqrt(TRADING_DAYS)),
     }
+
+
+def compute_risk_contribution(returns_df, weights: list[float]) -> dict:
+    """
+    Compute risk contribution of each asset to portfolio volatility.
+    Returns absolute and relative contributions.
+    """
+    import numpy as np
+
+    w = np.array(weights)
+    # Covariance matrix annualisée
+    cov = returns_df.cov() * 252
+
+    # Volatilité du portefeuille
+    port_var = w @ cov.values @ w
+    port_vol = np.sqrt(port_var)
+
+    # Contribution marginale au risque
+    marginal = cov.values @ w
+
+    # Contribution absolue au risque
+    abs_contrib = w * marginal
+
+    # Contribution relative au risque (%)
+    rel_contrib = abs_contrib / port_var
+
+    tickers = returns_df.columns.tolist()
+    result = {}
+    for i, ticker in enumerate(tickers):
+        result[ticker] = {
+            "weight": float(w[i]),
+            "abs_risk_contribution": float(abs_contrib[i]),
+            "rel_risk_contribution": float(rel_contrib[i]),
+            "marginal_risk": float(marginal[i]),
+        }
+
+    return {
+        "portfolio_volatility": float(port_vol),
+        "assets": result,
+    }

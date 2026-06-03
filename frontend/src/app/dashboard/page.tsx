@@ -305,29 +305,61 @@ function DashboardContent() {
                       </div>
                     )}
                     {activeTab==="assets" && (
-                      <div className="overflow-x-auto">
-                        <table className="w-full text-sm">
-                          <thead>
-                            <tr className="text-left text-xs font-semibold text-slate-400 uppercase tracking-widest border-b border-slate-100">
-                              {["ticker","weight","totalReturn","cagr","volatility","sharpe","contribution"].map(k => (
-                                <th key={k} className="pb-3 pr-4 last:pr-0 last:text-right text-right first:text-left">{t(`assets.${k}`)}</th>
-                              ))}
-                            </tr>
-                          </thead>
-                          <tbody className="divide-y divide-slate-50">
-                            {data.assets.map(a => (
-                              <tr key={a.ticker} className="hover:bg-slate-50 transition-colors">
-                                <td className="py-3 pr-4 font-mono font-bold text-indigo-600">{a.ticker}</td>
-                                <td className="py-3 pr-4 text-right tabular-nums">{a.weight.toFixed(1)}%</td>
-                                <td className={`py-3 pr-4 text-right tabular-nums font-medium ${returnColor(a.total_return)}`}>{(a.total_return*100).toFixed(1)}%</td>
-                                <td className={`py-3 pr-4 text-right tabular-nums ${returnColor(a.cagr)}`}>{(a.cagr*100).toFixed(1)}%</td>
-                                <td className="py-3 pr-4 text-right tabular-nums text-slate-600">{(a.volatility*100).toFixed(1)}%</td>
-                                <td className={`py-3 pr-4 text-right tabular-nums font-medium ${sharpeColor(a.sharpe)}`}>{a.sharpe.toFixed(2)}</td>
-                                <td className={`py-3 text-right tabular-nums ${returnColor(a.contribution_to_return)}`}>{(a.contribution_to_return*100).toFixed(1)}%</td>
+                      <div className="space-y-6">
+                        <div className="overflow-x-auto">
+                          <table className="w-full text-sm">
+                            <thead>
+                              <tr className="text-left text-xs font-semibold text-slate-400 uppercase tracking-widest border-b border-slate-100">
+                                {["ticker","weight","totalReturn","cagr","volatility","sharpe","contribution"].map(k => (
+                                  <th key={k} className="pb-3 pr-4 last:pr-0 last:text-right text-right first:text-left">{t(`assets.${k}`)}</th>
+                                ))}
                               </tr>
-                            ))}
-                          </tbody>
-                        </table>
+                            </thead>
+                            <tbody className="divide-y divide-slate-50">
+                              {data.assets.map(a => (
+                                <tr key={a.ticker} className="hover:bg-slate-50 transition-colors">
+                                  <td className="py-3 pr-4 font-mono font-bold text-indigo-600">{a.ticker}</td>
+                                  <td className="py-3 pr-4 text-right tabular-nums">{a.weight.toFixed(1)}%</td>
+                                  <td className={`py-3 pr-4 text-right tabular-nums font-medium ${returnColor(a.total_return)}`}>{(a.total_return*100).toFixed(1)}%</td>
+                                  <td className={`py-3 pr-4 text-right tabular-nums ${returnColor(a.cagr)}`}>{(a.cagr*100).toFixed(1)}%</td>
+                                  <td className="py-3 pr-4 text-right tabular-nums text-slate-600">{(a.volatility*100).toFixed(1)}%</td>
+                                  <td className={`py-3 pr-4 text-right tabular-nums font-medium ${sharpeColor(a.sharpe)}`}>{a.sharpe.toFixed(2)}</td>
+                                  <td className={`py-3 text-right tabular-nums ${returnColor(a.contribution_to_return)}`}>{(a.contribution_to_return*100).toFixed(1)}%</td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+
+                        {data.risk_contribution && (
+                          <div>
+                            <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-widest mb-4">Contribution au risque</h3>
+                            <div className="space-y-3">
+                              {Object.entries((data.risk_contribution as any).assets)
+                                .sort((a:any, b:any) => b[1].rel_risk_contribution - a[1].rel_risk_contribution)
+                                .map(([ticker, info]: [string, any]) => (
+                                <div key={ticker}>
+                                  <div className="flex items-center justify-between text-xs mb-1.5">
+                                    <div className="flex items-center gap-2">
+                                      <span className="font-mono font-bold text-indigo-600">{ticker}</span>
+                                      <span className="text-slate-400">Poids : {(info.weight*100).toFixed(1)}%</span>
+                                    </div>
+                                    <span className={`font-semibold tabular-nums ${info.rel_risk_contribution > info.weight ? "text-red-500" : "text-emerald-600"}`}>
+                                      {(info.rel_risk_contribution*100).toFixed(1)}% du risque
+                                    </span>
+                                  </div>
+                                  <div className="w-full h-2 bg-slate-100 rounded-full overflow-hidden">
+                                    <div className={`h-full rounded-full transition-all ${info.rel_risk_contribution > info.weight ? "bg-red-400" : "bg-emerald-400"}`}
+                                      style={{width: `${Math.min(info.rel_risk_contribution*100, 100)}%`}}/>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                            <p className="text-xs text-slate-400 mt-3">
+                              Rouge = contribution au risque supérieure au poids · Vert = contribution inférieure au poids
+                            </p>
+                          </div>
+                        )}
                       </div>
                     )}
                     {activeTab==="correlation" && (

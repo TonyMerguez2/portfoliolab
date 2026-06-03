@@ -3,6 +3,7 @@ from functools import lru_cache
 
 
 class Settings(BaseSettings):
+    fmp_api_key: str = ""
     app_name: str = "PortfolioLab API"
     app_version: str = "1.0.0"
     debug: bool = False

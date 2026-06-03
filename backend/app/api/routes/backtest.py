@@ -162,3 +162,30 @@ async def search_assets(q: str = "") -> dict:
     except Exception as e:
         logger.error(f"Search error: {e}")
         return {"results": []}
+
+
+@router.get("/sector/{ticker}", tags=["Search"])
+async def get_sector(ticker: str) -> dict:
+    """Get sector, industry and country for a ticker via FMP."""
+    import os, httpx
+    api_key = os.environ.get("FMP_API_KEY", "")
+    if not api_key:
+        return {"sector": None, "industry": None, "country": None}
+    try:
+        url = f"https://financialmodelingprep.com/stable/profile?symbol={ticker}&apikey={api_key}"
+        async with httpx.AsyncClient(timeout=5.0) as client:
+            resp = await client.get(url)
+            data = resp.json()
+        if data and len(data) > 0:
+            p = data[0]
+            return {
+                "ticker": ticker,
+                "sector": p.get("sector"),
+                "industry": p.get("industry"),
+                "country": p.get("country"),
+                "name": p.get("companyName"),
+            }
+        return {"sector": None, "industry": None, "country": None}
+    except Exception as e:
+        logger.error(f"Sector error: {e}")
+        return {"sector": None, "industry": None, "country": None}

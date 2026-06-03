@@ -172,6 +172,7 @@ class BacktestResponse(BaseModel):
     # Commentary
     commentary: Commentary
     score: dict | None = None
+    risk_contribution: dict | None = None
 
 
 class EfficientFrontierPoint(BaseModel):
