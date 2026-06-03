@@ -18,7 +18,7 @@ const DEFAULT_ASSETS = [
   { ticker: "CW8.PA", weight: 40 },
 ];
 
-const TABS = ["overview","charts","assets","correlation","markowitz","commentary","projections"] as const;
+const TABS = ["overview","charts","assets","correlation","markowitz","frontier","commentary","projections"] as const;
 type Tab = typeof TABS[number];
 
 function MetricCard({ label, value, sub, color="text-slate-900", metric, locale }: {
@@ -450,6 +450,74 @@ function DashboardContent() {
                         <p className="text-xs text-slate-400 text-center">
                           Optimisation basée sur les données historiques · Les performances passées ne préjugent pas des performances futures
                         </p>
+                      </div>
+                    )}
+
+                    {activeTab==="frontier" && data.efficient_frontier && (
+                      <div className="space-y-4">
+                        <div>
+                          <h3 className="text-sm font-semibold text-slate-700 mb-1">Frontière Efficiente</h3>
+                          <p className="text-xs text-slate-400 mb-4">Chaque point représente un portefeuille optimal pour un niveau de risque donné</p>
+                          <div style={{height: 380}}>
+                            {(() => {
+                              const { ScatterChart, Scatter, XAxis, YAxis, CartesianGrid, Tooltip, ReferenceLine, ResponsiveContainer, Label } = require("recharts");
+                              const ef = data.efficient_frontier as any;
+                              const frontierData = ef.frontier.map((p:any) => ({
+                                x: +(p.volatility*100).toFixed(2),
+                                y: +(p.return*100).toFixed(2),
+                                sharpe: p.sharpe,
+                              }));
+                              const msPoint = [{
+                                x: +(ef.max_sharpe.volatility*100).toFixed(2),
+                                y: +(ef.max_sharpe.return*100).toFixed(2),
+                              }];
+                              const mvPoint = [{
+                                x: +(ef.min_variance.volatility*100).toFixed(2),
+                                y: +(ef.min_variance.return*100).toFixed(2),
+                              }];
+                              const assetsData = ef.assets.map((a:any) => ({
+                                x: +(a.volatility*100).toFixed(2),
+                                y: +(a.return*100).toFixed(2),
+                                name: a.ticker,
+                              }));
+                              return (
+                                <ResponsiveContainer width="100%" height="100%">
+                                  <ScatterChart margin={{top:20,right:30,bottom:30,left:30}}>
+                                    <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9"/>
+                                    <XAxis type="number" dataKey="x" name="Volatilité" domain={["auto","auto"]} tickFormatter={(v:number) => `${v.toFixed(0)}%`}>
+                                      <Label value="Volatilité annualisée" offset={-10} position="insideBottom" style={{fontSize:11,fill:"#94a3b8"}}/>
+                                    </XAxis>
+                                    <YAxis type="number" dataKey="y" name="Rendement" domain={["auto","auto"]} tickFormatter={(v:number) => `${v.toFixed(0)}%`}>
+                                      <Label value="Rendement attendu" angle={-90} position="insideLeft" style={{fontSize:11,fill:"#94a3b8"}}/>
+                                    </YAxis>
+                                    <Tooltip cursor={{strokeDasharray:"3 3"}} content={({payload}:any) => {
+                                      if (!payload?.length) return null;
+                                      const d = payload[0]?.payload;
+                                      return (
+                                        <div className="bg-white border border-slate-200 rounded-lg p-2 text-xs shadow">
+                                          <p>Volatilité : <strong>{d.x}%</strong></p>
+                                          <p>Rendement : <strong>{d.y}%</strong></p>
+                                          {d.sharpe && <p>Sharpe : <strong>{d.sharpe?.toFixed(2)}</strong></p>}
+                                          {d.name && <p>Actif : <strong>{d.name}</strong></p>}
+                                        </div>
+                                      );
+                                    }}/>
+                                    <Scatter name="Frontière" data={frontierData} fill="#6366f1" opacity={0.6} r={3}/>
+                                    <Scatter name="Sharpe Max" data={msPoint} fill="#f59e0b" r={8} shape="star"/>
+                                    <Scatter name="Min Variance" data={mvPoint} fill="#10b981" r={8}/>
+                                    <Scatter name="Actifs" data={assetsData} fill="#ef4444" r={6} shape="diamond"/>
+                                  </ScatterChart>
+                                </ResponsiveContainer>
+                              );
+                            })()}
+                          </div>
+                          <div className="flex items-center justify-center gap-6 mt-2 text-xs text-slate-500">
+                            <div className="flex items-center gap-1.5"><div className="w-3 h-3 rounded-full bg-indigo-400"/><span>Frontière efficiente</span></div>
+                            <div className="flex items-center gap-1.5"><div className="w-3 h-3 rounded-full bg-amber-400"/><span>🎯 Sharpe max</span></div>
+                            <div className="flex items-center gap-1.5"><div className="w-3 h-3 rounded-full bg-emerald-400"/><span>🛡️ Variance min</span></div>
+                            <div className="flex items-center gap-1.5"><div className="w-3 h-3 rounded-full bg-red-400"/><span>Actifs individuels</span></div>
+                          </div>
+                        </div>
                       </div>
                     )}
 

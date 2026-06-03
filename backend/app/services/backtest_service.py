@@ -202,6 +202,10 @@ def run_backtest(req: BacktestRequest) -> BacktestResponse:
         drawdown_series=drawdown_pts,
         monthly_returns=monthly_ret_pts,
         correlation=corr_matrix,
+        efficient_frontier=fin.compute_efficient_frontier(
+            returns_df=returns_all[asset_tickers],
+            risk_free_rate=req.risk_free_rate,
+        ),
         markowitz=fin.optimize_markowitz(
             returns_df=returns_all[asset_tickers],
             risk_free_rate=req.risk_free_rate,

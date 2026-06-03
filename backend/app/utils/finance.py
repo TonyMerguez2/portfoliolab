@@ -640,3 +640,86 @@ def optimize_markowitz(returns_df, risk_free_rate: float = 0.035) -> dict:
             "expected_volatility": round(float(mv_vol), 4),
         },
     }
+
+
+def compute_efficient_frontier(returns_df, risk_free_rate: float = 0.035, n_points: int = 50) -> dict:
+    import numpy as np
+    from scipy.optimize import minimize
+
+    n = returns_df.shape[1]
+    tickers = returns_df.columns.tolist()
+    mu = returns_df.mean() * 252
+    cov = returns_df.cov() * 252
+
+    def portfolio_vol(w):
+        return np.sqrt(w @ cov.values @ w)
+
+    def portfolio_ret(w):
+        return w @ mu.values
+
+    def neg_sharpe(w):
+        ret = portfolio_ret(w)
+        vol = portfolio_vol(w)
+        return -(ret - risk_free_rate) / vol
+
+    bounds = [(0.0, 1.0)] * n
+    w0 = np.ones(n) / n
+    constraints_sum = {"type": "eq", "fun": lambda w: np.sum(w) - 1}
+
+    res_mv = minimize(portfolio_vol, w0, method="SLSQP", bounds=bounds, constraints=constraints_sum)
+    w_mv = res_mv.x
+    mv_ret = portfolio_ret(w_mv)
+    mv_vol = portfolio_vol(w_mv)
+
+    res_ms = minimize(neg_sharpe, w0, method="SLSQP", bounds=bounds, constraints=constraints_sum)
+    w_ms = res_ms.x
+    ms_ret = portfolio_ret(w_ms)
+    ms_vol = portfolio_vol(w_ms)
+    ms_sharpe = (ms_ret - risk_free_rate) / ms_vol
+
+    ret_min = mv_ret
+    ret_max = float(mu.max()) * 1.05
+    target_returns = np.linspace(ret_min, ret_max, n_points)
+
+    frontier = []
+    for target in target_returns:
+        constraints = [
+            constraints_sum,
+            {"type": "eq", "fun": lambda w, t=target: portfolio_ret(w) - t},
+        ]
+        res = minimize(portfolio_vol, w0, method="SLSQP", bounds=bounds, constraints=constraints)
+        if res.success:
+            vol = portfolio_vol(res.x)
+            sharpe = (target - risk_free_rate) / vol
+            frontier.append({
+                "return": round(float(target), 4),
+                "volatility": round(float(vol), 4),
+                "sharpe": round(float(sharpe), 4),
+            })
+
+    assets_pts = []
+    for i, ticker in enumerate(tickers):
+        w = np.zeros(n)
+        w[i] = 1.0
+        assets_pts.append({
+            "ticker": ticker,
+            "return": round(float(mu.iloc[i]), 4),
+            "volatility": round(float(np.sqrt(cov.values[i, i])), 4),
+        })
+
+    return {
+        "frontier": frontier,
+        "max_sharpe": {
+            "return": round(float(ms_ret), 4),
+            "volatility": round(float(ms_vol), 4),
+            "sharpe": round(float(ms_sharpe), 4),
+            "weights": {tickers[i]: round(float(w_ms[i]), 4) for i in range(n)},
+        },
+        "min_variance": {
+            "return": round(float(mv_ret), 4),
+            "volatility": round(float(mv_vol), 4),
+            "weights": {tickers[i]: round(float(w_mv[i]), 4) for i in range(n)},
+        },
+        "assets": assets_pts,
+        "risk_free_rate": risk_free_rate,
+    }

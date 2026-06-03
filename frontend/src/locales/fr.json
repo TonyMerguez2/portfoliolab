@@ -43,7 +43,8 @@
     "correlation": "Corrélation",
     "commentary": "Commentaires",
     "projections": "Projections",
-    "markowitz": "Markowitz"
+    "markowitz": "Markowitz",
+    "frontier": "Frontière"
   },
   "metrics": {
     "performance": "Performance",
