@@ -43,7 +43,7 @@ export default function GrowthChart({ portfolioData, benchmarkData, benchmarkNam
   };
 
   return (
-    <div className="w-full h-72">
+    <div className="w-full h-full">
       <ResponsiveContainer width="100%" height="100%">
         <LineChart data={sampled} margin={{top:4,right:16,bottom:4,left:8}}>
           <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9"/>
