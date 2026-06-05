@@ -67,8 +67,12 @@ export default function GrowthChart({ portfolioData, benchmarkData, benchmarkNam
   };
 
   const formatYAxis = (v: number) => {
-    if (v >= 10000) return `€${(v/1000).toFixed(0)}k`;
-    return `€${v.toFixed(0)}`;
+    if (!v || isNaN(v)) return "";
+    return new Intl.NumberFormat("fr-FR", {minimumFractionDigits:2, maximumFractionDigits:2}).format(v) + " EUR";
+  };
+  const formatYAxisShort = (v: number) => {
+    if (!v || isNaN(v)) return "";
+    return new Intl.NumberFormat("fr-FR", {minimumFractionDigits:2, maximumFractionDigits:2}).format(v);
   };
 
   const CustomTooltip = ({ active, payload, label }: any) => {
@@ -174,9 +178,7 @@ export default function GrowthChart({ portfolioData, benchmarkData, benchmarkNam
             <span className={`text-2xl font-bold tabular-nums ${perfPct >= 0 ? "text-emerald-500" : "text-red-500"}`}>
               {perfPct >= 0 ? "+" : ""}{perfPct.toFixed(1)}%
             </span>
-            <div className="text-xs text-slate-400 mt-0.5">
-              {formatYAxis(initialValue)} → <span className="font-semibold text-slate-600">{formatYAxis(currentValue)}</span>
-            </div>
+
           </div>
           {hoverData && (() => {
             const bPoint = benchmarkData.find(p => p.date === hoverData.date);
@@ -196,31 +198,11 @@ export default function GrowthChart({ portfolioData, benchmarkData, benchmarkNam
             <span className="text-xs text-slate-400">{new Date(hoverData.date).toLocaleDateString("fr-FR", {month:"short", year:"numeric"})}</span>
           )}
         </div>
-        <div className="flex gap-1">
-          {([
-            {key:"1M", label:"1M", title:"Dernier mois"},
-            {key:"3M", label:"3M", title:"3 derniers mois"},
-            {key:"6M", label:"6M", title:"6 derniers mois"},
-            {key:"1A", label:"1A", title:"Dernière année"},
-            {key:"3A", label:"3A", title:"3 dernières années"},
-            {key:"Max", label:"Max", title:"Période complète"},
-          ] as const).map(({key, label, title}) => (
-            <div key={key} className="relative group">
-              <button onClick={() => setPeriodFilter(key)}
-                className={`text-xs px-2 py-0.5 rounded-lg transition-colors ${periodFilter === key ? "bg-indigo-600 text-white" : "text-slate-400 hover:text-slate-600 border border-slate-200 hover:border-slate-300"}`}>
-                {label}
-              </button>
-              <div className="absolute bottom-full right-0 mb-1 px-2 py-1 bg-slate-800 text-white text-xs rounded whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-50">
-                {title}
-              </div>
-            </div>
-          ))}
-        </div>
       </div>
       {/* Performance chart — 75% height */}
-      <div style={{flex: "0 0 72%"}}>
+      <div style={{flex: "0 0 65%"}}>
         <ResponsiveContainer width="100%" height="100%">
-          <ComposedChart data={displayedData} margin={{top:4,right:16,bottom:0,left:8}} syncId="chart"
+          <ComposedChart data={displayedData} margin={{top:4,right:120,bottom:0,left:0}} syncId="chart"
             onMouseMove={(e: any) => {
               if (e?.activePayload?.[0]) {
                 const val = e.activePayload[0].value;
@@ -241,21 +223,80 @@ export default function GrowthChart({ portfolioData, benchmarkData, benchmarkNam
             </defs>
             <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9"/>
             <XAxis dataKey="date" tickFormatter={formatDate} tick={{fontSize:10,fill:"#94a3b8"}} tickLine={false} axisLine={false} interval="preserveStartEnd"/>
-            <YAxis tickFormatter={formatYAxis} tick={{fontSize:10,fill:"#94a3b8"}} tickLine={false} axisLine={false} width={48}/>
+            <YAxis orientation="right" tickFormatter={formatYAxisShort} tick={{fontSize:10,fill:"#94a3b8"}} tickLine={false} axisLine={false} width={80} tickCount={8} domain={["auto","auto"]}/>
             <Tooltip content={<CustomTooltip/>} wrapperStyle={{zIndex: 10}}/>
 
-            <Legend formatter={(value) => <span className="text-xs text-slate-400">{value}</span>} iconSize={8}/>
-            <ReferenceLine y={10000} stroke="#e2e8f0" strokeDasharray="4 4"/>
 
-            <Area type="monotone" dataKey={portfolioLabel} stroke="#4f46e5" strokeWidth={2} fill="url(#portfolioGradient)" dot={false} activeDot={{r:4}}/>
-            {benchmarkData.length > 0 && <Area type="monotone" dataKey={benchmarkName} stroke="#f59e0b" strokeWidth={2} fill="url(#benchmarkGradient)" dot={false} activeDot={{r:4}}/>}
+            
+
+            <Area type="monotone" dataKey={portfolioLabel} stroke="#4f46e5" strokeWidth={2} fill="url(#portfolioGradient)" activeDot={{r:4, strokeWidth:2, stroke:"white"}} dot={(props:any) => {
+              if (props.index !== displayedData.length - 1) return <g key={props.index}/>;
+              const {cx, cy, value} = props;
+              return (
+                <g key={props.index}>
+                  <circle cx={cx} cy={cy} r={8} fill="#4f46e5" opacity={0.15}>
+                    <animate attributeName="r" values="5;10;5" dur="2s" repeatCount="indefinite"/>
+                    <animate attributeName="opacity" values="0.3;0.05;0.3" dur="2s" repeatCount="indefinite"/>
+                  </circle>
+                  <circle cx={cx} cy={cy} r={4} fill="#4f46e5" stroke="white" strokeWidth={2}/>
+                  <rect x={cx+8} y={cy-11} width={72} height={22} rx={4} fill="#4f46e5"/>
+                  <text x={cx+44} y={cy+5} textAnchor="middle" fill="white" fontSize={11} fontWeight="bold">{formatYAxis(value)}</text>
+                </g>
+              );
+            }}/>
+            {benchmarkData.length > 0 && <Area type="monotone" dataKey={benchmarkName} stroke="#f59e0b" strokeWidth={2} fill="url(#benchmarkGradient)" activeDot={{r:4, strokeWidth:2, stroke:"white"}} dot={(props:any) => {
+              if (props.index !== displayedData.length - 1) return <g key={props.index}/>;
+              const {cx, cy, value} = props;
+              return (
+                <g key={props.index}>
+                  <circle cx={cx} cy={cy} r={8} fill="#f59e0b" opacity={0.15}>
+                    <animate attributeName="r" values="5;10;5" dur="2s" repeatCount="indefinite"/>
+                    <animate attributeName="opacity" values="0.3;0.05;0.3" dur="2s" repeatCount="indefinite"/>
+                  </circle>
+                  <circle cx={cx} cy={cy} r={4} fill="#f59e0b" stroke="white" strokeWidth={2}/>
+                  <rect x={cx+8} y={cy-11} width={72} height={22} rx={4} fill="#f59e0b"/>
+                  <text x={cx+44} y={cy+5} textAnchor="middle" fill="white" fontSize={11} fontWeight="bold">{formatYAxis(value)}</text>
+                </g>
+              );
+            }}/>}
           </ComposedChart>
         </ResponsiveContainer>
       </div>
 
+      {/* Période stats — style TradingView */}
+
+
+      {/* Période stats — style TradingView */}
+      <div className="flex justify-center gap-6 py-2 border-t border-slate-100">
+        {([
+          {key:"1M", label:"1M"},
+          {key:"3M", label:"3M"},
+          {key:"6M", label:"6M"},
+          {key:"1A", label:"1A"},
+          {key:"3A", label:"3A"},
+          {key:"Max", label:"Max"},
+        ] as const).map(({key, label}) => {
+          const months = {"1M":1,"3M":3,"6M":6,"1A":12,"3A":36,"Max":0}[key] || 0;
+          const cutoff = new Date();
+          if (months) cutoff.setMonth(cutoff.getMonth() - months);
+          const cutoffStr = cutoff.toISOString().slice(0,10);
+          const pts = key === "Max" ? portfolioData : portfolioData.filter(p => p.date >= cutoffStr);
+          const first = pts[0]?.value;
+          const last = pts[pts.length-1]?.value;
+          const pct = first && last ? ((last-first)/first*100) : null;
+          return (
+            <div key={key} className="relative pb-1 cursor-pointer text-center min-w-[40px]" onClick={() => setPeriodFilter(key)}>
+              <div className={`text-xs font-semibold ${periodFilter === key ? "text-indigo-600" : "text-slate-400 hover:text-slate-600"}`}>{label}</div>
+              {pct !== null && <div className={`text-xs font-bold tabular-nums ${pct >= 0 ? "text-emerald-500" : "text-red-500"}`}>{pct >= 0 ? "+" : ""}{pct.toFixed(1)}%</div>}
+              {periodFilter === key && <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-indigo-600 rounded"/>}
+            </div>
+          );
+        })}
+      </div>
+
       {/* Drawdown chart — 25% height */}
       {drawdownSampled.length > 0 && (
-        <div style={{flex: "0 0 25%"}}>
+        <div style={{flex: "0 0 20%"}}>
           <ResponsiveContainer width="100%" height="100%">
             <AreaChart data={drawdownSampled} margin={{top:0,right:16,bottom:4,left:8}} syncId="chart"
               onMouseMove={(e: any) => {
@@ -268,7 +309,7 @@ export default function GrowthChart({ portfolioData, benchmarkData, benchmarkNam
               }}
               onMouseLeave={() => setHoverData(null)}>
               <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9"/>
-              <XAxis dataKey="date" tickFormatter={formatDate} tick={{fontSize:10,fill:"#94a3b8"}} tickLine={false} axisLine={false} interval="preserveStartEnd"/>
+              <XAxis dataKey="date" hide/>
               <YAxis tickFormatter={(v) => `${v.toFixed(1)}%`} tick={{fontSize:10,fill:"#94a3b8"}} tickLine={false} axisLine={false} width={48} domain={["auto", 0]}/>
 
               <Tooltip content={() => null} wrapperStyle={{display:"none"}}/>
@@ -279,21 +320,21 @@ export default function GrowthChart({ portfolioData, benchmarkData, benchmarkNam
               {(() => {
                 if (!drawdownSampled.length) return null;
                 const minPoint = drawdownSampled.reduce((min, p) => p.drawdown < min.drawdown ? p : min, drawdownSampled[0]);
-                const CustomDot = (props: any) => {
+                const lastPoint = drawdownSampled[drawdownSampled.length - 1];
+                const LastDot = (props: any) => {
                   const { cx, cy } = props;
                   if (!cx || !cy) return null;
                   return (
                     <g>
-                      <circle cx={cx} cy={cy} r={12} fill="#ef4444" opacity={0.15}>
-                        <animate attributeName="r" values="8;14;8" dur="2s" repeatCount="indefinite"/>
+                      <circle cx={cx} cy={cy} r={8} fill="#ef4444" opacity={0.15}>
+                        <animate attributeName="r" values="5;10;5" dur="2s" repeatCount="indefinite"/>
                         <animate attributeName="opacity" values="0.3;0.05;0.3" dur="2s" repeatCount="indefinite"/>
                       </circle>
-                      <circle cx={cx} cy={cy} r={5} fill="#ef4444" stroke="white" strokeWidth={2}/>
-
+                      <circle cx={cx} cy={cy} r={4} fill="#ef4444" stroke="white" strokeWidth={2}/>
                     </g>
                   );
                 };
-                return <ReferenceDot x={minPoint.date} y={minPoint.drawdown} r={0} shape={<CustomDot/>}/>;
+                return <ReferenceDot x={lastPoint.date} y={lastPoint.drawdown} r={0} shape={<LastDot/>}/>;
               })()}
             </AreaChart>
           </ResponsiveContainer>
