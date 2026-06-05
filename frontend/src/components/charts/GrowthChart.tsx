@@ -1,6 +1,6 @@
 "use client";
 import { useState } from "react";
-import { ResponsiveContainer, LineChart, AreaChart, ComposedChart, Area, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ReferenceLine, ReferenceDot, ReferenceArea } from "recharts";
+import { ResponsiveContainer, LineChart, AreaChart, ComposedChart, Area, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ReferenceLine, ReferenceDot, ReferenceArea, Customized } from "recharts";
 
 interface DataPoint { date: string; [key: string]: number | string; }
 
@@ -99,7 +99,7 @@ export default function GrowthChart({ portfolioData, benchmarkData, benchmarkNam
       return sorted[0] || null;
     })();
 
-    return (
+  return (
       <div className="bg-white border border-slate-200 rounded-xl shadow-lg p-3 text-xs min-w-[180px]">
         <p className="text-slate-400 font-medium mb-2">{new Date(label).toLocaleDateString('fr-FR', {day:'numeric', month:'short', year:'numeric'})}</p>
         {ptfVal && <div className="flex justify-between mb-1">
@@ -165,6 +165,35 @@ export default function GrowthChart({ portfolioData, benchmarkData, benchmarkNam
     const step = Math.ceil(filtered.length / 300);
     return filtered.filter((_:any, i:number) => i % step === 0 || i === filtered.length - 1);
   })();
+  const lastPortfolioValue = displayedData.length > 0 ? (displayedData[displayedData.length-1][portfolioLabel] as number) : null;
+  const lastBenchmarkValue = displayedData.length > 0 ? (displayedData[displayedData.length-1][benchmarkName] as number) : null;
+
+  const CustomYAxisTick = (props: any) => {
+    const { x, y, payload } = props;
+    const v = payload.value;
+    const fmt = new Intl.NumberFormat("fr-FR", {minimumFractionDigits:2, maximumFractionDigits:2}).format(v);
+    const isPortfolio = lastPortfolioValue !== null && Math.abs(v - lastPortfolioValue) < Math.abs(lastPortfolioValue * 0.003);
+    const isBenchmark = lastBenchmarkValue !== null && Math.abs(v - lastBenchmarkValue) < Math.abs(lastBenchmarkValue * 0.003);
+    if (isPortfolio) {
+      return (
+        <g>
+          <rect x={x} y={y-10} width={70} height={20} rx={3} fill="#4f46e5"/>
+          <text x={x+35} y={y+5} textAnchor="middle" fill="white" fontSize={10} fontWeight="600">{fmt}</text>
+        </g>
+      );
+    }
+    if (isBenchmark) {
+      return (
+        <g>
+          <rect x={x} y={y-10} width={70} height={20} rx={3} fill="#f59e0b"/>
+          <text x={x+35} y={y+5} textAnchor="middle" fill="white" fontSize={10} fontWeight="600">{fmt}</text>
+        </g>
+      );
+    }
+    return <text x={x+4} y={y+4} fill="#94a3b8" fontSize={10} textAnchor="start">{fmt}</text>;
+  };
+
+
   const initialValue = displayedData.length > 0 ? (displayedData[0][portfolioLabel] as number) : 10000;
   const currentValue = hoverData ? hoverData.value : (sampled.length > 0 ? (sampled[sampled.length-1][portfolioLabel] as number) : 10000);
   const perfPct = ((currentValue - initialValue) / initialValue) * 100;
@@ -200,9 +229,9 @@ export default function GrowthChart({ portfolioData, benchmarkData, benchmarkNam
         </div>
       </div>
       {/* Performance chart — 75% height */}
-      <div style={{flex: "0 0 65%"}}>
+      <div style={{flex: "0 0 65%", overflow: "visible"}}>
         <ResponsiveContainer width="100%" height="100%">
-          <ComposedChart data={displayedData} margin={{top:4,right:120,bottom:0,left:0}} syncId="chart"
+          <ComposedChart data={displayedData} margin={{top:16,right:0,bottom:0,left:0}} syncId="chart"
             onMouseMove={(e: any) => {
               if (e?.activePayload?.[0]) {
                 const val = e.activePayload[0].value;
@@ -223,15 +252,40 @@ export default function GrowthChart({ portfolioData, benchmarkData, benchmarkNam
             </defs>
             <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9"/>
             <XAxis dataKey="date" tickFormatter={formatDate} tick={{fontSize:10,fill:"#94a3b8"}} tickLine={false} axisLine={false} interval="preserveStartEnd"/>
-            <YAxis orientation="right" tickFormatter={formatYAxisShort} tick={{fontSize:10,fill:"#94a3b8"}} tickLine={false} axisLine={false} width={80} tickCount={8} domain={["auto","auto"]}/>
+            <YAxis orientation="right" tickFormatter={formatYAxisShort} tick={{fontSize:10,fill:"#94a3b8"}} tickLine={false} axisLine={false} width={70} tickCount={8} domain={["auto","auto"]}/>
             <Tooltip content={<CustomTooltip/>} wrapperStyle={{zIndex: 10}}/>
 
 
             
 
+            <Customized component={(props: any) => {
+              const { yAxisMap, xAxisMap } = props;
+              const yAxis = yAxisMap && (yAxisMap[0] || Object.values(yAxisMap)[0]);
+              if (!yAxis || !displayedData.length) return null;
+              const ptfVal = displayedData[displayedData.length-1][portfolioLabel] as number;
+              const bmVal = displayedData[displayedData.length-1][benchmarkName] as number;
+              const fmt = (v: number) => new Intl.NumberFormat("fr-FR",{minimumFractionDigits:2,maximumFractionDigits:2}).format(v);
+              const ptfY = yAxis.scale(ptfVal);
+              const bmY = bmVal ? yAxis.scale(bmVal) : null;
+              const x = yAxis.x;
+              const ptfTxt = fmt(ptfVal);
+              const bmTxt = fmt(bmVal);
+              const charW = 5.5;
+              const pad = 6;
+              const ptfW = ptfTxt.length * charW + pad * 2;
+              const bmW = bmTxt.length * charW + pad * 2;
+              return (
+                <g>
+                  <rect x={x+2} y={ptfY-10} width={ptfW} height={20} rx={3} fill="#4f46e5"/>
+                  <text x={x+2+ptfW/2} y={ptfY} textAnchor="middle" dominantBaseline="central" fill="white" fontSize={10} fontWeight="600">{ptfTxt}</text>
+                  {bmY !== null && <rect x={x+2} y={bmY-10} width={bmW} height={20} rx={3} fill="#f59e0b"/>}
+                  {bmY !== null && <text x={x+2+bmW/2} y={bmY} textAnchor="middle" dominantBaseline="central" fill="white" fontSize={10} fontWeight="600">{bmTxt}</text>}
+                </g>
+              );
+            }}/>
             <Area type="monotone" dataKey={portfolioLabel} stroke="#4f46e5" strokeWidth={2} fill="url(#portfolioGradient)" activeDot={{r:4, strokeWidth:2, stroke:"white"}} dot={(props:any) => {
               if (props.index !== displayedData.length - 1) return <g key={props.index}/>;
-              const {cx, cy, value} = props;
+              const {cx, cy} = props;
               return (
                 <g key={props.index}>
                   <circle cx={cx} cy={cy} r={8} fill="#4f46e5" opacity={0.15}>
@@ -239,14 +293,12 @@ export default function GrowthChart({ portfolioData, benchmarkData, benchmarkNam
                     <animate attributeName="opacity" values="0.3;0.05;0.3" dur="2s" repeatCount="indefinite"/>
                   </circle>
                   <circle cx={cx} cy={cy} r={4} fill="#4f46e5" stroke="white" strokeWidth={2}/>
-                  <rect x={cx+8} y={cy-11} width={72} height={22} rx={4} fill="#4f46e5"/>
-                  <text x={cx+44} y={cy+5} textAnchor="middle" fill="white" fontSize={11} fontWeight="bold">{formatYAxis(value)}</text>
                 </g>
               );
             }}/>
             {benchmarkData.length > 0 && <Area type="monotone" dataKey={benchmarkName} stroke="#f59e0b" strokeWidth={2} fill="url(#benchmarkGradient)" activeDot={{r:4, strokeWidth:2, stroke:"white"}} dot={(props:any) => {
               if (props.index !== displayedData.length - 1) return <g key={props.index}/>;
-              const {cx, cy, value} = props;
+              const {cx, cy} = props;
               return (
                 <g key={props.index}>
                   <circle cx={cx} cy={cy} r={8} fill="#f59e0b" opacity={0.15}>
@@ -254,8 +306,6 @@ export default function GrowthChart({ portfolioData, benchmarkData, benchmarkNam
                     <animate attributeName="opacity" values="0.3;0.05;0.3" dur="2s" repeatCount="indefinite"/>
                   </circle>
                   <circle cx={cx} cy={cy} r={4} fill="#f59e0b" stroke="white" strokeWidth={2}/>
-                  <rect x={cx+8} y={cy-11} width={72} height={22} rx={4} fill="#f59e0b"/>
-                  <text x={cx+44} y={cy+5} textAnchor="middle" fill="white" fontSize={11} fontWeight="bold">{formatYAxis(value)}</text>
                 </g>
               );
             }}/>}
@@ -298,7 +348,7 @@ export default function GrowthChart({ portfolioData, benchmarkData, benchmarkNam
       {drawdownSampled.length > 0 && (
         <div style={{flex: "0 0 20%"}}>
           <ResponsiveContainer width="100%" height="100%">
-            <AreaChart data={drawdownSampled} margin={{top:0,right:16,bottom:4,left:8}} syncId="chart"
+            <AreaChart data={drawdownSampled} margin={{top:0,right:0,bottom:4,left:0}} syncId="chart"
               onMouseMove={(e: any) => {
                 if (e?.activeLabel) {
                   const match = sampled.find((p:any) => p.date === e.activeLabel);
