@@ -283,32 +283,8 @@ export default function GrowthChart({ portfolioData, benchmarkData, benchmarkNam
                 </g>
               );
             }}/>
-            <Area type="monotone" dataKey={portfolioLabel} stroke="#4f46e5" strokeWidth={2} fill="url(#portfolioGradient)" activeDot={{r:4, strokeWidth:2, stroke:"white"}} dot={(props:any) => {
-              if (props.index !== displayedData.length - 1) return <g key={props.index}/>;
-              const {cx, cy} = props;
-              return (
-                <g key={props.index}>
-                  <circle cx={cx} cy={cy} r={8} fill="#4f46e5" opacity={0.15}>
-                    <animate attributeName="r" values="5;10;5" dur="2s" repeatCount="indefinite"/>
-                    <animate attributeName="opacity" values="0.3;0.05;0.3" dur="2s" repeatCount="indefinite"/>
-                  </circle>
-                  <circle cx={cx} cy={cy} r={4} fill="#4f46e5" stroke="white" strokeWidth={2}/>
-                </g>
-              );
-            }}/>
-            {benchmarkData.length > 0 && <Area type="monotone" dataKey={benchmarkName} stroke="#f59e0b" strokeWidth={2} fill="url(#benchmarkGradient)" activeDot={{r:4, strokeWidth:2, stroke:"white"}} dot={(props:any) => {
-              if (props.index !== displayedData.length - 1) return <g key={props.index}/>;
-              const {cx, cy} = props;
-              return (
-                <g key={props.index}>
-                  <circle cx={cx} cy={cy} r={8} fill="#f59e0b" opacity={0.15}>
-                    <animate attributeName="r" values="5;10;5" dur="2s" repeatCount="indefinite"/>
-                    <animate attributeName="opacity" values="0.3;0.05;0.3" dur="2s" repeatCount="indefinite"/>
-                  </circle>
-                  <circle cx={cx} cy={cy} r={4} fill="#f59e0b" stroke="white" strokeWidth={2}/>
-                </g>
-              );
-            }}/>}
+            <Area type="monotone" dataKey={portfolioLabel} stroke="#4f46e5" strokeWidth={2} fill="url(#portfolioGradient)" activeDot={{r:4, strokeWidth:2, stroke:"white"}} dot={false}/>
+            {benchmarkData.length > 0 && <Area type="monotone" dataKey={benchmarkName} stroke="#f59e0b" strokeWidth={2} fill="url(#benchmarkGradient)" activeDot={{r:4, strokeWidth:2, stroke:"white"}} dot={false}/>}
           </ComposedChart>
         </ResponsiveContainer>
       </div>
@@ -360,7 +336,7 @@ export default function GrowthChart({ portfolioData, benchmarkData, benchmarkNam
               onMouseLeave={() => setHoverData(null)}>
               <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9"/>
               <XAxis dataKey="date" hide/>
-              <YAxis orientation="right" dataKey="drawdown_eur" tickFormatter={(v) => new Intl.NumberFormat("fr-FR",{minimumFractionDigits:2,maximumFractionDigits:2}).format(v)} tick={{fontSize:10,fill:"#94a3b8"}} tickLine={false} axisLine={false} width={80} domain={["auto", 0]}/>
+              <YAxis orientation="right" dataKey="drawdown_eur" tickFormatter={(v) => new Intl.NumberFormat("fr-FR",{minimumFractionDigits:2,maximumFractionDigits:2}).format(v)} tick={{fontSize:10,fill:"#94a3b8"}} tickLine={false} axisLine={false} width={70} domain={["auto", 0]}/>
 
               <Tooltip content={() => null} wrapperStyle={{display:"none"}}/>
               <ReferenceLine y={0} stroke="#64748b" strokeWidth={1.5}/>
@@ -369,23 +345,25 @@ export default function GrowthChart({ portfolioData, benchmarkData, benchmarkNam
 
               {(() => {
                 if (!drawdownSampled.length) return null;
-                const minPoint = drawdownSampled.reduce((min, p) => p.drawdown_eur < min.drawdown_eur ? p : min, drawdownSampled[0]);
-                const lastPoint = drawdownSampled[drawdownSampled.length - 1];
-                const LastDot = (props: any) => {
-                  const { cx, cy } = props;
-                  if (!cx || !cy) return null;
-                  return (
-                    <g>
-                      <circle cx={cx} cy={cy} r={8} fill="#ef4444" opacity={0.15}>
-                        <animate attributeName="r" values="5;10;5" dur="2s" repeatCount="indefinite"/>
-                        <animate attributeName="opacity" values="0.3;0.05;0.3" dur="2s" repeatCount="indefinite"/>
-                      </circle>
-                      <circle cx={cx} cy={cy} r={4} fill="#ef4444" stroke="white" strokeWidth={2}/>
-                    </g>
-                  );
-                };
-                return <ReferenceDot x={lastPoint.date} y={lastPoint.drawdown_eur} r={0} shape={<LastDot/>}/>;
+return null;
               })()}
+            <Customized component={(props: any) => {
+              const { yAxisMap } = props;
+              const yAxis = yAxisMap && (yAxisMap[0] || Object.values(yAxisMap)[0]);
+              if (!yAxis || !drawdownSampled.length) return null;
+              const lastPt = drawdownSampled[drawdownSampled.length-1];
+              const val = lastPt.drawdown_eur;
+              const y = yAxis.scale(val);
+              const x = yAxis.x;
+              const fmt = new Intl.NumberFormat("fr-FR",{minimumFractionDigits:2,maximumFractionDigits:2}).format(val);
+              const w = fmt.length * 5.5 + 12;
+              return (
+                <g>
+                  <rect x={x+2} y={y-10} width={w} height={20} rx={3} fill="#ef4444"/>
+                  <text x={x+2+w/2} y={y} textAnchor="middle" dominantBaseline="central" fill="white" fontSize={10} fontWeight="600">{fmt}</text>
+                </g>
+              );
+            }}/>
             </AreaChart>
           </ResponsiveContainer>
         </div>
