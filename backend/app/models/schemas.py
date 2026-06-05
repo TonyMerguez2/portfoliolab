@@ -111,6 +111,7 @@ class TimeSeriesPoint(BaseModel):
 class DrawdownPoint(BaseModel):
     date: str
     drawdown: float                  # negative percentage
+    drawdown_eur: float = 0.0        # drawdown in EUR
 
 
 class MonthlyReturn(BaseModel):

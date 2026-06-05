@@ -9,7 +9,7 @@ interface Props {
   benchmarkData: DataPoint[];
   benchmarkName: string;
   portfolioLabel: string;
-  drawdownData?: { date: string; drawdown: number }[];
+  drawdownData?: { date: string; drawdown: number; drawdown_eur: number }[];
   benchmarkDrawdownData?: { date: string; drawdown: number }[];
 }
 
@@ -310,16 +310,16 @@ export default function GrowthChart({ portfolioData, benchmarkData, benchmarkNam
               onMouseLeave={() => setHoverData(null)}>
               <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9"/>
               <XAxis dataKey="date" hide/>
-              <YAxis tickFormatter={(v) => `${v.toFixed(1)}%`} tick={{fontSize:10,fill:"#94a3b8"}} tickLine={false} axisLine={false} width={48} domain={["auto", 0]}/>
+              <YAxis orientation="right" dataKey="drawdown_eur" tickFormatter={(v) => new Intl.NumberFormat("fr-FR",{minimumFractionDigits:2,maximumFractionDigits:2}).format(v)} tick={{fontSize:10,fill:"#94a3b8"}} tickLine={false} axisLine={false} width={80} domain={["auto", 0]}/>
 
               <Tooltip content={() => null} wrapperStyle={{display:"none"}}/>
               <ReferenceLine y={0} stroke="#64748b" strokeWidth={1.5}/>
-              <Area type="monotone" dataKey="drawdown" stroke="#ef4444" fill="#fee2e2" strokeWidth={1.5} dot={false}/>
+              <Area type="monotone" dataKey="drawdown_eur" stroke="#ef4444" fill="#fee2e2" strokeWidth={1.5} dot={false}/>
 
 
               {(() => {
                 if (!drawdownSampled.length) return null;
-                const minPoint = drawdownSampled.reduce((min, p) => p.drawdown < min.drawdown ? p : min, drawdownSampled[0]);
+                const minPoint = drawdownSampled.reduce((min, p) => p.drawdown_eur < min.drawdown_eur ? p : min, drawdownSampled[0]);
                 const lastPoint = drawdownSampled[drawdownSampled.length - 1];
                 const LastDot = (props: any) => {
                   const { cx, cy } = props;
@@ -334,7 +334,7 @@ export default function GrowthChart({ portfolioData, benchmarkData, benchmarkNam
                     </g>
                   );
                 };
-                return <ReferenceDot x={lastPoint.date} y={lastPoint.drawdown} r={0} shape={<LastDot/>}/>;
+                return <ReferenceDot x={lastPoint.date} y={lastPoint.drawdown_eur} r={0} shape={<LastDot/>}/>;
               })()}
             </AreaChart>
           </ResponsiveContainer>

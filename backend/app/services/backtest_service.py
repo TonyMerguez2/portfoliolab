@@ -142,8 +142,13 @@ def run_backtest(req: BacktestRequest) -> BacktestResponse:
         ]
 
     dd_series = fin.drawdown_series(portfolio_ret)
+    growth_map = {str(d.date()): v for d, v in portfolio_growth.items()}
     drawdown_pts = [
-        DrawdownPoint(date=str(d.date()), drawdown=round(v * 100, 2))
+        DrawdownPoint(
+            date=str(d.date()),
+            drawdown=round(v * 100, 2),
+            drawdown_eur=round(v * growth_map.get(str(d.date()), 10000), 2)
+        )
         for d, v in dd_series.items()
     ]
 
