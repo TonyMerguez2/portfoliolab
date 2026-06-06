@@ -21,14 +21,25 @@ interface Props {
   drawdownData?: { date: string; drawdown: number; drawdown_eur: number }[];
   benchmarkDrawdownData?: { date: string; drawdown: number }[];
   onRemoveBenchmark?: () => void;
+  portfolioColor?: string;
   onExitFullscreen?: () => void;
 }
 
-export default function GrowthChart({ portfolioData, benchmarkData, benchmarkName, portfolioLabel, drawdownData, benchmarkDrawdownData, onRemoveBenchmark, onExitFullscreen }: Props) {
-  const [hoverData, setHoverData] = useState<{value: number, bValue: number, date: string} | null>(null);
+export default function GrowthChart({ portfolioData, benchmarkData, benchmarkName, portfolioLabel, drawdownData, benchmarkDrawdownData, onRemoveBenchmark, onExitFullscreen, portfolioColor = "#4f46e5" }: Props) {
+  const [hoverRow, setHoverRow] = useState<Record<string, any> | null>(null);
+  const [hoverPerfs, setHoverPerfs] = useState<Record<string, number> | null>(null);
   const [periodFilter, setPeriodFilter] = useState<"1M"|"3M"|"6M"|"1A"|"3A"|"Max">("Max");
   const [extraSeries, setExtraSeries] = useState<{ticker: string, name: string, color: string, data: {date:string,value:number}[]}[]>([]);
   const [showDropdown, setShowDropdown] = useState(false);
+  const [savedPortfolios, setSavedPortfolios] = useState<any[]>([]);
+
+  useEffect(() => {
+    const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
+    fetch(`${API_URL}/api/v1/portfolios`)
+      .then(r => r.json())
+      .then(setSavedPortfolios)
+      .catch(() => {});
+  }, []);
   const [fullscreen, setFullscreen] = useState(false);
   useEffect(() => {
     setTimeout(() => window.dispatchEvent(new Event("resize")), 100);
@@ -61,8 +72,14 @@ export default function GrowthChart({ portfolioData, benchmarkData, benchmarkNam
     if (extraSeries.length === 0) return;
     const reload = async () => {
       const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
+      const startDate = portfolioData.length > 0 ? portfolioData[0].date : null;
       const updated = await Promise.all(extraSeries.map(async s => {
-        const res = await fetch(`${API_URL}/api/v1/compare?ticker=${s.ticker}&period=Max`);
+        const savedP = savedPortfolios.find((p: any) => p.id === s.ticker);
+        if (savedP) return s; // les portefeuilles sauvegardés gardent leurs données
+        const url = startDate
+          ? `${API_URL}/api/v1/compare?ticker=${s.ticker}&period=Max&start=${startDate}`
+          : `${API_URL}/api/v1/compare?ticker=${s.ticker}&period=Max`;
+        const res = await fetch(url);
         const json = await res.json();
         if (!json.data?.length) return s;
         return {...s, data: json.data};
@@ -78,16 +95,32 @@ export default function GrowthChart({ portfolioData, benchmarkData, benchmarkNam
     setLoadingTicker(etf.ticker);
     try {
       const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
-      const startDate = portfolioData.length > 0 ? portfolioData[0].date : null;
-      const url = startDate 
-        ? `${API_URL}/api/v1/compare?ticker=${etf.ticker}&period=${periodFilter}&start=${startDate}`
-        : `${API_URL}/api/v1/compare?ticker=${etf.ticker}&period=${periodFilter}`;
-      const res = await fetch(url);
-      const json = await res.json();
-      if (json.data?.length > 0) {
-        if (json.data.length > 0) {
-          setExtraSeries(prev => [...prev, {...etf, data: json.data}]);
-        }
+      const savedP = savedPortfolios.find((p: any) => p.id === etf.ticker);
+      let data: any[] = [];
+      if (savedP) {
+        const res = await fetch(`${API_URL}/api/v1/backtest`, {
+          method: "POST",
+          headers: {"Content-Type": "application/json"},
+          body: JSON.stringify({
+            assets: savedP.assets,
+            period: "max",
+            benchmark: null,
+            risk_free_rate: 0.035,
+          }),
+        });
+        const json = await res.json();
+        data = json.portfolio_growth || [];
+      } else {
+        const startDate = portfolioData.length > 0 ? portfolioData[0].date : null;
+        const url = startDate
+          ? `${API_URL}/api/v1/compare?ticker=${etf.ticker}&period=Max&start=${startDate}`
+          : `${API_URL}/api/v1/compare?ticker=${etf.ticker}&period=Max`;
+        const res = await fetch(url);
+        const json = await res.json();
+        data = json.data || [];
+      }
+      if (data.length > 0) {
+        setExtraSeries(prev => [...prev, {...etf, data}]);
       }
     } finally {
       setLoadingTicker(null);
@@ -160,6 +193,24 @@ export default function GrowthChart({ portfolioData, benchmarkData, benchmarkNam
   };
 
   const CustomTooltip = ({ active, payload, label }: any) => {
+    useEffect(() => {
+      if (active && payload?.length) {
+        const perfs: Record<string, number> = {};
+        const firstVal = displayedData.length > 0 ? (displayedData[0][portfolioLabel] as number) : 10000;
+        const ptfPayload = payload.find((p:any) => p.dataKey === portfolioLabel);
+        if (ptfPayload && firstVal) perfs[portfolioLabel] = ((ptfPayload.value - firstVal) / firstVal * 100);
+        const bFirst = displayedData.length > 0 ? (displayedData[0][benchmarkName] as number) : null;
+        const bmPayload = payload.find((p:any) => p.dataKey === benchmarkName);
+        if (bmPayload && bFirst) perfs[benchmarkName] = ((bmPayload.value - bFirst) / bFirst * 100);
+        extraSeries.forEach((s:any) => {
+          const sp = payload.find((p:any) => p.dataKey === s.ticker);
+          if (sp) perfs[s.ticker] = ((sp.value - 10000) / 10000 * 100);
+        });
+        setHoverPerfs(perfs);
+      } else {
+        setHoverPerfs(null);
+      }
+    }, [active, payload]);
     if (!active || !payload?.length) return null;
     const ptfPayload = payload.find((p:any) => p.dataKey === portfolioLabel);
     const bmPayload = payload.find((p:any) => p.dataKey === benchmarkName);
@@ -299,9 +350,26 @@ export default function GrowthChart({ portfolioData, benchmarkData, benchmarkNam
   };
 
 
-  const initialValue = displayedData.length > 0 ? (displayedData[0][portfolioLabel] as number) : 10000;
-  const currentValue = hoverData ? hoverData.value : (sampled.length > 0 ? (sampled[sampled.length-1][portfolioLabel] as number) : 10000);
-  const perfPct = ((currentValue - initialValue) / initialValue) * 100;
+  const hoveredPoint = hoverRow;
+  const lastPoint = displayedData.length > 0 ? displayedData[displayedData.length-1] : null;
+  const firstPoint = displayedData.length > 0 ? displayedData[0] : null;
+
+  const initialValue = firstPoint ? (firstPoint[portfolioLabel] as number) : 10000;
+  const currentValue = hoveredPoint ? (hoveredPoint[portfolioLabel] as number) ?? initialValue : (lastPoint ? (lastPoint[portfolioLabel] as number) : initialValue);
+  const lastPtfVal = lastPoint ? (lastPoint[portfolioLabel] as number) ?? initialValue : initialValue;
+  const perfPct = hoverPerfs?.[portfolioLabel] ?? ((lastPtfVal - initialValue) / initialValue) * 100;
+
+  const bmInitial = firstPoint ? (firstPoint[benchmarkName] as number) ?? null : null;
+  const bmCurrentVal = hoveredPoint ? (hoveredPoint[benchmarkName] as number) ?? null : (lastPoint ? (lastPoint[benchmarkName] as number) ?? null : null);
+  const bmLastVal = lastPoint ? (lastPoint[benchmarkName] as number) ?? null : null;
+  const bmPerfPct = hoverPerfs?.[benchmarkName] ?? (bmInitial && bmLastVal ? ((bmLastVal - bmInitial) / bmInitial * 100) : null);
+
+  const extraPerfMap: Record<string, number|null> = {};
+  extraSeries.forEach((s:any) => {
+    const cur = hoveredPoint ? (hoveredPoint[s.ticker] as number) ?? null : (lastPoint ? (lastPoint[s.ticker] as number) ?? null : null);
+    const lastVal = lastPoint ? (lastPoint[s.ticker] as number) ?? null : null;
+    extraPerfMap[s.ticker] = hoverPerfs?.[s.ticker] ?? (lastVal != null ? ((lastVal - 10000) / 10000 * 100) : null);
+  });
 
   // Perf du jour = dernier point vs avant-dernier
   const todayPerfPtf = (() => {
@@ -351,7 +419,7 @@ export default function GrowthChart({ portfolioData, benchmarkData, benchmarkNam
       <div className="flex items-center justify-between px-1 pb-2">
         <div className="flex items-center gap-4">
           <div className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-full bg-indigo-600 flex items-center justify-center text-white text-xs font-bold">P</div>
+            <div className="w-8 h-8 rounded-full flex items-center justify-center text-white text-xs font-bold" style={{backgroundColor: portfolioColor}}>{portfolioLabel.charAt(0).toUpperCase()}</div>
             <div>
               <div className="text-sm font-semibold text-slate-700">{portfolioLabel}</div>
               <div className={`text-xs font-bold tabular-nums ${perfPct >= 0 ? "text-emerald-500" : "text-red-500"}`}>
@@ -361,9 +429,7 @@ export default function GrowthChart({ portfolioData, benchmarkData, benchmarkNam
             </div>
           </div>
           {benchmarkData.length > 0 && (() => {
-            const bmLast = sampled.length > 0 ? (sampled[sampled.length-1][benchmarkName] as number) : null;
-            const bmFirst = displayedData.length > 0 ? (displayedData[0][benchmarkName] as number) : null;
-            const bmPerf = bmLast && bmFirst ? ((bmLast - bmFirst) / bmFirst * 100) : null;
+            const bmPerf = bmPerfPct;
             return (
               <div className="flex items-center gap-2">
                 <div className="w-8 h-8 rounded-full bg-amber-500 flex items-center justify-center text-white text-xs font-bold relative">
@@ -383,9 +449,7 @@ export default function GrowthChart({ portfolioData, benchmarkData, benchmarkNam
 
           {/* Courbes supplémentaires */}
           {extraSeries.map(s => {
-            const sLast = s.data.length > 0 ? s.data[s.data.length-1].value : null;
-            const sFirst = s.data.length > 0 ? s.data[0].value : null;
-            const sPerf = sLast && sFirst ? ((sLast - sFirst) / sFirst * 100) : null;
+            const sPerf = extraPerfMap[s.ticker] ?? null;
             return (
               <div key={s.ticker} className="flex items-center gap-2">
                 <div className="w-8 h-8 rounded-full flex items-center justify-center text-white text-xs font-bold relative" style={{backgroundColor: s.color}}>
@@ -421,7 +485,16 @@ export default function GrowthChart({ portfolioData, benchmarkData, benchmarkNam
                     </button>
                   ))}
                   <div className="px-3 py-1 mt-1 text-xs text-slate-400 font-semibold uppercase border-t border-slate-100">Mes portefeuilles</div>
-                  <div className="px-3 py-2 text-xs text-slate-400 italic">Aucun portefeuille enregistré</div>
+                  {savedPortfolios.length === 0 
+                    ? <div className="px-3 py-2 text-xs text-slate-400 italic">Aucun portefeuille enregistré</div>
+                    : savedPortfolios.filter(p => !extraSeries.find(s => s.ticker === p.id)).map(p => (
+                      <button key={p.id} onClick={() => addSeries({ticker: p.id, name: p.name, color: p.color})} disabled={!!loadingTicker}
+                        className="w-full flex items-center gap-2 px-3 py-2 hover:bg-slate-50 text-sm text-slate-700">
+                        <div className="w-3 h-3 rounded-full" style={{backgroundColor: p.color}}/>
+                        {loadingTicker === p.id ? "Chargement..." : p.name}
+                      </button>
+                    ))
+                  }
                 </div>
               )}
             </div>
@@ -489,18 +562,31 @@ export default function GrowthChart({ portfolioData, benchmarkData, benchmarkNam
         <ResponsiveContainer width="100%" height="100%">
           <ComposedChart data={displayedData} margin={{top:4,right:0,bottom:0,left:4}} syncId="chart"
             onMouseMove={(e: any) => {
-              if (e?.activePayload?.[0]) {
-                const val = e.activePayload[0].value;
-                const date = e.activeLabel;
-                setHoverData({value: val, date});
+              if (e?.activePayload?.length) {
+                const ptfPayload = e.activePayload.find((p:any) => p.dataKey === portfolioLabel);
+                const bmPayload = e.activePayload.find((p:any) => p.dataKey === benchmarkName);
+                const val = ptfPayload?.value ?? e.activePayload[0].value;
+                const date = e.activeLabel || "";
+                const extraValues: Record<string, number> = {};
+                // Chercher dans displayedData (pas sampled qui est downsampleé)
+                const hoveredPoint = displayedData.find((p:any) => p.date === date) 
+                  || displayedData.reduce((closest:any, p:any) => 
+                    Math.abs(new Date(p.date).getTime() - new Date(date).getTime()) < Math.abs(new Date(closest.date).getTime() - new Date(date).getTime()) ? p : closest
+                  , displayedData[0]);
+                extraSeries.forEach((s:any) => {
+                  const v = hoveredPoint?.[s.ticker];
+                  if (v != null) extraValues[s.ticker] = v as number;
+                });
+                const bmFromPoint = hoveredPoint?.[benchmarkName] as number ?? bmPayload?.value ?? null;
+                setHoverRow({value: val, bValue: bmFromPoint, date, extraValues});
               }
             }}
-            onMouseLeave={() => setHoverData(null)}>
+            onMouseLeave={() => setHoverRow(null)}>
             <defs>
               <linearGradient id="portfolioGradient" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0%" stopColor="#4f46e5" stopOpacity={0.5}/>
-                <stop offset="60%" stopColor="#4f46e5" stopOpacity={0.15}/>
-                <stop offset="100%" stopColor="#4f46e5" stopOpacity={0}/>
+                <stop offset="0%" stopColor={portfolioColor} stopOpacity={0.5}/>
+                <stop offset="60%" stopColor={portfolioColor} stopOpacity={0.15}/>
+                <stop offset="100%" stopColor={portfolioColor} stopOpacity={0}/>
               </linearGradient>
               <linearGradient id="benchmarkGradient" x1="0" y1="0" x2="0" y2="1">
                 <stop offset="0%" stopColor="#f59e0b" stopOpacity={0.4}/>
@@ -573,7 +659,7 @@ export default function GrowthChart({ portfolioData, benchmarkData, benchmarkNam
                 </g>
               );
             }}/>
-            <Area type="monotone" dataKey={portfolioLabel} stroke="#4f46e5" strokeWidth={2} fill="url(#portfolioGradient)" activeDot={{r:4, strokeWidth:2, stroke:"white"}} dot={false}/>
+            <Area type="monotone" dataKey={portfolioLabel} stroke={portfolioColor} strokeWidth={2} fill="url(#portfolioGradient)" activeDot={{r:4, strokeWidth:2, stroke:"white"}} dot={false}/>
             {extraSeries.map(s => (
               <Area key={s.ticker} type="monotone" dataKey={s.ticker} stroke={s.color} strokeWidth={2} fill={`url(#grad-${s.ticker})`} dot={false} activeDot={{r:4, strokeWidth:2, stroke:"white"}} connectNulls={true}/>
             ))}
@@ -623,11 +709,11 @@ export default function GrowthChart({ portfolioData, benchmarkData, benchmarkNam
                 if (e?.activeLabel) {
                   const match = sampled.find((p:any) => p.date === e.activeLabel);
                   if (match && match[portfolioLabel]) {
-                    setHoverData({value: match[portfolioLabel] as number, bValue: match[benchmarkName] as number || 0, date: e.activeLabel});
+                    setHoverRow({date: e.activeLabel});
                   }
                 }
               }}
-              onMouseLeave={() => setHoverData(null)}>
+              onMouseLeave={() => setHoverRow(null)}>
               <defs>
                 <linearGradient id="ddGrad" x1="0" y1="0" x2="0" y2="1">
                   <stop offset="0%" stopColor="#fca5a5" stopOpacity={0.1}/>

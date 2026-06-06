@@ -60,6 +60,7 @@ function DashboardContent() {
   const getInitialAssets = () => {
     try {
       const raw = searchParams.get("assets");
+      const portfolioName = searchParams.get("name") ? decodeURIComponent(searchParams.get("name")!) : "Portefeuille";
       if (raw) {
         const parsed = JSON.parse(decodeURIComponent(raw));
         if (Array.isArray(parsed) && parsed.length > 0)
@@ -91,8 +92,6 @@ function DashboardContent() {
   };
   const handleSubmit = () => {
     if (!isBalanced || assets.some(a => !a.ticker)) return;
-    setHideBenchmark(false);
-    setHideBenchmark(false);
     run({ assets: assets.filter(a => a.ticker), period, start_date: period === "custom" ? customStartDate : undefined, benchmark: benchmark === "none" ? null : benchmark as Benchmark, risk_free_rate: riskFreeRate/100, lang: locale });
   };
 
@@ -151,7 +150,7 @@ function DashboardContent() {
           <aside className="lg:col-span-1 space-y-4">
             <div className={`${bgCard} border rounded-2xl p-4 shadow-sm`}>
               <div className="flex items-center justify-between mb-3">
-                <h2 className={`text-sm font-semibold ${textPrimary}`}>Portefeuille</h2>
+                <h2 className={`text-sm font-semibold ${textPrimary}`}>{searchParams.get("name") ? decodeURIComponent(searchParams.get("name")!) : "Portefeuille"}</h2>
                 <button onClick={() => router.push("/build")} className="text-xs text-indigo-500 hover:text-indigo-400">Modifier</button>
               </div>
               {(() => {
@@ -335,10 +334,10 @@ function DashboardContent() {
                         portfolioData={data.portfolio_growth}
                         benchmarkData={hideBenchmark ? [] : (data.benchmark_growth || [])}
                         benchmarkName={data.benchmark?.name || ""}
-                        portfolioLabel="Portefeuille"
+                        portfolioLabel={searchParams.get("name") ? decodeURIComponent(searchParams.get("name")!) : "Portefeuille"}
+                        portfolioColor={searchParams.get("color") ? decodeURIComponent(searchParams.get("color")!) : "#4f46e5"}
                         drawdownData={data.drawdown_series}
                         benchmarkDrawdownData={(data as any).benchmark_drawdown_series}
-                        onRemoveBenchmark={() => setHideBenchmark(true)}
                         onRemoveBenchmark={() => setHideBenchmark(true)}
                       />
                     )}

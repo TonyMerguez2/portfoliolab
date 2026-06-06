@@ -10,6 +10,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.core.config import get_settings
 from app.api.routes.backtest import router as backtest_router
+from app.api.routes.portfolios import router as portfolios_router
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -37,6 +38,7 @@ app.add_middleware(
 )
 
 app.include_router(backtest_router)
+app.include_router(portfolios_router)
 
 
 @app.get("/health", tags=["System"])
