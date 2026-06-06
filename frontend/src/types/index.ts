@@ -2,7 +2,7 @@
 // Enums
 // ─────────────────────────────────────────────
 
-export type Period = "1y" | "3y" | "5y" | "10y" | "max";
+export type Period = "1y" | "3y" | "5y" | "10y" | "max" | "custom";
 export type Benchmark = "^GSPC" | "URTH" | "^NDX" | "^FCHI";
 
 // ─────────────────────────────────────────────
@@ -17,6 +17,7 @@ export interface AssetInput {
 export interface BacktestRequest {
   assets: AssetInput[];
   period: Period;
+  start_date?: string;
   benchmark?: Benchmark | null;
   risk_free_rate: number;
   lang?: string;

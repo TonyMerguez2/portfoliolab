@@ -16,6 +16,7 @@ class Period(str, Enum):
     FIVE_YEARS = "5y"
     TEN_YEARS = "10y"
     MAX = "max"
+    CUSTOM = "custom"
 
 
 class Benchmark(str, Enum):
@@ -42,6 +43,7 @@ class AssetInput(BaseModel):
 class BacktestRequest(BaseModel):
     assets: list[AssetInput] = Field(..., min_length=1, max_length=20)
     period: Period = Period.FIVE_YEARS
+    start_date: str | None = None
     benchmark: Benchmark | None = Benchmark.SP500
     risk_free_rate: float = Field(
         default=0.035, ge=0, le=0.20,

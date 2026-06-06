@@ -48,7 +48,7 @@ def run_backtest(req: BacktestRequest) -> BacktestResponse:
     # ── 1. Fetch data ──────────────────────────────────────────────
     benchmark_ticker = req.benchmark.value if req.benchmark else None
     all_tickers = [a.ticker for a in req.assets] + ([benchmark_ticker] if benchmark_ticker else [])
-    prices_all, successful, failed = fetch_prices(all_tickers, req.period)
+    prices_all, successful, failed = fetch_prices(all_tickers, req.period, start_date_override=req.start_date if req.period == "custom" else None)
     asset_tickers = [t for t in [a.ticker for a in req.assets] if t in successful]
 
     if not asset_tickers:

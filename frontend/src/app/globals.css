@@ -40,3 +40,12 @@
   background-color: #0f1117;
   color: #e2e8f0;
 }
+
+.recharts-wrapper svg,
+.recharts-surface {
+  overflow: visible !important;
+}
+
+.recharts-responsive-container {
+  overflow: visible !important;
+}

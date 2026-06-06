@@ -49,6 +49,8 @@ function DashboardContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [chartView, setChartView] = useState<ChartView>("performance");
+  const [hideBenchmark, setHideBenchmark] = useState(false);
+  const [customStartDate, setCustomStartDate] = useState<string>("");
   const [period, setPeriod] = useState<Period>("5y");
   const [benchmark, setBenchmark] = useState<string>("^GSPC");
   const [riskFreeRate, setRiskFreeRate] = useState(3.5);
@@ -89,7 +91,9 @@ function DashboardContent() {
   };
   const handleSubmit = () => {
     if (!isBalanced || assets.some(a => !a.ticker)) return;
-    run({ assets: assets.filter(a => a.ticker), period, benchmark: benchmark === "none" ? null : benchmark as Benchmark, risk_free_rate: riskFreeRate/100, lang: locale });
+    setHideBenchmark(false);
+    setHideBenchmark(false);
+    run({ assets: assets.filter(a => a.ticker), period, start_date: period === "custom" ? customStartDate : undefined, benchmark: benchmark === "none" ? null : benchmark as Benchmark, risk_free_rate: riskFreeRate/100, lang: locale });
   };
 
   const bg = dark ? "bg-[#0f1117]" : "bg-slate-50";
@@ -98,7 +102,7 @@ function DashboardContent() {
   const textSecondary = dark ? "text-slate-400" : "text-slate-500";
   const borderColor = dark ? "border-slate-700" : "border-slate-200";
 
-  const periods: Period[] = ["1y","3y","5y","10y","max"];
+  const periods: {value: Period, label: string}[] = [{value:"1y",label:"1A"},{value:"3y",label:"3A"},{value:"5y",label:"5A"},{value:"10y",label:"10A"},{value:"max",label:"Max"}];
   const benchmarks: {value:Benchmark|"none", label:string}[] = [
     {value:"none", label:"Sans benchmark"},
     {value:"^GSPC", label:"S&P 500"},
@@ -178,14 +182,45 @@ function DashboardContent() {
 
               {/* Période & Benchmark */}
               <div className="space-y-2 mb-3">
-                <select value={period} onChange={e => setPeriod(e.target.value as Period)}
-                  className={`w-full border rounded-lg px-2 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500 ${dark ? "bg-slate-700 border-slate-600 text-slate-200" : "bg-white border-slate-200"}`}>
-                  {periods.map(v => <option key={v} value={v}>{t(`builder.periodLabel.${v}`)}</option>)}
-                </select>
-                <select value={benchmark} onChange={e => setBenchmark(e.target.value as Benchmark)}
-                  className={`w-full border rounded-lg px-2 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500 ${dark ? "bg-slate-700 border-slate-600 text-slate-200" : "bg-white border-slate-200"}`}>
-                  {benchmarks.map(({value,label}) => <option key={value} value={value}>{label}</option>)}
-                </select>
+                <div className="space-y-1.5">
+                  <div className="flex gap-1 flex-wrap">
+                    {periods.map(({value, label}) => (
+                      <button key={value} onClick={() => setPeriod(value)}
+                        className={`px-2 py-1 text-xs rounded-lg border transition-colors ${period === value ? "bg-indigo-600 text-white border-indigo-600" : dark ? "bg-slate-700 border-slate-600 text-slate-300 hover:border-indigo-400" : "bg-white border-slate-200 text-slate-600 hover:border-indigo-400"}`}>
+                        {label}
+                      </button>
+                    ))}
+                  </div>
+                  <div className="flex items-center gap-1">
+                    <span className={`text-xs font-medium ${dark ? "text-slate-400" : "text-slate-500"}`}>Depuis</span>
+                    <select
+                      value={customStartDate ? new Date(customStartDate).getMonth() + 1 : ""}
+                      onChange={e => {
+                        const y = customStartDate ? new Date(customStartDate).getFullYear() : new Date().getFullYear();
+                        const m = e.target.value;
+                        if (m) { const d = `${y}-${String(m).padStart(2,"0")}-01`; setCustomStartDate(d); setPeriod("custom"); }
+                      }}
+                      className={`flex-1 border rounded-lg px-2 py-1 text-xs focus:outline-none transition-colors appearance-none cursor-pointer ${period === "custom" ? "bg-indigo-600 text-white border-indigo-600" : dark ? "bg-slate-700 border-slate-600 text-slate-300" : "bg-white border-slate-200 text-slate-600 hover:border-indigo-400"}`}>
+                      <option value="">Mois</option>
+                      {["Jan","Fév","Mar","Avr","Mai","Jun","Jul","Aoû","Sep","Oct","Nov","Déc"].map((m,i) => (
+                        <option key={i} value={i+1}>{m}</option>
+                      ))}
+                    </select>
+                    <select
+                      value={customStartDate ? new Date(customStartDate).getFullYear() : ""}
+                      onChange={e => {
+                        const m = customStartDate ? new Date(customStartDate).getMonth() + 1 : 1;
+                        const y = e.target.value;
+                        if (y) { const d = `${y}-${String(m).padStart(2,"0")}-01`; setCustomStartDate(d); setPeriod("custom"); }
+                      }}
+                      className={`flex-1 border rounded-lg px-2 py-1 text-xs focus:outline-none transition-colors appearance-none cursor-pointer ${period === "custom" ? "bg-indigo-600 text-white border-indigo-600" : dark ? "bg-slate-700 border-slate-600 text-slate-300" : "bg-white border-slate-200 text-slate-600 hover:border-indigo-400"}`}>
+                      <option value="">Année</option>
+                      {Array.from({length: new Date().getFullYear() - 1990 + 1}, (_,i) => new Date().getFullYear() - i).map(y => (
+                        <option key={y} value={y}>{y}</option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
                 <div>
                   <p className={`text-xs mb-1 ${textSecondary}`}>Taux sans risque — {riskFreeRate.toFixed(1)}%</p>
                   <input type="range" min={0} max={10} step={0.1} value={riskFreeRate}
@@ -298,11 +333,13 @@ function DashboardContent() {
                     {chartView === "performance" && (
                       <GrowthChart
                         portfolioData={data.portfolio_growth}
-                        benchmarkData={data.benchmark_growth || []}
+                        benchmarkData={hideBenchmark ? [] : (data.benchmark_growth || [])}
                         benchmarkName={data.benchmark?.name || ""}
                         portfolioLabel="Portefeuille"
                         drawdownData={data.drawdown_series}
                         benchmarkDrawdownData={(data as any).benchmark_drawdown_series}
+                        onRemoveBenchmark={() => setHideBenchmark(true)}
+                        onRemoveBenchmark={() => setHideBenchmark(true)}
                       />
                     )}
                     {chartView === "drawdown" && <DrawdownChart data={data.drawdown_series}/>}

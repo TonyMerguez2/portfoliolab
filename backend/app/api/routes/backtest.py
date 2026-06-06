@@ -189,3 +189,28 @@ async def get_sector(ticker: str) -> dict:
     except Exception as e:
         logger.error(f"Sector error: {e}")
         return {"sector": None, "industry": None, "country": None}
+
+
+@router.get("/compare", tags=["Utilities"])
+async def compare_ticker(ticker: str, period: str = "Max", start: str = None) -> dict:
+    """Fetch growth curve for a ticker, normalized to 10000."""
+    import yfinance as yf
+    from datetime import datetime, timedelta
+    periods = {"1M": 30, "3M": 90, "6M": 180, "1A": 365, "3A": 1095, "Max": 0}
+    days = periods.get(period, 0)
+    if start:
+        pass  # use provided start
+    else:
+        start = None if days == 0 else (datetime.today() - timedelta(days=days)).strftime("%Y-%m-%d")
+    try:
+        hist = yf.download(ticker, start=start, period=None if start else "max", progress=False, auto_adjust=True)
+        if hist.empty:
+            return {"ticker": ticker, "data": []}
+        close = hist["Close"].dropna()
+        if hasattr(close.columns, '__len__'):
+            close = close.iloc[:, 0]
+        first = float(close.iloc[0])
+        data = [{"date": str(d.date()), "value": round(float(v) / first * 10000, 2)} for d, v in close.items()]
+        return {"ticker": ticker, "data": data}
+    except Exception as e:
+        return {"ticker": ticker, "data": [], "error": str(e)}

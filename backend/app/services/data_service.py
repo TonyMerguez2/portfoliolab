@@ -30,12 +30,13 @@ PERIOD_TO_YEARS: dict[Period, float | None] = {
     Period.FIVE_YEARS: 5,
     Period.TEN_YEARS: 10,
     Period.MAX: None,
+    Period.CUSTOM: None,
 }
 
 
 def _period_to_start_date(period: Period) -> str | None:
     """Convert a Period enum to a start date string (YYYY-MM-DD), or None for max."""
-    years = PERIOD_TO_YEARS[period]
+    years = PERIOD_TO_YEARS.get(period)
     if years is None:
         return None
     start = datetime.today() - timedelta(days=int(years * 365.25))
@@ -45,6 +46,7 @@ def _period_to_start_date(period: Period) -> str | None:
 def fetch_prices(
     tickers: list[str],
     period: Period,
+    start_date_override: str | None = None,
 ) -> tuple[pd.DataFrame, list[str], list[str]]:
     """
     Download adjusted close prices for a list of tickers.
@@ -59,7 +61,7 @@ def fetch_prices(
     failed : list[str]
         Tickers that failed (not found, no data, etc.).
     """
-    start_date = _period_to_start_date(period)
+    start_date = start_date_override if start_date_override else _period_to_start_date(period)
     end_date = datetime.today().strftime("%Y-%m-%d")
 
     successful: list[str] = []
@@ -68,14 +70,23 @@ def fetch_prices(
 
     for ticker in tickers:
         try:
-            data = yf.download(
-                ticker,
-                start=start_date,
-                end=end_date,
-                progress=False,
-                auto_adjust=True,
-                timeout=settings.yfinance_timeout,
-            )
+            if start_date is None:
+                data = yf.download(
+                    ticker,
+                    period="max",
+                    progress=False,
+                    auto_adjust=True,
+                    timeout=settings.yfinance_timeout,
+                )
+            else:
+                data = yf.download(
+                    ticker,
+                    start=start_date,
+                    end=end_date,
+                    progress=False,
+                    auto_adjust=True,
+                    timeout=settings.yfinance_timeout,
+                )
             if data.empty or len(data) < 30:
                 logger.warning(f"Insufficient data for {ticker}")
                 failed.append(ticker)
