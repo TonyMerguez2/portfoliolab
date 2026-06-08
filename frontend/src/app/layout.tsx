@@ -5,7 +5,7 @@ import "./globals.css";
 const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: "Quantfolio — Analyse de Portefeuille",
+  title: "NOVAC — Analyse de Portefeuille",
   description: "Construisez, analysez et comprenez votre portefeuille d'investissement. Backtesting, Monte Carlo, analyse du risque.",
 };
 

@@ -516,7 +516,7 @@ export default function GrowthChart({ portfolioData, benchmarkData, benchmarkNam
                   const html2canvas = (await import("html2canvas")).default;
                   const canvas = await html2canvas(chartRef.current!);
                   const link = document.createElement("a");
-                  link.download = "quantfolio-chart.png";
+                  link.download = "novac-chart.png";
                   link.href = canvas.toDataURL();
                   link.click();
                 } catch(e) { alert("Erreur téléchargement"); }
@@ -527,7 +527,7 @@ export default function GrowthChart({ portfolioData, benchmarkData, benchmarkNam
               </button>
               <button onClick={() => {
                 const url = encodeURIComponent(window.location.href);
-                const text = encodeURIComponent("Mon analyse de portefeuille sur Quantfolio");
+                const text = encodeURIComponent("Mon analyse de portefeuille sur NOVAC");
                 window.open(`https://twitter.com/intent/tweet?text=${text}&url=${url}`, "_blank");
                 setShowShare(false);
               }} className="w-full flex items-center gap-2 px-3 py-2 hover:bg-slate-50 text-sm text-slate-700">

@@ -119,8 +119,8 @@ function DashboardContent() {
         <div className="max-w-screen-2xl mx-auto px-4 h-13 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <button onClick={() => router.push("/build")} className="flex items-center gap-2 hover:opacity-80">
-              <img src="/logo.png" alt="Quantfolio" className="w-7 h-7 object-contain"/>
-              <span className={`font-bold text-base tracking-tight ${textPrimary}`}>Quantfolio</span>
+              <img src={dark ? "/logob.png" : "/logoa.png"} alt="NOVAC" className="w-10 h-10 object-contain"/>
+              <span className={`font-bold text-base tracking-tight ${textPrimary}`}>NOVAC</span>
             </button>
             <span className={`text-xs px-2 py-0.5 rounded-full border ${dark ? "border-slate-600 text-slate-400" : "border-slate-200 text-slate-400"}`}>Analyse</span>
           </div>

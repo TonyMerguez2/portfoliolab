@@ -1,211 +1,305 @@
 "use client";
 import { useRouter } from "next/navigation";
+import { useEffect, useRef, useState } from "react";
 
-const ACTIONS = [
-  { ticker: "AAPL", name: "Apple", flag: "🇺🇸" },
-  { ticker: "MSFT", name: "Microsoft", flag: "🇺🇸" },
-  { ticker: "NVDA", name: "Nvidia", flag: "🇺🇸" },
-  { ticker: "ASML", name: "ASML", flag: "🇳🇱" },
-  { ticker: "MC.PA", name: "LVMH", flag: "🇫🇷" },
-  { ticker: "TSLA", name: "Tesla", flag: "🇺🇸" },
-  { ticker: "GOOGL", name: "Google", flag: "🇺🇸" },
-  { ticker: "AMZN", name: "Amazon", flag: "🇺🇸" },
-  { ticker: "META", name: "Meta", flag: "🇺🇸" },
-  { ticker: "OR.PA", name: "L'Oréal", flag: "🇫🇷" },
-  { ticker: "SAP", name: "SAP", flag: "🇩🇪" },
-  { ticker: "TTE.PA", name: "TotalEnergies", flag: "🇫🇷" },
-  { ticker: "NOVO-B.CO", name: "Novo Nordisk", flag: "🇩🇰" },
-];
-
-const ETFS = [
-  { ticker: "CW8.PA", name: "MSCI World", flag: "🌍" },
-  { ticker: "EWLD.PA", name: "EWLD", flag: "🌍" },
-  { ticker: "WPEA.PA", name: "WPEA", flag: "🌍" },
-  { ticker: "SPY", name: "S&P 500 ETF", flag: "🇺🇸" },
-  { ticker: "QQQ", name: "Nasdaq ETF", flag: "🇺🇸" },
-  { ticker: "AAXJ", name: "MSCI Asia ex-JP", flag: "🌏" },
-  { ticker: "ESEA.PA", name: "MSCI EM", flag: "🌍" },
-  { ticker: "PAEEM.PA", name: "MSCI EM ESG", flag: "🌱" },
-  { ticker: "GLD", name: "Gold ETF", flag: "🥇" },
-  { ticker: "TLT", name: "US Bonds 20Y", flag: "🇺🇸" },
-  { ticker: "IEMB.AS", name: "EM Bonds", flag: "🌍" },
-  { ticker: "IWDA.AS", name: "iShares World", flag: "🌍" },
-  { ticker: "VWCE.DE", name: "Vanguard World", flag: "🌍" },
-];
-
-const CRYPTOS = [
-  { ticker: "BTC-USD", name: "Bitcoin", flag: "—" },
-  { ticker: "ETH-USD", name: "Ethereum", flag: "—" },
-  { ticker: "SOL-USD", name: "Solana", flag: "—" },
-  { ticker: "BNB-USD", name: "BNB", flag: "—" },
-  { ticker: "ADA-USD", name: "Cardano", flag: "—" },
-  { ticker: "XRP-USD", name: "XRP", flag: "—" },
-  { ticker: "DOT-USD", name: "Polkadot", flag: "—" },
-  { ticker: "AVAX-USD", name: "Avalanche", flag: "—" },
-  { ticker: "MATIC-USD", name: "Polygon", flag: "—" },
-  { ticker: "LINK-USD", name: "Chainlink", flag: "—" },
-];
-
-const FEATURES = [
-  { icon: "📈", title: "Backtesting", desc: "Analysez les performances historiques sur jusqu'à 10 ans." },
-  { icon: "⚡", title: "Analyse du risque", desc: "Volatilité, drawdown, VaR, Sharpe — tous les indicateurs essentiels." },
-  { icon: "🎲", title: "Monte Carlo", desc: "Simulez 500 scénarios futurs et calculez vos probabilités." },
-  { icon: "🎯", title: "Objectifs financiers", desc: "Définissez un objectif et obtenez la probabilité de l'atteindre." },
-  { icon: "📚", title: "Pédagogie intégrée", desc: "Chaque métrique expliquée en mode intermédiaire et avancé." },
-  { icon: "🌍", title: "Multi-langues", desc: "Français, anglais, espagnol, chinois et allemand." },
-];
-
-function AssetCard({ ticker, name, flag }: { ticker: string; name: string; flag: string }) {
-  return (
-    <div className="flex items-center gap-2 bg-white border border-slate-200 rounded-lg px-3 py-2 shadow-sm flex-shrink-0 select-none">
-      {flag !== "—" && <span className="text-lg leading-none">{flag}</span>}
-      <div>
-        <p className="text-xs font-bold text-slate-800 font-mono leading-tight text-[11px]">{ticker}</p>
-        <p className="text-xs text-slate-400 leading-tight">{name}</p>
-      </div>
-    </div>
-  );
-}
-
-function ScrollRow({ items, direction }: { items: typeof ACTIONS; direction: "left" | "right" }) {
-  const doubled = [...items, ...items, ...items, ...items, ...items, ...items];
-  return (
-    <div className="overflow-hidden" style={{ maskImage: "linear-gradient(to right, transparent, black 10%, black 90%, transparent)" }}>
-      <div style={{
-        display: "flex",
-        width: "max-content",
-        animation: `scroll-${direction} ${items.length * 6}s linear infinite`,
-      }}>
-        {doubled.map((a, i) => (
-          <div key={i} className="mx-2">
-            <AssetCard {...a} />
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-export default function LandingPage() {
+export default function Home() {
   const router = useRouter();
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const mouseRef = useRef({ x: 0.5, y: 0.5 });
+  const [dark, setDark] = useState(false);
+  const darkRef = useRef(dark);
+  const [phase, setPhase] = useState<"assembling"|"assembled"|"ready">("assembling");
+  const [exiting, setExiting] = useState(false);
+  const convergingRef = useRef(false);
+  const haloRef = useRef(0);
+
+  useEffect(() => { darkRef.current = dark; }, [dark]);
+
+  useEffect(() => {
+    const saved = localStorage.getItem("theme");
+    if (saved === "dark") setDark(true);
+  }, []);
+
+  useEffect(() => {
+    document.documentElement.classList.toggle("dark", dark);
+    localStorage.setItem("theme", dark ? "dark" : "light");
+  }, [dark]);
+
+  useEffect(() => {
+    const t1 = setTimeout(() => setPhase("assembled"), 1000);
+    const t2 = setTimeout(() => setPhase("ready"), 1600);
+    return () => { clearTimeout(t1); clearTimeout(t2); };
+  }, []);
+
+  useEffect(() => {
+    const h = (e: MouseEvent) => { mouseRef.current = { x: e.clientX / window.innerWidth, y: e.clientY / window.innerHeight }; };
+    window.addEventListener("mousemove", h);
+    return () => window.removeEventListener("mousemove", h);
+  }, []);
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext("2d")!;
+    let w = canvas.width = window.innerWidth;
+    let h = canvas.height = window.innerHeight;
+    const resize = () => { w = canvas.width = window.innerWidth; h = canvas.height = window.innerHeight; };
+    window.addEventListener("resize", resize);
+
+    const N = 140;
+    const trajs = Array.from({ length: N }, (_, i) => {
+      const isOptimal = i === Math.floor(N / 2);
+      const convergesToCenter = isOptimal || Math.random() < 0.65;
+      const depth = isOptimal ? 1 : Math.random();
+      const layer = depth < 0.33 ? 0 : depth < 0.66 ? 1 : depth < 0.88 ? 2 : 3;
+
+      // Distance from center — reduce density near center
+      const distFactor = isOptimal ? 1 : 0.3 + Math.random() * 0.7;
+
+      const fromEdge = Math.floor(Math.random() * 4);
+      let sx = 0, sy = 0;
+      if (fromEdge === 0) { sx = Math.random() * w; sy = -5; }
+      else if (fromEdge === 1) { sx = w + 5; sy = Math.random() * h; }
+      else if (fromEdge === 2) { sx = Math.random() * w; sy = h + 5; }
+      else { sx = -5; sy = Math.random() * h; }
+
+      let ex = 0, ey = 0;
+      if (convergesToCenter && !isOptimal) {
+        const spread = 0.1 + Math.random() * 0.25;
+        ex = w * 0.5 + (Math.random() - 0.5) * w * spread;
+        ey = h * 0.5 + (Math.random() - 0.5) * h * spread;
+      } else {
+        const toEdge = (fromEdge + 1 + Math.floor(Math.random() * 3)) % 4;
+        if (toEdge === 0) { ex = Math.random() * w; ey = -5; }
+        else if (toEdge === 1) { ex = w + 5; ey = Math.random() * h; }
+        else if (toEdge === 2) { ex = Math.random() * w; ey = h + 5; }
+        else { ex = -5; ey = Math.random() * h; }
+      }
+
+      const cpSpread = isOptimal ? 0.06 : 0.2 + Math.random() * 0.3;
+      return {
+        isOptimal, depth, layer, convergesToCenter, distFactor,
+        sx, sy, ex, ey,
+        origCp1x: w * 0.5 + (Math.random() - 0.5) * w * cpSpread,
+        origCp1y: h * 0.5 + (Math.random() - 0.5) * h * cpSpread,
+        origCp2x: w * 0.5 + (Math.random() - 0.5) * w * cpSpread,
+        origCp2y: h * 0.5 + (Math.random() - 0.5) * h * cpSpread,
+        cp1x: 0, cp1y: 0, cp2x: 0, cp2y: 0,
+        vy1: (Math.random() - 0.5) * 0.05,
+        vy2: (Math.random() - 0.5) * 0.05,
+        vx1: (Math.random() - 0.5) * 0.04,
+        vx2: (Math.random() - 0.5) * 0.04,
+        flashTimer: Math.floor(Math.random() * 600),
+        flashAt: 480 + Math.floor(Math.random() * 240),
+        flashDur: 50,
+        isHighlighted: false,
+      };
+    });
+
+    // Init cp values
+    trajs.forEach(tr => { tr.cp1x = tr.origCp1x; tr.cp1y = tr.origCp1y; tr.cp2x = tr.origCp2x; tr.cp2y = tr.origCp2y; });
+
+    let t = 0;
+    let convergeFactor = 0;
+    let raf: number;
+
+    const draw = () => {
+      ctx.clearRect(0, 0, w, h);
+      t++;
+      const isDark = darkRef.current;
+      const ox = (mouseRef.current.x - 0.5) * 8;
+      const oy = (mouseRef.current.y - 0.5) * 4;
+
+      if (convergingRef.current) {
+        convergeFactor = Math.min(1, convergeFactor + 0.015);
+        haloRef.current = Math.min(1, haloRef.current + 0.03);
+      }
+
+      [...trajs].sort((a, b) => a.depth - b.depth).forEach(tr => {
+        tr.cp1x += tr.vx1; tr.cp1y += tr.vy1;
+        tr.cp2x += tr.vx2; tr.cp2y += tr.vy2;
+        if (tr.cp1x < -w * 0.2 || tr.cp1x > w * 1.2) tr.vx1 *= -1;
+        if (tr.cp1y < -h * 0.2 || tr.cp1y > h * 1.2) tr.vy1 *= -1;
+        if (tr.cp2x < -w * 0.2 || tr.cp2x > w * 1.2) tr.vx2 *= -1;
+        if (tr.cp2y < -h * 0.2 || tr.cp2y > h * 1.2) tr.vy2 *= -1;
+
+        // Flash effet
+        tr.flashTimer++;
+        const isFlashing = tr.flashTimer > tr.flashAt && tr.flashTimer < tr.flashAt + tr.flashDur;
+        if (tr.flashTimer > tr.flashAt + tr.flashDur + 300) {
+          tr.flashTimer = 0;
+          tr.flashAt = 480 + Math.floor(Math.random() * 240);
+        }
+        const flashBoost = isFlashing ? Math.sin((tr.flashTimer - tr.flashAt) / tr.flashDur * Math.PI) * 0.07 : 0;
+
+        // Convergence vers centre au click
+        const cx = tr.cp1x + (w * 0.5 - tr.cp1x) * convergeFactor;
+        const cy = tr.cp1y + (h * 0.5 - tr.cp1y) * convergeFactor;
+        const cx2 = tr.cp2x + (w * 0.5 - tr.cp2x) * convergeFactor;
+        const cy2 = tr.cp2y + (h * 0.5 - tr.cp2y) * convergeFactor;
+        const exC = tr.ex + (w * 0.5 - tr.ex) * convergeFactor * 0.7;
+        const eyC = tr.ey + (h * 0.5 - tr.ey) * convergeFactor * 0.7;
+
+        ctx.beginPath();
+        ctx.moveTo(tr.sx + ox * 0.1 * tr.depth, tr.sy + oy * 0.1 * tr.depth);
+        ctx.bezierCurveTo(
+          cx + ox * 0.35 * tr.depth, cy + oy * 0.35 * tr.depth,
+          cx2 + ox * 0.65 * tr.depth, cy2 + oy * 0.65 * tr.depth,
+          exC + ox * tr.depth, eyC + oy * tr.depth
+        );
+
+        if (tr.isOptimal) {
+          ctx.shadowBlur = 4;
+          ctx.shadowColor = isDark ? "rgba(255,255,255,0.2)" : "rgba(30,55,105,0.12)";
+          const optOp = isDark ? 0.14 + convergeFactor * 0.1 : 0.12 + convergeFactor * 0.08;
+          ctx.strokeStyle = isDark ? `rgba(255,255,255,${optOp})` : `rgba(30,55,105,${optOp})`;
+          ctx.lineWidth = 1.0;
+        } else {
+          ctx.shadowBlur = 0;
+          const layerOps = isDark ? [0.02, 0.04, 0.07, 0.12] : [0.045, 0.075, 0.11, 0.17];
+          const base = (layerOps[tr.layer] || 0.02) + flashBoost + (tr.isHighlighted ? 0.05 : 0);
+          ctx.strokeStyle = isDark ? `rgba(255,255,255,${base})` : `rgba(30,55,105,${base})`;
+          ctx.lineWidth = [0.35, 0.5, 0.7, 0.9][tr.layer] || 0.35;
+        }
+        ctx.stroke();
+        ctx.shadowBlur = 0;
+      });
+
+      raf = requestAnimationFrame(draw);
+    };
+    draw();
+    return () => { cancelAnimationFrame(raf); window.removeEventListener("resize", resize); };
+  }, []);
+
+  const handleStart = () => {
+    convergingRef.current = true;
+    setExiting(true);
+    setTimeout(() => router.push("/build"), 600);
+  };
+
+  const bg = dark ? "#041124" : "#F5F8FC";
+  const text = dark ? "#F8F9FC" : "#041124";
+  const btnBg = dark ? "#F8F9FC" : "#041124";
+  const btnText = dark ? "#041124" : "#F8F9FC";
+  const suffix = dark ? "white" : "black";
+
+  const blocks = [
+    { src: `/logo-top-${suffix}.png`, from: "translateY(-150px)", label: "top", delay: 0 },
+    { src: `/logo-right-${suffix}.png`, from: "translateX(150px)", label: "right", delay: 120 },
+    { src: `/logo-bottom-${suffix}.png`, from: "translateY(150px)", label: "bottom", delay: 240 },
+    { src: `/logo-left-${suffix}.png`, from: "translateX(-150px)", label: "left", delay: 360 },
+  ];
 
   return (
-    <div className="min-h-screen bg-slate-50">
-      <style>{`
-        @keyframes scroll-left {
-          0% { transform: translateX(0); }
-          100% { transform: translateX(-50%); }
-        }
-        @keyframes scroll-right {
-          0% { transform: translateX(-50%); }
-          100% { transform: translateX(0); }
-        }
-        .scroll-left:hover, .scroll-right:hover {
-          animation-play-state: paused;
-        }
-      `}</style>
+    <div className="min-h-screen flex flex-col items-center justify-center relative overflow-hidden"
+      style={{ backgroundColor: bg, opacity: exiting ? 0 : 1, transition: "opacity 0.5s ease, background-color 0.4s ease" }}>
 
-      {/* Nav */}
-      <nav className="bg-white border-b border-slate-200 sticky top-0 z-10">
-        <div className="max-w-6xl mx-auto px-6 h-14 flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <img src="/logo.png" alt="Quantfolio" className="w-8 h-8 object-contain"/>
-            <span className="font-bold text-slate-900 text-base tracking-tight">Quantfolio</span>
-          </div>
-          <button onClick={() => router.push("/build")}
-            className="bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold px-4 py-2 rounded-lg transition-colors">
-            Commencer gratuitement
+      {/* Radial bg */}
+      <div className="absolute inset-0 pointer-events-none" style={{
+        background: dark
+          ? "radial-gradient(ellipse 55% 55% at 50% 50%, #0B1C3F 0%, #041124 100%)"
+          : "radial-gradient(ellipse 55% 55% at 50% 50%, #FFFFFF 0%, #EEF2F7 100%)",
+        transition: "background 0.4s ease",
+      }}/>
+
+      <canvas ref={canvasRef} className="absolute inset-0 w-full h-full pointer-events-none"/>
+
+      {/* Halo logo */}
+      <div className="absolute pointer-events-none" style={{
+        width: "480px", height: "480px",
+        background: dark
+          ? "radial-gradient(circle, rgba(255,255,255,0.055) 0%, rgba(255,255,255,0.02) 35%, transparent 70%)"
+          : "radial-gradient(circle, rgba(30,55,105,0.035) 0%, transparent 65%)",
+        top: "50%", left: "50%", transform: "translate(-50%,-52%)" ,
+        transition: "background 0.4s ease",
+      }}/>
+
+      <div className="relative z-10 flex flex-col items-center" style={{ gap: "30px" }}>
+
+        {/* Logo */}
+        <div className="relative w-40 h-40" style={{
+          animation: phase === "ready" ? "breathe 7s ease-in-out infinite" : "none",
+        }}>
+          <style>{`
+            @keyframes breathe {
+              0%, 100% { transform: translateY(0px) scale(1) rotate(0deg); }
+              50% { transform: translateY(-4px) scale(1.012) rotate(0.15deg); }
+            }
+          `}</style>
+          {blocks.map(b => (
+            <img key={b.label} src={b.src} alt="" className="absolute inset-0 w-full h-full object-contain"
+              style={{
+                transform: phase === "assembling" ? b.from : "translate(0,0)",
+                opacity: phase === "assembling" ? 0 : 1,
+                transition: `transform 0.9s cubic-bezier(0.16,1,0.3,1) ${b.delay}ms, opacity 0.5s ease ${b.delay}ms`,
+              }}
+            />
+          ))}
+        </div>
+
+        {/* Texte */}
+        <div className="text-center" style={{
+          opacity: phase === "ready" ? 1 : 0,
+          transform: phase === "ready" ? "translateY(0)" : "translateY(14px)",
+          transition: "opacity 0.7s ease, transform 0.7s ease",
+        }}>
+          <h1 style={{ color: text, fontSize: "17px", fontWeight: 700, letterSpacing: "0.35em", transition: "color 0.4s ease" }}>
+            NOVAC
+          </h1>
+          <p style={{ color: text, opacity: 0.32, fontSize: "11px", fontWeight: 300, letterSpacing: "0.2em", marginTop: "12px", transition: "color 0.4s ease" }}>
+            Find the optimal path.
+          </p>
+        </div>
+
+        {/* Bouton */}
+        <div style={{
+          opacity: phase === "ready" ? 1 : 0,
+          transform: phase === "ready" ? "translateY(0)" : "translateY(14px)",
+          transition: "opacity 0.7s ease 0.15s, transform 0.7s ease 0.15s",
+        }}>
+          <button onClick={handleStart}
+            style={{
+              backgroundColor: btnBg, color: btnText,
+              padding: "11px 42px", borderRadius: "13px",
+              fontSize: "12px", fontWeight: 600, letterSpacing: "0.08em",
+              border: "none", cursor: "pointer",
+              boxShadow: dark ? "0 4px 28px rgba(0,0,0,0.5)" : "0 4px 20px rgba(4,17,36,0.1)",
+              transition: "background-color 0.4s, color 0.4s, transform 0.25s, box-shadow 0.25s",
+            }}
+            onMouseEnter={e => { (e.currentTarget as HTMLElement).style.transform = "scale(1.03)"; (e.currentTarget as HTMLElement).style.boxShadow = dark ? "0 6px 36px rgba(0,0,0,0.6)" : "0 6px 28px rgba(4,17,36,0.16)"; }}
+            onMouseLeave={e => { (e.currentTarget as HTMLElement).style.transform = "scale(1)"; (e.currentTarget as HTMLElement).style.boxShadow = dark ? "0 4px 28px rgba(0,0,0,0.5)" : "0 4px 20px rgba(4,17,36,0.1)"; }}
+          >
+            Commencer
           </button>
         </div>
-      </nav>
 
-      {/* Hero */}
-      <section className="max-w-6xl mx-auto px-6 pt-20 pb-16 text-center">
-        <div className="inline-flex items-center gap-2 bg-indigo-50 border border-indigo-200 rounded-full px-4 py-1.5 text-xs font-semibold text-indigo-600 mb-6">
-          ✨ Analyse quantitative accessible à tous
-        </div>
-        <h1 className="text-5xl sm:text-6xl font-bold text-slate-900 mb-6 leading-tight">
-          Construisez, analysez et<br/>
-          <span className="text-indigo-600">comprenez</span> votre portefeuille.
-        </h1>
-        <p className="text-xl text-slate-500 max-w-2xl mx-auto mb-10 leading-relaxed">
-          Backtesting, analyse du risque, simulations Monte Carlo, objectifs financiers et pédagogie intégrée — le tout gratuitement.
+        {/* Tags */}
+        <p style={{
+          color: text, opacity: phase === "ready" ? 0.12 : 0,
+          fontSize: "10px", letterSpacing: "0.12em",
+          transition: "opacity 0.7s ease 0.3s, color 0.4s ease",
+        }}>
+          Actions • ETF • Crypto • Benchmarks • Monte Carlo • Frontière efficiente
         </p>
-        <div className="flex items-center justify-center gap-4">
-          <button onClick={() => router.push("/build")}
-            className="bg-indigo-600 hover:bg-indigo-700 text-white font-semibold px-8 py-3.5 rounded-xl text-base transition-colors shadow-lg shadow-indigo-200 flex items-center gap-2">
-            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z"/>
-            </svg>
-            Commencer gratuitement
-          </button>
-          <a href="https://github.com/TonyMerguez2/portfoliolab" target="_blank"
-            className="flex items-center gap-2 text-slate-600 hover:text-slate-900 font-medium text-sm border border-slate-200 hover:border-slate-300 px-5 py-3.5 rounded-xl transition-colors bg-white">
-            <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
-              <path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z"/>
-            </svg>
-            GitHub
-          </a>
-        </div>
-      </section>
+      </div>
 
-      {/* Ticker rows */}
-      <section className="pb-16">
-        <div className="max-w-6xl mx-auto px-6 mb-8 text-center">
-          <p className="text-sm font-semibold text-slate-400 uppercase tracking-widest mb-1">Actifs supportés</p>
-          <p className="text-slate-600">Actions, ETF et cryptomonnaies du monde entier</p>
-        </div>
-
-        <div className="space-y-4">
-          <div>
-            <p className="text-center text-xs font-semibold text-slate-400 uppercase tracking-widest mb-3">Actions</p>
-            <ScrollRow items={ACTIONS} direction="left"/>
-          </div>
-          <div>
-            <p className="text-center text-xs font-semibold text-slate-400 uppercase tracking-widest mb-3">ETF</p>
-            <ScrollRow items={ETFS} direction="right"/>
-          </div>
-          <div>
-            <p className="text-center text-xs font-semibold text-slate-400 uppercase tracking-widest mb-3">Crypto</p>
-            <ScrollRow items={CRYPTOS} direction="left"/>
-          </div>
-        </div>
-      </section>
-
-      {/* Features */}
-      <section className="bg-white border-y border-slate-200 py-16">
-        <div className="max-w-6xl mx-auto px-6">
-          <p className="text-center text-sm font-semibold text-slate-400 uppercase tracking-widest mb-2">Fonctionnalités</p>
-          <h2 className="text-3xl font-bold text-slate-900 text-center mb-12">Tout ce dont vous avez besoin</h2>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-            {FEATURES.map(f => (
-              <div key={f.title} className="p-6 rounded-2xl border border-slate-100 hover:border-indigo-200 hover:shadow-sm transition-all">
-                <span className="text-3xl mb-4 block">{f.icon}</span>
-                <h3 className="text-base font-semibold text-slate-900 mb-2">{f.title}</h3>
-                <p className="text-sm text-slate-500 leading-relaxed">{f.desc}</p>
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* CTA */}
-      <section className="py-20 text-center">
-        <div className="max-w-2xl mx-auto px-6">
-          <h2 className="text-3xl font-bold text-slate-900 mb-4">Prêt à analyser votre portefeuille ?</h2>
-          <p className="text-slate-500 mb-8">Gratuit, sans inscription, sans publicité.</p>
-          <button onClick={() => router.push("/build")}
-            className="bg-indigo-600 hover:bg-indigo-700 text-white font-semibold px-8 py-4 rounded-xl text-base transition-colors shadow-lg shadow-indigo-200">
-            Commencer maintenant →
-          </button>
-        </div>
-      </section>
-
-      {/* Footer */}
-      <footer className="border-t border-slate-200 py-8 text-center text-sm text-slate-400">
-        <p>Quantfolio — Outil open-source d'analyse de portefeuille</p>
-        <p className="mt-1">Données via Yahoo Finance · Les performances passées ne préjugent pas des performances futures</p>
-      </footer>
+      {/* Toggle dark */}
+      <button onClick={() => setDark(d => !d)}
+        className="fixed top-5 right-6 w-8 h-8 flex items-center justify-center rounded-lg"
+        style={{ border: `1px solid ${text}`, opacity: 0.17, backgroundColor: "transparent", cursor: "pointer", transition: "opacity 0.2s, border-color 0.4s" }}
+        onMouseEnter={e => (e.currentTarget.style.opacity = "0.38")}
+        onMouseLeave={e => (e.currentTarget.style.opacity = "0.17")}>
+        <span style={{ position: "absolute", transition: "opacity 0.2s ease, transform 0.2s ease", opacity: dark ? 1 : 0, transform: dark ? "scale(1)" : "scale(0.6)" }}>
+          <svg width="12" height="12" fill="none" viewBox="0 0 24 24" stroke={text} strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364-6.364l-.707.707M6.343 17.657l-.707.707M17.657 17.657l-.707-.707M6.343 6.343l-.707-.707M12 7a5 5 0 100 10A5 5 0 0012 7z"/>
+          </svg>
+        </span>
+        <span style={{ position: "absolute", transition: "opacity 0.2s ease, transform 0.2s ease", opacity: dark ? 0 : 1, transform: dark ? "scale(0.6)" : "scale(1)" }}>
+          <svg width="12" height="12" fill="none" viewBox="0 0 24 24" stroke={text} strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"/>
+          </svg>
+        </span>
+      </button>
     </div>
   );
 }
