@@ -6,6 +6,7 @@ import { useTranslation, LOCALE_LABELS, type Locale } from "@/hooks/useTranslati
 import { fmtDate, fmtPctSigned, fmtPct, fmtRatio, returnColor, sharpeColor } from "@/lib/format";
 import type { Period, Benchmark } from "@/types";
 import GrowthChart from "@/components/charts/GrowthChart";
+import AuthModal from "@/components/AuthModal";
 import DrawdownChart from "@/components/charts/DrawdownChart";
 import { AllocationPie, MonthlyReturnsChart, CorrelationHeatmap } from "@/components/charts";
 import MetricTooltip from "@/components/ui/MetricTooltip";
@@ -55,6 +56,14 @@ function DashboardContent() {
   const [benchmark, setBenchmark] = useState<string>("^GSPC");
   const [riskFreeRate, setRiskFreeRate] = useState(3.5);
   const [dark, setDark] = useState(false);
+  const [user, setUser] = useState<any>(() => {
+    if (typeof window !== "undefined") {
+      const u = localStorage.getItem("novac_user");
+      return u ? JSON.parse(u) : null;
+    }
+    return null;
+  });
+  const [showAuth, setShowAuth] = useState(false);
   const [openSection, setOpenSection] = useState<string|null>("performance");
 
   const getInitialAssets = () => {
@@ -139,9 +148,17 @@ function DashboardContent() {
               className={`w-8 h-8 rounded-lg border flex items-center justify-center transition-colors ${dark ? "border-slate-600 bg-slate-800 text-yellow-400" : "border-slate-200 bg-white text-slate-500 hover:border-slate-300"}`}>
               {dark ? "☀️" : "🌙"}
             </button>
+            <button onClick={() => user ? null : setShowAuth(true)}
+              className={`w-8 h-8 rounded-full border flex items-center justify-center overflow-hidden transition-colors ${dark ? "border-slate-600 bg-slate-700" : "border-slate-200 bg-slate-100"}`}>
+              {user?.avatar_url
+                ? <img src={user.avatar_url} className="w-full h-full object-cover"/>
+                : <span className={`text-xs font-bold ${dark ? "text-slate-300" : "text-slate-500"}`}>{user ? user.username?.charAt(0).toUpperCase() : "?"}</span>
+              }
+            </button>
           </div>
         </div>
       </header>
+      {showAuth && <AuthModal dark={dark} onClose={() => setShowAuth(false)} onAuth={(u) => setUser(u)}/>}
 
       <div className="max-w-screen-2xl mx-auto px-4 py-6">
         <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">

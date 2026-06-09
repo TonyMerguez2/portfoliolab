@@ -1,6 +1,8 @@
 "use client";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
+import AuthModal from "@/components/AuthModal";
+import ProfileModal from "@/components/ProfileModal";
 
 export default function Home() {
   const router = useRouter();
@@ -10,6 +12,17 @@ export default function Home() {
   const darkRef = useRef(dark);
   const [phase, setPhase] = useState<"assembling"|"assembled"|"ready">("assembling");
   const [exiting, setExiting] = useState(false);
+  const [user, setUser] = useState<any>(null);
+  const [showAuth, setShowAuth] = useState(false);
+  const [showProfile, setShowProfile] = useState(false);
+
+  useEffect(() => {
+    const u = localStorage.getItem("novac_user");
+    if (u) setUser(JSON.parse(u));
+  }, []);
+  const [mousePos, setMousePos] = useState({ x: 0, y: 0 });
+  const targetMouse = useRef({ x: 0, y: 0 });
+  const smoothMouse = useRef({ x: 0, y: 0 });
   const convergingRef = useRef(false);
   const haloRef = useRef(0);
 
@@ -32,9 +45,20 @@ export default function Home() {
   }, []);
 
   useEffect(() => {
-    const h = (e: MouseEvent) => { mouseRef.current = { x: e.clientX / window.innerWidth, y: e.clientY / window.innerHeight }; };
+    const h = (e: MouseEvent) => {
+      mouseRef.current = { x: e.clientX / window.innerWidth, y: e.clientY / window.innerHeight };
+      targetMouse.current = { x: (e.clientX / window.innerWidth - 0.5) * 2, y: (e.clientY / window.innerHeight - 0.5) * 2 };
+    };
     window.addEventListener("mousemove", h);
-    return () => window.removeEventListener("mousemove", h);
+    let raf: number;
+    const smooth = () => {
+      smoothMouse.current.x += (targetMouse.current.x - smoothMouse.current.x) * 0.06;
+      smoothMouse.current.y += (targetMouse.current.y - smoothMouse.current.y) * 0.06;
+      setMousePos({ x: smoothMouse.current.x, y: smoothMouse.current.y });
+      raf = requestAnimationFrame(smooth);
+    };
+    smooth();
+    return () => { window.removeEventListener("mousemove", h); cancelAnimationFrame(raf); };
   }, []);
 
   useEffect(() => {
@@ -171,6 +195,13 @@ export default function Home() {
     return () => { cancelAnimationFrame(raf); window.removeEventListener("resize", resize); };
   }, []);
 
+  const getGreeting = () => {
+    const h = new Date().getHours();
+    if (h >= 5 && h < 12) return "Bonjour";
+    if (h >= 12 && h < 18) return "Bon après-midi";
+    return "Bonsoir";
+  };
+
   const handleStart = () => {
     convergingRef.current = true;
     setExiting(true);
@@ -184,10 +215,10 @@ export default function Home() {
   const suffix = dark ? "white" : "black";
 
   const blocks = [
-    { src: `/logo-top-${suffix}.png`, from: "translateY(-150px)", label: "top", delay: 0 },
-    { src: `/logo-right-${suffix}.png`, from: "translateX(150px)", label: "right", delay: 120 },
-    { src: `/logo-bottom-${suffix}.png`, from: "translateY(150px)", label: "bottom", delay: 240 },
-    { src: `/logo-left-${suffix}.png`, from: "translateX(-150px)", label: "left", delay: 360 },
+    { src: `/logo-top-${suffix}.png`, from: "translateY(-150px)", label: "top", delay: 0, px: -1.5, py: -2.5 },
+    { src: `/logo-right-${suffix}.png`, from: "translateX(150px)", label: "right", delay: 120, px: 2.5, py: -1.5 },
+    { src: `/logo-bottom-${suffix}.png`, from: "translateY(150px)", label: "bottom", delay: 240, px: 1.5, py: 2.5 },
+    { src: `/logo-left-${suffix}.png`, from: "translateX(-150px)", label: "left", delay: 360, px: -2.5, py: 1.5 },
   ];
 
   return (
@@ -227,13 +258,19 @@ export default function Home() {
             }
           `}</style>
           {blocks.map(b => (
-            <img key={b.label} src={b.src} alt="" className="absolute inset-0 w-full h-full object-contain"
+            <div key={b.label} className="absolute inset-0"
               style={{
                 transform: phase === "assembling" ? b.from : "translate(0,0)",
                 opacity: phase === "assembling" ? 0 : 1,
-                transition: `transform 0.9s cubic-bezier(0.16,1,0.3,1) ${b.delay}ms, opacity 0.5s ease ${b.delay}ms`,
-              }}
-            />
+                transition: `transform 0.9s cubic-bezier(0.16,1,0.3,1) ${b.delay}ms, opacity 0.6s ease ${b.delay}ms`,
+              }}>
+              <img src={b.src} alt="" className="absolute inset-0 w-full h-full object-contain"
+                style={{
+                  transform: phase !== "assembling" ? `translate(${mousePos.x * b.px}px, ${mousePos.y * b.py}px)` : "translate(0,0)",
+                  transition: phase !== "assembling" ? "transform 0.15s ease-out" : "none",
+                }}
+              />
+            </div>
           ))}
         </div>
 
@@ -251,6 +288,18 @@ export default function Home() {
           </p>
         </div>
 
+        {/* Salutation */}
+        {user && (
+          <p style={{
+            color: text, opacity: phase === "ready" ? 0.45 : 0,
+            fontSize: "12px", fontWeight: 300, letterSpacing: "0.15em",
+            transition: "opacity 0.7s ease 0.1s, color 0.4s ease",
+            textAlign: "center",
+          }}>
+            {getGreeting()}, {user.username}.
+          </p>
+        )}
+
         {/* Bouton */}
         <div style={{
           opacity: phase === "ready" ? 1 : 0,
@@ -259,17 +308,54 @@ export default function Home() {
         }}>
           <button onClick={handleStart}
             style={{
-              backgroundColor: btnBg, color: btnText,
-              padding: "11px 42px", borderRadius: "13px",
-              fontSize: "12px", fontWeight: 600, letterSpacing: "0.08em",
-              border: "none", cursor: "pointer",
-              boxShadow: dark ? "0 4px 28px rgba(0,0,0,0.5)" : "0 4px 20px rgba(4,17,36,0.1)",
-              transition: "background-color 0.4s, color 0.4s, transform 0.25s, box-shadow 0.25s",
+              position: "relative", overflow: "hidden",
+              padding: "12px 44px",
+
+              borderRadius: "8px 2px 8px 8px",
+              fontSize: "12px", fontWeight: 600, letterSpacing: "0.1em",
+              cursor: "pointer",
+              background: dark
+                ? "rgba(255,255,255,0.08)"
+                : "rgba(4,17,36,0.06)",
+              border: dark
+                ? "1px solid rgba(255,255,255,0.18)"
+                : "1px solid rgba(4,17,36,0.15)",
+              color: text,
+              backdropFilter: "blur(12px)",
+              WebkitBackdropFilter: "blur(12px)",
+              boxShadow: dark
+                ? "0 0 0 1px rgba(255,255,255,0.06) inset, 0 8px 32px rgba(0,0,0,0.4)"
+                : "0 0 0 1px rgba(255,255,255,0.8) inset, 0 8px 24px rgba(4,17,36,0.08)",
+              transition: "all 0.3s ease",
             }}
-            onMouseEnter={e => { (e.currentTarget as HTMLElement).style.transform = "scale(1.03)"; (e.currentTarget as HTMLElement).style.boxShadow = dark ? "0 6px 36px rgba(0,0,0,0.6)" : "0 6px 28px rgba(4,17,36,0.16)"; }}
-            onMouseLeave={e => { (e.currentTarget as HTMLElement).style.transform = "scale(1)"; (e.currentTarget as HTMLElement).style.boxShadow = dark ? "0 4px 28px rgba(0,0,0,0.5)" : "0 4px 20px rgba(4,17,36,0.1)"; }}
+            onMouseEnter={e => {
+              const el = e.currentTarget as HTMLElement;
+              el.style.transform = "scale(1.03) translateY(-1px)";
+              el.style.background = dark ? "rgba(255,255,255,0.13)" : "rgba(4,17,36,0.1)";
+              el.style.border = dark ? "1px solid rgba(255,255,255,0.3)" : "1px solid rgba(4,17,36,0.25)";
+              el.style.boxShadow = dark
+                ? "0 0 0 1px rgba(255,255,255,0.1) inset, 0 12px 40px rgba(0,0,0,0.5)"
+                : "0 0 0 1px rgba(255,255,255,0.9) inset, 0 12px 32px rgba(4,17,36,0.14)";
+            }}
+            onMouseLeave={e => {
+              const el = e.currentTarget as HTMLElement;
+              el.style.transform = "scale(1) translateY(0)";
+              el.style.background = dark ? "rgba(255,255,255,0.08)" : "rgba(4,17,36,0.06)";
+              el.style.border = dark ? "1px solid rgba(255,255,255,0.18)" : "1px solid rgba(4,17,36,0.15)";
+              el.style.boxShadow = dark
+                ? "0 0 0 1px rgba(255,255,255,0.06) inset, 0 8px 32px rgba(0,0,0,0.4)"
+                : "0 0 0 1px rgba(255,255,255,0.8) inset, 0 8px 24px rgba(4,17,36,0.08)";
+            }}
           >
-            Commencer
+            <span style={{ position: "relative", zIndex: 1 }}>Commencer</span>
+            <span style={{
+              position: "absolute", top: 0, left: "-100%", width: "60%", height: "100%",
+              background: "linear-gradient(90deg, transparent, rgba(255,255,255,0.08), transparent)",
+              transform: "skewX(-20deg)",
+              animation: "shimmer 3s ease-in-out infinite",
+              pointerEvents: "none",
+            }}/>
+            <style>{`@keyframes shimmer { 0%,100% { left: -100% } 50% { left: 150% } }`}</style>
           </button>
         </div>
 
@@ -284,6 +370,14 @@ export default function Home() {
       </div>
 
       {/* Toggle dark */}
+      <button onClick={() => user ? setShowProfile(true) : setShowAuth(true)}
+        className="fixed top-5 right-16 w-8 h-8 flex items-center justify-center rounded-full overflow-hidden"
+        style={{ border: `1px solid ${text}`, opacity: 0.25, backgroundColor: "transparent", cursor: "pointer" }}>
+        {user?.avatar_url
+          ? <img src={user.avatar_url.startsWith("/uploads") ? `http://localhost:8000${user.avatar_url}` : user.avatar_url} className="w-full h-full object-cover"/>
+          : <span style={{ fontSize: "11px", fontWeight: 700, color: text }}>{user ? user.username?.charAt(0).toUpperCase() : "?"}</span>
+        }
+      </button>
       <button onClick={() => setDark(d => !d)}
         className="fixed top-5 right-6 w-8 h-8 flex items-center justify-center rounded-lg"
         style={{ border: `1px solid ${text}`, opacity: 0.17, backgroundColor: "transparent", cursor: "pointer", transition: "opacity 0.2s, border-color 0.4s" }}
@@ -300,6 +394,8 @@ export default function Home() {
           </svg>
         </span>
       </button>
+      {showAuth && <AuthModal dark={dark} onClose={() => setShowAuth(false)} onAuth={(u: any) => setUser(u)}/>}
+      {showProfile && user && <ProfileModal dark={dark} user={user} onClose={() => setShowProfile(false)} onUpdate={(u: any) => setUser(u)}/>}
     </div>
   );
 }

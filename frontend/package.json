@@ -10,6 +10,8 @@
     "type-check": "tsc --noEmit"
   },
   "dependencies": {
+    "@supabase/auth-helpers-nextjs": "^0.15.0",
+    "@supabase/supabase-js": "^2.108.0",
     "html2canvas": "^1.4.1",
     "next": "^14.1.0",
     "react": "^18.2.0",
