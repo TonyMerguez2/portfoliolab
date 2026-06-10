@@ -15,6 +15,7 @@ export default function Home() {
   const [user, setUser] = useState<any>(null);
   const [showAuth, setShowAuth] = useState(false);
   const [showProfile, setShowProfile] = useState(false);
+  const [tickerData, setTickerData] = useState<{symbol: string, price: number, change: number}[]>([]);
 
   useEffect(() => {
     const u = localStorage.getItem("novac_user");
@@ -31,6 +32,19 @@ export default function Home() {
   useEffect(() => { darkRef.current = dark; }, [dark]);
 
   useEffect(() => {
+    const fetch_prices = async () => {
+      try {
+        const res = await fetch("http://localhost:8000/ticker");
+        const data = await res.json();
+        if (Array.isArray(data)) setTickerData(data);
+      } catch {}
+    };
+    fetch_prices();
+    const iv = setInterval(fetch_prices, 30000);
+    return () => clearInterval(iv);
+  }, []);
+
+  useEffect(() => {
     if (phase !== "ready") return;
     setTypedText("");
     let i = 0;
@@ -44,7 +58,8 @@ export default function Home() {
 
   useEffect(() => {
     const saved = localStorage.getItem("theme");
-    if (saved === "dark") setDark(true);
+    if (saved === "light") setDark(false);
+    else setDark(true);
   }, []);
 
   useEffect(() => {
@@ -99,14 +114,14 @@ export default function Home() {
       if (convergingRef.current) convergeFactor = Math.min(1, convergeFactor + 0.018);
 
       const vpx = w * 1.35;
-      const vpy = h * 0.48;
+      const vpy = h * 0.28;
       const laneWidth = h * 0.048;
-      const baseLine = h * 1.05;
-      const baseX = w * 0.1;
+      const baseLine = h * 0.92;
+      const baseX = w * -0.15;
 
       // Shared control point Y values (same for all lanes — perspective)
-      const sharedCp1y = h * 0.75;
-      const sharedCp2y = h * 0.35;
+      const sharedCp1y = h * 0.58;
+      const sharedCp2y = h * 0.22;
 
       for (let i = 0; i < N_LINES; i++) {
         const isOptimal = i === OPTIMAL;
@@ -154,8 +169,8 @@ export default function Home() {
             ctx.moveTo(x0s, y0s);
             ctx.lineTo(x1s, y1s);
             ctx.shadowBlur = progress * 18;
-            ctx.shadowColor = isDark ? `rgba(120,185,255,${glowOp})` : `rgba(30,80,200,${glowOp * 0.7})`;
-            ctx.strokeStyle = isDark ? `rgba(175,218,255,${op})` : `rgba(50,110,230,${op * 0.9})`;
+            ctx.shadowColor = isDark ? `rgba(120,185,255,${glowOp})` : `rgba(155,185,255,0.2)`;
+            ctx.strokeStyle = isDark ? `rgba(175,218,255,${op})` : `rgba(155,185,255,0.45)`;
             ctx.lineWidth = lw;
             ctx.stroke();
           }
@@ -168,19 +183,19 @@ export default function Home() {
           const dotY = it3*by + 3*it2*mt*cp1y + 3*it*mt2*cp2y + mt3*ty2;
           const dotOp = Math.sin(dp * Math.PI) * 0.95;
           ctx.beginPath();
-          const dotSize = 3.5 * (1 - dp * 0.75);
-          ctx.arc(dotX, dotY, Math.max(0.5, dotSize), 0, Math.PI * 2);
-          ctx.fillStyle = isDark ? `rgba(220,240,255,${dotOp})` : `rgba(80,140,255,${dotOp})`;
+          const dotSize = 5.5 * (1 - dp * 0.82);
+          ctx.arc(dotX, dotY, Math.max(0.4, dotSize), 0, Math.PI * 2);
+          ctx.fillStyle = isDark ? `rgba(220,240,255,${dotOp})` : `rgba(155,185,255,${dotOp * 0.45})`;
           ctx.shadowBlur = 14;
-          ctx.shadowColor = isDark ? `rgba(180,225,255,0.9)` : `rgba(60,130,255,0.7)`;
+          ctx.shadowColor = isDark ? `rgba(180,225,255,0.9)` : `rgba(155,185,255,0.2)`;
           ctx.fill();
           ctx.shadowBlur = 0;
         } else {
           const fade = Math.max(0, 1 - distFromOptimal * 0.17);
           const op = isDark
-            ? (0.06 + fade * 0.14) * (1 - convergeFactor * 0.5)
-            : (0.08 + fade * 0.16) * (1 - convergeFactor * 0.5);
-          ctx.strokeStyle = isDark ? `rgba(255,255,255,${op})` : `rgba(30,55,105,${op * 1.3})`;
+            ? (0.12 + fade * 0.16) * (1 - convergeFactor * 0.5)
+            : (0.14 + fade * 0.18) * (1 - convergeFactor * 0.5);
+          ctx.strokeStyle = isDark ? `rgba(255,255,255,${op})` : `rgba(175,198,255,0.35)`;
           ctx.lineWidth = 0.25 + fade * 0.5;
           ctx.stroke();
         }
@@ -215,7 +230,7 @@ export default function Home() {
         ctx.beginPath();
         ctx.moveTo(xL, yL2);
         ctx.lineTo(xR, yR2);
-        ctx.strokeStyle = isDark ? `rgba(255,255,255,${cop})` : `rgba(30,55,105,${cop * 1.3})`;
+        ctx.strokeStyle = isDark ? `rgba(255,255,255,${cop})` : `rgba(175,198,255,0.35)`;
         ctx.lineWidth = 0.3;
         ctx.stroke();
       }
@@ -247,17 +262,17 @@ export default function Home() {
     setTimeout(() => router.push("/build"), 600);
   };
 
-  const bg = dark ? "#041124" : "#F5F8FC";
-  const text = dark ? "#F8F9FC" : "#041124";
+  const bg = dark ? "#041124" : "#F3F6FC";
+  const text = dark ? "#F8F9FC" : "#0B1A33";
   const btnBg = dark ? "#F8F9FC" : "#041124";
   const btnText = dark ? "#041124" : "#F8F9FC";
-  const suffix = dark ? "white" : "black";
+  const suffix = dark ? "white" : "light";
 
   const blocks = [
-    { src: `/logo-top-${suffix}.png`, from: "translateY(-150px)", label: "top", delay: 0, px: -1.5, py: -2.5 },
-    { src: `/logo-right-${suffix}.png`, from: "translateX(150px)", label: "right", delay: 120, px: 2.5, py: -1.5 },
-    { src: `/logo-bottom-${suffix}.png`, from: "translateY(150px)", label: "bottom", delay: 240, px: 1.5, py: 2.5 },
-    { src: `/logo-left-${suffix}.png`, from: "translateX(-150px)", label: "left", delay: 360, px: -2.5, py: 1.5 },
+    { src: `/logo-top-${suffix}.png`, from: "translateY(-150px)", label: "top", delay: 0, px: -0.6, py: -1.0 },
+    { src: `/logo-right-${suffix}.png`, from: "translateX(150px)", label: "right", delay: 120, px: 1.0, py: -0.6 },
+    { src: `/logo-bottom-${suffix}.png`, from: "translateY(150px)", label: "bottom", delay: 240, px: 0.6, py: 1.0 },
+    { src: `/logo-left-${suffix}.png`, from: "translateX(-150px)", label: "left", delay: 360, px: -1.0, py: 0.6 },
   ];
 
   return (
@@ -267,7 +282,7 @@ export default function Home() {
       <div className="absolute inset-0 pointer-events-none" style={{
         background: dark
           ? "radial-gradient(ellipse 55% 55% at 50% 50%, #0B1C3F 0%, #041124 100%)"
-          : "radial-gradient(ellipse 55% 55% at 50% 50%, #FFFFFF 0%, #EEF2F7 100%)",
+          : "radial-gradient(circle at center, rgba(74,111,165,0.10) 0%, rgba(74,111,165,0.04) 32%, transparent 70%)",
         transition: "background 0.4s ease",
       }}/>
 
@@ -318,12 +333,7 @@ export default function Home() {
             ))}
           </div>
 
-          <div style={{
-            width: "1px", height: "80px",
-            background: dark ? "rgba(255,255,255,0.12)" : "rgba(4,17,36,0.12)",
-            opacity: phase === "ready" ? 1 : 0,
-            transition: "opacity 0.5s ease 0.4s",
-          }}/>
+
 
           <div style={{
             opacity: phase === "ready" ? 1 : 0,
@@ -333,13 +343,13 @@ export default function Home() {
             <h1 style={{ color: text, fontSize: "36px", fontWeight: 700, letterSpacing: "0.35em", transition: "color 0.4s ease", margin: 0 }}>
               NOVAC
             </h1>
-            <p style={{ color: text, opacity: 0.28, fontSize: "12px", fontWeight: 300, letterSpacing: "0.22em", marginTop: "10px", transition: "color 0.4s ease" }}>
+            <p style={{ color: text, opacity: 0.7, fontSize: "12px", fontWeight: 300, letterSpacing: "0.22em", marginTop: "10px", transition: "color 0.4s ease" }}>
               {typedText}<span style={{ opacity: typedText.length < fullTagline.length ? 1 : 0, transition: "opacity 0.2s" }}>▎</span>
             </p>
           </div>
         </div>
 
-        <div style={{ height: "48px" }}/>
+        <div style={{ height: "32px" }}/>
 
         {/* Bonsoir + avatar */}
         <div style={{
@@ -348,12 +358,12 @@ export default function Home() {
           transition: "opacity 0.7s ease 0.35s, transform 0.7s ease 0.35s",
           display: "flex", alignItems: "center", gap: "10px",
         }}>
-          <p style={{ color: text, fontSize: "12px", fontWeight: 300, letterSpacing: "0.15em", opacity: 0.45, transition: "color 0.4s ease" }}>
-            {getGreeting()}{user ? `, ${user.username}` : ""}.
+          <p style={{ color: text, fontSize: "14px", fontWeight: 300, letterSpacing: "0.15em", opacity: 0.45, transition: "color 0.4s ease" }}>
+            {getGreeting()}{user ? `, ${user.username}` : ""}
           </p>
           {user && (
             <button onClick={() => setShowProfile(true)}
-              className="w-6 h-6 flex items-center justify-center rounded-full overflow-hidden flex-shrink-0"
+              className="w-8 h-8 flex items-center justify-center rounded-full overflow-hidden flex-shrink-0"
               style={{
                 border: dark ? "1px solid rgba(255,255,255,0.18)" : "1px solid rgba(4,17,36,0.14)",
                 backgroundColor: dark ? "rgba(255,255,255,0.07)" : "rgba(4,17,36,0.05)",
@@ -361,7 +371,7 @@ export default function Home() {
               }}>
               {user?.avatar_url
                 ? <img src={user.avatar_url.startsWith("/uploads") ? `http://localhost:8000${user.avatar_url}` : user.avatar_url} className="w-full h-full object-cover"/>
-                : <span style={{ fontSize: "9px", fontWeight: 700, color: text, opacity: 0.7 }}>{user.username?.charAt(0).toUpperCase()}</span>
+                : <span style={{ fontSize: "11px", fontWeight: 700, color: text, opacity: 0.7 }}>{user.username?.charAt(0).toUpperCase()}</span>
               }
             </button>
           )}
@@ -390,17 +400,17 @@ export default function Home() {
           <button onClick={handleStart}
             style={{
               position: "relative", overflow: "hidden",
-              padding: "13px 52px",
-              borderRadius: "8px 2px 8px 8px",
+              padding: "13px 40px",
+              borderRadius: "5px",
+              backdropFilter: "blur(12px)", WebkitBackdropFilter: "blur(12px)",
               fontSize: "12px", fontWeight: 600, letterSpacing: "0.12em",
               cursor: "pointer",
-              background: dark ? "rgba(255,255,255,0.08)" : "rgba(4,17,36,0.06)",
-              border: dark ? "1px solid rgba(255,255,255,0.18)" : "1px solid rgba(4,17,36,0.15)",
+              background: dark ? "rgba(255,255,255,0.08)" : "rgba(11,26,51,0.07)",
+              border: dark ? "1px solid rgba(255,255,255,0.18)" : "1px solid rgba(11,26,51,0.18)",
               color: text,
-              backdropFilter: "blur(12px)", WebkitBackdropFilter: "blur(12px)",
               boxShadow: dark
                 ? "0 0 0 1px rgba(255,255,255,0.06) inset, 0 8px 32px rgba(0,0,0,0.4)"
-                : "0 0 0 1px rgba(255,255,255,0.8) inset, 0 8px 24px rgba(4,17,36,0.08)",
+                : "0 14px 40px rgba(11,26,51,0.16)",
               transition: "all 0.3s ease",
             }}
             onMouseEnter={e => {
@@ -434,12 +444,12 @@ export default function Home() {
 
       {/* Dark toggle */}
       <button onClick={() => setDark(d => !d)}
-        className="fixed top-5 right-5 w-8 h-8 flex items-center justify-center rounded-lg"
+        className="fixed top-5 right-5 w-9 h-9 flex items-center justify-center rounded-lg"
         style={{
           background: dark ? "rgba(255,255,255,0.06)" : "rgba(4,17,36,0.05)",
           border: dark ? "1px solid rgba(255,255,255,0.12)" : "1px solid rgba(4,17,36,0.1)",
           backdropFilter: "blur(12px)", WebkitBackdropFilter: "blur(12px)",
-          cursor: "pointer", transition: "all 0.3s ease",
+          cursor: "pointer", transition: "all 0.3s ease", zIndex: 50,
         }}
         onMouseEnter={e => (e.currentTarget.style.opacity = "0.7")}
         onMouseLeave={e => (e.currentTarget.style.opacity = "1")}>
@@ -454,6 +464,35 @@ export default function Home() {
           </svg>
         </span>
       </button>
+
+      {/* Ticker */}
+      {tickerData.length > 0 && (
+        <div style={{
+          position: "fixed", bottom: 0, left: 0, right: 0, zIndex: 20,
+          background: dark ? "rgba(4,17,36,0.85)" : "rgba(243,246,252,0.85)",
+          backdropFilter: "blur(12px)", WebkitBackdropFilter: "blur(12px)",
+          borderTop: dark ? "1px solid rgba(255,255,255,0.06)" : "1px solid rgba(11,26,51,0.08)",
+          padding: "8px 0", overflow: "hidden",
+        }}>
+          <style>{`
+            @keyframes ticker { 0% { transform: translateX(0) } 100% { transform: translateX(-50%) } }
+          `}</style>
+          <div style={{
+            display: "flex", gap: "48px", whiteSpace: "nowrap",
+            animation: "ticker 35s linear infinite",
+          }}>
+            {[...tickerData, ...tickerData].map((d, i) => (
+              <span key={i} style={{ display: "inline-flex", alignItems: "center", gap: "8px" }}>
+                <span style={{ color: text, fontSize: "11px", fontWeight: 600, letterSpacing: "0.08em", opacity: 0.7 }}>{d.symbol}</span>
+                <span style={{ color: text, fontSize: "11px", opacity: 0.5 }}>{d.price.toLocaleString("fr-FR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                <span style={{ fontSize: "11px", fontWeight: 500, color: d.change >= 0 ? "#22c55e" : "#ef4444" }}>
+                  {d.change >= 0 ? "+" : ""}{d.change.toFixed(2)}%
+                </span>
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
 
       {showAuth && <AuthModal dark={dark} onClose={() => setShowAuth(false)} onAuth={(u: any) => setUser(u)}/>}
       {showProfile && user && <ProfileModal dark={dark} user={user} onClose={() => setShowProfile(false)} onUpdate={(u: any) => setUser(u)}/>}
