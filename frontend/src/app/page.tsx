@@ -544,17 +544,18 @@ export default function Home() {
               {[
                 { icon: "◈", label: "Créer un portefeuille" },
                 { icon: "◎", label: "Analyse de marché" },
-                { icon: "⬡", label: "ETF Map" },
+                { icon: "⬡", label: "ETF Map", href: "/map" },
                 { icon: "⟁", label: "Monte Carlo" },
                 { icon: "◆", label: "Optimisation Markowitz" },
-              ].map(item => (
+              ].map((item: any) => (
                 <button key={item.label}
+                  onClick={() => item.href && router.push(item.href)}
                   style={{
                     display: "flex", alignItems: "center", gap: "10px",
                     width: "100%", padding: "9px 12px", borderRadius: "7px",
                     background: "transparent", border: "none",
                     color: text, fontSize: "12px", letterSpacing: "0.04em",
-                    cursor: "pointer", textAlign: "left", opacity: 0.7,
+                    cursor: item.href ? "pointer" : "default", textAlign: "left", opacity: 0.7,
                     transition: "background 0.15s, opacity 0.15s",
                   }}
                   onMouseEnter={e => {
