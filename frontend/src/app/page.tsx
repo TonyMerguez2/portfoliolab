@@ -18,6 +18,8 @@ export default function Home() {
   const [searchQuery, setSearchQuery] = useState("");
   const [showTools, setShowTools] = useState(false);
   const [tickerData, setTickerData] = useState<{symbol: string, price: number, change: number}[]>([]);
+  const tickerRef = useRef<HTMLDivElement>(null);
+  const tickerPosRef = useRef(0);
 
   useEffect(() => {
     const u = localStorage.getItem("novac_user");
@@ -32,6 +34,27 @@ export default function Home() {
   const haloRef = useRef(0);
 
   useEffect(() => { darkRef.current = dark; }, [dark]);
+
+  useEffect(() => {
+    if (!tickerRef.current || tickerData.length === 0) return;
+    let raf: number;
+    const el = tickerRef.current;
+    const speed = 0.5;
+    // Mesurer après rendu complet
+    const timeout = setTimeout(() => {
+      const singleWidth = el.scrollWidth / 2;
+      const animate = () => {
+        tickerPosRef.current -= speed;
+        if (tickerPosRef.current <= -singleWidth) {
+          tickerPosRef.current += singleWidth;
+        }
+        el.style.transform = `translateX(${Math.round(tickerPosRef.current)}px)`;
+        raf = requestAnimationFrame(animate);
+      };
+      raf = requestAnimationFrame(animate);
+    }, 200);
+    return () => { cancelAnimationFrame(raf); clearTimeout(timeout); };
+  }, [tickerData]);
 
   useEffect(() => {
     const fetch_prices = async () => {
@@ -562,12 +585,9 @@ export default function Home() {
           borderTop: dark ? "1px solid rgba(255,255,255,0.06)" : "1px solid rgba(11,26,51,0.08)",
           padding: "8px 0", overflow: "hidden",
         }}>
-          <style>{`
-            @keyframes ticker { 0% { transform: translateX(0) } 100% { transform: translateX(-50%) } }
-          `}</style>
-          <div style={{
-            display: "flex", gap: "48px", whiteSpace: "nowrap",
-            animation: "ticker 35s linear infinite",
+          <div ref={tickerRef} style={{
+            display: "flex", gap: "80px", whiteSpace: "nowrap",
+            willChange: "transform",
           }}>
             {[...tickerData, ...tickerData].map((d, i) => (
               <span key={i} style={{ display: "inline-flex", alignItems: "center", gap: "8px" }}>
