@@ -470,7 +470,7 @@ export default function Home() {
       {/* Search bar */}
       {/* Header top-right */}
       <div style={{
-        position: "fixed", top: "16px", right: "64px",
+        position: "fixed", top: "16px", right: "20px",
         zIndex: 30, display: "flex", alignItems: "center", gap: "8px",
         opacity: phase === "ready" ? 1 : 0,
         transition: "opacity 0.7s ease 0.5s",
@@ -604,30 +604,7 @@ export default function Home() {
       )}
 
       {/* Toggle dark */}
-      <button onClick={() => setDark(d => !d)}
-        style={{
-          position: "fixed", top: "16px", right: "20px", zIndex: 40,
-          display: "flex", alignItems: "center", justifyContent: "center",
-          width: "36px", height: "36px",
-          background: dark ? "rgba(255,255,255,0.06)" : "rgba(11,26,51,0.05)",
-          border: dark ? "1px solid rgba(255,255,255,0.1)" : "1px solid rgba(11,26,51,0.1)",
-          borderRadius: "9px",
-          backdropFilter: "blur(12px)", WebkitBackdropFilter: "blur(12px)",
-          cursor: "pointer",
-          opacity: phase === "ready" ? 1 : 0,
-          transition: "opacity 0.7s ease 0.5s",
-        }}>
-        <span style={{ position: "absolute", transition: "opacity 0.2s ease, transform 0.2s ease", opacity: dark ? 1 : 0, transform: dark ? "scale(1)" : "scale(0.6)" }}>
-          <svg width="12" height="12" fill="none" viewBox="0 0 24 24" stroke={text} strokeWidth={2}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364-6.364l-.707.707M6.343 17.657l-.707.707M17.657 17.657l-.707-.707M6.343 6.343l-.707-.707M12 7a5 5 0 100 10A5 5 0 0012 7z"/>
-          </svg>
-        </span>
-        <span style={{ position: "absolute", transition: "opacity 0.2s ease, transform 0.2s ease", opacity: dark ? 0 : 1, transform: dark ? "scale(0.6)" : "scale(1)" }}>
-          <svg width="12" height="12" fill="none" viewBox="0 0 24 24" stroke={text} strokeWidth={2}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"/>
-          </svg>
-        </span>
-      </button>
+      
 
       {showAuth && <AuthModal dark={dark} onClose={() => setShowAuth(false)} onAuth={(u: any) => setUser(u)}/>}
       {showProfile && user && <ProfileModal dark={dark} user={user} onClose={() => setShowProfile(false)} onUpdate={(u: any) => setUser(u)}/>}
