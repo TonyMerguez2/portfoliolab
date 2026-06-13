@@ -49,3 +49,36 @@
 .recharts-responsive-container {
   overflow: visible !important;
 }
+
+#globe-tooltip {
+  background: transparent !important;
+  border: none !important;
+  padding: 0 !important;
+  box-shadow: none !important;
+}
+.scene-tooltip {
+  background: transparent;
+  border: none;
+  padding: 0;
+  box-shadow: none;
+}
+
+/* Globe.gl tooltip override */
+.globe-tooltip,
+div[style*="position: absolute"][style*="pointer-events: none"],
+#__globegl-tooltip {
+  background: transparent !important;
+  border: none !important;
+  padding: 0 !important;
+  box-shadow: none !important;
+}
+
+/* Force Globe.gl tooltip transparent */
+canvas + div,
+canvas ~ div div {
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+  padding: 0 !important;
+  border-radius: 0 !important;
+}
