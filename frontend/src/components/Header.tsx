@@ -1,16 +1,38 @@
 "use client";
 import { useRouter } from "next/navigation";
+import { useApp } from "@/lib/AppContext";
 import { useEffect, useRef, useState } from "react";
 
-export default function Header({ dark, setDark, hideToggle }: { dark: boolean, setDark: (d: boolean) => void, hideToggle?: boolean }) {
+export default function Header({ dark, setDark, hideToggle, showLogo }: { dark: boolean, setDark: (d: boolean) => void, hideToggle?: boolean, showLogo?: boolean }) {
   const router = useRouter();
+  const { mode, setMode, activePortfolio, activeAsset, setActiveAsset } = useApp();
+  const [localSearch, setLocalSearch] = useState("");
+  const [localResults, setLocalResults] = useState<any[]>([]);
+  const [showLocalResults, setShowLocalResults] = useState(false);
+  const localDebounce = useRef<NodeJS.Timeout>();
+
+  const handleLocalSearch = (q: string) => {
+    setLocalSearch(q);
+    setShowLocalResults(false);
+    clearTimeout(localDebounce.current);
+    if (!q) { setLocalResults([]); return; }
+    localDebounce.current = setTimeout(async () => {
+      try {
+        const res = await fetch(`http://localhost:8000/api/v1/search?q=${encodeURIComponent(q)}`);
+        const data = await res.json();
+        const items = (data?.quotes || data?.results || []).slice(0, 6);
+        setLocalResults(items.map((r: any) => ({ ticker: r.symbol || r.ticker, name: r.shortname || r.longname || r.name })));
+        setShowLocalResults(true);
+      } catch {}
+    }, 300);
+  };
   const [searchQuery, setSearchQuery] = useState("");
   const [showTools, setShowTools] = useState(false);
   const [tickerData, setTickerData] = useState<{symbol: string, price: number, change: number}[]>([]);
   const tickerRef = useRef<HTMLDivElement>(null);
   const tickerPosRef = useRef(0);
 
-  const text = dark ? "#F8F9FC" : "#0B1A33";
+  const text = "#F8F9FC"; // Toujours dark
 
   useEffect(() => {
     const fetch_prices = async () => {
@@ -45,41 +67,86 @@ export default function Header({ dark, setDark, hideToggle }: { dark: boolean, s
 
   return (
     <>
+      {/* Mode switcher — centré en haut */}
+      <div style={{ position: "fixed", top: "14px", left: "50%", transform: "translateX(-50%)", zIndex: 30, display: "flex", flexDirection: "column", alignItems: "center", gap: "6px" }}>
+        {/* Switcher */}
+        <div style={{
+          display: "flex", alignItems: "center",
+          background: "rgba(255,255,255,0.08)",
+          border: "1px solid rgba(255,255,255,0.2)",
+          borderRadius: "12px", padding: "3px",
+          backdropFilter: "blur(40px) saturate(180%)", WebkitBackdropFilter: "blur(40px) saturate(180%)",
+          boxShadow: "0 2px 20px rgba(0,0,0,0.2), 0 0 0 0.5px rgba(255,255,255,0.15) inset, 0 1px 0 rgba(255,255,255,0.2) inset",
+        }}>
+          {(["portfolio", "asset"] as const).map((m, i) => (
+            <button key={m} onClick={() => setMode(m)} style={{
+              padding: "5px 16px", borderRadius: "7px", border: "none",
+              background: mode === m ? "rgba(91,141,239,0.22)" : "transparent",
+              color: "#F8F9FC",
+              boxShadow: mode === m ? "0 2px 8px rgba(91,141,239,0.2)" : "none", fontSize: "11px", fontWeight: mode === m ? 600 : 400,
+              opacity: mode === m ? 1 : 0.45, cursor: "pointer", letterSpacing: "0.06em",
+              transition: "all 0.2s",
+            }}>
+              {m === "portfolio"
+                ? (activePortfolio ? `● ${activePortfolio.name}` : "● Portefeuille")
+                : "○ Actif seul"}
+            </button>
+          ))}
+        </div>
+        {/* Barre de recherche contextuelle */}
+        <div style={{ position: "relative", width: "280px" }}>
+          <div style={{
+            display: "flex", alignItems: "center", gap: "8px",
+            background: "rgba(255,255,255,0.07)",
+            border: "1px solid rgba(255,255,255,0.18)",
+            borderRadius: "9px", padding: "0 12px", height: "32px",
+            backdropFilter: "blur(40px) saturate(180%)", WebkitBackdropFilter: "blur(40px) saturate(180%)",
+            boxShadow: "0 2px 16px rgba(0,0,0,0.15), 0 0 0 0.5px rgba(255,255,255,0.12) inset, 0 1px 0 rgba(255,255,255,0.15) inset",
+          }}>
+            <svg width="11" height="11" fill="none" viewBox="0 0 24 24" stroke={text} strokeWidth={2} style={{ opacity: 0.35, flexShrink: 0 }}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-4.35-4.35M17 11A6 6 0 1 1 5 11a6 6 0 0 1 12 0z"/>
+            </svg>
+            <input value={localSearch} onChange={e => handleLocalSearch(e.target.value)}
+              placeholder={mode === "portfolio" ? "Rechercher un portefeuille..." : "Rechercher un actif, ETF, crypto..."}
+              style={{ background: "transparent", border: "none", outline: "none", color: text, fontSize: "11px", width: "100%", opacity: localSearch ? 1 : 0.5 }}
+            />
+            {localSearch && (
+              <button onClick={() => { setLocalSearch(""); setLocalResults([]); setShowLocalResults(false); }} style={{ background: "transparent", border: "none", cursor: "pointer", opacity: 0.4, padding: 0 }}>
+                <svg width="10" height="10" fill="none" viewBox="0 0 24 24" stroke={text} strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12"/>
+                </svg>
+              </button>
+            )}
+          </div>
+          {/* Résultats */}
+          {showLocalResults && localResults.length > 0 && (
+            <div style={{ position: "absolute", top: "calc(100% + 4px)", left: 0, right: 0, background: dark ? "rgba(4,17,36,0.97)" : "rgba(243,246,252,0.97)", border: dark ? "1px solid rgba(255,255,255,0.1)" : "1px solid rgba(11,26,51,0.1)", borderRadius: "10px", overflow: "hidden", boxShadow: "0 8px 32px rgba(0,0,0,0.3)", zIndex: 50 }}>
+              {localResults.map(r => (
+                <button key={r.ticker} onClick={() => { setActiveAsset({ ticker: r.ticker, name: r.name }); setLocalSearch(""); setShowLocalResults(false); }}
+                  style={{ display: "flex", alignItems: "center", gap: "8px", width: "100%", padding: "8px 12px", background: "transparent", border: "none", cursor: "pointer", borderBottom: "1px solid rgba(255,255,255,0.04)" }}
+                  onMouseEnter={e => (e.currentTarget.style.background = dark ? "rgba(255,255,255,0.06)" : "rgba(11,26,51,0.05)")}
+                  onMouseLeave={e => (e.currentTarget.style.background = "transparent")}>
+                  <span style={{ color: text, fontSize: "11px", fontWeight: 600 }}>{r.ticker}</span>
+                  <span style={{ color: text, fontSize: "10px", opacity: 0.4 }}>{r.name}</span>
+                </button>
+              ))}
+            </div>
+          )}
+          {/* Actif actif affiché */}
+          {mode === "asset" && activeAsset && !localSearch && (
+            <div style={{ position: "absolute", top: "calc(100% + 4px)", left: 0, right: 0, background: dark ? "rgba(4,17,36,0.9)" : "rgba(243,246,252,0.9)", border: dark ? "1px solid rgba(255,255,255,0.08)" : "1px solid rgba(11,26,51,0.08)", borderRadius: "8px", padding: "7px 12px", backdropFilter: "blur(12px)" }}>
+              <span style={{ color: "#9BB9FF", fontSize: "11px", fontWeight: 600 }}>{activeAsset.ticker}</span>
+              <span style={{ color: text, fontSize: "10px", opacity: 0.4, marginLeft: "6px" }}>{activeAsset.name}</span>
+            </div>
+          )}
+        </div>
+      </div>
+
       {/* Header top-right */}
       <div style={{
         position: "fixed", top: "16px", right: hideToggle ? "20px" : "64px",
         zIndex: 30, display: "flex", alignItems: "center", gap: "8px",
       }}>
-        {/* Search */}
-        <div style={{
-          display: "flex", alignItems: "center",
-          background: dark ? "rgba(255,255,255,0.06)" : "rgba(11,26,51,0.05)",
-          border: dark ? "1px solid rgba(255,255,255,0.1)" : "1px solid rgba(11,26,51,0.1)",
-          borderRadius: "9px", backdropFilter: "blur(12px)", WebkitBackdropFilter: "blur(12px)",
-          padding: "0 12px", width: "220px", height: "36px",
-        }}>
-          <svg width="13" height="13" fill="none" viewBox="0 0 24 24" stroke={text} strokeWidth={2} style={{ opacity: 0.35, flexShrink: 0 }}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-4.35-4.35M17 11A6 6 0 1 1 5 11a6 6 0 0 1 12 0z"/>
-          </svg>
-          <input value={searchQuery} onChange={e => setSearchQuery(e.target.value)}
-            placeholder="Rechercher un actif, ETF, crypto..."
-            style={{
-              background: "transparent", border: "none", outline: "none",
-              color: text, fontSize: "12px", letterSpacing: "0.04em",
-              padding: "0 10px", width: "100%", height: "36px",
-              opacity: searchQuery ? 1 : 0.45,
-            }}
-          />
-          {searchQuery && (
-            <button onClick={() => setSearchQuery("")}
-              style={{ background: "transparent", border: "none", cursor: "pointer", padding: 0, opacity: 0.4 }}>
-              <svg width="12" height="12" fill="none" viewBox="0 0 24 24" stroke={text} strokeWidth={2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12"/>
-              </svg>
-            </button>
-          )}
-        </div>
-
         {/* Outils */}
         <div style={{ position: "relative" }}>
           <button onClick={() => setShowTools(t => !t)} style={{

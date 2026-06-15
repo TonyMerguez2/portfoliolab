@@ -130,7 +130,7 @@ async def search_assets(q: str = "") -> dict:
         return {"results": []}
     try:
         import httpx
-        url = f"https://query1.finance.yahoo.com/v1/finance/search?q={q}&lang=en-US&region=US&quotesCount=8&newsCount=0&listsCount=0"
+        url = f"https://query1.finance.yahoo.com/v1/finance/search?q={q}&lang=en-US&region=US&quotesCount=20&newsCount=0&listsCount=0"
         headers = {"User-Agent": "Mozilla/5.0"}
         async with httpx.AsyncClient(timeout=5.0) as client:
             resp = await client.get(url, headers=headers)
@@ -155,6 +155,7 @@ async def search_assets(q: str = "") -> dict:
                 "type": qtype,
                 "exchange": exchange,
                 "score": score,
+                "logo": q.get("logoUrl", "") or f"https://financialmodelingprep.com/image-stock/{q.get('symbol','')}.png",
             })
         results.sort(key=lambda x: x["score"], reverse=True)
         for r in results: r.pop("score", None)
@@ -214,3 +215,107 @@ async def compare_ticker(ticker: str, period: str = "Max", start: str = None) ->
         return {"ticker": ticker, "data": data}
     except Exception as e:
         return {"ticker": ticker, "data": [], "error": str(e)}
+
+@router.get("/trending", tags=["Search"])
+async def get_trending() -> dict:
+    """Get trending assets from Yahoo Finance."""
+    try:
+        import httpx
+        # Top actifs par catégorie
+        tickers = [
+            {"ticker":"AAPL","type":"EQUITY","name":"Apple Inc."},
+            {"ticker":"MSFT","type":"EQUITY","name":"Microsoft Corp."},
+            {"ticker":"NVDA","type":"EQUITY","name":"NVIDIA Corp."},
+            {"ticker":"TSLA","type":"EQUITY","name":"Tesla Inc."},
+            {"ticker":"AMZN","type":"EQUITY","name":"Amazon.com Inc."},
+            {"ticker":"META","type":"EQUITY","name":"Meta Platforms"},
+            {"ticker":"GOOGL","type":"EQUITY","name":"Alphabet Inc."},
+            {"ticker":"JPM","type":"EQUITY","name":"JPMorgan Chase"},
+            {"ticker":"V","type":"EQUITY","name":"Visa Inc."},
+            {"ticker":"MA","type":"EQUITY","name":"Mastercard Inc."},
+            {"ticker":"JNJ","type":"EQUITY","name":"Johnson & Johnson"},
+            {"ticker":"WMT","type":"EQUITY","name":"Walmart Inc."},
+            {"ticker":"BAC","type":"EQUITY","name":"Bank of America"},
+            {"ticker":"XOM","type":"EQUITY","name":"ExxonMobil Corp."},
+            {"ticker":"UNH","type":"EQUITY","name":"UnitedHealth Group"},
+            {"ticker":"PG","type":"EQUITY","name":"Procter & Gamble"},
+            {"ticker":"HD","type":"EQUITY","name":"Home Depot Inc."},
+            {"ticker":"ABBV","type":"EQUITY","name":"AbbVie Inc."},
+            {"ticker":"MRK","type":"EQUITY","name":"Merck & Co."},
+            {"ticker":"AVGO","type":"EQUITY","name":"Broadcom Inc."},
+            {"ticker":"COST","type":"EQUITY","name":"Costco Wholesale"},
+            {"ticker":"KO","type":"EQUITY","name":"Coca-Cola Co."},
+            {"ticker":"LLY","type":"EQUITY","name":"Eli Lilly & Co."},
+            {"ticker":"MCD","type":"EQUITY","name":"McDonald's Corp."},
+            {"ticker":"INTC","type":"EQUITY","name":"Intel Corp."},
+            {"ticker":"AMD","type":"EQUITY","name":"Advanced Micro Devices"},
+            {"ticker":"CRM","type":"EQUITY","name":"Salesforce Inc."},
+            {"ticker":"ADBE","type":"EQUITY","name":"Adobe Inc."},
+            {"ticker":"NFLX","type":"EQUITY","name":"Netflix Inc."},
+            {"ticker":"PYPL","type":"EQUITY","name":"PayPal Holdings"},
+            {"ticker":"MC.PA","type":"EQUITY","name":"LVMH"},
+            {"ticker":"TTE.PA","type":"EQUITY","name":"TotalEnergies"},
+            {"ticker":"ASML","type":"EQUITY","name":"ASML Holding"},
+            {"ticker":"SAP","type":"EQUITY","name":"SAP SE"},
+            {"ticker":"OR.PA","type":"EQUITY","name":"L'Oréal"},
+            {"ticker":"SAN.PA","type":"EQUITY","name":"Sanofi"},
+            {"ticker":"AIR.PA","type":"EQUITY","name":"Airbus SE"},
+            {"ticker":"SPY","type":"ETF","name":"SPDR S&P 500 ETF"},
+            {"ticker":"QQQ","type":"ETF","name":"Invesco QQQ Trust"},
+            {"ticker":"VTI","type":"ETF","name":"Vanguard Total Market"},
+            {"ticker":"VEA","type":"ETF","name":"Vanguard Dev. Markets"},
+            {"ticker":"EEM","type":"ETF","name":"iShares MSCI EM"},
+            {"ticker":"GLD","type":"ETF","name":"SPDR Gold Shares"},
+            {"ticker":"IWM","type":"ETF","name":"iShares Russell 2000"},
+            {"ticker":"ARKK","type":"ETF","name":"ARK Innovation ETF"},
+            {"ticker":"CW8.PA","type":"ETF","name":"Amundi MSCI World"},
+            {"ticker":"BTC-USD","type":"CRYPTOCURRENCY","name":"Bitcoin"},
+            {"ticker":"ETH-USD","type":"CRYPTOCURRENCY","name":"Ethereum"},
+            {"ticker":"SOL-USD","type":"CRYPTOCURRENCY","name":"Solana"},
+            {"ticker":"BNB-USD","type":"CRYPTOCURRENCY","name":"BNB"},
+            {"ticker":"XRP-USD","type":"CRYPTOCURRENCY","name":"XRP"},
+            {"ticker":"DOGE-USD","type":"CRYPTOCURRENCY","name":"Dogecoin"},
+            {"ticker":"ADA-USD","type":"CRYPTOCURRENCY","name":"Cardano"},
+            {"ticker":"^GSPC","type":"INDEX","name":"S&P 500"},
+            {"ticker":"^NDX","type":"INDEX","name":"Nasdaq 100"},
+            {"ticker":"^DJI","type":"INDEX","name":"Dow Jones"},
+            {"ticker":"^FCHI","type":"INDEX","name":"CAC 40"},
+            {"ticker":"^GDAXI","type":"INDEX","name":"DAX 40"},
+            {"ticker":"^FTSE","type":"INDEX","name":"FTSE 100"},
+            {"ticker":"^N225","type":"INDEX","name":"Nikkei 225"},
+        ]
+        return {"results": tickers}
+    except Exception as e:
+        return {"results": {}}
+
+@router.get("/prices", tags=["Prices"])
+async def get_prices(tickers: str = "") -> list:
+    """Get current prices for multiple tickers."""
+    if not tickers:
+        return []
+    try:
+        import yfinance as yf
+        from concurrent.futures import ThreadPoolExecutor
+        import asyncio
+        ticker_list = [t.strip() for t in tickers.split(",") if t.strip()][:20]
+
+        def fetch_all():
+            result = []
+            for symbol in ticker_list:
+                try:
+                    t = yf.Ticker(symbol)
+                    info = t.fast_info
+                    price = float(info.last_price or 0)
+                    prev = float(info.previous_close or price)
+                    change = ((price - prev) / prev * 100) if prev else 0
+                    result.append({"symbol": symbol, "price": price, "change": round(change, 2)})
+                except:
+                    pass
+            return result
+
+        loop = asyncio.get_event_loop()
+        with ThreadPoolExecutor() as pool:
+            result = await loop.run_in_executor(pool, fetch_all)
+        return result
+    except Exception as e:
+        return []
