@@ -327,7 +327,7 @@ export default function GlobalHeader() {
       )}
 
       {/* Switcher centré */}
-      <div style={{ position:"fixed", top:"13px", left:"50%", transform:"translateX(-50%)", zIndex:50 }}>
+      {pathname !== "/build" && <div style={{ position:"fixed", top:"13px", left:"50%", transform:"translateX(-50%)", zIndex:50 }}>
         <div style={{ display:"flex", alignItems:"center", borderRadius:"10px", padding:"3px", ...glass }}>
           <button onClick={() => setMode("portfolio")} style={{ padding:"5px 16px", borderRadius:"7px", border:"none", background:mode==="portfolio"?"rgba(255,255,255,0.12)":"transparent", color:"#F8F9FC", fontSize:"11px", fontWeight:mode==="portfolio"?600:400, opacity:mode==="portfolio"?1:0.45, cursor:"pointer", letterSpacing:"0.06em", boxShadow:mode==="portfolio"?"0 0 12px rgba(91,141,239,0.2)":"none", transition:"all 0.2s", whiteSpace:"nowrap" }}>
             {activePortfolio ? `● ${activePortfolio.name}` : mode==="portfolio" ? "● Portefeuille" : "○ Portefeuille"}
@@ -339,7 +339,7 @@ export default function GlobalHeader() {
           {mode==="asset" && (
             <>
               <div style={{ width:"1px", height:"16px", background:"rgba(255,255,255,0.12)", flexShrink:0 }}/>
-              <div style={{ display:"flex", alignItems:"center", gap:"6px", padding:"0 10px", width:"180px", flexShrink:0, position:"relative" }}>
+              {pathname !== "/build" && <div style={{ display:"flex", alignItems:"center", gap:"6px", padding:"0 10px", width:"180px", flexShrink:0, position:"relative" }}>
                 {activeAsset && !localSearch ? (() => { const tc = typeColor(TRENDING.find(a=>a.ticker===activeAsset.ticker)?.type||"EQUITY"); const label = activeAsset.ticker.replace(/-USD$/,"").replace(/\.PA$/,"").replace(/\^/,"").slice(0,4); return <div style={{ width:"28px", height:"28px", borderRadius:"6px", flexShrink:0, display:"flex", alignItems:"center", justifyContent:"center", background:tc.bg, border:`1px solid ${tc.border}` }}><span style={{ fontSize:"8px", fontWeight:800, color:tc.text, letterSpacing:"-0.02em" }}>{label}</span></div>; })() : (
                 <svg width="10" height="10" fill="none" viewBox="0 0 24 24" stroke="#F8F9FC" strokeWidth={2} style={{ opacity:0.35, flexShrink:0 }}>
                   <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-4.35-4.35M17 11A6 6 0 1 1 5 11a6 6 0 0 1 12 0z"/>
@@ -350,7 +350,7 @@ export default function GlobalHeader() {
                   style={{ background:"transparent", border:"none", outline:"none", color:"#F8F9FC", fontSize:"11px", width:"100%", opacity:localSearch?1:0.5 }}
                 />
                 {localSearch && <button onMouseDown={e=>e.preventDefault()} onClick={() => { setLocalSearch(""); setSearchResults([]); }} style={{ background:"transparent", border:"none", cursor:"pointer", opacity:0.4, color:"#F8F9FC", padding:0, fontSize:"11px" }}>✕</button>}
-              </div>
+              </div>}
             </>
           )}
         </div>
@@ -376,7 +376,7 @@ export default function GlobalHeader() {
             </div>
           </div>
         )}
-      </div>
+      </div>}
 
       {/* Outils */}
       <div style={{ position:"fixed", top:"13px", right:"20px", zIndex:50 }}>

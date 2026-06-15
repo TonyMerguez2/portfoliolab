@@ -255,4 +255,5 @@ export const t: Record<Lang, Record<string, string>> = {
     corrDesc: "Paarweise Pearson-Korrelation der Tagesrenditen. Werte nahe 1 bedeuten gleichläufige Bewegungen.",
     yearsLabel: "Jahre",
   },
+  ar: {} as any,
 };

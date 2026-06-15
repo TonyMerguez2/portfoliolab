@@ -19,7 +19,7 @@ const DEFAULT_ASSETS = [
   { ticker: "CW8.PA", weight: 40 },
 ];
 
-type ChartView = "performance"|"montecarlo"|"monthly"|"correlation"|"frontier";
+type ChartView = "performance"|"montecarlo"|"monthly"|"correlation"|"frontier"|"drawdown";
 
 const CHART_VIEWS: {key: ChartView, label: string}[] = [
   {key:"performance", label:"Performance"},

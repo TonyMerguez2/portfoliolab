@@ -53,6 +53,7 @@ export interface AssetMetrics {
 }
 
 export interface TimeSeriesPoint {
+  [key: string]: any;
   date: string;
   value: number;
 }
@@ -60,6 +61,7 @@ export interface TimeSeriesPoint {
 export interface DrawdownPoint {
   date: string;
   drawdown: number; // negative %
+  drawdown_eur: number;
 }
 
 export interface MonthlyReturn {
@@ -108,6 +110,10 @@ export interface BacktestResponse {
   portfolio_growth: TimeSeriesPoint[];
   benchmark_growth: TimeSeriesPoint[];
   drawdown_series: DrawdownPoint[];
+  score?: any;
+  efficient_frontier?: any[];
+  risk_contribution?: any;
+  markowitz?: any;
   monthly_returns: MonthlyReturn[];
 
   correlation: CorrelationMatrix;
@@ -124,6 +130,7 @@ export const PERIOD_LABELS: Record<Period, string> = {
   "5y": "5 Years",
   "10y": "10 Years",
   max: "Max Available",
+  custom: "Custom",
 };
 
 export const BENCHMARK_LABELS: Record<Benchmark, string> = {

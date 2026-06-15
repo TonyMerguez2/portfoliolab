@@ -608,7 +608,7 @@ export default function GrowthChart({ portfolioData, benchmarkData, benchmarkNam
               tick={(props: any) => {
                 const { x, y, payload } = props;
                 const entry = xAxisLabelMap[payload.value];
-                if (!entry) return null;
+                if (!entry) return <g/>;
                 const ticks = Object.keys(xAxisLabelMap);
                 const isFirst = ticks.indexOf(payload.value) === 0;
                 const isLast = ticks.indexOf(payload.value) === ticks.length - 1;
@@ -688,7 +688,7 @@ export default function GrowthChart({ portfolioData, benchmarkData, benchmarkNam
           const pts = key === "Max" ? portfolioData : portfolioData.filter(p => p.date >= cutoffStr);
           const first = pts[0]?.value;
           const last = pts[pts.length-1]?.value;
-          const pct = first && last ? ((last-first)/first*100) : null;
+          const pct = first && last ? (((last as number)-(first as number))/(first as number)*100) : null;
           return (
             <div key={key} className="relative pb-1 cursor-pointer text-center min-w-[40px]" onClick={() => setPeriodFilter(key)}>
               <div className={`text-xs font-semibold ${periodFilter === key ? "text-indigo-600" : "text-slate-400 hover:text-slate-600"}`}>{label}</div>
