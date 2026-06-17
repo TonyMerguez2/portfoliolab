@@ -290,32 +290,54 @@ async def get_trending() -> dict:
 
 @router.get("/prices", tags=["Prices"])
 async def get_prices(tickers: str = "") -> list:
-    """Get current prices for multiple tickers."""
+    """Get current prices for multiple tickers via batch download."""
     if not tickers:
         return []
     try:
         import yfinance as yf
+        import pandas as pd
         from concurrent.futures import ThreadPoolExecutor
         import asyncio
-        ticker_list = [t.strip() for t in tickers.split(",") if t.strip()][:20]
 
-        def fetch_all():
-            result = []
-            for symbol in ticker_list:
-                try:
-                    t = yf.Ticker(symbol)
-                    info = t.fast_info
-                    price = float(info.last_price or 0)
-                    prev = float(info.previous_close or price)
-                    change = ((price - prev) / prev * 100) if prev else 0
-                    result.append({"symbol": symbol, "price": price, "change": round(change, 2)})
-                except:
-                    pass
-            return result
+        ticker_list = [t.strip() for t in tickers.split(",") if t.strip()][:50]
+        if not ticker_list:
+            return []
 
-        loop = asyncio.get_event_loop()
-        with ThreadPoolExecutor() as pool:
-            result = await loop.run_in_executor(pool, fetch_all)
-        return result
+        def batch_download():
+            arg = ticker_list[0] if len(ticker_list) == 1 else ticker_list
+            return yf.download(arg, period="2d", progress=False, auto_adjust=True)
+
+        loop = asyncio.get_running_loop()
+        with ThreadPoolExecutor(max_workers=1) as pool:
+            hist = await loop.run_in_executor(pool, batch_download)
+
+        if hist.empty:
+            return []
+
+        close = hist["Close"]
+        results = []
+
+        for ticker in ticker_list:
+            try:
+                if len(ticker_list) == 1:
+                    series = close if isinstance(close, pd.Series) else close.iloc[:, 0]
+                else:
+                    if ticker not in close.columns:
+                        continue
+                    series = close[ticker]
+                series = series.dropna()
+                if len(series) == 0:
+                    continue
+                price = float(series.iloc[-1])
+                prev = float(series.iloc[-2]) if len(series) >= 2 else price
+                if price <= 0:
+                    continue
+                change = ((price - prev) / prev * 100) if prev else 0
+                results.append({"symbol": ticker, "price": round(price, 4), "change": round(change, 2)})
+            except Exception:
+                continue
+
+        return results
     except Exception as e:
+        logger.error(f"Prices error: {e}")
         return []

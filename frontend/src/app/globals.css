@@ -73,9 +73,8 @@ div[style*="position: absolute"][style*="pointer-events: none"],
   box-shadow: none !important;
 }
 
-/* Force Globe.gl tooltip transparent */
-canvas + div,
-canvas ~ div div {
+/* Force Globe.gl tooltip transparent — scope to direct canvas sibling only */
+canvas + div {
   background: transparent !important;
   border: none !important;
   box-shadow: none !important;
