@@ -4,7 +4,6 @@ import { useEffect, useRef, useState } from "react";
 import AuthModal from "@/components/AuthModal";
 import Header from "@/components/Header";
 import ProfileModal from "@/components/ProfileModal";
-
 export default function Home() {
   const router = useRouter();
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -21,7 +20,6 @@ export default function Home() {
   const [tickerData, setTickerData] = useState<{symbol: string, price: number, change: number}[]>([]);
   const tickerRef = useRef<HTMLDivElement>(null);
   const tickerPosRef = useRef(0);
-
   useEffect(() => {
     const u = localStorage.getItem("novac_user");
     if (u) setUser(JSON.parse(u));
@@ -425,6 +423,7 @@ export default function Home() {
         }}>
           <button onClick={() => router.push("/build")} onMouseEnter={e => { e.currentTarget.style.background = "rgba(255,255,255,0.12)"; e.currentTarget.style.transform = "translateY(-1px)"; }} onMouseLeave={e => { e.currentTarget.style.background = "rgba(255,255,255,0.09)"; e.currentTarget.style.transform = "translateY(0)"; }} style={{ padding: "0 48px", height: "46px", borderRadius: "8px 8px 24px 8px", background: "rgba(255,255,255,0.09)", border: "1px solid rgba(255,255,255,0.18)", color: "#F8F9FC", fontSize: "12px", letterSpacing: "0.12em", cursor: "pointer", backdropFilter: "blur(16px)", transition: "background 0.2s, transform 0.2s", fontWeight: 500 }}>+ Créer un portefeuille</button>
         </div>
+
       </div>
 
             {showAuth && <AuthModal dark={dark} onClose={() => setShowAuth(false)} onAuth={(u: any) => setUser(u)}/>}

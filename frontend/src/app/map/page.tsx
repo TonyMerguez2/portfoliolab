@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import * as d3 from "d3";
 import { feature } from "topojson-client";
 import Header from "@/components/Header";
@@ -66,7 +66,7 @@ const TICKER_TO_COUNTRIES: Record<string, string[]> = {
   "HSBA.L":["GBR"],"BP.L":["GBR"],"GSK.L":["GBR"],"ULVR.L":["GBR"],
   "SHEL.L":["GBR"],"RIO.L":["GBR"],
   // Switzerland
-  "NOVN.SW":["CHE"],"NESN.SW":["CHE"],"ROG.SW":["CHE"],
+  "NOVN.SW":["CHE"],"NESN.SW":["CHE"],"RO.SW":["CHE"],
   // Stellantis — multinationale
   "STLA":["FRA","ITA","USA"],
   // Asia
@@ -119,6 +119,21 @@ const MACRO_INDICATORS = [
   { id: "NY.GDP.PCAP.CD", label: "PIB/habitant", unit: "$", desc: "PIB par habitant en USD" },
 ];
 
+function computePortfolioGeo(portfolio: { assets: { ticker: string; weight: number }[] }): Record<string, number> {
+  const out: Record<string, number> = {};
+  for (const a of portfolio.assets) {
+    const w = a.weight / 100;
+    const etfW = ETF_COUNTRY_WEIGHTS[a.ticker];
+    if (etfW && Object.keys(etfW).length > 0) {
+      for (const [c, pct] of Object.entries(etfW)) out[c] = (out[c] || 0) + w * pct / 100;
+    } else {
+      const cs = TICKER_TO_COUNTRIES[a.ticker] || [];
+      if (cs.length > 0) cs.forEach(c => { out[c] = (out[c] || 0) + w / cs.length; });
+    }
+  }
+  return out;
+}
+
 export default function MapPage() {
   const svgRef = useRef<SVGSVGElement>(null);
   const oceanRef = useRef<HTMLCanvasElement>(null);
@@ -167,6 +182,7 @@ export default function MapPage() {
     return () => cancelAnimationFrame(raf);
   }, []);
   const { mode, activePortfolio, activeAsset, setActiveAsset } = useApp();
+  const portfolioGeo = useMemo(() => activePortfolio ? computePortfolioGeo(activePortfolio) : {}, [activePortfolio]);
   const macro = MACRO_INDICATORS.find(m => m.id === selectedMacro);
 
   // Fetch countries
@@ -233,8 +249,15 @@ export default function MapPage() {
 
     // Mode portefeuille
     if (mode === "portfolio" && activePortfolio) {
-      // Calculer l'exposition géo du portefeuille (simplifié)
-      return COUNTRY_NAMES[iso3] ? "rgba(91,141,239,0.28)" : "rgba(255,255,255,0.04)";
+      const pct = portfolioGeo[iso3] || 0;
+      if (pct > 0) {
+        const maxPct = Math.max(...Object.values(portfolioGeo));
+        const ratio = pct / maxPct;
+        if (ratio > 0.65) return `rgba(147,197,253,${0.5 + ratio * 0.45})`;
+        if (ratio > 0.25) return `rgba(91,141,239,${0.3 + ratio * 0.55})`;
+        return `rgba(59,90,180,${0.12 + ratio * 0.5})`;
+      }
+      return "rgba(255,255,255,0.02)";
     }
 
     // Mode actif individuel
@@ -301,7 +324,7 @@ export default function MapPage() {
         d3.select(this).attr("fill", getCountryColor(iso3));
         setHovTooltip(null);
       });
-  }, [countriesData, selectedMacro, macroData, mode, activePortfolio, activeAsset]);
+  }, [countriesData, selectedMacro, macroData, mode, activePortfolio, activeAsset, portfolioGeo]);
 
   const macroValues = Object.values(macroData);
   const macroMin = macroValues.length ? Math.min(...macroValues) : 0;
@@ -360,6 +383,19 @@ export default function MapPage() {
             🌍 Exposition géo. {showGeoPanel ? "▲" : "▼"}
           </button>
         )}
+
+        {/* Bouton Exposition géo portefeuille */}
+        {mode === "portfolio" && activePortfolio && Object.keys(portfolioGeo).length > 0 && (
+          <button onClick={() => { setShowGeoPanel(p => !p); setShowMacroPanel(false); }} style={{
+            display: "flex", alignItems: "center", gap: "6px",
+            background: showGeoPanel ? "rgba(91,141,239,0.25)" : "rgba(91,141,239,0.15)",
+            border: showGeoPanel ? "1px solid rgba(91,141,239,0.5)" : "1px solid rgba(91,141,239,0.3)",
+            borderRadius: "8px", padding: "7px 12px",
+            backdropFilter: "blur(12px)", color: "#9BB9FF", fontSize: "11px", cursor: "pointer",
+          }}>
+            🌍 Exposition géo. {showGeoPanel ? "▲" : "▼"}
+          </button>
+        )}
       </div>
 
       {/* Panel exposition géo */}
@@ -388,6 +424,33 @@ export default function MapPage() {
         </div>
       )}
 
+      {/* Panel exposition géo portefeuille */}
+      {showGeoPanel && mode === "portfolio" && activePortfolio && Object.keys(portfolioGeo).length > 0 && (
+        <div style={{ position: "fixed", left: "20px", top: "80px", zIndex: 30, width: "240px", background: "rgba(4,17,36,0.95)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: "12px", padding: "16px", backdropFilter: "blur(20px)", boxShadow: "0 8px 32px rgba(0,0,0,0.4)", maxHeight: "calc(100vh - 160px)", overflowY: "auto" }}>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "14px" }}>
+            <div>
+              <div style={{ color: "#F8F9FC", fontSize: "12px", fontWeight: 600 }}>{activePortfolio.name}</div>
+              <div style={{ color: "rgba(255,255,255,0.4)", fontSize: "10px", marginTop: "2px" }}>Exposition géographique</div>
+            </div>
+            <button onClick={() => setShowGeoPanel(false)} style={{ background: "transparent", border: "none", color: "rgba(255,255,255,0.4)", cursor: "pointer", fontSize: "14px" }}>✕</button>
+          </div>
+          {Object.entries(portfolioGeo)
+            .sort((a, b) => b[1] - a[1])
+            .slice(0, 15)
+            .map(([iso3, pct]) => (
+            <div key={iso3} style={{ marginBottom: "10px" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "4px" }}>
+                <span style={{ color: "#F8F9FC", fontSize: "11px", opacity: 0.8 }}>{COUNTRY_FLAGS[iso3] || "🌐"} {COUNTRY_NAMES[iso3] || iso3}</span>
+                <span style={{ color: "#9BB9FF", fontSize: "11px", fontWeight: 700 }}>{(pct * 100).toFixed(1)}%</span>
+              </div>
+              <div style={{ height: "4px", background: "rgba(255,255,255,0.07)", borderRadius: "2px" }}>
+                <div style={{ width: `${Math.min(pct * 100, 100)}%`, height: "100%", background: "linear-gradient(to right, #3B82F6, #93C5FD)", borderRadius: "2px" }}/>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
       {hovTooltip && COUNTRY_NAMES[hovTooltip.iso3] && (
         <div style={{ position: "fixed", left: hovTooltip.x+14, top: hovTooltip.y-14, background: "rgba(2,10,24,0.97)", border: "1px solid rgba(255,255,255,0.12)", borderRadius: "12px", padding: "10px 14px", pointerEvents: "none", zIndex: 100, boxShadow: "0 8px 32px rgba(0,0,0,0.4)" }}>
           <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "2px" }}>
@@ -408,6 +471,19 @@ export default function MapPage() {
                 </div>
                 <span style={{ color: "#9BB9FF", fontSize: "12px", fontWeight: 700, minWidth: "36px", textAlign: "right" }}>
                   {ETF_COUNTRY_WEIGHTS[activeAsset.ticker][hovTooltip.iso3]}%
+                </span>
+              </div>
+            </div>
+          )}
+          {mode === "portfolio" && activePortfolio && portfolioGeo[hovTooltip.iso3] && (
+            <div style={{ marginTop: "6px" }}>
+              <div style={{ color: "rgba(255,255,255,0.5)", fontSize: "10px", marginBottom: "4px" }}>{activePortfolio.name}</div>
+              <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                <div style={{ flex: 1, height: "4px", background: "rgba(255,255,255,0.1)", borderRadius: "2px" }}>
+                  <div style={{ width: `${Math.min(portfolioGeo[hovTooltip.iso3] * 100, 100)}%`, height: "100%", background: "#5B8DEF", borderRadius: "2px" }}/>
+                </div>
+                <span style={{ color: "#9BB9FF", fontSize: "12px", fontWeight: 700, minWidth: "36px", textAlign: "right" }}>
+                  {(portfolioGeo[hovTooltip.iso3] * 100).toFixed(1)}%
                 </span>
               </div>
             </div>

@@ -1,15 +1,52 @@
 "use client";
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useMemo, useCallback } from "react";
+import {
+  createChart, IChartApi, ISeriesApi,
+  AreaSeries, LineSeries, CandlestickSeries,
+  ColorType, CrosshairMode, LineStyle,
+  UTCTimestamp,
+} from "lightweight-charts";
+import {
+  AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip,
+  ResponsiveContainer, ReferenceLine, Customized,
+} from "recharts";
 
-const ETF_LIST = [
-  { ticker: "^GSPC", name: "S&P 500", color: "#f59e0b" },
-  { ticker: "^FCHI", name: "CAC 40", color: "#10b981" },
-  { ticker: "^GDAXI", name: "DAX 40", color: "#6366f1" },
-  { ticker: "^IXIC", name: "NASDAQ", color: "#ec4899" },
-  { ticker: "^FTSE", name: "FTSE 100", color: "#0ea5e9" },
-  { ticker: "^N225", name: "Nikkei 225", color: "#f97316" },
-];
-import { ResponsiveContainer, LineChart, AreaChart, ComposedChart, Area, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ReferenceLine, ReferenceDot, ReferenceArea, Customized } from "recharts";
+const PERIOD_CONFIG: Record<string, { apiPeriod: string; interval: string }> = {
+  "1H":  { apiPeriod: "7d",  interval: "1m"  },
+  "24h": { apiPeriod: "5d",  interval: "5m"  },
+  "1S":  { apiPeriod: "7d",  interval: "5m"  },
+  "1M":  { apiPeriod: "60d", interval: "15m" },
+  "3M":  { apiPeriod: "max", interval: "1h"  },
+  "6M":  { apiPeriod: "max", interval: "1d"  },
+  "1A":  { apiPeriod: "max", interval: "1d"  },
+  "3A":  { apiPeriod: "max", interval: "1d"  },
+  "Max": { apiPeriod: "max", interval: "1d"  },
+};
+
+const PERIOD_CONFIG_CANDLE: Record<string, { apiPeriod: string; interval: string }> = {
+  "1H":  { apiPeriod: "7d",  interval: "1m"  },
+  "24h": { apiPeriod: "5d",  interval: "5m"  },
+  "1S":  { apiPeriod: "1mo", interval: "30m" },
+  "1M":  { apiPeriod: "60d", interval: "1h"  },
+  "3M":  { apiPeriod: "max", interval: "1d"  },
+  "6M":  { apiPeriod: "max", interval: "1d"  },
+  "1A":  { apiPeriod: "max", interval: "1d"  },
+  "3A":  { apiPeriod: "max", interval: "1d"  },
+  "Max": { apiPeriod: "max", interval: "1d"  },
+};
+
+// Durée visible initialement (en secondes) pour chaque période.
+// setVisibleRange cadre la fenêtre ; les données hors fenêtre sont scrollables.
+const PERIOD_VISIBLE_SECS: Record<string, number> = {
+  "1H":  3600,
+  "24h": 86400,
+  "1S":  7   * 86400,
+  "1M":  30  * 86400,
+  "3M":  91  * 86400,
+  "6M":  183 * 86400,
+  "1A":  365 * 86400,
+  "3A":  1095 * 86400,
+};
 
 interface DataPoint { date: string; [key: string]: number | string; }
 
@@ -20,742 +57,920 @@ interface Props {
   portfolioLabel: string;
   drawdownData?: { date: string; drawdown: number; drawdown_eur: number }[];
   benchmarkDrawdownData?: { date: string; drawdown: number }[];
+  ticker?: string;
   onRemoveBenchmark?: () => void;
   portfolioColor?: string;
   onExitFullscreen?: () => void;
+  onPeriodChange?: (period: string) => void;
+  onVisibleRangeChange?: (from: string | null, to: string | null) => void;
+  dark?: boolean;
+  percentMode?: boolean;
+  priceMode?: boolean;
+  hideDrawdown?: boolean;
 }
 
-export default function GrowthChart({ portfolioData, benchmarkData, benchmarkName, portfolioLabel, drawdownData, benchmarkDrawdownData, onRemoveBenchmark, onExitFullscreen, portfolioColor = "#4f46e5" }: Props) {
-  const [hoverRow, setHoverRow] = useState<Record<string, any> | null>(null);
-  const [hoverPerfs, setHoverPerfs] = useState<Record<string, number> | null>(null);
-  const [periodFilter, setPeriodFilter] = useState<"1M"|"3M"|"6M"|"1A"|"3A"|"Max">("Max");
-  const [extraSeries, setExtraSeries] = useState<{ticker: string, name: string, color: string, data: {date:string,value:number}[]}[]>([]);
-  const [showDropdown, setShowDropdown] = useState(false);
-  const [savedPortfolios, setSavedPortfolios] = useState<any[]>([]);
+function toTs(d: string): UTCTimestamp {
+  return Math.floor(new Date(d).getTime() / 1000) as UTCTimestamp;
+}
 
-  useEffect(() => {
-    const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
-    fetch(`${API_URL}/api/v1/portfolios`)
-      .then(r => r.json())
-      .then(setSavedPortfolios)
-      .catch(() => {});
-  }, []);
+function dedup<T extends { time: UTCTimestamp }>(arr: T[]): T[] {
+  const seen = new Set<number>();
+  const out: T[] = [];
+  for (const item of arr) {
+    if (!seen.has(item.time)) { seen.add(item.time); out.push(item); }
+  }
+  return out.sort((a, b) => a.time - b.time);
+}
+
+function getCutoffStr(p: string): string | null {
+  if (p === "Max") return null;
+  const now = new Date();
+  const days: Record<string, number> = { "1H":1, "24h":1, "1S":14, "1M":31, "3M":91, "6M":183, "1A":365, "3A":1095 };
+  if (!days[p]) return null;
+  now.setDate(now.getDate() - days[p]);
+  return now.toISOString().slice(0, 10);
+}
+
+interface OHLCPt { date: string; value: number; open?: number; high?: number; low?: number; close?: number; }
+
+function aggregateCandles(pts: OHLCPt[], getKey: (d: Date) => string): OHLCPt[] {
+  const groups = new Map<string, OHLCPt[]>();
+  const order: string[] = [];
+  for (const pt of pts) {
+    const key = getKey(new Date(pt.date));
+    if (!groups.has(key)) { groups.set(key, []); order.push(key); }
+    groups.get(key)!.push(pt);
+  }
+  return order.map(key => {
+    const bars = groups.get(key)!;
+    return {
+      date:  bars[0].date,
+      value: bars[bars.length - 1].value,
+      open:  bars[0].open  ?? bars[0].value,
+      high:  Math.max(...bars.map(b => b.high  ?? b.value)),
+      low:   Math.min(...bars.map(b => b.low   ?? b.value)),
+      close: bars[bars.length - 1].close ?? bars[bars.length - 1].value,
+    };
+  });
+}
+
+function agg2h(pts: OHLCPt[]): OHLCPt[] {
+  return aggregateCandles(pts, d =>
+    `${d.toISOString().slice(0, 10)}_${Math.floor(d.getUTCHours() / 2)}`
+  );
+}
+
+function aggWeekly(pts: OHLCPt[]): OHLCPt[] {
+  return aggregateCandles(pts, d => {
+    const day = d.getUTCDay();
+    const mon = new Date(d);
+    mon.setUTCDate(d.getUTCDate() - (day === 0 ? 6 : day - 1));
+    return mon.toISOString().slice(0, 10);
+  });
+}
+
+function aggMonthly(pts: OHLCPt[]): OHLCPt[] {
+  return aggregateCandles(pts, d => d.toISOString().slice(0, 7));
+}
+
+export default function GrowthChart({
+  portfolioData, benchmarkData, benchmarkName, portfolioLabel,
+  drawdownData, ticker, portfolioColor = "#4f46e5",
+  onExitFullscreen, onPeriodChange, onVisibleRangeChange,
+  dark = false, percentMode = false, priceMode = false,
+  hideDrawdown = false,
+}: Props) {
+
+  const [periodFilter, setPeriodFilter] = useState<"1H"|"24h"|"1S"|"1M"|"3M"|"6M"|"1A"|"3A"|"Max">("Max");
+  const [chartMode, setChartMode]       = useState<"line"|"candle">("line");
+  const [adaptiveData, setAdaptiveData] = useState<{
+    date: string; value: number;
+    open?: number; high?: number; low?: number; close?: number;
+  }[]>([]);
   const [fullscreen, setFullscreen] = useState(false);
+  const [showShare,  setShowShare]  = useState(false);
+  const [chartError, setChartError] = useState<string | null>(null);
+
+  // Hover state for custom tooltip
+  const [hoverPrice,   setHoverPrice]   = useState<number | null>(null);
+  const [hoverDate,    setHoverDate]    = useState<string | null>(null);
+  const [hoverOHLC,    setHoverOHLC]    = useState<{ open:number; high:number; low:number; close:number } | null>(null);
+  const [hoverPoint,   setHoverPoint]   = useState<{ x: number; y: number } | null>(null);
+  const [hoverBmPrice, setHoverBmPrice] = useState<number | null>(null);
+
+  // Refs
+  const containerRef       = useRef<HTMLDivElement>(null);
+  const chartWrapRef       = useRef<HTMLDivElement>(null);
+  const shareRef           = useRef<HTMLDivElement>(null);
+  const chartRef           = useRef<IChartApi | null>(null);
+  const areaSeriesRef      = useRef<ISeriesApi<"Area"> | null>(null);
+  const candleSeriesRef    = useRef<ISeriesApi<"Candlestick"> | null>(null);
+  const benchmarkSeriesRef = useRef<ISeriesApi<"Line"> | null>(null);
+  const chartModeRef      = useRef(chartMode);
+  const chartModeForFetch = useRef(chartMode);
+  const prevChartModeRef  = useRef(chartMode);
+  const isMountedRef      = useRef(false);
+  const [fetchKey, setFetchKey] = useState(0);
+
+  // Lazy loading refs
+  const oldestLoadedDateRef = useRef<string | null>(null);
+  const currentIntervalRef  = useRef<string>("1d");
+  const isLoadingMoreRef    = useRef(false);
+  const hasMoreHistoryRef   = useRef(true);
+  const isAutoModeRef       = useRef(true);
+  const isPrependRef            = useRef(false);
+  const adaptiveDataRef         = useRef<typeof adaptiveData>([]);
+  const onVisibleRangeChangeRef = useRef(onVisibleRangeChange);
+  useEffect(() => { adaptiveDataRef.current = adaptiveData; }, [adaptiveData]);
+  useEffect(() => { onVisibleRangeChangeRef.current = onVisibleRangeChange; }, [onVisibleRangeChange]);
+  useEffect(() => { chartModeRef.current = chartMode; }, [chartMode]);
+  useEffect(() => {
+    chartModeForFetch.current = chartMode;
+    if (ticker && isMountedRef.current) setFetchKey(k => k + 1);
+  }, [chartMode, ticker]); // eslint-disable-line
+  useEffect(() => { isMountedRef.current = true; }, []);
+
+  // Lazy load: fetch chunk d'historique avant la barre la plus ancienne chargée.
+  // Quand l'interval intraday est épuisé par la limite Yahoo, bascule sur "1d" pour continuer.
+  const loadMore = useCallback(async () => {
+    if (
+      isLoadingMoreRef.current ||
+      !hasMoreHistoryRef.current ||
+      isAutoModeRef.current
+    ) return;
+    const oldest = oldestLoadedDateRef.current;
+    if (!ticker || !oldest) return;
+
+    isLoadingMoreRef.current = true;
+    const iv = currentIntervalRef.current;
+    const endDate = new Date(oldest);
+    endDate.setDate(endDate.getDate() - 1);
+
+    const daysMap: Record<string, number> = {
+      "1m": 2, "5m": 6, "15m": 15, "30m": 25, "1h": 70, "1d": 450,
+    };
+    const days = daysMap[iv] ?? 450;
+    const startDate = new Date(endDate);
+    startDate.setDate(startDate.getDate() - days);
+
+    const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
+    const start = startDate.toISOString().slice(0, 10);
+    const end   = endDate.toISOString().slice(0, 10);
+    try {
+      const res  = await fetch(`${API_URL}/api/v1/intraday?ticker=${encodeURIComponent(ticker)}&start=${start}&end=${end}&interval=${iv}`);
+      const data = await res.json();
+      if (!Array.isArray(data) || data.length === 0) {
+        if (iv !== "1d") {
+          // Historique intraday épuisé (limite Yahoo ~60j/5m, ~730j/1h).
+          // On bascule sur daily pour continuer à charger l'historique complet.
+          currentIntervalRef.current = "1d";
+          // isLoadingMoreRef = false dans finally → le prochain scroll relance loadMore en 1d
+        } else {
+          hasMoreHistoryRef.current = false;
+        }
+      } else {
+        oldestLoadedDateRef.current = data[0].date;
+        isPrependRef.current = true;
+        setAdaptiveData(prev => [...(data as typeof adaptiveData), ...prev]);
+      }
+    } catch {
+      hasMoreHistoryRef.current = false;
+    } finally {
+      isLoadingMoreRef.current = false;
+    }
+  }, [ticker]); // eslint-disable-line
+
+  // Fetch intraday data
+  useEffect(() => {
+    if (!ticker) { setAdaptiveData([]); return; }
+
+    // Vider immédiatement pour éviter d'afficher les données stale de la période précédente.
+    setAdaptiveData([]);
+    // Reset lazy loading state pour chaque nouveau fetch
+    isLoadingMoreRef.current  = false;
+    hasMoreHistoryRef.current = true;
+    isPrependRef.current      = false;
+    oldestLoadedDateRef.current = null;
+
+    const isCandleMode = chartModeForFetch.current === "candle";
+
+    const config = isCandleMode
+      ? PERIOD_CONFIG_CANDLE[periodFilter]
+      : PERIOD_CONFIG[periodFilter];
+    if (!config) { setAdaptiveData([]); return; }
+    const interval = config.interval;
+
+    // 1H : pas de lazy (7j de 1m = tout ce que Yahoo a).
+    // apiPeriod=max : tout l'historique disponible déjà chargé (1d ou 1h), lazy inutile.
+    // Autres périodes (24h/1S/1M) : lazy actif, fallback 1d si intraday épuisé.
+    isAutoModeRef.current = (periodFilter === "1H") || (config.apiPeriod === "max");
+    currentIntervalRef.current = interval;
+
+    const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
+    let cancelled = false;
+    fetch(`${API_URL}/api/v1/intraday?ticker=${encodeURIComponent(ticker)}&period=${config.apiPeriod}&interval=${interval}`)
+      .then(r => r.json())
+      .then(data => {
+        if (cancelled || !Array.isArray(data)) return;
+        let pts = data as typeof adaptiveData;
+
+        // Pas de downsample en courbe : lightweight-charts gère 10k+ pts nativement.
+        // Le downsample détruirait la résolution dans la fenêtre visible (ex: 3 pts/h en 1H 1m).
+        // Candle: agrégation OHLCV selon la période
+        if (isCandleMode) {
+          if (periodFilter === "1M")  pts = agg2h(pts);
+          if (periodFilter === "3A")  pts = aggWeekly(pts);
+          if (periodFilter === "Max") pts = aggWeekly(pts);
+        }
+        // Mémoriser la date la plus ancienne pour le lazy loading
+        oldestLoadedDateRef.current = pts[0]?.date ?? null;
+        setAdaptiveData(pts);
+
+        // Pour 1H/24h/1S/1M en mode LIGNE : historique daily chargé en arrière-plan.
+        // En candle, on ne mixe pas les résolutions (bougies 1m + bougies 1j = incohérent visuellement).
+        // En candle, le lazy loading avec fallback 1d gère l'historique progressivement.
+        if (!isCandleMode && periodFilter !== "1H" && config.apiPeriod !== "max" && interval !== "1d" && pts.length > 0) {
+          const cutDate = pts[0].date.slice(0, 10);
+          fetch(`${API_URL}/api/v1/intraday?ticker=${encodeURIComponent(ticker)}&period=max&interval=1d`)
+            .then(r => r.json())
+            .then((daily: typeof pts) => {
+              if (cancelled || !Array.isArray(daily)) return;
+              // Seulement les barres daily AVANT le début des données intraday
+              const before = daily.filter((p: typeof pts[0]) => p.date.slice(0, 10) < cutDate);
+              hasMoreHistoryRef.current = false; // historique complet chargé, lazy inutile
+              if (before.length > 0) {
+                oldestLoadedDateRef.current = before[0].date;
+                isPrependRef.current = true;
+                setAdaptiveData(prev => [...before, ...prev]);
+              }
+            })
+            .catch(() => { /* lazy loading reste actif comme fallback */ });
+        }
+      })
+      .catch(() => { if (!cancelled) setAdaptiveData([]); });
+    return () => { cancelled = true; };
+  }, [ticker, periodFilter, fetchKey]); // eslint-disable-line
+
+  // Lazy load: déclencher quand l'utilisateur scrolle vers le bord gauche du chart
+  useEffect(() => {
+    const chart = chartRef.current;
+    if (!chart || !ticker) return;
+    const handler = (range: { from: number; to: number } | null) => {
+      if (range && range.from < 50) loadMore();
+    };
+    chart.timeScale().subscribeVisibleLogicalRangeChange(handler);
+    return () => chart.timeScale().unsubscribeVisibleLogicalRangeChange(handler);
+  }, [ticker, loadMore]);
+
   useEffect(() => {
     setTimeout(() => window.dispatchEvent(new Event("resize")), 100);
   }, [fullscreen]);
-  const [showShare, setShowShare] = useState(false);
-  const shareRef = useRef<HTMLDivElement>(null);
-  const chartRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    const handler = (e: MouseEvent) => {
+    const h = (e: MouseEvent) => {
       if (shareRef.current && !shareRef.current.contains(e.target as Node)) setShowShare(false);
     };
-    document.addEventListener("mousedown", handler);
-    return () => document.removeEventListener("mousedown", handler);
-  }, []);
-  const [loadingTicker, setLoadingTicker] = useState<string|null>(null);
-  const dropdownRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    const handler = (e: MouseEvent) => {
-      if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
-        setShowDropdown(false);
-      }
-    };
-    document.addEventListener("mousedown", handler);
-    return () => document.removeEventListener("mousedown", handler);
+    document.addEventListener("mousedown", h);
+    return () => document.removeEventListener("mousedown", h);
   }, []);
 
+  const isIntraday = !!(ticker && adaptiveData.length > 0);
+
+  const fmtPrice = (v: number): string => {
+    if (percentMode) {
+      const pct = (v - 10000) / 10000 * 100;
+      return `${pct >= 0 ? "+" : ""}${pct.toFixed(2)}%`;
+    }
+    if (priceMode) {
+      if (v < 1)    return v.toFixed(4);
+      if (v < 10)   return v.toFixed(3);
+      if (v >= 1e5) return `${(v / 1000).toFixed(0)}k`;
+      return new Intl.NumberFormat("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(v);
+    }
+    return new Intl.NumberFormat("fr-FR", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(v) + " €";
+  };
+
+  // ─── Create chart on mount ────────────────────────────────────────────────────
   useEffect(() => {
-    if (extraSeries.length === 0) return;
-    const reload = async () => {
-      const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
-      const startDate = portfolioData.length > 0 ? portfolioData[0].date : null;
-      const updated = await Promise.all(extraSeries.map(async s => {
-        const savedP = savedPortfolios.find((p: any) => p.id === s.ticker);
-        if (savedP) return s; // les portefeuilles sauvegardés gardent leurs données
-        const url = startDate
-          ? `${API_URL}/api/v1/compare?ticker=${s.ticker}&period=Max&start=${startDate}`
-          : `${API_URL}/api/v1/compare?ticker=${s.ticker}&period=Max`;
-        const res = await fetch(url);
-        const json = await res.json();
-        if (!json.data?.length) return s;
-        return {...s, data: json.data};
-      }));
-      setExtraSeries(updated);
-    };
-    reload();
-  }, [periodFilter]);
+    if (!containerRef.current) return;
 
-  const addSeries = async (etf: {ticker:string, name:string, color:string}) => {
-    if (extraSeries.length >= 3) return;
-    if (extraSeries.find(s => s.ticker === etf.ticker)) return;
-    setLoadingTicker(etf.ticker);
     try {
-      const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
-      const savedP = savedPortfolios.find((p: any) => p.id === etf.ticker);
-      let data: any[] = [];
-      if (savedP) {
-        const res = await fetch(`${API_URL}/api/v1/backtest`, {
-          method: "POST",
-          headers: {"Content-Type": "application/json"},
-          body: JSON.stringify({
-            assets: savedP.assets,
-            period: "max",
-            benchmark: null,
-            risk_free_rate: 0.035,
-          }),
-        });
-        const json = await res.json();
-        data = json.portfolio_growth || [];
-      } else {
-        const startDate = portfolioData.length > 0 ? portfolioData[0].date : null;
-        const url = startDate
-          ? `${API_URL}/api/v1/compare?ticker=${etf.ticker}&period=Max&start=${startDate}`
-          : `${API_URL}/api/v1/compare?ticker=${etf.ticker}&period=Max`;
-        const res = await fetch(url);
-        const json = await res.json();
-        data = json.data || [];
-      }
-      if (data.length > 0) {
-        setExtraSeries(prev => [...prev, {...etf, data}]);
-      }
-    } finally {
-      setLoadingTicker(null);
-      setShowDropdown(false);
-    }
-  };
+      const bg   = dark ? "rgba(0,0,0,0)" : "#ffffff";
+      const grid = dark ? "rgba(255,255,255,0.05)" : "#f1f5f9";
+      const txt  = dark ? "#94a3b8" : "#64748b";
 
-  const removeSeries = (ticker: string) => {
-    setExtraSeries(prev => prev.filter(s => s.ticker !== ticker));
-  };
-  const sampled = (() => {
-    const merged: Record<string, DataPoint> = {};
-    portfolioData.forEach(p => { merged[p.date] = { ...merged[p.date], date: p.date, [portfolioLabel]: p.value }; });
-    benchmarkData.forEach(p => { merged[p.date] = { ...merged[p.date], date: p.date, [benchmarkName]: p.value }; });
-    const arr = Object.values(merged).sort((a,b) => a.date < b.date ? -1 : 1);
-    if (arr.length <= 300) return arr;
-    const step = Math.ceil(arr.length / 300);
-    return arr.filter((_,i) => i % step === 0 || i === arr.length - 1);
-  })();
-
-  const bmDrawdownSampled = (() => {
-    if (!benchmarkDrawdownData || benchmarkDrawdownData.length === 0) return [];
-    const months = {"1M":1,"3M":3,"6M":6,"1A":12,"3A":36,"Max":999}[periodFilter] || 999;
-    let filtered = benchmarkDrawdownData;
-    if (periodFilter !== "Max") {
-      const cutoff = new Date();
-      cutoff.setMonth(cutoff.getMonth() - months);
-      const cutoffStr = cutoff.toISOString().slice(0,10);
-      filtered = benchmarkDrawdownData.filter(p => p.date >= cutoffStr);
-    }
-    if (filtered.length <= 300) return filtered;
-    const step = Math.ceil(filtered.length / 300);
-    return filtered.filter((_,i) => i % step === 0 || i === filtered.length - 1);
-  })();
-
-  const drawdownSampled = (() => {
-    if (!drawdownData || drawdownData.length === 0) return [];
-    const months = {"1M":1,"3M":3,"6M":6,"1A":12,"3A":36,"Max":0}[periodFilter] || 0;
-    let filtered = drawdownData;
-    if (periodFilter !== "Max") {
-      const cutoff = new Date();
-      cutoff.setMonth(cutoff.getMonth() - months);
-      const cutoffStr = cutoff.toISOString().slice(0,10);
-      filtered = drawdownData.filter(p => p.date >= cutoffStr);
-    }
-    if (filtered.length <= 300) return filtered;
-    const step = Math.ceil(filtered.length / 300);
-    return filtered.filter((_,i) => i % step === 0 || i === filtered.length - 1);
-  })();
-
-  const formatDate = (d: string) => {
-    try {
-      const months = {"1M":1,"3M":3,"6M":6,"1A":12,"3A":36,"Max":0}[periodFilter] || 0;
-      const date = new Date(d);
-      if (months <= 3) return date.toLocaleDateString("fr-FR", { day: "numeric", month: "short" });
-      if (months <= 12) return date.toLocaleDateString("fr-FR", { month: "short", year: "2-digit" });
-      if (months <= 60) return date.toLocaleDateString("fr-FR", { month: "short", year: "2-digit" });
-      return date.getFullYear().toString();
-    }
-    catch { return d; }
-  };
-
-  const formatYAxis = (v: number) => {
-    if (!v || isNaN(v)) return "";
-    return new Intl.NumberFormat("fr-FR", {minimumFractionDigits:2, maximumFractionDigits:2}).format(v) + " EUR";
-  };
-  const formatYAxisShort = (v: number) => {
-    if (!v || isNaN(v)) return "";
-    return new Intl.NumberFormat("fr-FR", {minimumFractionDigits:2, maximumFractionDigits:2}).format(v);
-  };
-
-  const CustomTooltip = ({ active, payload, label }: any) => {
-    useEffect(() => {
-      if (active && payload?.length) {
-        const perfs: Record<string, number> = {};
-        const firstVal = displayedData.length > 0 ? (displayedData[0][portfolioLabel] as number) : 10000;
-        const ptfPayload = payload.find((p:any) => p.dataKey === portfolioLabel);
-        if (ptfPayload && firstVal) perfs[portfolioLabel] = ((ptfPayload.value - firstVal) / firstVal * 100);
-        const bFirst = displayedData.length > 0 ? (displayedData[0][benchmarkName] as number) : null;
-        const bmPayload = payload.find((p:any) => p.dataKey === benchmarkName);
-        if (bmPayload && bFirst) perfs[benchmarkName] = ((bmPayload.value - bFirst) / bFirst * 100);
-        extraSeries.forEach((s:any) => {
-          const sp = payload.find((p:any) => p.dataKey === s.ticker);
-          if (sp) perfs[s.ticker] = ((sp.value - 10000) / 10000 * 100);
-        });
-        setHoverPerfs(perfs);
-      } else {
-        setHoverPerfs(null);
-      }
-    }, [active, payload]);
-    if (!active || !payload?.length) return null;
-    const ptfPayload = payload.find((p:any) => p.dataKey === portfolioLabel);
-    const bmPayload = payload.find((p:any) => p.dataKey === benchmarkName);
-    const ptfVal = ptfPayload?.value;
-    const bmVal = bmPayload?.value;
-
-    const firstVal = displayedData.length > 0 ? (displayedData[0][portfolioLabel] as number) : 10000;
-    const ptfPct = ptfVal ? ((ptfVal - firstVal) / firstVal * 100) : null;
-
-    const bFirstPoint = benchmarkData.length > 0 ? benchmarkData.find(p => p.date >= (displayedData[0]?.date as string || "")) : null;
-    const bFirst = bFirstPoint?.value || bmVal;
-    const bmPct = bmVal && bFirst ? ((bmVal - bFirst) / bFirst * 100) : null;
-    const alpha = ptfPct !== null && bmPct !== null ? ptfPct - bmPct : null;
-
-    const ddPoint = (() => {
-      if (!drawdownData?.length) return null;
-      const exact = drawdownData.find(p => p.date === label);
-      if (exact) return exact;
-      // Trouver le point le plus proche
-      const sorted = [...drawdownData].sort((a,b) => Math.abs(new Date(a.date).getTime() - new Date(label).getTime()) - Math.abs(new Date(b.date).getTime() - new Date(label).getTime()));
-      return sorted[0] || null;
-    })();
-
-  return (
-      <div className="bg-white border border-slate-200 rounded-xl shadow-lg p-3 text-xs min-w-[180px]">
-        <p className="text-slate-400 font-medium mb-2">{new Date(label).toLocaleDateString('fr-FR', {day:'numeric', month:'short', year:'numeric'})}</p>
-        {ptfVal && <div className="flex justify-between mb-1">
-          <span className="text-indigo-500 font-semibold">Portefeuille</span>
-          <span className="font-bold text-indigo-500">{formatYAxis(ptfVal)}</span>
-        </div>}
-        {bmVal && <div className="flex justify-between mb-1">
-          <span className="text-amber-500 font-semibold">{benchmarkName}</span>
-          <span className="font-bold text-amber-500">{formatYAxis(bmVal)}</span>
-        </div>}
-        {extraSeries.map(s => {
-          const sPayload = payload.find((p:any) => p.dataKey === s.ticker);
-          const sVal = sPayload?.value;
-          if (!sVal) return null;
-          return (
-            <div key={s.ticker} className="flex justify-between mb-1">
-              <span className="font-semibold" style={{color: s.color}}>{s.name}</span>
-              <span className="font-bold" style={{color: s.color}}>{formatYAxis(sVal)}</span>
-            </div>
-          );
-        })}
-        {ptfPct !== null && <div className="flex justify-between border-t border-slate-100 pt-2 mb-1">
-          <span className="text-slate-500">Perf. ptf</span>
-          <span className={`font-semibold ${ptfPct >= 0 ? "text-emerald-500" : "text-red-500"}`}>{ptfPct >= 0 ? "+" : ""}{ptfPct.toFixed(1)}%</span>
-        </div>}
-        {bmPct !== null && <div className="flex justify-between mb-1">
-          <span className="text-slate-500">Perf. idx</span>
-          <span className={`font-medium ${bmPct >= 0 ? "text-emerald-500" : "text-red-400"}`}>{bmPct >= 0 ? "+" : ""}{bmPct.toFixed(1)}%</span>
-        </div>}
-        {alpha !== null && <div className="flex justify-between mb-1">
-          <span className="text-slate-500">Alpha</span>
-          <span className={`font-bold ${alpha >= 0 ? "text-emerald-500" : "text-red-500"}`}>{alpha >= 0 ? "+" : ""}{alpha.toFixed(1)}%</span>
-        </div>}
-        {ddPoint && <div className="flex justify-between border-t border-slate-100 pt-2 mt-1">
-          <span className="text-slate-500">Drawdown</span>
-          <span className="font-medium text-red-500">{ddPoint.drawdown.toFixed(1)}%</span>
-        </div>}
-      </div>
-    );
-  };
-
-  const DrawdownTooltip = ({ active, payload, label }: any) => {
-    if (!active || !payload?.length) return null;
-    return (
-      <div className="bg-white border border-slate-200 rounded-xl shadow-lg p-2 text-xs">
-        <span className="font-bold text-red-500">{payload[0]?.value.toFixed(1)}%</span>
-      </div>
-    );
-  };
-
-  const mergedDrawdown = (() => {
-    if (!drawdownSampled.length) return drawdownSampled;
-    if (!bmDrawdownSampled.length) return drawdownSampled;
-    const bmMap: Record<string, number> = {};
-    bmDrawdownSampled.forEach(p => { bmMap[p.date] = p.drawdown; });
-    return drawdownSampled.map(p => ({
-      ...p,
-      bmDrawdown: bmMap[p.date] !== undefined ? bmMap[p.date] : null,
-    }));
-  })();
-
-  const displayedData = (() => {
-    const months = {"1M":1,"3M":3,"6M":6,"1A":12,"3A":36,"Max":0}[periodFilter] || 0;
-    const allMerged: Record<string, any> = {};
-    portfolioData.forEach(p => { allMerged[p.date] = { ...allMerged[p.date], date: p.date, [portfolioLabel]: p.value }; });
-    const ptfDates = Object.values(allMerged).filter((p:any) => p[portfolioLabel] !== undefined).sort((a:any,b:any) => a.date < b.date ? -1 : 1);
-    const cutoffDate = ptfDates.length > 0 ? ptfDates[0].date : null;
-    extraSeries.forEach(s => {
-      const filtered = cutoffDate ? s.data.filter((p:any) => p.date >= cutoffDate) : s.data;
-      const firstVal = filtered.length > 0 ? filtered[0].value : null;
-      filtered.forEach((p:any) => {
-        const normalized = firstVal ? Math.round(p.value / firstVal * 10000 * 100) / 100 : p.value;
-        allMerged[p.date] = { ...allMerged[p.date], date: p.date, [s.ticker]: normalized };
+      const chart = createChart(containerRef.current, {
+        autoSize: true,
+        layout: {
+          attributionLogo: false,
+          background: { type: ColorType.Solid, color: bg },
+          textColor: txt,
+          fontSize: 11,
+        },
+        grid: {
+          vertLines: { color: grid, style: LineStyle.Dashed },
+          horzLines: { color: grid, style: LineStyle.Dashed },
+        },
+        crosshair: {
+          mode: CrosshairMode.Normal,
+          vertLine: {
+            color: dark ? "rgba(255,255,255,0.2)" : "#94a3b8",
+            style: LineStyle.Solid,
+            width: 1,
+            labelBackgroundColor: dark ? "#334155" : "#1e293b",
+          },
+          horzLine: {
+            color: dark ? "rgba(255,255,255,0.2)" : "#94a3b8",
+            style: LineStyle.Solid,
+            width: 1,
+            labelBackgroundColor: dark ? "#334155" : "#1e293b",
+          },
+        },
+        rightPriceScale: {
+          borderVisible: false,
+          scaleMargins: { top: 0.08, bottom: 0.08 },
+        },
+        timeScale: {
+          borderVisible: false,
+          timeVisible: true,
+          secondsVisible: false,
+          fixRightEdge: true,
+          fixLeftEdge: true,
+        },
+        handleScroll: {
+          mouseWheel: true,
+          pressedMouseMove: true,
+          horzTouchDrag: true,
+          vertTouchDrag: false,
+        },
+        handleScale: {
+          mouseWheel: true,
+          pinch: true,
+          axisPressedMouseMove: { time: true, price: true },
+        },
+        kineticScroll: { touch: true, mouse: true },
       });
-    });
-    benchmarkData.forEach(p => { allMerged[p.date] = { ...allMerged[p.date], date: p.date, [benchmarkName]: p.value }; });
-    const all = Object.values(allMerged).sort((a,b) => a.date < b.date ? -1 : 1);
-    // Garder seulement les dates où le portefeuille existe
-    const cutoff = new Date();
-    cutoff.setMonth(cutoff.getMonth() - months);
-    const cutoffStr = cutoff.toISOString().slice(0,10);
-    const filtered = months === 0 ? all : all.filter((p:any) => p.date >= cutoffStr);
-    if (filtered.length <= 300) return filtered;
-    const step = Math.ceil(filtered.length / 300);
-    return filtered.filter((_:any, i:number) => i % step === 0 || i === filtered.length - 1);
-  })();
-  const lastPortfolioValue = displayedData.length > 0 ? (displayedData[displayedData.length-1][portfolioLabel] as number) : null;
-  const lastBenchmarkValue = displayedData.length > 0 ? (displayedData[displayedData.length-1][benchmarkName] as number) : null;
+      chartRef.current = chart;
 
-  const CustomYAxisTick = (props: any) => {
-    const { x, y, payload } = props;
-    const v = payload.value;
-    const fmt = new Intl.NumberFormat("fr-FR", {minimumFractionDigits:2, maximumFractionDigits:2}).format(v);
-    const isPortfolio = lastPortfolioValue !== null && Math.abs(v - lastPortfolioValue) < Math.abs(lastPortfolioValue * 0.003);
-    const isBenchmark = lastBenchmarkValue !== null && Math.abs(v - lastBenchmarkValue) < Math.abs(lastBenchmarkValue * 0.003);
-    if (isPortfolio) {
-      return (
-        <g>
-          <rect x={x} y={y-10} width={70} height={20} rx={3} fill="#4f46e5"/>
-          <text x={x+35} y={y+5} textAnchor="middle" fill="white" fontSize={10} fontWeight="600">{fmt}</text>
-        </g>
-      );
+      // Sync visible time range to parent (debounced 150ms)
+      let rangeDebounce: ReturnType<typeof setTimeout>;
+      const rangeHandler = (range: { from: number; to: number } | null) => {
+        clearTimeout(rangeDebounce);
+        rangeDebounce = setTimeout(() => {
+          if (!range) { onVisibleRangeChangeRef.current?.(null, null); return; }
+          const from = new Date((range.from as number) * 1000).toISOString().slice(0, 10);
+          const to   = new Date((range.to   as number) * 1000).toISOString().slice(0, 10);
+          onVisibleRangeChangeRef.current?.(from, to);
+        }, 150);
+      };
+      chart.timeScale().subscribeVisibleTimeRangeChange(rangeHandler as any);
+
+      const area = chart.addSeries(AreaSeries, {
+        lineColor: portfolioColor,
+        topColor:    portfolioColor + "55",
+        bottomColor: portfolioColor + "00",
+        lineWidth: 2,
+        crosshairMarkerVisible: true,
+        crosshairMarkerRadius: 4,
+        crosshairMarkerBorderColor: "#ffffff",
+        crosshairMarkerBackgroundColor: portfolioColor,
+        lastValueVisible: true,
+        priceLineVisible: false,
+        priceFormat: {
+          type: "custom",
+          formatter: (v: number) => {
+            try { return fmtPrice(v); } catch { return String(v); }
+          },
+          minMove: 0.001,
+        },
+      });
+      areaSeriesRef.current = area;
+
+      const candle = chart.addSeries(CandlestickSeries, {
+        upColor: "#26a69a", downColor: "#ef5350",
+        borderUpColor: "#26a69a", borderDownColor: "#ef5350",
+        wickUpColor: "#26a69a", wickDownColor: "#ef5350",
+        lastValueVisible: true,
+        priceLineVisible: false,
+        visible: false,
+      });
+      candleSeriesRef.current = candle;
+
+      const bm = chart.addSeries(LineSeries, {
+        color: "#f59e0b",
+        lineWidth: 1,
+        lastValueVisible: false,
+        priceLineVisible: false,
+        crosshairMarkerVisible: false,
+      });
+      benchmarkSeriesRef.current = bm;
+
+      chart.subscribeCrosshairMove(param => {
+        if (!param.time || !param.point) {
+          setHoverPrice(null);
+          setHoverDate(null);
+          setHoverOHLC(null);
+          setHoverPoint(null);
+          setHoverBmPrice(null);
+          return;
+        }
+        try {
+          const aData  = param.seriesData.get(area) as any;
+          const cData  = param.seriesData.get(candle) as any;
+          const bmData = param.seriesData.get(bm) as any;
+          setHoverPoint({ x: param.point.x, y: param.point.y });
+          setHoverDate(new Date((param.time as number) * 1000).toISOString());
+          if (cData && chartModeRef.current === "candle") {
+            setHoverPrice(cData.close ?? null);
+            setHoverOHLC({ open: cData.open, high: cData.high, low: cData.low, close: cData.close });
+          } else if (aData) {
+            setHoverPrice(aData.value ?? null);
+            setHoverOHLC(null);
+          }
+          setHoverBmPrice(bmData?.value ?? null);
+        } catch { /* ignore crosshair errors */ }
+      });
+
+      setChartError(null);
+
+      return () => {
+        clearTimeout(rangeDebounce);
+        chart.remove();
+        chartRef.current = null;
+        areaSeriesRef.current = null;
+        candleSeriesRef.current = null;
+        benchmarkSeriesRef.current = null;
+      };
+    } catch (err: any) {
+      setChartError(err?.message ?? "Chart init failed");
     }
-    if (isBenchmark) {
-      return (
-        <g>
-          <rect x={x} y={y-10} width={70} height={20} rx={3} fill="#f59e0b"/>
-          <text x={x+35} y={y+5} textAnchor="middle" fill="white" fontSize={10} fontWeight="600">{fmt}</text>
-        </g>
-      );
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Update theme
+  useEffect(() => {
+    if (!chartRef.current) return;
+    const bg   = dark ? "rgba(0,0,0,0)" : "#ffffff";
+    const grid = dark ? "rgba(255,255,255,0.05)" : "#f1f5f9";
+    const txt  = dark ? "#94a3b8" : "#64748b";
+    chartRef.current.applyOptions({
+      layout: { background: { type: ColorType.Solid, color: bg }, textColor: txt },
+      grid: { vertLines: { color: grid, style: LineStyle.Dashed }, horzLines: { color: grid, style: LineStyle.Dashed } },
+    });
+  }, [dark]);
+
+  // Update series color
+  useEffect(() => {
+    if (!areaSeriesRef.current) return;
+    areaSeriesRef.current.applyOptions({
+      lineColor: portfolioColor,
+      topColor:    portfolioColor + "55",
+      bottomColor: portfolioColor + "00",
+      crosshairMarkerBackgroundColor: portfolioColor,
+    });
+  }, [portfolioColor]);
+
+  // Set series data — déclenché uniquement par les changements de données structurelles.
+  // portfolioData est volontairement absent des deps : la mise à jour du prix live
+  // passe par un effet séparé qui utilise series.update() au lieu de setData(),
+  // évitant ainsi le reset de vue (zoom-out) que setData() provoque.
+  useEffect(() => {
+    const area   = areaSeriesRef.current;
+    const candle = candleSeriesRef.current;
+    const bm     = benchmarkSeriesRef.current;
+    if (!area || !candle || !bm) return;
+
+    try {
+      if (ticker) {
+        if (isIntraday) {
+          const aData = dedup(adaptiveData.map(p => ({ time: toTs(p.date), value: p.value })));
+          const cData = dedup(adaptiveData.map(p => ({
+            time:  toTs(p.date),
+            open:  p.open  ?? p.value,
+            high:  p.high  ?? p.value,
+            low:   p.low   ?? p.value,
+            close: p.close ?? p.value,
+          })));
+          area.setData(aData);
+          candle.setData(cData);
+        } else {
+          area.setData([]);
+          candle.setData([]);
+        }
+        bm.setData([]);
+        const inCandle = chartModeRef.current === "candle";
+        area.applyOptions({ visible: !inCandle });
+        candle.applyOptions({ visible: inCandle });
+      } else {
+        // Portfolio mode (no ticker)
+        const cutStr = getCutoffStr(periodFilter);
+        const filterDate = (arr: DataPoint[]) =>
+          cutStr ? arr.filter(p => p.date >= cutStr) : arr;
+
+        const aData = dedup(filterDate(portfolioData).map(p => ({ time: toTs(p.date), value: p.value as number })));
+        const bmData = benchmarkData.length
+          ? dedup(filterDate(benchmarkData).map(p => ({ time: toTs(p.date), value: p.value as number })))
+          : [];
+
+        area.setData(aData);
+        candle.setData([]);
+        bm.setData(bmData);
+        area.applyOptions({ visible: true });
+        candle.applyOptions({ visible: false });
+      }
+    } catch (err: any) {
+      console.warn("GrowthChart setData error:", err?.message);
     }
-    return <text x={x+4} y={y+4} fill="#94a3b8" fontSize={10} textAnchor="start">{fmt}</text>;
+  }, [adaptiveData, benchmarkData, isIntraday, periodFilter]); // eslint-disable-line
+
+  // Mise à jour du prix live (toutes les ~60s pour les actions Yahoo Finance).
+  // series.update() met à jour uniquement la dernière barre sans reset de vue.
+  useEffect(() => {
+    if (!isIntraday || portfolioData.length === 0 || adaptiveData.length === 0) return;
+    const live = portfolioData[portfolioData.length - 1];
+    const livePrice = live.value as number;
+    const lastBar = adaptiveData[adaptiveData.length - 1];
+    try {
+      const lastTs = toTs(lastBar.date);
+      areaSeriesRef.current?.update({ time: lastTs, value: livePrice });
+      candleSeriesRef.current?.update({
+        time:  lastTs,
+        open:  lastBar.open  ?? lastBar.value,
+        high:  Math.max(lastBar.high ?? lastBar.value, livePrice),
+        low:   lastBar.low   ?? lastBar.value,
+        close: livePrice,
+      });
+    } catch { /* ignore si série pas encore prête */ }
+  }, [portfolioData]); // eslint-disable-line
+
+  // Après chargement initial, cadrer la vue sur la bonne fenêtre temporelle.
+  // En candle auto, on utilise setVisibleRange pour n'afficher que la période choisie
+  // même si les données téléchargées couvrent une plage plus large (buffer scroll).
+  useEffect(() => {
+    if (adaptiveData.length > 0 && !isPrependRef.current) {
+      const chart = chartRef.current;
+      if (chart) {
+        const visibleSecs = PERIOD_VISIBLE_SECS[periodFilter];
+        if (visibleSecs) {
+          const nowSec  = Math.floor(Date.now() / 1000);
+          const lastTs  = toTs(adaptiveData[adaptiveData.length - 1].date);
+          const toSec   = (nowSec - lastTs > visibleSecs / 2 ? lastTs : nowSec) as UTCTimestamp;
+          const fromSec = (toSec - visibleSecs) as UTCTimestamp;
+          chart.timeScale().setVisibleRange({ from: fromSec, to: toSec });
+        } else {
+          chart.timeScale().fitContent();
+        }
+      }
+    }
+    isPrependRef.current = false;
+  }, [adaptiveData, periodFilter]); // eslint-disable-line
+
+  // fitContent en mode portfolio (pas de fetch async, données déjà dispo)
+  useEffect(() => {
+    if (!ticker) {
+      chartRef.current?.timeScale().fitContent();
+    }
+  }, [periodFilter, ticker]); // eslint-disable-line
+
+  // Transition symétrique : quand le MODE change, masquer la série destination
+  // (qui a les données stale de l'ancien mode), garder la source visible.
+  // Le data effect fait le vrai switch atomique une fois les nouvelles données prêtes.
+  useEffect(() => {
+    const modeChanged = prevChartModeRef.current !== chartMode;
+    prevChartModeRef.current = chartMode;
+    if (!modeChanged || !ticker) return;
+    if (chartMode === "candle") {
+      // line→candle : masquer candle stale, area reste visible pendant le fetch
+      candleSeriesRef.current?.applyOptions({ visible: false });
+    } else {
+      // candle→line : masquer area stale (données coarses candle), candle reste visible
+      areaSeriesRef.current?.applyOptions({ visible: false });
+    }
+  }, [chartMode, ticker]);
+
+  // ─── Drawdown data ────────────────────────────────────────────────────────────
+  const drawdownSampled = useMemo(() => {
+    if (!drawdownData || drawdownData.length === 0) return [];
+    const cutStr = getCutoffStr(periodFilter);
+    let pts = cutStr ? drawdownData.filter(p => p.date >= cutStr) : drawdownData;
+    const hasPos = pts.some(p => (p.drawdown ?? 0) > 0);
+    if (hasPos) pts = pts.map(p => ({ ...p, drawdown: -Math.abs(p.drawdown ?? 0), drawdown_eur: -Math.abs(p.drawdown_eur ?? 0) }));
+    if (pts.length <= 300) return pts;
+    const step = Math.ceil(pts.length / 300);
+    return pts.filter((_, i) => i % step === 0 || i === pts.length - 1);
+  }, [drawdownData, periodFilter]);
+
+  // ─── Perf stats ───────────────────────────────────────────────────────────────
+  const periodPerfData = useMemo(() => {
+    // Intraday (minute/hour bars): use adaptiveData for BOTH first and last to avoid scale mismatch.
+    if (isIntraday && adaptiveData.length >= 2) {
+      const lastPrice = adaptiveData[adaptiveData.length - 1].value;
+      const visibleSecs = PERIOD_VISIBLE_SECS[periodFilter];
+      let firstPrice = adaptiveData[0].value;
+      if (visibleSecs) {
+        const nowSec = Math.floor(Date.now() / 1000);
+        const lastTs = toTs(adaptiveData[adaptiveData.length - 1].date);
+        const effectiveToSec = nowSec - lastTs > visibleSecs / 2 ? lastTs : nowSec;
+        const fromTs = effectiveToSec - visibleSecs;
+        const fp = adaptiveData.find(p => toTs(p.date) >= fromTs);
+        firstPrice = fp?.value ?? lastPrice;
+      }
+      return { first: firstPrice, last: lastPrice };
+    }
+    // Non-intraday (daily bars): use portfolioData filtered by period — same logic as period buttons.
+    const cutStr = getCutoffStr(periodFilter);
+    const pts = cutStr ? portfolioData.filter(p => p.date >= cutStr) : portfolioData;
+    if (pts.length < 2) return null;
+    return { first: pts[0].value as number, last: pts[pts.length - 1].value as number };
+  }, [isIntraday, adaptiveData, portfolioData, periodFilter]); // eslint-disable-line
+
+  const periodPerfPct  = periodPerfData ? (periodPerfData.last - periodPerfData.first) / periodPerfData.first * 100 : null;
+  const hoverPerfPct   = (hoverPrice !== null && periodPerfData) ? (hoverPrice - periodPerfData.first) / periodPerfData.first * 100 : null;
+  // displayPrice always shows the live price (portfolioData.last), independent of perf calculation.
+  const displayPrice   = hoverPrice ?? (portfolioData.length > 0 ? portfolioData[portfolioData.length - 1].value as number : null);
+  const displayPerfPct = hoverPerfPct ?? periodPerfPct;
+
+  const fmtHoverDate = (iso: string | null): string | null => {
+    if (!iso) return null;
+    try {
+      const d = new Date(iso);
+      if (["1H","24h"].includes(periodFilter)) return d.toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" });
+      if (["1S","1M"].includes(periodFilter)) return d.toLocaleDateString("fr-FR", { day:"numeric", month:"short", hour:"2-digit", minute:"2-digit" });
+      return d.toLocaleDateString("fr-FR", { day:"numeric", month:"short", year:"numeric" });
+    } catch { return iso; }
   };
 
+  const displayDate = hoverDate ?? (adaptiveData.length > 0 ? adaptiveData[adaptiveData.length - 1].date : portfolioData.length > 0 ? portfolioData[portfolioData.length - 1].date : null);
 
-  const hoveredPoint = hoverRow;
-  const lastPoint = displayedData.length > 0 ? displayedData[displayedData.length-1] : null;
-  const firstPoint = displayedData.length > 0 ? displayedData[0] : null;
+  // Légende top-left intégrée dans le chart (style TradingView)
+  // Affiche toujours le prix/perf courant ; se met à jour avec les valeurs hover.
+  const chartLegend = (
+    <div style={{
+      position: "absolute", top: 8, left: 8, zIndex: 20, pointerEvents: "none",
+      lineHeight: 1.6,
+    }}>
+      <div style={{ fontSize: 11, color: dark ? "rgba(255,255,255,0.45)" : "#94a3b8", marginBottom: 2 }}>
+        {fmtHoverDate(displayDate)}
+      </div>
+      {hoverOHLC ? (
+        <div style={{ display: "flex", gap: 8, fontSize: 11, flexWrap: "wrap" }}>
+          {([
+            { label: "O", val: hoverOHLC.open,  color: dark ? "#cbd5e1" : "#475569" },
+            { label: "H", val: hoverOHLC.high,  color: "#22c55e" },
+            { label: "L", val: hoverOHLC.low,   color: "#ef4444" },
+            { label: "C", val: hoverOHLC.close, color: hoverOHLC.close >= hoverOHLC.open ? "#22c55e" : "#ef4444" },
+          ] as const).map(({ label, val, color }) => (
+            <span key={label}>
+              <span style={{ color: dark ? "rgba(255,255,255,0.35)" : "#94a3b8" }}>{label} </span>
+              <span style={{ fontWeight: 600, fontFamily: "monospace", color }}>{fmtPrice(val)}</span>
+            </span>
+          ))}
+        </div>
+      ) : displayPrice !== null ? (
+        <div style={{ fontSize: 11, display: "flex", gap: 12 }}>
+          <span>
+            <span style={{ color: dark ? "rgba(255,255,255,0.35)" : "#94a3b8" }}>{portfolioLabel} </span>
+            <span style={{ fontWeight: 600, fontFamily: "monospace", color: portfolioColor }}>{fmtPrice(displayPrice)}</span>
+          </span>
+          {hoverBmPrice != null && (
+            <span>
+              <span style={{ color: dark ? "rgba(255,255,255,0.35)" : "#94a3b8" }}>{benchmarkName} </span>
+              <span style={{ fontWeight: 600, fontFamily: "monospace", color: "#f59e0b" }}>{fmtPrice(hoverBmPrice)}</span>
+            </span>
+          )}
+          {displayPerfPct != null && (
+            <span style={{ fontWeight: 700, color: displayPerfPct >= 0 ? "#22c55e" : "#ef4444" }}>
+              {displayPerfPct >= 0 ? "+" : ""}{displayPerfPct.toFixed(2)}%
+            </span>
+          )}
+        </div>
+      ) : null}
+    </div>
+  );
 
-  const initialValue = firstPoint ? (firstPoint[portfolioLabel] as number) : 10000;
-  const currentValue = hoveredPoint ? (hoveredPoint[portfolioLabel] as number) ?? initialValue : (lastPoint ? (lastPoint[portfolioLabel] as number) : initialValue);
-  const lastPtfVal = lastPoint ? (lastPoint[portfolioLabel] as number) ?? initialValue : initialValue;
-  const perfPct = hoverPerfs?.[portfolioLabel] ?? ((lastPtfVal - initialValue) / initialValue) * 100;
-
-  const bmInitial = firstPoint ? (firstPoint[benchmarkName] as number) ?? null : null;
-  const bmCurrentVal = hoveredPoint ? (hoveredPoint[benchmarkName] as number) ?? null : (lastPoint ? (lastPoint[benchmarkName] as number) ?? null : null);
-  const bmLastVal = lastPoint ? (lastPoint[benchmarkName] as number) ?? null : null;
-  const bmPerfPct = hoverPerfs?.[benchmarkName] ?? (bmInitial && bmLastVal ? ((bmLastVal - bmInitial) / bmInitial * 100) : null);
-
-  const extraPerfMap: Record<string, number|null> = {};
-  extraSeries.forEach((s:any) => {
-    const cur = hoveredPoint ? (hoveredPoint[s.ticker] as number) ?? null : (lastPoint ? (lastPoint[s.ticker] as number) ?? null : null);
-    const lastVal = lastPoint ? (lastPoint[s.ticker] as number) ?? null : null;
-    extraPerfMap[s.ticker] = hoverPerfs?.[s.ticker] ?? (lastVal != null ? ((lastVal - 10000) / 10000 * 100) : null);
-  });
-
-  // Perf du jour = dernier point vs avant-dernier
-  const todayPerfPtf = (() => {
-    if (sampled.length < 2) return null;
-    const last = sampled[sampled.length-1][portfolioLabel] as number;
-    const prev = sampled[sampled.length-2][portfolioLabel] as number;
-    return prev ? ((last - prev) / prev * 100) : null;
-  })();
-  const todayPerfBm = (() => {
-    if (benchmarkData.length < 2) return null;
-    const last = benchmarkData[benchmarkData.length-1].value as number;
-    const prev = benchmarkData[benchmarkData.length-2].value as number;
-    return prev ? ((last - prev) / prev * 100) : null;
-  })();
-
-  const xAxisLabelMap = (() => {
-    const map: Record<string, {label: string, bold: boolean}> = {};
-    if (!displayedData.length) return map;
-    const allDates = displayedData.map((p:any) => p.date as string);
-    const months = {"1M":1,"3M":3,"6M":6,"1A":12,"3A":36,"Max":999}[periodFilter] || 999;
-    const N = 10;
-    const indices: number[] = [];
-    for (let i = 0; i < N; i++) {
-      indices.push(Math.round(i * (allDates.length - 1) / (N - 1)));
-    }
-    indices.forEach((idx, i) => {
-      const d = allDates[idx];
-      const date = new Date(d);
-      const prevDate = i > 0 ? new Date(allDates[indices[i-1]]) : null;
-      const isNewYear = prevDate && date.getFullYear() !== prevDate.getFullYear();
-      let label = "";
-      let bold = false;
-      if (isNewYear) {
-        label = date.getFullYear().toString();
-        bold = true;
-      } else {
-        label = date.toLocaleDateString("fr-FR", {day:"numeric", month:"short"});
-      }
-      map[d] = {label, bold};
-    });
-    return map;
-  })();
-
+  // ─── JSX ─────────────────────────────────────────────────────────────────────
   return (
-    <div ref={chartRef} className={fullscreen ? "fixed inset-0 z-50 bg-white flex flex-col p-4" : "w-full h-full flex flex-col"}>
-      {/* Header TradingView style */}
-      <div className="flex items-center justify-between px-1 pb-2">
-        <div className="flex items-center gap-4">
-          <div className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-full flex items-center justify-center text-white text-xs font-bold" style={{backgroundColor: portfolioColor}}>{portfolioLabel.charAt(0).toUpperCase()}</div>
-            <div>
-              <div className="text-sm font-semibold text-slate-700">{portfolioLabel}</div>
-              <div className={`text-xs font-bold tabular-nums ${perfPct >= 0 ? "text-emerald-500" : "text-red-500"}`}>
-                {perfPct >= 0 ? "+" : ""}{perfPct.toFixed(1)}%
-                {todayPerfPtf !== null && <span className="ml-1 text-slate-400 font-normal">({todayPerfPtf >= 0 ? "+" : ""}{todayPerfPtf.toFixed(2)}% auj.)</span>}
+    <div
+      ref={chartWrapRef}
+      className={fullscreen ? "fixed inset-0 z-50 flex flex-col p-4" : "w-full h-full flex flex-col"}
+      style={fullscreen ? { background: dark ? "#041124" : "white" } : { minHeight: 0, overflow: "hidden" }}
+    >
+      {/* Header */}
+      <div className="flex items-center justify-between px-2 py-1 flex-shrink-0 gap-2">
+        <div />
+
+        <div className="flex items-center gap-1 flex-shrink-0">
+          {/* Candle toggle – visible on all ticker periods */}
+          {ticker && (
+            <button
+              onClick={() => setChartMode(m => m === "line" ? "candle" : "line")}
+              className="p-1.5 rounded-lg transition-colors"
+              title={chartMode === "line" ? "Passer en bougies" : "Passer en ligne"}
+              style={{ color: chartMode === "candle" ? (dark ? "#9BB9FF" : "#4f46e5") : (dark ? "rgba(255,255,255,0.4)" : "#94a3b8") }}
+            >
+              {chartMode === "line" ? (
+                <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
+                  <rect x="3" y="4" width="3" height="6" rx="0.5"/>
+                  <line x1="4.5" y1="2" x2="4.5" y2="4"/>
+                  <line x1="4.5" y1="10" x2="4.5" y2="14"/>
+                  <rect x="10" y="6" width="3" height="5" rx="0.5"/>
+                  <line x1="11.5" y1="3" x2="11.5" y2="6"/>
+                  <line x1="11.5" y1="11" x2="11.5" y2="13"/>
+                </svg>
+              ) : (
+                <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
+                  <polyline points="1,12 4,8 7,10 10,5 13,7 15,4"/>
+                </svg>
+              )}
+            </button>
+          )}
+
+          {/* Share */}
+          <div className="relative" ref={shareRef}>
+            <button
+              onClick={() => setShowShare(v => !v)}
+              className="p-1.5 rounded-lg transition-colors"
+              style={{ color: dark ? "rgba(255,255,255,0.4)" : "#94a3b8" }}
+              title="Partager"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z"/>
+              </svg>
+            </button>
+            {showShare && (
+              <div className="absolute right-0 top-8 w-44 bg-white border border-slate-100 rounded-xl shadow-xl z-50 py-1">
+                <button
+                  onClick={() => { navigator.clipboard.writeText(window.location.href); setShowShare(false); }}
+                  className="w-full flex items-center gap-2 px-3 py-2 hover:bg-slate-50 text-sm text-slate-700"
+                >
+                  Copier le lien
+                </button>
               </div>
-            </div>
+            )}
           </div>
-          {benchmarkData.length > 0 && (() => {
-            const bmPerf = bmPerfPct;
-            return (
-              <div className="flex items-center gap-2">
-                <div className="w-8 h-8 rounded-full bg-amber-500 flex items-center justify-center text-white text-xs font-bold relative">
-                  {benchmarkName.charAt(0)}
-                  {onRemoveBenchmark && <button onClick={onRemoveBenchmark} className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-slate-500 text-white text-xs flex items-center justify-center hover:bg-red-500">×</button>}
-                </div>
-                <div>
-                  <div className="text-sm font-semibold text-slate-700">{benchmarkName}</div>
-                  <div className={`text-xs font-bold tabular-nums ${bmPerf !== null && bmPerf >= 0 ? "text-emerald-500" : "text-red-500"}`}>
-                    {bmPerf !== null ? `${bmPerf >= 0 ? "+" : ""}${bmPerf.toFixed(1)}%` : ""}
-                    {todayPerfBm !== null && <span className="ml-1 text-slate-400 font-normal">({todayPerfBm >= 0 ? "+" : ""}{todayPerfBm.toFixed(2)}% auj.)</span>}
-                  </div>
-                </div>
-              </div>
-            );
-          })()}
 
-          {/* Courbes supplémentaires */}
-          {extraSeries.map(s => {
-            const sPerf = extraPerfMap[s.ticker] ?? null;
-            return (
-              <div key={s.ticker} className="flex items-center gap-2">
-                <div className="w-8 h-8 rounded-full flex items-center justify-center text-white text-xs font-bold relative" style={{backgroundColor: s.color}}>
-                  {s.name.charAt(0)}
-                  <button onClick={() => removeSeries(s.ticker)} className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-slate-500 text-white text-xs flex items-center justify-center hover:bg-red-500">×</button>
-                </div>
-                <div>
-                  <div className="text-sm font-semibold text-slate-700">{s.name}</div>
-                  <div className={`text-xs font-bold tabular-nums ${sPerf !== null && sPerf >= 0 ? "text-emerald-500" : "text-red-500"}`}>
-                    {sPerf !== null ? `${sPerf >= 0 ? "+" : ""}${sPerf.toFixed(1)}%` : ""}
-                    {s.data.length >= 2 && (() => {
-                      const todayP = ((s.data[s.data.length-1].value - s.data[s.data.length-2].value) / s.data[s.data.length-2].value * 100);
-                      return <span className="ml-1 text-slate-400 font-normal">({todayP >= 0 ? "+" : ""}{todayP.toFixed(2)}% auj.)</span>;
-                    })()}
-                  </div>
-                </div>
-              </div>
-            );
-          })}
+          {/* Fullscreen */}
+          {!dark && (
+            <button
+              onClick={() => { if (fullscreen && onExitFullscreen) onExitFullscreen(); setFullscreen(v => !v); }}
+              className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-400 transition-colors"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                {fullscreen
+                  ? <path strokeLinecap="round" strokeLinejoin="round" d="M9 9L4 4m0 0h5m-5 0v5M15 9l5-5m0 0h-5m5 0v5M9 15l-5 5m0 0h5m-5 0v-5M15 15l5 5m0 0h-5m5 0v-5"/>
+                  : <path strokeLinecap="round" strokeLinejoin="round" d="M4 8V4m0 0h4M4 4l5 5M20 8V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5M20 16v4m0 0h-4m4 0l-5-5"/>
+                }
+              </svg>
+            </button>
+          )}
+        </div>
+      </div>
 
-          {/* Bouton + */}
-          {(1 + (benchmarkData.length > 0 ? 1 : 0) + extraSeries.length) < 4 && (
-            <div className="relative" ref={dropdownRef}>
-              <button onClick={() => setShowDropdown(v => !v)} className="w-8 h-8 rounded-full border-2 border-dashed border-slate-300 flex items-center justify-center text-slate-400 hover:border-indigo-400 hover:text-indigo-500 text-lg font-light">+</button>
-              {showDropdown && (
-                <div className="absolute top-10 left-0 z-50 bg-white border border-slate-200 rounded-xl shadow-xl w-52 py-2">
-                  <div className="px-3 py-1 text-xs text-slate-400 font-semibold uppercase">Indices</div>
-                  {ETF_LIST.filter(e => e.ticker !== benchmarkName && !extraSeries.find(s => s.ticker === e.ticker)).map(etf => (
-                    <button key={etf.ticker} onClick={() => addSeries(etf)} disabled={!!loadingTicker}
-                      className="w-full flex items-center gap-2 px-3 py-2 hover:bg-slate-50 text-sm text-slate-700">
-                      <div className="w-3 h-3 rounded-full" style={{backgroundColor: etf.color}}/>
-                      {loadingTicker === etf.ticker ? "Chargement..." : etf.name}
-                    </button>
-                  ))}
-                  <div className="px-3 py-1 mt-1 text-xs text-slate-400 font-semibold uppercase border-t border-slate-100">Mes portefeuilles</div>
-                  {savedPortfolios.length === 0 
-                    ? <div className="px-3 py-2 text-xs text-slate-400 italic">Aucun portefeuille enregistré</div>
-                    : savedPortfolios.filter(p => !extraSeries.find(s => s.ticker === p.id)).map(p => (
-                      <button key={p.id} onClick={() => addSeries({ticker: p.id, name: p.name, color: p.color})} disabled={!!loadingTicker}
-                        className="w-full flex items-center gap-2 px-3 py-2 hover:bg-slate-50 text-sm text-slate-700">
-                        <div className="w-3 h-3 rounded-full" style={{backgroundColor: p.color}}/>
-                        {loadingTicker === p.id ? "Chargement..." : p.name}
-                      </button>
-                    ))
-                  }
+      {/* Chart */}
+      <div style={{ flex: "1 1 0", minHeight: 0, position: "relative" }}>
+        {chartError ? (
+          <div style={{ width: "100%", height: "100%", display: "flex", alignItems: "center", justifyContent: "center" }}>
+            <span style={{ color: "#ef4444", fontSize: 12, fontFamily: "monospace" }}>Chart error: {chartError}</span>
+          </div>
+        ) : (
+          <div ref={containerRef} style={{ width: "100%", height: "100%" }} />
+        )}
+        {chartLegend}
+        {/* NOVAC logo — bottom-right watermark */}
+        <img
+          src={dark ? "/logob.png" : "/logoa.png"}
+          alt="NOVAC"
+          style={{
+            position: "absolute", bottom: 36, right: 72,
+            height: 24, width: "auto",
+            opacity: 0.35, zIndex: 10,
+            pointerEvents: "none", userSelect: "none",
+          }}
+        />
+      </div>
+
+      {/* Period buttons */}
+      <div className="flex justify-center gap-4 py-2 flex-wrap flex-shrink-0">
+        {(["1H","24h","1S","1M","3M","6M","1A","3A","Max"] as const).map(key => {
+          let first: number | undefined, last: number | undefined;
+          if (key === "1H" || key === "24h") {
+            // portfolioData a seulement des barres journalières.
+            // Quand le marché est fermé, live ≈ last close → comparaison = 0%.
+            // On compare plutôt les deux dernières clôtures différentes.
+            const all = portfolioData;
+            if (all.length >= 3) {
+              const v0 = all[all.length - 1].value as number; // live (ou last close)
+              const v1 = all[all.length - 2].value as number; // last close
+              const v2 = all[all.length - 3].value as number; // prev close
+              // Si live ≈ last close (marché fermé), afficher last close vs prev close.
+              if (Math.abs(v0 - v1) / (v1 || 1) < 0.0002) { first = v2; last = v1; }
+              else { first = v1; last = v0; }
+            } else if (all.length === 2) {
+              first = all[0].value as number; last = all[1].value as number;
+            }
+          } else {
+            const cutStr = getCutoffStr(key);
+            const pts = cutStr ? portfolioData.filter(p => p.date >= cutStr) : portfolioData;
+            first = pts[0]?.value as number | undefined;
+            last  = pts[pts.length - 1]?.value as number | undefined;
+          }
+          const pct = (first && last) ? (last - first) / first * 100 : null;
+          const isActive = periodFilter === key;
+          return (
+            <div
+              key={key}
+              className="relative pb-1 cursor-pointer text-center min-w-[40px]"
+              onClick={() => { setPeriodFilter(key); onPeriodChange?.(key); }}
+            >
+              <div className="text-xs font-semibold" style={{ color: isActive ? (dark ? "#9BB9FF" : "#4f46e5") : "#94a3b8" }}>
+                {key}
+              </div>
+              {pct !== null && (
+                <div className={`text-xs font-bold tabular-nums ${pct >= 0 ? "text-emerald-500" : "text-red-500"}`}>
+                  {(() => { const s = pct >= 0 ? "+" : ""; const a = Math.abs(pct); return a >= 10000 ? `${s}${(pct/1000).toFixed(0)}k%` : a >= 1000 ? `${s}${pct.toFixed(0)}%` : `${s}${pct.toFixed(1)}%`; })()}
                 </div>
               )}
-            </div>
-          )}
-
-
-        </div>
-        <div className="flex items-center gap-1">
-        <div className="relative" ref={shareRef}>
-          <button onClick={() => setShowShare(v => !v)} className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-slate-600 transition-colors" title="Partager">
-            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z"/>
-            </svg>
-          </button>
-          {showShare && (
-            <div className="absolute right-0 top-9 z-50 bg-white border border-slate-200 rounded-xl shadow-xl w-48 py-2">
-              <button onClick={async () => {
-                try {
-                  const html2canvas = (await import("html2canvas")).default;
-                  const canvas = await html2canvas(chartRef.current!);
-                  const link = document.createElement("a");
-                  link.download = "novac-chart.png";
-                  link.href = canvas.toDataURL();
-                  link.click();
-                } catch(e) { alert("Erreur téléchargement"); }
-                setShowShare(false);
-              }} className="w-full flex items-center gap-2 px-3 py-2 hover:bg-slate-50 text-sm text-slate-700">
-                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
-                Télécharger image
-              </button>
-              <button onClick={() => {
-                const url = encodeURIComponent(window.location.href);
-                const text = encodeURIComponent("Mon analyse de portefeuille sur NOVAC");
-                window.open(`https://twitter.com/intent/tweet?text=${text}&url=${url}`, "_blank");
-                setShowShare(false);
-              }} className="w-full flex items-center gap-2 px-3 py-2 hover:bg-slate-50 text-sm text-slate-700">
-                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-4.714-6.231-5.401 6.231H2.747l7.73-8.835L1.254 2.25H8.08l4.253 5.622 5.912-5.622zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg>
-                Partager sur X
-              </button>
-              <button onClick={() => {
-                navigator.clipboard.writeText(window.location.href);
-                setShowShare(false);
-              }} className="w-full flex items-center gap-2 px-3 py-2 hover:bg-slate-50 text-sm text-slate-700">
-                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"/></svg>
-                Copier le lien
-              </button>
-            </div>
-          )}
-        </div>
-        <button onClick={() => { if (fullscreen && onExitFullscreen) onExitFullscreen(); setFullscreen(v => !v); }} className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-slate-600 transition-colors" title={fullscreen ? "Réduire" : "Plein écran"}>
-          {fullscreen ? (
-            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M9 9L4 4m0 0h5m-5 0v5M15 9l5-5m0 0h-5m5 0v5M9 15l-5 5m0 0h5m-5 0v-5M15 15l5 5m0 0h-5m5 0v-5"/>
-            </svg>
-          ) : (
-            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M4 8V4m0 0h4M4 4l5 5M20 8V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5M20 16v4m0 0h-4m4 0l-5-5"/>
-            </svg>
-          )}
-        </button>
-        </div>
-      </div>
-      {/* Performance chart — 75% height */}
-      <div style={{flex: "1 1 0", minHeight: 0, overflow: "visible"}}>
-        <ResponsiveContainer width="100%" height="100%">
-          <ComposedChart data={displayedData} margin={{top:4,right:0,bottom:0,left:4}} syncId="chart"
-            onMouseMove={(e: any) => {
-              if (e?.activePayload?.length) {
-                const ptfPayload = e.activePayload.find((p:any) => p.dataKey === portfolioLabel);
-                const bmPayload = e.activePayload.find((p:any) => p.dataKey === benchmarkName);
-                const val = ptfPayload?.value ?? e.activePayload[0].value;
-                const date = e.activeLabel || "";
-                const extraValues: Record<string, number> = {};
-                // Chercher dans displayedData (pas sampled qui est downsampleé)
-                const hoveredPoint = displayedData.find((p:any) => p.date === date) 
-                  || displayedData.reduce((closest:any, p:any) => 
-                    Math.abs(new Date(p.date).getTime() - new Date(date).getTime()) < Math.abs(new Date(closest.date).getTime() - new Date(date).getTime()) ? p : closest
-                  , displayedData[0]);
-                extraSeries.forEach((s:any) => {
-                  const v = hoveredPoint?.[s.ticker];
-                  if (v != null) extraValues[s.ticker] = v as number;
-                });
-                const bmFromPoint = hoveredPoint?.[benchmarkName] as number ?? bmPayload?.value ?? null;
-                setHoverRow({value: val, bValue: bmFromPoint, date, extraValues});
-              }
-            }}
-            onMouseLeave={() => setHoverRow(null)}>
-            <defs>
-              <linearGradient id="portfolioGradient" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0%" stopColor={portfolioColor} stopOpacity={0.5}/>
-                <stop offset="60%" stopColor={portfolioColor} stopOpacity={0.15}/>
-                <stop offset="100%" stopColor={portfolioColor} stopOpacity={0}/>
-              </linearGradient>
-              <linearGradient id="benchmarkGradient" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0%" stopColor="#f59e0b" stopOpacity={0.4}/>
-                <stop offset="60%" stopColor="#f59e0b" stopOpacity={0.1}/>
-                <stop offset="100%" stopColor="#f59e0b" stopOpacity={0}/>
-              </linearGradient>
-            </defs>
-            {extraSeries.map(s => (
-              <defs key={`grad-${s.ticker}`}>
-                <linearGradient id={`grad-${s.ticker}`} x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stopColor={s.color} stopOpacity={0.4}/>
-                  <stop offset="60%" stopColor={s.color} stopOpacity={0.1}/>
-                  <stop offset="100%" stopColor={s.color} stopOpacity={0}/>
-                </linearGradient>
-              </defs>
-            ))}
-            <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9"/>
-            <XAxis dataKey="date" tickLine={false} axisLine={false} padding={{left:0, right:0}} ticks={Object.keys(xAxisLabelMap)}
-              tick={(props: any) => {
-                const { x, y, payload } = props;
-                const entry = xAxisLabelMap[payload.value];
-                if (!entry) return <g/>;
-                const ticks = Object.keys(xAxisLabelMap);
-                const isFirst = ticks.indexOf(payload.value) === 0;
-                const isLast = ticks.indexOf(payload.value) === ticks.length - 1;
-                const anchor = isFirst ? "start" : isLast ? "end" : "middle";
-                return <text x={x} y={y+12} textAnchor={anchor} fill={entry.bold ? "#1e293b" : "#94a3b8"} fontSize={10} fontWeight={entry.bold ? "700" : "400"}>{entry.label}</text>;
-              }}/>
-            <YAxis orientation="right" tickFormatter={formatYAxisShort} tick={{fontSize:10,fill:"#94a3b8"}} tickLine={false} axisLine={false} width={70} tickCount={8} domain={["auto","auto"]}/>
-            <Tooltip content={<CustomTooltip/>} wrapperStyle={{zIndex: 10}}/>
-
-
-            
-
-            <Customized component={(props: any) => {
-              const { yAxisMap, xAxisMap } = props;
-              const yAxis = yAxisMap && (yAxisMap[0] || Object.values(yAxisMap)[0]);
-              if (!yAxis || !displayedData.length) return null;
-              const ptfVal = displayedData[displayedData.length-1][portfolioLabel] as number;
-              const bmVal = displayedData[displayedData.length-1][benchmarkName] as number;
-              const fmt = (v: number) => new Intl.NumberFormat("fr-FR",{minimumFractionDigits:2,maximumFractionDigits:2}).format(v);
-              const ptfY = yAxis.scale(ptfVal);
-              const bmY = bmVal ? yAxis.scale(bmVal) : null;
-              const x = yAxis.x;
-              const ptfTxt = fmt(ptfVal);
-              const bmTxt = fmt(bmVal);
-              const charW = 5.5;
-              const pad = 6;
-              const ptfW = ptfTxt.length * charW + pad * 2;
-              const bmW = bmTxt.length * charW + pad * 2;
-              return (
-                <g>
-                  <rect x={x+2} y={ptfY-10} width={ptfW} height={20} rx={3} fill="#4f46e5"/>
-                  <text x={x+2+ptfW/2} y={ptfY} textAnchor="middle" dominantBaseline="central" fill="white" fontSize={10} fontWeight="600">{ptfTxt}</text>
-                  {bmY !== null && <rect x={x+2} y={bmY-10} width={bmW} height={20} rx={3} fill="#f59e0b"/>}
-                  {bmY !== null && <text x={x+2+bmW/2} y={bmY} textAnchor="middle" dominantBaseline="central" fill="white" fontSize={10} fontWeight="600">{bmTxt}</text>}
-                  {extraSeries.map(s => {
-                    const sLastVal = displayedData.length > 0 ? displayedData[displayedData.length-1][s.ticker] as number : null;
-                    if (!sLastVal) return null;
-                    const sY = yAxis.scale(sLastVal);
-                    const sTxt = fmt(sLastVal);
-                    const sW = sTxt.length * charW + pad * 2;
-                    return (
-                      <g key={s.ticker}>
-                        <rect x={x+2} y={sY-10} width={sW} height={20} rx={3} fill={s.color}/>
-                        <text x={x+2+sW/2} y={sY} textAnchor="middle" dominantBaseline="central" fill="white" fontSize={10} fontWeight="600">{sTxt}</text>
-                      </g>
-                    );
-                  })}
-                </g>
-              );
-            }}/>
-            <Area type="monotone" dataKey={portfolioLabel} stroke={portfolioColor} strokeWidth={2} fill="url(#portfolioGradient)" activeDot={{r:4, strokeWidth:2, stroke:"white"}} dot={false}/>
-            {extraSeries.map(s => (
-              <Area key={s.ticker} type="monotone" dataKey={s.ticker} stroke={s.color} strokeWidth={2} fill={`url(#grad-${s.ticker})`} dot={false} activeDot={{r:4, strokeWidth:2, stroke:"white"}} connectNulls={true}/>
-            ))}
-            {benchmarkData.length > 0 && <Area type="monotone" dataKey={benchmarkName} stroke="#f59e0b" strokeWidth={2} fill="url(#benchmarkGradient)" activeDot={{r:4, strokeWidth:2, stroke:"white"}} dot={false}/>}
-          </ComposedChart>
-        </ResponsiveContainer>
-      </div>
-
-      {/* Période stats — style TradingView */}
-
-
-      {/* Période stats — style TradingView */}
-      <div className="flex justify-center gap-6 py-2">
-        {([
-          {key:"1M", label:"1M"},
-          {key:"3M", label:"3M"},
-          {key:"6M", label:"6M"},
-          {key:"1A", label:"1A"},
-          {key:"3A", label:"3A"},
-          {key:"Max", label:"Max"},
-        ] as const).map(({key, label}) => {
-          const months = {"1M":1,"3M":3,"6M":6,"1A":12,"3A":36,"Max":0}[key] || 0;
-          const cutoff = new Date();
-          if (months) cutoff.setMonth(cutoff.getMonth() - months);
-          const cutoffStr = cutoff.toISOString().slice(0,10);
-          const pts = key === "Max" ? portfolioData : portfolioData.filter(p => p.date >= cutoffStr);
-          const first = pts[0]?.value;
-          const last = pts[pts.length-1]?.value;
-          const pct = first && last ? (((last as number)-(first as number))/(first as number)*100) : null;
-          return (
-            <div key={key} className="relative pb-1 cursor-pointer text-center min-w-[40px]" onClick={() => setPeriodFilter(key)}>
-              <div className={`text-xs font-semibold ${periodFilter === key ? "text-indigo-600" : "text-slate-400 hover:text-slate-600"}`}>{label}</div>
-              {pct !== null && <div className={`text-xs font-bold tabular-nums ${pct >= 0 ? "text-emerald-500" : "text-red-500"}`}>{pct >= 0 ? "+" : ""}{pct.toFixed(1)}%</div>}
-              {periodFilter === key && <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-indigo-600 rounded"/>}
+              {isActive && (
+                <div className="absolute bottom-0 left-0 right-0 h-0.5 rounded" style={{ background: dark ? "#9BB9FF" : "#4f46e5" }}/>
+              )}
             </div>
           );
         })}
       </div>
 
-      {/* Drawdown chart — 25% height */}
-      {drawdownSampled.length > 0 && (
-        <div style={{height: "100px", overflow: "visible", position: "relative"}}>
-          <span style={{position:"absolute", bottom:20, left:"50%", transform:"translateX(-50%)", fontSize:10, color:"#94a3b8", zIndex:10, pointerEvents:"none", letterSpacing:"0.05em"}}>DRAWDOWN</span>
+
+      {/* Drawdown (Recharts) */}
+      {!isIntraday && drawdownSampled.length > 0 && !hideDrawdown && (
+        <div style={{ height: 100, position: "relative", flexShrink: 0 }}>
+          <span style={{
+            position: "absolute", bottom: 20, left: "50%", transform: "translateX(-50%)",
+            fontSize: 10, color: "#94a3b8", zIndex: 10, pointerEvents: "none", letterSpacing: "0.05em",
+          }}>
+            DRAWDOWN
+          </span>
           <ResponsiveContainer width="100%" height="100%">
-            <AreaChart data={drawdownSampled} margin={{top:0,right:0,bottom:16,left:4}} syncId="chart"
-              onMouseMove={(e: any) => {
-                if (e?.activeLabel) {
-                  const match = sampled.find((p:any) => p.date === e.activeLabel);
-                  if (match && match[portfolioLabel]) {
-                    setHoverRow({date: e.activeLabel});
-                  }
-                }
-              }}
-              onMouseLeave={() => setHoverRow(null)}>
+            <AreaChart data={drawdownSampled} margin={{ top: 0, right: 0, bottom: 16, left: 4 }}>
               <defs>
                 <linearGradient id="ddGrad" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stopColor="#fca5a5" stopOpacity={0.1}/>
-                  <stop offset="50%" stopColor="#ef4444" stopOpacity={0.5}/>
+                  <stop offset="0%"   stopColor="#fca5a5" stopOpacity={0.1}/>
+                  <stop offset="50%"  stopColor="#ef4444" stopOpacity={0.5}/>
                   <stop offset="100%" stopColor="#b91c1c" stopOpacity={0.9}/>
                 </linearGradient>
               </defs>
-              <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9"/>
+              <CartesianGrid strokeDasharray="3 3" stroke={dark ? "rgba(255,255,255,0.05)" : "#f1f5f9"}/>
               <XAxis dataKey="date" hide/>
-              <YAxis orientation="right" dataKey="drawdown_eur" tickFormatter={(v) => new Intl.NumberFormat("fr-FR",{minimumFractionDigits:2,maximumFractionDigits:2}).format(v)} tick={{fontSize:10,fill:"#94a3b8"}} tickLine={false} axisLine={false} width={70} domain={["auto", 0]}/>
-
-              <Tooltip content={() => null} wrapperStyle={{display:"none"}}/>
+              <YAxis
+                orientation="right"
+                dataKey={(percentMode || priceMode) ? "drawdown" : "drawdown_eur"}
+                tickFormatter={v => (percentMode || priceMode)
+                  ? v.toFixed(1) + "%"
+                  : new Intl.NumberFormat("fr-FR", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(v)
+                }
+                tick={{ fontSize: 10, fill: "#94a3b8" }}
+                tickLine={false}
+                axisLine={false}
+                width={70}
+                domain={["auto", 0]}
+              />
+              <Tooltip content={() => null} wrapperStyle={{ display: "none" }}/>
               <ReferenceLine y={0} stroke="#e2e8f0" strokeWidth={1}/>
-              <Area type="monotone" dataKey="drawdown_eur" stroke="#ef4444" fill="url(#ddGrad)" strokeWidth={1.5} dot={false}/>
-
-
-              {(() => {
-                if (!drawdownSampled.length) return null;
-return null;
-              })()}
-            <Customized component={(props: any) => {
-              const { yAxisMap } = props;
-              const yAxis = yAxisMap && (yAxisMap[0] || Object.values(yAxisMap)[0]);
-              if (!yAxis || !drawdownSampled.length) return null;
-              const lastPt = drawdownSampled[drawdownSampled.length-1];
-              const val = lastPt.drawdown_eur;
-              const y = yAxis.scale(val);
-              const x = yAxis.x;
-              const fmt = new Intl.NumberFormat("fr-FR",{minimumFractionDigits:2,maximumFractionDigits:2}).format(val);
-              const w = fmt.length * 5.5 + 12;
-              return (
-                <g>
-                  <rect x={x+2} y={y-10} width={w} height={20} rx={3} fill="#ef4444"/>
-                  <text x={x+2+w/2} y={y} textAnchor="middle" dominantBaseline="central" fill="white" fontSize={10} fontWeight="600">{fmt}</text>
-                </g>
-              );
-            }}/>
+              <Area
+                type="monotone"
+                dataKey={(percentMode || priceMode) ? "drawdown" : "drawdown_eur"}
+                stroke="#ef4444"
+                fill="url(#ddGrad)"
+                strokeWidth={1.5}
+                dot={false}
+                baseValue={0}
+              />
+              <Customized component={(props: any) => {
+                try {
+                  const yAxisMap = props.yAxisMap;
+                  if (!yAxisMap) return null;
+                  const yAxis = yAxisMap[0] ?? Object.values(yAxisMap)[0];
+                  if (!yAxis || !drawdownSampled.length) return null;
+                  const lastPt = drawdownSampled[drawdownSampled.length - 1];
+                  const val = (percentMode || priceMode) ? (lastPt.drawdown ?? 0) : (lastPt.drawdown_eur ?? 0);
+                  const y = yAxis.scale(val);
+                  if (isNaN(y)) return null;
+                  const x = yAxis.x;
+                  const label = (percentMode || priceMode)
+                    ? val.toFixed(1) + "%"
+                    : new Intl.NumberFormat("fr-FR", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(val);
+                  const w = label.length * 5.5 + 12;
+                  return (
+                    <g>
+                      <rect x={x + 2} y={y - 10} width={w} height={20} rx={3} fill="#ef4444"/>
+                      <text x={x + 2 + w / 2} y={y} textAnchor="middle" dominantBaseline="central" fill="white" fontSize={10} fontWeight="600">
+                        {label}
+                      </text>
+                    </g>
+                  );
+                } catch { return null; }
+              }}/>
             </AreaChart>
           </ResponsiveContainer>
         </div>
       )}
-
     </div>
   );
 }

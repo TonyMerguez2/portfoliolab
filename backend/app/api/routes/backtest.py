@@ -341,3 +341,143 @@ async def get_prices(tickers: str = "") -> list:
     except Exception as e:
         logger.error(f"Prices error: {e}")
         return []
+
+def _yahoo_to_binance_symbol(ticker: str) -> str | None:
+    """Convertit un ticker Yahoo (BTC-USD) en symbole Binance (BTCUSDT). None si non applicable."""
+    if "." in ticker or "-" not in ticker:
+        return None
+    parts = ticker.split("-")
+    if len(parts) != 2:
+        return None
+    base, quote = parts[0].upper(), parts[1].upper()
+    quote_map = {"USD": "USDT", "USDT": "USDT", "EUR": "EUR", "BTC": "BTC", "ETH": "ETH", "BNB": "BNB"}
+    binance_quote = quote_map.get(quote)
+    if not binance_quote:
+        return None
+    return base + binance_quote
+
+
+async def _fetch_binance(symbol: str, interval: str, period: str, start: str | None, end: str | None) -> list:
+    """Fetch OHLCV depuis Binance avec pagination automatique. Retourne [] si symbole inconnu."""
+    import httpx
+    from datetime import datetime, timezone
+
+    interval_map = {
+        "1m": "1m", "5m": "5m", "15m": "15m", "30m": "30m",
+        "60m": "1h", "1h": "1h", "1d": "1d",
+    }
+    bi = interval_map.get(interval)
+    if not bi:
+        return []
+
+    now_ms = int(datetime.now(timezone.utc).timestamp() * 1000)
+
+    if start:
+        start_ms = int(datetime.fromisoformat(start.replace("Z", "+00:00")).timestamp() * 1000)
+        end_ms   = int(datetime.fromisoformat(end.replace("Z", "+00:00")).timestamp() * 1000) if end else now_ms
+    else:
+        period_days: dict[str, int] = {
+            "1d": 1, "2d": 2, "5d": 5, "7d": 7, "14d": 14,
+            "1mo": 30, "2mo": 60, "3mo": 90, "60d": 60,
+            "6mo": 183, "1y": 365, "2y": 730, "5y": 1825,
+        }
+        if period == "max":
+            days = 730 if interval in ("1h", "60m") else 365 * 10
+        else:
+            days = period_days.get(period, 7)
+        start_ms = now_ms - days * 86_400_000
+        end_ms   = now_ms
+
+    results = []
+    cur = start_ms
+    async with httpx.AsyncClient(timeout=15.0) as client:
+        while cur < end_ms:
+            resp = await client.get(
+                "https://api.binance.com/api/v3/klines",
+                params={"symbol": symbol, "interval": bi, "startTime": cur, "endTime": end_ms, "limit": 1000},
+            )
+            if resp.status_code != 200:
+                return []  # symbole inconnu → fallback Yahoo
+            data = resp.json()
+            if not isinstance(data, list) or not data:
+                break
+            for k in data:
+                results.append({
+                    "date":  datetime.fromtimestamp(k[0] / 1000, tz=timezone.utc).isoformat(),
+                    "value": round(float(k[4]), 6),
+                    "open":  round(float(k[1]), 6),
+                    "high":  round(float(k[2]), 6),
+                    "low":   round(float(k[3]), 6),
+                    "close": round(float(k[4]), 6),
+                })
+            cur = data[-1][6] + 1  # close time du dernier candle + 1ms
+            if len(data) < 1000:
+                break
+
+    return results
+
+
+@router.get("/intraday", tags=["Prices"])
+async def get_intraday(
+    ticker: str,
+    period: str = "5d",
+    interval: str = "1h",
+    start: str | None = None,
+    end: str | None = None,
+) -> list:
+    """Get intraday OHLCV data. Binance pour les cryptos listées, Yahoo Finance en fallback."""
+    if not ticker:
+        return []
+
+    # Binance en priorité pour les cryptos (données complètes, pas de trous sur 1m)
+    binance_symbol = _yahoo_to_binance_symbol(ticker)
+    if binance_symbol:
+        try:
+            data = await _fetch_binance(binance_symbol, interval, period, start, end)
+            if data:
+                return data
+        except Exception as e:
+            logger.warning(f"Binance fallback to Yahoo for {ticker}: {e}")
+
+    # Yahoo Finance (actions, ETFs, cryptos de niche non listées sur Binance)
+    try:
+        import yfinance as yf
+        import asyncio
+        from concurrent.futures import ThreadPoolExecutor
+
+        allowed_intervals = {"1m","2m","5m","15m","30m","60m","1h","1d"}
+        allowed_periods = {"1d","2d","5d","7d","14d","60d","1mo","2mo","3mo","6mo","1y","2y","5y","max"}
+        if interval not in allowed_intervals:
+            return []
+        if not start and period not in allowed_periods:
+            return []
+
+        def fetch():
+            t = yf.Ticker(ticker)
+            if start:
+                return t.history(start=start, end=end or None, interval=interval, auto_adjust=True)
+            return t.history(period=period, interval=interval, auto_adjust=True)
+
+        loop = asyncio.get_running_loop()
+        with ThreadPoolExecutor(max_workers=1) as pool:
+            hist = await loop.run_in_executor(pool, fetch)
+
+        if hist.empty:
+            return []
+
+        result = []
+        for ts, row in hist.iterrows():
+            close = float(row["Close"])
+            if close > 0:
+                result.append({
+                    "date":  ts.isoformat(),
+                    "value": round(close, 6),
+                    "open":  round(float(row["Open"]),  6),
+                    "high":  round(float(row["High"]),  6),
+                    "low":   round(float(row["Low"]),   6),
+                    "close": round(close, 6),
+                })
+        return result
+    except Exception as e:
+        logger.error(f"Intraday error: {e}")
+        return []
