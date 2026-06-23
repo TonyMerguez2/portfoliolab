@@ -166,3 +166,64 @@ export const TRENDING: AssetItem[] = [
   {ticker:"^AEX",name:"AEX Amsterdam",type:"INDEX",exchange:""},
   {ticker:"^SSMI",name:"SMI Switzerland",type:"INDEX",exchange:""},
 ];
+
+/**
+ * Dominant brand colour per ticker.
+ * Used as the default chart line colour when the user hasn't set a custom one.
+ * All values are chosen to be legible on the dark terminal background (#041124).
+ */
+export const BRAND_COLORS: Record<string, string> = {
+  // ── US Large Cap ──────────────────────────────────────────────────────────
+  AAPL:  "#A8B2C0", MSFT:  "#00A4EF", NVDA:  "#76B900", TSLA:  "#E31937",
+  AMZN:  "#FF9900", META:  "#1877F2", GOOGL: "#4285F4", GOOG:  "#4285F4",
+  JPM:   "#005EB8", V:     "#3B82C4", MA:    "#FF5F00", JNJ:   "#CC0000",
+  WMT:   "#0071CE", BAC:   "#DC1431", XOM:   "#D82718", UNH:   "#0066CC",
+  PG:    "#4A90E2", HD:    "#F96302", ABBV:  "#006FAD", MRK:   "#009360",
+  AVGO:  "#CF0A2C", COST:  "#E31837", KO:    "#F40009", LLY:   "#D13039",
+  MCD:   "#DA291C", INTC:  "#0068B5", AMD:   "#ED1C24", CRM:   "#00A1E0",
+  ADBE:  "#FA0F00", NFLX:  "#E50914", PYPL:  "#0070BA", QCOM:  "#3253DC",
+  TXN:   "#C00000", HON:   "#C8102E", UPS:   "#8B4513", CAT:   "#CC8A00",
+  GS:    "#6DA883", MS:    "#4A7ED9", BLK:   "#3A4F7A", SPGI:  "#4A7ED9",
+  RTX:   "#2E5FBF", BA:    "#3A6BC0", LMT:   "#4066C8", GE:    "#3CB6CE",
+  DE:    "#367C2B", DIS:   "#006E99", SBUX:  "#00704A", NKE:   "#F05020",
+  CVX:   "#0096D6", NOW:   "#00C7B1", UBER:  "#6C6C6C", ABNB:  "#FF385C",
+  COIN:  "#0052FF", PLTR:  "#3E7EC4", ARM:   "#0091BD", SMCI:  "#3CB4C8",
+  // ── Europe ────────────────────────────────────────────────────────────────
+  "MC.PA":   "#C5A87B", "TTE.PA":  "#DA291C", ASML:      "#00A0E9",
+  SAP:       "#0FAAFF", "OR.PA":   "#C9B76A", "SAN.PA":  "#9B1B2A",
+  "AIR.PA":  "#3056C4", "BNP.PA":  "#009A44", "SU.PA":   "#3DCD58",
+  "AI.PA":   "#009FE3", "KER.PA":  "#C8A882", "HO.PA":   "#2E5FBF",
+  "DG.PA":   "#007DC4", "CS.PA":   "#3333CC", "ACA.PA":  "#009B3A",
+  "GLE.PA":  "#E60028", STLA:      "#1B4AA0", "SIE.DE":  "#009999",
+  "ALV.DE":  "#3864C8", "BMW.DE":  "#1C69D4", "VOW3.DE": "#1D5BA0",
+  "BAYN.DE": "#00BCFF", "BAS.DE":  "#009540", "DTE.DE":  "#E20074",
+  "ADS.DE":  "#C0372A", "HSBA.L":  "#DB0011", "BP.L":    "#009900",
+  "GSK.L":   "#F36633", "SHEL.L":  "#FFCC00", "RIO.L":   "#BF1B2C",
+  "NOVN.SW": "#EC0016", "NESN.SW": "#C8922A", "RO.SW":   "#0066CC",
+  // ── Asia ──────────────────────────────────────────────────────────────────
+  TSM:        "#007BCF", "7203.T":    "#EB0A1E", "6758.T":    "#002FA7",
+  "9984.T":   "#CC3333", BABA:        "#FF6A00", TCEHY:       "#21A453",
+  "005930.KS":"#1428A0",
+  // ── ETF ───────────────────────────────────────────────────────────────────
+  SPY:  "#3A6BC0", QQQ:  "#4A52A8", VTI:  "#8B1A2E", VEA:  "#8B2244",
+  VWO:  "#8B3266", EEM:  "#1A8FD1", GLD:  "#D4AF37", SLV:  "#A8A9AD",
+  IWM:  "#1A72C0", ARKK: "#2DDE98", XLF:  "#2E7FBF", XLK:  "#5B7FD3",
+  XLE:  "#D4791F", XLV:  "#3DA54E", XLI:  "#5B9BD5", IBIT: "#F7931A",
+  FBTC: "#F7931A", "CW8.PA":  "#009FE3", "EWLD.PA": "#1E8FA8",
+  "ESE.PA":  "#009FE3", "PANX.PA": "#009FE3", EWJ:  "#1A8FD1",
+  FXI:  "#1A8FD1", EWG:  "#1A8FD1", EWU:  "#1A8FD1", ACWI: "#1A8FD1",
+  AGG:  "#3A7BC8", TLT:  "#1A72C0", HYG:  "#1A8FD1", VNQ:  "#8B2244",
+  // ── Crypto ────────────────────────────────────────────────────────────────
+  "BTC-USD":      "#F7931A", "ETH-USD":      "#627EEA", "SOL-USD":      "#9945FF",
+  "BNB-USD":      "#F3BA2F", "XRP-USD":      "#00AAE4", "DOGE-USD":     "#C2A633",
+  "ADA-USD":      "#0E70FF", "AVAX-USD":     "#E84142", "DOT-USD":      "#E6007A",
+  "INJ-USD":      "#00B2FF", "LINK-USD":     "#2A5ADA", "UNI7083-USD":  "#FF007A",
+  "LTC-USD":      "#B0B0B0", "ATOM-USD":     "#8B8FBE", "NEAR-USD":     "#00C08B",
+  "ARB-USD":      "#4CC9F0", "OP-USD":       "#FF0420", "SUI20947-USD": "#4DA2FF",
+  // ── Indices ───────────────────────────────────────────────────────────────
+  "^GSPC":    "#4A7ED9", "^NDX":     "#6A5ACD", "^DJI":     "#3A6BC0",
+  "^RUT":     "#7B68EE", "^VIX":     "#CC4444", "^FCHI":    "#3352C0",
+  "^GDAXI":   "#CC8A00", "^FTSE":    "#CC0000", "^N225":    "#CC003A",
+  "^HSI":     "#CC0000", "^STOXX50E":"#4466CC", "^IBEX":    "#CC1A25",
+  "^AEX":     "#FF6600", "^SSMI":    "#CC1A35",
+};

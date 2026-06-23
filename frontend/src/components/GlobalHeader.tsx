@@ -1,11 +1,64 @@
 "use client";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, memo, useCallback } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { useApp } from "@/lib/AppContext";
 import { TRENDING } from "@/lib/assets";
+import AssetLogo from "@/components/AssetLogo";
 
 type Asset = { ticker: string; type: string; name: string; };
 type Price = { price: number; change: number; };
+
+type AssetRowProps = {
+  a: Asset;
+  highlighted?: boolean;
+  focused?: boolean;
+  idx: number;
+  price?: Price;
+  onSelect: (a: Asset) => void;
+  onChart: (ticker: string) => void;
+};
+
+const AssetRow = memo(function AssetRow({ a, highlighted, focused, idx, price, onSelect, onChart }: AssetRowProps) {
+  const tc = typeColor(a.type);
+  const [hovered, setHovered] = useState(false);
+  return (
+    <div
+      data-idx={idx}
+      style={{ display:"flex", alignItems:"center", gap:"10px", width:"100%", padding:"8px 12px", background: focused ? "rgba(91,141,239,0.12)" : hovered ? "rgba(255,255,255,0.05)" : "transparent", cursor:"pointer", borderBottom:"1px solid rgba(255,255,255,0.04)", borderLeft: focused ? "2px solid rgba(91,141,239,0.6)" : "2px solid transparent", boxSizing:"border-box" as const }}
+      onClick={() => onSelect(a)}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}>
+      <AssetLogo
+        ticker={a.ticker}
+        type={a.type}
+        size={28}
+        radius={6}
+        fallbackBg={highlighted ? `${tc.text}22` : tc.bg}
+        fallbackBorder={highlighted ? tc.text : tc.border}
+        fallbackTextColor={tc.text}
+        style={{
+          border: `1px solid ${highlighted ? tc.text : tc.border}`,
+          boxShadow: highlighted ? `0 0 8px ${tc.text}55` : "none",
+          background: highlighted ? `${tc.text}11` : "rgba(255,255,255,0.06)",
+        }}
+      />
+      <span style={{ color:"#F8F9FC", fontSize:"11px", fontWeight:500, flex:1, textAlign:"left" }}>{a.name}</span>
+      {hovered && (
+        <button
+          onClick={e => { e.stopPropagation(); onChart(a.ticker); }}
+          style={{ background:"rgba(91,141,239,0.15)", border:"1px solid rgba(91,141,239,0.3)", borderRadius:"5px", color:"#9BB9FF", fontSize:"10px", padding:"3px 8px", cursor:"pointer", flexShrink:0, whiteSpace:"nowrap" as const, letterSpacing:"0.03em" }}>
+          Graphique
+        </button>
+      )}
+      {price && (
+        <div style={{ display:"flex", flexDirection:"column", alignItems:"flex-end", gap:"1px" }}>
+          <span style={{ color:"#F8F9FC", fontSize:"10px", opacity:0.6 }}>${price.price.toLocaleString("en-US", { minimumFractionDigits:2, maximumFractionDigits:2 })}</span>
+          <span style={{ fontSize:"10px", fontWeight:600, color:price.change>=0?"#22c55e":"#ef4444" }}>{price.change>=0?"▲":"▼"} {Math.abs(price.change).toFixed(2)}%</span>
+        </div>
+      )}
+    </div>
+  );
+});
 
 
 const typeColor = (type: string) => ({
@@ -151,38 +204,17 @@ export default function GlobalHeader() {
 
   const glass = { background:"rgba(255,255,255,0.08)", border:"1px solid rgba(255,255,255,0.14)", backdropFilter:"blur(24px)" as const, WebkitBackdropFilter:"blur(24px)" as const, boxShadow:"0 4px 24px rgba(0,0,0,0.25), 0 1px 0 rgba(255,255,255,0.1) inset" };
 
-  const AssetRow = ({ a, highlighted, focused, idx }: { a: Asset; highlighted?: boolean; focused?: boolean; idx: number }) => {
-    const tc = typeColor(a.type);
-    const p = prices[a.ticker];
-    const label = a.ticker.replace(/-USD$/,"").replace(/\.PA$/,"").replace(/\^/,"").slice(0,4);
-    const [hovered, setHovered] = useState(false);
-    return (
-      <div
-        data-idx={idx}
-        style={{ display:"flex", alignItems:"center", gap:"10px", width:"100%", padding:"8px 12px", background: focused ? "rgba(91,141,239,0.12)" : hovered ? "rgba(255,255,255,0.05)" : "transparent", cursor:"pointer", borderBottom:"1px solid rgba(255,255,255,0.04)", borderLeft: focused ? "2px solid rgba(91,141,239,0.6)" : "2px solid transparent", boxSizing:"border-box" as const }}
-        onClick={() => { setActiveAsset({ ticker: a.ticker, name: a.name }); setShowDropdown(false); setLocalSearch(""); setHighlightIndex(-1); }}
-        onMouseEnter={() => setHovered(true)}
-        onMouseLeave={() => setHovered(false)}>
-        <div style={{ width:"28px", height:"28px", borderRadius:"6px", flexShrink:0, display:"flex", alignItems:"center", justifyContent:"center", background:highlighted?`${tc.text}22`:tc.bg, border:`1px solid ${highlighted?tc.text:tc.border}`, boxShadow:highlighted?`0 0 8px ${tc.text}55`:"none", transition:"all 0.2s" }}>
-          <span style={{ fontSize:"8px", fontWeight:800, color:tc.text, letterSpacing:"-0.02em" }}>{label}</span>
-        </div>
-        <span style={{ color:"#F8F9FC", fontSize:"11px", fontWeight:500, flex:1, textAlign:"left" }}>{a.name}</span>
-        {hovered && (
-          <button
-            onClick={e => { e.stopPropagation(); router.push(`/chart?ticker=${encodeURIComponent(a.ticker)}`); setShowDropdown(false); }}
-            style={{ background:"rgba(91,141,239,0.15)", border:"1px solid rgba(91,141,239,0.3)", borderRadius:"5px", color:"#9BB9FF", fontSize:"10px", padding:"3px 8px", cursor:"pointer", flexShrink:0, whiteSpace:"nowrap" as const, letterSpacing:"0.03em" }}>
-            Graphique
-          </button>
-        )}
-        {p && (
-          <div style={{ display:"flex", flexDirection:"column", alignItems:"flex-end", gap:"1px" }}>
-            <span style={{ color:"#F8F9FC", fontSize:"10px", opacity:0.6 }}>${p.price.toLocaleString("en-US", { minimumFractionDigits:2, maximumFractionDigits:2 })}</span>
-            <span style={{ fontSize:"10px", fontWeight:600, color:p.change>=0?"#22c55e":"#ef4444" }}>{p.change>=0?"▲":"▼"} {Math.abs(p.change).toFixed(2)}%</span>
-          </div>
-        )}
-      </div>
-    );
-  };
+  const handleSelect = useCallback((a: Asset) => {
+    setActiveAsset({ ticker: a.ticker, name: a.name });
+    setShowDropdown(false);
+    setLocalSearch("");
+    setHighlightIndex(-1);
+  }, [setActiveAsset]);
+
+  const handleChart = useCallback((ticker: string) => {
+    router.push(`/chart?ticker=${encodeURIComponent(ticker)}`);
+    setShowDropdown(false);
+  }, [router]);
 
   return (
     <>
@@ -246,7 +278,7 @@ export default function GlobalHeader() {
             <>
               <div style={{ width:"1px", height:"16px", background:"rgba(255,255,255,0.12)", flexShrink:0 }}/>
               {pathname !== "/build" && <div style={{ display:"flex", alignItems:"center", gap:"6px", padding:"0 10px", width:"180px", flexShrink:0, position:"relative" }}>
-                {activeAsset && !localSearch ? (() => { const tc = typeColor(TRENDING.find(a=>a.ticker===activeAsset.ticker)?.type||"EQUITY"); const label = activeAsset.ticker.replace(/-USD$/,"").replace(/\.PA$/,"").replace(/\^/,"").slice(0,4); return <div style={{ width:"28px", height:"28px", borderRadius:"6px", flexShrink:0, display:"flex", alignItems:"center", justifyContent:"center", background:tc.bg, border:`1px solid ${tc.border}` }}><span style={{ fontSize:"8px", fontWeight:800, color:tc.text, letterSpacing:"-0.02em" }}>{label}</span></div>; })() : (
+                {activeAsset && !localSearch ? (() => { const tc = typeColor(TRENDING.find(a=>a.ticker===activeAsset.ticker)?.type||"EQUITY"); return <AssetLogo ticker={activeAsset.ticker} type={TRENDING.find(a=>a.ticker===activeAsset.ticker)?.type||"EQUITY"} size={28} radius={6} fallbackBg={tc.bg} fallbackBorder={tc.border} fallbackTextColor={tc.text}/>; })() : (
                 <svg width="10" height="10" fill="none" viewBox="0 0 24 24" stroke="#F8F9FC" strokeWidth={2} style={{ opacity:0.35, flexShrink:0 }}>
                   <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-4.35-4.35M17 11A6 6 0 1 1 5 11a6 6 0 0 1 12 0z"/>
                 </svg>)}
@@ -279,7 +311,7 @@ export default function GlobalHeader() {
             {/* Liste scrollable */}
             <div ref={listRef} onScroll={handleScroll} style={{ maxHeight:"320px", overflowY:"auto" }}>
               {!localSearch && <div style={{ padding:"3px 12px 2px", color:"rgba(255,255,255,0.2)", fontSize:"9px", letterSpacing:"0.12em" }}>POPULAIRES</div>}
-              {displayAssets.map((a, i) => <AssetRow key={a.ticker} a={a} highlighted={i===0 && !!localSearch} focused={i===highlightIndex} idx={i}/>)}
+              {displayAssets.map((a, i) => <AssetRow key={a.ticker} a={a} highlighted={i===0 && !!localSearch} focused={i===highlightIndex} idx={i} price={prices[a.ticker]} onSelect={handleSelect} onChart={handleChart}/>)}
               {!localSearch && displayCount < filteredAssets.length && (
                 <div style={{ padding:"10px", textAlign:"center", color:"rgba(255,255,255,0.2)", fontSize:"10px" }}>Scroll pour charger plus...</div>
               )}

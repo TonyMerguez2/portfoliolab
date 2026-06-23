@@ -3,7 +3,7 @@ import { useState, useEffect, useMemo, Suspense } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import dynamic from "next/dynamic";
 import { useApp } from "@/lib/AppContext";
-import { TRENDING } from "@/lib/assets";
+import { TRENDING, BRAND_COLORS } from "@/lib/assets";
 import {
   BarChart, Bar,
   XAxis, YAxis, CartesianGrid, ResponsiveContainer,
@@ -12,6 +12,7 @@ import {
 
 const GrowthChart = dynamic(() => import("@/components/charts/GrowthChart"), { ssr: false });
 const SubChart    = dynamic(() => import("@/components/charts/SubChart"),    { ssr: false });
+import AssetLogo from "@/components/AssetLogo";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 
@@ -19,6 +20,29 @@ function getCutoffDate(days: number): string {
   const d = new Date();
   d.setDate(d.getDate() - days);
   return d.toISOString().slice(0, 10);
+}
+
+function computeDrawdownFromPrices(data: {date:string;value:number}[]): {date:string;value:number}[] {
+  let peak = -Infinity;
+  return data.map(p => {
+    if (p.value > peak) peak = p.value;
+    const dd = peak > 0 ? ((p.value - peak) / peak) * 100 : 0;
+    return { date: p.date, value: dd };
+  });
+}
+
+function toDailyClose(data: {date:string;value:number;high?:number;low?:number}[]): {date:string;value:number;high?:number;low?:number}[] {
+  const byDate = new Map<string, {date:string;value:number;high:number;low:number}>();
+  for (const p of data) {
+    const d = p.date.slice(0, 10);
+    if (byDate.has(d)) {
+      const ex = byDate.get(d)!;
+      byDate.set(d, { date: d, value: p.value, high: Math.max(ex.high, p.high ?? p.value), low: Math.min(ex.low, p.low ?? p.value) });
+    } else {
+      byDate.set(d, { date: d, value: p.value, high: p.high ?? p.value, low: p.low ?? p.value });
+    }
+  }
+  return Array.from(byDate.values()).sort((a, b) => a.date.localeCompare(b.date));
 }
 
 function computeRollingVol(data: {date:string;value:number}[], window=30): {date:string;vol:number}[] {
@@ -195,6 +219,133 @@ const SUB_PERIOD_DAYS: Record<string, number | null> = {
   "1H": 91, "24h": 91, "1S": 14, "1M": 31, "3M": 91, "6M": 183, "1A": 365, "3A": 1095, "Max": null,
 };
 
+// ── Colour presets ──────────────────────────────────────────────────────────
+const COLOR_PRESETS = [
+  { label:"Default", line:"#5B8DEF", up:"#26a69a", down:"#ef5350" },
+  { label:"Neon",    line:"#00d4ff", up:"#00e676", down:"#ff1744" },
+  { label:"Violet",  line:"#a855f7", up:"#c084fc", down:"#f43f5e" },
+  { label:"Amber",   line:"#f59e0b", up:"#fbbf24", down:"#dc2626" },
+];
+
+function SwatchInput({ label, value, onChange }: { label: string; value: string; onChange: (v: string) => void }) {
+  return (
+    <label style={{ display:"flex", alignItems:"center", gap:10, cursor:"pointer" }}>
+      <span style={{ fontSize:9, letterSpacing:"0.08em", color:"rgba(255,255,255,0.35)", width:52, flexShrink:0 }}>{label}</span>
+      <span style={{
+        width:22, height:22, borderRadius:5, border:"1px solid rgba(255,255,255,0.15)",
+        background:value, display:"block", flexShrink:0, position:"relative", overflow:"hidden",
+      }}>
+        <input type="color" value={value} onChange={e => onChange(e.target.value)}
+          style={{ opacity:0, position:"absolute", inset:0, width:"100%", height:"100%", cursor:"pointer", border:"none", padding:0 }} />
+      </span>
+      <span style={{ fontSize:10, color:"rgba(255,255,255,0.45)", fontFamily:"monospace", letterSpacing:"0.04em" }}>{value.toUpperCase()}</span>
+    </label>
+  );
+}
+
+interface CustomPanelProps {
+  lineColor: string; candleUp: string; candleDown: string; defaultLineColor: string;
+  onLineColor: (v: string | null) => void; onCandleUp: (v: string) => void; onCandleDown: (v: string) => void;
+}
+function CustomPanel({ lineColor, candleUp, candleDown, defaultLineColor, onLineColor, onCandleUp, onCandleDown }: CustomPanelProps) {
+  return (
+    <div style={{
+      position:"absolute", top:50, right:10, zIndex:30,
+      background:"rgba(4,12,28,0.97)", border:"1px solid rgba(155,185,255,0.16)",
+      borderRadius:12, padding:"14px 16px", width:230,
+      boxShadow:"0 8px 32px rgba(0,0,0,0.7)",
+      backdropFilter:"blur(12px)",
+    }}>
+      <div style={{ fontSize:9, letterSpacing:"0.12em", color:"rgba(255,255,255,0.25)", marginBottom:12 }}>COULEURS DU GRAPHIQUE</div>
+
+      <div style={{ display:"flex", flexDirection:"column", gap:10, marginBottom:14 }}>
+        <SwatchInput label="COURBE" value={lineColor} onChange={v => onLineColor(v)} />
+        <SwatchInput label="HAUSSE" value={candleUp}  onChange={onCandleUp} />
+        <SwatchInput label="BAISSE" value={candleDown} onChange={onCandleDown} />
+      </div>
+
+      <div style={{ borderTop:"1px solid rgba(255,255,255,0.06)", paddingTop:12 }}>
+        <div style={{ fontSize:9, letterSpacing:"0.08em", color:"rgba(255,255,255,0.22)", marginBottom:8 }}>PRESETS</div>
+        <div style={{ display:"flex", gap:6, flexWrap:"wrap" as const }}>
+          {COLOR_PRESETS.map(p => (
+            <button key={p.label}
+              onClick={() => { onLineColor(p.line); onCandleUp(p.up); onCandleDown(p.down); }}
+              title={p.label}
+              style={{
+                width:20, height:20, borderRadius:4, cursor:"pointer",
+                background:`linear-gradient(135deg, ${p.line} 50%, ${p.up} 50%)`,
+                border:"1px solid rgba(255,255,255,0.12)", padding:0,
+                transition:"transform 0.1s",
+              }}
+            />
+          ))}
+          <button
+            onClick={() => { onLineColor(null); onCandleUp("#26a69a"); onCandleDown("#ef5350"); }}
+            title="Réinitialiser"
+            style={{
+              width:20, height:20, borderRadius:4, cursor:"pointer",
+              background:"rgba(255,255,255,0.06)", border:"1px solid rgba(255,255,255,0.12)",
+              color:"rgba(255,255,255,0.35)", fontSize:11, display:"flex", alignItems:"center", justifyContent:"center", padding:0,
+            }}
+          >↺</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function TipCard({ tip }: { tip: { icon: string; title: string; body: string; accent: string } }) {
+  const [hovered, setHovered] = useState(false);
+  const isWarm = ["#ef4444", "#f97316", "#f59e0b"].includes(tip.accent);
+  const g1 = isWarm ? "#f97316" : "#3b82f6";
+  const g2 = isWarm ? "#ef4444" : "#8b5cf6";
+  return (
+    <div
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+      style={{
+        flex:"1 1 200px",
+        background:[
+          `radial-gradient(ellipse at 18% 50%, ${g1}14, transparent 65%) padding-box`,
+          `linear-gradient(rgba(4,17,36,0.94), rgba(4,17,36,0.94)) padding-box`,
+          `linear-gradient(135deg, ${g1}55, ${g2}33) border-box`,
+        ].join(", "),
+        border:"1.5px solid transparent",
+        borderRadius:14,
+        padding:"13px 14px",
+        display:"flex", alignItems:"flex-start", gap:12,
+        cursor:"pointer",
+        transform: hovered ? "translateY(-2px)" : "translateY(0)",
+        transition:"transform 0.2s ease, box-shadow 0.2s ease",
+        boxShadow: hovered
+          ? `0 8px 24px rgba(0,0,0,0.45), 0 2px 10px ${g1}22`
+          : `0 2px 6px rgba(0,0,0,0.2)`,
+      }}
+    >
+      <div style={{
+        width:38, height:38, borderRadius:"50%", flexShrink:0,
+        background:`rgba(${isWarm ? "249,115,22" : "59,130,246"},0.08)`,
+        border:`1px solid ${tip.accent}55`,
+        display:"flex", alignItems:"center", justifyContent:"center",
+        boxShadow: hovered
+          ? `0 0 22px ${tip.accent}55, 0 0 8px ${tip.accent}35`
+          : `0 0 14px ${tip.accent}30, 0 0 4px ${tip.accent}18`,
+        transition:"box-shadow 0.2s ease",
+      }}>
+        <span style={{ fontSize:17, lineHeight:1 }}>{tip.icon}</span>
+      </div>
+      <div style={{ minWidth:0 }}>
+        <div style={{ fontSize:11, fontWeight:600, color:"rgba(255,255,255,0.88)", marginBottom:4, letterSpacing:"0.01em" }}>
+          {tip.title}
+        </div>
+        <p style={{ fontSize:10, color:"rgba(255,255,255,0.45)", lineHeight:1.55, margin:0 }}>
+          {tip.body}
+        </p>
+      </div>
+    </div>
+  );
+}
+
 const typeColor = (type?: string) => ({
   bg: type==="CRYPTOCURRENCY"?"rgba(245,158,11,0.16)":type==="ETF"?"rgba(139,92,246,0.16)":type==="INDEX"?"rgba(34,211,238,0.14)":"rgba(59,130,246,0.16)",
   border: type==="CRYPTOCURRENCY"?"rgba(245,158,11,0.35)":type==="ETF"?"rgba(139,92,246,0.35)":type==="INDEX"?"rgba(34,211,238,0.32)":"rgba(59,130,246,0.35)",
@@ -217,17 +368,51 @@ function ChartContent() {
   const [error, setError] = useState<string|null>(null);
   const [investedAmount, setInvestedAmount] = useState(10000);
   const [wsLive, setWsLive] = useState(false);
+  const [quote, setQuote] = useState<{day_high?:number;day_low?:number;open?:number;prev_close?:number;year_high?:number;year_low?:number;volume?:number;avg_volume?:number;market_cap?:number;currency?:string}|null>(null);
   const [subOpen, setSubOpen] = useState(false);
   const [subTab, setSubTab] = useState<SubTab>("drawdown");
   const [activePeriod, setActivePeriod] = useState("Max");
-  const [visibleRange, setVisibleRange] = useState<{from:string;to:string}|null>(null);
+  const [visibleRange, setVisibleRange]   = useState<{from:number;to:number}|null>(null);
+  const [crosshairTime, setCrosshairTime] = useState<number|null>(null);
+  const [chartPriceData, setChartPriceData] = useState<{date:string;value:number;high?:number;low?:number}[]>([]);
+  const [showCustom,    setShowCustom]    = useState(false);
+  const [copied,        setCopied]        = useState(false);
+  const [chartViewMode, setChartViewMode] = useState<"line" | "candle">("line");
+  const [extractedColor, setExtractedColor] = useState<string | null>(null);
+
+  // Reset extracted colour whenever the viewed asset changes
+  useEffect(() => { setExtractedColor(null); }, [ticker]);
+
+  // Colours — initialised from localStorage, persisted on every change
+  const [lineColor,  setLineColorRaw]  = useState<string | null>(() =>
+    typeof window !== "undefined" ? localStorage.getItem("novac_chart_lineColor") : null
+  );
+  const [candleUp,   setCandleUpRaw]   = useState(() =>
+    typeof window !== "undefined" ? (localStorage.getItem("novac_chart_candleUp")   ?? "#26a69a") : "#26a69a"
+  );
+  const [candleDown, setCandleDownRaw] = useState(() =>
+    typeof window !== "undefined" ? (localStorage.getItem("novac_chart_candleDown") ?? "#ef5350") : "#ef5350"
+  );
+
+  const setLineColor  = (v: string | null) => { setLineColorRaw(v);  if (v === null) localStorage.removeItem("novac_chart_lineColor"); else localStorage.setItem("novac_chart_lineColor", v); };
+  const setCandleUp   = (v: string)        => { setCandleUpRaw(v);   localStorage.setItem("novac_chart_candleUp",   v); };
+  const setCandleDown = (v: string)        => { setCandleDownRaw(v); localStorage.setItem("novac_chart_candleDown", v); };
+
+  const handleShare = () => {
+    navigator.clipboard.writeText(window.location.href).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    });
+  };
 
   const assetInfo = ticker ? TRENDING.find(a => a.ticker === ticker) : null;
   const isCrypto = !!(ticker && (assetInfo?.type === "CRYPTOCURRENCY" || ticker.endsWith("-USD")));
   const label = isPortfolio
     ? (activePortfolio?.name || "Portefeuille")
     : (assetInfo?.name || ticker || "Actif");
-  const color = isPortfolio ? (activePortfolio?.color || "#5B8DEF") : "#5B8DEF";
+  const color = isPortfolio
+    ? (activePortfolio?.color || "#5B8DEF")
+    : (ticker ? (BRAND_COLORS[ticker] ?? extractedColor ?? "#5B8DEF") : "#5B8DEF");
   const tc = typeColor(assetInfo?.type);
   const shortLabel = ticker
     ? ticker.replace(/-USD$/,"").replace(/\.PA$/,"").replace(/\^/,"").slice(0,4)
@@ -255,7 +440,7 @@ function ChartContent() {
           if (currentPriceVal) setCurrentPrice({ price: currentPriceVal, change: currentChange });
           setRawPortfolioGrowth(backtestData.portfolio_growth || []);
           setRawBenchmarkGrowth(backtestData.benchmark_growth || []);
-          setDrawdownData(backtestData.drawdown || []);
+          setDrawdownData(backtestData.drawdown_series || []);
         } catch {
           setError("Impossible de charger les données de cet actif.");
         } finally {
@@ -274,7 +459,7 @@ function ChartContent() {
         .then(d => {
           setRawPortfolioGrowth(d.portfolio_growth || []);
           setRawBenchmarkGrowth(d.benchmark_growth || []);
-          setDrawdownData(d.drawdown || []);
+          setDrawdownData(d.drawdown_series || []);
         })
         .catch(() => setError("Impossible de charger les données du portefeuille."))
         .finally(() => setLoading(false));
@@ -317,6 +502,15 @@ function ChartContent() {
     }, 60000);
     return () => clearInterval(interval);
   }, [ticker, isCrypto]);
+
+  // Quote (infos marché) — chargé une fois par ticker
+  useEffect(() => {
+    if (!ticker) { setQuote(null); return; }
+    fetch(`${API_URL}/api/v1/quote/${encodeURIComponent(ticker)}`)
+      .then(r => r.json())
+      .then(d => { if (!d.error) setQuote(d); })
+      .catch(() => {});
+  }, [ticker]);
 
   const portfolioData = useMemo(() => {
     if (!ticker || !rawPortfolioGrowth.length) return rawPortfolioGrowth;
@@ -361,8 +555,11 @@ function ChartContent() {
   // Sub-chart data filtered by visible range (synced from main chart scroll)
   const subChartFilter = useMemo((): { from: string | null; to: string | null } => {
     if (visibleRange) {
-      const diffMs = new Date(visibleRange.to).getTime() - new Date(visibleRange.from).getTime();
-      if (diffMs >= 2 * 86400 * 1000) return visibleRange;
+      const diffMs = (visibleRange.to - visibleRange.from) * 1000;
+      if (diffMs >= 2 * 86400 * 1000) return {
+        from: new Date(visibleRange.from * 1000).toISOString().slice(0, 10),
+        to:   new Date(visibleRange.to   * 1000).toISOString().slice(0, 10),
+      };
       return { from: getCutoffDate(91), to: null };
     }
     const days = SUB_PERIOD_DAYS[activePeriod] ?? null;
@@ -380,20 +577,36 @@ function ChartContent() {
   // Distribution stays filtered (histogram bins depend on the visible period)
   const distData = useMemo(() => computeDistribution(subPortfolioData), [subPortfolioData]);
 
+  // For ticker mode, use daily-aggregated yfinance prices (same source as main chart)
+  // so all indicators share the exact same date range and precision as GrowthChart.
+  const dailyChartData = useMemo(() => toDailyClose(chartPriceData), [chartPriceData]);
+  const effectivePriceData = ticker && dailyChartData.length > 0
+    ? dailyChartData
+    : scaledPortfolioData;
+
+
   // All other indicators use full data — LC SubChart handles visible range via setVisibleRange
-  const fullVol    = useMemo(() => computeRollingVol(scaledPortfolioData), [scaledPortfolioData]);
-  const fullRsi    = useMemo(() => computeRSI(scaledPortfolioData), [scaledPortfolioData]);
-  const fullCorr   = useMemo(() => computeRollingCorrelation(scaledPortfolioData, scaledBenchmarkData), [scaledPortfolioData, scaledBenchmarkData]);
-  const fullSharpe = useMemo(() => computeRollingSharpe(scaledPortfolioData), [scaledPortfolioData]);
+  const fullVol    = useMemo(() => computeRollingVol(effectivePriceData), [effectivePriceData]);
+  const fullRsi    = useMemo(() => computeRSI(effectivePriceData), [effectivePriceData]);
+  const fullCorr   = useMemo(() => computeRollingCorrelation(effectivePriceData, scaledBenchmarkData), [effectivePriceData, scaledBenchmarkData]);
+  const fullSharpe = useMemo(() => computeRollingSharpe(effectivePriceData), [effectivePriceData]);
+
+  const tickerDrawdown = useMemo(
+    () => ticker && dailyChartData.length > 0 ? computeDrawdownFromPrices(dailyChartData) : null,
+    [ticker, dailyChartData]
+  );
 
   const subData = useMemo((): { date: string; value: number }[] => {
-    if (subTab === "drawdown")     return scaledDrawdownData.map(p => ({ date: p.date, value: p.drawdown }));
-    if (subTab === "volatility")   return fullVol.map(p => ({ date: p.date, value: p.vol }));
-    if (subTab === "rsi")          return fullRsi.map(p => ({ date: p.date, value: p.rsi }));
-    if (subTab === "correlation")  return fullCorr.map(p => ({ date: p.date, value: p.corr }));
-    if (subTab === "sharpe")       return fullSharpe.map(p => ({ date: p.date, value: p.sharpe }));
+    if (subTab === "drawdown") {
+      if (tickerDrawdown) return tickerDrawdown;
+      return scaledDrawdownData.map(p => ({ date: p.date, value: p.drawdown }));
+    }
+    if (subTab === "volatility")  return fullVol.map(p => ({ date: p.date, value: p.vol }));
+    if (subTab === "rsi")         return fullRsi.map(p => ({ date: p.date, value: p.rsi }));
+    if (subTab === "correlation") return fullCorr.map(p => ({ date: p.date, value: p.corr }));
+    if (subTab === "sharpe")      return fullSharpe.map(p => ({ date: p.date, value: p.sharpe }));
     return [];
-  }, [subTab, scaledDrawdownData, fullVol, fullRsi, fullCorr, fullSharpe]);
+  }, [subTab, tickerDrawdown, scaledDrawdownData, fullVol, fullRsi, fullCorr, fullSharpe]);
 
   const { vol1Y, drawdownVal, perf1Y, perf3M } = useMemo(() => {
     const pts = scaledPortfolioData;
@@ -426,98 +639,188 @@ function ChartContent() {
     [vol1Y, drawdownVal, perf1Y, perf3M]
   );
 
+  // ── metaCards hoisted so leftSlot can access it outside the header IIFE ──────
+  const _EXCH: Record<string,string> = {
+    NMS:"Nasdaq GS", NMQ:"Nasdaq", NYQ:"NYSE", PAR:"Euronext Paris",
+    GER:"Xetra", LSE:"London SE", MCE:"Madrid", AMS:"Amsterdam", MIL:"Milan", SWX:"SIX Swiss",
+  };
+  const _fmtN = (v: number) => v < 1
+    ? v.toLocaleString("en-US",{minimumFractionDigits:4,maximumFractionDigits:4})
+    : v.toLocaleString("en-US",{minimumFractionDigits:2,maximumFractionDigits:2});
+  const _fmtV = (v: number) => v > 1e9 ? (v/1e9).toFixed(1)+"B" : v > 1e6 ? (v/1e6).toFixed(1)+"M" : v > 1e3 ? (v/1e3).toFixed(0)+"K" : String(v);
+  const _fmtC = (v: number) => v > 1e12 ? (v/1e12).toFixed(2)+"T" : v > 1e9 ? (v/1e9).toFixed(1)+"B" : (v/1e6).toFixed(0)+"M";
+  const metaCards = ticker ? [
+    assetInfo?.exchange && { label:"Exchange", value: _EXCH[assetInfo.exchange] || assetInfo.exchange },
+    assetInfo?.type     && { label:"Type",     value: ({"EQUITY":"Action","ETF":"ETF","INDEX":"Indice","CRYPTOCURRENCY":"Crypto"} as Record<string,string>)[assetInfo.type] || assetInfo.type },
+    quote?.currency     && { label:"Devise",   value: quote.currency },
+    quote?.open      != null && { label:"Ouv",    value: _fmtN(quote.open!) },
+    quote?.day_high  != null && { label:"Haut",   value: _fmtN(quote.day_high!) },
+    quote?.day_low   != null && { label:"Bas",    value: _fmtN(quote.day_low!) },
+    quote?.volume    != null && { label:"Vol",    value: _fmtV(quote.volume!) },
+    quote?.market_cap!= null && { label:"Cap",    value: _fmtC(quote.market_cap!) },
+    (quote?.year_low != null && quote?.year_high != null) && { label:"52 sem", value: `${_fmtN(quote.year_low!)} – ${_fmtN(quote.year_high!)}` },
+  ].filter(Boolean) as {label:string;value:string}[] : [];
+
   return (
     <div style={{ height:"100vh", background:"#041124", color:"#F8F9FC", fontFamily:"-apple-system,BlinkMacSystemFont,sans-serif", display:"flex", flexDirection:"column", position:"relative", overflow:"hidden" }}>
       <div style={{ position:"fixed", inset:0, zIndex:0, pointerEvents:"none", background:"radial-gradient(ellipse 55% 55% at 50% 50%, #0B1C3F 0%, #041124 100%)" }}/>
       <div style={{ position:"relative", zIndex:1, display:"flex", flexDirection:"column", flex:1, minHeight:0 }}>
 
         {/* Header */}
-        <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", padding:"14px 24px", borderBottom:"1px solid rgba(255,255,255,0.06)", flexShrink:0 }}>
-          <div style={{ display:"flex", alignItems:"center", gap:"16px" }}>
-            <button onClick={() => router.back()}
-              style={{ background:"rgba(255,255,255,0.06)", border:"1px solid rgba(255,255,255,0.1)", borderRadius:"8px", color:"rgba(255,255,255,0.6)", fontSize:"11px", padding:"6px 12px", cursor:"pointer", letterSpacing:"0.04em", flexShrink:0 }}>
-              ← Retour
-            </button>
+        {(() => {
+          const displayTicker = ticker
+            ? ticker.replace(/-USD$/,"").replace(/[0-9]+$/,"").replace(/\.[A-Z]{1,3}$/,"").replace(/^\^/,"")
+            : "";
+          const EXCH: Record<string,string> = {
+            NMS:"Nasdaq GS", NMQ:"Nasdaq", NYQ:"NYSE", PAR:"Euronext Paris",
+            GER:"Xetra", LSE:"London SE", MCE:"Madrid", AMS:"Amsterdam", MIL:"Milan", SWX:"SIX Swiss",
+          };
+          const TYPE_LBL: Record<string,string> = {
+            EQUITY:"Action", ETF:"ETF", INDEX:"Indice", CRYPTOCURRENCY:"Crypto",
+          };
+          const fmtNum = (v: number) => v < 1
+            ? v.toLocaleString("en-US",{minimumFractionDigits:4,maximumFractionDigits:4})
+            : v.toLocaleString("en-US",{minimumFractionDigits:2,maximumFractionDigits:2});
+          const fmtVol = (v: number) => v > 1e9 ? (v/1e9).toFixed(1)+"B" : v > 1e6 ? (v/1e6).toFixed(1)+"M" : v > 1e3 ? (v/1e3).toFixed(0)+"K" : String(v);
+          const fmtCap = (v: number) => v > 1e12 ? (v/1e12).toFixed(2)+"T" : v > 1e9 ? (v/1e9).toFixed(1)+"B" : (v/1e6).toFixed(0)+"M";
 
-            {ticker && (
-              <div style={{ display:"flex", alignItems:"center", gap:"10px" }}>
-                <div style={{ width:"36px", height:"36px", borderRadius:"9px", display:"flex", alignItems:"center", justifyContent:"center", background:tc.bg, border:`1px solid ${tc.border}`, flexShrink:0 }}>
-                  <span style={{ fontSize:"9px", fontWeight:800, color:tc.text, letterSpacing:"-0.02em" }}>{shortLabel}</span>
-                </div>
-                <div>
-                  <div style={{ fontSize:"13px", fontWeight:600, color:"#F8F9FC", lineHeight:1.2 }}>{assetInfo?.name || ticker}</div>
-                  <div style={{ display:"flex", alignItems:"center", gap:"8px", marginTop:"2px" }}>
-                    {currentPrice ? (
-                      <>
-                        <span style={{ fontSize:"13px", fontWeight:700, color:"#F8F9FC", letterSpacing:"-0.01em" }}>
-                          {currentPrice.price < 1
-                            ? currentPrice.price.toLocaleString("en-US", {minimumFractionDigits:4, maximumFractionDigits:4})
-                            : currentPrice.price.toLocaleString("en-US", {minimumFractionDigits:2, maximumFractionDigits:2})}
-                        </span>
-                        <span style={{ fontSize:"11px", fontWeight:600, color: currentPrice.change >= 0 ? "#22c55e" : "#ef4444" }}>
-                          {currentPrice.change >= 0 ? "▲" : "▼"} {Math.abs(currentPrice.change).toFixed(2)}%
-                        </span>
-                        <span style={{ fontSize:"9px", color:"rgba(255,255,255,0.22)", letterSpacing:"0.06em" }}>{ticker} · {assetInfo?.type || "ACTIF"}</span>
-                        {isCrypto && wsLive && (
-                          <span style={{ display:"flex", alignItems:"center", gap:"4px", fontSize:"9px", color:"#22c55e", letterSpacing:"0.06em" }}>
-                            <span style={{ width:"6px", height:"6px", borderRadius:"50%", background:"#22c55e", display:"inline-block", animation:"pulse 1.5s infinite" }}/>
-                            LIVE
-                          </span>
-                        )}
-                        {!isCrypto && (() => {
-                          const now = new Date();
-                          const parts = new Intl.DateTimeFormat("en-US", {
-                            timeZone: "America/New_York", weekday: "short",
-                            hour: "numeric", minute: "2-digit", hour12: false,
-                          }).formatToParts(now);
-                          const wd = parts.find(p => p.type === "weekday")?.value ?? "";
-                          const h  = parseInt(parts.find(p => p.type === "hour")?.value ?? "0");
-                          const m  = parseInt(parts.find(p => p.type === "minute")?.value ?? "0");
-                          const isOpen = wd !== "Sat" && wd !== "Sun" && (h * 60 + m) >= 570 && (h * 60 + m) < 960;
-                          return (
-                            <span style={{ display:"flex", alignItems:"center", gap:"4px", fontSize:"9px", letterSpacing:"0.06em", color: isOpen ? "#22c55e" : "rgba(255,255,255,0.28)" }}>
-                              <span style={{ width:"5px", height:"5px", borderRadius:"50%", background: isOpen ? "#22c55e" : "rgba(255,255,255,0.28)", display:"inline-block" }}/>
-                              {isOpen ? "Ouvert" : "Fermé"}
+          // Market open check (NYSE/Nasdaq 9h30–16h ET)
+          const now = new Date();
+          const nyParts = new Intl.DateTimeFormat("en-US",{timeZone:"America/New_York",weekday:"short",hour:"numeric",minute:"2-digit",hour12:false}).formatToParts(now);
+          const nyWd = nyParts.find(p=>p.type==="weekday")?.value??"";
+          const nyH  = parseInt(nyParts.find(p=>p.type==="hour")?.value??"0");
+          const nyM  = parseInt(nyParts.find(p=>p.type==="minute")?.value??"0");
+          const isOpen = nyWd!=="Sat" && nyWd!=="Sun" && (nyH*60+nyM)>=570 && (nyH*60+nyM)<960;
+
+          const metaCards = ticker ? [
+            assetInfo?.exchange && { label:"Exchange", value: EXCH[assetInfo.exchange] || assetInfo.exchange },
+            assetInfo?.type     && { label:"Type",     value: TYPE_LBL[assetInfo.type] || assetInfo.type },
+            quote?.currency     && { label:"Devise",   value: quote.currency },
+            quote?.open      != null && { label:"Ouv",   value: fmtNum(quote.open!) },
+            quote?.day_high  != null && { label:"Haut",  value: fmtNum(quote.day_high!) },
+            quote?.day_low   != null && { label:"Bas",   value: fmtNum(quote.day_low!) },
+            quote?.volume    != null && { label:"Vol",   value: fmtVol(quote.volume!) },
+            quote?.market_cap!= null && { label:"Cap",   value: fmtCap(quote.market_cap!) },
+            (quote?.year_low != null && quote?.year_high != null) && { label:"52 sem", value: `${fmtNum(quote.year_low!)} – ${fmtNum(quote.year_high!)}` },
+          ].filter(Boolean) as {label:string;value:string}[] : [];
+
+          const up = currentPrice ? currentPrice.change >= 0 : true;
+
+          return (
+            <>
+              <style>{`
+                @keyframes hdr-glow-up{0%,100%{box-shadow:0 0 6px rgba(34,197,94,.15)}50%{box-shadow:0 0 14px rgba(34,197,94,.35)}}
+                @keyframes hdr-glow-dn{0%,100%{box-shadow:0 0 6px rgba(239,68,68,.15)}50%{box-shadow:0 0 14px rgba(239,68,68,.35)}}
+                @keyframes hdr-pulse{0%,100%{box-shadow:0 0 0 0 rgba(34,197,94,.7)}60%{box-shadow:0 0 0 5px rgba(34,197,94,0)}}
+                @keyframes hdr-pulse-red{0%,100%{box-shadow:0 0 0 0 rgba(239,68,68,.7)}60%{box-shadow:0 0 0 5px rgba(239,68,68,0)}}
+                @keyframes hdr-pulse-live{0%,100%{box-shadow:0 0 0 0 rgba(34,197,94,.9)}50%{box-shadow:0 0 0 6px rgba(34,197,94,0)}}
+              `}</style>
+              <div style={{ display:"flex", flexDirection:"column", padding:"11px 20px 9px", borderBottom:"1px solid rgba(255,255,255,0.06)", flexShrink:0, gap:8 }}>
+
+                {/* ── Row 1: back · [logo + compact identity+price] · NOVAC ── */}
+                <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", gap:16 }}>
+
+                  <div style={{ display:"flex", alignItems:"center", gap:13, minWidth:0 }}>
+                    <button onClick={() => router.back()} style={{ background:"rgba(255,255,255,0.06)", border:"1px solid rgba(255,255,255,0.1)", borderRadius:8, color:"rgba(255,255,255,0.55)", fontSize:11, padding:"6px 12px", cursor:"pointer", letterSpacing:"0.04em", flexShrink:0 }}>
+                      ← Retour
+                    </button>
+
+                    {ticker && (
+                      <div style={{ display:"flex", alignItems:"center", gap:12 }}>
+                        <AssetLogo
+                          ticker={ticker} type={assetInfo?.type} size={40} radius={10}
+                          fallbackBg={tc.bg} fallbackBorder={tc.border} fallbackTextColor={tc.text}
+                          onColorExtracted={c => { if (!BRAND_COLORS[ticker]) setExtractedColor(c); }}
+                        />
+                        <div>
+                          {/* Line 1 — ticker · price · currency · badge */}
+                          <div style={{ display:"flex", alignItems:"baseline", gap:7, flexWrap:"nowrap" }}>
+                            <span style={{ fontSize:21, fontWeight:800, color:"#F8F9FC", letterSpacing:"-0.03em", lineHeight:1 }}>
+                              {displayTicker}
                             </span>
-                          );
-                        })()}
-                      </>
-                    ) : (
-                      <span style={{ fontSize:"10px", color:"rgba(255,255,255,0.28)", letterSpacing:"0.06em" }}>{ticker} · {assetInfo?.type || "ACTIF"}</span>
+                            {currentPrice && (
+                              <>
+                                <span style={{ fontSize:17, fontWeight:700, color:"#F8F9FC", letterSpacing:"-0.02em", fontVariantNumeric:"tabular-nums" }}>
+                                  {fmtNum(currentPrice.price)}
+                                </span>
+                                <span style={{ fontSize:10, color:"rgba(255,255,255,0.28)", letterSpacing:"0.04em", alignSelf:"center" }}>
+                                  {quote?.currency || "USD"}
+                                </span>
+                                <div style={{
+                                  background: up ? "rgba(34,197,94,0.14)" : "rgba(239,68,68,0.14)",
+                                  border: `1px solid ${up ? "rgba(34,197,94,0.35)" : "rgba(239,68,68,0.35)"}`,
+                                  animation: up ? "hdr-glow-up 4s ease-in-out infinite" : "hdr-glow-dn 4s ease-in-out infinite",
+                                  borderRadius:6, padding:"3px 9px", alignSelf:"center",
+                                  color: up ? "#4ade80" : "#f87171", fontSize:11, fontWeight:700,
+                                  letterSpacing:"-0.01em", fontVariantNumeric:"tabular-nums",
+                                }}>
+                                  {up ? "▲" : "▼"} {Math.abs(currentPrice.change).toFixed(2)}%
+                                </div>
+                              </>
+                            )}
+                          </div>
+                          {/* Line 2 — company · exchange · market status */}
+                          <div style={{ display:"flex", alignItems:"center", gap:7, marginTop:4 }}>
+                            <span style={{ fontSize:11, color:"rgba(255,255,255,0.36)", lineHeight:1 }}>
+                              {assetInfo?.name || ticker}
+                              {assetInfo?.exchange ? ` · ${EXCH[assetInfo.exchange] || assetInfo.exchange}` : ""}
+                            </span>
+                            {!isCrypto && (
+                              <span style={{ display:"flex", alignItems:"center", gap:5, flexShrink:0 }}>
+                                <span style={{
+                                  width:6, height:6, borderRadius:"50%", display:"inline-block",
+                                  background: isOpen ? "#22c55e" : "#ef4444",
+                                  animation: isOpen ? "hdr-pulse 2s ease-in-out infinite" : "hdr-pulse-red 2s ease-in-out infinite",
+                                }}/>
+                                <span style={{ fontSize:9, letterSpacing:"0.06em", color: isOpen ? "#4ade80" : "#f87171" }}>
+                                  {isOpen ? "Marché ouvert" : "Marché fermé"}
+                                </span>
+                              </span>
+                            )}
+                            {isCrypto && wsLive && (
+                              <span style={{ display:"flex", alignItems:"center", gap:5, flexShrink:0 }}>
+                                <span style={{ width:6, height:6, borderRadius:"50%", background:"#22c55e", display:"inline-block", animation:"hdr-pulse-live 1.5s ease-in-out infinite" }}/>
+                                <span style={{ fontSize:9, color:"#4ade80", letterSpacing:"0.06em" }}>LIVE</span>
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    {isPortfolio && activePortfolio && (
+                      <div style={{ display:"flex", alignItems:"center", gap:10 }}>
+                        <div style={{ width:36, height:36, borderRadius:9, display:"flex", alignItems:"center", justifyContent:"center", background:`${activePortfolio.color||"#5B8DEF"}22`, border:`1px solid ${activePortfolio.color||"#5B8DEF"}44`, flexShrink:0 }}>
+                          <span style={{ fontSize:"9px", fontWeight:800, color:activePortfolio.color||"#5B8DEF", letterSpacing:"-0.02em" }}>{shortLabel}</span>
+                        </div>
+                        <div>
+                          <div style={{ fontSize:13, fontWeight:600, color:"#F8F9FC", lineHeight:1.2 }}>{activePortfolio.name}</div>
+                          <div style={{ display:"flex", alignItems:"center", gap:8, marginTop:2, flexWrap:"wrap" }}>
+                            <span style={{ fontSize:10, color:"rgba(255,255,255,0.28)" }}>{activePortfolio.assets.length} actifs · vs S&P 500</span>
+                            <span style={{ color:"rgba(255,255,255,0.15)", fontSize:10 }}>·</span>
+                            <span style={{ fontSize:10, color:"rgba(255,255,255,0.4)" }}>Investi</span>
+                            <input type="number" min={1} value={investedAmount}
+                              onChange={e => setInvestedAmount(Math.max(1, Number(e.target.value)))}
+                              onClick={e => (e.target as HTMLInputElement).select()}
+                              style={{ background:"rgba(255,255,255,0.07)", border:"1px solid rgba(255,255,255,0.14)", borderRadius:6, color:"#F8F9FC", fontSize:11, padding:"2px 7px", width:76, textAlign:"right", outline:"none" }}
+                            />
+                            <span style={{ fontSize:10, color:"rgba(255,255,255,0.4)" }}>€</span>
+                          </div>
+                        </div>
+                      </div>
                     )}
                   </div>
-                </div>
-              </div>
-            )}
 
-            {isPortfolio && activePortfolio && (
-              <div style={{ display:"flex", alignItems:"center", gap:"10px" }}>
-                <div style={{ width:"36px", height:"36px", borderRadius:"9px", display:"flex", alignItems:"center", justifyContent:"center", background:`${activePortfolio.color || "#5B8DEF"}22`, border:`1px solid ${activePortfolio.color || "#5B8DEF"}44`, flexShrink:0 }}>
-                  <span style={{ fontSize:"9px", fontWeight:800, color:activePortfolio.color || "#5B8DEF", letterSpacing:"-0.02em" }}>{shortLabel}</span>
+                  <div style={{ color:"rgba(255,255,255,0.1)", fontSize:"11px", letterSpacing:"0.22em", flexShrink:0 }}>NOVAC</div>
                 </div>
-                <div>
-                  <div style={{ fontSize:"13px", fontWeight:600, color:"#F8F9FC", lineHeight:1.2 }}>{activePortfolio.name}</div>
-                  <div style={{ display:"flex", alignItems:"center", gap:"8px", marginTop:"2px", flexWrap:"wrap" }}>
-                    <span style={{ fontSize:"10px", color:"rgba(255,255,255,0.28)" }}>{activePortfolio.assets.length} actifs · vs S&P 500</span>
-                    <span style={{ color:"rgba(255,255,255,0.15)", fontSize:"10px" }}>·</span>
-                    <span style={{ fontSize:"10px", color:"rgba(255,255,255,0.4)" }}>Investi</span>
-                    <input
-                      type="number" min={1} value={investedAmount}
-                      onChange={e => setInvestedAmount(Math.max(1, Number(e.target.value)))}
-                      onClick={e => (e.target as HTMLInputElement).select()}
-                      style={{ background:"rgba(255,255,255,0.07)", border:"1px solid rgba(255,255,255,0.14)", borderRadius:"6px", color:"#F8F9FC", fontSize:"11px", padding:"2px 7px", width:"76px", textAlign:"right", outline:"none" }}
-                    />
-                    <span style={{ fontSize:"10px", color:"rgba(255,255,255,0.4)" }}>€</span>
-                  </div>
-                </div>
+
               </div>
-            )}
-          </div>
-          <div style={{ color:"rgba(255,255,255,0.1)", fontSize:"11px", letterSpacing:"0.22em" }}>NOVAC</div>
-        </div>
+            </>
+          );
+        })()}
 
         {/* Content */}
-        <div style={{ flex:1, minHeight:0, padding:"16px 20px 20px", display:"flex", flexDirection:"column", overflowY:"auto", overflowX:"hidden" }}>
+        <div style={{ flex:1, minHeight:0, padding:"10px 20px 10px", display:"flex", flexDirection:"column", overflow:"hidden" }}>
           {loading && (
             <div style={{ flex:1, display:"flex", alignItems:"center", justifyContent:"center" }}>
               <div style={{ color:"rgba(255,255,255,0.25)", fontSize:"12px", letterSpacing:"0.1em" }}>Chargement···</div>
@@ -535,7 +838,7 @@ function ChartContent() {
           {!loading && !error && portfolioData.length > 0 && (
             <>
               {/* Main chart */}
-              <div style={{ background:"rgba(255,255,255,0.02)", border:"1px solid rgba(255,255,255,0.06)", borderRadius:"16px", padding:"14px 18px 10px", flex:"1 1 380px", minHeight:380, display:"flex", flexDirection:"column" }}>
+              <div style={{ background:"rgba(255,255,255,0.02)", border:"1px solid rgba(255,255,255,0.06)", borderRadius:"16px", padding:"14px 18px 10px", flex:"1 1 0", minHeight:220, display:"flex", flexDirection:"column", position:"relative", overflow:"hidden" }}>
                 <GrowthChart
                   portfolioData={scaledPortfolioData}
                   benchmarkData={scaledBenchmarkData}
@@ -543,72 +846,183 @@ function ChartContent() {
                   portfolioLabel={label}
                   drawdownData={scaledDrawdownData.length > 0 ? scaledDrawdownData : undefined}
                   ticker={ticker ?? undefined}
-                  portfolioColor={color}
+                  portfolioColor={lineColor ?? color}
+                  candleUpColor={candleUp}
+                  candleDownColor={candleDown}
+                  chartMode={chartViewMode}
+                  onChartModeChange={setChartViewMode}
                   dark={true}
                   priceMode={!!ticker}
                   hideDrawdown={true}
                   onPeriodChange={setActivePeriod}
                   onVisibleRangeChange={(from, to) => setVisibleRange(from && to ? { from, to } : null)}
+                  onCrosshairMove={(t) => setCrosshairTime(t)}
+                  onAdaptiveData={setChartPriceData}
+                  leftSlot={metaCards.length > 0 ? (
+                    <div style={{ display:"flex", alignItems:"center", gap:0, overflow:"hidden" }}>
+                      {metaCards.map((card, i) => (
+                        <div key={card.label} style={{ display:"flex", alignItems:"center", gap:5, padding: i === 0 ? "0 10px 0 0" : "0 10px", borderLeft: i > 0 ? "1px solid rgba(255,255,255,0.07)" : "none" }}>
+                          <span style={{ fontSize:9, color:"rgba(255,255,255,0.22)", letterSpacing:"0.08em", textTransform:"uppercase" as const, flexShrink:0 }}>
+                            {card.label}
+                          </span>
+                          <span style={{ fontSize:11, fontWeight:600, color:"rgba(255,255,255,0.6)", fontVariantNumeric:"tabular-nums" as const }}>
+                            {card.value}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  ) : undefined}
+                  rightSlot={
+                    <div style={{ display:"flex", alignItems:"center", gap:4 }}>
+                      {/* Share */}
+                      <button
+                        onClick={handleShare}
+                        title="Copier le lien"
+                        style={{
+                          background: copied ? "rgba(34,197,94,0.14)" : "rgba(255,255,255,0.05)",
+                          border:`1px solid ${copied ? "rgba(34,197,94,0.35)" : "rgba(255,255,255,0.10)"}`,
+                          borderRadius:6, width:28, height:28, cursor:"pointer",
+                          display:"flex", alignItems:"center", justifyContent:"center",
+                          color: copied ? "#4ade80" : "rgba(255,255,255,0.40)",
+                          transition:"all 0.15s",
+                        }}
+                      >
+                        {copied ? (
+                          <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2">
+                            <polyline points="2,8 6,12 14,4"/>
+                          </svg>
+                        ) : (
+                          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z"/>
+                          </svg>
+                        )}
+                      </button>
+
+                      {/* Courbe / Bougies toggle — only for ticker */}
+                      {ticker && (
+                        <button
+                          onClick={() => setChartViewMode(m => m === "line" ? "candle" : "line")}
+                          title={chartViewMode === "line" ? "Passer en bougies" : "Passer en courbe"}
+                          style={{
+                            background:"rgba(255,255,255,0.05)",
+                            border:`1px solid ${chartViewMode === "candle" ? "rgba(155,185,255,0.35)" : "rgba(255,255,255,0.10)"}`,
+                            borderRadius:6, width:28, height:28, cursor:"pointer",
+                            display:"flex", alignItems:"center", justifyContent:"center",
+                            color: chartViewMode === "candle" ? "#9BB9FF" : "rgba(255,255,255,0.40)",
+                            transition:"all 0.15s",
+                          }}
+                        >
+                          {chartViewMode === "line" ? (
+                            <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
+                              <rect x="3" y="4" width="3" height="6" rx="0.5"/>
+                              <line x1="4.5" y1="2" x2="4.5" y2="4"/>
+                              <line x1="4.5" y1="10" x2="4.5" y2="14"/>
+                              <rect x="10" y="6" width="3" height="5" rx="0.5"/>
+                              <line x1="11.5" y1="3" x2="11.5" y2="6"/>
+                              <line x1="11.5" y1="11" x2="11.5" y2="13"/>
+                            </svg>
+                          ) : (
+                            <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
+                              <polyline points="1,12 4,8 7,10 10,5 13,7 15,4"/>
+                            </svg>
+                          )}
+                        </button>
+                      )}
+
+                      {/* Customisation colours */}
+                      <button
+                        onClick={() => setShowCustom(v => !v)}
+                        title="Personnaliser les couleurs"
+                        style={{
+                          background: showCustom ? "rgba(155,185,255,0.14)" : "rgba(255,255,255,0.05)",
+                          border:`1px solid ${showCustom ? "rgba(155,185,255,0.35)" : "rgba(255,255,255,0.10)"}`,
+                          borderRadius:6, width:28, height:28, cursor:"pointer",
+                          display:"flex", alignItems:"center", justifyContent:"center",
+                          transition:"all 0.15s",
+                        }}
+                      >
+                        <svg width="13" height="13" viewBox="0 0 16 16" fill="none">
+                          <circle cx="4"  cy="4"  r="2.5" fill={showCustom ? "#9BB9FF" : "rgba(255,255,255,0.45)"}/>
+                          <circle cx="12" cy="4"  r="2.5" fill={showCustom ? "#9BB9FF" : "rgba(255,255,255,0.45)"}/>
+                          <circle cx="4"  cy="12" r="2.5" fill={showCustom ? "#9BB9FF" : "rgba(255,255,255,0.45)"}/>
+                          <circle cx="12" cy="12" r="2.5" fill={showCustom ? "#9BB9FF" : "rgba(255,255,255,0.45)"}/>
+                        </svg>
+                      </button>
+                    </div>
+                  }
                 />
+
+                {/* ── Customisation panel ── */}
+                {showCustom && <CustomPanel
+                  lineColor={lineColor ?? color}
+                  candleUp={candleUp}
+                  candleDown={candleDown}
+                  defaultLineColor={color}
+                  onLineColor={setLineColor}
+                  onCandleUp={setCandleUp}
+                  onCandleDown={setCandleDown}
+                />}
               </div>
 
-              {/* Sub-chart panel */}
-              {!subOpen ? (
-                <button
-                  onClick={() => setSubOpen(true)}
-                  style={{ marginTop:10, width:"100%", background:"transparent", border:"1px dashed rgba(255,255,255,0.09)", borderRadius:12, padding:"7px 0", cursor:"pointer", color:"rgba(255,255,255,0.2)", fontSize:11, letterSpacing:"0.08em", display:"flex", alignItems:"center", justifyContent:"center", gap:6, flexShrink:0 }}
-                >
-                  <span style={{ fontSize:16, lineHeight:1 }}>+</span> Ajouter un panneau
-                </button>
-              ) : (
-                <div style={{ marginTop:10, background:"rgba(255,255,255,0.02)", border:"1px solid rgba(255,255,255,0.06)", borderRadius:16, padding:"12px 16px 10px", flexShrink:0 }}>
-                  <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:8 }}>
-                    <div style={{ display:"flex", gap:4, overflowX:"auto", scrollbarWidth:"none" }}>
+              {/* Sub-panel — en dessous, hauteur fixe, pas de scroll */}
+              {subOpen ? (
+                <div style={{ background:"rgba(255,255,255,0.02)", border:"1px solid rgba(255,255,255,0.06)", borderRadius:12, marginTop:4, flexShrink:0, display:"flex", flexDirection:"column" }}>
+                  <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", padding:"4px 12px 3px", borderBottom:"1px solid rgba(255,255,255,0.05)" }}>
+                    <div style={{ display:"flex", gap:4, overflowX:"auto", scrollbarWidth:"none" as const }}>
                       {SUB_TABS.map(({key, label: lbl}) => (
-                        <button key={key} onClick={() => setSubTab(key)} style={{ whiteSpace:"nowrap", background: subTab===key ? "rgba(155,185,255,0.12)" : "transparent", border:`1px solid ${subTab===key ? "rgba(155,185,255,0.25)" : "transparent"}`, borderRadius:6, padding:"3px 10px", cursor:"pointer", fontSize:10, letterSpacing:"0.05em", color: subTab===key ? "#9BB9FF" : "rgba(255,255,255,0.3)" }}>
+                        <button key={key} onClick={() => setSubTab(key)} style={{ whiteSpace:"nowrap" as const, background: subTab===key ? "rgba(155,185,255,0.12)" : "transparent", border:`1px solid ${subTab===key ? "rgba(155,185,255,0.25)" : "transparent"}`, borderRadius:6, padding:"3px 10px", cursor:"pointer", fontSize:10, letterSpacing:"0.05em", color: subTab===key ? "#9BB9FF" : "rgba(255,255,255,0.3)" }}>
                           {lbl}
                         </button>
                       ))}
                     </div>
-                    <button onClick={() => setSubOpen(false)} style={{ background:"transparent", border:"none", cursor:"pointer", color:"rgba(255,255,255,0.3)", fontSize:18, padding:"0 4px", lineHeight:1 }}>×</button>
+                    <button onClick={() => setSubOpen(false)} style={{ background:"transparent", border:"none", cursor:"pointer", color:"rgba(255,255,255,0.25)", fontSize:16, padding:"0 4px", lineHeight:1, flexShrink:0 }}>×</button>
                   </div>
-
-                  {subTab === "distribution" ? (
-                    distData.length > 0 ? (
-                      <ResponsiveContainer width="100%" height={130}>
-                        <BarChart data={distData} margin={{ top:2, right:2, bottom:2, left:0 }} barCategoryGap="4%">
-                          <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" vertical={false}/>
-                          <XAxis dataKey="label" hide/>
-                          <YAxis tick={{ fill:"rgba(255,255,255,0.25)", fontSize:9 }} tickLine={false} axisLine={false} width={20}/>
-                          <Tooltip
-                            contentStyle={{ background:"#0d1f35", border:"1px solid rgba(255,255,255,0.1)", borderRadius:8, color:"rgba(255,255,255,0.7)", fontSize:10 }}
-                            cursor={{ fill:"rgba(255,255,255,0.04)" }}
-                            formatter={(v: number) => [v+" j", "Fréquence"]}
-                            labelFormatter={(l: string) => `Rendement: ${l}`}
-                          />
-                          <Bar dataKey="count" radius={[2,2,0,0]}>
-                            {distData.map((entry, i) => (
-                              <Cell key={i} fill={entry.ret >= 0 ? "#22c55e" : "#ef4444"} fillOpacity={0.65}/>
-                            ))}
-                          </Bar>
-                        </BarChart>
-                      </ResponsiveContainer>
+                  <div style={{ height:200 }}>
+                    {subTab === "distribution" ? (
+                      distData.length > 0 ? (
+                        <ResponsiveContainer width="100%" height={200}>
+                          <BarChart data={distData} margin={{ top:4, right:2, bottom:2, left:0 }} barCategoryGap="4%">
+                            <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" vertical={false}/>
+                            <XAxis dataKey="label" hide/>
+                            <YAxis tick={{ fill:"rgba(255,255,255,0.25)", fontSize:9 }} tickLine={false} axisLine={false} width={20}/>
+                            <Tooltip
+                              contentStyle={{ background:"#0d1f35", border:"1px solid rgba(255,255,255,0.1)", borderRadius:8, color:"rgba(255,255,255,0.7)", fontSize:10 }}
+                              cursor={{ fill:"rgba(255,255,255,0.04)" }}
+                              formatter={(v: number) => [v+" j", "Fréquence"]}
+                              labelFormatter={(l: string) => `Rendement: ${l}`}
+                            />
+                            <Bar dataKey="count" radius={[2,2,0,0]}>
+                              {distData.map((entry, i) => (
+                                <Cell key={i} fill={entry.ret >= 0 ? "#22c55e" : "#ef4444"} fillOpacity={0.65}/>
+                              ))}
+                            </Bar>
+                          </BarChart>
+                        </ResponsiveContainer>
+                      ) : (
+                        <div style={{ height:200, display:"flex", alignItems:"center", justifyContent:"center", color:"rgba(255,255,255,0.2)", fontSize:11 }}>Données insuffisantes</div>
+                      )
+                    ) : subData.length > 0 ? (
+                      <SubChart
+                        type={subTab as import("@/components/charts/SubChart").SubChartType}
+                        data={subData}
+                        visibleRange={visibleRange}
+                        crosshairTime={crosshairTime}
+                        height={200}
+                      />
                     ) : (
-                      <div style={{ height:130, display:"flex", alignItems:"center", justifyContent:"center", color:"rgba(255,255,255,0.2)", fontSize:11 }}>Données insuffisantes</div>
-                    )
-                  ) : subData.length > 0 ? (
-                    <SubChart
-                      type={subTab as import("@/components/charts/SubChart").SubChartType}
-                      data={subData}
-                      visibleRange={visibleRange}
-                      height={130}
-                    />
-                  ) : (
-                    <div style={{ height:130, display:"flex", alignItems:"center", justifyContent:"center", color:"rgba(255,255,255,0.2)", fontSize:11 }}>
-                      {subTab === "correlation" || subTab === "sharpe" ? "Données insuffisantes (min 90 jours)" : "Données insuffisantes"}
-                    </div>
-                  )}
+                      <div style={{ height:200, display:"flex", alignItems:"center", justifyContent:"center", color:"rgba(255,255,255,0.2)", fontSize:11 }}>
+                        {subTab === "correlation" || subTab === "sharpe" ? "Données insuffisantes (min 90 jours)" : "Données insuffisantes"}
+                      </div>
+                    )}
+                  </div>
                 </div>
+              ) : (
+                <button
+                  onClick={() => setSubOpen(true)}
+                  style={{ marginTop:6, background:"transparent", border:"1px dashed rgba(255,255,255,0.07)", borderRadius:8, padding:"5px 0", cursor:"pointer", color:"rgba(255,255,255,0.18)", fontSize:10, letterSpacing:"0.07em", display:"flex", alignItems:"center", justifyContent:"center", gap:5, flexShrink:0 }}
+                >
+                  <span>＋</span> Indicateur
+                </button>
               )}
 
               {/* AI tips */}
@@ -619,24 +1033,7 @@ function ChartContent() {
                     <span style={{ fontSize:9, background:"rgba(139,92,246,0.18)", border:"1px solid rgba(139,92,246,0.3)", borderRadius:4, padding:"1px 6px", color:"#c4b5fd", fontWeight:600 }}>IA bêta</span>
                   </div>
                   <div style={{ display:"flex", gap:10, flexWrap:"wrap" }}>
-                    {tips.map(tip => (
-                      <div key={tip.title} style={{
-                        flex:"1 1 200px",
-                        background:`linear-gradient(rgba(4,17,36,0.92),rgba(4,17,36,0.92)) padding-box, linear-gradient(135deg,${tip.accent}66,${tip.accent}18) border-box`,
-                        border:"1px solid transparent",
-                        borderRadius:14,
-                        padding:"13px 14px",
-                        display:"flex", alignItems:"flex-start", gap:12,
-                      }}>
-                        <div style={{ width:38, height:38, borderRadius:"50%", flexShrink:0, background:"rgba(255,255,255,0.07)", border:`1px solid ${tip.accent}44`, display:"flex", alignItems:"center", justifyContent:"center" }}>
-                          <span style={{ fontSize:17, lineHeight:1 }}>{tip.icon}</span>
-                        </div>
-                        <div style={{ minWidth:0 }}>
-                          <div style={{ fontSize:11, fontWeight:700, color:"rgba(255,255,255,0.88)", marginBottom:4 }}>{tip.title}</div>
-                          <p style={{ fontSize:10, color:"rgba(255,255,255,0.38)", lineHeight:1.55, margin:0 }}>{tip.body}</p>
-                        </div>
-                      </div>
-                    ))}
+                    {tips.map(tip => <TipCard key={tip.title} tip={tip} />)}
                   </div>
                 </div>
               )}

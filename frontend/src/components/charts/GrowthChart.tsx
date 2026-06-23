@@ -50,6 +50,59 @@ const PERIOD_VISIBLE_SECS: Record<string, number> = {
 
 interface DataPoint { date: string; [key: string]: number | string; }
 
+// ─── Market phase zone primitive ─────────────────────────────────────────────
+type ZoneType = "bull" | "bear" | "consolidation";
+interface Zone { id: string; startTime: UTCTimestamp; endTime: UTCTimestamp; type: ZoneType; }
+
+const ZONE_COLORS: Record<ZoneType, string> = {
+  bull:          "rgba(34,197,94,0.13)",
+  bear:          "rgba(239,68,68,0.13)",
+  consolidation: "rgba(251,146,60,0.13)",
+};
+const ZONE_BORDER: Record<ZoneType, string> = {
+  bull:          "rgba(34,197,94,0.35)",
+  bear:          "rgba(239,68,68,0.35)",
+  consolidation: "rgba(251,146,60,0.35)",
+};
+
+class ZonesRenderer {
+  constructor(private _zones: Zone[], private _chart: IChartApi) {}
+  draw() {}
+  drawBackground(target: any) {
+    target.useMediaCoordinateSpace((scope: any) => {
+      const { context: ctx, mediaSize } = scope;
+      const ts = this._chart.timeScale();
+      for (const z of this._zones) {
+        const x1 = ts.timeToCoordinate(z.startTime as any);
+        const x2 = ts.timeToCoordinate(z.endTime   as any);
+        if (x1 === null || x2 === null) continue;
+        const left  = Math.min(x1, x2);
+        const width = Math.abs(x2 - x1);
+        ctx.fillStyle = ZONE_COLORS[z.type];
+        ctx.fillRect(left, 0, width, mediaSize.height);
+        // left border line
+        ctx.fillStyle = ZONE_BORDER[z.type];
+        ctx.fillRect(left, 0, 2, mediaSize.height);
+        ctx.fillRect(left + width - 2, 0, 2, mediaSize.height);
+      }
+    });
+  }
+}
+
+class ZonesPrimitiveView {
+  constructor(private _zones: Zone[], private _chart: IChartApi) {}
+  zOrder() { return "bottom" as const; }
+  renderer() { return new ZonesRenderer(this._zones, this._chart); }
+}
+
+class ZonesPrimitive {
+  private _zones: Zone[] = [];
+  constructor(private _chart: IChartApi) {}
+  updateZones(zones: Zone[]) { this._zones = [...zones]; }
+  updateAllViews() {}
+  paneViews() { return [new ZonesPrimitiveView(this._zones, this._chart)]; }
+}
+
 interface Props {
   portfolioData: DataPoint[];
   benchmarkData: DataPoint[];
@@ -60,9 +113,17 @@ interface Props {
   ticker?: string;
   onRemoveBenchmark?: () => void;
   portfolioColor?: string;
+  candleUpColor?:   string;
+  candleDownColor?: string;
+  chartMode?:         "line" | "candle";
+  onChartModeChange?: (m: "line" | "candle") => void;
+  rightSlot?:         React.ReactNode;
+  leftSlot?:          React.ReactNode;
   onExitFullscreen?: () => void;
   onPeriodChange?: (period: string) => void;
-  onVisibleRangeChange?: (from: string | null, to: string | null) => void;
+  onVisibleRangeChange?: (from: number | null, to: number | null) => void;
+  onCrosshairMove?: (time: UTCTimestamp | null) => void;
+  onAdaptiveData?: (data: { date: string; value: number; high?: number; low?: number }[]) => void;
   dark?: boolean;
   percentMode?: boolean;
   priceMode?: boolean;
@@ -136,19 +197,26 @@ function aggMonthly(pts: OHLCPt[]): OHLCPt[] {
 export default function GrowthChart({
   portfolioData, benchmarkData, benchmarkName, portfolioLabel,
   drawdownData, ticker, portfolioColor = "#4f46e5",
-  onExitFullscreen, onPeriodChange, onVisibleRangeChange,
+  candleUpColor = "#26a69a", candleDownColor = "#ef5350",
+  chartMode: chartModeProp, onChartModeChange, rightSlot, leftSlot,
+  onExitFullscreen, onPeriodChange, onVisibleRangeChange, onCrosshairMove, onAdaptiveData,
   dark = false, percentMode = false, priceMode = false,
   hideDrawdown = false,
 }: Props) {
 
   const [periodFilter, setPeriodFilter] = useState<"1H"|"24h"|"1S"|"1M"|"3M"|"6M"|"1A"|"3A"|"Max">("Max");
-  const [chartMode, setChartMode]       = useState<"line"|"candle">("line");
+  const [chartModeInternal, setChartModeInternal] = useState<"line"|"candle">("line");
+  const chartMode = chartModeProp ?? chartModeInternal;
+  const setChartMode = (fn: ((m: "line"|"candle") => "line"|"candle") | "line" | "candle") => {
+    const next = typeof fn === "function" ? fn(chartMode) : fn;
+    setChartModeInternal(next);
+    onChartModeChange?.(next);
+  };
   const [adaptiveData, setAdaptiveData] = useState<{
     date: string; value: number;
     open?: number; high?: number; low?: number; close?: number;
   }[]>([]);
   const [fullscreen, setFullscreen] = useState(false);
-  const [showShare,  setShowShare]  = useState(false);
   const [chartError, setChartError] = useState<string | null>(null);
 
   // Hover state for custom tooltip
@@ -161,7 +229,6 @@ export default function GrowthChart({
   // Refs
   const containerRef       = useRef<HTMLDivElement>(null);
   const chartWrapRef       = useRef<HTMLDivElement>(null);
-  const shareRef           = useRef<HTMLDivElement>(null);
   const chartRef           = useRef<IChartApi | null>(null);
   const areaSeriesRef      = useRef<ISeriesApi<"Area"> | null>(null);
   const candleSeriesRef    = useRef<ISeriesApi<"Candlestick"> | null>(null);
@@ -172,6 +239,14 @@ export default function GrowthChart({
   const isMountedRef      = useRef(false);
   const [fetchKey, setFetchKey] = useState(0);
 
+  // Zone annotation state
+  const [zones, setZones] = useState<Zone[]>([]);
+  const [activeZoneTool, setActiveZoneTool] = useState<ZoneType | null>(null);
+  const [drawingStep, setDrawingStep] = useState<0 | 1>(0); // 0=idle/waiting start, 1=waiting end
+  const pendingZoneTypeRef = useRef<ZoneType | null>(null);
+  const zoneStartRef       = useRef<UTCTimestamp | null>(null);
+  const zonePrimitiveRef   = useRef<ZonesPrimitive | null>(null);
+
   // Lazy loading refs
   const oldestLoadedDateRef = useRef<string | null>(null);
   const currentIntervalRef  = useRef<string>("1d");
@@ -181,8 +256,19 @@ export default function GrowthChart({
   const isPrependRef            = useRef(false);
   const adaptiveDataRef         = useRef<typeof adaptiveData>([]);
   const onVisibleRangeChangeRef = useRef(onVisibleRangeChange);
+  const onCrosshairMoveRef      = useRef(onCrosshairMove);
+  const onAdaptiveDataRef       = useRef(onAdaptiveData);
   useEffect(() => { adaptiveDataRef.current = adaptiveData; }, [adaptiveData]);
   useEffect(() => { onVisibleRangeChangeRef.current = onVisibleRangeChange; }, [onVisibleRangeChange]);
+  useEffect(() => { onCrosshairMoveRef.current = onCrosshairMove; }, [onCrosshairMove]);
+  useEffect(() => { onAdaptiveDataRef.current = onAdaptiveData; }, [onAdaptiveData]);
+
+  // Fire onAdaptiveData whenever the price data changes (ticker mode only)
+  useEffect(() => {
+    if (ticker && adaptiveData.length > 0) {
+      onAdaptiveDataRef.current?.(adaptiveData.map(p => ({ date: p.date, value: p.value, high: p.high, low: p.low })));
+    }
+  }, [adaptiveData, ticker]);
   useEffect(() => { chartModeRef.current = chartMode; }, [chartMode]);
   useEffect(() => {
     chartModeForFetch.current = chartMode;
@@ -326,13 +412,6 @@ export default function GrowthChart({
     setTimeout(() => window.dispatchEvent(new Event("resize")), 100);
   }, [fullscreen]);
 
-  useEffect(() => {
-    const h = (e: MouseEvent) => {
-      if (shareRef.current && !shareRef.current.contains(e.target as Node)) setShowShare(false);
-    };
-    document.addEventListener("mousedown", h);
-    return () => document.removeEventListener("mousedown", h);
-  }, []);
 
   const isIntraday = !!(ticker && adaptiveData.length > 0);
 
@@ -418,10 +497,8 @@ export default function GrowthChart({
         clearTimeout(rangeDebounce);
         rangeDebounce = setTimeout(() => {
           if (!range) { onVisibleRangeChangeRef.current?.(null, null); return; }
-          const from = new Date((range.from as number) * 1000).toISOString().slice(0, 10);
-          const to   = new Date((range.to   as number) * 1000).toISOString().slice(0, 10);
-          onVisibleRangeChangeRef.current?.(from, to);
-        }, 150);
+          onVisibleRangeChangeRef.current?.(range.from, range.to);
+        }, 30);
       };
       chart.timeScale().subscribeVisibleTimeRangeChange(rangeHandler as any);
 
@@ -447,9 +524,9 @@ export default function GrowthChart({
       areaSeriesRef.current = area;
 
       const candle = chart.addSeries(CandlestickSeries, {
-        upColor: "#26a69a", downColor: "#ef5350",
-        borderUpColor: "#26a69a", borderDownColor: "#ef5350",
-        wickUpColor: "#26a69a", wickDownColor: "#ef5350",
+        upColor: candleUpColor, downColor: candleDownColor,
+        borderUpColor: candleUpColor, borderDownColor: candleDownColor,
+        wickUpColor: candleUpColor, wickDownColor: candleDownColor,
         lastValueVisible: true,
         priceLineVisible: false,
         visible: false,
@@ -465,6 +542,33 @@ export default function GrowthChart({
       });
       benchmarkSeriesRef.current = bm;
 
+      // Zone primitive (draws colored background bands)
+      const zp = new ZonesPrimitive(chart);
+      area.attachPrimitive(zp);
+      zonePrimitiveRef.current = zp;
+
+      // Zone creation: 2-click workflow
+      chart.subscribeClick(param => {
+        if (!pendingZoneTypeRef.current || !param.time) return;
+        if (zoneStartRef.current === null) {
+          // First click → record start
+          zoneStartRef.current = param.time as UTCTimestamp;
+          setDrawingStep(1);
+        } else {
+          // Second click → create zone
+          const t1 = zoneStartRef.current;
+          const t2 = param.time as UTCTimestamp;
+          const startTime = Math.min(t1, t2) as UTCTimestamp;
+          const endTime   = Math.max(t1, t2) as UTCTimestamp;
+          const type = pendingZoneTypeRef.current;
+          pendingZoneTypeRef.current = null;
+          zoneStartRef.current = null;
+          setActiveZoneTool(null);
+          setDrawingStep(0);
+          setZones(prev => [...prev, { id: `z-${Date.now()}`, startTime, endTime, type }]);
+        }
+      });
+
       chart.subscribeCrosshairMove(param => {
         if (!param.time || !param.point) {
           setHoverPrice(null);
@@ -472,8 +576,10 @@ export default function GrowthChart({
           setHoverOHLC(null);
           setHoverPoint(null);
           setHoverBmPrice(null);
+          onCrosshairMoveRef.current?.(null);
           return;
         }
+        onCrosshairMoveRef.current?.(param.time as UTCTimestamp);
         try {
           const aData  = param.seriesData.get(area) as any;
           const cData  = param.seriesData.get(candle) as any;
@@ -500,6 +606,7 @@ export default function GrowthChart({
         areaSeriesRef.current = null;
         candleSeriesRef.current = null;
         benchmarkSeriesRef.current = null;
+        zonePrimitiveRef.current = null;
       };
     } catch (err: any) {
       setChartError(err?.message ?? "Chart init failed");
@@ -518,7 +625,7 @@ export default function GrowthChart({
     });
   }, [dark]);
 
-  // Update series color
+  // Update area series color (from logo color extraction)
   useEffect(() => {
     if (!areaSeriesRef.current) return;
     areaSeriesRef.current.applyOptions({
@@ -528,6 +635,24 @@ export default function GrowthChart({
       crosshairMarkerBackgroundColor: portfolioColor,
     });
   }, [portfolioColor]);
+
+  // Sync zones → primitive + force chart redraw
+  useEffect(() => {
+    if (!zonePrimitiveRef.current) return;
+    zonePrimitiveRef.current.updateZones(zones);
+    areaSeriesRef.current?.applyOptions({});
+  }, [zones]);
+
+
+  // Update candle colors
+  useEffect(() => {
+    if (!candleSeriesRef.current) return;
+    candleSeriesRef.current.applyOptions({
+      upColor: candleUpColor, downColor: candleDownColor,
+      borderUpColor: candleUpColor, borderDownColor: candleDownColor,
+      wickUpColor: candleUpColor, wickDownColor: candleDownColor,
+    });
+  }, [candleUpColor, candleDownColor]);
 
   // Set series data — déclenché uniquement par les changements de données structurelles.
   // portfolioData est volontairement absent des deps : la mise à jour du prix live
@@ -756,58 +881,10 @@ export default function GrowthChart({
     >
       {/* Header */}
       <div className="flex items-center justify-between px-2 py-1 flex-shrink-0 gap-2">
-        <div />
+        <div className="flex items-center min-w-0">{leftSlot ?? null}</div>
 
         <div className="flex items-center gap-1 flex-shrink-0">
-          {/* Candle toggle – visible on all ticker periods */}
-          {ticker && (
-            <button
-              onClick={() => setChartMode(m => m === "line" ? "candle" : "line")}
-              className="p-1.5 rounded-lg transition-colors"
-              title={chartMode === "line" ? "Passer en bougies" : "Passer en ligne"}
-              style={{ color: chartMode === "candle" ? (dark ? "#9BB9FF" : "#4f46e5") : (dark ? "rgba(255,255,255,0.4)" : "#94a3b8") }}
-            >
-              {chartMode === "line" ? (
-                <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
-                  <rect x="3" y="4" width="3" height="6" rx="0.5"/>
-                  <line x1="4.5" y1="2" x2="4.5" y2="4"/>
-                  <line x1="4.5" y1="10" x2="4.5" y2="14"/>
-                  <rect x="10" y="6" width="3" height="5" rx="0.5"/>
-                  <line x1="11.5" y1="3" x2="11.5" y2="6"/>
-                  <line x1="11.5" y1="11" x2="11.5" y2="13"/>
-                </svg>
-              ) : (
-                <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
-                  <polyline points="1,12 4,8 7,10 10,5 13,7 15,4"/>
-                </svg>
-              )}
-            </button>
-          )}
-
-          {/* Share */}
-          <div className="relative" ref={shareRef}>
-            <button
-              onClick={() => setShowShare(v => !v)}
-              className="p-1.5 rounded-lg transition-colors"
-              style={{ color: dark ? "rgba(255,255,255,0.4)" : "#94a3b8" }}
-              title="Partager"
-            >
-              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z"/>
-              </svg>
-            </button>
-            {showShare && (
-              <div className="absolute right-0 top-8 w-44 bg-white border border-slate-100 rounded-xl shadow-xl z-50 py-1">
-                <button
-                  onClick={() => { navigator.clipboard.writeText(window.location.href); setShowShare(false); }}
-                  className="w-full flex items-center gap-2 px-3 py-2 hover:bg-slate-50 text-sm text-slate-700"
-                >
-                  Copier le lien
-                </button>
-              </div>
-            )}
-          </div>
-
+          {rightSlot}
           {/* Fullscreen */}
           {!dark && (
             <button
@@ -832,9 +909,83 @@ export default function GrowthChart({
             <span style={{ color: "#ef4444", fontSize: 12, fontFamily: "monospace" }}>Chart error: {chartError}</span>
           </div>
         ) : (
-          <div ref={containerRef} style={{ width: "100%", height: "100%" }} />
+          <div ref={containerRef} style={{ width: "100%", height: "100%", cursor: activeZoneTool ? "crosshair" : "default" }} />
         )}
         {chartLegend}
+
+        {/* Zone tool hint — shown during drawing */}
+        {activeZoneTool && (
+          <div style={{
+            position: "absolute", bottom: 8, left: "50%", transform: "translateX(-50%)",
+            zIndex: 30, pointerEvents: "none",
+            background: "rgba(8,18,38,0.88)", border: "1px solid rgba(255,255,255,0.12)",
+            borderRadius: 8, padding: "4px 12px",
+            fontSize: 11, color: "rgba(255,255,255,0.6)", backdropFilter: "blur(12px)",
+          }}>
+            {drawingStep === 0 ? "Clic pour définir le début de la zone" : "Clic pour définir la fin de la zone"}
+          </div>
+        )}
+
+        {/* Zone toolbar */}
+        <div style={{
+          position: "absolute", right: 8, top: "50%", transform: "translateY(-50%)",
+          zIndex: 30, display: "flex", flexDirection: "column", gap: 4,
+        }}>
+          {([
+            { type: "bull"          as ZoneType, color: "#22c55e", label: "Haussier" },
+            { type: "consolidation" as ZoneType, color: "#fb923c", label: "Consolidation" },
+            { type: "bear"          as ZoneType, color: "#ef4444", label: "Baissier" },
+          ]).map(({ type, color, label }) => {
+            const active = activeZoneTool === type;
+            return (
+              <button
+                key={type}
+                title={label}
+                onClick={() => {
+                  if (active) {
+                    pendingZoneTypeRef.current = null;
+                    zoneStartRef.current = null;
+                    setActiveZoneTool(null);
+                    setDrawingStep(0);
+                  } else {
+                    pendingZoneTypeRef.current = type;
+                    zoneStartRef.current = null;
+                    setActiveZoneTool(type);
+                    setDrawingStep(0);
+                  }
+                }}
+                style={{
+                  width: 22, height: 22, borderRadius: 6,
+                  border: `2px solid ${active ? color : color + "55"}`,
+                  background: active ? color + "33" : color + "18",
+                  cursor: "pointer", transition: "all 0.15s",
+                  boxShadow: active ? `0 0 8px ${color}66` : "none",
+                }}
+              />
+            );
+          })}
+
+          {/* Separator + clear */}
+          {zones.length > 0 && (
+            <>
+              <div style={{ height: 1, background: "rgba(255,255,255,0.1)", margin: "2px 0" }} />
+              <button
+                onClick={() => setZones([])}
+                title="Effacer toutes les zones"
+                style={{
+                  width: 22, height: 22, borderRadius: 6,
+                  border: "1px solid rgba(255,255,255,0.12)",
+                  background: "rgba(255,255,255,0.05)",
+                  cursor: "pointer", fontSize: 11, color: "rgba(255,255,255,0.4)",
+                  display: "flex", alignItems: "center", justifyContent: "center",
+                }}
+              >
+                ✕
+              </button>
+            </>
+          )}
+        </div>
+
         {/* NOVAC logo — bottom-right watermark */}
         <img
           src={dark ? "/logob.png" : "/logoa.png"}
