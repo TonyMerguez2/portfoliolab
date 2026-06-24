@@ -352,6 +352,38 @@ const typeColor = (type?: string) => ({
   text: type==="CRYPTOCURRENCY"?"#fcd34d":type==="ETF"?"#c4b5fd":type==="INDEX"?"#67e8f9":"#93c5fd",
 });
 
+// Rang de l'actif dans sa catégorie (market cap / AUM / CoinMarketCap)
+const ASSET_RANK: Record<string, number> = {
+  // ── Crypto (CoinMarketCap) ────────────────────────────────────────────────
+  "BTC-USD":1,"ETH-USD":2,"XRP-USD":3,"BNB-USD":4,"SOL-USD":5,
+  "DOGE-USD":7,"ADA-USD":9,"AVAX-USD":11,"LINK-USD":13,"DOT-USD":16,
+  "LTC-USD":19,"NEAR-USD":18,"SUI20947-USD":22,"UNI7083-USD":21,
+  "ATOM-USD":27,"ARB-USD":38,"INJ-USD":47,"OP-USD":50,
+  // ── US Stocks (market cap mondial) ────────────────────────────────────────
+  NVDA:1,AAPL:2,MSFT:3,AMZN:4,GOOGL:5,GOOG:5,META:6,TSLA:7,
+  AVGO:8,TSM:9,LLY:10,JPM:11,V:12,MA:13,UNH:14,WMT:15,
+  XOM:16,HD:17,BAC:18,PG:19,COST:20,MRK:21,ABBV:22,KO:23,
+  MCD:24,NFLX:25,ADBE:26,AMD:27,CRM:28,QCOM:29,NOW:30,
+  GS:31,MS:32,SPGI:33,BLK:34,RTX:35,DE:36,CAT:37,BA:38,
+  LMT:39,GE:40,DIS:41,SBUX:42,NKE:43,PYPL:44,UBER:45,
+  COIN:50,PLTR:42,ARM:36,SMCI:55,ABNB:60,TXN:25,HON:38,
+  // ── Europe (market cap européen) ──────────────────────────────────────────
+  "ASML":1,"MC.PA":2,"NOVN.SW":3,"NESN.SW":4,"SAP":5,
+  "OR.PA":6,"RO.SW":7,"TTE.PA":8,"SU.PA":9,"AIR.PA":10,
+  "SIE.DE":11,"ALV.DE":12,"BNP.PA":13,"ACA.PA":14,"DG.PA":15,
+  "BMW.DE":16,"VOW3.DE":17,"BAYN.DE":18,"BAS.DE":19,"ADS.DE":20,
+  "GLE.PA":21,"SAN.PA":22,"HO.PA":23,"CS.PA":24,"DTE.DE":25,
+  "AI.PA":26,"KER.PA":27,"STLA":28,
+  "HSBA.L":1,"SHEL.L":2,"BP.L":3,"GSK.L":4,"RIO.L":5,
+  "7203.T":1,"6758.T":2,"9984.T":3,
+  "005930.KS":1,BABA:1,TCEHY:2,
+  // ── ETF (AUM) ─────────────────────────────────────────────────────────────
+  SPY:1,VTI:2,QQQ:3,VEA:4,AGG:5,VWO:6,GLD:7,IWM:8,
+  IBIT:9,TLT:10,XLF:11,XLE:12,VNQ:13,XLK:14,XLV:15,
+  XLI:16,EEM:17,FBTC:18,ACWI:19,EWJ:20,HYG:21,SLV:22,ARKK:23,
+  "CW8.PA":1,"EWLD.PA":2,"ESE.PA":3,"PANX.PA":4,
+};
+
 function ChartContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
@@ -372,13 +404,16 @@ function ChartContent() {
   const [subOpen, setSubOpen] = useState(false);
   const [subTab, setSubTab] = useState<SubTab>("drawdown");
   const [activePeriod, setActivePeriod] = useState("Max");
-  const [visibleRange, setVisibleRange]   = useState<{from:number;to:number}|null>(null);
+  const [visibleRange, setVisibleRange]   = useState<{from:string;to:string}|null>(null);
   const [crosshairTime, setCrosshairTime] = useState<number|null>(null);
   const [chartPriceData, setChartPriceData] = useState<{date:string;value:number;high?:number;low?:number}[]>([]);
   const [showCustom,    setShowCustom]    = useState(false);
   const [copied,        setCopied]        = useState(false);
   const [chartViewMode, setChartViewMode] = useState<"line" | "candle">("line");
   const [extractedColor, setExtractedColor] = useState<string | null>(null);
+  const [displayCurrency,   setDisplayCurrency]   = useState<string | null>(null);
+  const [showCurrencyMenu,  setShowCurrencyMenu]  = useState(false);
+  const [fxRates,           setFxRates]           = useState<Record<string, number>>({ USD: 1 });
 
   // Reset extracted colour whenever the viewed asset changes
   useEffect(() => { setExtractedColor(null); }, [ticker]);
@@ -512,6 +547,29 @@ function ChartContent() {
       .catch(() => {});
   }, [ticker]);
 
+  // Initialise la devise affichée depuis la devise native de l'actif
+  useEffect(() => {
+    if (quote?.currency) setDisplayCurrency(quote.currency);
+  }, [quote?.currency]);
+
+  // Taux de change (open.er-api.com, gratuit, sans auth)
+  useEffect(() => {
+    fetch("https://open.er-api.com/v6/latest/USD")
+      .then(r => r.json())
+      .then(d => { if (d.rates) setFxRates({ USD: 1, ...d.rates }); })
+      .catch(() => {});
+  }, []);
+
+  // Multiplicateur pour convertir prix natif → devise choisie
+  const fxMultiplier = useMemo(() => {
+    const native = quote?.currency ?? "USD";
+    const target = displayCurrency ?? native;
+    if (target === native) return 1;
+    const rNative = native === "USD" ? 1 : (fxRates[native] ?? 1);
+    const rTarget = target === "USD" ? 1 : (fxRates[target] ?? 1);
+    return rTarget / rNative;
+  }, [displayCurrency, quote?.currency, fxRates]);
+
   const portfolioData = useMemo(() => {
     if (!ticker || !rawPortfolioGrowth.length) return rawPortfolioGrowth;
     const anchor = currentPrice?.price;
@@ -555,11 +613,8 @@ function ChartContent() {
   // Sub-chart data filtered by visible range (synced from main chart scroll)
   const subChartFilter = useMemo((): { from: string | null; to: string | null } => {
     if (visibleRange) {
-      const diffMs = (visibleRange.to - visibleRange.from) * 1000;
-      if (diffMs >= 2 * 86400 * 1000) return {
-        from: new Date(visibleRange.from * 1000).toISOString().slice(0, 10),
-        to:   new Date(visibleRange.to   * 1000).toISOString().slice(0, 10),
-      };
+      const diffMs = (new Date(visibleRange.to).getTime() - new Date(visibleRange.from).getTime());
+      if (diffMs >= 2 * 86400 * 1000) return { from: visibleRange.from, to: visibleRange.to };
       return { from: getCutoffDate(91), to: null };
     }
     const days = SUB_PERIOD_DAYS[activePeriod] ?? null;
@@ -595,6 +650,7 @@ function ChartContent() {
     () => ticker && dailyChartData.length > 0 ? computeDrawdownFromPrices(dailyChartData) : null,
     [ticker, dailyChartData]
   );
+
 
   const subData = useMemo((): { date: string; value: number }[] => {
     if (subTab === "drawdown") {
@@ -641,7 +697,7 @@ function ChartContent() {
 
   // ── metaCards hoisted so leftSlot can access it outside the header IIFE ──────
   const _EXCH: Record<string,string> = {
-    NMS:"Nasdaq GS", NMQ:"Nasdaq", NYQ:"NYSE", PAR:"Euronext Paris",
+    NMS:"Nasdaq GS", NMQ:"Nasdaq", NYQ:"NYSE", NYSEArca:"NYSE Arca", PAR:"Euronext Paris",
     GER:"Xetra", LSE:"London SE", MCE:"Madrid", AMS:"Amsterdam", MIL:"Milan", SWX:"SIX Swiss",
   };
   const _fmtN = (v: number) => v < 1
@@ -649,17 +705,26 @@ function ChartContent() {
     : v.toLocaleString("en-US",{minimumFractionDigits:2,maximumFractionDigits:2});
   const _fmtV = (v: number) => v > 1e9 ? (v/1e9).toFixed(1)+"B" : v > 1e6 ? (v/1e6).toFixed(1)+"M" : v > 1e3 ? (v/1e3).toFixed(0)+"K" : String(v);
   const _fmtC = (v: number) => v > 1e12 ? (v/1e12).toFixed(2)+"T" : v > 1e9 ? (v/1e9).toFixed(1)+"B" : (v/1e6).toFixed(0)+"M";
-  const metaCards = ticker ? [
-    assetInfo?.exchange && { label:"Exchange", value: _EXCH[assetInfo.exchange] || assetInfo.exchange },
-    assetInfo?.type     && { label:"Type",     value: ({"EQUITY":"Action","ETF":"ETF","INDEX":"Indice","CRYPTOCURRENCY":"Crypto"} as Record<string,string>)[assetInfo.type] || assetInfo.type },
-    quote?.currency     && { label:"Devise",   value: quote.currency },
-    quote?.open      != null && { label:"Ouv",    value: _fmtN(quote.open!) },
-    quote?.day_high  != null && { label:"Haut",   value: _fmtN(quote.day_high!) },
-    quote?.day_low   != null && { label:"Bas",    value: _fmtN(quote.day_low!) },
-    quote?.volume    != null && { label:"Vol",    value: _fmtV(quote.volume!) },
-    quote?.market_cap!= null && { label:"Cap",    value: _fmtC(quote.market_cap!) },
-    (quote?.year_low != null && quote?.year_high != null) && { label:"52 sem", value: `${_fmtN(quote.year_low!)} – ${_fmtN(quote.year_high!)}` },
-  ].filter(Boolean) as {label:string;value:string}[] : [];
+  const metaCards = ticker ? (() => {
+    const aType = assetInfo?.type;
+    const isIdx = aType === "INDEX";
+    const isEtf = aType === "ETF";
+    const isCrp = aType === "CRYPTOCURRENCY";
+    const exchVal = (isIdx || isCrp)
+      ? null
+      : (assetInfo?.exchange ? (_EXCH[assetInfo.exchange] || assetInfo.exchange) : null);
+    return [
+      exchVal                                               && { label:"Exchange", value: exchVal },
+      aType                                                 && { label:"Type",     value: ({"EQUITY":"Action","ETF":"ETF","INDEX":"Indice","CRYPTOCURRENCY":"Crypto"} as Record<string,string>)[aType] || aType },
+      quote?.currency                                       && { label:"Devise",   value: quote.currency },
+      quote?.open      != null                              && { label:"Ouv",      value: _fmtN(quote.open!) },
+      quote?.day_high  != null                              && { label:"Haut",     value: _fmtN(quote.day_high!) },
+      quote?.day_low   != null                              && { label:"Bas",      value: _fmtN(quote.day_low!) },
+      !isIdx && quote?.volume    != null                    && { label:"Vol",      value: _fmtV(quote.volume!) },
+      !isIdx && quote?.market_cap != null                   && { label: isEtf ? "AUM" : "Cap", value: _fmtC(quote.market_cap!) },
+      (quote?.year_low != null && quote?.year_high != null) && { label:"52 sem",  value: `${_fmtN(quote.year_low!)} – ${_fmtN(quote.year_high!)}` },
+    ].filter(Boolean) as {label:string;value:string}[];
+  })() : [];
 
   return (
     <div style={{ height:"100vh", background:"#041124", color:"#F8F9FC", fontFamily:"-apple-system,BlinkMacSystemFont,sans-serif", display:"flex", flexDirection:"column", position:"relative", overflow:"hidden" }}>
@@ -672,37 +737,29 @@ function ChartContent() {
             ? ticker.replace(/-USD$/,"").replace(/[0-9]+$/,"").replace(/\.[A-Z]{1,3}$/,"").replace(/^\^/,"")
             : "";
           const EXCH: Record<string,string> = {
-            NMS:"Nasdaq GS", NMQ:"Nasdaq", NYQ:"NYSE", PAR:"Euronext Paris",
+            NMS:"Nasdaq GS", NMQ:"Nasdaq", NYQ:"NYSE", NYSEArca:"NYSE Arca", PAR:"Euronext Paris",
             GER:"Xetra", LSE:"London SE", MCE:"Madrid", AMS:"Amsterdam", MIL:"Milan", SWX:"SIX Swiss",
-          };
-          const TYPE_LBL: Record<string,string> = {
-            EQUITY:"Action", ETF:"ETF", INDEX:"Indice", CRYPTOCURRENCY:"Crypto",
           };
           const fmtNum = (v: number) => v < 1
             ? v.toLocaleString("en-US",{minimumFractionDigits:4,maximumFractionDigits:4})
             : v.toLocaleString("en-US",{minimumFractionDigits:2,maximumFractionDigits:2});
-          const fmtVol = (v: number) => v > 1e9 ? (v/1e9).toFixed(1)+"B" : v > 1e6 ? (v/1e6).toFixed(1)+"M" : v > 1e3 ? (v/1e3).toFixed(0)+"K" : String(v);
-          const fmtCap = (v: number) => v > 1e12 ? (v/1e12).toFixed(2)+"T" : v > 1e9 ? (v/1e9).toFixed(1)+"B" : (v/1e6).toFixed(0)+"M";
 
-          // Market open check (NYSE/Nasdaq 9h30–16h ET)
+          // Market open — per exchange timezone
           const now = new Date();
-          const nyParts = new Intl.DateTimeFormat("en-US",{timeZone:"America/New_York",weekday:"short",hour:"numeric",minute:"2-digit",hour12:false}).formatToParts(now);
-          const nyWd = nyParts.find(p=>p.type==="weekday")?.value??"";
-          const nyH  = parseInt(nyParts.find(p=>p.type==="hour")?.value??"0");
-          const nyM  = parseInt(nyParts.find(p=>p.type==="minute")?.value??"0");
-          const isOpen = nyWd!=="Sat" && nyWd!=="Sun" && (nyH*60+nyM)>=570 && (nyH*60+nyM)<960;
-
-          const metaCards = ticker ? [
-            assetInfo?.exchange && { label:"Exchange", value: EXCH[assetInfo.exchange] || assetInfo.exchange },
-            assetInfo?.type     && { label:"Type",     value: TYPE_LBL[assetInfo.type] || assetInfo.type },
-            quote?.currency     && { label:"Devise",   value: quote.currency },
-            quote?.open      != null && { label:"Ouv",   value: fmtNum(quote.open!) },
-            quote?.day_high  != null && { label:"Haut",  value: fmtNum(quote.day_high!) },
-            quote?.day_low   != null && { label:"Bas",   value: fmtNum(quote.day_low!) },
-            quote?.volume    != null && { label:"Vol",   value: fmtVol(quote.volume!) },
-            quote?.market_cap!= null && { label:"Cap",   value: fmtCap(quote.market_cap!) },
-            (quote?.year_low != null && quote?.year_high != null) && { label:"52 sem", value: `${fmtNum(quote.year_low!)} – ${fmtNum(quote.year_high!)}` },
-          ].filter(Boolean) as {label:string;value:string}[] : [];
+          const EXCH_HOURS: Record<string,{tz:string;o:number;c:number}> = {
+            NMS:{tz:"America/New_York",o:570,c:960},NMQ:{tz:"America/New_York",o:570,c:960},
+            NYQ:{tz:"America/New_York",o:570,c:960},NYSEArca:{tz:"America/New_York",o:570,c:960},
+            PAR:{tz:"Europe/Paris",o:540,c:1050},GER:{tz:"Europe/Berlin",o:540,c:1050},
+            LSE:{tz:"Europe/London",o:480,c:990},SWX:{tz:"Europe/Zurich",o:540,c:1050},
+            MCE:{tz:"Europe/Madrid",o:540,c:1050},AMS:{tz:"Europe/Amsterdam",o:540,c:1050},
+            MIL:{tz:"Europe/Rome",o:540,c:1050},
+          };
+          const exchH = assetInfo?.exchange ? (EXCH_HOURS[assetInfo.exchange] ?? EXCH_HOURS.NMS) : EXCH_HOURS.NMS;
+          const exParts = new Intl.DateTimeFormat("en-US",{timeZone:exchH.tz,weekday:"short",hour:"numeric",minute:"2-digit",hour12:false}).formatToParts(now);
+          const exWd = exParts.find(p=>p.type==="weekday")?.value??"";
+          const exH  = parseInt(exParts.find(p=>p.type==="hour")?.value??"0");
+          const exM  = parseInt(exParts.find(p=>p.type==="minute")?.value??"0");
+          const isOpen = exWd!=="Sat" && exWd!=="Sun" && (exH*60+exM)>=exchH.o && (exH*60+exM)<exchH.c;
 
           const up = currentPrice ? currentPrice.change >= 0 : true;
 
@@ -712,7 +769,6 @@ function ChartContent() {
                 @keyframes hdr-glow-up{0%,100%{box-shadow:0 0 6px rgba(34,197,94,.15)}50%{box-shadow:0 0 14px rgba(34,197,94,.35)}}
                 @keyframes hdr-glow-dn{0%,100%{box-shadow:0 0 6px rgba(239,68,68,.15)}50%{box-shadow:0 0 14px rgba(239,68,68,.35)}}
                 @keyframes hdr-pulse{0%,100%{box-shadow:0 0 0 0 rgba(34,197,94,.7)}60%{box-shadow:0 0 0 5px rgba(34,197,94,0)}}
-                @keyframes hdr-pulse-red{0%,100%{box-shadow:0 0 0 0 rgba(239,68,68,.7)}60%{box-shadow:0 0 0 5px rgba(239,68,68,0)}}
                 @keyframes hdr-pulse-live{0%,100%{box-shadow:0 0 0 0 rgba(34,197,94,.9)}50%{box-shadow:0 0 0 6px rgba(34,197,94,0)}}
               `}</style>
               <div style={{ display:"flex", flexDirection:"column", padding:"11px 20px 9px", borderBottom:"1px solid rgba(255,255,255,0.06)", flexShrink:0, gap:8 }}>
@@ -733,57 +789,57 @@ function ChartContent() {
                           onColorExtracted={c => { if (!BRAND_COLORS[ticker]) setExtractedColor(c); }}
                         />
                         <div>
-                          {/* Line 1 — ticker · price · currency · badge */}
-                          <div style={{ display:"flex", alignItems:"baseline", gap:7, flexWrap:"nowrap" }}>
-                            <span style={{ fontSize:21, fontWeight:800, color:"#F8F9FC", letterSpacing:"-0.03em", lineHeight:1 }}>
+                          {/* Line 1 — ticker · prix · variation  (même taille, même ligne) */}
+                          <div style={{ display:"flex", alignItems:"baseline", gap:10, flexWrap:"nowrap" }}>
+                            <span style={{ fontSize:20, fontWeight:800, color:"#F8F9FC", letterSpacing:"-0.03em", lineHeight:1 }}>
                               {displayTicker}
                             </span>
                             {currentPrice && (
                               <>
-                                <span style={{ fontSize:17, fontWeight:700, color:"#F8F9FC", letterSpacing:"-0.02em", fontVariantNumeric:"tabular-nums" }}>
+                                <span style={{ width:1, height:14, background:"rgba(255,255,255,0.3)", flexShrink:0, alignSelf:"center" }}/>
+                                <span style={{ fontSize:20, fontWeight:700, color:"#F8F9FC", letterSpacing:"-0.03em", fontVariantNumeric:"tabular-nums", lineHeight:1 }}>
                                   {fmtNum(currentPrice.price)}
                                 </span>
-                                <span style={{ fontSize:10, color:"rgba(255,255,255,0.28)", letterSpacing:"0.04em", alignSelf:"center" }}>
-                                  {quote?.currency || "USD"}
+                                <span style={{ fontSize:11, fontWeight:600, color: up ? "#4ade80" : "#ef4444", letterSpacing:"-0.01em", fontVariantNumeric:"tabular-nums", lineHeight:1 }}>
+                                  {up ? "▲" : "▼"}{" "}
+                                  {fmtNum(Math.abs(quote?.prev_close ? currentPrice.price - quote.prev_close : currentPrice.price * currentPrice.change / 100))}{" "}
+                                  {up ? "+" : "–"}{Math.abs(currentPrice.change).toFixed(2)}%
                                 </span>
-                                <div style={{
-                                  background: up ? "rgba(34,197,94,0.14)" : "rgba(239,68,68,0.14)",
-                                  border: `1px solid ${up ? "rgba(34,197,94,0.35)" : "rgba(239,68,68,0.35)"}`,
-                                  animation: up ? "hdr-glow-up 4s ease-in-out infinite" : "hdr-glow-dn 4s ease-in-out infinite",
-                                  borderRadius:6, padding:"3px 9px", alignSelf:"center",
-                                  color: up ? "#4ade80" : "#f87171", fontSize:11, fontWeight:700,
-                                  letterSpacing:"-0.01em", fontVariantNumeric:"tabular-nums",
-                                }}>
-                                  {up ? "▲" : "▼"} {Math.abs(currentPrice.change).toFixed(2)}%
-                                </div>
                               </>
                             )}
                           </div>
-                          {/* Line 2 — company · exchange · market status */}
-                          <div style={{ display:"flex", alignItems:"center", gap:7, marginTop:4 }}>
-                            <span style={{ fontSize:11, color:"rgba(255,255,255,0.36)", lineHeight:1 }}>
+                          {/* Line 2 — tout statique + statut, même taille, même couleur */}
+                          <div style={{ display:"flex", alignItems:"center", gap:5, marginTop:5 }}>
+                            <span style={{ fontSize:11, color:"rgba(255,255,255,0.33)", lineHeight:1, letterSpacing:"0.01em" }}>
                               {assetInfo?.name || ticker}
-                              {assetInfo?.exchange ? ` · ${EXCH[assetInfo.exchange] || assetInfo.exchange}` : ""}
+                              {(() => {
+                                if (!ticker || ASSET_RANK[ticker] == null || assetInfo?.type === "INDEX") return null;
+                                const lbl = ({"EQUITY":"Action","ETF":"ETF","CRYPTOCURRENCY":"Crypto"} as Record<string,string>)[assetInfo?.type ?? ""];
+                                return lbl ? ` · #${ASSET_RANK[ticker]} ${lbl}` : null;
+                              })()}
                             </span>
+                            <span style={{ color:"rgba(255,255,255,0.15)", fontSize:11 }}>·</span>
                             {!isCrypto && (
-                              <span style={{ display:"flex", alignItems:"center", gap:5, flexShrink:0 }}>
-                                <span style={{
-                                  width:6, height:6, borderRadius:"50%", display:"inline-block",
-                                  background: isOpen ? "#22c55e" : "#ef4444",
-                                  animation: isOpen ? "hdr-pulse 2s ease-in-out infinite" : "hdr-pulse-red 2s ease-in-out infinite",
-                                }}/>
-                                <span style={{ fontSize:9, letterSpacing:"0.06em", color: isOpen ? "#4ade80" : "#f87171" }}>
+                              <span style={{ display:"flex", alignItems:"center", gap:4, flexShrink:0 }}>
+                                <span style={{ width:5, height:5, borderRadius:"50%", display:"inline-block", background: isOpen ? "#22c55e" : "#64748b", animation: isOpen ? "hdr-pulse 2s ease-in-out infinite" : "none", flexShrink:0 }}/>
+                                <span style={{ fontSize:10, letterSpacing:"0.05em", color: isOpen ? "#4ade80" : "#64748b" }}>
                                   {isOpen ? "Marché ouvert" : "Marché fermé"}
                                 </span>
+                                {isOpen && (
+                                  <span style={{ fontSize:9, color:"rgba(255,255,255,0.2)", letterSpacing:"0.04em" }}>↻ 60s</span>
+                                )}
                               </span>
                             )}
-                            {isCrypto && wsLive && (
-                              <span style={{ display:"flex", alignItems:"center", gap:5, flexShrink:0 }}>
-                                <span style={{ width:6, height:6, borderRadius:"50%", background:"#22c55e", display:"inline-block", animation:"hdr-pulse-live 1.5s ease-in-out infinite" }}/>
-                                <span style={{ fontSize:9, color:"#4ade80", letterSpacing:"0.06em" }}>LIVE</span>
+                            {isCrypto && (
+                              <span style={{ display:"flex", alignItems:"center", gap:4, flexShrink:0 }}>
+                                <span style={{ width:5, height:5, borderRadius:"50%", background:"#22c55e", display:"inline-block", animation:"hdr-pulse-live 1.5s ease-in-out infinite", flexShrink:0 }}/>
+                                <span style={{ fontSize:10, color:"#4ade80", letterSpacing:"0.05em" }}>LIVE</span>
                               </span>
                             )}
                           </div>
+                        </div>
+                        <div style={{ width:26, height:26, borderRadius:7, border:"1px solid rgba(255,255,255,0.12)", display:"flex", alignItems:"center", justifyContent:"center", cursor:"not-allowed", flexShrink:0 }} title="Ajouter un benchmark (bientôt disponible)">
+                          <svg width="10" height="10" viewBox="0 0 10 10" fill="none"><path d="M5 1v8M1 5h8" stroke="rgba(255,255,255,0.25)" strokeWidth="1.5" strokeLinecap="round"/></svg>
                         </div>
                       </div>
                     )}
@@ -838,7 +894,7 @@ function ChartContent() {
           {!loading && !error && portfolioData.length > 0 && (
             <>
               {/* Main chart */}
-              <div style={{ background:"rgba(255,255,255,0.02)", border:"1px solid rgba(255,255,255,0.06)", borderRadius:"16px", padding:"14px 18px 10px", flex:"1 1 0", minHeight:220, display:"flex", flexDirection:"column", position:"relative", overflow:"hidden" }}>
+              <div style={{ border:"1px solid rgba(255,255,255,0.06)", borderRadius:"16px", padding:"14px 18px 10px", flex:"1 1 0", minHeight:220, display:"flex", flexDirection:"column", position:"relative", overflow:"hidden", background:"rgba(255,255,255,0.02)" }}>
                 <GrowthChart
                   portfolioData={scaledPortfolioData}
                   benchmarkData={scaledBenchmarkData}
@@ -854,8 +910,10 @@ function ChartContent() {
                   dark={true}
                   priceMode={!!ticker}
                   hideDrawdown={true}
+                  dailyChangePct={currentPrice?.change ?? null}
+                  openPrice={quote?.open ?? null}
                   onPeriodChange={setActivePeriod}
-                  onVisibleRangeChange={(from, to) => setVisibleRange(from && to ? { from, to } : null)}
+                  onVisibleRangeChange={(from, to) => setVisibleRange(from && to ? { from: new Date(from*1000).toISOString().slice(0,10), to: new Date(to*1000).toISOString().slice(0,10) } : null)}
                   onCrosshairMove={(t) => setCrosshairTime(t)}
                   onAdaptiveData={setChartPriceData}
                   leftSlot={metaCards.length > 0 ? (
@@ -1006,7 +1064,6 @@ function ChartContent() {
                         type={subTab as import("@/components/charts/SubChart").SubChartType}
                         data={subData}
                         visibleRange={visibleRange}
-                        crosshairTime={crosshairTime}
                         height={200}
                       />
                     ) : (

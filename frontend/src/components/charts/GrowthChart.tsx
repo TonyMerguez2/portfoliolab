@@ -11,34 +11,43 @@ import {
   ResponsiveContainer, ReferenceLine, Customized,
 } from "recharts";
 
-const PERIOD_CONFIG: Record<string, { apiPeriod: string; interval: string }> = {
-  "1H":  { apiPeriod: "7d",  interval: "1m"  },
-  "24h": { apiPeriod: "5d",  interval: "5m"  },
-  "1S":  { apiPeriod: "7d",  interval: "5m"  },
-  "1M":  { apiPeriod: "60d", interval: "15m" },
-  "3M":  { apiPeriod: "max", interval: "1h"  },
-  "6M":  { apiPeriod: "max", interval: "1d"  },
-  "1A":  { apiPeriod: "max", interval: "1d"  },
-  "3A":  { apiPeriod: "max", interval: "1d"  },
-  "Max": { apiPeriod: "max", interval: "1d"  },
+// Fetch config par intervalle — charge tout le disponible Yahoo en un seul fetch
+const INTERVAL_FETCH_CONFIG: Record<string, { apiPeriod: string; apiInterval: string }> = {
+  "1m":  { apiPeriod: "7d",  apiInterval: "1m"  },
+  "5m":  { apiPeriod: "60d", apiInterval: "5m"  },
+  "15m": { apiPeriod: "60d", apiInterval: "15m" },
+  "1h":  { apiPeriod: "max", apiInterval: "60m" },
+  "1d":  { apiPeriod: "max", apiInterval: "1d"  },
+  "1W":  { apiPeriod: "max", apiInterval: "1wk" },
 };
 
-const PERIOD_CONFIG_CANDLE: Record<string, { apiPeriod: string; interval: string }> = {
-  "1H":  { apiPeriod: "7d",  interval: "1m"  },
-  "24h": { apiPeriod: "5d",  interval: "5m"  },
-  "1S":  { apiPeriod: "1mo", interval: "30m" },
-  "1M":  { apiPeriod: "60d", interval: "1h"  },
-  "3M":  { apiPeriod: "max", interval: "1d"  },
-  "6M":  { apiPeriod: "max", interval: "1d"  },
-  "1A":  { apiPeriod: "max", interval: "1d"  },
-  "3A":  { apiPeriod: "max", interval: "1d"  },
-  "Max": { apiPeriod: "max", interval: "1d"  },
+// Intervalles disponibles selon la fenêtre de la période
+const PERIOD_ALLOWED_INTERVALS: Record<string, string[]> = {
+  "24h": ["1m", "5m", "15m"],
+  "1S":  ["5m", "15m", "1h"],
+  "1M":  ["5m", "15m", "1h", "1d"],
+  "3M":  ["15m", "1h", "1d"],
+  "6M":  ["1h", "1d", "1W"],
+  "1A":  ["1h", "1d", "1W"],
+  "3A":  ["1d", "1W"],
+  "Max": ["1d", "1W"],
+};
+
+// Intervalle par défaut lors d'un changement de période
+const PERIOD_DEFAULT_INTERVAL: Record<string, string> = {
+  "24h": "5m",
+  "1S":  "15m",
+  "1M":  "1h",
+  "3M":  "1h",
+  "6M":  "1d",
+  "1A":  "1d",
+  "3A":  "1d",
+  "Max": "1d",
 };
 
 // Durée visible initialement (en secondes) pour chaque période.
 // setVisibleRange cadre la fenêtre ; les données hors fenêtre sont scrollables.
 const PERIOD_VISIBLE_SECS: Record<string, number> = {
-  "1H":  3600,
   "24h": 86400,
   "1S":  7   * 86400,
   "1M":  30  * 86400,
@@ -50,58 +59,6 @@ const PERIOD_VISIBLE_SECS: Record<string, number> = {
 
 interface DataPoint { date: string; [key: string]: number | string; }
 
-// ─── Market phase zone primitive ─────────────────────────────────────────────
-type ZoneType = "bull" | "bear" | "consolidation";
-interface Zone { id: string; startTime: UTCTimestamp; endTime: UTCTimestamp; type: ZoneType; }
-
-const ZONE_COLORS: Record<ZoneType, string> = {
-  bull:          "rgba(34,197,94,0.13)",
-  bear:          "rgba(239,68,68,0.13)",
-  consolidation: "rgba(251,146,60,0.13)",
-};
-const ZONE_BORDER: Record<ZoneType, string> = {
-  bull:          "rgba(34,197,94,0.35)",
-  bear:          "rgba(239,68,68,0.35)",
-  consolidation: "rgba(251,146,60,0.35)",
-};
-
-class ZonesRenderer {
-  constructor(private _zones: Zone[], private _chart: IChartApi) {}
-  draw() {}
-  drawBackground(target: any) {
-    target.useMediaCoordinateSpace((scope: any) => {
-      const { context: ctx, mediaSize } = scope;
-      const ts = this._chart.timeScale();
-      for (const z of this._zones) {
-        const x1 = ts.timeToCoordinate(z.startTime as any);
-        const x2 = ts.timeToCoordinate(z.endTime   as any);
-        if (x1 === null || x2 === null) continue;
-        const left  = Math.min(x1, x2);
-        const width = Math.abs(x2 - x1);
-        ctx.fillStyle = ZONE_COLORS[z.type];
-        ctx.fillRect(left, 0, width, mediaSize.height);
-        // left border line
-        ctx.fillStyle = ZONE_BORDER[z.type];
-        ctx.fillRect(left, 0, 2, mediaSize.height);
-        ctx.fillRect(left + width - 2, 0, 2, mediaSize.height);
-      }
-    });
-  }
-}
-
-class ZonesPrimitiveView {
-  constructor(private _zones: Zone[], private _chart: IChartApi) {}
-  zOrder() { return "bottom" as const; }
-  renderer() { return new ZonesRenderer(this._zones, this._chart); }
-}
-
-class ZonesPrimitive {
-  private _zones: Zone[] = [];
-  constructor(private _chart: IChartApi) {}
-  updateZones(zones: Zone[]) { this._zones = [...zones]; }
-  updateAllViews() {}
-  paneViews() { return [new ZonesPrimitiveView(this._zones, this._chart)]; }
-}
 
 interface Props {
   portfolioData: DataPoint[];
@@ -128,10 +85,52 @@ interface Props {
   percentMode?: boolean;
   priceMode?: boolean;
   hideDrawdown?: boolean;
+  dailyChangePct?: number | null;
+  openPrice?: number | null;
 }
 
 function toTs(d: string): UTCTimestamp {
   return Math.floor(new Date(d).getTime() / 1000) as UTCTimestamp;
+}
+
+// Calcul de perf partagé entre légende chart et boutons période
+// → garantit que bouton et légende affichent exactement la même valeur
+function computePerfForPeriod(
+  period: string,
+  adaptiveData: { date: string; value: number }[],
+  portfolioData: DataPoint[],
+  isIntradayInterval: boolean,
+): { first: number; last: number } | null {
+  const visibleSecs = (PERIOD_VISIBLE_SECS as Record<string, number | undefined>)[period] ?? null;
+
+  if (isIntradayInterval && adaptiveData.length >= 2) {
+    const adaptiveLast = adaptiveData[adaptiveData.length - 1].value;
+    const liveLast = portfolioData.length > 0
+      ? portfolioData[portfolioData.length - 1].value as number
+      : adaptiveLast;
+
+    if (visibleSecs) {
+      const nowSec  = Math.floor(Date.now() / 1000);
+      const lastTs  = toTs(adaptiveData[adaptiveData.length - 1].date);
+      const toSec   = nowSec - lastTs > visibleSecs / 2 ? lastTs : nowSec;
+      const fromSec = toSec - visibleSecs;
+      const fp = adaptiveData.find(p => toTs(p.date) >= fromSec);
+      // fp not found = adaptiveData doesn't cover this period → fall through to daily branch
+      if (fp) return { first: fp.value, last: liveLast };
+    } else {
+      return { first: adaptiveData[0].value, last: liveLast };
+    }
+  }
+
+  // Intervalle daily/weekly ou mode portfolio
+  const cutStr = visibleSecs
+    ? new Date(Date.now() - visibleSecs * 1000).toISOString().slice(0, 10)
+    : null;
+  const pts = cutStr
+    ? portfolioData.filter(p => p.date >= cutStr)
+    : portfolioData;
+  if (pts.length < 2) return null;
+  return { first: pts[0].value as number, last: pts[pts.length - 1].value as number };
 }
 
 function dedup<T extends { time: UTCTimestamp }>(arr: T[]): T[] {
@@ -146,7 +145,7 @@ function dedup<T extends { time: UTCTimestamp }>(arr: T[]): T[] {
 function getCutoffStr(p: string): string | null {
   if (p === "Max") return null;
   const now = new Date();
-  const days: Record<string, number> = { "1H":1, "24h":1, "1S":14, "1M":31, "3M":91, "6M":183, "1A":365, "3A":1095 };
+  const days: Record<string, number> = { "24h":1, "1S":14, "1M":31, "3M":91, "6M":183, "1A":365, "3A":1095 };
   if (!days[p]) return null;
   now.setDate(now.getDate() - days[p]);
   return now.toISOString().slice(0, 10);
@@ -194,6 +193,16 @@ function aggMonthly(pts: OHLCPt[]): OHLCPt[] {
   return aggregateCandles(pts, d => d.toISOString().slice(0, 7));
 }
 
+// ─── Grid presets ─────────────────────────────────────────────────────────────
+type GridPreset = "none" | "minimal" | "standard" | "solid";
+
+const GRID_PRESETS: Record<GridPreset, { color: string; style: LineStyle; label: string }> = {
+  none:     { color: "rgba(255,255,255,0)",    style: LineStyle.Dashed, label: "Aucune"   },
+  minimal:  { color: "rgba(255,255,255,0.03)", style: LineStyle.Dashed, label: "Minimal"  },
+  standard: { color: "rgba(255,255,255,0.06)", style: LineStyle.Dashed, label: "Standard" },
+  solid:    { color: "rgba(255,255,255,0.10)", style: LineStyle.Solid,  label: "Solide"   },
+};
+
 export default function GrowthChart({
   portfolioData, benchmarkData, benchmarkName, portfolioLabel,
   drawdownData, ticker, portfolioColor = "#4f46e5",
@@ -201,10 +210,11 @@ export default function GrowthChart({
   chartMode: chartModeProp, onChartModeChange, rightSlot, leftSlot,
   onExitFullscreen, onPeriodChange, onVisibleRangeChange, onCrosshairMove, onAdaptiveData,
   dark = false, percentMode = false, priceMode = false,
-  hideDrawdown = false,
+  hideDrawdown = false, dailyChangePct = null, openPrice = null,
 }: Props) {
 
-  const [periodFilter, setPeriodFilter] = useState<"1H"|"24h"|"1S"|"1M"|"3M"|"6M"|"1A"|"3A"|"Max">("Max");
+  const [periodFilter, setPeriodFilter] = useState<"24h"|"1S"|"1M"|"3M"|"6M"|"1A"|"3A"|"Max">("Max");
+  const [intervalKey,  setIntervalKey]  = useState<"1m"|"5m"|"15m"|"1h"|"1d"|"1W">("1d");
   const [chartModeInternal, setChartModeInternal] = useState<"line"|"candle">("line");
   const chartMode = chartModeProp ?? chartModeInternal;
   const setChartMode = (fn: ((m: "line"|"candle") => "line"|"candle") | "line" | "candle") => {
@@ -218,6 +228,18 @@ export default function GrowthChart({
   }[]>([]);
   const [fullscreen, setFullscreen] = useState(false);
   const [chartError, setChartError] = useState<string | null>(null);
+
+  // Grid customization
+  const [gridPreset, setGridPreset] = useState<GridPreset>(() => {
+    try { return (localStorage.getItem("novac_grid_preset") as GridPreset) || "standard"; } catch { return "standard"; }
+  });
+  const [showHorz, setShowHorz] = useState(() => {
+    try { return localStorage.getItem("novac_grid_horz") !== "false"; } catch { return true; }
+  });
+  const [showVert, setShowVert] = useState(() => {
+    try { return localStorage.getItem("novac_grid_vert") !== "false"; } catch { return true; }
+  });
+  const [showGridPicker, setShowGridPicker] = useState(false);
 
   // Hover state for custom tooltip
   const [hoverPrice,   setHoverPrice]   = useState<number | null>(null);
@@ -234,26 +256,10 @@ export default function GrowthChart({
   const candleSeriesRef    = useRef<ISeriesApi<"Candlestick"> | null>(null);
   const benchmarkSeriesRef = useRef<ISeriesApi<"Line"> | null>(null);
   const chartModeRef      = useRef(chartMode);
-  const chartModeForFetch = useRef(chartMode);
   const prevChartModeRef  = useRef(chartMode);
   const isMountedRef      = useRef(false);
   const [fetchKey, setFetchKey] = useState(0);
 
-  // Zone annotation state
-  const [zones, setZones] = useState<Zone[]>([]);
-  const [activeZoneTool, setActiveZoneTool] = useState<ZoneType | null>(null);
-  const [drawingStep, setDrawingStep] = useState<0 | 1>(0); // 0=idle/waiting start, 1=waiting end
-  const pendingZoneTypeRef = useRef<ZoneType | null>(null);
-  const zoneStartRef       = useRef<UTCTimestamp | null>(null);
-  const zonePrimitiveRef   = useRef<ZonesPrimitive | null>(null);
-
-  // Lazy loading refs
-  const oldestLoadedDateRef = useRef<string | null>(null);
-  const currentIntervalRef  = useRef<string>("1d");
-  const isLoadingMoreRef    = useRef(false);
-  const hasMoreHistoryRef   = useRef(true);
-  const isAutoModeRef       = useRef(true);
-  const isPrependRef            = useRef(false);
   const adaptiveDataRef         = useRef<typeof adaptiveData>([]);
   const onVisibleRangeChangeRef = useRef(onVisibleRangeChange);
   const onCrosshairMoveRef      = useRef(onCrosshairMove);
@@ -270,143 +276,39 @@ export default function GrowthChart({
     }
   }, [adaptiveData, ticker]);
   useEffect(() => { chartModeRef.current = chartMode; }, [chartMode]);
-  useEffect(() => {
-    chartModeForFetch.current = chartMode;
-    if (ticker && isMountedRef.current) setFetchKey(k => k + 1);
-  }, [chartMode, ticker]); // eslint-disable-line
   useEffect(() => { isMountedRef.current = true; }, []);
 
-  // Lazy load: fetch chunk d'historique avant la barre la plus ancienne chargée.
-  // Quand l'interval intraday est épuisé par la limite Yahoo, bascule sur "1d" pour continuer.
-  const loadMore = useCallback(async () => {
-    if (
-      isLoadingMoreRef.current ||
-      !hasMoreHistoryRef.current ||
-      isAutoModeRef.current
-    ) return;
-    const oldest = oldestLoadedDateRef.current;
-    if (!ticker || !oldest) return;
-
-    isLoadingMoreRef.current = true;
-    const iv = currentIntervalRef.current;
-    const endDate = new Date(oldest);
-    endDate.setDate(endDate.getDate() - 1);
-
-    const daysMap: Record<string, number> = {
-      "1m": 2, "5m": 6, "15m": 15, "30m": 25, "1h": 70, "1d": 450,
-    };
-    const days = daysMap[iv] ?? 450;
-    const startDate = new Date(endDate);
-    startDate.setDate(startDate.getDate() - days);
-
-    const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
-    const start = startDate.toISOString().slice(0, 10);
-    const end   = endDate.toISOString().slice(0, 10);
-    try {
-      const res  = await fetch(`${API_URL}/api/v1/intraday?ticker=${encodeURIComponent(ticker)}&start=${start}&end=${end}&interval=${iv}`);
-      const data = await res.json();
-      if (!Array.isArray(data) || data.length === 0) {
-        if (iv !== "1d") {
-          // Historique intraday épuisé (limite Yahoo ~60j/5m, ~730j/1h).
-          // On bascule sur daily pour continuer à charger l'historique complet.
-          currentIntervalRef.current = "1d";
-          // isLoadingMoreRef = false dans finally → le prochain scroll relance loadMore en 1d
-        } else {
-          hasMoreHistoryRef.current = false;
-        }
-      } else {
-        oldestLoadedDateRef.current = data[0].date;
-        isPrependRef.current = true;
-        setAdaptiveData(prev => [...(data as typeof adaptiveData), ...prev]);
-      }
-    } catch {
-      hasMoreHistoryRef.current = false;
-    } finally {
-      isLoadingMoreRef.current = false;
+  // handlePeriodChange : met à jour la période et auto-switch l'intervalle si incompatible
+  const handlePeriodChange = useCallback((p: typeof periodFilter) => {
+    const allowed = PERIOD_ALLOWED_INTERVALS[p];
+    if (!allowed.includes(intervalKey)) {
+      setIntervalKey(PERIOD_DEFAULT_INTERVAL[p] as typeof intervalKey);
     }
-  }, [ticker]); // eslint-disable-line
+    setPeriodFilter(p);
+    onPeriodChange?.(p);
+  }, [intervalKey, onPeriodChange]); // eslint-disable-line
 
-  // Fetch intraday data
+  // Fetch intraday data — charge toute la plage disponible Yahoo pour l'intervalle choisi
   useEffect(() => {
     if (!ticker) { setAdaptiveData([]); return; }
 
-    // Vider immédiatement pour éviter d'afficher les données stale de la période précédente.
     setAdaptiveData([]);
-    // Reset lazy loading state pour chaque nouveau fetch
-    isLoadingMoreRef.current  = false;
-    hasMoreHistoryRef.current = true;
-    isPrependRef.current      = false;
-    oldestLoadedDateRef.current = null;
 
-    const isCandleMode = chartModeForFetch.current === "candle";
-
-    const config = isCandleMode
-      ? PERIOD_CONFIG_CANDLE[periodFilter]
-      : PERIOD_CONFIG[periodFilter];
+    const config = INTERVAL_FETCH_CONFIG[intervalKey];
     if (!config) { setAdaptiveData([]); return; }
-    const interval = config.interval;
-
-    // 1H : pas de lazy (7j de 1m = tout ce que Yahoo a).
-    // apiPeriod=max : tout l'historique disponible déjà chargé (1d ou 1h), lazy inutile.
-    // Autres périodes (24h/1S/1M) : lazy actif, fallback 1d si intraday épuisé.
-    isAutoModeRef.current = (periodFilter === "1H") || (config.apiPeriod === "max");
-    currentIntervalRef.current = interval;
 
     const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
     let cancelled = false;
-    fetch(`${API_URL}/api/v1/intraday?ticker=${encodeURIComponent(ticker)}&period=${config.apiPeriod}&interval=${interval}`)
+    fetch(`${API_URL}/api/v1/intraday?ticker=${encodeURIComponent(ticker)}&period=${config.apiPeriod}&interval=${config.apiInterval}`)
       .then(r => r.json())
       .then(data => {
         if (cancelled || !Array.isArray(data)) return;
-        let pts = data as typeof adaptiveData;
-
-        // Pas de downsample en courbe : lightweight-charts gère 10k+ pts nativement.
-        // Le downsample détruirait la résolution dans la fenêtre visible (ex: 3 pts/h en 1H 1m).
-        // Candle: agrégation OHLCV selon la période
-        if (isCandleMode) {
-          if (periodFilter === "1M")  pts = agg2h(pts);
-          if (periodFilter === "3A")  pts = aggWeekly(pts);
-          if (periodFilter === "Max") pts = aggWeekly(pts);
-        }
-        // Mémoriser la date la plus ancienne pour le lazy loading
-        oldestLoadedDateRef.current = pts[0]?.date ?? null;
-        setAdaptiveData(pts);
-
-        // Pour 1H/24h/1S/1M en mode LIGNE : historique daily chargé en arrière-plan.
-        // En candle, on ne mixe pas les résolutions (bougies 1m + bougies 1j = incohérent visuellement).
-        // En candle, le lazy loading avec fallback 1d gère l'historique progressivement.
-        if (!isCandleMode && periodFilter !== "1H" && config.apiPeriod !== "max" && interval !== "1d" && pts.length > 0) {
-          const cutDate = pts[0].date.slice(0, 10);
-          fetch(`${API_URL}/api/v1/intraday?ticker=${encodeURIComponent(ticker)}&period=max&interval=1d`)
-            .then(r => r.json())
-            .then((daily: typeof pts) => {
-              if (cancelled || !Array.isArray(daily)) return;
-              // Seulement les barres daily AVANT le début des données intraday
-              const before = daily.filter((p: typeof pts[0]) => p.date.slice(0, 10) < cutDate);
-              hasMoreHistoryRef.current = false; // historique complet chargé, lazy inutile
-              if (before.length > 0) {
-                oldestLoadedDateRef.current = before[0].date;
-                isPrependRef.current = true;
-                setAdaptiveData(prev => [...before, ...prev]);
-              }
-            })
-            .catch(() => { /* lazy loading reste actif comme fallback */ });
-        }
+        setAdaptiveData(data as typeof adaptiveData);
       })
       .catch(() => { if (!cancelled) setAdaptiveData([]); });
     return () => { cancelled = true; };
-  }, [ticker, periodFilter, fetchKey]); // eslint-disable-line
+  }, [ticker, intervalKey, fetchKey]); // eslint-disable-line
 
-  // Lazy load: déclencher quand l'utilisateur scrolle vers le bord gauche du chart
-  useEffect(() => {
-    const chart = chartRef.current;
-    if (!chart || !ticker) return;
-    const handler = (range: { from: number; to: number } | null) => {
-      if (range && range.from < 50) loadMore();
-    };
-    chart.timeScale().subscribeVisibleLogicalRangeChange(handler);
-    return () => chart.timeScale().unsubscribeVisibleLogicalRangeChange(handler);
-  }, [ticker, loadMore]);
 
   useEffect(() => {
     setTimeout(() => window.dispatchEvent(new Event("resize")), 100);
@@ -414,6 +316,7 @@ export default function GrowthChart({
 
 
   const isIntraday = !!(ticker && adaptiveData.length > 0);
+  const isIntradayInterval = ["1m", "5m", "15m", "1h"].includes(intervalKey);
 
   const fmtPrice = (v: number): string => {
     if (percentMode) {
@@ -434,9 +337,10 @@ export default function GrowthChart({
     if (!containerRef.current) return;
 
     try {
-      const bg   = dark ? "rgba(0,0,0,0)" : "#ffffff";
-      const grid = dark ? "rgba(255,255,255,0.05)" : "#f1f5f9";
-      const txt  = dark ? "#94a3b8" : "#64748b";
+      const bg  = dark ? "rgba(0,0,0,0)" : "#ffffff";
+      const txt = dark ? "#94a3b8" : "#64748b";
+      const initGrid = dark ? GRID_PRESETS[gridPreset] : { color: "#f1f5f9", style: LineStyle.Dashed };
+      const initVisible = dark ? gridPreset !== "none" : true;
 
       const chart = createChart(containerRef.current, {
         autoSize: true,
@@ -447,8 +351,8 @@ export default function GrowthChart({
           fontSize: 11,
         },
         grid: {
-          vertLines: { color: grid, style: LineStyle.Dashed },
-          horzLines: { color: grid, style: LineStyle.Dashed },
+          vertLines: { color: initGrid.color, style: initGrid.style, visible: initVisible && showVert },
+          horzLines: { color: initGrid.color, style: initGrid.style, visible: initVisible && showHorz },
         },
         crosshair: {
           mode: CrosshairMode.Normal,
@@ -504,7 +408,7 @@ export default function GrowthChart({
 
       const area = chart.addSeries(AreaSeries, {
         lineColor: portfolioColor,
-        topColor:    portfolioColor + "55",
+        topColor:    portfolioColor + (ticker ? "40" : "55"),
         bottomColor: portfolioColor + "00",
         lineWidth: 2,
         crosshairMarkerVisible: true,
@@ -541,33 +445,6 @@ export default function GrowthChart({
         crosshairMarkerVisible: false,
       });
       benchmarkSeriesRef.current = bm;
-
-      // Zone primitive (draws colored background bands)
-      const zp = new ZonesPrimitive(chart);
-      area.attachPrimitive(zp);
-      zonePrimitiveRef.current = zp;
-
-      // Zone creation: 2-click workflow
-      chart.subscribeClick(param => {
-        if (!pendingZoneTypeRef.current || !param.time) return;
-        if (zoneStartRef.current === null) {
-          // First click → record start
-          zoneStartRef.current = param.time as UTCTimestamp;
-          setDrawingStep(1);
-        } else {
-          // Second click → create zone
-          const t1 = zoneStartRef.current;
-          const t2 = param.time as UTCTimestamp;
-          const startTime = Math.min(t1, t2) as UTCTimestamp;
-          const endTime   = Math.max(t1, t2) as UTCTimestamp;
-          const type = pendingZoneTypeRef.current;
-          pendingZoneTypeRef.current = null;
-          zoneStartRef.current = null;
-          setActiveZoneTool(null);
-          setDrawingStep(0);
-          setZones(prev => [...prev, { id: `z-${Date.now()}`, startTime, endTime, type }]);
-        }
-      });
 
       chart.subscribeCrosshairMove(param => {
         if (!param.time || !param.point) {
@@ -606,43 +483,45 @@ export default function GrowthChart({
         areaSeriesRef.current = null;
         candleSeriesRef.current = null;
         benchmarkSeriesRef.current = null;
-        zonePrimitiveRef.current = null;
       };
     } catch (err: any) {
       setChartError(err?.message ?? "Chart init failed");
     }
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Update theme
+  // Update layout colors when dark mode changes
   useEffect(() => {
     if (!chartRef.current) return;
-    const bg   = dark ? "rgba(0,0,0,0)" : "#ffffff";
-    const grid = dark ? "rgba(255,255,255,0.05)" : "#f1f5f9";
-    const txt  = dark ? "#94a3b8" : "#64748b";
+    const bg  = dark ? "rgba(0,0,0,0)" : "#ffffff";
+    const txt = dark ? "#94a3b8" : "#64748b";
     chartRef.current.applyOptions({
       layout: { background: { type: ColorType.Solid, color: bg }, textColor: txt },
-      grid: { vertLines: { color: grid, style: LineStyle.Dashed }, horzLines: { color: grid, style: LineStyle.Dashed } },
     });
   }, [dark]);
+
+  // Update grid when preset or toggles change
+  useEffect(() => {
+    if (!chartRef.current) return;
+    const p = dark ? GRID_PRESETS[gridPreset] : { color: "#f1f5f9", style: LineStyle.Dashed };
+    const visible = dark ? gridPreset !== "none" : true;
+    chartRef.current.applyOptions({
+      grid: {
+        vertLines: { color: p.color, style: p.style, visible: visible && showVert },
+        horzLines: { color: p.color, style: p.style, visible: visible && showHorz },
+      },
+    });
+  }, [gridPreset, showHorz, showVert, dark]);
 
   // Update area series color (from logo color extraction)
   useEffect(() => {
     if (!areaSeriesRef.current) return;
     areaSeriesRef.current.applyOptions({
       lineColor: portfolioColor,
-      topColor:    portfolioColor + "55",
+      topColor:    portfolioColor + (ticker ? "40" : "55"),
       bottomColor: portfolioColor + "00",
       crosshairMarkerBackgroundColor: portfolioColor,
     });
-  }, [portfolioColor]);
-
-  // Sync zones → primitive + force chart redraw
-  useEffect(() => {
-    if (!zonePrimitiveRef.current) return;
-    zonePrimitiveRef.current.updateZones(zones);
-    areaSeriesRef.current?.applyOptions({});
-  }, [zones]);
-
+  }, [portfolioColor, ticker]);
 
   // Update candle colors
   useEffect(() => {
@@ -727,26 +606,21 @@ export default function GrowthChart({
     } catch { /* ignore si série pas encore prête */ }
   }, [portfolioData]); // eslint-disable-line
 
-  // Après chargement initial, cadrer la vue sur la bonne fenêtre temporelle.
-  // En candle auto, on utilise setVisibleRange pour n'afficher que la période choisie
-  // même si les données téléchargées couvrent une plage plus large (buffer scroll).
+  // Applique la fenêtre visible quand les données changent OU quand la période change
   useEffect(() => {
-    if (adaptiveData.length > 0 && !isPrependRef.current) {
-      const chart = chartRef.current;
-      if (chart) {
-        const visibleSecs = PERIOD_VISIBLE_SECS[periodFilter];
-        if (visibleSecs) {
-          const nowSec  = Math.floor(Date.now() / 1000);
-          const lastTs  = toTs(adaptiveData[adaptiveData.length - 1].date);
-          const toSec   = (nowSec - lastTs > visibleSecs / 2 ? lastTs : nowSec) as UTCTimestamp;
-          const fromSec = (toSec - visibleSecs) as UTCTimestamp;
-          chart.timeScale().setVisibleRange({ from: fromSec, to: toSec });
-        } else {
-          chart.timeScale().fitContent();
-        }
-      }
+    if (!adaptiveData.length) return;
+    const chart = chartRef.current;
+    if (!chart) return;
+    const visibleSecs = PERIOD_VISIBLE_SECS[periodFilter];
+    if (visibleSecs) {
+      const nowSec  = Math.floor(Date.now() / 1000);
+      const lastTs  = toTs(adaptiveData[adaptiveData.length - 1].date);
+      const toSec   = (nowSec - lastTs > visibleSecs / 2 ? lastTs : nowSec) as UTCTimestamp;
+      const fromSec = (toSec - visibleSecs) as UTCTimestamp;
+      chart.timeScale().setVisibleRange({ from: fromSec, to: toSec });
+    } else {
+      chart.timeScale().fitContent();
     }
-    isPrependRef.current = false;
   }, [adaptiveData, periodFilter]); // eslint-disable-line
 
   // fitContent en mode portfolio (pas de fetch async, données déjà dispo)
@@ -756,20 +630,13 @@ export default function GrowthChart({
     }
   }, [periodFilter, ticker]); // eslint-disable-line
 
-  // Transition symétrique : quand le MODE change, masquer la série destination
-  // (qui a les données stale de l'ancien mode), garder la source visible.
-  // Le data effect fait le vrai switch atomique une fois les nouvelles données prêtes.
+  // Bascule immédiate de visibilité entre les deux séries au changement de mode
   useEffect(() => {
-    const modeChanged = prevChartModeRef.current !== chartMode;
     prevChartModeRef.current = chartMode;
-    if (!modeChanged || !ticker) return;
-    if (chartMode === "candle") {
-      // line→candle : masquer candle stale, area reste visible pendant le fetch
-      candleSeriesRef.current?.applyOptions({ visible: false });
-    } else {
-      // candle→line : masquer area stale (données coarses candle), candle reste visible
-      areaSeriesRef.current?.applyOptions({ visible: false });
-    }
+    if (!ticker || !areaSeriesRef.current || !candleSeriesRef.current) return;
+    const inCandle = chartMode === "candle";
+    areaSeriesRef.current.applyOptions({ visible: !inCandle });
+    candleSeriesRef.current.applyOptions({ visible: inCandle });
   }, [chartMode, ticker]);
 
   // ─── Drawdown data ────────────────────────────────────────────────────────────
@@ -785,28 +652,21 @@ export default function GrowthChart({
   }, [drawdownData, periodFilter]);
 
   // ─── Perf stats ───────────────────────────────────────────────────────────────
+  // Même source que les boutons inactifs → bouton actif = légende, jamais de changement au clic
   const periodPerfData = useMemo(() => {
-    // Intraday (minute/hour bars): use adaptiveData for BOTH first and last to avoid scale mismatch.
-    if (isIntraday && adaptiveData.length >= 2) {
-      const lastPrice = adaptiveData[adaptiveData.length - 1].value;
-      const visibleSecs = PERIOD_VISIBLE_SECS[periodFilter];
-      let firstPrice = adaptiveData[0].value;
-      if (visibleSecs) {
-        const nowSec = Math.floor(Date.now() / 1000);
-        const lastTs = toTs(adaptiveData[adaptiveData.length - 1].date);
-        const effectiveToSec = nowSec - lastTs > visibleSecs / 2 ? lastTs : nowSec;
-        const fromTs = effectiveToSec - visibleSecs;
-        const fp = adaptiveData.find(p => toTs(p.date) >= fromTs);
-        firstPrice = fp?.value ?? lastPrice;
-      }
-      return { first: firstPrice, last: lastPrice };
+    if (periodFilter === "24h" && dailyChangePct !== null && portfolioData.length > 0) {
+      const last  = portfolioData[portfolioData.length - 1].value as number;
+      const first = last / (1 + dailyChangePct / 100);
+      return { first, last };
     }
-    // Non-intraday (daily bars): use portfolioData filtered by period — same logic as period buttons.
-    const cutStr = getCutoffStr(periodFilter);
+    const visibleSecs = (PERIOD_VISIBLE_SECS as Record<string, number | undefined>)[periodFilter] ?? null;
+    const cutStr = visibleSecs
+      ? new Date(Date.now() - visibleSecs * 1000).toISOString().slice(0, 10)
+      : null;
     const pts = cutStr ? portfolioData.filter(p => p.date >= cutStr) : portfolioData;
     if (pts.length < 2) return null;
     return { first: pts[0].value as number, last: pts[pts.length - 1].value as number };
-  }, [isIntraday, adaptiveData, portfolioData, periodFilter]); // eslint-disable-line
+  }, [portfolioData, periodFilter, dailyChangePct]);
 
   const periodPerfPct  = periodPerfData ? (periodPerfData.last - periodPerfData.first) / periodPerfData.first * 100 : null;
   const hoverPerfPct   = (hoverPrice !== null && periodPerfData) ? (hoverPrice - periodPerfData.first) / periodPerfData.first * 100 : null;
@@ -818,8 +678,8 @@ export default function GrowthChart({
     if (!iso) return null;
     try {
       const d = new Date(iso);
-      if (["1H","24h"].includes(periodFilter)) return d.toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" });
-      if (["1S","1M"].includes(periodFilter)) return d.toLocaleDateString("fr-FR", { day:"numeric", month:"short", hour:"2-digit", minute:"2-digit" });
+      if (intervalKey === "1m") return d.toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" });
+      if (["5m","15m","1h"].includes(intervalKey)) return d.toLocaleDateString("fr-FR", { day:"numeric", month:"short", hour:"2-digit", minute:"2-digit" });
       return d.toLocaleDateString("fr-FR", { day:"numeric", month:"short", year:"numeric" });
     } catch { return iso; }
   };
@@ -877,7 +737,10 @@ export default function GrowthChart({
     <div
       ref={chartWrapRef}
       className={fullscreen ? "fixed inset-0 z-50 flex flex-col p-4" : "w-full h-full flex flex-col"}
-      style={fullscreen ? { background: dark ? "#041124" : "white" } : { minHeight: 0, overflow: "hidden" }}
+      style={fullscreen
+        ? { background: dark ? "#041124" : "white" }
+        : { minHeight: 0, overflow: "hidden" }
+      }
     >
       {/* Header */}
       <div className="flex items-center justify-between px-2 py-1 flex-shrink-0 gap-2">
@@ -885,6 +748,118 @@ export default function GrowthChart({
 
         <div className="flex items-center gap-1 flex-shrink-0">
           {rightSlot}
+
+          {/* Grid picker — dark mode only */}
+          {dark && (
+            <div style={{ position: "relative" }}>
+              <button
+                onClick={() => setShowGridPicker(v => !v)}
+                title="Personnaliser la grille"
+                style={{
+                  width: 28, height: 28, borderRadius: 7, border: "none",
+                  background: showGridPicker ? "rgba(155,185,255,0.18)" : "rgba(255,255,255,0.06)",
+                  color: showGridPicker ? "#9BB9FF" : "rgba(255,255,255,0.4)",
+                  cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center",
+                  transition: "all 0.15s",
+                }}
+              >
+                <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth={1.5}>
+                  <line x1="0" y1="4.7" x2="14" y2="4.7"/>
+                  <line x1="0" y1="9.3" x2="14" y2="9.3"/>
+                  <line x1="4.7" y1="0" x2="4.7" y2="14"/>
+                  <line x1="9.3" y1="0" x2="9.3" y2="14"/>
+                </svg>
+              </button>
+
+              {showGridPicker && (
+                <>
+                  <div style={{ position: "fixed", inset: 0, zIndex: 40 }} onClick={() => setShowGridPicker(false)} />
+                  <div style={{
+                    position: "absolute", top: "calc(100% + 6px)", right: 0, zIndex: 50,
+                    background: "rgba(6,14,32,0.97)", border: "1px solid rgba(255,255,255,0.1)",
+                    borderRadius: 12, padding: "12px 12px 10px", backdropFilter: "blur(20px)",
+                    boxShadow: "0 8px 32px rgba(0,0,0,0.5)", width: 196,
+                  }}>
+                    {/* Presets */}
+                    <div style={{ fontSize: 9, letterSpacing: "0.1em", color: "rgba(255,255,255,0.22)", marginBottom: 8 }}>STYLE</div>
+                    <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 5, marginBottom: 12 }}>
+                      {(["none","minimal","standard","solid"] as GridPreset[]).map(p => {
+                        const active = gridPreset === p;
+                        return (
+                          <button key={p} onClick={() => {
+                            setGridPreset(p);
+                            try { localStorage.setItem("novac_grid_preset", p); } catch {}
+                          }} style={{
+                            borderRadius: 7, padding: "6px 4px 5px", cursor: "pointer",
+                            border: active ? "1px solid rgba(155,185,255,0.55)" : "1px solid rgba(255,255,255,0.07)",
+                            background: active ? "rgba(79,70,229,0.2)" : "rgba(255,255,255,0.04)",
+                            transition: "all 0.15s", display: "flex", flexDirection: "column", alignItems: "center", gap: 4,
+                          }}>
+                            {/* Mini preview */}
+                            <svg width="28" height="20" viewBox="0 0 28 20" style={{ flexShrink: 0 }}>
+                              <rect width="28" height="20" fill="rgba(255,255,255,0.03)" rx="2"/>
+                              {p !== "none" && <>
+                                <line x1="0" y1="10" x2="28" y2="10"
+                                  stroke={GRID_PRESETS[p].color === "rgba(255,255,255,0)" ? "none" : GRID_PRESETS[p].color}
+                                  strokeWidth="1"
+                                  strokeDasharray={p === "solid" ? "none" : "2 2"}
+                                  opacity={p === "minimal" ? 0.5 : 1}
+                                />
+                                <line x1="14" y1="0" x2="14" y2="20"
+                                  stroke={GRID_PRESETS[p].color === "rgba(255,255,255,0)" ? "none" : GRID_PRESETS[p].color}
+                                  strokeWidth="1"
+                                  strokeDasharray={p === "solid" ? "none" : "2 2"}
+                                  opacity={p === "minimal" ? 0.5 : 1}
+                                />
+                              </>}
+                            </svg>
+                            <span style={{ fontSize: 8, color: active ? "#9BB9FF" : "rgba(255,255,255,0.35)", letterSpacing: "0.04em" }}>
+                              {GRID_PRESETS[p].label}
+                            </span>
+                          </button>
+                        );
+                      })}
+                    </div>
+
+                    {/* H/V toggles */}
+                    <div style={{ fontSize: 9, letterSpacing: "0.1em", color: "rgba(255,255,255,0.22)", marginBottom: 8 }}>LIGNES</div>
+                    <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
+                      {([
+                        { key: "horz" as const, label: "Horizontales", icon: "≡", val: showHorz, set: (v: boolean) => { setShowHorz(v); try { localStorage.setItem("novac_grid_horz", String(v)); } catch {} } },
+                        { key: "vert" as const, label: "Verticales",   icon: "⫴", val: showVert, set: (v: boolean) => { setShowVert(v); try { localStorage.setItem("novac_grid_vert", String(v)); } catch {} } },
+                      ]).map(({ key, label, icon, val, set }) => (
+                        <button key={key} onClick={() => set(!val)} style={{
+                          display: "flex", alignItems: "center", justifyContent: "space-between",
+                          padding: "6px 9px", borderRadius: 7, cursor: "pointer",
+                          border: val ? "1px solid rgba(155,185,255,0.25)" : "1px solid rgba(255,255,255,0.07)",
+                          background: val ? "rgba(79,70,229,0.12)" : "rgba(255,255,255,0.03)",
+                          transition: "all 0.15s",
+                        }}>
+                          <div style={{ display: "flex", alignItems: "center", gap: 7 }}>
+                            <span style={{ fontSize: 13, color: val ? "#9BB9FF" : "rgba(255,255,255,0.3)", lineHeight: 1, width: 14, textAlign: "center" }}>{icon}</span>
+                            <span style={{ fontSize: 10, color: val ? "rgba(255,255,255,0.75)" : "rgba(255,255,255,0.3)", letterSpacing: "0.02em" }}>{label}</span>
+                          </div>
+                          {/* Toggle pill */}
+                          <div style={{
+                            width: 26, height: 14, borderRadius: 7, position: "relative",
+                            background: val ? "rgba(99,102,241,0.8)" : "rgba(255,255,255,0.12)",
+                            transition: "background 0.2s", flexShrink: 0,
+                          }}>
+                            <div style={{
+                              position: "absolute", top: 2, left: val ? 14 : 2, width: 10, height: 10,
+                              borderRadius: "50%", background: "white",
+                              transition: "left 0.2s", boxShadow: "0 1px 3px rgba(0,0,0,0.3)",
+                            }}/>
+                          </div>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </>
+              )}
+            </div>
+          )}
+
           {/* Fullscreen */}
           {!dark && (
             <button
@@ -909,130 +884,36 @@ export default function GrowthChart({
             <span style={{ color: "#ef4444", fontSize: 12, fontFamily: "monospace" }}>Chart error: {chartError}</span>
           </div>
         ) : (
-          <div ref={containerRef} style={{ width: "100%", height: "100%", cursor: activeZoneTool ? "crosshair" : "default" }} />
+          <div ref={containerRef} style={{ width: "100%", height: "100%" }} />
         )}
         {chartLegend}
 
-        {/* Zone tool hint — shown during drawing */}
-        {activeZoneTool && (
-          <div style={{
-            position: "absolute", bottom: 8, left: "50%", transform: "translateX(-50%)",
-            zIndex: 30, pointerEvents: "none",
-            background: "rgba(8,18,38,0.88)", border: "1px solid rgba(255,255,255,0.12)",
-            borderRadius: 8, padding: "4px 12px",
-            fontSize: 11, color: "rgba(255,255,255,0.6)", backdropFilter: "blur(12px)",
-          }}>
-            {drawingStep === 0 ? "Clic pour définir le début de la zone" : "Clic pour définir la fin de la zone"}
-          </div>
-        )}
-
-        {/* Zone toolbar */}
-        <div style={{
-          position: "absolute", right: 8, top: "50%", transform: "translateY(-50%)",
-          zIndex: 30, display: "flex", flexDirection: "column", gap: 4,
-        }}>
-          {([
-            { type: "bull"          as ZoneType, color: "#22c55e", label: "Haussier" },
-            { type: "consolidation" as ZoneType, color: "#fb923c", label: "Consolidation" },
-            { type: "bear"          as ZoneType, color: "#ef4444", label: "Baissier" },
-          ]).map(({ type, color, label }) => {
-            const active = activeZoneTool === type;
-            return (
-              <button
-                key={type}
-                title={label}
-                onClick={() => {
-                  if (active) {
-                    pendingZoneTypeRef.current = null;
-                    zoneStartRef.current = null;
-                    setActiveZoneTool(null);
-                    setDrawingStep(0);
-                  } else {
-                    pendingZoneTypeRef.current = type;
-                    zoneStartRef.current = null;
-                    setActiveZoneTool(type);
-                    setDrawingStep(0);
-                  }
-                }}
-                style={{
-                  width: 22, height: 22, borderRadius: 6,
-                  border: `2px solid ${active ? color : color + "55"}`,
-                  background: active ? color + "33" : color + "18",
-                  cursor: "pointer", transition: "all 0.15s",
-                  boxShadow: active ? `0 0 8px ${color}66` : "none",
-                }}
-              />
-            );
-          })}
-
-          {/* Separator + clear */}
-          {zones.length > 0 && (
-            <>
-              <div style={{ height: 1, background: "rgba(255,255,255,0.1)", margin: "2px 0" }} />
-              <button
-                onClick={() => setZones([])}
-                title="Effacer toutes les zones"
-                style={{
-                  width: 22, height: 22, borderRadius: 6,
-                  border: "1px solid rgba(255,255,255,0.12)",
-                  background: "rgba(255,255,255,0.05)",
-                  cursor: "pointer", fontSize: 11, color: "rgba(255,255,255,0.4)",
-                  display: "flex", alignItems: "center", justifyContent: "center",
-                }}
-              >
-                ✕
-              </button>
-            </>
-          )}
-        </div>
-
-        {/* NOVAC logo — bottom-right watermark */}
-        <img
-          src={dark ? "/logob.png" : "/logoa.png"}
-          alt="NOVAC"
-          style={{
-            position: "absolute", bottom: 36, right: 72,
-            height: 24, width: "auto",
-            opacity: 0.35, zIndex: 10,
-            pointerEvents: "none", userSelect: "none",
-          }}
-        />
       </div>
 
       {/* Period buttons */}
       <div className="flex justify-center gap-4 py-2 flex-wrap flex-shrink-0">
-        {(["1H","24h","1S","1M","3M","6M","1A","3A","Max"] as const).map(key => {
-          let first: number | undefined, last: number | undefined;
-          if (key === "1H" || key === "24h") {
-            // portfolioData a seulement des barres journalières.
-            // Quand le marché est fermé, live ≈ last close → comparaison = 0%.
-            // On compare plutôt les deux dernières clôtures différentes.
-            const all = portfolioData;
-            if (all.length >= 3) {
-              const v0 = all[all.length - 1].value as number; // live (ou last close)
-              const v1 = all[all.length - 2].value as number; // last close
-              const v2 = all[all.length - 3].value as number; // prev close
-              // Si live ≈ last close (marché fermé), afficher last close vs prev close.
-              if (Math.abs(v0 - v1) / (v1 || 1) < 0.0002) { first = v2; last = v1; }
-              else { first = v1; last = v0; }
-            } else if (all.length === 2) {
-              first = all[0].value as number; last = all[1].value as number;
-            }
-          } else {
-            const cutStr = getCutoffStr(key);
-            const pts = cutStr ? portfolioData.filter(p => p.date >= cutStr) : portfolioData;
-            first = pts[0]?.value as number | undefined;
-            last  = pts[pts.length - 1]?.value as number | undefined;
-          }
-          const pct = (first && last) ? (last - first) / first * 100 : null;
+        {(["24h","1S","1M","3M","6M","1A","3A","Max"] as const).map(key => {
           const isActive = periodFilter === key;
+          let pct: number | null = null;
+          if (isActive) {
+            pct = periodPerfPct;
+          } else if (key === "24h") {
+            pct = dailyChangePct ?? null;
+          } else {
+            const visibleSecs = (PERIOD_VISIBLE_SECS as Record<string, number | undefined>)[key] ?? null;
+            const cutStr = visibleSecs ? new Date(Date.now() - visibleSecs * 1000).toISOString().slice(0, 10) : null;
+            const pts = cutStr ? portfolioData.filter(p => p.date >= cutStr) : portfolioData;
+            if (pts.length >= 2) {
+              pct = (pts[pts.length - 1].value as number - (pts[0].value as number)) / (pts[0].value as number) * 100;
+            }
+          }
           return (
             <div
               key={key}
               className="relative pb-1 cursor-pointer text-center min-w-[40px]"
-              onClick={() => { setPeriodFilter(key); onPeriodChange?.(key); }}
+              onClick={() => handlePeriodChange(key)}
             >
-              <div className="text-xs font-semibold" style={{ color: isActive ? (dark ? "#9BB9FF" : "#4f46e5") : "#94a3b8" }}>
+              <div className="text-xs font-semibold" style={{ color: isActive ? portfolioColor : "#94a3b8" }}>
                 {key}
               </div>
               {pct !== null && (
@@ -1041,12 +922,49 @@ export default function GrowthChart({
                 </div>
               )}
               {isActive && (
-                <div className="absolute bottom-0 left-0 right-0 h-0.5 rounded" style={{ background: dark ? "#9BB9FF" : "#4f46e5" }}/>
+                <div className="absolute bottom-0 left-0 right-0 h-0.5 rounded" style={{ background: portfolioColor }}/>
               )}
             </div>
           );
         })}
       </div>
+
+      {/* Interval selector — uniquement en mode ticker */}
+      {ticker && (
+        <div className="flex justify-center gap-2 pb-2 flex-shrink-0">
+          {(["1m","5m","15m","1h","1d","1W"] as const).map(iv => {
+            const allowed = PERIOD_ALLOWED_INTERVALS[periodFilter] ?? [];
+            const isAllowed = allowed.includes(iv);
+            const isActive  = intervalKey === iv;
+            return (
+              <button
+                key={iv}
+                disabled={!isAllowed}
+                onClick={() => isAllowed && setIntervalKey(iv)}
+                style={{
+                  fontSize: 10, fontWeight: isActive ? 700 : 500,
+                  padding: "2px 7px", borderRadius: 5,
+                  border: isActive
+                    ? `1px solid ${portfolioColor}66`
+                    : "1px solid transparent",
+                  color: !isAllowed
+                    ? (dark ? "rgba(255,255,255,0.15)" : "#cbd5e1")
+                    : isActive
+                      ? portfolioColor
+                      : (dark ? "rgba(255,255,255,0.45)" : "#94a3b8"),
+                  background: isActive
+                    ? `${portfolioColor}18`
+                    : "transparent",
+                  cursor: isAllowed ? "pointer" : "not-allowed",
+                  transition: "all 0.15s",
+                }}
+              >
+                {iv}
+              </button>
+            );
+          })}
+        </div>
+      )}
 
 
       {/* Drawdown (Recharts) */}
