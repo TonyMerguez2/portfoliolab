@@ -216,130 +216,113 @@ export default function GlobalHeader() {
     setShowDropdown(false);
   }, [router]);
 
+  const firstTab = mode === "portfolio"
+    ? { label: "Dashboard", href: "/portfolio" }
+    : { label: "Graphique", href: activeAsset ? `/chart?ticker=${encodeURIComponent(activeAsset.ticker)}` : "/chart" };
+
+  const navTabs = [
+    firstTab,
+    { label: "Marchés", href: "/treemap" },
+    { label: "Carte",   href: "/map" },
+    { label: "Analyse", href: "/dashboard" },
+  ];
+
   return (
     <>
-      {!isLanding && !isChartPage && (
-        <a href="/" style={{ position:"fixed", top:"18px", left:"20px", zIndex:50, textDecoration:"none", color:"#F8F9FC", fontSize:"13px", fontWeight:700, letterSpacing:"0.22em", opacity:0.85 }}>NOVAC</a>
-      )}
-
-      {/* Switcher centré */}
-      {pathname !== "/build" && !isChartPage && <div style={{ position:"fixed", top:"13px", left:"50%", transform:"translateX(-50%)", zIndex:50 }}>
-        <div style={{ display:"flex", alignItems:"center", borderRadius:"10px", padding:"3px", ...glass }}>
+      {/* Left: NOVAC + separator + asset pill */}
+      {!isChartPage && (
+        <div style={{ position:"fixed", top:"12px", left:"16px", zIndex:50, display:"flex", alignItems:"center", gap:"10px" }}>
+          {!isLanding && <>
+            <a href="/" style={{ textDecoration:"none", color:"#F8F9FC", fontSize:"13px", fontWeight:700, letterSpacing:"0.22em", opacity:0.85 }}>NOVAC</a>
+            <div style={{ width:"1px", height:"16px", background:"rgba(255,255,255,0.22)", flexShrink:0 }}/>
+          </>}
           <div style={{ position:"relative" }}>
-            <button onClick={() => { setMode("portfolio"); setShowPortfolioMenu(v => !v); setShowDropdown(false); }}
-              style={{ padding:"5px 16px", borderRadius:"7px", border:"none", background:mode==="portfolio"?"rgba(255,255,255,0.12)":"transparent", color:"#F8F9FC", fontSize:"11px", fontWeight:mode==="portfolio"?600:400, opacity:mode==="portfolio"?1:0.45, cursor:"pointer", letterSpacing:"0.06em", boxShadow:mode==="portfolio"?"0 0 12px rgba(91,141,239,0.2)":"none", transition:"all 0.2s", whiteSpace:"nowrap" }}>
-              {activePortfolio ? `● ${activePortfolio.name}` : mode==="portfolio" ? "● Portefeuille" : "○ Portefeuille"}
+            <button onClick={() => { setShowDropdown(v => !v); setShowPortfolioMenu(false); }}
+              style={{ display:"flex", alignItems:"center", gap:"6px", padding:"4px 9px 4px 6px", borderRadius:"8px", border:"1px solid rgba(255,255,255,0.14)", background:"rgba(255,255,255,0.08)", backdropFilter:"blur(20px)", cursor:"pointer", color:"#F8F9FC" }}>
+              {activeAsset && (() => {
+                const t = TRENDING.find(a => a.ticker === activeAsset.ticker)?.type || "EQUITY";
+                const tc = typeColor(t);
+                return <AssetLogo ticker={activeAsset.ticker} type={t} size={18} radius={4} fallbackBg={tc.bg} fallbackBorder={tc.border} fallbackTextColor={tc.text}/>;
+              })()}
+              <span style={{ fontSize:"12px", fontWeight:500, letterSpacing:"0.04em" }}>{activeAsset ? activeAsset.ticker : "Sélectionner..."}</span>
+              <span style={{ fontSize:"9px", opacity:0.45 }}>▾</span>
             </button>
-            {showPortfolioMenu && (
-              <div style={{ position:"absolute", top:"calc(100% + 10px)", left:0, background:"rgba(4,17,36,0.97)", border:"1px solid rgba(255,255,255,0.1)", borderRadius:"12px", minWidth:"220px", boxShadow:"0 16px 40px rgba(0,0,0,0.5)", overflow:"hidden", zIndex:70 }}
+            {showDropdown && (
+              <div style={{ position:"absolute", top:"calc(100% + 6px)", left:0, width:"420px", background:"rgba(4,17,36,0.97)", border:"1px solid rgba(255,255,255,0.1)", borderRadius:"12px", overflow:"hidden", boxShadow:"0 16px 48px rgba(0,0,0,0.5)", zIndex:60 }}
                 onMouseDown={e => e.preventDefault()}>
-                {portfolios.length > 0 && (
-                  <>
+                <div style={{ display:"flex", alignItems:"center", gap:"8px", padding:"10px 12px", borderBottom:"1px solid rgba(255,255,255,0.06)" }}>
+                  <svg width="12" height="12" fill="none" viewBox="0 0 24 24" stroke="#F8F9FC" strokeWidth={2} style={{ opacity:0.3, flexShrink:0 }}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-4.35-4.35M17 11A6 6 0 1 1 5 11a6 6 0 0 1 12 0z"/>
+                  </svg>
+                  <input ref={inputRef} value={localSearch} onChange={e => { setLocalSearch(e.target.value); setHighlightIndex(-1); }}
+                    onKeyDown={handleKeyDown}
+                    placeholder="Rechercher un actif..."
+                    style={{ background:"transparent", border:"none", outline:"none", color:"#F8F9FC", fontSize:"12px", flex:1 }}
+                    autoFocus
+                  />
+                  {localSearch && <button onMouseDown={e => e.preventDefault()} onClick={() => { setLocalSearch(""); setSearchResults([]); setHighlightIndex(-1); }} style={{ background:"transparent", border:"none", cursor:"pointer", opacity:0.4, color:"#F8F9FC", padding:0 }}>✕</button>}
+                </div>
+                <div style={{ display:"flex", gap:"2px", padding:"6px 8px", borderBottom:"1px solid rgba(255,255,255,0.06)" }}>
+                  {[{id:"all",label:"Tous"},{id:"EQUITY",label:"Actions"},{id:"ETF",label:"Fonds"},{id:"INDEX",label:"Indices"},{id:"CRYPTOCURRENCY",label:"Crypto"}].map(cat => (
+                    <button key={cat.id} onClick={() => { setCategory(cat.id); setDisplayCount(20); }} style={{ padding:"3px 10px", borderRadius:"6px", border:"none", fontSize:"10px", background:category===cat.id?"rgba(91,141,239,0.2)":"transparent", color:category===cat.id?"#9BB9FF":"rgba(255,255,255,0.4)", cursor:"pointer", fontWeight:category===cat.id?600:400, letterSpacing:"0.04em" }}>
+                      {cat.label}
+                    </button>
+                  ))}
+                </div>
+                <div style={{ position:"relative" }}>
+                  <div ref={listRef} onScroll={handleScroll} style={{ maxHeight:"260px", overflowY:"auto" }}>
+                    {!localSearch && <div style={{ padding:"3px 12px 2px", color:"rgba(255,255,255,0.2)", fontSize:"9px", letterSpacing:"0.12em" }}>POPULAIRES</div>}
+                    {displayAssets.map((a, i) => <AssetRow key={a.ticker} a={a} highlighted={i===0 && !!localSearch} focused={i===highlightIndex} idx={i} price={prices[a.ticker]} onSelect={handleSelect} onChart={handleChart}/>)}
+                    {!localSearch && displayCount < filteredAssets.length && (
+                      <div style={{ padding:"10px", textAlign:"center", color:"rgba(255,255,255,0.2)", fontSize:"10px" }}>Scroll pour charger plus...</div>
+                    )}
+                  </div>
+                  <div style={{ position:"absolute", bottom:0, left:0, right:0, height:"40px", background:"linear-gradient(to bottom, transparent, rgba(4,17,36,0.95))", pointerEvents:"none" }}/>
+                </div>
+                {/* Portefeuilles enregistrés */}
+                {portfolios.length > 0 && !localSearch && (
+                  <div style={{ borderTop:"1px solid rgba(255,255,255,0.06)" }}>
                     <div style={{ padding:"7px 12px 4px", color:"rgba(255,255,255,0.22)", fontSize:"9px", letterSpacing:"0.14em" }}>MES PORTEFEUILLES</div>
                     {portfolios.map((p: any) => (
                       <div key={p.id}
-                        style={{ display:"flex", alignItems:"center", gap:"10px", width:"100%", padding:"9px 12px", background:hoveredPortfolioId===p.id?"rgba(255,255,255,0.05)":"transparent", borderBottom:"1px solid rgba(255,255,255,0.04)", cursor:"pointer" }}
-                        onClick={() => { setActivePortfolio({ id: p.id, name: p.name, assets: p.assets || [], color: p.color || "#5B8DEF" }); setMode("portfolio"); setShowPortfolioMenu(false); }}
-                        onMouseEnter={() => setHoveredPortfolioId(p.id)}
-                        onMouseLeave={() => setHoveredPortfolioId(null)}>
-                        <div style={{ width:"7px", height:"7px", borderRadius:"2px", background: p.color || "#5B8DEF", flexShrink:0 }}/>
+                        onClick={() => { setActivePortfolio({ id:p.id, name:p.name, assets:p.assets||[], color:p.color||"#5B8DEF" }); setMode("portfolio"); setShowDropdown(false); router.push("/portfolio"); }}
+                        style={{ display:"flex", alignItems:"center", gap:"10px", padding:"8px 12px", cursor:"pointer", transition:"background 0.12s" }}
+                        onMouseEnter={e => e.currentTarget.style.background="rgba(255,255,255,0.04)"}
+                        onMouseLeave={e => e.currentTarget.style.background="transparent"}>
+                        <div style={{ width:"7px", height:"7px", borderRadius:"2px", background:p.color||"#5B8DEF", flexShrink:0 }}/>
                         <span style={{ color:"#F8F9FC", fontSize:"11px", flex:1 }}>{p.name}</span>
-                        {hoveredPortfolioId === p.id ? (
-                          <button
-                            onClick={e => { e.stopPropagation(); setActivePortfolio({ id: p.id, name: p.name, assets: p.assets || [], color: p.color || "#5B8DEF" }); setMode("portfolio"); setShowPortfolioMenu(false); router.push("/chart?portfolio=true"); }}
-                            style={{ background:"rgba(91,141,239,0.15)", border:"1px solid rgba(91,141,239,0.3)", borderRadius:"5px", color:"#9BB9FF", fontSize:"10px", padding:"2px 7px", cursor:"pointer", flexShrink:0, whiteSpace:"nowrap" as const }}>
-                            Graphique
-                          </button>
-                        ) : (
-                          <>
-                            <span style={{ color:"rgba(255,255,255,0.25)", fontSize:"10px" }}>{Array.isArray(p.assets) ? p.assets.length : 0} actifs</span>
-                            {activePortfolio?.id === p.id && <span style={{ color:"#5B8DEF", fontSize:"10px" }}>●</span>}
-                          </>
-                        )}
+                        <span style={{ color:"rgba(255,255,255,0.25)", fontSize:"10px" }}>{Array.isArray(p.assets)?p.assets.length:0} actifs</span>
+                        {activePortfolio?.id === p.id && <span style={{ color:"#5B8DEF", fontSize:"10px" }}>●</span>}
                       </div>
                     ))}
-                    <div style={{ height:"1px", background:"rgba(255,255,255,0.06)", margin:"4px 0" }}/>
-                  </>
+                  </div>
                 )}
-                <button onClick={() => { router.push("/build"); setShowPortfolioMenu(false); }}
-                  style={{ display:"flex", alignItems:"center", gap:"8px", width:"100%", padding:"9px 12px", background:"transparent", border:"none", cursor:"pointer", color:"rgba(255,255,255,0.5)", fontSize:"11px", letterSpacing:"0.04em" }}
-                  onMouseEnter={e => { e.currentTarget.style.background="rgba(91,141,239,0.08)"; e.currentTarget.style.color="#9BB9FF"; }}
-                  onMouseLeave={e => { e.currentTarget.style.background="transparent"; e.currentTarget.style.color="rgba(255,255,255,0.5)"; }}>
-                  <span style={{ opacity:0.5 }}>+</span> Nouveau portefeuille
-                </button>
               </div>
             )}
           </div>
-          <div style={{ width:"1px", height:"16px", background:"rgba(255,255,255,0.12)", flexShrink:0 }}/>
-          <button onClick={() => { setMode("asset"); setShowDropdown(true); setShowPortfolioMenu(false); setTimeout(() => inputRef.current?.focus(), 50); }} style={{ padding:"5px 14px", borderRadius:"7px", border:"none", background:mode==="asset"?"rgba(255,255,255,0.12)":"transparent", color:"#F8F9FC", fontSize:"11px", fontWeight:mode==="asset"?600:400, opacity:mode==="asset"?1:0.45, cursor:"pointer", letterSpacing:"0.06em", boxShadow:mode==="asset"?"0 0 12px rgba(91,141,239,0.2)":"none", transition:"all 0.2s", whiteSpace:"nowrap" }}>
-            {mode==="asset" ? "● Actif seul" : "○ Actif seul"}
-          </button>
-          {mode==="asset" && (
-            <>
-              <div style={{ width:"1px", height:"16px", background:"rgba(255,255,255,0.12)", flexShrink:0 }}/>
-              {pathname !== "/build" && <div style={{ display:"flex", alignItems:"center", gap:"6px", padding:"0 10px", width:"180px", flexShrink:0, position:"relative" }}>
-                {activeAsset && !localSearch ? (() => { const tc = typeColor(TRENDING.find(a=>a.ticker===activeAsset.ticker)?.type||"EQUITY"); return <AssetLogo ticker={activeAsset.ticker} type={TRENDING.find(a=>a.ticker===activeAsset.ticker)?.type||"EQUITY"} size={28} radius={6} fallbackBg={tc.bg} fallbackBorder={tc.border} fallbackTextColor={tc.text}/>; })() : (
-                <svg width="10" height="10" fill="none" viewBox="0 0 24 24" stroke="#F8F9FC" strokeWidth={2} style={{ opacity:0.35, flexShrink:0 }}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-4.35-4.35M17 11A6 6 0 1 1 5 11a6 6 0 0 1 12 0z"/>
-                </svg>)}
-                <input ref={inputRef} value={localSearch} onChange={e => { setLocalSearch(e.target.value); setShowDropdown(true); setHighlightIndex(-1); }}
-                  onFocus={() => setShowDropdown(true)}
-                  onKeyDown={handleKeyDown}
-                  placeholder={activeAsset ? activeAsset.name : "Rechercher un actif..."}
-                  style={{ background:"transparent", border:"none", outline:"none", color:"#F8F9FC", fontSize:"11px", width:"100%", opacity:localSearch?1:0.5 }}
-                />
-                {isSearching
-                  ? <span style={{ color:"rgba(91,141,239,0.7)", fontSize:"10px", flexShrink:0, letterSpacing:"0.05em", animation:"none" }}>···</span>
-                  : localSearch && <button onMouseDown={e=>e.preventDefault()} onClick={() => { setLocalSearch(""); setSearchResults([]); setHighlightIndex(-1); }} style={{ background:"transparent", border:"none", cursor:"pointer", opacity:0.4, color:"#F8F9FC", padding:0, fontSize:"11px" }}>✕</button>}
-              </div>}
-            </>
-          )}
         </div>
+      )}
 
-        {/* Dropdown liste d'actifs */}
-        {showDropdown && mode==="asset" && (
-          <div style={{ position:"absolute", top:"calc(100% + 6px)", left:"50%", transform:"translateX(-50%)", width:"420px", background:"rgba(4,17,36,0.97)", border:"1px solid rgba(255,255,255,0.1)", borderRadius:"12px", overflow:"hidden", boxShadow:"0 16px 48px rgba(0,0,0,0.5)", zIndex:60 }}
-            onMouseDown={e => e.preventDefault()}>
-            {/* Catégories */}
-            <div style={{ display:"flex", gap:"2px", padding:"8px 8px 6px", borderBottom:"1px solid rgba(255,255,255,0.06)" }}>
-              {[{id:"all",label:"Tous"},{id:"EQUITY",label:"Actions"},{id:"ETF",label:"Fonds"},{id:"INDEX",label:"Indices"},{id:"CRYPTOCURRENCY",label:"Crypto"}].map(cat => (
-                <button key={cat.id} onClick={() => { setCategory(cat.id); setDisplayCount(20); }} style={{ padding:"3px 10px", borderRadius:"6px", border:"none", fontSize:"10px", background:category===cat.id?"rgba(91,141,239,0.2)":"transparent", color:category===cat.id?"#9BB9FF":"rgba(255,255,255,0.4)", cursor:"pointer", fontWeight:category===cat.id?600:400, letterSpacing:"0.04em" }}>
-                  {cat.label}
-                </button>
-              ))}
-            </div>
-            {/* Liste scrollable */}
-            <div ref={listRef} onScroll={handleScroll} style={{ maxHeight:"320px", overflowY:"auto" }}>
-              {!localSearch && <div style={{ padding:"3px 12px 2px", color:"rgba(255,255,255,0.2)", fontSize:"9px", letterSpacing:"0.12em" }}>POPULAIRES</div>}
-              {displayAssets.map((a, i) => <AssetRow key={a.ticker} a={a} highlighted={i===0 && !!localSearch} focused={i===highlightIndex} idx={i} price={prices[a.ticker]} onSelect={handleSelect} onChart={handleChart}/>)}
-              {!localSearch && displayCount < filteredAssets.length && (
-                <div style={{ padding:"10px", textAlign:"center", color:"rgba(255,255,255,0.2)", fontSize:"10px" }}>Scroll pour charger plus...</div>
-              )}
-            </div>
-          </div>
-        )}
-      </div>}
-
-      {/* Outils */}
-      {!isChartPage && <div style={{ position:"fixed", top:"13px", right:"20px", zIndex:50 }}>
-        <div style={{ position:"relative" }}>
-          <button onClick={() => setShowTools(t => !t)} style={{ display:"flex", alignItems:"center", gap:"6px", borderRadius:"8px", padding:"6px 14px", border:"1px solid rgba(255,255,255,0.1)", background:"rgba(255,255,255,0.06)", backdropFilter:"blur(20px)", color:"rgba(255,255,255,0.7)", fontSize:"11px", fontWeight:400, letterSpacing:"0.06em", cursor:"pointer" }}>
-            ≡ Outils <span style={{ opacity:0.5, fontSize:"10px" }}>{showTools?"▲":"▼"}</span>
-          </button>
-          {showTools && (
-            <div style={{ position:"absolute", top:"calc(100% + 8px)", right:0, background:"rgba(4,17,36,0.97)", border:"1px solid rgba(255,255,255,0.1)", borderRadius:"12px", backdropFilter:"blur(24px)", padding:"6px", minWidth:"210px", boxShadow:"0 16px 40px rgba(0,0,0,0.4)" }}>
-              {[{icon:"◈",label:"Créer un portefeuille",href:"/build"},{icon:"◎",label:"Analyse de marché"},{icon:"⬡",label:"ETF Map",href:"/map"},{icon:"⟁",label:"Monte Carlo"},{icon:"◆",label:"Optimisation Markowitz"}].map((item:any) => (
-                <button key={item.label} onClick={() => { item.href && router.push(item.href); setShowTools(false); }}
-                  style={{ display:"flex", alignItems:"center", gap:"10px", width:"100%", padding:"9px 12px", borderRadius:"7px", background:"transparent", border:"none", color:"#F8F9FC", fontSize:"12px", cursor:item.href?"pointer":"default", textAlign:"left", opacity:0.7, transition:"background 0.15s" }}
-                  onMouseEnter={e => { e.currentTarget.style.background="rgba(255,255,255,0.07)"; e.currentTarget.style.opacity="1"; }}
-                  onMouseLeave={e => { e.currentTarget.style.background="transparent"; e.currentTarget.style.opacity="0.7"; }}>
-                  <span style={{ opacity:0.5, fontSize:"14px" }}>{item.icon}</span>{item.label}
-                </button>
-              ))}
-            </div>
-          )}
+      {/* Nav tabs centrés — plain text */}
+      {!isChartPage && (
+        <div style={{ position:"fixed", top:"14px", left:"50%", transform:"translateX(-50%)", zIndex:50, display:"flex", alignItems:"center", gap:"28px" }}>
+          {navTabs.map(tab => {
+            const isActive = pathname === tab.href || (tab.href !== "/" && pathname.startsWith(tab.href.split("?")[0]));
+            return (
+              <a key={tab.label} href={tab.href}
+                style={{ textDecoration:"none", color:"#F8F9FC", fontSize:"12px",
+                  fontWeight: isActive ? 500 : 400,
+                  opacity: isActive ? 0.9 : 0.45,
+                  letterSpacing:"0.05em",
+                  transition:"opacity 0.2s",
+                  whiteSpace:"nowrap" as const }}>
+                {tab.label}
+              </a>
+            );
+          })}
         </div>
-      </div>}
+      )}
+
 
       {showDropdown && <div style={{ position:"fixed", inset:0, zIndex:49 }} onClick={() => setShowDropdown(false)}/>}
       {showPortfolioMenu && <div style={{ position:"fixed", inset:0, zIndex:49 }} onClick={() => setShowPortfolioMenu(false)}/>}
