@@ -33,14 +33,9 @@ const AssetRow = memo(function AssetRow({ a, highlighted, focused, idx, price, o
         type={a.type}
         size={28}
         radius={6}
-        fallbackBg={highlighted ? `${tc.text}22` : tc.bg}
-        fallbackBorder={highlighted ? tc.text : tc.border}
+        fallbackBg={tc.bg}
+        fallbackBorder={tc.border}
         fallbackTextColor={tc.text}
-        style={{
-          border: `1px solid ${highlighted ? tc.text : tc.border}`,
-          boxShadow: highlighted ? `0 0 8px ${tc.text}55` : "none",
-          background: highlighted ? `${tc.text}11` : "rgba(255,255,255,0.06)",
-        }}
       />
       <span style={{ color:"#F8F9FC", fontSize:"11px", fontWeight:500, flex:1, textAlign:"left" }}>{a.name}</span>
       {hovered && (
@@ -145,22 +140,35 @@ export default function GlobalHeader() {
     } catch {}
   };
 
-  // Search
+  // Search — local TRENDING fallback (instant, gère les accents) + API
+  const normSearch = (s: string) => s.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
   useEffect(() => {
     if (!localSearch) { setSearchResults([]); setIsSearching(false); setHighlightIndex(-1); return; }
+    const qn = normSearch(localSearch);
+    // Résultats locaux immédiats depuis TRENDING
+    const local: Asset[] = TRENDING
+      .filter(a => normSearch(a.ticker).includes(qn) || normSearch(a.name).includes(qn))
+      .map(a => ({ ticker: a.ticker, type: a.type, name: a.name }));
+    if (local.length > 0) {
+      setSearchResults(local);
+      setHighlightIndex(-1);
+      fetchPrices(local.slice(0, 10).map(a => a.ticker));
+    }
     setIsSearching(true);
     clearTimeout(debounce.current);
     debounce.current = setTimeout(async () => {
       try {
         const r = await fetch(`http://localhost:8000/api/v1/search?q=${encodeURIComponent(localSearch)}`);
         const d = await r.json();
-        const items = (d?.results || []).map((x: any) => ({ ticker: x.ticker, type: x.type || "EQUITY", name: x.name || x.ticker }));
-        setSearchResults(items);
+        const api: Asset[] = (d?.results || []).map((x: any) => ({ ticker: x.ticker, type: x.type || "EQUITY", name: x.name || x.ticker }));
+        const seen = new Set(api.map(a => a.ticker));
+        const merged = [...api, ...local.filter(a => !seen.has(a.ticker))].slice(0, 10);
+        setSearchResults(merged);
         setHighlightIndex(-1);
-        fetchPrices(items.slice(0,10).map((x: any) => x.ticker));
-      } catch {} finally { setIsSearching(false); }
+        fetchPrices(merged.map(a => a.ticker));
+      } catch { if (local.length === 0) setSearchResults([]); } finally { setIsSearching(false); }
     }, 300);
-  }, [localSearch]);
+  }, [localSearch]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Load prices when dropdown opens
   useEffect(() => {
@@ -229,6 +237,7 @@ export default function GlobalHeader() {
 
   return (
     <>
+
       {/* Left: NOVAC + separator + asset pill */}
       {!isChartPage && (
         <div style={{ position:"fixed", top:"12px", left:"16px", zIndex:50, display:"flex", alignItems:"center", gap:"10px" }}>
@@ -239,63 +248,99 @@ export default function GlobalHeader() {
           <div style={{ position:"relative" }}>
             <button onClick={() => { setShowDropdown(v => !v); setShowPortfolioMenu(false); }}
               style={{ display:"flex", alignItems:"center", gap:"6px", padding:"4px 9px 4px 6px", borderRadius:"8px", border:"1px solid rgba(255,255,255,0.14)", background:"rgba(255,255,255,0.08)", backdropFilter:"blur(20px)", cursor:"pointer", color:"#F8F9FC" }}>
-              {activeAsset && (() => {
-                const t = TRENDING.find(a => a.ticker === activeAsset.ticker)?.type || "EQUITY";
-                const tc = typeColor(t);
-                return <AssetLogo ticker={activeAsset.ticker} type={t} size={18} radius={4} fallbackBg={tc.bg} fallbackBorder={tc.border} fallbackTextColor={tc.text}/>;
-              })()}
-              <span style={{ fontSize:"12px", fontWeight:500, letterSpacing:"0.04em" }}>{activeAsset ? activeAsset.ticker : "Sélectionner..."}</span>
+              {mode === "portfolio" && activePortfolio ? (
+                <>
+                  <div style={{ width:8, height:8, borderRadius:2, background:activePortfolio.color||"#5B8DEF", flexShrink:0 }}/>
+                  <span style={{ fontSize:"12px", fontWeight:500, letterSpacing:"0.04em" }}>{activePortfolio.name}</span>
+                </>
+              ) : (
+                <>
+                  {activeAsset && (() => {
+                    const t = TRENDING.find(a => a.ticker === activeAsset.ticker)?.type || "EQUITY";
+                    const tc = typeColor(t);
+                    return <AssetLogo ticker={activeAsset.ticker} type={t} size={22} radius={5} fallbackBg={tc.bg} fallbackBorder={tc.border} fallbackTextColor={tc.text}/>;
+                  })()}
+                  <span style={{ fontSize:"12px", fontWeight:500, letterSpacing:"0.04em" }}>{activeAsset ? activeAsset.ticker : "Sélectionner..."}</span>
+                </>
+              )}
               <span style={{ fontSize:"9px", opacity:0.45 }}>▾</span>
             </button>
             {showDropdown && (
-              <div style={{ position:"absolute", top:"calc(100% + 6px)", left:0, width:"420px", background:"rgba(4,17,36,0.97)", border:"1px solid rgba(255,255,255,0.1)", borderRadius:"12px", overflow:"hidden", boxShadow:"0 16px 48px rgba(0,0,0,0.5)", zIndex:60 }}
+              <div style={{ position:"absolute", top:"calc(100% + 6px)", left:0, width: pathname.startsWith("/portfolio") ? "280px" : "420px", background:"rgba(4,17,36,0.97)", border:"1px solid rgba(255,255,255,0.1)", borderRadius:"12px", overflow:"hidden", boxShadow:"0 16px 48px rgba(0,0,0,0.5)", zIndex:60 }}
                 onMouseDown={e => e.preventDefault()}>
-                <div style={{ display:"flex", alignItems:"center", gap:"8px", padding:"10px 12px", borderBottom:"1px solid rgba(255,255,255,0.06)" }}>
-                  <svg width="12" height="12" fill="none" viewBox="0 0 24 24" stroke="#F8F9FC" strokeWidth={2} style={{ opacity:0.3, flexShrink:0 }}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-4.35-4.35M17 11A6 6 0 1 1 5 11a6 6 0 0 1 12 0z"/>
-                  </svg>
-                  <input ref={inputRef} value={localSearch} onChange={e => { setLocalSearch(e.target.value); setHighlightIndex(-1); }}
-                    onKeyDown={handleKeyDown}
-                    placeholder="Rechercher un actif..."
-                    style={{ background:"transparent", border:"none", outline:"none", color:"#F8F9FC", fontSize:"12px", flex:1 }}
-                    autoFocus
-                  />
-                  {localSearch && <button onMouseDown={e => e.preventDefault()} onClick={() => { setLocalSearch(""); setSearchResults([]); setHighlightIndex(-1); }} style={{ background:"transparent", border:"none", cursor:"pointer", opacity:0.4, color:"#F8F9FC", padding:0 }}>✕</button>}
-                </div>
-                <div style={{ display:"flex", gap:"2px", padding:"6px 8px", borderBottom:"1px solid rgba(255,255,255,0.06)" }}>
-                  {[{id:"all",label:"Tous"},{id:"EQUITY",label:"Actions"},{id:"ETF",label:"Fonds"},{id:"INDEX",label:"Indices"},{id:"CRYPTOCURRENCY",label:"Crypto"}].map(cat => (
-                    <button key={cat.id} onClick={() => { setCategory(cat.id); setDisplayCount(20); }} style={{ padding:"3px 10px", borderRadius:"6px", border:"none", fontSize:"10px", background:category===cat.id?"rgba(91,141,239,0.2)":"transparent", color:category===cat.id?"#9BB9FF":"rgba(255,255,255,0.4)", cursor:"pointer", fontWeight:category===cat.id?600:400, letterSpacing:"0.04em" }}>
-                      {cat.label}
-                    </button>
-                  ))}
-                </div>
-                <div style={{ position:"relative" }}>
-                  <div ref={listRef} onScroll={handleScroll} style={{ maxHeight:"260px", overflowY:"auto" }}>
-                    {!localSearch && <div style={{ padding:"3px 12px 2px", color:"rgba(255,255,255,0.2)", fontSize:"9px", letterSpacing:"0.12em" }}>POPULAIRES</div>}
-                    {displayAssets.map((a, i) => <AssetRow key={a.ticker} a={a} highlighted={i===0 && !!localSearch} focused={i===highlightIndex} idx={i} price={prices[a.ticker]} onSelect={handleSelect} onChart={handleChart}/>)}
-                    {!localSearch && displayCount < filteredAssets.length && (
-                      <div style={{ padding:"10px", textAlign:"center", color:"rgba(255,255,255,0.2)", fontSize:"10px" }}>Scroll pour charger plus...</div>
-                    )}
-                  </div>
-                  <div style={{ position:"absolute", bottom:0, left:0, right:0, height:"40px", background:"linear-gradient(to bottom, transparent, rgba(4,17,36,0.95))", pointerEvents:"none" }}/>
-                </div>
-                {/* Portefeuilles enregistrés */}
-                {portfolios.length > 0 && !localSearch && (
-                  <div style={{ borderTop:"1px solid rgba(255,255,255,0.06)" }}>
-                    <div style={{ padding:"7px 12px 4px", color:"rgba(255,255,255,0.22)", fontSize:"9px", letterSpacing:"0.14em" }}>MES PORTEFEUILLES</div>
+
+                {/* Sur la page portfolio : uniquement la liste des portefeuilles */}
+                {pathname.startsWith("/portfolio") ? (
+                  <div>
+                    <div style={{ padding:"10px 14px 6px", color:"rgba(255,255,255,0.30)", fontSize:"9px", letterSpacing:"0.14em", fontWeight:700 }}>MES PORTEFEUILLES</div>
                     {portfolios.map((p: any) => (
                       <div key={p.id}
-                        onClick={() => { setActivePortfolio({ id:p.id, name:p.name, assets:p.assets||[], color:p.color||"#5B8DEF" }); setMode("portfolio"); setShowDropdown(false); router.push("/portfolio"); }}
-                        style={{ display:"flex", alignItems:"center", gap:"10px", padding:"8px 12px", cursor:"pointer", transition:"background 0.12s" }}
+                        onClick={() => { setActivePortfolio({ id:p.id, name:p.name, assets:p.assets||[], color:p.color||"#5B8DEF" }); setMode("portfolio"); setShowDropdown(false); }}
+                        style={{ display:"flex", alignItems:"center", gap:"10px", padding:"9px 14px", cursor:"pointer", transition:"background 0.12s" }}
                         onMouseEnter={e => e.currentTarget.style.background="rgba(255,255,255,0.04)"}
                         onMouseLeave={e => e.currentTarget.style.background="transparent"}>
-                        <div style={{ width:"7px", height:"7px", borderRadius:"2px", background:p.color||"#5B8DEF", flexShrink:0 }}/>
-                        <span style={{ color:"#F8F9FC", fontSize:"11px", flex:1 }}>{p.name}</span>
+                        <div style={{ width:"8px", height:"8px", borderRadius:"2px", background:p.color||"#5B8DEF", flexShrink:0 }}/>
+                        <span style={{ color:"#F8F9FC", fontSize:"12px", flex:1, fontWeight:500 }}>{p.name}</span>
+                        {p.is_simulation && <span style={{ fontSize:"8px", padding:"1px 5px", borderRadius:"4px", background:"rgba(99,102,241,0.14)", border:"1px solid rgba(99,102,241,0.28)", color:"#a5b4fc", letterSpacing:"0.08em", flexShrink:0 }}>SIM</span>}
                         <span style={{ color:"rgba(255,255,255,0.25)", fontSize:"10px" }}>{Array.isArray(p.assets)?p.assets.length:0} actifs</span>
                         {activePortfolio?.id === p.id && <span style={{ color:"#5B8DEF", fontSize:"10px" }}>●</span>}
                       </div>
                     ))}
+                    {portfolios.length === 0 && (
+                      <div style={{ padding:"16px 14px", color:"rgba(255,255,255,0.25)", fontSize:"11px" }}>Aucun portefeuille</div>
+                    )}
                   </div>
+                ) : (
+                  /* Ailleurs : recherche d'actifs + portefeuilles */
+                  <>
+                    <div style={{ display:"flex", alignItems:"center", gap:"8px", padding:"10px 12px", borderBottom:"1px solid rgba(255,255,255,0.06)" }}>
+                      <svg width="12" height="12" fill="none" viewBox="0 0 24 24" stroke="#F8F9FC" strokeWidth={2} style={{ opacity:0.3, flexShrink:0 }}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-4.35-4.35M17 11A6 6 0 1 1 5 11a6 6 0 0 1 12 0z"/>
+                      </svg>
+                      <input ref={inputRef} value={localSearch} onChange={e => { setLocalSearch(e.target.value); setHighlightIndex(-1); }}
+                        onKeyDown={handleKeyDown}
+                        placeholder="Rechercher un actif..."
+                        style={{ background:"transparent", border:"none", outline:"none", color:"#F8F9FC", fontSize:"12px", flex:1 }}
+                        autoFocus
+                      />
+                      {localSearch && <button onMouseDown={e => e.preventDefault()} onClick={() => { setLocalSearch(""); setSearchResults([]); setHighlightIndex(-1); }} style={{ background:"transparent", border:"none", cursor:"pointer", opacity:0.4, color:"#F8F9FC", padding:0 }}>✕</button>}
+                    </div>
+                    <div style={{ display:"flex", gap:"2px", padding:"6px 8px", borderBottom:"1px solid rgba(255,255,255,0.06)" }}>
+                      {[{id:"all",label:"Tous"},{id:"EQUITY",label:"Actions"},{id:"ETF",label:"Fonds"},{id:"INDEX",label:"Indices"},{id:"CRYPTOCURRENCY",label:"Crypto"}].map(cat => (
+                        <button key={cat.id} onClick={() => { setCategory(cat.id); setDisplayCount(20); }} style={{ padding:"3px 10px", borderRadius:"6px", border:"none", fontSize:"10px", background:category===cat.id?"rgba(91,141,239,0.2)":"transparent", color:category===cat.id?"#9BB9FF":"rgba(255,255,255,0.4)", cursor:"pointer", fontWeight:category===cat.id?600:400, letterSpacing:"0.04em" }}>
+                          {cat.label}
+                        </button>
+                      ))}
+                    </div>
+                    <div style={{ position:"relative" }}>
+                      <div ref={listRef} onScroll={handleScroll} style={{ maxHeight:"260px", overflowY:"auto" }}>
+                        {!localSearch && <div style={{ padding:"3px 12px 2px", color:"rgba(255,255,255,0.2)", fontSize:"9px", letterSpacing:"0.12em" }}>POPULAIRES</div>}
+                        {displayAssets.map((a, i) => <AssetRow key={a.ticker} a={a} highlighted={i===0 && !!localSearch} focused={i===highlightIndex} idx={i} price={prices[a.ticker]} onSelect={handleSelect} onChart={handleChart}/>)}
+                        {!localSearch && displayCount < filteredAssets.length && (
+                          <div style={{ padding:"10px", textAlign:"center", color:"rgba(255,255,255,0.2)", fontSize:"10px" }}>Scroll pour charger plus...</div>
+                        )}
+                      </div>
+                      <div style={{ position:"absolute", bottom:0, left:0, right:0, height:"40px", background:"linear-gradient(to bottom, transparent, rgba(4,17,36,0.95))", pointerEvents:"none" }}/>
+                    </div>
+                    {portfolios.length > 0 && !localSearch && (
+                      <div style={{ borderTop:"1px solid rgba(255,255,255,0.06)" }}>
+                        <div style={{ padding:"7px 12px 4px", color:"rgba(255,255,255,0.22)", fontSize:"9px", letterSpacing:"0.14em" }}>MES PORTEFEUILLES</div>
+                        {portfolios.map((p: any) => (
+                          <div key={p.id}
+                            onClick={() => { setActivePortfolio({ id:p.id, name:p.name, assets:p.assets||[], color:p.color||"#5B8DEF" }); setMode("portfolio"); setShowDropdown(false); }}
+                            style={{ display:"flex", alignItems:"center", gap:"10px", padding:"8px 12px", cursor:"pointer", transition:"background 0.12s" }}
+                            onMouseEnter={e => e.currentTarget.style.background="rgba(255,255,255,0.04)"}
+                            onMouseLeave={e => e.currentTarget.style.background="transparent"}>
+                            <div style={{ width:"7px", height:"7px", borderRadius:"2px", background:p.color||"#5B8DEF", flexShrink:0 }}/>
+                            <span style={{ color:"#F8F9FC", fontSize:"11px", flex:1 }}>{p.name}</span>
+                            {p.is_simulation && <span style={{ fontSize:"8px", padding:"1px 5px", borderRadius:"4px", background:"rgba(99,102,241,0.14)", border:"1px solid rgba(99,102,241,0.28)", color:"#a5b4fc", letterSpacing:"0.08em", flexShrink:0 }}>SIM</span>}
+                            <span style={{ color:"rgba(255,255,255,0.25)", fontSize:"10px" }}>{Array.isArray(p.assets)?p.assets.length:0} actifs</span>
+                            {activePortfolio?.id === p.id && <span style={{ color:"#5B8DEF", fontSize:"10px" }}>●</span>}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </>
                 )}
               </div>
             )}
@@ -305,7 +350,7 @@ export default function GlobalHeader() {
 
       {/* Nav tabs centrés — plain text */}
       {!isChartPage && (
-        <div style={{ position:"fixed", top:"14px", left:"50%", transform:"translateX(-50%)", zIndex:50, display:"flex", alignItems:"center", gap:"28px" }}>
+        <div style={{ position:"fixed", top:"14px", left:"50%", transform:"translateX(-50%)", zIndex:50, display:"flex", alignItems:"center", gap:"22px", padding:"7px 18px", borderRadius:"999px", border:"1px solid rgba(255,255,255,0.12)", background:"rgba(255,255,255,0.06)", backdropFilter:"blur(20px)", WebkitBackdropFilter:"blur(20px)" }}>
           {navTabs.map(tab => {
             const isActive = pathname === tab.href || (tab.href !== "/" && pathname.startsWith(tab.href.split("?")[0]));
             return (

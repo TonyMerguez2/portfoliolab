@@ -1,0 +1,299 @@
+"use client";
+import { useMemo, useRef, useState, useEffect } from "react";
+
+const Px = [0.906, -0.185] as const;
+const Py = [0.360,  0.480] as const;
+const Pz = [0,     -0.860] as const;
+
+const H_MIN   = 40;
+const H_SCALE = 8;
+const H_FLOOR = 22;
+
+const ASSETS = [
+  { ticker:"CW8",   weight:23, change:  0.0 },
+  { ticker:"GOOGL", weight:19, change:  4.1 },
+  { ticker:"SPY",   weight:15, change:  1.2 },
+  { ticker:"NVDA",  weight:12, change:  3.2 },
+  { ticker:"HRMS",  weight:11, change: -1.8 },
+  { ticker:"GOLD",  weight:10, change:  0.8 },
+  { ticker:"XSX6",  weight:10, change: -0.9 },
+];
+
+function assetH(change: number) {
+  return Math.max(H_FLOOR, H_MIN + change * H_SCALE);
+}
+
+const SLOTS = [
+  { x0:2.5, y0:2.5, x1:7.5, y1:7.5 },
+  { x0:2.5, y0:0,   x1:7.5, y1:2.5 },
+  { x0:0,   y0:2.5, x1:2.5, y1:7.5 },
+  { x0:7.5, y0:2.5, x1:10,  y1:7.5 },
+  { x0:2.5, y0:7.5, x1:7.5, y1:10  },
+  { x0:0,   y0:0,   x1:2.5, y1:2.5 },
+  { x0:7.5, y0:0,   x1:10,  y1:2.5 },
+  { x0:0,   y0:7.5, x1:2.5, y1:10  },
+  { x0:7.5, y0:7.5, x1:10,  y1:10  },
+];
+
+function roundedPoly(pts: [number,number][], r: number): string {
+  const n = pts.length;
+  const segs: string[] = [];
+  let started = false;
+  for (let i = 0; i < n; i++) {
+    const prev = pts[(i-1+n)%n], curr = pts[i], next = pts[(i+1)%n];
+    if (r < 0.5) {
+      segs.push(`${started?'L':'M'} ${curr[0].toFixed(1)} ${curr[1].toFixed(1)}`);
+      started = true;
+    } else {
+      const d1x=prev[0]-curr[0], d1y=prev[1]-curr[1], len1=Math.sqrt(d1x*d1x+d1y*d1y)||1;
+      const d2x=next[0]-curr[0], d2y=next[1]-curr[1], len2=Math.sqrt(d2x*d2x+d2y*d2y)||1;
+      const r1=Math.min(r,len1*0.42), r2=Math.min(r,len2*0.42);
+      const a1:[number,number]=[curr[0]+(d1x/len1)*r1, curr[1]+(d1y/len1)*r1];
+      const a2:[number,number]=[curr[0]+(d2x/len2)*r2, curr[1]+(d2y/len2)*r2];
+      segs.push(`${started?'L':'M'} ${a1[0].toFixed(1)} ${a1[1].toFixed(1)}`);
+      started = true;
+      segs.push(`Q ${curr[0].toFixed(1)} ${curr[1].toFixed(1)} ${a2[0].toFixed(1)} ${a2[1].toFixed(1)}`);
+    }
+  }
+  return segs.join(' ') + ' Z';
+}
+
+function logoUrl(ticker: string) {
+  return `https://financialmodelingprep.com/image-stock/${ticker.replace(/\.[A-Z]{1,3}$/,"").replace(/^\^/,"")}.png`;
+}
+
+function perfHsl(change: number|null): [number,number,number] {
+  if (change === null || Math.abs(change) < 0.3) return [220, 18, 22];
+  const t = Math.min(Math.abs(change)/10, 1);
+  const s = Math.round(60 + t*34), l = Math.round(28 + t*24);
+  if (change > 0) return [Math.round(100 + t*40), s, l];
+  return [Math.round(10 + t*8), s, l];
+}
+
+export default function Treemap() {
+  const ref = useRef<HTMLDivElement>(null);
+  const [size, setSize] = useState({ w: 960, h: 640 });
+  const [hovered, setHovered] = useState<string|null>(null);
+  const [logoErrors, setLogoErrors] = useState<Set<string>>(new Set(["CW8","XSX6","HRMS","GOLD"]));
+
+  useEffect(() => {
+    const obs = new ResizeObserver(e => {
+      const r = e[0].contentRect;
+      setSize({ w: r.width, h: r.height });
+    });
+    if (ref.current) obs.observe(ref.current);
+    return () => obs.disconnect();
+  }, []);
+
+  const sqSize = Math.min(size.w * 0.58, size.h * 0.72);
+  const sw = sqSize, sh = sqSize;
+  const GAP = 18;
+
+  const tiles = useMemo(() => {
+    if (size.w < 10) return [];
+    const sorted = [...ASSETS].sort((a,b) => b.weight - a.weight);
+    return sorted.slice(0, SLOTS.length).map((asset, i) => {
+      const s = SLOTS[i];
+      return {
+        x0: (s.x0/10)*sw + GAP/2,
+        y0: (s.y0/10)*sh + GAP/2,
+        x1: (s.x1/10)*sw - GAP/2,
+        y1: (s.y1/10)*sh - GAP/2,
+        data: asset,
+      };
+    });
+  }, [size, sw, sh]);
+
+  const maxH = useMemo(() => Math.max(...ASSETS.map(a => assetH(a.change))), []);
+
+  const { scale, ox, oy } = useMemo(() => {
+    const pad = 18;
+    const corners:[number,number,number][] = [
+      [0,0,0],[sw,0,0],[0,sh,0],[sw,sh,0],
+      [0,0,maxH],[sw,0,maxH],[0,sh,maxH],[sw,sh,maxH],
+    ];
+    let mnX=Infinity,mxX=-Infinity,mnY=Infinity,mxY=-Infinity;
+    for (const [x,y,z] of corners) {
+      const sx=x*Px[0]+y*Py[0]+z*Pz[0], sy=x*Px[1]+y*Py[1]+z*Pz[1];
+      if(sx<mnX)mnX=sx; if(sx>mxX)mxX=sx;
+      if(sy<mnY)mnY=sy; if(sy>mxY)mxY=sy;
+    }
+    const sc = Math.min((size.w-pad*2)/(mxX-mnX),(size.h-pad*2)/(mxY-mnY));
+    return { scale:sc, ox:pad+(size.w-pad*2-(mxX-mnX)*sc)/2-mnX*sc, oy:pad+(size.h-pad*2-(mxY-mnY)*sc)/2-mnY*sc };
+  }, [sw,sh,maxH,size]);
+
+  function p(sx:number,sy:number,sz:number):[number,number] {
+    return [ox+(sx*Px[0]+sy*Py[0]+sz*Pz[0])*scale, oy+(sx*Px[1]+sy*Py[1]+sz*Pz[1])*scale];
+  }
+
+  const tileData = useMemo(() =>
+    tiles.map(node => {
+      const a = node.data;
+      const h = assetH(a.change);
+      const depth = (node.x0+node.x1)/2*Px[1] + (node.y0+node.y1)/2*Py[1];
+      return { node, asset: a, h, depth };
+    }).sort((a,b) => a.depth - b.depth),
+  [tiles]);
+
+  const gridStep = Math.max(20, Math.round(Math.max(sw,sh)/9/10)*10);
+  const gx0=-sw*0.30, gx1=sw*1.30, gy0=-sh*0.38, gy1=sh*1.38;
+  const gXC = Math.floor((gx1-gx0)/gridStep)+2;
+  const gYC = Math.floor((gy1-gy0)/gridStep)+2;
+
+  return (
+    <div style={{ width:"100vw", height:"100vh", background:"#040F22" }}>
+      <div ref={ref} style={{ width:"100%", height:"100%", position:"relative" }}>
+        <svg width={size.w} height={size.h} style={{ position:"absolute", inset:0 }}>
+          <defs>
+            {tileData.map(({ node, asset, h }) => {
+              const [H,S,L] = perfHsl(asset.change);
+              const TL=p(node.x0,node.y0,h), TR=p(node.x1,node.y0,h);
+              const BR=p(node.x1,node.y1,h), BL=p(node.x0,node.y1,h);
+              const TLb=p(node.x0,node.y0,0), BLb=p(node.x0,node.y1,0), BRb=p(node.x1,node.y1,0);
+              const vW=(node.x1-node.x0)*Px[0]*scale, vH=(node.y1-node.y0)*Py[1]*scale;
+              const r=Math.min(18,Math.max(5,Math.min(vW,vH)*0.15));
+              const topMx=(TL[0]+TR[0])/2, topMy=(TL[1]+TR[1])/2;
+              const botMx=(BLb[0]+BRb[0])/2, botMy=(BLb[1]+BRb[1])/2;
+              const cLight=`hsl(${H},${Math.min(76,S+22)}%,${Math.min(54,L+18)}%)`;
+              const cMid=`hsl(${H},${S}%,${L}%)`;
+              const cDark=`hsl(${H},${Math.max(5,S-8)}%,${Math.max(4,L-12)}%)`;
+              const cGlow=`hsl(${H},100%,60%)`;
+              const neon=`hsl(${H},100%,62%)`;
+              return (
+                <g key={asset.ticker}>
+                  <linearGradient id={`sg-${asset.ticker}`} gradientUnits="userSpaceOnUse"
+                    x1={topMx} y1={topMy} x2={botMx} y2={botMy}>
+                    <stop offset="0%"   stopColor={`hsl(${H},${Math.max(10,Math.round(S*0.45))}%,${Math.max(4,Math.round(L*0.38))}%)`}/>
+                    <stop offset="100%" stopColor={`hsl(${H},${Math.max(6,Math.round(S*0.28))}%,${Math.max(2,Math.round(L*0.20))}%)`}/>
+                  </linearGradient>
+                  <linearGradient id={`tf-${asset.ticker}`} gradientUnits="userSpaceOnUse"
+                    x1={TL[0]} y1={TL[1]} x2={BR[0]} y2={BR[1]}>
+                    <stop offset="0%"   stopColor="rgba(255,255,255,0.75)"/>
+                    <stop offset="6%"  stopColor={cLight}/>
+                    <stop offset="55%"  stopColor={cMid}/>
+                    <stop offset="100%" stopColor={cDark}/>
+                  </linearGradient>
+                  <radialGradient id={`cg-${asset.ticker}`} cx="50%" cy="50%" r="50%">
+                    <stop offset="0%"   stopColor={cGlow} stopOpacity="1"/>
+                    <stop offset="100%" stopColor={cGlow} stopOpacity="0"/>
+                  </radialGradient>
+                  <clipPath id={`cp-${asset.ticker}`}>
+                    <path d={roundedPoly([TL,TR,BR,BL],r)}/>
+                  </clipPath>
+                  <mask id={`tm-${asset.ticker}`}>
+                    <path d={roundedPoly([TL,TR,BR,BL],r)} fill="white"/>
+                  </mask>
+                </g>
+              );
+            })}
+          </defs>
+
+          {/* Grid */}
+          <polygon points={[p(gx0,gy0,0),p(gx1,gy0,0),p(gx1,gy1,0),p(gx0,gy1,0)].map(([x,y])=>`${x.toFixed(1)},${y.toFixed(1)}`).join(' ')}
+            fill="rgba(15,28,80,0.28)"/>
+          <g opacity={0.55} style={{filter:"blur(1.2px)"}}>
+            {Array.from({length:gXC},(_,i)=>{ const x=gx0+i*gridStep,[x1,y1]=p(x,gy0,0),[x2,y2]=p(x,gy1,0); return <line key={`gx${i}`} x1={x1} y1={y1} x2={x2} y2={y2} stroke="#4A7DE8" strokeWidth={1.4}/>; })}
+            {Array.from({length:gYC},(_,i)=>{ const y=gy0+i*gridStep,[x1,y1]=p(gx0,y,0),[x2,y2]=p(gx1,y,0); return <line key={`gy${i}`} x1={x1} y1={y1} x2={x2} y2={y2} stroke="#4A7DE8" strokeWidth={1.4}/>; })}
+          </g>
+          {Array.from({length:gXC},(_,i)=>{ const x=gx0+i*gridStep,[x1,y1]=p(x,gy0,0),[x2,y2]=p(x,gy1,0); return <line key={`gxs${i}`} x1={x1} y1={y1} x2={x2} y2={y2} stroke="rgba(74,125,232,0.50)" strokeWidth={0.65}/>; })}
+          {Array.from({length:gYC},(_,i)=>{ const y=gy0+i*gridStep,[x1,y1]=p(gx0,y,0),[x2,y2]=p(gx1,y,0); return <line key={`gys${i}`} x1={x1} y1={y1} x2={x2} y2={y2} stroke="rgba(74,125,232,0.50)" strokeWidth={0.65}/>; })}
+
+          {/* Blocks */}
+          {tileData.map(({ node, asset, h }) => {
+            const [H,S,L] = perfHsl(asset.change);
+            const TL=p(node.x0,node.y0,h), TR=p(node.x1,node.y0,h);
+            const BR=p(node.x1,node.y1,h), BL=p(node.x0,node.y1,h);
+            const TLb=p(node.x0,node.y0,0), BLb=p(node.x0,node.y1,0), BRb=p(node.x1,node.y1,0);
+            const [cx,cy]=p((node.x0+node.x1)/2,(node.y0+node.y1)/2,h);
+            const vW=(node.x1-node.x0)*Px[0]*scale, vH=(node.y1-node.y0)*Py[1]*scale;
+            const r=Math.min(18,Math.max(5,Math.min(vW,vH)*0.15));
+            const neon=`hsl(${H},100%,62%)`;
+            const cGlow=`hsl(${H},100%,60%)`;
+            const isHovered = hovered === asset.ticker;
+
+            return (
+              <g key={asset.ticker}
+                style={{ cursor:"pointer", transform: isHovered ? "translateY(-4px)" : "translateY(0)", transition:"transform 0.12s ease" }}
+                onMouseEnter={() => setHovered(asset.ticker)}
+                onMouseLeave={() => setHovered(null)}>
+
+                {/* Dark silhouette — sides */}
+                <path d={roundedPoly([TLb,TL,TR,BR,BRb,BLb], r)}
+                  fill={`url(#sg-${asset.ticker})`} fillOpacity={0.95} stroke="rgba(255,255,255,0.22)" strokeWidth={1.2}/>
+
+                {/* Bright top face */}
+                <path d={roundedPoly([TL,TR,BR,BL], r)}
+                  fill={`url(#tf-${asset.ticker})`}/>
+
+                {/* Glossy highlight streak */}
+                <g clipPath={`url(#cp-${asset.ticker})`} style={{pointerEvents:"none"}}>
+                  <path d={`M ${TL[0].toFixed(1)} ${TL[1].toFixed(1)} L ${TR[0].toFixed(1)} ${TR[1].toFixed(1)} L ${((TR[0]+BR[0])/2).toFixed(1)} ${((TR[1]+BR[1])/2).toFixed(1)} L ${((TL[0]+BL[0])/2).toFixed(1)} ${((TL[1]+BL[1])/2).toFixed(1)} Z`}
+                    fill="rgba(255,255,255,0.30)"/>
+                </g>
+
+                {/* Edge glow — inner perimeter bloom */}
+                <g clipPath={`url(#cp-${asset.ticker})`} style={{pointerEvents:"none"}}>
+                  <path d={roundedPoly([TL,TR,BR,BL], r)}
+                    fill="none" stroke={cGlow}
+                    strokeWidth={16} strokeOpacity={0.18}
+                    style={{filter:"blur(4px)"}}/>
+                </g>
+
+                {/* Neon edge */}
+                <path d={roundedPoly([TL,TR,BR,BL], r)}
+                  fill="none" stroke={neon}
+                  strokeWidth={1.8} strokeOpacity={0.88}
+                  style={{pointerEvents:"none"}}/>
+
+                {/* Content */}
+                <g clipPath={`url(#cp-${asset.ticker})`}>
+                  <g transform={`matrix(${(Px[0]*scale).toFixed(3)},${(Px[1]*scale).toFixed(3)},${(Py[0]*scale).toFixed(3)},${(Py[1]*scale).toFixed(3)},${cx.toFixed(1)},${cy.toFixed(1)})`}>
+                    {(()=>{
+                      const pyMag = 0.600;
+                      const fs = Math.min(20, Math.max(9, Math.min(vW,vH)*0.14)) / (pyMag * scale);
+                      const ls = fs * 1.25;
+                      const logoSz = fs * 2.2;
+                      const logoY = -(logoSz/2 + ls*1.2);
+                      return (<>
+                        {logoErrors.has(asset.ticker) ? (
+                          <g>
+                            <rect x={-logoSz/2} y={logoY-logoSz/2} width={logoSz} height={logoSz}
+                              rx={logoSz*0.22}
+                              fill={`hsl(${H},${Math.min(60,S+14)}%,${Math.min(42,L+20)}%)`} fillOpacity={0.55}/>
+                            <text x={0} y={logoY} textAnchor="middle" dominantBaseline="middle"
+                              fontSize={logoSz*0.52} fontWeight={900} fill="#fff" fillOpacity={0.88}>
+                              {asset.ticker[0]}
+                            </text>
+                          </g>
+                        ) : (
+                          <image href={logoUrl(asset.ticker)}
+                            x={-logoSz/2} y={logoY-logoSz/2}
+                            width={logoSz} height={logoSz}
+                            preserveAspectRatio="xMidYMid meet"
+                            onError={() => setLogoErrors(p => { const n=new Set(p); n.add(asset.ticker); return n; })}/>
+                        )}
+                        <text x={0} y={-ls*0.3} textAnchor="middle" dominantBaseline="middle"
+                          fontSize={fs} fontWeight={800} fill="#fff" letterSpacing={fs*0.02}>
+                          {asset.ticker}
+                        </text>
+                        <text x={0} y={ls*0.9} textAnchor="middle" dominantBaseline="middle"
+                          fontSize={fs*0.72} fontWeight={600}
+                          fill={asset.change>=0?"rgba(160,255,170,0.90)":"rgba(255,130,130,0.90)"}>
+                          {(asset.change>=0?"+":"")+asset.change.toFixed(1)}%
+                        </text>
+                        <text x={0} y={ls*1.9} textAnchor="middle" dominantBaseline="middle"
+                          fontSize={fs*0.52} fontWeight={400} fill="rgba(255,255,255,0.40)">
+                          {asset.weight}%
+                        </text>
+                      </>);
+                    })()}
+                  </g>
+                </g>
+              </g>
+            );
+          })}
+        </svg>
+      </div>
+    </div>
+  );
+}

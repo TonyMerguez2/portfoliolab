@@ -1,0 +1,1028 @@
+"use client";
+import { useEffect, useState, useMemo, useRef, Suspense } from "react";
+import type { ReactNode } from "react";
+import { useSearchParams, useRouter } from "next/navigation";
+import { useApp } from "@/lib/AppContext";
+import AssetLogo from "@/components/AssetLogo";
+import * as d3 from "d3";
+import LiquidGlassTreemap from "@/components/charts/LiquidGlassTreemap";
+
+// ── Types ──────────────────────────────────────────────────────────────────────
+type PortfolioAsset = { ticker: string; weight: number };
+type PortfolioData  = { id: string; name: string; assets: PortfolioAsset[]; color: string };
+type PriceData      = { symbol: string; price: number; change: number };
+type Enriched       = PortfolioAsset & { price: number | null; change: number | null; type?: string };
+type Leaf           = d3.HierarchyRectangularNode<any>;
+
+// ── Helpers ────────────────────────────────────────────────────────────────────
+function fmtChange(v: number | null) {
+  if (v === null) return "—";
+  return (v >= 0 ? "+" : "") + v.toFixed(2) + "%";
+}
+
+// ── Performance → HSL ─────────────────────────────────────────────────────────
+function perfHsl(perf: number | null): [number, number, number] {
+  if (perf === null) return [220, 18, 22];
+  const MAX = 10;
+  const p   = Math.max(-MAX, Math.min(MAX, perf));
+  const abs = Math.abs(p);
+  if (abs < 0.3) return [220, 18, 22];
+  const t = abs / MAX;
+  const s = Math.round(58 + t * 36);   // 58–94 %
+  const l = Math.round(28 + t * 24);   // 28–52 %
+  if (p > 0) return [Math.round(100 + t * 40), s, l]; // vert 100→140
+  return [Math.round(10 + t * 8), s, l];              // rouge 10→18
+}
+
+function faceHsl(h: number, s: number, l: number, face: "top" | "front" | "right"): string {
+  if (face === "top")   return `hsl(${h},${s}%,${l}%)`;
+  if (face === "front") return `hsl(${h},${s}%,${Math.max(4, l - 10)}%)`;
+  return `hsl(${h},${Math.max(8, s - 6)}%,${Math.max(4, l - 22)}%)`;
+}
+
+const BRAND_COLOR: Record<string, string> = {
+  AAPL: "#A2AAAD", MSFT: "#5BB8E8", NVDA: "#76B900", AMZN: "#FF9900",
+  GOOGL: "#4285F4", GOOG: "#4285F4", META: "#0866FF", TSLA: "#E82127",
+  "BTC-USD": "#F7931A", "ETH-USD": "#8A8DF0", "SOL-USD": "#14F195",
+  GLD: "#E6B800", GOLD: "#E6B800",
+};
+function brandColor(ticker: string): string {
+  return BRAND_COLOR[ticker.toUpperCase()] || "#5B8DEF";
+}
+function hexToRgb(hex: string): [number, number, number] {
+  const h = hex.replace("#", "");
+  return [parseInt(h.slice(0,2),16), parseInt(h.slice(2,4),16), parseInt(h.slice(4,6),16)];
+}
+
+// ── SVG-native logo ────────────────────────────────────────────────────────────
+const CMC: Record<string, number> = {
+  btc:1, eth:1027, bnb:1839, sol:5426, xrp:52, doge:74, ada:2010,
+  avax:5805, dot:6636, shib:5994, link:1975, uni:7083, ltc:2,
+};
+
+function logoUrls(ticker: string, type?: string): string[] {
+  const isCrypto = type === "CRYPTOCURRENCY" || ticker.endsWith("-USD");
+  if (isCrypto) {
+    const sym = ticker.toLowerCase().replace(/-usd$/, "");
+    const id  = CMC[sym];
+    return [
+      ...(id ? [`https://s2.coinmarketcap.com/static/img/coins/64x64/${id}.png`] : []),
+      `https://assets.coincap.io/assets/icons/${sym}@2x.png`,
+    ];
+  }
+  return [`https://financialmodelingprep.com/image-stock/${ticker}.png`];
+}
+
+const _logoCache = new Map<string, number>();
+
+function TileLogo({ ticker, type, cx, cy, r, h, s, l }: {
+  ticker: string; type?: string;
+  cx: number; cy: number; r: number;
+  h: number; s: number; l: number;
+}) {
+  const urls   = useMemo(() => logoUrls(ticker, type), [ticker, type]);
+  const cached = _logoCache.get(ticker);
+  const [idx,    setIdx]    = useState(cached ?? 0);
+  const [status, setStatus] = useState<"loading" | "ok" | "fail">(
+    cached !== undefined ? "ok" : "loading"
+  );
+  const initials = ticker.replace(/-USD$/, "").replace(/[0-9]+$/, "")
+    .replace(/\.[A-Z]+$/, "").replace(/^\^/, "").slice(0, 3).toUpperCase();
+  const Fallback = (
+    <g>
+      <circle cx={cx} cy={cy} r={r}
+        fill={`hsl(${h},${Math.max(8, s - 12)}%,${Math.max(5, l - 5)}%)`}
+        stroke={`hsl(${h},${Math.max(6, s - 18)}%,${Math.max(3, l - 14)}%)`} strokeWidth={1}/>
+      <text x={cx} y={cy} textAnchor="middle" dominantBaseline="central"
+        fontSize={Math.max(5, r * 0.58)} fontWeight={800} fill="#ffffff"
+        letterSpacing={-0.4} style={{ userSelect: "none" as const }}>{initials}</text>
+    </g>
+  );
+  if (status === "fail" || urls.length === 0) return Fallback;
+  return (
+    <>
+      {status !== "ok" && Fallback}
+      <image href={urls[idx]} x={cx - r} y={cy - r} width={r * 2} height={r * 2}
+        opacity={status === "ok" ? 1 : 0}
+        onLoad={() => { _logoCache.set(ticker, idx); setStatus("ok"); }}
+        onError={() => { if (idx + 1 < urls.length) setIdx(i => i + 1); else setStatus("fail"); }}/>
+    </>
+  );
+}
+
+// ── True isometric projection ──────────────────────────────────────────────────
+// Viewing direction ≈ rotateX(38°) rotateZ(-20°)
+// Visible faces: top (+Z), left (-X), south (+Y)
+const Px = [0.940, -0.269] as const;  // scene X → screen XY
+const Py = [0.342,  0.741] as const;  // scene Y → screen XY
+const Pz = [0,     -0.616] as const;  // scene Z → screen XY (up)
+
+// Height parameters (scene units)
+const H_MIN   = 44;   // minimum block height
+const H_SCALE = 20;   // |change| × H_SCALE = height
+
+function polyPts(pts: Array<[number, number]>): string {
+  return pts.map(([x, y]) => `${x.toFixed(1)},${y.toFixed(1)}`).join(" ");
+}
+
+// Parallelogram / polygon avec coins arrondis (bezier quadratique)
+function roundedPoly(pts: [number, number][], r: number): string {
+  if (r < 0.5) return `M ${pts.map(([x,y]) => `${x.toFixed(1)},${y.toFixed(1)}`).join(' L ')} Z`;
+  const n = pts.length;
+  const segs: string[] = [];
+  for (let i = 0; i < n; i++) {
+    const prev = pts[(i-1+n) % n];
+    const curr = pts[i];
+    const next = pts[(i+1) % n];
+    const d1x = prev[0]-curr[0], d1y = prev[1]-curr[1];
+    const len1 = Math.sqrt(d1x*d1x + d1y*d1y) || 1;
+    const d2x = next[0]-curr[0], d2y = next[1]-curr[1];
+    const len2 = Math.sqrt(d2x*d2x + d2y*d2y) || 1;
+    const r1 = Math.min(r, len1/2), r2 = Math.min(r, len2/2);
+    const a1: [number,number] = [curr[0]+(d1x/len1)*r1, curr[1]+(d1y/len1)*r1];
+    const a2: [number,number] = [curr[0]+(d2x/len2)*r2, curr[1]+(d2y/len2)*r2];
+    if (i === 0) segs.push(`M ${a1[0].toFixed(1)} ${a1[1].toFixed(1)}`);
+    else         segs.push(`L ${a1[0].toFixed(1)} ${a1[1].toFixed(1)}`);
+    segs.push(`Q ${curr[0].toFixed(1)} ${curr[1].toFixed(1)} ${a2[0].toFixed(1)} ${a2[1].toFixed(1)}`);
+  }
+  return segs.join(' ') + ' Z';
+}
+
+function IsoTreemap({ assets, show3D = true }: { assets: Enriched[]; show3D?: boolean }) {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [size, setSize] = useState({ w: 800, h: 460 });
+
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+    const ro = new ResizeObserver(([e]) =>
+      setSize({ w: Math.floor(e.contentRect.width), h: Math.floor(e.contentRect.height) })
+    );
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+
+  // Scene dimensions: chosen so the projected floor fills the SVG nicely.
+  // projW = sw×0.940 + sh×0.342 ≈ 0.90 × size.w
+  // projH = sw×0.269 + sh×0.741 + maxH×0.616 ≈ 0.88 × size.h
+  const sw = size.w * 0.66;
+  const sh = size.h * 0.44;
+  const GAP = 8;
+
+  const tiles = useMemo((): Leaf[] => {
+    if (!assets.length || size.w < 10) return [];
+    const root = d3.hierarchy<any>({ children: assets })
+      .sum((d: any) => d.weight ?? 0)
+      .sort((a, b) => (b.value ?? 0) - (a.value ?? 0));
+    d3.treemap<any>()
+      .size([sw, sh]).paddingInner(GAP).paddingOuter(0)
+      .tile(d3.treemapSquarify)(root);
+    return root.leaves() as Leaf[];
+  }, [assets, size, sw, sh]);
+
+  // Per-tile heights (scene units)
+  const tileData = useMemo(() =>
+    tiles.map(node => {
+      const asset = node.data as Enriched;
+      const h = show3D ? Math.max(H_MIN, Math.abs(asset.change ?? 0) * H_SCALE) : 0;
+      // Painter's algorithm depth: higher Y and lower X = closer to viewer
+      const depth = (node.x0 + node.x1) / 2 * Px[1]
+                  + (node.y0 + node.y1) / 2 * Py[1];
+      return { node, asset, h, depth };
+    }).sort((a, b) => a.depth - b.depth),
+  [tiles, show3D]);
+
+  const maxH = show3D
+    ? Math.max(H_MIN, ...assets.map(a => Math.abs(a.change ?? 0) * H_SCALE))
+    : 0;
+
+  // Projected bounding box → compute scale + origin to center in SVG
+  const { scale, ox, oy } = useMemo(() => {
+    const corners: [number, number, number][] = [
+      [0,  0,  0],  [sw, 0,  0],  [0,  sh, 0],  [sw, sh, 0],
+      [0,  0,  maxH], [sw, 0, maxH], [0, sh, maxH], [sw, sh, maxH],
+    ];
+    let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+    for (const [x, y, z] of corners) {
+      const sx = x * Px[0] + y * Py[0] + z * Pz[0];
+      const sy = x * Px[1] + y * Py[1] + z * Pz[1];
+      if (sx < minX) minX = sx; if (sx > maxX) maxX = sx;
+      if (sy < minY) minY = sy; if (sy > maxY) maxY = sy;
+    }
+    const pad = 14;
+    const sc  = Math.min((size.w - pad * 2) / (maxX - minX), (size.h - pad * 2) / (maxY - minY));
+    return {
+      scale: sc,
+      ox: pad + (size.w - pad * 2 - (maxX - minX) * sc) / 2 - minX * sc,
+      oy: pad + (size.h - pad * 2 - (maxY - minY) * sc) / 2 - minY * sc,
+    };
+  }, [sw, sh, maxH, size]);
+
+  // Project a scene point to screen coordinates
+  function p(sx: number, sy: number, sz: number): [number, number] {
+    return [
+      ox + (sx * Px[0] + sy * Py[0] + sz * Pz[0]) * scale,
+      oy + (sx * Px[1] + sy * Py[1] + sz * Pz[1]) * scale,
+    ];
+  }
+
+  // Grid spacing in scene units (~10 lines across the scene)
+  const gridStep = Math.max(20, Math.round(Math.max(sw, sh) / 9 / 10) * 10);
+  // Grid extends well beyond the treemap footprint
+  const gx0 = -sw * 0.30, gx1 = sw * 1.30;
+  const gy0 = -sh * 0.38, gy1 = sh * 1.38;
+  const gridXCount = Math.floor((gx1 - gx0) / gridStep) + 2;
+  const gridYCount = Math.floor((gy1 - gy0) / gridStep) + 2;
+
+  return (
+    <div ref={containerRef} style={{ flex: 1, position: "relative", minHeight: 0 }}>
+      <svg width={size.w} height={size.h} style={{ position: "absolute", left: 0, top: 0 }}>
+        <defs>
+          {/* Gloss + shimmer gradients per tile */}
+          {tileData.map(({ node, asset, h }) => {
+            const back  = p(node.x0, node.y0, h);
+            const front = p(node.x1, node.y1, h);
+            const TR    = p(node.x1, node.y0, h);
+            const BL    = p(node.x0, node.y1, h);
+            return (
+              <g key={`pf-defs-${asset.ticker}`}>
+                <linearGradient id={`pf-gl-${asset.ticker}`}
+                  gradientUnits="userSpaceOnUse"
+                  x1={back[0]} y1={back[1]} x2={front[0]} y2={front[1]}>
+                  <stop offset="0%"   stopColor="white" stopOpacity="0.30"/>
+                  <stop offset="40%"  stopColor="white" stopOpacity="0.08"/>
+                  <stop offset="100%" stopColor="white" stopOpacity="0"/>
+                </linearGradient>
+                {/* Diagonal glass shimmer: TR → BL diagonal stripe */}
+                <linearGradient id={`pf-sh-${asset.ticker}`}
+                  gradientUnits="userSpaceOnUse"
+                  x1={TR[0]} y1={TR[1]} x2={BL[0]} y2={BL[1]}>
+                  <stop offset="0%"   stopColor="white" stopOpacity="0"/>
+                  <stop offset="28%"  stopColor="white" stopOpacity="0.04"/>
+                  <stop offset="38%"  stopColor="white" stopOpacity="0.26"/>
+                  <stop offset="48%"  stopColor="white" stopOpacity="0.04"/>
+                  <stop offset="100%" stopColor="white" stopOpacity="0"/>
+                </linearGradient>
+              </g>
+            );
+          })}
+          {/* Content clip paths — same rounded top face used for text/logo clipping */}
+          {tileData.map(({ node, asset, h }) => {
+            const TL = p(node.x0, node.y0, h), TR = p(node.x1, node.y0, h);
+            const BR = p(node.x1, node.y1, h), BL = p(node.x0, node.y1, h);
+            const vW = (node.x1-node.x0) * Px[0] * scale;
+            const vH = (node.y1-node.y0) * Py[1] * scale;
+            const r  = Math.min(16, Math.max(4, Math.min(vW, vH) * 0.16));
+            return (
+              <clipPath key={`pf-cp-${asset.ticker}`} id={`pf-cp-${asset.ticker}`}>
+                <path d={roundedPoly([TL, TR, BR, BL], r)}/>
+              </clipPath>
+            );
+          })}
+        </defs>
+
+        {/* ── Floor grid (circuit board) ── */}
+        {show3D && (
+          <g style={{ pointerEvents: "none" }}>
+            {/* Floor base — covers extended grid area */}
+            <polygon
+              points={polyPts([p(gx0,gy0,0), p(gx1,gy0,0), p(gx1,gy1,0), p(gx0,gy1,0)])}
+              fill="rgba(20,35,90,0.18)" stroke="none"/>
+            {/* Grid lines with glow — drawn once as blurred (glow) + once sharp */}
+            <g opacity={0.58} style={{ filter: "blur(1.2px)" }}>
+              {Array.from({ length: gridXCount }, (_, i) => {
+                const x = gx0 + i * gridStep;
+                const [x1, y1] = p(x, gy0, 0), [x2, y2] = p(x, gy1, 0);
+                return <line key={`gxg-${i}`} x1={x1} y1={y1} x2={x2} y2={y2}
+                  stroke="#5B8DEF" strokeWidth={1.6}/>;
+              })}
+              {Array.from({ length: gridYCount }, (_, i) => {
+                const y = gy0 + i * gridStep;
+                const [x1, y1] = p(gx0, y, 0), [x2, y2] = p(gx1, y, 0);
+                return <line key={`gyg-${i}`} x1={x1} y1={y1} x2={x2} y2={y2}
+                  stroke="#5B8DEF" strokeWidth={1.6}/>;
+              })}
+            </g>
+            {/* Grid lines sharp */}
+            {Array.from({ length: gridXCount }, (_, i) => {
+              const x = gx0 + i * gridStep;
+              const [x1, y1] = p(x, gy0, 0), [x2, y2] = p(x, gy1, 0);
+              return <line key={`gx-${i}`} x1={x1} y1={y1} x2={x2} y2={y2}
+                stroke="rgba(91,141,239,0.60)" strokeWidth={0.8}/>;
+            })}
+            {Array.from({ length: gridYCount }, (_, i) => {
+              const y = gy0 + i * gridStep;
+              const [x1, y1] = p(gx0, y, 0), [x2, y2] = p(gx1, y, 0);
+              return <line key={`gy-${i}`} x1={x1} y1={y1} x2={x2} y2={y2}
+                stroke="rgba(91,141,239,0.60)" strokeWidth={0.8}/>;
+            })}
+          </g>
+        )}
+
+        {/* ── Blocks (painter's algorithm: low depth first) ── */}
+        {tileData.map(({ node, asset, h }) => {
+          const x0 = node.x0, y0 = node.y0, x1 = node.x1, y1 = node.y1;
+          const [H, S, L] = perfHsl(asset.change);
+
+          // 3D corners
+          const TL  = p(x0, y0, h),  TR  = p(x1, y0, h);
+          const BR  = p(x1, y1, h),  BL  = p(x0, y1, h);
+          const TLb = p(x0, y0, 0),  BLb = p(x0, y1, 0);
+          const BRb = p(x1, y1, 0);
+
+          // Content position: center of top face in screen space
+          const [cx, cy] = p((x0 + x1) / 2, (y0 + y1) / 2, h);
+
+          // Visual size of top face (for content thresholds)
+          const vW  = (x1 - x0) * Px[0] * scale;  // projected X span
+          const vH  = (y1 - y0) * Py[1] * scale;  // projected Y span
+          const minDim = Math.min(vW, vH);
+
+          const micro    = minDim < 20;
+          const showLogo = !micro && minDim >= 26;
+          const showPerf = !micro && minDim >= 38;
+          const showWgt  = !micro && minDim >= 52;
+
+          const logoR    = showLogo ? Math.round(Math.min(14, Math.max(6, minDim * 0.12))) : 0;
+          const tickerFs = Math.round(Math.min(13, Math.max(9,  minDim * 0.10)));
+          const perfFs   = showPerf ? Math.round(Math.min(11, Math.max(9, minDim * 0.085))) : 0;
+          const wgtFs    = showWgt  ? Math.round(Math.min(9,  Math.max(9, minDim * 0.075))) : 0;
+          const gapPx    = Math.max(2, Math.round(minDim * 0.025));
+
+          const stackH = (showLogo ? logoR * 2 + gapPx : 0) + tickerFs
+                       + (showPerf ? gapPx + perfFs : 0)
+                       + (showWgt  ? gapPx + wgtFs  : 0);
+          let yc = cy - stackH / 2;
+          const logoY = showLogo ? yc + logoR : 0;
+          if (showLogo) yc += logoR * 2 + gapPx;
+          const tickY = yc + tickerFs / 2; yc += tickerFs;
+          const perfY = showPerf ? yc + gapPx + perfFs / 2 : 0;
+          if (showPerf) yc += gapPx + perfFs;
+          const wgtY  = showWgt  ? yc + gapPx + wgtFs  / 2 : 0;
+          const sign  = (asset.change ?? 0) >= 0 ? "+" : "";
+
+          // Same radius on all 3 faces so junctions align seamlessly
+          const r = Math.min(16, Math.max(4, Math.min(vW, vH) * 0.16));
+          return (
+            <g key={`pf-tile-${asset.ticker}`}>
+              {/* Left face (-X normal, medium brightness) — rounded with same r */}
+              {show3D && h > 0 && (
+                <path d={roundedPoly([TLb, TL, BL, BLb], r)}
+                  fill={faceHsl(H, S, L, "front")}
+                  stroke="rgba(255,255,255,0.14)" strokeWidth={0.6}/>
+              )}
+              {/* South face (+Y normal, darkest) — rounded with same r */}
+              {show3D && h > 0 && (
+                <path d={roundedPoly([BLb, BL, BR, BRb], r)}
+                  fill={faceHsl(H, S, L, "right")}
+                  stroke="rgba(255,255,255,0.10)" strokeWidth={0.6}/>
+              )}
+              {/* Top face (+Z, brightest) — same r → seamless junction at BL */}
+              <path d={roundedPoly([TL, TR, BR, BL], r)}
+                fill={faceHsl(H, S, L, "top")}
+                stroke="none"/>
+              {/* Gloss overlay */}
+              <path d={roundedPoly([TL, TR, BR, BL], r)}
+                fill={`url(#pf-gl-${asset.ticker})`}
+                style={{ pointerEvents: "none" }}/>
+              {/* Glass diagonal shimmer */}
+              <path d={roundedPoly([TL, TR, BR, BL], r)}
+                fill={`url(#pf-sh-${asset.ticker})`}
+                style={{ pointerEvents: "none" }}/>
+              {/* Neon glow border — outer blurred halo */}
+              <path d={roundedPoly([TL, TR, BR, BL], r)}
+                fill="none"
+                stroke={`hsl(${H},100%,${Math.min(88, L + 38)}%)`}
+                strokeWidth={8} strokeOpacity={0.52}
+                style={{ pointerEvents: "none", filter: "blur(5px)" }}/>
+              {/* Neon glow border — inner blurred */}
+              <path d={roundedPoly([TL, TR, BR, BL], r)}
+                fill="none"
+                stroke={`hsl(${H},100%,${Math.min(92, L + 44)}%)`}
+                strokeWidth={2.5} strokeOpacity={0.78}
+                style={{ pointerEvents: "none", filter: "blur(1.5px)" }}/>
+              {/* Sharp white edge */}
+              <path d={roundedPoly([TL, TR, BR, BL], r)}
+                fill="none"
+                stroke="rgba(255,255,255,0.72)" strokeWidth={0.9}
+                style={{ pointerEvents: "none" }}/>
+              {/* Glass inner rim light (inset glow) */}
+              <path d={roundedPoly([TL, TR, BR, BL], r)}
+                fill="none"
+                stroke="rgba(255,255,255,0.14)" strokeWidth={5}
+                style={{ pointerEvents: "none", filter: "blur(2.5px)" }}/>
+              {/* Content on top face */}
+              {!micro && (
+                <g clipPath={`url(#pf-cp-${asset.ticker})`}>
+                  {showLogo && (
+                    <TileLogo ticker={asset.ticker} type={asset.type}
+                      cx={cx} cy={logoY} r={logoR} h={H} s={S} l={L}/>
+                  )}
+                  <text x={cx} y={tickY} textAnchor="middle" dominantBaseline="middle"
+                    fontSize={tickerFs} fontWeight={800} fill="#ffffff"
+                    stroke="rgba(0,0,0,0.55)" strokeWidth={2.5} paintOrder="stroke"
+                    letterSpacing={0.4}>
+                    {asset.ticker.replace(/-USD$/, "").replace(/\.[A-Z]+$/, "")}
+                  </text>
+                  {showPerf && asset.change !== null && (
+                    <text x={cx} y={perfY} textAnchor="middle" dominantBaseline="middle"
+                      fontSize={perfFs} fontWeight={700}
+                      fill={asset.change >= 0 ? "rgba(134,239,172,0.95)" : "rgba(252,165,165,0.95)"}
+                      stroke="rgba(0,0,0,0.55)" strokeWidth={2} paintOrder="stroke">
+                      {sign}{asset.change.toFixed(1)}%
+                    </text>
+                  )}
+                  {showWgt && (
+                    <text x={cx} y={wgtY} textAnchor="middle" dominantBaseline="middle"
+                      fontSize={wgtFs} fontWeight={500} fill="rgba(255,255,255,0.52)"
+                      stroke="rgba(0,0,0,0.50)" strokeWidth={1.5} paintOrder="stroke">
+                      {asset.weight}%
+                    </text>
+                  )}
+                </g>
+              )}
+            </g>
+          );
+        })}
+      </svg>
+    </div>
+  );
+}
+
+// ── Exposition classifier ──────────────────────────────────────────────────────
+const CRYPTO_SET = new Set(["BTC","ETH","BNB","SOL","XRP","ADA","DOGE","AVAX","LINK","UNI","LTC","MATIC","DOT"]);
+const ETF_RE     = /^(SPY|QQQ|IWM|VTI|VOO|GLD|TLT|HYG|EEM|VEA|IEFA|ARKK)/i;
+
+function classifyExposition(assets: Enriched[]): Record<string, number> {
+  const groups: Record<string, number> = {};
+  for (const a of assets) {
+    const t = a.ticker.replace(/-USD$/, "").replace(/\.[A-Z]+$/, "").toUpperCase();
+    let cat = "Actions";
+    if (CRYPTO_SET.has(t) || a.type === "CRYPTOCURRENCY" || a.ticker.endsWith("-USD")) cat = "Crypto";
+    else if (ETF_RE.test(t)) cat = "ETF";
+    groups[cat] = (groups[cat] ?? 0) + a.weight;
+  }
+  return groups;
+}
+
+// ── Donut SVG ──────────────────────────────────────────────────────────────────
+const EXPO_COLORS: Record<string, string> = {
+  Actions: "#5B8DEF", Crypto: "#fbbf24", ETF: "#a78bfa", Cash: "#34d399",
+};
+
+function MiniDonut({ data, size = 72 }: { data: Record<string, number>; size?: number }) {
+  const r    = size / 2 - 7;
+  const cx   = size / 2, cy = size / 2;
+  const sw   = 10;
+  const circ = 2 * Math.PI * r;
+  let offset = 0;
+  const slices = Object.entries(data).map(([label, value]) => {
+    const total = Object.values(data).reduce((a, b) => a + b, 0);
+    const pct   = value / total;
+    const sl    = { label, pct, da: circ * pct, do: -circ * offset };
+    offset += pct;
+    return sl;
+  });
+  const top = Object.entries(data).sort((a, b) => b[1] - a[1])[0];
+  return (
+    <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`}>
+      {slices.map(sl => (
+        <circle key={sl.label} cx={cx} cy={cy} r={r} fill="none"
+          stroke={EXPO_COLORS[sl.label] ?? "#94a3b8"} strokeWidth={sw}
+          strokeDasharray={`${sl.da} ${circ - sl.da}`}
+          strokeDashoffset={sl.do}
+          style={{ transformOrigin: `${cx}px ${cy}px`, transform: "rotate(-90deg)" }}/>
+      ))}
+      {top && <>
+        <text x={cx} y={cy - 4} textAnchor="middle" fill="#F8F9FC" fontSize={11} fontWeight={700}>
+          {top[1].toFixed(0)}%
+        </text>
+        <text x={cx} y={cy + 8} textAnchor="middle" fill="rgba(255,255,255,0.35)" fontSize={7}>
+          {top[0]}
+        </text>
+      </>}
+    </svg>
+  );
+}
+
+// ── Performer row ──────────────────────────────────────────────────────────────
+function PerformerRow({ asset }: { asset: Enriched }) {
+  const pos = (asset.change ?? 0) >= 0;
+  return (
+    <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "5px 0",
+      borderBottom: "1px solid rgba(255,255,255,0.04)" }}>
+      <AssetLogo ticker={asset.ticker} type="EQUITY" size={22} radius={5}
+        fallbackBg="rgba(255,255,255,0.08)" fallbackBorder="rgba(255,255,255,0.15)"
+        fallbackTextColor="#fff"/>
+      <span style={{ color: "#F8F9FC", fontSize: 11, fontWeight: 500, flex: 1 }}>
+        {asset.ticker.replace(/-USD$/, "").replace(/\.[A-Z]+$/, "")}
+      </span>
+      <span style={{ fontSize: 11, fontWeight: 600, color: pos ? "#4ade80" : "#f87171" }}>
+        {fmtChange(asset.change)}
+      </span>
+    </div>
+  );
+}
+
+// ── Bottom info card ───────────────────────────────────────────────────────────
+function Card({ label, icon, children }: { label: string; icon: string; children: ReactNode }) {
+  return (
+    <div style={{ flex: 1, background: "rgba(255,255,255,0.03)",
+      border: "1px solid rgba(255,255,255,0.07)", borderRadius: 10,
+      padding: "10px 14px", display: "flex", flexDirection: "column", gap: 4, minWidth: 0 }}>
+      <div style={{ fontSize: 9, color: "rgba(255,255,255,0.32)", fontWeight: 600,
+        letterSpacing: "0.08em", display: "flex", alignItems: "center", gap: 5 }}>
+        <span>{icon}</span>{label}
+      </div>
+      {children}
+    </div>
+  );
+}
+
+// ── Main page ──────────────────────────────────────────────────────────────────
+function PortfolioPageInner() {
+  const { activePortfolio, setActivePortfolio, setMode } = useApp();
+  const searchParams = useSearchParams();
+  const router       = useRouter();
+
+  const [portfolio, setPortfolio] = useState<PortfolioData | null>(null);
+  const [prices,    setPrices]    = useState<Record<string, PriceData>>({});
+  const [loading,   setLoading]   = useState(true);
+  const [show3D,    setShow3D]    = useState(true);
+  const [view,      setView]      = useState<"carte" | "liste">("carte");
+
+  useEffect(() => {
+    const idFromUrl = searchParams.get("id");
+    fetch("http://localhost:8000/api/v1/portfolios")
+      .then(r => r.json())
+      .then((list: PortfolioData[]) => {
+        if (!Array.isArray(list) || !list.length) { setLoading(false); return; }
+        const target = idFromUrl
+          ? list.find(p => p.id === idFromUrl)
+          : activePortfolio
+            ? list.find(p => p.id === String(activePortfolio.id))
+            : list[0];
+        const p = target ?? list[0];
+        setPortfolio(p);
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        setActivePortfolio({ id: p.id as any, name: p.name, assets: p.assets, color: p.color });
+        setMode("portfolio");
+      })
+      .catch(() => setLoading(false));
+  }, [searchParams]); // eslint-disable-line
+
+  useEffect(() => {
+    if (!portfolio?.assets?.length) return;
+    const tickers = portfolio.assets.map(a => a.ticker).join(",");
+    setLoading(true);
+    fetch(`http://localhost:8000/api/v1/prices?tickers=${encodeURIComponent(tickers)}`)
+      .then(r => r.json())
+      .then((list: PriceData[]) => {
+        const map: Record<string, PriceData> = {};
+        list.forEach(p => { if (p.symbol) map[p.symbol] = p; });
+        setPrices(map);
+      })
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, [portfolio]);
+
+  const enriched: Enriched[] = useMemo(() => {
+    if (!portfolio) return [];
+    return portfolio.assets.map(a => ({
+      ...a,
+      price:  prices[a.ticker]?.price  ?? null,
+      change: prices[a.ticker]?.change ?? null,
+    }));
+  }, [portfolio, prices]);
+
+  const totalWeight    = enriched.reduce((s, a) => s + a.weight, 0);
+  const weightedChange = enriched.reduce((s, a) => {
+    if (a.change === null) return s;
+    return s + (a.weight / totalWeight) * a.change;
+  }, 0);
+  const isUp = weightedChange >= 0;
+
+  const topPerformers    = [...enriched].filter(a => a.change !== null)
+    .sort((a, b) => (b.change ?? 0) - (a.change ?? 0)).slice(0, 5);
+  const bottomPerformers = [...enriched].filter(a => a.change !== null)
+    .sort((a, b) => (a.change ?? 0) - (b.change ?? 0)).slice(0, 5);
+
+  const exposition = useMemo(() => classifyExposition(enriched), [enriched]);
+
+  const top3Conc = [...enriched].sort((a, b) => b.weight - a.weight)
+    .slice(0, 3).reduce((s, a) => s + a.weight, 0);
+
+  const gainCount = enriched.filter(a => (a.change ?? 0) > 0).length;
+  const lossCount = enriched.filter(a => (a.change ?? 0) < 0).length;
+
+  if (!portfolio && !loading) {
+    return (
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "center",
+        height: "100vh", background: "#040F22", color: "rgba(255,255,255,0.5)",
+        fontSize: 14, flexDirection: "column", gap: 16 }}>
+        <div>Aucun portefeuille sélectionné.</div>
+        <button onClick={() => router.push("/build")}
+          style={{ padding: "8px 20px", borderRadius: 8,
+            border: "1px solid rgba(91,141,239,0.4)",
+            background: "rgba(91,141,239,0.1)", color: "#9BB9FF",
+            cursor: "pointer", fontSize: 12 }}>
+          Créer un portefeuille
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <div style={{ display: "flex", height: "100vh", paddingTop: 48,
+      background: "#040F22", color: "#F8F9FC",
+      fontFamily: "inherit", overflow: "hidden", boxSizing: "border-box" }}>
+
+      {/* ══ Left sidebar ══════════════════════════════════════════════════════ */}
+      <div style={{ width: 228, flexShrink: 0,
+        borderRight: "1px solid rgba(255,255,255,0.06)",
+        display: "flex", flexDirection: "column", overflowY: "auto" }}>
+
+        {/* Portfolio selector */}
+        <div style={{ padding: "14px 16px 12px",
+          borderBottom: "1px solid rgba(255,255,255,0.06)" }}>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+            <span style={{ fontSize: 12, fontWeight: 600, color: "#F8F9FC" }}>
+              {portfolio?.name ?? "Mon Portefeuille"}
+            </span>
+            <span style={{ fontSize: 13, color: "rgba(255,255,255,0.3)" }}>∨</span>
+          </div>
+        </div>
+
+        {/* Value + perf + sparkline */}
+        <div style={{ padding: "14px 16px 12px",
+          borderBottom: "1px solid rgba(255,255,255,0.06)" }}>
+          <div style={{ fontSize: 24, fontWeight: 700, letterSpacing: "-0.02em",
+            color: "#F8F9FC", marginBottom: 2 }}>—</div>
+          <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 10,
+            color: isUp ? "#4ade80" : "#f87171" }}>
+            {fmtChange(weightedChange)} (24h)
+          </div>
+          {/* Sparkline placeholder */}
+          <svg width="100%" height={30} style={{ overflow: "visible", display: "block" }}>
+            <polyline
+              points="0,22 24,16 48,18 72,10 96,7 120,13 144,9 172,5 196,12"
+              fill="none" stroke={isUp ? "#a78bfa" : "#f87171"} strokeWidth={1.5}
+              strokeLinecap="round" strokeLinejoin="round" opacity={0.65}/>
+          </svg>
+          {/* Time buttons */}
+          <div style={{ display: "flex", gap: 2, marginTop: 6 }}>
+            {["1J", "7J", "1M", "3M", "1A", "TOUT"].map(t => (
+              <button key={t} style={{ flex: 1, padding: "3px 0", fontSize: 9,
+                border: "none", borderRadius: 4, background: "transparent",
+                color: t === "1J" ? "#9BB9FF" : "rgba(255,255,255,0.3)",
+                fontWeight: t === "1J" ? 700 : 400, cursor: "pointer" }}>
+                {t}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Perf + gains/pertes */}
+        <div style={{ padding: "12px 16px",
+          borderBottom: "1px solid rgba(255,255,255,0.06)" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 8 }}>
+            <span style={{ fontSize: 10, color: "rgba(255,255,255,0.45)" }}>Performance (24h)</span>
+            <span style={{ fontSize: 10, fontWeight: 700,
+              color: isUp ? "#4ade80" : "#f87171" }}>
+              {fmtChange(weightedChange)}
+            </span>
+          </div>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 5 }}>
+            <span style={{ fontSize: 10, color: "rgba(255,255,255,0.35)", width: 40 }}>Gains</span>
+            <div style={{ flex: 1, height: 4, borderRadius: 2, background: "rgba(74,222,128,0.1)",
+              position: "relative", overflow: "hidden" }}>
+              <div style={{ position: "absolute", left: 0, top: 0, height: "100%", borderRadius: 2,
+                width: enriched.length ? `${(gainCount / enriched.length) * 100}%` : "0%",
+                background: "#4ade80" }}/>
+            </div>
+            <span style={{ fontSize: 9, color: "#4ade80", minWidth: 28, textAlign: "right" }}>
+              {gainCount} act.
+            </span>
+          </div>
+          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <span style={{ fontSize: 10, color: "rgba(255,255,255,0.35)", width: 40 }}>Pertes</span>
+            <div style={{ flex: 1, height: 4, borderRadius: 2, background: "rgba(248,113,113,0.1)",
+              position: "relative", overflow: "hidden" }}>
+              <div style={{ position: "absolute", left: 0, top: 0, height: "100%", borderRadius: 2,
+                width: enriched.length ? `${(lossCount / enriched.length) * 100}%` : "0%",
+                background: "#f87171" }}/>
+            </div>
+            <span style={{ fontSize: 9, color: "#f87171", minWidth: 28, textAlign: "right" }}>
+              {lossCount} act.
+            </span>
+          </div>
+        </div>
+
+        {/* Indicateurs clés */}
+        <div style={{ padding: "12px 16px",
+          borderBottom: "1px solid rgba(255,255,255,0.06)" }}>
+          <div style={{ fontSize: 9, color: "rgba(255,255,255,0.28)", letterSpacing: "0.1em",
+            marginBottom: 8, fontWeight: 600 }}>INDICATEURS CLÉS</div>
+          {[
+            ["Volatilité (30j)", "—"],
+            ["Sharpe Ratio",     "—"],
+            ["VaR (95%)",        "—"],
+            ["Bêta",             "—"],
+            ["Max Drawdown",     "—"],
+          ].map(([label, value]) => (
+            <div key={label} style={{ display: "flex", justifyContent: "space-between",
+              padding: "3px 0", borderBottom: "1px solid rgba(255,255,255,0.03)" }}>
+              <span style={{ fontSize: 10, color: "rgba(255,255,255,0.38)" }}>{label}</span>
+              <span style={{ fontSize: 10, color: "rgba(255,255,255,0.5)", fontWeight: 500 }}>{value}</span>
+            </div>
+          ))}
+        </div>
+
+        {/* Répartition par secteur */}
+        <div style={{ padding: "12px 16px" }}>
+          <div style={{ fontSize: 9, color: "rgba(255,255,255,0.28)", letterSpacing: "0.1em",
+            marginBottom: 10, fontWeight: 600 }}>RÉPARTITION PAR SECTEUR</div>
+          <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+            <MiniDonut data={exposition} size={56}/>
+            <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: 4 }}>
+              {Object.entries(exposition).sort((a, b) => b[1] - a[1]).map(([k, v]) => (
+                <div key={k} style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                  <div style={{ width: 6, height: 6, borderRadius: 1.5, flexShrink: 0,
+                    background: EXPO_COLORS[k] ?? "#94a3b8" }}/>
+                  <span style={{ fontSize: 9, color: "rgba(255,255,255,0.4)", flex: 1 }}>{k}</span>
+                  <span style={{ fontSize: 9, fontWeight: 600, color: "rgba(255,255,255,0.55)" }}>
+                    {v.toFixed(1)}%
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        {/* Personnaliser */}
+        <div style={{ padding: "12px 16px", marginTop: "auto",
+          borderTop: "1px solid rgba(255,255,255,0.06)" }}>
+          <button style={{ width: "100%", padding: "7px 0", borderRadius: 7,
+            border: "1px solid rgba(255,255,255,0.1)",
+            background: "rgba(255,255,255,0.04)",
+            color: "rgba(255,255,255,0.45)", fontSize: 11, cursor: "pointer" }}>
+            ≡ Personnaliser la vue
+          </button>
+        </div>
+      </div>
+
+      {/* ══ Center ════════════════════════════════════════════════════════════ */}
+      <div style={{ flex: 1, display: "flex", flexDirection: "column", minWidth: 0 }}>
+
+        {/* Controls bar */}
+        <div style={{ display: "flex", alignItems: "center", gap: 10,
+          padding: "0 14px", height: 44, flexShrink: 0,
+          borderBottom: "1px solid rgba(255,255,255,0.06)" }}>
+
+          {/* View tabs */}
+          <div style={{ display: "flex", background: "rgba(255,255,255,0.06)",
+            borderRadius: 7, padding: 2, gap: 1 }}>
+            {(["Carte", "Liste"] as const).map(v => {
+              const key = v.toLowerCase() as "carte" | "liste";
+              return (
+                <button key={v} onClick={() => setView(key)}
+                  style={{ padding: "3px 12px", borderRadius: 5, border: "none", fontSize: 10,
+                    background: view === key ? "rgba(255,255,255,0.12)" : "transparent",
+                    color: view === key ? "#F8F9FC" : "rgba(255,255,255,0.4)",
+                    cursor: "pointer", fontWeight: view === key ? 600 : 400 }}>
+                  {v === "Carte" ? "⊞ Carte" : "≡ Liste"}
+                </button>
+              );
+            })}
+          </div>
+
+          {/* Perf period */}
+          <div style={{ padding: "3px 10px", borderRadius: 5,
+            background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.08)",
+            fontSize: 10, color: "rgba(255,255,255,0.6)",
+            display: "flex", alignItems: "center", gap: 5 }}>
+            Performance (24h) <span style={{ fontSize: 9, opacity: 0.6 }}>▾</span>
+          </div>
+
+          <div style={{ flex: 1 }}/>
+
+          {/* Color legend */}
+          <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+            <div style={{ display: "flex", justifyContent: "space-between", width: 132 }}>
+              {["-6%", "-3%", "0%", "+3%", "+6%"].map(l => (
+                <span key={l} style={{ fontSize: 7, color: "rgba(255,255,255,0.3)" }}>{l}</span>
+              ))}
+            </div>
+            <div style={{ width: 132, height: 5, borderRadius: 3,
+              background: "linear-gradient(to right, hsl(0,88%,28%), hsl(220,14%,16%), hsl(130,88%,28%))" }}/>
+          </div>
+
+          {/* 3D toggle */}
+          <button onClick={() => setShow3D(v => !v)}
+            style={{ display: "flex", alignItems: "center", gap: 5, padding: "3px 10px",
+              borderRadius: 6,
+              border: `1px solid ${show3D ? "rgba(91,141,239,0.4)" : "rgba(255,255,255,0.1)"}`,
+              background: show3D ? "rgba(91,141,239,0.15)" : "transparent",
+              color: show3D ? "#9BB9FF" : "rgba(255,255,255,0.4)",
+              cursor: "pointer", fontSize: 10, fontWeight: show3D ? 600 : 400 }}>
+            3D
+            <div style={{ width: 26, height: 14, borderRadius: 7,
+              background: show3D ? "#5B8DEF" : "rgba(255,255,255,0.12)", position: "relative" }}>
+              <div style={{ position: "absolute", top: 2, left: show3D ? 13 : 2,
+                width: 10, height: 10, borderRadius: 5, background: "#fff",
+                transition: "left 0.2s" }}/>
+            </div>
+          </button>
+        </div>
+
+        {/* Treemap + bottom cards */}
+        <div style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column",
+          padding: "8px 8px 8px", gap: 8 }}>
+
+          {loading ? (
+            <div style={{ flex: 1, display: "flex", alignItems: "center",
+              justifyContent: "center", color: "rgba(255,255,255,0.25)", fontSize: 12 }}>
+              Chargement…
+            </div>
+          ) : view === "carte" ? (
+            <div style={{ flex: 1, minHeight: 0, position: "relative" }}>
+              <LiquidGlassTreemap assets={enriched.map(a => ({ ticker: a.ticker, weight: a.weight, change: a.change }))} />
+            </div>
+          ) : (
+            <div style={{ overflowY: "auto", flex: 1 }}>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 80px 90px 80px" }}>
+                {["Actif", "Poids", "Prix", "24h"].map(h => (
+                  <div key={h} style={{ padding: "6px 12px", fontSize: 9,
+                    color: "rgba(255,255,255,0.3)", letterSpacing: "0.1em",
+                    borderBottom: "1px solid rgba(255,255,255,0.06)" }}>{h}</div>
+                ))}
+                {[...enriched].sort((a, b) => b.weight - a.weight).flatMap(a => [
+                  <div key={`${a.ticker}-n`} style={{ display: "flex", alignItems: "center",
+                    gap: 8, padding: "8px 12px", borderBottom: "1px solid rgba(255,255,255,0.04)" }}>
+                    <AssetLogo ticker={a.ticker} type="EQUITY" size={22} radius={5}
+                      fallbackBg="rgba(255,255,255,0.08)" fallbackBorder="rgba(255,255,255,0.15)"
+                      fallbackTextColor="#fff"/>
+                    <span style={{ fontSize: 11, fontWeight: 500 }}>{a.ticker.replace(/-USD$/, "")}</span>
+                  </div>,
+                  <div key={`${a.ticker}-w`} style={{ padding: "8px 12px", fontSize: 11,
+                    color: "rgba(255,255,255,0.6)", borderBottom: "1px solid rgba(255,255,255,0.04)",
+                    display: "flex", alignItems: "center" }}>{a.weight.toFixed(1)}%</div>,
+                  <div key={`${a.ticker}-p`} style={{ padding: "8px 12px", fontSize: 11,
+                    color: "rgba(255,255,255,0.6)", borderBottom: "1px solid rgba(255,255,255,0.04)",
+                    display: "flex", alignItems: "center" }}>
+                    {a.price !== null
+                      ? `$${a.price.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+                      : "—"}
+                  </div>,
+                  <div key={`${a.ticker}-c`} style={{ padding: "8px 12px", fontSize: 11,
+                    fontWeight: 600, borderBottom: "1px solid rgba(255,255,255,0.04)",
+                    display: "flex", alignItems: "center",
+                    color: a.change === null ? "rgba(255,255,255,0.3)" : a.change >= 0 ? "#4ade80" : "#f87171" }}>
+                    {fmtChange(a.change)}
+                  </div>,
+                ])}
+              </div>
+            </div>
+          )}
+
+          {/* Bottom cards — only in carte mode */}
+          {view === "carte" && (
+            <div style={{ display: "flex", gap: 8, flexShrink: 0, height: 108 }}>
+
+              <Card label="RÉSUMÉ INTELLIGENT" icon="⬡">
+                <div style={{ fontSize: 10, color: "rgba(255,255,255,0.55)", lineHeight: 1.6 }}>
+                  Portefeuille{" "}
+                  <span style={{ color: isUp ? "#4ade80" : "#f87171", fontWeight: 700 }}>
+                    {isUp ? "en hausse" : "en baisse"}
+                  </span>{" "}
+                  de{" "}
+                  <span style={{ color: isUp ? "#4ade80" : "#f87171", fontWeight: 700 }}>
+                    {fmtChange(weightedChange)}
+                  </span>{" "}
+                  sur 24h · {gainCount} actif{gainCount !== 1 ? "s" : ""} en vert,{" "}
+                  {lossCount} en rouge.
+                </div>
+              </Card>
+
+              <Card label="CONCENTRATION" icon="◎">
+                <div style={{ fontSize: 22, fontWeight: 700, color: "#F8F9FC", lineHeight: 1 }}>
+                  {top3Conc.toFixed(0)}%
+                </div>
+                <div style={{ fontSize: 9, color: "rgba(255,255,255,0.35)" }}>
+                  Top 5 actifs · Risque{" "}
+                  <span style={{ color: top3Conc > 70 ? "#f87171" : top3Conc > 50 ? "#fbbf24" : "#4ade80",
+                    fontWeight: 600 }}>
+                    {top3Conc > 70 ? "modéré" : top3Conc > 50 ? "modéré" : "faible"}
+                  </span>
+                </div>
+                <div style={{ display: "flex", gap: 2, marginTop: 4 }}>
+                  {[...enriched].sort((a, b) => b.weight - a.weight).slice(0, 5).map(a => {
+                    const [h, , l] = perfHsl(a.change);
+                    return (
+                      <div key={a.ticker} style={{ flex: a.weight, height: 3, borderRadius: 2,
+                        background: `hsl(${h},60%,${Math.max(30, l + 10)}%)`, minWidth: 2 }}/>
+                    );
+                  })}
+                </div>
+              </Card>
+
+              <Card label="RISQUE" icon="⚡">
+                <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 2,
+                  color: top3Conc > 70 ? "#f87171" : top3Conc > 50 ? "#fbbf24" : "#4ade80" }}>
+                  Niveau de risque{" "}
+                  <span style={{ fontWeight: 700 }}>
+                    {top3Conc > 70 ? "Élevé" : top3Conc > 50 ? "Modéré" : "Faible"}
+                  </span>
+                </div>
+                <div style={{ display: "flex", gap: 4 }}>
+                  {[1, 2, 3, 4, 5].map(i => (
+                    <div key={i} style={{ flex: 1, height: 4, borderRadius: 2,
+                      background: i <= (top3Conc > 70 ? 4 : top3Conc > 50 ? 3 : 2)
+                        ? (top3Conc > 70 ? "#f87171" : top3Conc > 50 ? "#fbbf24" : "#4ade80")
+                        : "rgba(255,255,255,0.1)" }}/>
+                  ))}
+                </div>
+                <div style={{ fontSize: 9, color: "rgba(255,255,255,0.28)", marginTop: 2 }}>
+                  Basé sur la concentration top 3
+                </div>
+              </Card>
+
+              <Card label="CORRÉLATION" icon="⊙">
+                <div style={{ fontSize: 10, color: "rgba(255,255,255,0.5)", lineHeight: 1.5 }}>
+                  Bonne diversification
+                </div>
+                <div style={{ display: "flex", gap: 3, flexWrap: "wrap", marginTop: 2 }}>
+                  {Object.keys(exposition).map(k => (
+                    <div key={k} style={{ padding: "2px 7px", borderRadius: 4, fontSize: 8,
+                      background: (EXPO_COLORS[k] ?? "#94a3b8") + "28",
+                      color: EXPO_COLORS[k] ?? "#94a3b8", fontWeight: 600,
+                      border: `1px solid ${(EXPO_COLORS[k] ?? "#94a3b8")}44` }}>
+                      {k}
+                    </div>
+                  ))}
+                </div>
+              </Card>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* ══ Right sidebar ════════════════════════════════════════════════════ */}
+      <div style={{ width: 200, flexShrink: 0,
+        borderLeft: "1px solid rgba(255,255,255,0.06)",
+        display: "flex", flexDirection: "column",
+        padding: "16px 14px", gap: 16, overflowY: "auto" }}>
+
+        <div>
+          <div style={{ fontSize: 11, fontWeight: 600, color: "#F8F9FC",
+            marginBottom: 10 }}>Top Performers</div>
+          {topPerformers.map(a => <PerformerRow key={a.ticker} asset={a}/>)}
+        </div>
+
+        <div style={{ height: 1, background: "rgba(255,255,255,0.06)", flexShrink: 0 }}/>
+
+        <div>
+          <div style={{ fontSize: 11, fontWeight: 600, color: "#F8F9FC",
+            marginBottom: 10 }}>Moins bons</div>
+          {bottomPerformers.map(a => <PerformerRow key={a.ticker} asset={a}/>)}
+        </div>
+
+        <div style={{ height: 1, background: "rgba(255,255,255,0.06)", flexShrink: 0 }}/>
+
+        <div>
+          <div style={{ fontSize: 11, fontWeight: 600, color: "#F8F9FC",
+            marginBottom: 10 }}>Exposition</div>
+          <div style={{ display: "flex", justifyContent: "center", marginBottom: 10 }}>
+            <MiniDonut data={exposition} size={80}/>
+          </div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
+            {Object.entries(exposition).sort((a, b) => b[1] - a[1]).map(([k, v]) => (
+              <div key={k} style={{ display: "flex", alignItems: "center", gap: 7 }}>
+                <div style={{ width: 8, height: 8, borderRadius: 2, flexShrink: 0,
+                  background: EXPO_COLORS[k] ?? "#94a3b8" }}/>
+                <span style={{ fontSize: 10, color: "rgba(255,255,255,0.5)", flex: 1 }}>{k}</span>
+                <span style={{ fontSize: 10, fontWeight: 600, color: "rgba(255,255,255,0.75)" }}>
+                  {v.toFixed(1)}%
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+export default function PortfolioPage() {
+  return (
+    <Suspense fallback={
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "center",
+        height: "100vh", background: "#040F22",
+        color: "rgba(255,255,255,0.3)", fontSize: 12 }}>
+        Chargement…
+      </div>
+    }>
+      <PortfolioPageInner />
+    </Suspense>
+  );
+}

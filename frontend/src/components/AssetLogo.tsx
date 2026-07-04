@@ -1,8 +1,29 @@
 "use client";
-import { useState, useEffect, CSSProperties, memo } from "react";
+import { useState, useEffect, useRef, CSSProperties, memo } from "react";
+import { BRAND_COLORS } from "@/lib/assets";
 
-// Module-level cache survives component remounts — ticker → working URL index
-const _cache = new Map<string, number>();
+const _idxCache  = new Map<string, number>();
+type LogoMeta = { hasBg: boolean; isDark: boolean };
+const _metaCache = new Map<string, LogoMeta>();
+
+// Same formula as LiquidGlassTreemap tiles
+function brandGlassBg(ticker: string): string {
+  const hex = BRAND_COLORS[ticker.replace(/-USD$/, "")];
+  let r = 91, g = 141, b = 239;
+  if (hex) {
+    const m = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+    if (m) { r = parseInt(m[1],16); g = parseInt(m[2],16); b = parseInt(m[3],16); }
+  } else {
+    // deterministic hash fallback (same as treemap)
+    let h = 2166136261;
+    for (let i = 0; i < ticker.length; i++) { h ^= ticker.charCodeAt(i); h = Math.imul(h, 16777619); }
+    h = h >>> 0;
+    r = 100 + (h & 0x7F); g = 100 + ((h >> 8) & 0x7F); b = 140 + ((h >> 16) & 0x5F);
+  }
+  const shine = "linear-gradient(160deg,rgba(255,255,255,0.07) 0%,rgba(255,255,255,0) 35%)";
+  const dark  = `rgba(${Math.round(r*0.14)},${Math.round(g*0.10)},${Math.round(b*0.10)},0.90)`;
+  return `${shine},${dark}`;
+}
 
 function cryptoSymbol(ticker: string): string {
   return ticker.replace(/-USD$/, "").replace(/[0-9]+$/, "").toLowerCase();
@@ -38,12 +59,47 @@ function resolveUrls(ticker: string, type?: string): string[] {
   return urls;
 }
 
+// Canvas pixel analysis — requires crossOrigin image to avoid SecurityError
+function analyzeElement(img: HTMLImageElement): LogoMeta {
+  const c = document.createElement("canvas");
+  c.width = c.height = 32;
+  const ctx = c.getContext("2d")!;
+  ctx.drawImage(img, 0, 0, 32, 32);
+  const { data } = ctx.getImageData(0, 0, 32, 32); // throws if tainted
+
+  const a = (x: number, y: number) => data[(y * 32 + x) * 4 + 3];
+  const avgCorner = (a(0,0) + a(31,0) + a(0,31) + a(31,31)) / 4;
+  const hasBg = avgCorner > 200;
+  if (hasBg) return { hasBg: true, isDark: false };
+
+  let lumSum = 0, count = 0;
+  for (let i = 0; i < data.length; i += 4) {
+    if (data[i + 3] < 50) continue;
+    lumSum += 0.299 * data[i] + 0.587 * data[i + 1] + 0.114 * data[i + 2];
+    count++;
+  }
+  return { hasBg: false, isDark: count > 0 && lumSum / count < 100 };
+}
+
+// Load a separate crossOrigin probe image for analysis
+// If CORS is blocked (FMP stocks), falls back to hasBg:true → transparent → trust the image
+function analyzeAsync(src: string, cb: (m: LogoMeta) => void): void {
+  const probe = new Image();
+  probe.crossOrigin = "anonymous";
+  probe.onload = () => {
+    try { cb(analyzeElement(probe)); }
+    catch { cb({ hasBg: true, isDark: false }); }
+  };
+  probe.onerror = () => cb({ hasBg: true, isDark: false });
+  probe.src = src;
+}
+
 function extractColor(src: string, cb: (hex: string) => void): void {
   const img = new Image();
   img.crossOrigin = "anonymous";
   img.onload = () => {
     try {
-      const SIZE = 24;
+      const SIZE = 32;
       const canvas = document.createElement("canvas");
       canvas.width = SIZE; canvas.height = SIZE;
       const ctx = canvas.getContext("2d");
@@ -53,34 +109,30 @@ function extractColor(src: string, cb: (hex: string) => void): void {
       type Bucket = { count: number; r: number; g: number; b: number; sat: number };
       const buckets = new Map<number, Bucket>();
       for (let i = 0; i < data.length; i += 4) {
-        const r = data[i], g = data[i + 1], b = data[i + 2], a = data[i + 3];
+        const r = data[i], g = data[i+1], b = data[i+2], a = data[i+3];
         if (a < 50) continue;
         const brightness = (r + g + b) / 3;
-        if (brightness > 225 || brightness < 18) continue;
-        const max = Math.max(r, g, b), min = Math.min(r, g, b), d = max - min;
+        if (brightness > 220 || brightness < 15) continue;
+        const max = Math.max(r,g,b), min = Math.min(r,g,b), d = max - min;
         const sat = max === 0 ? 0 : d / max;
-        if (sat < 0.18) continue;
+        if (sat < 0.15) continue;
         let h = 0;
         if (d !== 0) {
-          if (max === r)      h = ((g - b) / d + (g < b ? 6 : 0)) / 6;
-          else if (max === g) h = ((b - r) / d + 2) / 6;
-          else                h = ((r - g) / d + 4) / 6;
+          if (max === r)      h = ((g-b)/d + (g < b ? 6 : 0)) / 6;
+          else if (max === g) h = ((b-r)/d + 2) / 6;
+          else                h = ((r-g)/d + 4) / 6;
         }
-        const bkt = Math.floor(h * 18);
+        const bkt = Math.floor(h * 24);
         const ex = buckets.get(bkt);
-        if (!ex) {
-          buckets.set(bkt, { count: 1, r, g, b, sat });
-        } else {
-          ex.count++;
-          if (sat > ex.sat) { ex.r = r; ex.g = g; ex.b = b; ex.sat = sat; }
-        }
+        if (!ex) buckets.set(bkt, { count:1, r, g, b, sat });
+        else { ex.count++; if (sat > ex.sat) { ex.r=r; ex.g=g; ex.b=b; ex.sat=sat; } }
       }
       if (!buckets.size) return;
-      let best: Bucket = { count: 0, r: 91, g: 141, b: 239, sat: 0 };
+      let best: Bucket = { count:0, r:91, g:141, b:239, sat:0 };
       buckets.forEach(v => { if (v.count > best.count) best = v; });
       const h = (n: number) => n.toString(16).padStart(2, "0");
       cb(`#${h(best.r)}${h(best.g)}${h(best.b)}`);
-    } catch { /* CORS failure — silent */ }
+    } catch { /* CORS */ }
   };
   img.src = src;
 }
@@ -94,84 +146,125 @@ interface Props {
   fallbackBg: string;
   fallbackBorder: string;
   fallbackTextColor: string;
+  bare?: boolean; // no background/border — use inside cards that already have their own surface
   onColorExtracted?: (hex: string) => void;
 }
 
 function AssetLogoInner({
   ticker, type, size = 32, radius = 8,
-  style,
-  fallbackBg, fallbackBorder, fallbackTextColor,
-  onColorExtracted,
+  style, fallbackBg, fallbackBorder, fallbackTextColor, bare, onColorExtracted,
 }: Props) {
-  const urls = resolveUrls(ticker, type);
-  const cachedIdx = _cache.get(ticker);
-  const [idx, setIdx]       = useState(cachedIdx ?? 0);
-  const [status, setStatus] = useState<"loading" | "ok" | "failed">(
-    cachedIdx !== undefined ? "ok" : "loading"
-  );
+  const urls      = resolveUrls(ticker, type);
+  const cachedIdx  = _idxCache.get(ticker);
+  const cachedMeta = _metaCache.get(ticker);
+
+  const [idx,    setIdx]    = useState(cachedIdx ?? 0);
+  const [status, setStatus] = useState<"loading"|"ok"|"failed">(cachedIdx !== undefined ? "ok" : "loading");
+  const [meta,   setMeta]   = useState<LogoMeta>(cachedMeta ?? { hasBg: true, isDark: false });
+
+  const imgRef = useRef<HTMLImageElement>(null);
 
   useEffect(() => {
-    const c = _cache.get(ticker);
+    const c = _idxCache.get(ticker);
+    const m = _metaCache.get(ticker);
     setIdx(c ?? 0);
     setStatus(c !== undefined ? "ok" : "loading");
+    setMeta(m ?? { hasBg: true, isDark: false });
   }, [ticker]);
 
   useEffect(() => {
-    if (status !== "ok" || !onColorExtracted) return;
-    extractColor(urls[idx], onColorExtracted);
-  }, [status]); // eslint-disable-line react-hooks/exhaustive-deps
+    if (status === "loading" && imgRef.current?.complete) {
+      if (imgRef.current.naturalWidth > 0) {
+        onLoaded(imgRef.current);
+      } else {
+        if (idx + 1 < urls.length) setIdx(i => i + 1);
+        else setStatus("failed");
+      }
+    }
+  }, [idx, status]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const label = ticker
-    .replace(/-USD$/, "").replace(/[0-9]+$/, "")
-    .replace(/\.[A-Z]{1,3}$/, "").replace(/^\^/, "")
-    .slice(0, 4).toUpperCase();
+  function onLoaded(_el: HTMLImageElement) {
+    _idxCache.set(ticker, idx);
+    setStatus("ok");
+    analyzeAsync(urls[idx], m => {
+      _metaCache.set(ticker, m);
+      setMeta(m);
+    });
+    if (onColorExtracted) extractColor(urls[idx], onColorExtracted);
+  }
 
   const handleError = () => {
     if (idx + 1 < urls.length) setIdx(i => i + 1);
     else setStatus("failed");
   };
 
-  const handleLoad = () => {
-    _cache.set(ticker, idx);
-    setStatus("ok");
-  };
+  const label = ticker
+    .replace(/-USD$/,"").replace(/[0-9]+$/,"")
+    .replace(/\.[A-Z]{1,3}$/,"").replace(/^\^/,"")
+    .slice(0,4).toUpperCase();
 
-  if (status === "failed") {
-    return (
-      <div style={{
-        width: size, height: size, borderRadius: radius, flexShrink: 0,
-        background: fallbackBg, border: `1px solid ${fallbackBorder}`,
-        display: "flex", alignItems: "center", justifyContent: "center",
-        ...style,
-      }}>
+  const containerBg  = bare ? "transparent" : status !== "ok" ? fallbackBg : brandGlassBg(ticker);
+  const containerBdr = bare ? "none"        : status !== "ok" ? "none"      : "1px solid rgba(255,255,255,0.07)";
+  const showGloss   = size >= 24 && status === "ok";
+
+  return (
+    <div style={{
+      width: size, height: size, borderRadius: radius, flexShrink: 0,
+      position: "relative", overflow: "hidden",
+      background: containerBg,
+      border: status === "failed" ? `1px solid ${fallbackBorder}` : containerBdr,
+      display: "flex", alignItems: "center", justifyContent: "center",
+      ...style,
+    }}>
+
+      {/* Fallback initials */}
+      {status === "failed" && (
         <span style={{
           fontSize: Math.max(6, Math.floor(size * 0.27)), fontWeight: 800,
           color: fallbackTextColor, letterSpacing: "-0.02em", userSelect: "none",
         }}>
           {label}
         </span>
-      </div>
-    );
-  }
+      )}
 
-  return (
-    <div style={{
-      width: size, height: size, borderRadius: radius, flexShrink: 0,
-      overflow: "hidden", background: "transparent", border: "none",
-      display: "flex", alignItems: "center", justifyContent: "center",
-      ...style,
-    }}>
-      <img
-        key={`${ticker}-${idx}`}
-        src={urls[idx]}
-        alt={ticker}
-        style={{
-          width: "100%", height: "100%", objectFit: "contain",
-          display: status === "ok" ? "block" : "none",
-        }}
-        onLoad={handleLoad}
-        onError={handleError}
-      />
+      {/* Logo */}
+      {status !== "failed" && (
+        <img
+          ref={imgRef}
+          key={`${ticker}-${idx}`}
+          src={urls[idx]}
+          alt={ticker}
+          style={{
+            position: "absolute", inset: 0,
+            width: "100%", height: "100%",
+            objectFit: "contain",
+            opacity: status === "ok" ? 1 : 0,
+            transition: "opacity 0.15s ease",
+          }}
+          onLoad={() => onLoaded(imgRef.current!)}
+          onError={handleError}
+        />
+      )}
+
+      {/* iOS gloss (top reflection + bottom depth + inner ring) — only ≥ 24px */}
+      {showGloss && <>
+        <div style={{
+          position:"absolute", top:0, left:0, right:0, height:"48%",
+          background:"linear-gradient(180deg,rgba(255,255,255,0.18) 0%,rgba(255,255,255,0.02) 100%)",
+          pointerEvents:"none",
+        }}/>
+        <div style={{
+          position:"absolute", bottom:0, left:0, right:0, height:"30%",
+          background:"linear-gradient(0deg,rgba(0,0,0,0.16) 0%,rgba(0,0,0,0) 100%)",
+          pointerEvents:"none",
+        }}/>
+        <div style={{
+          position:"absolute", inset:0, borderRadius:"inherit",
+          boxShadow:"inset 0 1px 0 rgba(255,255,255,0.14),inset 0 -1px 0 rgba(0,0,0,0.14)",
+          pointerEvents:"none",
+        }}/>
+      </>}
+
     </div>
   );
 }

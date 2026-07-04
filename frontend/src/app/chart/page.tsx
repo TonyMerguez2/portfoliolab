@@ -4,6 +4,7 @@ import { useSearchParams, useRouter } from "next/navigation";
 import dynamic from "next/dynamic";
 import { useApp } from "@/lib/AppContext";
 import { TRENDING, BRAND_COLORS } from "@/lib/assets";
+import TileCard from "@/components/TileCard";
 import {
   BarChart, Bar,
   XAxis, YAxis, CartesianGrid, ResponsiveContainer,
@@ -153,51 +154,85 @@ function computeRollingSharpe(data: {date:string;value:number}[], window=90, rf=
   return result;
 }
 
+type TipIconKey = "shield"|"trending-up"|"zap"|"flame"|"mountain"|"alert"|"refresh"|"seedling"|"diamond"|"scale"|"x-circle"|"chart";
+type TipSignal = "positive"|"negative"|"warning"|"neutral";
+type Tip = { iconKey: TipIconKey; title: string; body: string; accent: string; signal: TipSignal; metric: string };
+
+const TIP_ICONS: Record<TipIconKey, JSX.Element> = {
+  "shield":      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>,
+  "trending-up": <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/></svg>,
+  "zap":         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>,
+  "flame":       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M8.5 14.5A2.5 2.5 0 0011 17c1.38 0 2.5-1.12 2.5-2.5 0-1.38-.5-2-1-3 1 .5 1.5 2 1.5 3 0 2.21-1.79 4-4 4s-4-1.79-4-4c0-2.5 2.5-5 2.5-5s-.5 1-.5 2.5z"/><path d="M12 2C6.5 6 4 10 4 14c0 4.42 3.58 8 8 8s8-3.58 8-8c0-4-2-8-8-12z"/></svg>,
+  "mountain":    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><polygon points="3 17 9 5 15 11 19 8 21 17"/></svg>,
+  "alert":       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>,
+  "refresh":     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 102.13-9.36L1 10"/></svg>,
+  "seedling":    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M12 2a10 10 0 000 20"/><path d="M12 12c2-2 5-3 8-3"/><path d="M12 17c-2-2-5-3-8-3"/></svg>,
+  "diamond":     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><polygon points="12 2 22 8.5 22 15.5 12 22 2 15.5 2 8.5 12 2"/><line x1="12" y1="2" x2="12" y2="22"/><path d="M2 8.5h20M2 15.5h20"/></svg>,
+  "scale":       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="3" x2="12" y2="21"/><path d="M3 6l9-3 9 3"/><path d="M3 12l9 3 9-3"/><path d="M3 18l9 3 9-3"/></svg>,
+  "x-circle":    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>,
+  "chart":       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>,
+};
+
 function generateTips(p: {
   vol1Y: number|null; drawdown: number|null; perf1Y: number|null; perf3M: number|null;
-}): { icon:string; title:string; body:string; accent:string }[] {
-  const tips: { icon:string; title:string; body:string; accent:string }[] = [];
+}): Tip[] {
+  const tips: Tip[] = [];
 
   if (p.vol1Y !== null) {
-    if (p.vol1Y < 15) tips.push({ icon:"🛡️", title:"Faible volatilité", accent:"#22c55e",
+    if (p.vol1Y < 15) tips.push({ iconKey:"shield", title:"Faible volatilité", accent:"#22c55e", signal:"positive",
+      metric:`${p.vol1Y.toFixed(0)}% vol`,
       body:`Volatilité annualisée de ${p.vol1Y.toFixed(0)}% — actif défensif, idéal pour une stratégie buy & hold longue durée.` });
-    else if (p.vol1Y < 35) tips.push({ icon:"📊", title:"Volatilité modérée", accent:"#60a5fa",
+    else if (p.vol1Y < 35) tips.push({ iconKey:"chart", title:"Volatilité modérée", accent:"#60a5fa", signal:"neutral",
+      metric:`${p.vol1Y.toFixed(0)}% vol`,
       body:`${p.vol1Y.toFixed(0)}% de volatilité annualisée — profil équilibré, convient à la plupart des stratégies.` });
-    else if (p.vol1Y < 70) tips.push({ icon:"⚡", title:"Volatilité élevée", accent:"#f97316",
+    else if (p.vol1Y < 70) tips.push({ iconKey:"zap", title:"Volatilité élevée", accent:"#f97316", signal:"warning",
+      metric:`${p.vol1Y.toFixed(0)}% vol`,
       body:`${p.vol1Y.toFixed(0)}% de volatilité — mouvements brusques possibles. Dimensionnez votre position avec soin.` });
-    else tips.push({ icon:"🔥", title:"Très haute volatilité", accent:"#ef4444",
+    else tips.push({ iconKey:"flame", title:"Très haute volatilité", accent:"#ef4444", signal:"negative",
+      metric:`${p.vol1Y.toFixed(0)}% vol`,
       body:`${p.vol1Y.toFixed(0)}% annualisé — actif spéculatif à forte convexité. Risque de perte en capital élevé sur court terme.` });
   }
 
   if (p.drawdown !== null) {
-    if (p.drawdown > -10) tips.push({ icon:"📈", title:"Proche des sommets", accent:"#22c55e",
+    if (p.drawdown > -10) tips.push({ iconKey:"mountain", title:"Proche des sommets", accent:"#22c55e", signal:"positive",
+      metric:`${p.drawdown.toFixed(1)}% DD`,
       body:`Drawdown actuel de ${p.drawdown.toFixed(1)}% — l'actif se maintient en zone haute, proche de son plus haut historique.` });
-    else if (p.drawdown > -25) tips.push({ icon:"🔍", title:"Correction modérée", accent:"#f59e0b",
+    else if (p.drawdown > -25) tips.push({ iconKey:"refresh", title:"Correction modérée", accent:"#f59e0b", signal:"warning",
+      metric:`${Math.abs(p.drawdown).toFixed(0)}% DD`,
       body:`Repli de ${Math.abs(p.drawdown).toFixed(0)}% depuis le pic. Zone potentielle d'accumulation si les fondamentaux restent solides.` });
-    else if (p.drawdown > -50) tips.push({ icon:"⚠️", title:"Drawdown significatif", accent:"#f97316",
+    else if (p.drawdown > -50) tips.push({ iconKey:"alert", title:"Drawdown significatif", accent:"#f97316", signal:"warning",
+      metric:`${Math.abs(p.drawdown).toFixed(0)}% DD`,
       body:`Correction de ${Math.abs(p.drawdown).toFixed(0)}% depuis le plus haut. Tendance baissière — attendez une confirmation de retournement.` });
-    else tips.push({ icon:"🚨", title:"Zone de capitulation", accent:"#ef4444",
+    else tips.push({ iconKey:"x-circle", title:"Zone de capitulation", accent:"#ef4444", signal:"negative",
+      metric:`${Math.abs(p.drawdown).toFixed(0)}% DD`,
       body:`Drawdown sévère de ${Math.abs(p.drawdown).toFixed(0)}%. Stress extrême — haut risque, mais historiquement une zone d'opportunité longue durée.` });
   }
 
   if (p.perf1Y !== null && p.perf3M !== null) {
-    if (p.perf3M > 0 && p.perf1Y > 0) tips.push({ icon:"🚀", title:"Momentum haussier", accent:"#22c55e",
+    if (p.perf3M > 0 && p.perf1Y > 0) tips.push({ iconKey:"trending-up", title:"Momentum haussier", accent:"#22c55e", signal:"positive",
+      metric:`+${p.perf1Y.toFixed(0)}% 1A`,
       body:`+${p.perf3M.toFixed(1)}% sur 3 mois, +${p.perf1Y.toFixed(1)}% sur 1 an — momentum positif aligné court et long terme.` });
-    else if (p.perf3M < 0 && p.perf1Y > 0) tips.push({ icon:"🔄", title:"Consolidation", accent:"#60a5fa",
+    else if (p.perf3M < 0 && p.perf1Y > 0) tips.push({ iconKey:"refresh", title:"Consolidation", accent:"#60a5fa", signal:"neutral",
+      metric:`+${p.perf1Y.toFixed(0)}% 1A`,
       body:`Repli de ${Math.abs(p.perf3M).toFixed(1)}% sur 3 mois après une bonne année (+${p.perf1Y.toFixed(1)}%). Phase de digestion, potentiel de reprise.` });
-    else if (p.perf3M > 0 && p.perf1Y < 0) tips.push({ icon:"🌱", title:"Rebond en cours", accent:"#f59e0b",
+    else if (p.perf3M > 0 && p.perf1Y < 0) tips.push({ iconKey:"seedling", title:"Rebond en cours", accent:"#f59e0b", signal:"warning",
+      metric:`${p.perf1Y.toFixed(0)}% 1A`,
       body:`+${p.perf3M.toFixed(1)}% sur 3 mois après une année difficile (${p.perf1Y.toFixed(1)}%). Surveiller la confirmation du retournement.` });
-    else tips.push({ icon:"📉", title:"Pression baissière", accent:"#ef4444",
+    else tips.push({ iconKey:"alert", title:"Pression baissière", accent:"#ef4444", signal:"negative",
+      metric:`${p.perf1Y.toFixed(0)}% 1A`,
       body:`Recul sur 3 mois (${p.perf3M.toFixed(1)}%) et sur 1 an (${p.perf1Y.toFixed(1)}%). Tendance baissière persistante.` });
   }
 
   if (p.vol1Y !== null && p.perf1Y !== null && p.vol1Y > 0) {
     const sharpe = p.perf1Y / p.vol1Y;
-    if (sharpe > 1) tips.push({ icon:"💎", title:"Ratio rendement/risque excellent", accent:"#22c55e",
+    if (sharpe > 1) tips.push({ iconKey:"diamond", title:"Ratio rendement/risque excellent", accent:"#22c55e", signal:"positive",
+      metric:`Sharpe ${sharpe.toFixed(2)}`,
       body:`+${p.perf1Y.toFixed(1)}% pour ${p.vol1Y.toFixed(0)}% de volatilité — ratio Sharpe estimé à ${sharpe.toFixed(2)}. L'actif compense très bien le risque.` });
-    else if (sharpe > 0.3) tips.push({ icon:"⚖️", title:"Ratio rendement/risque correct", accent:"#60a5fa",
+    else if (sharpe > 0.3) tips.push({ iconKey:"scale", title:"Ratio rendement/risque correct", accent:"#60a5fa", signal:"neutral",
+      metric:`Sharpe ${sharpe.toFixed(2)}`,
       body:`+${p.perf1Y.toFixed(1)}% de performance pour ${p.vol1Y.toFixed(0)}% de volatilité. Ratio risque/rendement raisonnable.` });
-    else if (sharpe < 0) tips.push({ icon:"❌", title:"Ratio rendement/risque défavorable", accent:"#ef4444",
+    else if (sharpe < 0) tips.push({ iconKey:"x-circle", title:"Ratio rendement/risque défavorable", accent:"#ef4444", signal:"negative",
+      metric:`Sharpe ${sharpe.toFixed(2)}`,
       body:`Rendement de ${p.perf1Y.toFixed(1)}% pour ${p.vol1Y.toFixed(0)}% de volatilité — le risque pris n'est pas compensé actuellement.` });
   }
 
@@ -294,57 +329,63 @@ function CustomPanel({ lineColor, candleUp, candleDown, defaultLineColor, onLine
   );
 }
 
-function TipCard({ tip }: { tip: { icon: string; title: string; body: string; accent: string } }) {
+function TipCard({ tip, compact = false }: { tip: Tip; compact?: boolean }) {
   const [hovered, setHovered] = useState(false);
-  const isWarm = ["#ef4444", "#f97316", "#f59e0b"].includes(tip.accent);
-  const g1 = isWarm ? "#f97316" : "#3b82f6";
-  const g2 = isWarm ? "#ef4444" : "#8b5cf6";
+  const signalColors: Record<TipSignal, { bg: string; border: string; glow: string }> = {
+    positive: { bg:"rgba(34,197,94,0.08)",  border:"rgba(34,197,94,0.25)",  glow:"rgba(34,197,94,0.20)" },
+    neutral:  { bg:"rgba(96,165,250,0.07)", border:"rgba(96,165,250,0.22)", glow:"rgba(96,165,250,0.18)" },
+    warning:  { bg:"rgba(249,115,22,0.08)", border:"rgba(249,115,22,0.25)", glow:"rgba(249,115,22,0.20)" },
+    negative: { bg:"rgba(239,68,68,0.08)",  border:"rgba(239,68,68,0.25)",  glow:"rgba(239,68,68,0.20)" },
+  };
+  const sc = signalColors[tip.signal];
   return (
     <div
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
       style={{
-        flex:"1 1 200px",
-        background:[
-          `radial-gradient(ellipse at 18% 50%, ${g1}14, transparent 65%) padding-box`,
-          `linear-gradient(rgba(4,17,36,0.94), rgba(4,17,36,0.94)) padding-box`,
-          `linear-gradient(135deg, ${g1}55, ${g2}33) border-box`,
-        ].join(", "),
-        border:"1.5px solid transparent",
-        borderRadius:14,
-        padding:"13px 14px",
-        display:"flex", alignItems:"flex-start", gap:12,
-        cursor:"pointer",
-        transform: hovered ? "translateY(-2px)" : "translateY(0)",
-        transition:"transform 0.2s ease, box-shadow 0.2s ease",
-        boxShadow: hovered
-          ? `0 8px 24px rgba(0,0,0,0.45), 0 2px 10px ${g1}22`
-          : `0 2px 6px rgba(0,0,0,0.2)`,
+        flex: compact ? "none" : "1 1 200px",
+        background: sc.bg,
+        border:`1px solid ${hovered ? tip.accent + "55" : sc.border}`,
+        borderLeft:`3px solid ${tip.accent}`,
+        borderRadius:10,
+        padding: compact ? "10px 12px" : "13px 14px",
+        display:"flex", alignItems:"flex-start", gap:10,
+        cursor:"default",
+        transform: hovered ? "translateY(-1px)" : "translateY(0)",
+        transition:"all 0.18s ease",
+        boxShadow: hovered ? `0 6px 18px rgba(0,0,0,0.35), 0 2px 8px ${sc.glow}` : "0 1px 4px rgba(0,0,0,0.15)",
       }}
     >
       <div style={{
-        width:38, height:38, borderRadius:"50%", flexShrink:0,
-        background:`rgba(${isWarm ? "249,115,22" : "59,130,246"},0.08)`,
-        border:`1px solid ${tip.accent}55`,
+        width:32, height:32, borderRadius:8, flexShrink:0,
+        background:`rgba(255,255,255,0.06)`,
+        border:`1px solid rgba(255,255,255,0.10)`,
         display:"flex", alignItems:"center", justifyContent:"center",
-        boxShadow: hovered
-          ? `0 0 22px ${tip.accent}55, 0 0 8px ${tip.accent}35`
-          : `0 0 14px ${tip.accent}30, 0 0 4px ${tip.accent}18`,
-        transition:"box-shadow 0.2s ease",
+        color: tip.accent,
+        transition:"box-shadow 0.18s ease",
+        boxShadow: hovered ? `0 0 16px ${sc.glow}` : "none",
       }}>
-        <span style={{ fontSize:17, lineHeight:1 }}>{tip.icon}</span>
+        {TIP_ICONS[tip.iconKey]}
       </div>
-      <div style={{ minWidth:0 }}>
-        <div style={{ fontSize:11, fontWeight:600, color:"rgba(255,255,255,0.88)", marginBottom:4, letterSpacing:"0.01em" }}>
-          {tip.title}
+      <div style={{ flex:1, minWidth:0 }}>
+        <div style={{ display:"flex", alignItems:"center", gap:6, marginBottom:4 }}>
+          <span style={{ fontSize:11, fontWeight:600, color:"rgba(255,255,255,0.88)", letterSpacing:"0.01em", flex:1, minWidth:0 }}>
+            {tip.title}
+          </span>
+          <span style={{ fontSize:9, fontWeight:700, padding:"2px 6px", borderRadius:4,
+            background:`${tip.accent}18`, border:`1px solid ${tip.accent}40`, color:tip.accent,
+            letterSpacing:"0.04em", flexShrink:0, fontVariantNumeric:"tabular-nums" as const }}>
+            {tip.metric}
+          </span>
         </div>
-        <p style={{ fontSize:10, color:"rgba(255,255,255,0.45)", lineHeight:1.55, margin:0 }}>
+        <p style={{ fontSize:10, color:"rgba(255,255,255,0.42)", lineHeight:1.55, margin:0 }}>
           {tip.body}
         </p>
       </div>
     </div>
   );
 }
+
 
 const typeColor = (type?: string) => ({
   bg: type==="CRYPTOCURRENCY"?"rgba(245,158,11,0.16)":type==="ETF"?"rgba(139,92,246,0.16)":type==="INDEX"?"rgba(34,211,238,0.14)":"rgba(59,130,246,0.16)",
@@ -414,6 +455,14 @@ function ChartContent() {
   const [displayCurrency,   setDisplayCurrency]   = useState<string | null>(null);
   const [showCurrencyMenu,  setShowCurrencyMenu]  = useState(false);
   const [fxRates,           setFxRates]           = useState<Record<string, number>>({ USD: 1 });
+  const [sidebarOpen,    setSidebarOpen]    = useState(false);
+  const [sidebarTab,     setSidebarTab]     = useState<"news"|"similar"|"ai">("news");
+  const [similar,        setSimilar]        = useState<{ticker:string;sector?:string;country?:string;type?:string;price:number;change:number}[]>([]);
+  const [similarBy,      setSimilarBy]      = useState<"sector"|"geography"|"class"|"marketcap">("sector");
+  const [news,           setNews]           = useState<{title:string;publisher:string;link:string;published_at:string|number;thumbnail?:string}[]>([]);
+  const [newsLoading,    setNewsLoading]    = useState(false);
+  const [similarLoading, setSimilarLoading] = useState(false);
+  const [fullscreen,     setFullscreen]     = useState(false);
 
   // Reset extracted colour whenever the viewed asset changes
   useEffect(() => { setExtractedColor(null); }, [ticker]);
@@ -551,6 +600,33 @@ function ChartContent() {
   useEffect(() => {
     if (quote?.currency) setDisplayCurrency(quote.currency);
   }, [quote?.currency]);
+
+  // Auto-open sidebar when viewing a ticker
+  useEffect(() => {
+    if (ticker) setSidebarOpen(true);
+  }, [ticker]);
+
+  // Similar assets
+  useEffect(() => {
+    if (!ticker) { setSimilar([]); return; }
+    setSimilarLoading(true);
+    fetch(`${API_URL}/api/v1/similar/${encodeURIComponent(ticker)}?by=${similarBy}`)
+      .then(r => r.json())
+      .then((d: unknown) => { if (Array.isArray(d)) setSimilar(d); })
+      .catch(() => {})
+      .finally(() => setSimilarLoading(false));
+  }, [ticker, similarBy]);
+
+  // News
+  useEffect(() => {
+    if (!ticker) { setNews([]); return; }
+    setNewsLoading(true);
+    fetch(`${API_URL}/api/v1/news/${encodeURIComponent(ticker)}?lang=fr`)
+      .then(r => r.json())
+      .then((d: unknown) => { if (Array.isArray(d)) setNews(d); })
+      .catch(() => {})
+      .finally(() => setNewsLoading(false));
+  }, [ticker]);
 
   // Taux de change (open.er-api.com, gratuit, sans auth)
   useEffect(() => {
@@ -728,7 +804,12 @@ function ChartContent() {
 
   return (
     <div style={{ height:"100vh", background:"#041124", color:"#F8F9FC", fontFamily:"-apple-system,BlinkMacSystemFont,sans-serif", display:"flex", flexDirection:"column", position:"relative", overflow:"hidden" }}>
-      <div style={{ position:"fixed", inset:0, zIndex:0, pointerEvents:"none", background:"radial-gradient(ellipse 55% 55% at 50% 50%, #0B1C3F 0%, #041124 100%)" }}/>
+      <div style={{ position:"fixed", inset:0, zIndex:0, pointerEvents:"none", background:[
+        "radial-gradient(ellipse 60% 50% at 25% 30%, rgba(80,120,255,0.09) 0%, transparent 100%)",
+        "radial-gradient(ellipse 55% 60% at 75% 65%, rgba(60,200,100,0.06) 0%, transparent 100%)",
+        "radial-gradient(ellipse 50% 45% at 55% 20%, rgba(200,100,255,0.05) 0%, transparent 100%)",
+        "#040F22",
+      ].join(", ") }}/>
       <div style={{ position:"relative", zIndex:1, display:"flex", flexDirection:"column", flex:1, minHeight:0 }}>
 
         {/* Header */}
@@ -782,11 +863,12 @@ function ChartContent() {
                     </button>
 
                     {ticker && (
-                      <div style={{ display:"flex", alignItems:"center", gap:12 }}>
+                      <TileCard ticker={ticker} style={{ display:"flex", alignItems:"center", gap:12, padding:"8px 10px" }}>
                         <AssetLogo
                           ticker={ticker} type={assetInfo?.type} size={40} radius={10}
                           fallbackBg={tc.bg} fallbackBorder={tc.border} fallbackTextColor={tc.text}
                           onColorExtracted={c => { if (!BRAND_COLORS[ticker]) setExtractedColor(c); }}
+                          bare
                         />
                         <div>
                           {/* Line 1 — ticker · prix · variation  (même taille, même ligne) */}
@@ -810,7 +892,7 @@ function ChartContent() {
                           </div>
                           {/* Line 2 — tout statique + statut, même taille, même couleur */}
                           <div style={{ display:"flex", alignItems:"center", gap:5, marginTop:5 }}>
-                            <span style={{ fontSize:11, color:"rgba(255,255,255,0.33)", lineHeight:1, letterSpacing:"0.01em" }}>
+                            <span style={{ fontSize:11, color:"#FFFFFF", lineHeight:1, letterSpacing:"0.01em" }}>
                               {assetInfo?.name || ticker}
                               {(() => {
                                 if (!ticker || ASSET_RANK[ticker] == null || assetInfo?.type === "INDEX") return null;
@@ -818,15 +900,15 @@ function ChartContent() {
                                 return lbl ? ` · #${ASSET_RANK[ticker]} ${lbl}` : null;
                               })()}
                             </span>
-                            <span style={{ color:"rgba(255,255,255,0.15)", fontSize:11 }}>·</span>
+                            <span style={{ color:"#FFFFFF", fontSize:11 }}>·</span>
                             {!isCrypto && (
                               <span style={{ display:"flex", alignItems:"center", gap:4, flexShrink:0 }}>
-                                <span style={{ width:5, height:5, borderRadius:"50%", display:"inline-block", background: isOpen ? "#22c55e" : "#64748b", animation: isOpen ? "hdr-pulse 2s ease-in-out infinite" : "none", flexShrink:0 }}/>
-                                <span style={{ fontSize:10, letterSpacing:"0.05em", color: isOpen ? "#4ade80" : "#64748b" }}>
+                                <span style={{ width:5, height:5, borderRadius:"50%", display:"inline-block", background: isOpen ? "#22c55e" : "#FFFFFF", animation: isOpen ? "hdr-pulse 2s ease-in-out infinite" : "none", flexShrink:0 }}/>
+                                <span style={{ fontSize:10, letterSpacing:"0.05em", color: isOpen ? "#4ade80" : "#FFFFFF" }}>
                                   {isOpen ? "Marché ouvert" : "Marché fermé"}
                                 </span>
                                 {isOpen && (
-                                  <span style={{ fontSize:9, color:"rgba(255,255,255,0.2)", letterSpacing:"0.04em" }}>↻ 60s</span>
+                                  <span style={{ fontSize:9, color:"#FFFFFF", letterSpacing:"0.04em" }}>↻ 60s</span>
                                 )}
                               </span>
                             )}
@@ -838,9 +920,11 @@ function ChartContent() {
                             )}
                           </div>
                         </div>
-                        <div style={{ width:26, height:26, borderRadius:7, border:"1px solid rgba(255,255,255,0.12)", display:"flex", alignItems:"center", justifyContent:"center", cursor:"not-allowed", flexShrink:0 }} title="Ajouter un benchmark (bientôt disponible)">
-                          <svg width="10" height="10" viewBox="0 0 10 10" fill="none"><path d="M5 1v8M1 5h8" stroke="rgba(255,255,255,0.25)" strokeWidth="1.5" strokeLinecap="round"/></svg>
-                        </div>
+                      </TileCard>
+                    )}
+                    {ticker && (
+                      <div style={{ width:26, height:26, borderRadius:7, border:"1px solid rgba(255,255,255,0.12)", display:"flex", alignItems:"center", justifyContent:"center", cursor:"not-allowed", flexShrink:0 }} title="Ajouter un benchmark (bientôt disponible)">
+                        <svg width="10" height="10" viewBox="0 0 10 10" fill="none"><path d="M5 1v8M1 5h8" stroke="rgba(255,255,255,0.25)" strokeWidth="1.5" strokeLinecap="round"/></svg>
                       </div>
                     )}
 
@@ -893,6 +977,9 @@ function ChartContent() {
           )}
           {!loading && !error && portfolioData.length > 0 && (
             <>
+              <div style={{ display:"flex", gap:12, flex:"1 1 0", minHeight:0 }}>
+              {/* Chart column */}
+              <div style={{ flex:1, minWidth:0, display:"flex", flexDirection:"column" }}>
               {/* Main chart */}
               <div style={{ border:"1px solid rgba(255,255,255,0.06)", borderRadius:"16px", padding:"14px 18px 10px", flex:"1 1 0", minHeight:220, display:"flex", flexDirection:"column", position:"relative", overflow:"hidden", background:"rgba(255,255,255,0.02)" }}>
                 <GrowthChart
@@ -932,6 +1019,44 @@ function ChartContent() {
                   ) : undefined}
                   rightSlot={
                     <div style={{ display:"flex", alignItems:"center", gap:4 }}>
+                      {/* Fullscreen */}
+                      {ticker && (
+                        <button
+                          onClick={() => setFullscreen(f => !f)}
+                          title={fullscreen ? "Quitter le plein écran" : "Plein écran"}
+                          style={{
+                            background: fullscreen ? "rgba(91,141,239,0.16)" : "rgba(255,255,255,0.05)",
+                            border:`1px solid ${fullscreen ? "rgba(91,141,239,0.40)" : "rgba(255,255,255,0.10)"}`,
+                            borderRadius:6, width:28, height:28, cursor:"pointer",
+                            display:"flex", alignItems:"center", justifyContent:"center",
+                            color: fullscreen ? "#9BB9FF" : "rgba(255,255,255,0.40)",
+                            transition:"all 0.15s",
+                          }}
+                        >
+                          {fullscreen ? (
+                            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M8 3v3a2 2 0 01-2 2H3m18 0h-3a2 2 0 01-2-2V3m0 18v-3a2 2 0 012-2h3M3 16h3a2 2 0 012 2v3"/></svg>
+                          ) : (
+                            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M8 3H5a2 2 0 00-2 2v3m18 0V5a2 2 0 00-2-2h-3m0 18h3a2 2 0 002-2v-3M3 16v3a2 2 0 002 2h3"/></svg>
+                          )}
+                        </button>
+                      )}
+                      {/* Sidebar toggle */}
+                      {ticker && (
+                        <button
+                          onClick={() => setSidebarOpen(o => !o)}
+                          title={sidebarOpen ? "Fermer le panneau" : "Ouvrir le panneau (News, Similaires, IA)"}
+                          style={{
+                            background: sidebarOpen ? "rgba(91,141,239,0.16)" : "rgba(255,255,255,0.05)",
+                            border:`1px solid ${sidebarOpen ? "rgba(91,141,239,0.40)" : "rgba(255,255,255,0.10)"}`,
+                            borderRadius:6, width:28, height:28, cursor:"pointer",
+                            display:"flex", alignItems:"center", justifyContent:"center",
+                            color: sidebarOpen ? "#9BB9FF" : "rgba(255,255,255,0.40)",
+                            transition:"all 0.15s",
+                          }}
+                        >
+                          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><line x1="15" y1="3" x2="15" y2="21"/></svg>
+                        </button>
+                      )}
                       {/* Share */}
                       <button
                         onClick={handleShare}
@@ -1082,15 +1207,210 @@ function ChartContent() {
                 </button>
               )}
 
-              {/* AI tips */}
-              {tips.length > 0 && (
-                <div style={{ marginTop:18, flexShrink:0 }}>
-                  <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:12 }}>
-                    <span style={{ fontSize:10, color:"rgba(255,255,255,0.25)", letterSpacing:"0.12em", fontWeight:600 }}>ANALYSE</span>
-                    <span style={{ fontSize:9, background:"rgba(139,92,246,0.18)", border:"1px solid rgba(139,92,246,0.3)", borderRadius:4, padding:"1px 6px", color:"#c4b5fd", fontWeight:600 }}>IA bêta</span>
+              </div>{/* end chart column */}
+
+              {/* Sidebar */}
+              {ticker && sidebarOpen && (
+                <div style={{ width:336, flexShrink:0, display:"flex", flexDirection:"column", background:"rgba(255,255,255,0.025)", border:"1px solid rgba(255,255,255,0.07)", borderRadius:14, overflow:"hidden" }}>
+                  {/* Sidebar tabs + close button */}
+                  <div style={{ display:"flex", alignItems:"stretch", borderBottom:"1px solid rgba(255,255,255,0.06)", flexShrink:0 }}>
+                    {([["news","Actualités"],["similar","Similaires"],["ai","IA"]] as const).map(([tab, label]) => {
+                      const active = sidebarTab === tab;
+                      return (
+                        <button key={tab} onClick={() => setSidebarTab(tab)}
+                          style={{ flex:1, padding:"12px 4px 10px", border:"none", background: active?"rgba(91,141,239,0.10)":"transparent", cursor:"pointer", fontSize:11, fontWeight:active?700:500, letterSpacing:"0.07em", color:active?"#C5D9FF":"rgba(255,255,255,0.30)", borderBottom: active?"2px solid #5B8DEF":"2px solid rgba(255,255,255,0.0)", transition:"all 0.13s" }}>
+                          {label}
+                        </button>
+                      );
+                    })}
+                    <button onClick={() => setSidebarOpen(false)}
+                      title="Fermer"
+                      style={{ flexShrink:0, width:36, border:"none", background:"transparent", cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center", color:"rgba(255,255,255,0.20)", borderLeft:"1px solid rgba(255,255,255,0.05)", transition:"color 0.13s" }}
+                      onMouseEnter={e => (e.currentTarget.style.color="rgba(255,255,255,0.55)")}
+                      onMouseLeave={e => (e.currentTarget.style.color="rgba(255,255,255,0.20)")}>
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                    </button>
                   </div>
-                  <div style={{ display:"flex", gap:10, flexWrap:"wrap" }}>
-                    {tips.map(tip => <TipCard key={tip.title} tip={tip} />)}
+
+                  {/* Sidebar content */}
+                  <div style={{ flex:1, overflowY:"auto", padding:"14px 12px" }}>
+
+                    {/* NEWS TAB */}
+                    {sidebarTab === "news" && (
+                      newsLoading ? (
+                        <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
+                          {[1,2,3,4].map(i => (
+                            <div key={i} style={{ height:60, borderRadius:8, background:"rgba(255,255,255,0.04)" }} />
+                          ))}
+                        </div>
+                      ) : news.length > 0 ? (
+                        <div style={{ display:"flex", flexDirection:"column", gap:7 }}>
+                          {news.map((n, i) => {
+                            let timeAgo = "";
+                            try {
+                              const ts = typeof n.published_at === "number"
+                                ? new Date(n.published_at * 1000)
+                                : new Date(n.published_at);
+                              const diff = Math.floor((Date.now() - ts.getTime()) / 60000);
+                              if (diff < 60)        timeAgo = `${diff}m`;
+                              else if (diff < 1440) timeAgo = `${Math.floor(diff/60)}h`;
+                              else                  timeAgo = `${Math.floor(diff/1440)}j`;
+                            } catch { timeAgo = ""; }
+
+                            return (
+                              <a key={i} href={n.link} target="_blank" rel="noopener noreferrer"
+                                style={{ display:"flex", gap:11, padding:"11px 12px", borderRadius:10, background:"rgba(255,255,255,0.025)", border:"1px solid rgba(255,255,255,0.06)", textDecoration:"none", transition:"all 0.14s", alignItems:"flex-start" }}
+                                onMouseEnter={e => { e.currentTarget.style.background="rgba(255,255,255,0.055)"; e.currentTarget.style.borderColor="rgba(255,255,255,0.12)"; }}
+                                onMouseLeave={e => { e.currentTarget.style.background="rgba(255,255,255,0.025)"; e.currentTarget.style.borderColor="rgba(255,255,255,0.06)"; }}>
+                                {n.thumbnail ? (
+                                  <img src={n.thumbnail} alt="" width={52} height={52}
+                                    style={{ borderRadius:7, objectFit:"cover" as const, flexShrink:0 }}
+                                    onError={e => { (e.target as HTMLImageElement).style.display="none"; }} />
+                                ) : (
+                                  <div style={{
+                                    width:52, height:52, borderRadius:7, flexShrink:0,
+                                    background: ["rgba(91,141,239,0.20)","rgba(139,92,246,0.20)","rgba(34,197,94,0.16)","rgba(249,115,22,0.18)","rgba(236,72,153,0.18)"][
+                                      (n.publisher?.charCodeAt(0) ?? 65) % 5
+                                    ],
+                                    display:"flex", alignItems:"center", justifyContent:"center",
+                                    fontSize:20, fontWeight:700, color:"rgba(255,255,255,0.50)",
+                                  }}>
+                                    {n.publisher?.[0]?.toUpperCase() ?? "N"}
+                                  </div>
+                                )}
+                                <div style={{ flex:1, minWidth:0 }}>
+                                  <div style={{ fontSize:11.5, fontWeight:500, color:"rgba(255,255,255,0.84)", lineHeight:1.42,
+                                    display:"-webkit-box", WebkitLineClamp:2, WebkitBoxOrient:"vertical" as const, overflow:"hidden" }}>
+                                    {n.title}
+                                  </div>
+                                  <div style={{ marginTop:5, display:"flex", alignItems:"center", gap:6 }}>
+                                    <span style={{ fontSize:9.5, color:"rgba(255,255,255,0.38)", fontWeight:500 }}>{n.publisher}</span>
+                                    {timeAgo && <><span style={{ width:2, height:2, borderRadius:"50%", background:"rgba(255,255,255,0.20)", display:"inline-block", flexShrink:0 }}/><span style={{ fontSize:9.5, color:"rgba(255,255,255,0.28)" }}>{timeAgo}</span></>}
+                                    <span style={{ marginLeft:"auto", fontSize:9, color:"rgba(91,141,239,0.60)" }}>→</span>
+                                  </div>
+                                </div>
+                              </a>
+                            );
+                          })}
+                        </div>
+                      ) : (
+                        <div style={{ padding:"30px 0", textAlign:"center", fontSize:11, color:"rgba(255,255,255,0.20)" }}>
+                          Aucune actualité disponible.
+                        </div>
+                      )
+                    )}
+
+                    {/* SIMILAR TAB */}
+                    {sidebarTab === "similar" && (
+                      <div>
+                        <div style={{ display:"flex", gap:4, marginBottom:12, flexWrap:"wrap" }}>
+                          {(["sector","geography","class","marketcap"] as const).map(by => {
+                            const labels = {sector:"Secteur", geography:"Géographie", class:"Classe", marketcap:"Market Cap"};
+                            const active = similarBy === by;
+                            return (
+                              <button key={by} onClick={() => setSimilarBy(by)}
+                                style={{ padding:"3px 9px", borderRadius:5, border:`1px solid ${active?"rgba(91,141,239,0.50)":"rgba(255,255,255,0.10)"}`, background:active?"rgba(91,141,239,0.18)":"transparent", color:active?"#9BB9FF":"rgba(255,255,255,0.32)", fontSize:9, fontWeight:active?700:400, cursor:"pointer", letterSpacing:"0.06em", transition:"all 0.13s" }}>
+                                {labels[by]}
+                              </button>
+                            );
+                          })}
+                        </div>
+                        {similarLoading ? (
+                          <div style={{ display:"flex", flexDirection:"column", gap:6 }}>
+                            {[1,2,3,4,5].map(i => <div key={i} style={{ height:44, borderRadius:7, background:"rgba(255,255,255,0.04)" }} />)}
+                          </div>
+                        ) : similar.length > 0 ? (
+                          <div style={{ display:"flex", flexDirection:"column", gap:5 }}>
+                            {similar.map(s => {
+                              const name = TRENDING.find(t => t.ticker === s.ticker)?.name ?? s.ticker;
+                              const pos  = s.change >= 0;
+                              return (
+                                <div key={s.ticker}
+                                  onClick={() => { const url = new URL(window.location.href); url.searchParams.set("ticker", s.ticker); window.location.href = url.toString(); }}
+                                  style={{ display:"flex", alignItems:"center", gap:8, padding:"8px 10px", borderRadius:8, background:"rgba(255,255,255,0.03)", border:"1px solid rgba(255,255,255,0.07)", cursor:"pointer", transition:"background 0.12s" }}
+                                  onMouseEnter={e => e.currentTarget.style.background="rgba(255,255,255,0.07)"}
+                                  onMouseLeave={e => e.currentTarget.style.background="rgba(255,255,255,0.03)"}>
+                                  <AssetLogo ticker={s.ticker} type={s.type ?? "EQUITY"} size={28}
+                                    fallbackBg="rgba(255,255,255,0.07)" fallbackBorder="rgba(255,255,255,0.12)" fallbackTextColor="rgba(255,255,255,0.45)" />
+                                  <div style={{ flex:1, minWidth:0 }}>
+                                    <div style={{ fontSize:11, fontWeight:600, color:"rgba(255,255,255,0.88)" }}>{s.ticker}</div>
+                                    <div style={{ fontSize:9, color:"rgba(255,255,255,0.28)", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{name}</div>
+                                  </div>
+                                  <div style={{ textAlign:"right", flexShrink:0 }}>
+                                    <div style={{ fontSize:10, fontWeight:600, color:pos?"#4ade80":"#f87171", fontVariantNumeric:"tabular-nums" as const }}>
+                                      {pos?"+":""}{s.change.toFixed(2)}%
+                                    </div>
+                                    <div style={{ fontSize:9, color:"rgba(255,255,255,0.30)", fontVariantNumeric:"tabular-nums" as const }}>
+                                      {s.price < 1 ? s.price.toFixed(4) : s.price < 100 ? s.price.toFixed(2) : s.price.toFixed(0)}
+                                    </div>
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        ) : (
+                          <div style={{ padding:"30px 0", textAlign:"center", fontSize:11, color:"rgba(255,255,255,0.20)" }}>
+                            Aucun actif similaire trouvé.
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    {/* AI TAB */}
+                    {sidebarTab === "ai" && (
+                      tips.length > 0 ? (
+                        <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
+                          <div style={{ display:"flex", alignItems:"center", gap:6, marginBottom:4 }}>
+                            <span style={{ fontSize:9, color:"rgba(255,255,255,0.22)", letterSpacing:"0.12em", fontWeight:600 }}>ANALYSE IA</span>
+                            <span style={{ fontSize:8, background:"rgba(139,92,246,0.18)", border:"1px solid rgba(139,92,246,0.3)", borderRadius:4, padding:"1px 5px", color:"#c4b5fd", fontWeight:600 }}>bêta</span>
+                          </div>
+                          {tips.map(tip => <TipCard key={tip.title} tip={tip} compact={true} />)}
+                        </div>
+                      ) : (
+                        <div style={{ padding:"30px 0", textAlign:"center", fontSize:11, color:"rgba(255,255,255,0.20)" }}>
+                          Chargement de l&apos;analyse…
+                        </div>
+                      )
+                    )}
+
+                  </div>
+                </div>
+              )}
+              </div>{/* end flex-row */}
+
+              {/* Fullscreen overlay */}
+              {fullscreen && (
+                <div style={{ position:"fixed", inset:0, zIndex:100, background:"#040F22", display:"flex", flexDirection:"column", padding:20 }}>
+                  <div style={{ display:"flex", justifyContent:"flex-end", marginBottom:10, flexShrink:0 }}>
+                    <button onClick={() => setFullscreen(false)}
+                      style={{ background:"rgba(255,255,255,0.06)", border:"1px solid rgba(255,255,255,0.12)", borderRadius:8, color:"rgba(255,255,255,0.55)", fontSize:11, padding:"6px 14px", cursor:"pointer", letterSpacing:"0.07em", display:"flex", alignItems:"center", gap:6 }}>
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M8 3v3a2 2 0 01-2 2H3m18 0h-3a2 2 0 01-2-2V3m0 18v-3a2 2 0 012-2h3M3 16h3a2 2 0 012 2v3"/></svg>
+                      Quitter le plein écran
+                    </button>
+                  </div>
+                  <div style={{ flex:1, border:"1px solid rgba(255,255,255,0.07)", borderRadius:16, overflow:"hidden", background:"rgba(255,255,255,0.02)" }}>
+                    <GrowthChart
+                      portfolioData={scaledPortfolioData}
+                      benchmarkData={scaledBenchmarkData}
+                      benchmarkName="S&P 500"
+                      portfolioLabel={label}
+                      drawdownData={scaledDrawdownData.length > 0 ? scaledDrawdownData : undefined}
+                      ticker={ticker ?? undefined}
+                      portfolioColor={lineColor ?? color}
+                      candleUpColor={candleUp}
+                      candleDownColor={candleDown}
+                      chartMode={chartViewMode}
+                      onChartModeChange={setChartViewMode}
+                      dark={true}
+                      priceMode={!!ticker}
+                      hideDrawdown={true}
+                      dailyChangePct={currentPrice?.change ?? null}
+                      openPrice={quote?.open ?? null}
+                      onPeriodChange={setActivePeriod}
+                      onVisibleRangeChange={(from, to) => setVisibleRange(from && to ? { from: new Date(from*1000).toISOString().slice(0,10), to: new Date(to*1000).toISOString().slice(0,10) } : null)}
+                      onCrosshairMove={(t) => setCrosshairTime(t)}
+                      onAdaptiveData={setChartPriceData}
+                    />
                   </div>
                 </div>
               )}
