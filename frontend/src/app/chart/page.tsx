@@ -154,6 +154,39 @@ function computeRollingSharpe(data: {date:string;value:number}[], window=90, rf=
   return result;
 }
 
+// ── News AI scoring ──────────────────────────────────────────────────────────
+type NewsImpact = "high" | "medium" | "low";
+type NewsEventType = "Résultats" | "IA" | "Dividende" | "Régulation" | "Fusion" | "Analyse" | "Bourse" | "Direction" | "Marché";
+
+function scoreNews(title: string): { impact: NewsImpact; type: NewsEventType; readMin: number } {
+  const t = title.toLowerCase();
+  let type: NewsEventType = "Marché";
+  if (/earnings|revenue|profit|q[1-4]\b|eps\b|quarterly|annual|résultat|chiffre d.affaire|bénéfice/i.test(title)) type = "Résultats";
+  else if (/\bai\b|artificial intelligence|machine learning|chatgpt|\bgpt\b|\bllm\b|openai|gemini|mistral/i.test(title)) type = "IA";
+  else if (/dividend|yield|dividende|payout/i.test(title)) type = "Dividende";
+  else if (/\bsec\b|\bftc\b|regulat|fine\b|lawsuit|penalty|antitrust|sanction|amende|probe/i.test(title)) type = "Régulation";
+  else if (/merger|acqui|takeover|\bdeal\b|fusion|buys?\b|purchased?/i.test(title)) type = "Fusion";
+  else if (/analyst|upgrade|downgrade|price target|buy rating|sell rating|outperform|underperform/i.test(title)) type = "Analyse";
+  else if (/\bipo\b|offering|stock split|buyback|repurchase/i.test(title)) type = "Bourse";
+  else if (/\bceo\b|\bcfo\b|\bcto\b|executive|appoint|resign|leadership/i.test(title)) type = "Direction";
+
+  let score = 0;
+  ["miss","beat","surge","plunge","crash","record","bankruptcy","default","fine","merger","acqui","billion","layoff","downgrade","upgrade","warning","recall","investigation","fraud","guidance cut","profit warning","job cut"].forEach(k => { if (t.includes(k)) score += 2; });
+  ["growth","expansion","partnership","launch","announces","targets","dividend","analyst","forecast","results","report"].forEach(k => { if (t.includes(k)) score += 1; });
+  if (type === "Résultats" || type === "Fusion") score += 2;
+  if (type === "Régulation") score += 1;
+
+  const impact: NewsImpact = score >= 4 ? "high" : score >= 1 ? "medium" : "low";
+  const readMin = Math.max(1, Math.min(5, Math.round(title.split(" ").length * 7 / 60)));
+  return { impact, type, readMin };
+}
+
+const IMPACT_CONFIG: Record<NewsImpact, { label: string; color: string; bg: string; dot: string }> = {
+  high:   { label: "Impact élevé",  color: "#f87171", bg: "rgba(239,68,68,0.12)",   dot: "#ef4444" },
+  medium: { label: "Impact moyen",  color: "#fb923c", bg: "rgba(249,115,22,0.12)",  dot: "#f97316" },
+  low:    { label: "Impact faible", color: "#4ade80", bg: "rgba(34,197,94,0.12)",   dot: "#22c55e" },
+};
+
 type TipIconKey = "shield"|"trending-up"|"zap"|"flame"|"mountain"|"alert"|"refresh"|"seedling"|"diamond"|"scale"|"x-circle"|"chart";
 type TipSignal = "positive"|"negative"|"warning"|"neutral";
 type Tip = { iconKey: TipIconKey; title: string; body: string; accent: string; signal: TipSignal; metric: string };
@@ -452,6 +485,7 @@ function ChartContent() {
   const [copied,        setCopied]        = useState(false);
   const [chartViewMode, setChartViewMode] = useState<"line" | "candle">("line");
   const [extractedColor, setExtractedColor] = useState<string | null>(null);
+  const [bmExtractedColor, setBmExtractedColor] = useState<string | null>(null);
   const [displayCurrency,   setDisplayCurrency]   = useState<string | null>(null);
   const [showCurrencyMenu,  setShowCurrencyMenu]  = useState(false);
   const [fxRates,           setFxRates]           = useState<Record<string, number>>({ USD: 1 });
@@ -461,6 +495,14 @@ function ChartContent() {
   const [similarBy,      setSimilarBy]      = useState<"sector"|"geography"|"class"|"marketcap">("sector");
   const [news,           setNews]           = useState<{title:string;publisher:string;link:string;published_at:string|number;thumbnail?:string}[]>([]);
   const [newsLoading,    setNewsLoading]    = useState(false);
+  const [newsSortBy,      setNewsSortBy]      = useState<"recent" | "impact">("recent");
+  const [customBmTicker,  setCustomBmTicker]  = useState<string | null>(null);
+  const [customBmName,    setCustomBmName]    = useState<string>("");
+  const [customBmType,    setCustomBmType]    = useState<string>("EQUITY");
+  const [rawCustomBmData, setRawCustomBmData] = useState<{date:string;value:number}[]>([]);
+  const [customBmLoading, setCustomBmLoading] = useState(false);
+  const [showBmSearch,    setShowBmSearch]    = useState(false);
+  const [bmQuery,         setBmQuery]         = useState("");
   const [similarLoading, setSimilarLoading] = useState(false);
   const [fullscreen,     setFullscreen]     = useState(false);
 
@@ -497,6 +539,9 @@ function ChartContent() {
   const color = isPortfolio
     ? (activePortfolio?.color || "#5B8DEF")
     : (ticker ? (BRAND_COLORS[ticker] ?? extractedColor ?? "#5B8DEF") : "#5B8DEF");
+  const activeBmColor = customBmTicker
+    ? (BRAND_COLORS[customBmTicker] ?? bmExtractedColor ?? "#f59e0b")
+    : "#f59e0b";
   const tc = typeColor(assetInfo?.type);
   const shortLabel = ticker
     ? ticker.replace(/-USD$/,"").replace(/\.PA$/,"").replace(/\^/,"").slice(0,4)
@@ -556,7 +601,7 @@ function ChartContent() {
     }
   }, [ticker, isPortfolio, activePortfolio?.id]);
 
-  // WebSocket Binance pour crypto
+  // WebSocket Binance pour crypto — throttlé à 1 setState/2s pour éviter les re-renders continus
   useEffect(() => {
     if (!ticker || !isCrypto) return;
     const symbol = ticker.replace(/-USD$/, "USDT").toLowerCase();
@@ -564,12 +609,17 @@ function ChartContent() {
     ws.onopen = () => setWsLive(true);
     ws.onclose = () => setWsLive(false);
     ws.onerror = () => { setWsLive(false); ws.close(); };
+    let lastUpdate = 0;
     ws.onmessage = (event) => {
       try {
         const data = JSON.parse(event.data);
         const price = parseFloat(data.c);
         const changePct = parseFloat(data.P);
-        if (price > 0) setCurrentPrice({ price, change: changePct });
+        const now = Date.now();
+        if (price > 0 && now - lastUpdate >= 2000) {
+          lastUpdate = now;
+          setCurrentPrice({ price, change: changePct });
+        }
       } catch {}
     };
     return () => { if (ws.readyState === WebSocket.OPEN) ws.close(); };
@@ -646,23 +696,9 @@ function ChartContent() {
     return rTarget / rNative;
   }, [displayCurrency, quote?.currency, fxRates]);
 
-  const portfolioData = useMemo(() => {
-    if (!ticker || !rawPortfolioGrowth.length) return rawPortfolioGrowth;
-    const anchor = currentPrice?.price;
-    if (!anchor) return rawPortfolioGrowth;
-    const lastVal = rawPortfolioGrowth[rawPortfolioGrowth.length - 1].value;
-    const mapped = rawPortfolioGrowth.map(p => ({
-      date: p.date,
-      value: Math.round(anchor * (p.value / lastVal) * 10000) / 10000,
-    }));
-    const today = new Date().toISOString().slice(0, 10);
-    if (mapped[mapped.length - 1].date.slice(0, 10) < today) {
-      mapped.push({ date: new Date().toISOString(), value: anchor });
-    } else {
-      mapped[mapped.length - 1] = { ...mapped[mapped.length - 1], value: anchor };
-    }
-    return mapped;
-  }, [rawPortfolioGrowth, currentPrice?.price, ticker]);
+  // portfolioData est stable (ne dépend plus de currentPrice) — la mise à jour live se fait
+  // via le prop livePrice passé à GrowthChart pour éviter 10k re-créations d'objets/tick WebSocket.
+  const portfolioData = useMemo(() => rawPortfolioGrowth, [rawPortfolioGrowth]);
 
   const benchmarkData = useMemo(() => {
     if (!ticker || !rawBenchmarkGrowth.length || !portfolioData.length) return rawBenchmarkGrowth;
@@ -674,6 +710,37 @@ function ChartContent() {
       value: Math.round(p.value / firstBmVal * firstPrice * 10000) / 10000,
     }));
   }, [rawBenchmarkGrowth, portfolioData, ticker]);
+
+  // Réinitialiser la couleur extraite quand on change de benchmark
+  useEffect(() => { setBmExtractedColor(null); }, [customBmTicker]);
+
+  // Custom benchmark fetch
+  useEffect(() => {
+    if (!customBmTicker) { setRawCustomBmData([]); return; }
+    setCustomBmLoading(true);
+    fetch(`${API_URL}/api/v1/intraday?ticker=${encodeURIComponent(customBmTicker)}&period=max&interval=1d`)
+      .then(r => r.json())
+      .then(data => {
+        if (!Array.isArray(data)) { setRawCustomBmData([]); return; }
+        const prices = data
+          .filter((p: any) => p.date && (p.close ?? p.value) > 0)
+          .map((p: any) => ({ date: String(p.date).slice(0, 10), value: p.close ?? p.value }));
+        setRawCustomBmData(prices);
+      })
+      .catch(() => setRawCustomBmData([]))
+      .finally(() => setCustomBmLoading(false));
+  }, [customBmTicker]);
+
+  const customBmData = useMemo(() => {
+    if (!rawCustomBmData.length || !portfolioData.length) return rawCustomBmData;
+    const firstPrice = portfolioData[0]?.value;
+    const firstBmVal = rawCustomBmData[0]?.value;
+    if (!firstPrice || !firstBmVal) return rawCustomBmData;
+    return rawCustomBmData.map(p => ({
+      date: p.date,
+      value: Math.round(p.value / firstBmVal * firstPrice * 10000) / 10000,
+    }));
+  }, [rawCustomBmData, portfolioData]);
 
   const scaleFactor = isPortfolio ? investedAmount / 10000 : 1;
   const scaledPortfolioData = scaleFactor !== 1
@@ -717,6 +784,18 @@ function ChartContent() {
 
 
   // All other indicators use full data — LC SubChart handles visible range via setVisibleRange
+  const activeBmData = customBmTicker && customBmData.length ? customBmData : [];
+  // Perf calculée depuis le début de l'historique du ticker principal (pas depuis l'IPO du benchmark)
+  const bmPerf = useMemo(() => {
+    if (!rawCustomBmData.length) return null;
+    const dotStart = scaledPortfolioData[0]?.date?.slice(0, 10);
+    const pts = dotStart ? rawCustomBmData.filter(p => p.date >= dotStart) : rawCustomBmData;
+    if (pts.length < 2) return null;
+    const first = pts[0].value;
+    const last  = pts[pts.length - 1].value;
+    return first > 0 ? (last - first) / first * 100 : null;
+  }, [rawCustomBmData, scaledPortfolioData]);
+
   const fullVol    = useMemo(() => computeRollingVol(effectivePriceData), [effectivePriceData]);
   const fullRsi    = useMemo(() => computeRSI(effectivePriceData), [effectivePriceData]);
   const fullCorr   = useMemo(() => computeRollingCorrelation(effectivePriceData, scaledBenchmarkData), [effectivePriceData, scaledBenchmarkData]);
@@ -851,6 +930,9 @@ function ChartContent() {
                 @keyframes hdr-glow-dn{0%,100%{box-shadow:0 0 6px rgba(239,68,68,.15)}50%{box-shadow:0 0 14px rgba(239,68,68,.35)}}
                 @keyframes hdr-pulse{0%,100%{box-shadow:0 0 0 0 rgba(34,197,94,.7)}60%{box-shadow:0 0 0 5px rgba(34,197,94,0)}}
                 @keyframes hdr-pulse-live{0%,100%{box-shadow:0 0 0 0 rgba(34,197,94,.9)}50%{box-shadow:0 0 0 6px rgba(34,197,94,0)}}
+                .chart-action-btn{transition:all 0.18s cubic-bezier(0.34,1.56,0.64,1)!important}
+                .chart-action-btn:hover{transform:scale(1.08) translateY(-0.5px);filter:brightness(1.15)}
+                .chart-action-btn:active{transform:scale(0.94)!important;transition-duration:0.08s!important}
               `}</style>
               <div style={{ display:"flex", flexDirection:"column", padding:"11px 20px 9px", borderBottom:"1px solid rgba(255,255,255,0.06)", flexShrink:0, gap:8 }}>
 
@@ -922,11 +1004,137 @@ function ChartContent() {
                         </div>
                       </TileCard>
                     )}
-                    {ticker && (
-                      <div style={{ width:26, height:26, borderRadius:7, border:"1px solid rgba(255,255,255,0.12)", display:"flex", alignItems:"center", justifyContent:"center", cursor:"not-allowed", flexShrink:0 }} title="Ajouter un benchmark (bientôt disponible)">
-                        <svg width="10" height="10" viewBox="0 0 10 10" fill="none"><path d="M5 1v8M1 5h8" stroke="rgba(255,255,255,0.25)" strokeWidth="1.5" strokeLinecap="round"/></svg>
-                      </div>
-                    )}
+                    {ticker && (() => {
+                      const BM_PRESETS = [
+                        { ticker:"^GSPC",     name:"S&P 500",        type:"INDEX" },
+                        { ticker:"^IXIC",     name:"Nasdaq 100",     type:"INDEX" },
+                        { ticker:"^DJI",      name:"Dow Jones",      type:"INDEX" },
+                        { ticker:"^STOXX50E", name:"Euro Stoxx 50",  type:"INDEX" },
+                        { ticker:"BTC-USD",   name:"Bitcoin",        type:"CRYPTOCURRENCY" },
+                        { ticker:"GC=F",      name:"Or (Gold)",      type:"INDEX" },
+                      ];
+                      const bmResults = bmQuery.trim().length === 0
+                        ? TRENDING.slice(0, 10)
+                        : TRENDING.filter(a =>
+                            a.ticker.toLowerCase().includes(bmQuery.toLowerCase()) ||
+                            a.name.toLowerCase().includes(bmQuery.toLowerCase())
+                          ).slice(0, 10);
+
+                      return (
+                        <div style={{ position:"relative" }}>
+                          {/* Tuile benchmark — ghost si rien sélectionné, pleine sinon */}
+                          {customBmTicker ? (
+                            <TileCard ticker={customBmTicker} onClick={() => setShowBmSearch(s => !s)}
+                              style={{ display:"flex", alignItems:"center", gap:9, padding:"8px 10px", cursor:"pointer" }}>
+                              <AssetLogo ticker={customBmTicker} type={customBmType} size={32} radius={8}
+                                fallbackBg="rgba(255,255,255,0.07)" fallbackBorder="rgba(255,255,255,0.12)" fallbackTextColor="rgba(255,255,255,0.55)" bare
+                                onColorExtracted={c => { if (!BRAND_COLORS[customBmTicker]) setBmExtractedColor(c); }}/>
+                              <div style={{ minWidth:0 }}>
+                                <div style={{ fontSize:11, fontWeight:700, color:"#F8F9FC", lineHeight:1.1, letterSpacing:"-0.01em", whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis", maxWidth:90 }}>{customBmName}</div>
+                                <div style={{ fontSize:9.5, fontWeight:500, color:"rgba(255,255,255,0.40)", marginTop:2, lineHeight:1, whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis", maxWidth:90 }}>
+                                  {customBmTicker}
+                                </div>
+                                <div style={{ fontSize:10, fontWeight:600, marginTop:3, lineHeight:1, fontVariantNumeric:"tabular-nums",
+                                  color: customBmLoading ? "rgba(255,255,255,0.30)" : bmPerf == null ? "rgba(255,255,255,0.30)" : bmPerf >= 0 ? "#4ade80" : "#f87171" }}>
+                                  {customBmLoading ? "…" : bmPerf != null ? `${bmPerf >= 0 ? "+" : ""}${bmPerf.toFixed(2)}%` : "—"}
+                                </div>
+                              </div>
+                              {/* × remove */}
+                              <div onClick={e => { e.stopPropagation(); setCustomBmTicker(null); setCustomBmName(""); setRawCustomBmData([]); }}
+                                style={{ marginLeft:2, width:16, height:16, borderRadius:4, display:"flex", alignItems:"center", justifyContent:"center", background:"rgba(255,255,255,0.08)", flexShrink:0 }}>
+                                <svg width="8" height="8" viewBox="0 0 8 8" fill="none" stroke="rgba(255,255,255,0.50)" strokeWidth="1.5" strokeLinecap="round">
+                                  <line x1="1" y1="1" x2="7" y2="7"/><line x1="7" y1="1" x2="1" y2="7"/>
+                                </svg>
+                              </div>
+                            </TileCard>
+                          ) : (
+                            /* Ghost tile */
+                            <div onClick={() => setShowBmSearch(s => !s)} style={{
+                              display:"flex", alignItems:"center", gap:8, padding:"8px 12px", borderRadius:12, flexShrink:0,
+                              border:"1px dashed rgba(255,255,255,0.16)", cursor:"pointer",
+                              background:"rgba(255,255,255,0.03)", backdropFilter:"blur(8px)",
+                              transition:"all 0.18s", height:"100%", boxSizing:"border-box",
+                            }}
+                              onMouseEnter={e => { e.currentTarget.style.background="rgba(255,255,255,0.07)"; e.currentTarget.style.borderColor="rgba(255,255,255,0.28)"; }}
+                              onMouseLeave={e => { e.currentTarget.style.background="rgba(255,255,255,0.03)"; e.currentTarget.style.borderColor="rgba(255,255,255,0.16)"; }}>
+                              <div style={{ width:28, height:28, borderRadius:7, border:"1px solid rgba(255,255,255,0.15)", display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0 }}>
+                                <svg width="11" height="11" viewBox="0 0 11 11" fill="none"><path d="M5.5 1v9M1 5.5h9" stroke="rgba(255,255,255,0.40)" strokeWidth="1.5" strokeLinecap="round"/></svg>
+                              </div>
+                              <div>
+                                <div style={{ fontSize:11, fontWeight:600, color:"rgba(255,255,255,0.50)", lineHeight:1 }}>Comparer</div>
+                                <div style={{ fontSize:9, color:"rgba(255,255,255,0.25)", marginTop:2, lineHeight:1 }}>ajouter un actif</div>
+                              </div>
+                            </div>
+                          )}
+
+                          {/* Search panel */}
+                          {showBmSearch && (
+                            <>
+                              <div style={{ position:"fixed", inset:0, zIndex:40 }} onClick={() => { setShowBmSearch(false); setBmQuery(""); }}/>
+                              <div style={{ position:"absolute", top:"calc(100% + 8px)", left:0, zIndex:50,
+                                background:"rgba(5,12,30,0.97)", border:"1px solid rgba(255,255,255,0.10)",
+                                borderRadius:14, padding:"12px 10px", backdropFilter:"blur(24px)",
+                                boxShadow:"0 12px 40px rgba(0,0,0,0.6)", width:260 }}>
+                                {/* Search input */}
+                                <div style={{ display:"flex", alignItems:"center", gap:8, background:"rgba(255,255,255,0.06)", border:"1px solid rgba(255,255,255,0.10)", borderRadius:9, padding:"6px 10px", marginBottom:10 }}>
+                                  <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="rgba(255,255,255,0.35)" strokeWidth="2" strokeLinecap="round"><circle cx="6.5" cy="6.5" r="4.5"/><path d="M10.5 10.5l3 3"/></svg>
+                                  <input
+                                    autoFocus
+                                    value={bmQuery}
+                                    onChange={e => setBmQuery(e.target.value)}
+                                    placeholder="Chercher un actif…"
+                                    style={{ flex:1, background:"none", border:"none", outline:"none", fontSize:11, color:"#F8F9FC", caretColor:"#5B8DEF" }}
+                                    onKeyDown={e => e.key === "Escape" && (setShowBmSearch(false), setBmQuery(""))}
+                                  />
+                                  {bmQuery && <button onClick={() => setBmQuery("")} style={{ background:"none", border:"none", cursor:"pointer", color:"rgba(255,255,255,0.30)", fontSize:14, padding:0, lineHeight:1 }}>×</button>}
+                                </div>
+
+                                {/* Presets — only when no query */}
+                                {!bmQuery.trim() && (
+                                  <div style={{ marginBottom:8 }}>
+                                    <div style={{ fontSize:8.5, letterSpacing:"0.10em", color:"rgba(255,255,255,0.20)", marginBottom:6, paddingLeft:2 }}>INDICES & CRYPTO</div>
+                                    <div style={{ display:"flex", flexDirection:"column", gap:1 }}>
+                                      {BM_PRESETS.map(bm => (
+                                        <div key={bm.ticker} onClick={() => { setCustomBmTicker(bm.ticker); setCustomBmName(bm.name); setCustomBmType(bm.type); setShowBmSearch(false); setBmQuery(""); }}
+                                          style={{ display:"flex", alignItems:"center", gap:8, padding:"6px 8px", borderRadius:8, cursor:"pointer", transition:"background 0.10s" }}
+                                          onMouseEnter={e => e.currentTarget.style.background="rgba(255,255,255,0.07)"}
+                                          onMouseLeave={e => e.currentTarget.style.background="transparent"}>
+                                          <AssetLogo ticker={bm.ticker} type={bm.type} size={24} radius={6}
+                                            fallbackBg="rgba(255,255,255,0.08)" fallbackBorder="rgba(255,255,255,0.12)" fallbackTextColor="rgba(255,255,255,0.50)"/>
+                                          <div>
+                                            <div style={{ fontSize:11, fontWeight:600, color:"rgba(255,255,255,0.85)" }}>{bm.name}</div>
+                                            <div style={{ fontSize:9, color:"rgba(255,255,255,0.30)" }}>{bm.ticker}</div>
+                                          </div>
+                                        </div>
+                                      ))}
+                                    </div>
+                                    <div style={{ margin:"8px 0", borderTop:"1px solid rgba(255,255,255,0.06)" }}/>
+                                    <div style={{ fontSize:8.5, letterSpacing:"0.10em", color:"rgba(255,255,255,0.20)", marginBottom:6, paddingLeft:2 }}>POPULAIRES</div>
+                                  </div>
+                                )}
+
+                                {/* Results list */}
+                                <div style={{ display:"flex", flexDirection:"column", gap:1, maxHeight:220, overflowY:"auto" }}>
+                                  {bmResults.map(asset => (
+                                    <div key={asset.ticker} onClick={() => { setCustomBmTicker(asset.ticker); setCustomBmName(asset.name); setCustomBmType(asset.type); setShowBmSearch(false); setBmQuery(""); }}
+                                      style={{ display:"flex", alignItems:"center", gap:8, padding:"6px 8px", borderRadius:8, cursor:"pointer", transition:"background 0.10s" }}
+                                      onMouseEnter={e => e.currentTarget.style.background="rgba(255,255,255,0.07)"}
+                                      onMouseLeave={e => e.currentTarget.style.background="transparent"}>
+                                      <AssetLogo ticker={asset.ticker} type={asset.type} size={24} radius={6}
+                                        fallbackBg="rgba(255,255,255,0.08)" fallbackBorder="rgba(255,255,255,0.12)" fallbackTextColor="rgba(255,255,255,0.50)"/>
+                                      <div style={{ flex:1, minWidth:0 }}>
+                                        <div style={{ fontSize:11, fontWeight:600, color:"rgba(255,255,255,0.85)", whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>{asset.ticker}</div>
+                                        <div style={{ fontSize:9, color:"rgba(255,255,255,0.30)", whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>{asset.name}</div>
+                                      </div>
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                            </>
+                          )}
+                        </div>
+                      );
+                    })()}
 
                     {isPortfolio && activePortfolio && (
                       <div style={{ display:"flex", alignItems:"center", gap:10 }}>
@@ -982,10 +1190,17 @@ function ChartContent() {
               <div style={{ flex:1, minWidth:0, display:"flex", flexDirection:"column" }}>
               {/* Main chart */}
               <div style={{ border:"1px solid rgba(255,255,255,0.06)", borderRadius:"16px", padding:"14px 18px 10px", flex:"1 1 0", minHeight:220, display:"flex", flexDirection:"column", position:"relative", overflow:"hidden", background:"rgba(255,255,255,0.02)" }}>
+                {/* Radial glow derrière le graphique */}
+                <div style={{ position:"absolute", inset:0, pointerEvents:"none", zIndex:0, background:`radial-gradient(ellipse 75% 45% at 50% 75%, ${(lineColor??color)}1A 0%, transparent 70%), radial-gradient(ellipse 40% 30% at 15% 25%, ${(lineColor??color)}0D 0%, transparent 60%)` }}/>
                 <GrowthChart
                   portfolioData={scaledPortfolioData}
-                  benchmarkData={scaledBenchmarkData}
-                  benchmarkName="S&P 500"
+                  benchmarkData={activeBmData}
+                  benchmarkRawData={customBmTicker ? rawCustomBmData : undefined}
+                  benchmarkName={customBmTicker ? customBmName : "S&P 500"}
+                  benchmarkColor={activeBmColor}
+                  benchmarkTicker={customBmTicker ?? undefined}
+                  livePrice={currentPrice?.price}
+                  isCrypto={isCrypto}
                   portfolioLabel={label}
                   drawdownData={scaledDrawdownData.length > 0 ? scaledDrawdownData : undefined}
                   ticker={ticker ?? undefined}
@@ -1000,7 +1215,7 @@ function ChartContent() {
                   dailyChangePct={currentPrice?.change ?? null}
                   openPrice={quote?.open ?? null}
                   onPeriodChange={setActivePeriod}
-                  onVisibleRangeChange={(from, to) => setVisibleRange(from && to ? { from: new Date(from*1000).toISOString().slice(0,10), to: new Date(to*1000).toISOString().slice(0,10) } : null)}
+                  onVisibleRangeChange={(from, to) => { if (!from || !to) { setVisibleRange(null); return; } const fd = new Date(from*1000); const td = new Date(to*1000); if (!isNaN(fd.getTime()) && !isNaN(td.getTime())) setVisibleRange({ from: fd.toISOString().slice(0,10), to: td.toISOString().slice(0,10) }); }}
                   onCrosshairMove={(t) => setCrosshairTime(t)}
                   onAdaptiveData={setChartPriceData}
                   leftSlot={metaCards.length > 0 ? (
@@ -1018,19 +1233,22 @@ function ChartContent() {
                     </div>
                   ) : undefined}
                   rightSlot={
-                    <div style={{ display:"flex", alignItems:"center", gap:4 }}>
+                    <div style={{ display:"flex", alignItems:"center", gap:5 }}>
                       {/* Fullscreen */}
                       {ticker && (
                         <button
                           onClick={() => setFullscreen(f => !f)}
                           title={fullscreen ? "Quitter le plein écran" : "Plein écran"}
+                          className="chart-action-btn"
                           style={{
-                            background: fullscreen ? "rgba(91,141,239,0.16)" : "rgba(255,255,255,0.05)",
-                            border:`1px solid ${fullscreen ? "rgba(91,141,239,0.40)" : "rgba(255,255,255,0.10)"}`,
-                            borderRadius:6, width:28, height:28, cursor:"pointer",
+                            background: fullscreen ? "rgba(91,141,239,0.18)" : "rgba(255,255,255,0.06)",
+                            backdropFilter:"blur(10px) saturate(1.5)",
+                            WebkitBackdropFilter:"blur(10px) saturate(1.5)",
+                            border:`1px solid ${fullscreen ? "rgba(91,141,239,0.45)" : "rgba(255,255,255,0.12)"}`,
+                            borderRadius:9, width:30, height:30, cursor:"pointer",
                             display:"flex", alignItems:"center", justifyContent:"center",
-                            color: fullscreen ? "#9BB9FF" : "rgba(255,255,255,0.40)",
-                            transition:"all 0.15s",
+                            color: fullscreen ? "#9BB9FF" : "rgba(255,255,255,0.50)",
+                            boxShadow: fullscreen ? "0 0 12px rgba(91,141,239,0.20), inset 0 1px 0 rgba(255,255,255,0.10)" : "0 1px 3px rgba(0,0,0,0.20), inset 0 1px 0 rgba(255,255,255,0.07)",
                           }}
                         >
                           {fullscreen ? (
@@ -1045,13 +1263,16 @@ function ChartContent() {
                         <button
                           onClick={() => setSidebarOpen(o => !o)}
                           title={sidebarOpen ? "Fermer le panneau" : "Ouvrir le panneau (News, Similaires, IA)"}
+                          className="chart-action-btn"
                           style={{
-                            background: sidebarOpen ? "rgba(91,141,239,0.16)" : "rgba(255,255,255,0.05)",
-                            border:`1px solid ${sidebarOpen ? "rgba(91,141,239,0.40)" : "rgba(255,255,255,0.10)"}`,
-                            borderRadius:6, width:28, height:28, cursor:"pointer",
+                            background: sidebarOpen ? "rgba(91,141,239,0.18)" : "rgba(255,255,255,0.06)",
+                            backdropFilter:"blur(10px) saturate(1.5)",
+                            WebkitBackdropFilter:"blur(10px) saturate(1.5)",
+                            border:`1px solid ${sidebarOpen ? "rgba(91,141,239,0.45)" : "rgba(255,255,255,0.12)"}`,
+                            borderRadius:9, width:30, height:30, cursor:"pointer",
                             display:"flex", alignItems:"center", justifyContent:"center",
-                            color: sidebarOpen ? "#9BB9FF" : "rgba(255,255,255,0.40)",
-                            transition:"all 0.15s",
+                            color: sidebarOpen ? "#9BB9FF" : "rgba(255,255,255,0.50)",
+                            boxShadow: sidebarOpen ? "0 0 12px rgba(91,141,239,0.20), inset 0 1px 0 rgba(255,255,255,0.10)" : "0 1px 3px rgba(0,0,0,0.20), inset 0 1px 0 rgba(255,255,255,0.07)",
                           }}
                         >
                           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><line x1="15" y1="3" x2="15" y2="21"/></svg>
@@ -1061,13 +1282,16 @@ function ChartContent() {
                       <button
                         onClick={handleShare}
                         title="Copier le lien"
+                        className="chart-action-btn"
                         style={{
-                          background: copied ? "rgba(34,197,94,0.14)" : "rgba(255,255,255,0.05)",
-                          border:`1px solid ${copied ? "rgba(34,197,94,0.35)" : "rgba(255,255,255,0.10)"}`,
-                          borderRadius:6, width:28, height:28, cursor:"pointer",
+                          background: copied ? "rgba(34,197,94,0.16)" : "rgba(255,255,255,0.06)",
+                          backdropFilter:"blur(10px) saturate(1.5)",
+                          WebkitBackdropFilter:"blur(10px) saturate(1.5)",
+                          border:`1px solid ${copied ? "rgba(34,197,94,0.40)" : "rgba(255,255,255,0.12)"}`,
+                          borderRadius:9, width:30, height:30, cursor:"pointer",
                           display:"flex", alignItems:"center", justifyContent:"center",
-                          color: copied ? "#4ade80" : "rgba(255,255,255,0.40)",
-                          transition:"all 0.15s",
+                          color: copied ? "#4ade80" : "rgba(255,255,255,0.50)",
+                          boxShadow: copied ? "0 0 12px rgba(34,197,94,0.18), inset 0 1px 0 rgba(255,255,255,0.10)" : "0 1px 3px rgba(0,0,0,0.20), inset 0 1px 0 rgba(255,255,255,0.07)",
                         }}
                       >
                         {copied ? (
@@ -1086,13 +1310,16 @@ function ChartContent() {
                         <button
                           onClick={() => setChartViewMode(m => m === "line" ? "candle" : "line")}
                           title={chartViewMode === "line" ? "Passer en bougies" : "Passer en courbe"}
+                          className="chart-action-btn"
                           style={{
-                            background:"rgba(255,255,255,0.05)",
-                            border:`1px solid ${chartViewMode === "candle" ? "rgba(155,185,255,0.35)" : "rgba(255,255,255,0.10)"}`,
-                            borderRadius:6, width:28, height:28, cursor:"pointer",
+                            background: chartViewMode === "candle" ? "rgba(155,185,255,0.16)" : "rgba(255,255,255,0.06)",
+                            backdropFilter:"blur(10px) saturate(1.5)",
+                            WebkitBackdropFilter:"blur(10px) saturate(1.5)",
+                            border:`1px solid ${chartViewMode === "candle" ? "rgba(155,185,255,0.40)" : "rgba(255,255,255,0.12)"}`,
+                            borderRadius:9, width:30, height:30, cursor:"pointer",
                             display:"flex", alignItems:"center", justifyContent:"center",
-                            color: chartViewMode === "candle" ? "#9BB9FF" : "rgba(255,255,255,0.40)",
-                            transition:"all 0.15s",
+                            color: chartViewMode === "candle" ? "#9BB9FF" : "rgba(255,255,255,0.50)",
+                            boxShadow: chartViewMode === "candle" ? "0 0 12px rgba(155,185,255,0.16), inset 0 1px 0 rgba(255,255,255,0.10)" : "0 1px 3px rgba(0,0,0,0.20), inset 0 1px 0 rgba(255,255,255,0.07)",
                           }}
                         >
                           {chartViewMode === "line" ? (
@@ -1116,19 +1343,22 @@ function ChartContent() {
                       <button
                         onClick={() => setShowCustom(v => !v)}
                         title="Personnaliser les couleurs"
+                        className="chart-action-btn"
                         style={{
-                          background: showCustom ? "rgba(155,185,255,0.14)" : "rgba(255,255,255,0.05)",
-                          border:`1px solid ${showCustom ? "rgba(155,185,255,0.35)" : "rgba(255,255,255,0.10)"}`,
-                          borderRadius:6, width:28, height:28, cursor:"pointer",
+                          background: showCustom ? "rgba(155,185,255,0.16)" : "rgba(255,255,255,0.06)",
+                          backdropFilter:"blur(10px) saturate(1.5)",
+                          WebkitBackdropFilter:"blur(10px) saturate(1.5)",
+                          border:`1px solid ${showCustom ? "rgba(155,185,255,0.40)" : "rgba(255,255,255,0.12)"}`,
+                          borderRadius:9, width:30, height:30, cursor:"pointer",
                           display:"flex", alignItems:"center", justifyContent:"center",
-                          transition:"all 0.15s",
+                          boxShadow: showCustom ? "0 0 12px rgba(155,185,255,0.16), inset 0 1px 0 rgba(255,255,255,0.10)" : "0 1px 3px rgba(0,0,0,0.20), inset 0 1px 0 rgba(255,255,255,0.07)",
                         }}
                       >
                         <svg width="13" height="13" viewBox="0 0 16 16" fill="none">
-                          <circle cx="4"  cy="4"  r="2.5" fill={showCustom ? "#9BB9FF" : "rgba(255,255,255,0.45)"}/>
-                          <circle cx="12" cy="4"  r="2.5" fill={showCustom ? "#9BB9FF" : "rgba(255,255,255,0.45)"}/>
-                          <circle cx="4"  cy="12" r="2.5" fill={showCustom ? "#9BB9FF" : "rgba(255,255,255,0.45)"}/>
-                          <circle cx="12" cy="12" r="2.5" fill={showCustom ? "#9BB9FF" : "rgba(255,255,255,0.45)"}/>
+                          <circle cx="4"  cy="4"  r="2.5" fill={showCustom ? "#9BB9FF" : "rgba(255,255,255,0.50)"}/>
+                          <circle cx="12" cy="4"  r="2.5" fill={showCustom ? "#9BB9FF" : "rgba(255,255,255,0.50)"}/>
+                          <circle cx="4"  cy="12" r="2.5" fill={showCustom ? "#9BB9FF" : "rgba(255,255,255,0.50)"}/>
+                          <circle cx="12" cy="12" r="2.5" fill={showCustom ? "#9BB9FF" : "rgba(255,255,255,0.50)"}/>
                         </svg>
                       </button>
                     </div>
@@ -1240,60 +1470,106 @@ function ChartContent() {
                       newsLoading ? (
                         <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
                           {[1,2,3,4].map(i => (
-                            <div key={i} style={{ height:60, borderRadius:8, background:"rgba(255,255,255,0.04)" }} />
+                            <div key={i} style={{ height:72, borderRadius:10, background:"rgba(255,255,255,0.04)", animation:"none" }} />
                           ))}
                         </div>
-                      ) : news.length > 0 ? (
-                        <div style={{ display:"flex", flexDirection:"column", gap:7 }}>
-                          {news.map((n, i) => {
-                            let timeAgo = "";
-                            try {
-                              const ts = typeof n.published_at === "number"
-                                ? new Date(n.published_at * 1000)
-                                : new Date(n.published_at);
-                              const diff = Math.floor((Date.now() - ts.getTime()) / 60000);
-                              if (diff < 60)        timeAgo = `${diff}m`;
-                              else if (diff < 1440) timeAgo = `${Math.floor(diff/60)}h`;
-                              else                  timeAgo = `${Math.floor(diff/1440)}j`;
-                            } catch { timeAgo = ""; }
-
-                            return (
-                              <a key={i} href={n.link} target="_blank" rel="noopener noreferrer"
-                                style={{ display:"flex", gap:11, padding:"11px 12px", borderRadius:10, background:"rgba(255,255,255,0.025)", border:"1px solid rgba(255,255,255,0.06)", textDecoration:"none", transition:"all 0.14s", alignItems:"flex-start" }}
-                                onMouseEnter={e => { e.currentTarget.style.background="rgba(255,255,255,0.055)"; e.currentTarget.style.borderColor="rgba(255,255,255,0.12)"; }}
-                                onMouseLeave={e => { e.currentTarget.style.background="rgba(255,255,255,0.025)"; e.currentTarget.style.borderColor="rgba(255,255,255,0.06)"; }}>
-                                {n.thumbnail ? (
-                                  <img src={n.thumbnail} alt="" width={52} height={52}
-                                    style={{ borderRadius:7, objectFit:"cover" as const, flexShrink:0 }}
-                                    onError={e => { (e.target as HTMLImageElement).style.display="none"; }} />
-                                ) : (
-                                  <div style={{
-                                    width:52, height:52, borderRadius:7, flexShrink:0,
-                                    background: ["rgba(91,141,239,0.20)","rgba(139,92,246,0.20)","rgba(34,197,94,0.16)","rgba(249,115,22,0.18)","rgba(236,72,153,0.18)"][
-                                      (n.publisher?.charCodeAt(0) ?? 65) % 5
-                                    ],
-                                    display:"flex", alignItems:"center", justifyContent:"center",
-                                    fontSize:20, fontWeight:700, color:"rgba(255,255,255,0.50)",
+                      ) : news.length > 0 ? (() => {
+                        const scored = news.map(n => ({ ...n, ...scoreNews(n.title) }));
+                        const sorted = newsSortBy === "impact"
+                          ? [...scored].sort((a,b) => ({ high:0, medium:1, low:2 }[a.impact] - ({ high:0, medium:1, low:2 }[b.impact])))
+                          : scored;
+                        return (
+                          <div style={{ display:"flex", flexDirection:"column", gap:0 }}>
+                            {/* Sort bar */}
+                            <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:10 }}>
+                              <span style={{ fontSize:9, letterSpacing:"0.08em", color:"rgba(255,255,255,0.25)", textTransform:"uppercase" as const }}>
+                                {sorted.length} actualité{sorted.length > 1 ? "s" : ""}
+                              </span>
+                              <div style={{ display:"flex", gap:3 }}>
+                                {(["recent","impact"] as const).map(s => (
+                                  <button key={s} onClick={() => setNewsSortBy(s)} style={{
+                                    fontSize:9, letterSpacing:"0.06em", padding:"2px 8px", borderRadius:5, cursor:"pointer",
+                                    border:`1px solid ${newsSortBy===s ? "rgba(155,185,255,0.40)" : "rgba(255,255,255,0.10)"}`,
+                                    background: newsSortBy===s ? "rgba(91,141,239,0.16)" : "transparent",
+                                    color: newsSortBy===s ? "#9BB9FF" : "rgba(255,255,255,0.35)",
+                                    transition:"all 0.14s",
                                   }}>
-                                    {n.publisher?.[0]?.toUpperCase() ?? "N"}
+                                    {s === "recent" ? "Récent" : "Impact"}
+                                  </button>
+                                ))}
+                              </div>
+                            </div>
+                            {/* News items */}
+                            <div style={{ display:"flex", flexDirection:"column", gap:7 }}>
+                            {sorted.map((n, i) => {
+                              let timeAgo = "";
+                              try {
+                                const ts = typeof n.published_at === "number"
+                                  ? new Date(n.published_at * 1000)
+                                  : new Date(n.published_at);
+                                const diff = Math.floor((Date.now() - ts.getTime()) / 60000);
+                                if (diff < 60)        timeAgo = `${diff}m`;
+                                else if (diff < 1440) timeAgo = `${Math.floor(diff/60)}h`;
+                                else                  timeAgo = `${Math.floor(diff/1440)}j`;
+                              } catch { timeAgo = ""; }
+
+                              const imp = IMPACT_CONFIG[n.impact];
+
+                              return (
+                                <a key={i} href={n.link} target="_blank" rel="noopener noreferrer"
+                                  style={{ display:"flex", flexDirection:"column", gap:7, padding:"10px 11px", borderRadius:10, background:"rgba(255,255,255,0.025)", border:"1px solid rgba(255,255,255,0.06)", textDecoration:"none", transition:"all 0.14s" }}
+                                  onMouseEnter={e => { e.currentTarget.style.background="rgba(255,255,255,0.05)"; e.currentTarget.style.borderColor="rgba(255,255,255,0.11)"; }}
+                                  onMouseLeave={e => { e.currentTarget.style.background="rgba(255,255,255,0.025)"; e.currentTarget.style.borderColor="rgba(255,255,255,0.06)"; }}>
+                                  {/* Top row: type + impact badge */}
+                                  <div style={{ display:"flex", alignItems:"center", gap:5 }}>
+                                    <span style={{ fontSize:8.5, fontWeight:600, letterSpacing:"0.07em", padding:"1.5px 6px", borderRadius:4,
+                                      background:"rgba(255,255,255,0.08)", color:"rgba(255,255,255,0.50)", textTransform:"uppercase" as const }}>
+                                      {n.type}
+                                    </span>
+                                    <span style={{ fontSize:8.5, fontWeight:600, letterSpacing:"0.05em", padding:"1.5px 6px", borderRadius:4,
+                                      background:imp.bg, color:imp.color, display:"flex", alignItems:"center", gap:3 }}>
+                                      <span style={{ width:4, height:4, borderRadius:"50%", background:imp.dot, display:"inline-block", flexShrink:0 }}/>
+                                      {imp.label}
+                                    </span>
+                                    <span style={{ marginLeft:"auto", fontSize:8.5, color:"rgba(255,255,255,0.22)" }}>{n.readMin} min</span>
                                   </div>
-                                )}
-                                <div style={{ flex:1, minWidth:0 }}>
-                                  <div style={{ fontSize:11.5, fontWeight:500, color:"rgba(255,255,255,0.84)", lineHeight:1.42,
-                                    display:"-webkit-box", WebkitLineClamp:2, WebkitBoxOrient:"vertical" as const, overflow:"hidden" }}>
-                                    {n.title}
+                                  {/* Content row */}
+                                  <div style={{ display:"flex", gap:9, alignItems:"flex-start" }}>
+                                    {n.thumbnail ? (
+                                      <img src={n.thumbnail} alt="" width={44} height={44}
+                                        style={{ borderRadius:6, objectFit:"cover" as const, flexShrink:0 }}
+                                        onError={e => { (e.target as HTMLImageElement).style.display="none"; }} />
+                                    ) : (
+                                      <div style={{
+                                        width:44, height:44, borderRadius:6, flexShrink:0,
+                                        background: ["rgba(91,141,239,0.18)","rgba(139,92,246,0.18)","rgba(34,197,94,0.14)","rgba(249,115,22,0.16)","rgba(236,72,153,0.16)"][
+                                          (n.publisher?.charCodeAt(0) ?? 65) % 5
+                                        ],
+                                        display:"flex", alignItems:"center", justifyContent:"center",
+                                        fontSize:18, fontWeight:700, color:"rgba(255,255,255,0.45)",
+                                      }}>
+                                        {n.publisher?.[0]?.toUpperCase() ?? "N"}
+                                      </div>
+                                    )}
+                                    <div style={{ flex:1, minWidth:0 }}>
+                                      <div style={{ fontSize:11, fontWeight:500, color:"rgba(255,255,255,0.84)", lineHeight:1.44,
+                                        display:"-webkit-box", WebkitLineClamp:2, WebkitBoxOrient:"vertical" as const, overflow:"hidden" }}>
+                                        {n.title}
+                                      </div>
+                                      <div style={{ marginTop:4, display:"flex", alignItems:"center", gap:5 }}>
+                                        <span style={{ fontSize:9, color:"rgba(255,255,255,0.35)", fontWeight:500 }}>{n.publisher}</span>
+                                        {timeAgo && <><span style={{ width:2, height:2, borderRadius:"50%", background:"rgba(255,255,255,0.18)", display:"inline-block", flexShrink:0 }}/><span style={{ fontSize:9, color:"rgba(255,255,255,0.25)" }}>{timeAgo}</span></>}
+                                        <span style={{ marginLeft:"auto", fontSize:9, color:"rgba(91,141,239,0.55)" }}>→</span>
+                                      </div>
+                                    </div>
                                   </div>
-                                  <div style={{ marginTop:5, display:"flex", alignItems:"center", gap:6 }}>
-                                    <span style={{ fontSize:9.5, color:"rgba(255,255,255,0.38)", fontWeight:500 }}>{n.publisher}</span>
-                                    {timeAgo && <><span style={{ width:2, height:2, borderRadius:"50%", background:"rgba(255,255,255,0.20)", display:"inline-block", flexShrink:0 }}/><span style={{ fontSize:9.5, color:"rgba(255,255,255,0.28)" }}>{timeAgo}</span></>}
-                                    <span style={{ marginLeft:"auto", fontSize:9, color:"rgba(91,141,239,0.60)" }}>→</span>
-                                  </div>
-                                </div>
-                              </a>
-                            );
-                          })}
-                        </div>
-                      ) : (
+                                </a>
+                              );
+                            })}
+                            </div>
+                          </div>
+                        );
+                      })() : (
                         <div style={{ padding:"30px 0", textAlign:"center", fontSize:11, color:"rgba(255,255,255,0.20)" }}>
                           Aucune actualité disponible.
                         </div>
@@ -1391,8 +1667,12 @@ function ChartContent() {
                   <div style={{ flex:1, border:"1px solid rgba(255,255,255,0.07)", borderRadius:16, overflow:"hidden", background:"rgba(255,255,255,0.02)" }}>
                     <GrowthChart
                       portfolioData={scaledPortfolioData}
-                      benchmarkData={scaledBenchmarkData}
-                      benchmarkName="S&P 500"
+                      benchmarkData={activeBmData}
+                      benchmarkRawData={customBmTicker ? rawCustomBmData : undefined}
+                      benchmarkName={customBmTicker ? customBmName : "S&P 500"}
+                      benchmarkColor={activeBmColor}
+                      livePrice={currentPrice?.price}
+                      isCrypto={isCrypto}
                       portfolioLabel={label}
                       drawdownData={scaledDrawdownData.length > 0 ? scaledDrawdownData : undefined}
                       ticker={ticker ?? undefined}
@@ -1407,7 +1687,7 @@ function ChartContent() {
                       dailyChangePct={currentPrice?.change ?? null}
                       openPrice={quote?.open ?? null}
                       onPeriodChange={setActivePeriod}
-                      onVisibleRangeChange={(from, to) => setVisibleRange(from && to ? { from: new Date(from*1000).toISOString().slice(0,10), to: new Date(to*1000).toISOString().slice(0,10) } : null)}
+                      onVisibleRangeChange={(from, to) => { if (!from || !to) { setVisibleRange(null); return; } const fd = new Date(from*1000); const td = new Date(to*1000); if (!isNaN(fd.getTime()) && !isNaN(td.getTime())) setVisibleRange({ from: fd.toISOString().slice(0,10), to: td.toISOString().slice(0,10) }); }}
                       onCrosshairMove={(t) => setCrosshairTime(t)}
                       onAdaptiveData={setChartPriceData}
                     />

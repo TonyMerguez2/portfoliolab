@@ -81,16 +81,32 @@ interface Props {
   onVisibleRangeChange?: (from: number | null, to: number | null) => void;
   onCrosshairMove?: (time: UTCTimestamp | null) => void;
   onAdaptiveData?: (data: { date: string; value: number; high?: number; low?: number }[]) => void;
+  benchmarkRawData?: DataPoint[];
+  benchmarkColor?: string;
+  benchmarkTicker?: string;
+  livePrice?: number;
   dark?: boolean;
   percentMode?: boolean;
   priceMode?: boolean;
   hideDrawdown?: boolean;
   dailyChangePct?: number | null;
   openPrice?: number | null;
+  isCrypto?: boolean;
 }
 
 function toTs(d: string): UTCTimestamp {
   return Math.floor(new Date(d).getTime() / 1000) as UTCTimestamp;
+}
+
+function toDay(d: string): { year: number; month: number; day: number } {
+  const p = d.slice(0, 10).split("-");
+  return { year: +p[0], month: +p[1], day: +p[2] };
+}
+
+function sampleDown<T>(arr: T[], max = 3000): T[] {
+  if (arr.length <= max) return arr;
+  const step = Math.ceil(arr.length / max);
+  return arr.filter((_, i) => i % step === 0 || i === arr.length - 1);
 }
 
 // Calcul de perf partagé entre légende chart et boutons période
@@ -133,13 +149,24 @@ function computePerfForPeriod(
   return { first: pts[0].value as number, last: pts[pts.length - 1].value as number };
 }
 
-function dedup<T extends { time: UTCTimestamp }>(arr: T[]): T[] {
-  const seen = new Set<number>();
+function timeKey(t: any): string {
+  if (t !== null && typeof t === "object") return `${t.year}-${t.month}-${t.day}`;
+  return String(t);
+}
+function timeNum(t: any): number {
+  if (t !== null && typeof t === "object")
+    return new Date(`${t.year}-${String(t.month).padStart(2,"0")}-${String(t.day).padStart(2,"0")}`).getTime();
+  return t as number;
+}
+
+function dedup<T extends { time: any }>(arr: T[]): T[] {
+  const seen = new Set<string>();
   const out: T[] = [];
   for (const item of arr) {
-    if (!seen.has(item.time)) { seen.add(item.time); out.push(item); }
+    const k = timeKey(item.time);
+    if (!seen.has(k)) { seen.add(k); out.push(item); }
   }
-  return out.sort((a, b) => a.time - b.time);
+  return out.sort((a, b) => timeNum(a.time) - timeNum(b.time));
 }
 
 function getCutoffStr(p: string): string | null {
@@ -209,8 +236,9 @@ export default function GrowthChart({
   candleUpColor = "#26a69a", candleDownColor = "#ef5350",
   chartMode: chartModeProp, onChartModeChange, rightSlot, leftSlot,
   onExitFullscreen, onPeriodChange, onVisibleRangeChange, onCrosshairMove, onAdaptiveData,
+  benchmarkRawData, benchmarkColor = "#f59e0b", benchmarkTicker,
   dark = false, percentMode = false, priceMode = false,
-  hideDrawdown = false, dailyChangePct = null, openPrice = null,
+  hideDrawdown = false, dailyChangePct = null, openPrice = null, isCrypto = false,
 }: Props) {
 
   const [periodFilter, setPeriodFilter] = useState<"24h"|"1S"|"1M"|"3M"|"6M"|"1A"|"3A"|"Max">("Max");
@@ -259,6 +287,10 @@ export default function GrowthChart({
   const prevChartModeRef  = useRef(chartMode);
   const isMountedRef      = useRef(false);
   const [fetchKey, setFetchKey] = useState(0);
+  const [bmAdaptiveData, setBmAdaptiveData] = useState<OHLCPt[]>([]);
+  const [comparisonMode, setComparisonMode] = useState<"perf" | "raw">("perf");
+  const prevBmTickerRef = useRef<string | undefined>(undefined);
+  const chartPctModeRef = useRef(false);
 
   const adaptiveDataRef         = useRef<typeof adaptiveData>([]);
   const onVisibleRangeChangeRef = useRef(onVisibleRangeChange);
@@ -309,6 +341,27 @@ export default function GrowthChart({
     return () => { cancelled = true; };
   }, [ticker, intervalKey, fetchKey]); // eslint-disable-line
 
+  // Fetch intraday data pour le benchmark — même intervalle que la courbe principale
+  useEffect(() => {
+    if (!ticker || !benchmarkTicker) {
+      setBmAdaptiveData([]);
+      prevBmTickerRef.current = undefined;
+      return;
+    }
+    if (benchmarkTicker !== prevBmTickerRef.current) {
+      setBmAdaptiveData([]);
+      prevBmTickerRef.current = benchmarkTicker;
+    }
+    const config = INTERVAL_FETCH_CONFIG[intervalKey];
+    if (!config) { setBmAdaptiveData([]); return; }
+    const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
+    let cancelled = false;
+    fetch(`${API_URL}/api/v1/intraday?ticker=${encodeURIComponent(benchmarkTicker)}&period=${config.apiPeriod}&interval=${config.apiInterval}`)
+      .then(r => r.json())
+      .then(data => { if (!cancelled && Array.isArray(data)) setBmAdaptiveData(data as OHLCPt[]); })
+      .catch(() => { if (!cancelled) setBmAdaptiveData([]); });
+    return () => { cancelled = true; };
+  }, [ticker, benchmarkTicker, intervalKey, fetchKey]); // eslint-disable-line
 
   useEffect(() => {
     setTimeout(() => window.dispatchEvent(new Event("resize")), 100);
@@ -317,6 +370,10 @@ export default function GrowthChart({
 
   const isIntraday = !!(ticker && adaptiveData.length > 0);
   const isIntradayInterval = ["1m", "5m", "15m", "1h"].includes(intervalKey);
+  const hasComparison = !!(benchmarkTicker && benchmarkData.length > 0);
+  // BusinessDay supprime les trous weekend/jours fériés sur les actions en 1d/1W
+  const useBusinessDay = !isCrypto && ["1d", "1W"].includes(intervalKey);
+  const t = (d: string) => (useBusinessDay ? toDay(d) : toTs(d)) as UTCTimestamp;
 
   const fmtPrice = (v: number): string => {
     if (percentMode) {
@@ -396,12 +453,18 @@ export default function GrowthChart({
       chartRef.current = chart;
 
       // Sync visible time range to parent (debounced 150ms)
+      // Convertit un Time lightweight-charts (UTCTimestamp ou BusinessDay) en Unix seconds
+      const timeToSec = (t: any): number => {
+        if (t !== null && typeof t === "object")
+          return new Date(`${t.year}-${String(t.month).padStart(2,"0")}-${String(t.day).padStart(2,"0")}`).getTime() / 1000;
+        return t as number;
+      };
       let rangeDebounce: ReturnType<typeof setTimeout>;
-      const rangeHandler = (range: { from: number; to: number } | null) => {
+      const rangeHandler = (range: { from: any; to: any } | null) => {
         clearTimeout(rangeDebounce);
         rangeDebounce = setTimeout(() => {
           if (!range) { onVisibleRangeChangeRef.current?.(null, null); return; }
-          onVisibleRangeChangeRef.current?.(range.from, range.to);
+          onVisibleRangeChangeRef.current?.(timeToSec(range.from), timeToSec(range.to));
         }, 30);
       };
       chart.timeScale().subscribeVisibleTimeRangeChange(rangeHandler as any);
@@ -462,7 +525,12 @@ export default function GrowthChart({
           const cData  = param.seriesData.get(candle) as any;
           const bmData = param.seriesData.get(bm) as any;
           setHoverPoint({ x: param.point.x, y: param.point.y });
-          setHoverDate(new Date((param.time as number) * 1000).toISOString());
+          // param.time peut être UTCTimestamp (number) ou BusinessDay ({ year, month, day })
+          const rawTime = param.time as any;
+          const isoDate = typeof rawTime === "object"
+            ? `${rawTime.year}-${String(rawTime.month).padStart(2,"0")}-${String(rawTime.day).padStart(2,"0")}T12:00:00.000Z`
+            : new Date((rawTime as number) * 1000).toISOString();
+          setHoverDate(isoDate);
           if (cData && chartModeRef.current === "candle") {
             setHoverPrice(cData.close ?? null);
             setHoverOHLC({ open: cData.open, high: cData.high, low: cData.low, close: cData.close });
@@ -533,10 +601,7 @@ export default function GrowthChart({
     });
   }, [candleUpColor, candleDownColor]);
 
-  // Set series data — déclenché uniquement par les changements de données structurelles.
-  // portfolioData est volontairement absent des deps : la mise à jour du prix live
-  // passe par un effet séparé qui utilise series.update() au lieu de setData(),
-  // évitant ainsi le reset de vue (zoom-out) que setData() provoque.
+  // Set series data
   useEffect(() => {
     const area   = areaSeriesRef.current;
     const candle = candleSeriesRef.current;
@@ -544,47 +609,134 @@ export default function GrowthChart({
     if (!area || !candle || !bm) return;
 
     try {
+      const savedRange = chartRef.current?.timeScale().getVisibleRange() ?? null;
+      const cutStr = getCutoffStr(periodFilter);
+      const filterDate = (arr: DataPoint[]) => cutStr ? arr.filter(p => p.date >= cutStr) : arr;
+
       if (ticker) {
         if (isIntraday) {
-          const aData = dedup(adaptiveData.map(p => ({ time: toTs(p.date), value: p.value })));
-          const cData = dedup(adaptiveData.map(p => ({
-            time:  toTs(p.date),
-            open:  p.open  ?? p.value,
-            high:  p.high  ?? p.value,
-            low:   p.low   ?? p.value,
-            close: p.close ?? p.value,
-          })));
-          area.setData(aData);
-          candle.setData(cData);
-        } else {
-          area.setData([]);
-          candle.setData([]);
-        }
-        bm.setData([]);
-        const inCandle = chartModeRef.current === "candle";
-        area.applyOptions({ visible: !inCandle });
-        candle.applyOptions({ visible: inCandle });
-      } else {
-        // Portfolio mode (no ticker)
-        const cutStr = getCutoffStr(periodFilter);
-        const filterDate = (arr: DataPoint[]) =>
-          cutStr ? arr.filter(p => p.date >= cutStr) : arr;
+          const inCandle    = chartModeRef.current === "candle";
+          const dotStartStr = adaptiveData.length ? String(adaptiveData[0].date).slice(0, 10) : "";
+          const rawFmt      = { type: "price" as const, precision: 4, minMove: 0.0001 };
+          // 1 bougie = 1 session de trading — jamais de downsample sur les candles.
+          // La courbe line peut être réduite (visuellement identique sur courbes lisses).
+          const lineData   = sampleDown(adaptiveData);
+          const candleData = adaptiveData;
 
+          if (hasComparison && benchmarkData.length && adaptiveData.length) {
+
+            if (comparisonMode === "perf") {
+              const useBmIntraday = bmAdaptiveData.length > 0;
+              const bmSource = useBmIntraday ? bmAdaptiveData : benchmarkData.filter(p => p.date >= dotStartStr);
+
+              const periodRef  = cutStr ?? dotStartStr;
+              const dotRef     = adaptiveData.find(p => String(p.date).slice(0, 10) >= periodRef);
+              const bmRef      = (bmSource as DataPoint[]).find(p => String(p.date).slice(0, 10) >= periodRef);
+              const dotRefDate = dotRef ? String(dotRef.date).slice(0, 10) : dotStartStr;
+              const bmRefDate  = bmRef  ? String(bmRef.date).slice(0, 10)  : (bmSource.length ? String(bmSource[0].date).slice(0, 10) : dotStartStr);
+              const commonStart = dotRefDate > bmRefDate ? dotRefDate : bmRefDate;
+
+              const dotPts = adaptiveData.filter(p => String(p.date).slice(0, 10) >= commonStart);
+              const bmPts  = (bmSource as DataPoint[]).filter(p => String(p.date).slice(0, 10) >= commonStart);
+
+              const base100Fmt = {
+                type: "custom" as const,
+                formatter: (v: number) => {
+                  const pct = v - 100;
+                  if (Math.abs(pct) >= 10000) return `${pct >= 0 ? "+" : ""}${(pct / 1000).toFixed(1)}K%`;
+                  if (Math.abs(pct) >= 1000)  return `${pct >= 0 ? "+" : ""}${(pct / 1000).toFixed(2)}K%`;
+                  return `${pct >= 0 ? "+" : ""}${pct.toFixed(1)}%`;
+                },
+                minMove: 0.01,
+              };
+
+              if (dotPts.length && bmPts.length) {
+                chartRef.current?.applyOptions({ leftPriceScale: { visible: false } });
+                const dotBase = dotPts[0].value as number;
+                const bmBase  = bmPts[0].value as number;
+                area.setData(dedup(sampleDown(dotPts).map(p => ({
+                  time: t(p.date), value: Math.round(p.value / dotBase * 10000) / 100,
+                }))));
+                candle.setData([]);
+                bm.setData(dedup(sampleDown(bmPts as DataPoint[]).map(p => ({
+                  time: t(p.date), value: Math.round((p.value as number) / bmBase * 10000) / 100,
+                }))));
+                area.applyOptions({ visible: true, priceFormat: base100Fmt, priceScaleId: "right" });
+                candle.applyOptions({ visible: false });
+                bm.applyOptions({ priceFormat: base100Fmt, priceScaleId: "right" });
+                chartPctModeRef.current = true;
+              } else {
+                area.setData(dedup(lineData.map(p => ({ time: t(p.date), value: p.value }))));
+                candle.setData([]); bm.setData([]);
+                area.applyOptions({ visible: true, priceFormat: rawFmt, priceScaleId: "right" });
+                candle.applyOptions({ visible: false });
+                chartPctModeRef.current = false;
+              }
+
+            } else {
+              // ── Prix réel ──
+              const rawBmAligned = (benchmarkRawData ?? []).filter(p => p.date >= dotStartStr);
+              const aData = dedup(lineData.map(p => ({ time: t(p.date), value: p.value })));
+              const cData = dedup(candleData.map(p => ({
+                time: t(p.date), open: p.open ?? p.value, high: p.high ?? p.value,
+                low: p.low ?? p.value, close: p.close ?? p.value,
+              })));
+              chartRef.current?.applyOptions({
+                leftPriceScale: { visible: true, borderVisible: false, scaleMargins: { top: 0.08, bottom: 0.08 } },
+              });
+              area.setData(inCandle ? [] : aData);
+              candle.setData(inCandle ? cData : []);
+              area.applyOptions({ visible: !inCandle, priceFormat: rawFmt, priceScaleId: "right" });
+              candle.applyOptions({ visible: inCandle });
+              bm.applyOptions({ priceScaleId: "left", priceFormat: rawFmt });
+              bm.setData(rawBmAligned.length
+                ? dedup(sampleDown(rawBmAligned).map(p => ({ time: t(p.date), value: p.value as number })))
+                : []);
+              chartPctModeRef.current = false;
+            }
+
+          } else {
+            // ── Pas de benchmark ──
+            chartRef.current?.applyOptions({ leftPriceScale: { visible: false } });
+            const aData = dedup(lineData.map(p => ({ time: t(p.date), value: p.value })));
+            const cData = dedup(candleData.map(p => ({
+              time: t(p.date), open: p.open ?? p.value, high: p.high ?? p.value,
+              low: p.low ?? p.value, close: p.close ?? p.value,
+            })));
+            area.setData(inCandle ? [] : aData);
+            candle.setData(inCandle ? cData : []);
+            bm.setData([]);
+            bm.applyOptions({ priceScaleId: "right", priceFormat: rawFmt });
+            area.applyOptions({ visible: !inCandle, priceFormat: rawFmt, priceScaleId: "right" });
+            candle.applyOptions({ visible: inCandle });
+            chartPctModeRef.current = false;
+          }
+
+        } else {
+          area.setData([]); candle.setData([]); bm.setData([]);
+          chartPctModeRef.current = false;
+        }
+      } else {
+        // Portfolio mode
+        const rawFmtPortfolio = { type: "custom" as const, formatter: (v: number) => { try { return fmtPrice(v); } catch { return String(v); } }, minMove: 0.001 };
         const aData = dedup(filterDate(portfolioData).map(p => ({ time: toTs(p.date), value: p.value as number })));
         const bmData = benchmarkData.length
           ? dedup(filterDate(benchmarkData).map(p => ({ time: toTs(p.date), value: p.value as number })))
           : [];
-
         area.setData(aData);
         candle.setData([]);
         bm.setData(bmData);
-        area.applyOptions({ visible: true });
+        area.applyOptions({ visible: true, priceFormat: rawFmtPortfolio });
         candle.applyOptions({ visible: false });
+      }
+
+      if (savedRange && chartRef.current) {
+        try { chartRef.current.timeScale().setVisibleRange(savedRange as any); } catch {}
       }
     } catch (err: any) {
       console.warn("GrowthChart setData error:", err?.message);
     }
-  }, [adaptiveData, benchmarkData, isIntraday, periodFilter]); // eslint-disable-line
+  }, [adaptiveData, bmAdaptiveData, benchmarkData, benchmarkRawData, isIntraday, periodFilter, comparisonMode, chartMode]); // eslint-disable-line
 
   // Mise à jour du prix live (toutes les ~60s pour les actions Yahoo Finance).
   // series.update() met à jour uniquement la dernière barre sans reset de vue.
@@ -593,18 +745,19 @@ export default function GrowthChart({
     const live = portfolioData[portfolioData.length - 1];
     const livePrice = live.value as number;
     const lastBar = adaptiveData[adaptiveData.length - 1];
+    const isBizDay = !isCrypto && ["1d", "1W"].includes(intervalKey);
+    const lastTime = isBizDay ? (toDay(lastBar.date) as any) : toTs(lastBar.date);
     try {
-      const lastTs = toTs(lastBar.date);
-      areaSeriesRef.current?.update({ time: lastTs, value: livePrice });
+      areaSeriesRef.current?.update({ time: lastTime, value: livePrice });
       candleSeriesRef.current?.update({
-        time:  lastTs,
+        time:  lastTime,
         open:  lastBar.open  ?? lastBar.value,
         high:  Math.max(lastBar.high ?? lastBar.value, livePrice),
         low:   lastBar.low   ?? lastBar.value,
         close: livePrice,
       });
     } catch { /* ignore si série pas encore prête */ }
-  }, [portfolioData]); // eslint-disable-line
+  }, [portfolioData, isCrypto, intervalKey]); // eslint-disable-line
 
   // Applique la fenêtre visible quand les données changent OU quand la période change
   useEffect(() => {
@@ -613,15 +766,21 @@ export default function GrowthChart({
     if (!chart) return;
     const visibleSecs = PERIOD_VISIBLE_SECS[periodFilter];
     if (visibleSecs) {
-      const nowSec  = Math.floor(Date.now() / 1000);
-      const lastTs  = toTs(adaptiveData[adaptiveData.length - 1].date);
-      const toSec   = (nowSec - lastTs > visibleSecs / 2 ? lastTs : nowSec) as UTCTimestamp;
-      const fromSec = (toSec - visibleSecs) as UTCTimestamp;
-      chart.timeScale().setVisibleRange({ from: fromSec, to: toSec });
+      if (useBusinessDay) {
+        const toDate  = adaptiveData[adaptiveData.length - 1].date.slice(0, 10);
+        const fromDate = new Date(Date.now() - visibleSecs * 1000).toISOString().slice(0, 10);
+        chart.timeScale().setVisibleRange({ from: toDay(fromDate) as any, to: toDay(toDate) as any });
+      } else {
+        const nowSec  = Math.floor(Date.now() / 1000);
+        const lastTs  = toTs(adaptiveData[adaptiveData.length - 1].date);
+        const toSec   = (nowSec - lastTs > visibleSecs / 2 ? lastTs : nowSec) as UTCTimestamp;
+        const fromSec = (toSec - visibleSecs) as UTCTimestamp;
+        chart.timeScale().setVisibleRange({ from: fromSec, to: toSec });
+      }
     } else {
       chart.timeScale().fitContent();
     }
-  }, [adaptiveData, periodFilter]); // eslint-disable-line
+  }, [adaptiveData, periodFilter, useBusinessDay]); // eslint-disable-line
 
   // fitContent en mode portfolio (pas de fetch async, données déjà dispo)
   useEffect(() => {
@@ -889,6 +1048,24 @@ export default function GrowthChart({
         {chartLegend}
 
       </div>
+
+      {/* Comparison mode toggle */}
+      {hasComparison && (
+        <div className="flex justify-center gap-2 pb-1 flex-shrink-0">
+          {(["perf", "raw"] as const).map(m => (
+            <button key={m} onClick={() => setComparisonMode(m)} style={{
+              fontSize: 10, fontWeight: comparisonMode === m ? 700 : 500,
+              padding: "2px 10px", borderRadius: 5,
+              border: comparisonMode === m ? `1px solid ${portfolioColor}66` : "1px solid transparent",
+              color: comparisonMode === m ? portfolioColor : (dark ? "rgba(255,255,255,0.45)" : "#94a3b8"),
+              background: comparisonMode === m ? `${portfolioColor}18` : "transparent",
+              cursor: "pointer", transition: "all 0.15s",
+            }}>
+              {m === "perf" ? "Performance" : "Prix réel"}
+            </button>
+          ))}
+        </div>
+      )}
 
       {/* Period buttons */}
       <div className="flex justify-center gap-4 py-2 flex-wrap flex-shrink-0">
