@@ -92,6 +92,17 @@ interface Props {
   dailyChangePct?: number | null;
   openPrice?: number | null;
   isCrypto?: boolean;
+  syncCrosshairTime?: number | null;
+  externalPeriod?: string;
+  externalInterval?: string;
+  onIntervalChange?: (interval: string) => void;
+  hideControls?: boolean;
+  externalVisibleRange?: { from: number; to: number } | null;
+  syncPriceScaleWidth?: number;
+  onPriceScaleWidthChange?: (width: number) => void;
+  onCrosshairXPixel?: (x: number | null) => void;
+  syncCrosshairXPixel?: number | null;
+  timeAxisStart?: number; // UTC timestamp : étend l'axe X avant le 1er bar (sync Max period)
 }
 
 function toTs(d: string): UTCTimestamp {
@@ -220,6 +231,14 @@ function aggMonthly(pts: OHLCPt[]): OHLCPt[] {
   return aggregateCandles(pts, d => d.toISOString().slice(0, 7));
 }
 
+function hexToRgba(hex: string, alpha: number): string {
+  if (!hex.startsWith("#") || hex.length < 7) return `rgba(128,128,128,${alpha})`;
+  const r = parseInt(hex.slice(1, 3), 16);
+  const g = parseInt(hex.slice(3, 5), 16);
+  const b = parseInt(hex.slice(5, 7), 16);
+  return `rgba(${r},${g},${b},${alpha})`;
+}
+
 // ─── Grid presets ─────────────────────────────────────────────────────────────
 type GridPreset = "none" | "minimal" | "standard" | "solid";
 
@@ -238,7 +257,10 @@ export default function GrowthChart({
   onExitFullscreen, onPeriodChange, onVisibleRangeChange, onCrosshairMove, onAdaptiveData,
   benchmarkRawData, benchmarkColor = "#f59e0b", benchmarkTicker,
   dark = false, percentMode = false, priceMode = false,
-  hideDrawdown = false, dailyChangePct = null, openPrice = null, isCrypto = false,
+  hideDrawdown = false, dailyChangePct = null, openPrice = null, isCrypto = false, livePrice: livePriceProp,
+  syncCrosshairTime = null, externalPeriod, externalInterval, externalVisibleRange,
+  onIntervalChange, hideControls = false, syncPriceScaleWidth, onPriceScaleWidthChange,
+  onCrosshairXPixel, syncCrosshairXPixel, timeAxisStart,
 }: Props) {
 
   const [periodFilter, setPeriodFilter] = useState<"24h"|"1S"|"1M"|"3M"|"6M"|"1A"|"3A"|"Max">("Max");
@@ -292,14 +314,30 @@ export default function GrowthChart({
   const prevBmTickerRef = useRef<string | undefined>(undefined);
   const chartPctModeRef = useRef(false);
 
+  const glowCanvasRef       = useRef<HTMLCanvasElement>(null);
+  const portfolioColorRef   = useRef(portfolioColor);
+  const lineDataRef         = useRef<{ date: string; value: number }[]>([]);
+  const useBusinessDayRef   = useRef(false);
+
   const adaptiveDataRef         = useRef<typeof adaptiveData>([]);
-  const onVisibleRangeChangeRef = useRef(onVisibleRangeChange);
-  const onCrosshairMoveRef      = useRef(onCrosshairMove);
-  const onAdaptiveDataRef       = useRef(onAdaptiveData);
+  const onVisibleRangeChangeRef    = useRef(onVisibleRangeChange);
+  const onCrosshairMoveRef         = useRef(onCrosshairMove);
+  const onAdaptiveDataRef          = useRef(onAdaptiveData);
+  const onPriceScaleWidthChangeRef = useRef(onPriceScaleWidthChange);
+  const onCrosshairXPixelRef       = useRef(onCrosshairXPixel);
+  useEffect(() => { portfolioColorRef.current = portfolioColor; }, [portfolioColor]);
+  useEffect(() => { useBusinessDayRef.current = !isCrypto && ["1d","1W"].includes(intervalKey); }, [isCrypto, intervalKey]);
+  useEffect(() => {
+    lineDataRef.current = adaptiveData.length
+      ? adaptiveData
+      : portfolioData.map(p => ({ date: p.date as string, value: p.value as number }));
+  }, [adaptiveData, portfolioData]);
   useEffect(() => { adaptiveDataRef.current = adaptiveData; }, [adaptiveData]);
   useEffect(() => { onVisibleRangeChangeRef.current = onVisibleRangeChange; }, [onVisibleRangeChange]);
   useEffect(() => { onCrosshairMoveRef.current = onCrosshairMove; }, [onCrosshairMove]);
   useEffect(() => { onAdaptiveDataRef.current = onAdaptiveData; }, [onAdaptiveData]);
+  useEffect(() => { onPriceScaleWidthChangeRef.current = onPriceScaleWidthChange; }, [onPriceScaleWidthChange]);
+  useEffect(() => { onCrosshairXPixelRef.current = onCrosshairXPixel; }, [onCrosshairXPixel]);
 
   // Fire onAdaptiveData whenever the price data changes (ticker mode only)
   useEffect(() => {
@@ -310,15 +348,29 @@ export default function GrowthChart({
   useEffect(() => { chartModeRef.current = chartMode; }, [chartMode]);
   useEffect(() => { isMountedRef.current = true; }, []);
 
+  // Sync canvas size to chart container
+  useEffect(() => {
+    const canvas = glowCanvasRef.current;
+    const container = containerRef.current;
+    if (!canvas || !container) return;
+    const sync = () => { canvas.width = container.clientWidth; canvas.height = container.clientHeight; };
+    sync();
+    const ro = new ResizeObserver(sync);
+    ro.observe(container);
+    return () => ro.disconnect();
+  }, []);
+
   // handlePeriodChange : met à jour la période et auto-switch l'intervalle si incompatible
   const handlePeriodChange = useCallback((p: typeof periodFilter) => {
     const allowed = PERIOD_ALLOWED_INTERVALS[p];
     if (!allowed.includes(intervalKey)) {
-      setIntervalKey(PERIOD_DEFAULT_INTERVAL[p] as typeof intervalKey);
+      const newIv = PERIOD_DEFAULT_INTERVAL[p] as typeof intervalKey;
+      setIntervalKey(newIv);
+      onIntervalChange?.(newIv); // notifie le parent pour que activeInterval reste en sync
     }
     setPeriodFilter(p);
     onPeriodChange?.(p);
-  }, [intervalKey, onPeriodChange]); // eslint-disable-line
+  }, [intervalKey, onPeriodChange, onIntervalChange]); // eslint-disable-line
 
   // Fetch intraday data — charge toute la plage disponible Yahoo pour l'intervalle choisi
   useEffect(() => {
@@ -418,12 +470,15 @@ export default function GrowthChart({
             style: LineStyle.Solid,
             width: 1,
             labelBackgroundColor: dark ? "#334155" : "#1e293b",
+            labelVisible: !hideControls,
           },
           horzLine: {
             color: dark ? "rgba(255,255,255,0.2)" : "#94a3b8",
             style: LineStyle.Solid,
             width: 1,
             labelBackgroundColor: dark ? "#334155" : "#1e293b",
+            visible: true,
+            labelVisible: !hideControls,
           },
         },
         rightPriceScale: {
@@ -465,6 +520,8 @@ export default function GrowthChart({
         rangeDebounce = setTimeout(() => {
           if (!range) { onVisibleRangeChangeRef.current?.(null, null); return; }
           onVisibleRangeChangeRef.current?.(timeToSec(range.from), timeToSec(range.to));
+          const w = (chart as any).priceScale?.("right")?.width?.();
+          if (typeof w === "number" && w > 0) onPriceScaleWidthChangeRef.current?.(w);
         }, 30);
       };
       chart.timeScale().subscribeVisibleTimeRangeChange(rangeHandler as any);
@@ -474,10 +531,7 @@ export default function GrowthChart({
         topColor:    portfolioColor + (ticker ? "40" : "55"),
         bottomColor: portfolioColor + "00",
         lineWidth: 2,
-        crosshairMarkerVisible: true,
-        crosshairMarkerRadius: 4,
-        crosshairMarkerBorderColor: "#ffffff",
-        crosshairMarkerBackgroundColor: portfolioColor,
+        crosshairMarkerVisible: false,
         lastValueVisible: true,
         priceLineVisible: false,
         priceFormat: {
@@ -510,16 +564,22 @@ export default function GrowthChart({
       benchmarkSeriesRef.current = bm;
 
       chart.subscribeCrosshairMove(param => {
+        const glowCanvas = glowCanvasRef.current;
+        const ctx = glowCanvas?.getContext("2d");
+
         if (!param.time || !param.point) {
+          if (ctx && glowCanvas) ctx.clearRect(0, 0, glowCanvas.width, glowCanvas.height);
           setHoverPrice(null);
           setHoverDate(null);
           setHoverOHLC(null);
           setHoverPoint(null);
           setHoverBmPrice(null);
           onCrosshairMoveRef.current?.(null);
+          onCrosshairXPixelRef.current?.(null);
           return;
         }
         onCrosshairMoveRef.current?.(param.time as UTCTimestamp);
+        onCrosshairXPixelRef.current?.(param.point.x);
         try {
           const aData  = param.seriesData.get(area) as any;
           const cData  = param.seriesData.get(candle) as any;
@@ -539,6 +599,99 @@ export default function GrowthChart({
             setHoverOHLC(null);
           }
           setHoverBmPrice(bmData?.value ?? null);
+
+          // Curve glow — timeToCoordinate on actual data points (exact same path as chart)
+          if (ctx && glowCanvas) {
+            ctx.clearRect(0, 0, glowCanvas.width, glowCanvas.height);
+            if (aData?.value != null && chartModeRef.current !== "candle") {
+              const lineData = lineDataRef.current;
+              if (lineData.length >= 2) {
+                const halfPx = 22;
+                const cx     = param.point.x;
+                const col    = portfolioColorRef.current;
+                const isBD   = useBusinessDayRef.current;
+
+                // Convert date string → the Time type used when the series was populated
+                const toChartTime = (dateStr: string): any => {
+                  if (isBD) {
+                    const [y, m, d] = dateStr.slice(0, 10).split("-");
+                    return { year: +y, month: +m, day: +d };
+                  }
+                  return new Date(dateStr).getTime() / 1000;
+                };
+
+                // Find cursor's data index via binary search
+                const tsOf = (i: number) => new Date(lineData[i].date).getTime() / 1000;
+                const cursorTs = typeof param.time === "object"
+                  ? new Date(`${(param.time as any).year}-${String((param.time as any).month).padStart(2,"0")}-${String((param.time as any).day).padStart(2,"0")}`).getTime() / 1000
+                  : (param.time as number);
+                let lo = 0, hi = lineData.length - 1, curIdx = 0;
+                while (lo <= hi) {
+                  const m2 = (lo + hi) >> 1;
+                  if (tsOf(m2) <= cursorTs) { curIdx = m2; lo = m2 + 1; } else hi = m2 - 1;
+                }
+
+                // ±200 bars window — enough for any density (dense 1D needs ~60, sparse 1W needs ~12)
+                // sampleDown may drop some bars → timeToCoordinate returns null for them → we skip
+                const WINDOW    = 200;
+                const rangeStart = Math.max(0, curIdx - WINDOW);
+                const rangeEnd   = Math.min(lineData.length - 1, curIdx + WINDOW);
+
+                const segPts: [number, number][] = [];
+                let leftEndpoint: [number, number] | null = null;
+                let rightEndpointSet = false;
+                for (let i = rangeStart; i <= rangeEnd; i++) {
+                  const sx = chart.timeScale().timeToCoordinate(toChartTime(lineData[i].date));
+                  const sy = area.priceToCoordinate(lineData[i].value);
+                  if (sx == null || sy == null || !isFinite(sx) || !isFinite(sy)) continue;
+                  if (sx < cx - halfPx) {
+                    leftEndpoint = [sx, sy];        // rightmost point just left of zone
+                  } else if (sx <= cx + halfPx) {
+                    segPts.push([sx, sy]);
+                  } else if (!rightEndpointSet) {
+                    segPts.push([sx, sy]);           // first point just right of zone
+                    rightEndpointSet = true;
+                  }
+                }
+                if (leftEndpoint) segPts.unshift(leftEndpoint);
+
+                if (segPts.length >= 2) {
+                  const drawPath = () => {
+                    ctx.beginPath();
+                    ctx.moveTo(segPts[0][0], segPts[0][1]);
+                    for (let i = 1; i < segPts.length; i++) ctx.lineTo(segPts[i][0], segPts[i][1]);
+                  };
+
+                  // Clip to ±halfPx so glow never extends beyond fixed width
+                  ctx.save();
+                  ctx.beginPath();
+                  ctx.rect(cx - halfPx, 0, halfPx * 2, glowCanvas.height);
+                  ctx.clip();
+
+                  ctx.save(); ctx.filter = "blur(1.5px)";
+                  drawPath(); ctx.strokeStyle = hexToRgba(col, 0.5); ctx.lineWidth = 3;
+                  ctx.lineCap = "round"; ctx.lineJoin = "round"; ctx.stroke();
+                  ctx.restore();
+
+                  drawPath(); ctx.strokeStyle = "rgba(255,255,255,0.9)"; ctx.lineWidth = 1.5;
+                  ctx.lineCap = "round"; ctx.lineJoin = "round"; ctx.stroke();
+
+                  ctx.restore(); // remove clip
+
+                  // Fade left/right edges
+                  ctx.globalCompositeOperation = "destination-in";
+                  const fade = ctx.createLinearGradient(cx - halfPx, 0, cx + halfPx, 0);
+                  fade.addColorStop(0,   "rgba(0,0,0,0)");
+                  fade.addColorStop(0.2, "rgba(0,0,0,1)");
+                  fade.addColorStop(0.8, "rgba(0,0,0,1)");
+                  fade.addColorStop(1,   "rgba(0,0,0,0)");
+                  ctx.fillStyle = fade;
+                  ctx.fillRect(0, 0, glowCanvas.width, glowCanvas.height);
+                  ctx.globalCompositeOperation = "source-over";
+                }
+              }
+            }
+          }
         } catch { /* ignore crosshair errors */ }
       });
 
@@ -556,6 +709,71 @@ export default function GrowthChart({
       setChartError(err?.message ?? "Chart init failed");
     }
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Sync period from external source (split-view mode)
+  useEffect(() => {
+    if (!externalPeriod) return;
+    const valid = ["24h","1S","1M","3M","6M","1A","3A","Max"] as const;
+    if (!valid.includes(externalPeriod as any)) return;
+    setPeriodFilter(externalPeriod as typeof valid[number]);
+    // Application immédiate du range via refs — évite d'attendre le cycle state→render→effect
+    const chart = chartRef.current;
+    const data = adaptiveDataRef.current;
+    if (!chart || !data.length) return;
+    const visibleSecs = (PERIOD_VISIBLE_SECS as Record<string, number | undefined>)[externalPeriod] ?? null;
+    if (visibleSecs) {
+      if (useBusinessDay) {
+        const toDate = data[data.length - 1].date.slice(0, 10);
+        const fromDate = new Date(Date.now() - visibleSecs * 1000).toISOString().slice(0, 10);
+        try { chart.timeScale().setVisibleRange({ from: toDay(fromDate) as any, to: toDay(toDate) as any }); } catch {}
+      } else {
+        const nowSec = Math.floor(Date.now() / 1000);
+        const lastTs = toTs(data[data.length - 1].date);
+        const toSec = (nowSec - lastTs > visibleSecs / 2 ? lastTs : nowSec) as UTCTimestamp;
+        const fromSec = (toSec - visibleSecs) as UTCTimestamp;
+        try { chart.timeScale().setVisibleRange({ from: fromSec, to: toSec }); } catch {}
+      }
+    } else {
+      try { chart.timeScale().fitContent(); } catch {}
+    }
+  }, [externalPeriod, useBusinessDay]); // eslint-disable-line
+
+  // Sync interval from external source
+  useEffect(() => {
+    if (!externalInterval) return;
+    const valid = ["1m","5m","15m","1h","1d","1W"] as const;
+    if (valid.includes(externalInterval as any)) setIntervalKey(externalInterval as typeof valid[number]);
+  }, [externalInterval]);
+
+  const externalVisibleRangeRef = useRef(externalVisibleRange);
+  useEffect(() => { externalVisibleRangeRef.current = externalVisibleRange; }, [externalVisibleRange]);
+
+  // Verrouille la plage visible (split-view sync)
+  // fixLeftEdge doit être false sinon setVisibleRange est contraint au premier data point
+  // minimumWidth identique sur les 2 charts pour aligner les curseurs pixel-parfait
+  useEffect(() => {
+    if (!chartRef.current) return;
+    const scaleW = syncPriceScaleWidth ?? 0;
+    chartRef.current.applyOptions({
+      timeScale: { fixLeftEdge: !externalVisibleRange },
+      rightPriceScale: { minimumWidth: scaleW },
+    });
+    if (!externalVisibleRange) return;
+    const from = externalVisibleRange.from as UTCTimestamp;
+    const to   = externalVisibleRange.to   as UTCTimestamp;
+    try { chartRef.current.timeScale().setVisibleRange({ from, to }); } catch {}
+  }, [externalVisibleRange, syncPriceScaleWidth]);
+
+  // Sync crosshair from external source (split-view mode)
+  useEffect(() => {
+    if (!chartRef.current || syncCrosshairTime == null) {
+      chartRef.current?.clearCrosshairPosition();
+      return;
+    }
+    const series = areaSeriesRef.current ?? candleSeriesRef.current;
+    if (!series) return;
+    try { chartRef.current.setCrosshairPosition(NaN, syncCrosshairTime as UTCTimestamp, series); } catch {}
+  }, [syncCrosshairTime]);
 
   // Update layout colors when dark mode changes
   useEffect(() => {
@@ -703,8 +921,19 @@ export default function GrowthChart({
               time: t(p.date), open: p.open ?? p.value, high: p.high ?? p.value,
               low: p.low ?? p.value, close: p.close ?? p.value,
             })));
-            area.setData(inCandle ? [] : aData);
-            candle.setData(inCandle ? cData : []);
+            // Whitespace prefix (mode sync Max) : étend l'axe X de timeAxisStart au 1er bar réel.
+            // fitContent() montrera alors depuis timeAxisStart, aligné avec le top chart.
+            const wsPrefix: { time: UTCTimestamp }[] = [];
+            if (timeAxisStart && aData.length > 0) {
+              const firstTs = aData[0].time as number;
+              if (timeAxisStart < firstTs) {
+                for (let ts = timeAxisStart; ts < firstTs; ts += 86400) {
+                  wsPrefix.push({ time: ts as UTCTimestamp });
+                }
+              }
+            }
+            area.setData(inCandle ? [] : ([...wsPrefix, ...aData] as any));
+            candle.setData(inCandle ? ([...wsPrefix, ...cData] as any) : []);
             bm.setData([]);
             bm.applyOptions({ priceScaleId: "right", priceFormat: rawFmt });
             area.applyOptions({ visible: !inCandle, priceFormat: rawFmt, priceScaleId: "right" });
@@ -730,13 +959,15 @@ export default function GrowthChart({
         candle.applyOptions({ visible: false });
       }
 
-      if (savedRange && chartRef.current) {
+      // Ne restaure pas le range si un range externe gère la plage (mode sync)
+      // Également ignoré si externalPeriod est actif — le time-range effect applique la bonne plage
+      if (savedRange && chartRef.current && !externalVisibleRangeRef.current && !externalPeriod) {
         try { chartRef.current.timeScale().setVisibleRange(savedRange as any); } catch {}
       }
     } catch (err: any) {
       console.warn("GrowthChart setData error:", err?.message);
     }
-  }, [adaptiveData, bmAdaptiveData, benchmarkData, benchmarkRawData, isIntraday, periodFilter, comparisonMode, chartMode]); // eslint-disable-line
+  }, [adaptiveData, bmAdaptiveData, benchmarkData, benchmarkRawData, isIntraday, periodFilter, comparisonMode, chartMode, externalVisibleRange, timeAxisStart]); // eslint-disable-line
 
   // Mise à jour du prix live (toutes les ~60s pour les actions Yahoo Finance).
   // series.update() met à jour uniquement la dernière barre sans reset de vue.
@@ -764,6 +995,16 @@ export default function GrowthChart({
     if (!adaptiveData.length) return;
     const chart = chartRef.current;
     if (!chart) return;
+    // Si un range externe est actif (mode sync), il prime sur le range interne
+    if (externalVisibleRange) {
+      try {
+        chart.timeScale().setVisibleRange({
+          from: externalVisibleRange.from as UTCTimestamp,
+          to:   externalVisibleRange.to   as UTCTimestamp,
+        });
+      } catch {}
+      return;
+    }
     const visibleSecs = PERIOD_VISIBLE_SECS[periodFilter];
     if (visibleSecs) {
       if (useBusinessDay) {
@@ -780,7 +1021,7 @@ export default function GrowthChart({
     } else {
       chart.timeScale().fitContent();
     }
-  }, [adaptiveData, periodFilter, useBusinessDay]); // eslint-disable-line
+  }, [adaptiveData, periodFilter, useBusinessDay, externalVisibleRange]); // eslint-disable-line
 
   // fitContent en mode portfolio (pas de fetch async, données déjà dispo)
   useEffect(() => {
@@ -813,8 +1054,10 @@ export default function GrowthChart({
   // ─── Perf stats ───────────────────────────────────────────────────────────────
   // Même source que les boutons inactifs → bouton actif = légende, jamais de changement au clic
   const periodPerfData = useMemo(() => {
-    if (periodFilter === "24h" && dailyChangePct !== null && portfolioData.length > 0) {
-      const last  = portfolioData[portfolioData.length - 1].value as number;
+    // For ticker pages, use adaptiveData (stock prices); for portfolio, use portfolioData
+    const source = ticker && adaptiveData.length > 0 ? adaptiveData : portfolioData;
+    if (periodFilter === "24h" && dailyChangePct !== null && source.length > 0) {
+      const last  = source[source.length - 1].value as number;
       const first = last / (1 + dailyChangePct / 100);
       return { first, last };
     }
@@ -822,15 +1065,19 @@ export default function GrowthChart({
     const cutStr = visibleSecs
       ? new Date(Date.now() - visibleSecs * 1000).toISOString().slice(0, 10)
       : null;
-    const pts = cutStr ? portfolioData.filter(p => p.date >= cutStr) : portfolioData;
+    const pts = cutStr ? source.filter(p => String(p.date).slice(0, 10) >= cutStr) : source;
     if (pts.length < 2) return null;
     return { first: pts[0].value as number, last: pts[pts.length - 1].value as number };
-  }, [portfolioData, periodFilter, dailyChangePct]);
+  }, [ticker, adaptiveData, portfolioData, periodFilter, dailyChangePct]);
 
   const periodPerfPct  = periodPerfData ? (periodPerfData.last - periodPerfData.first) / periodPerfData.first * 100 : null;
   const hoverPerfPct   = (hoverPrice !== null && periodPerfData) ? (hoverPrice - periodPerfData.first) / periodPerfData.first * 100 : null;
   // displayPrice always shows the live price (portfolioData.last), independent of perf calculation.
-  const displayPrice   = hoverPrice ?? (portfolioData.length > 0 ? portfolioData[portfolioData.length - 1].value as number : null);
+  const displayPrice   = hoverPrice !== null
+    ? hoverPrice
+    : hoverDate !== null
+      ? 0  // cursor active but in whitespace (no series value)
+      : (livePriceProp ?? (portfolioData.length > 0 ? portfolioData[portfolioData.length - 1].value as number : null));
   const displayPerfPct = hoverPerfPct ?? periodPerfPct;
 
   const fmtHoverDate = (iso: string | null): string | null => {
@@ -1045,8 +1292,23 @@ export default function GrowthChart({
         ) : (
           <div ref={containerRef} style={{ width: "100%", height: "100%" }} />
         )}
+        <canvas
+          ref={glowCanvasRef}
+          style={{ position: "absolute", top: 0, left: 0, width: "100%", height: "100%", pointerEvents: "none", zIndex: 5, mixBlendMode: "screen" }}
+        />
         {chartLegend}
-
+        {hideControls && syncCrosshairXPixel != null && (
+          <div style={{
+            position: "absolute",
+            top: 0,
+            bottom: 0,
+            left: syncCrosshairXPixel,
+            width: 1,
+            background: "rgba(255,255,255,0.25)",
+            pointerEvents: "none",
+            zIndex: 50,
+          }} />
+        )}
       </div>
 
       {/* Comparison mode toggle */}
@@ -1068,7 +1330,7 @@ export default function GrowthChart({
       )}
 
       {/* Period buttons */}
-      <div className="flex justify-center gap-4 py-2 flex-wrap flex-shrink-0">
+      {!hideControls && <div className="flex justify-center gap-4 py-2 flex-wrap flex-shrink-0">
         {(["24h","1S","1M","3M","6M","1A","3A","Max"] as const).map(key => {
           const isActive = periodFilter === key;
           let pct: number | null = null;
@@ -1104,10 +1366,10 @@ export default function GrowthChart({
             </div>
           );
         })}
-      </div>
+      </div>}
 
       {/* Interval selector — uniquement en mode ticker */}
-      {ticker && (
+      {!hideControls && ticker && (
         <div className="flex justify-center gap-2 pb-2 flex-shrink-0">
           {(["1m","5m","15m","1h","1d","1W"] as const).map(iv => {
             const allowed = PERIOD_ALLOWED_INTERVALS[periodFilter] ?? [];
@@ -1117,7 +1379,7 @@ export default function GrowthChart({
               <button
                 key={iv}
                 disabled={!isAllowed}
-                onClick={() => isAllowed && setIntervalKey(iv)}
+                onClick={() => { if (isAllowed) { setIntervalKey(iv); onIntervalChange?.(iv); } }}
                 style={{
                   fontSize: 10, fontWeight: isActive ? 700 : 500,
                   padding: "2px 7px", borderRadius: 5,

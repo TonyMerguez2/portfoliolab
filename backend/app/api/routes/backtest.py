@@ -27,8 +27,20 @@ router = APIRouter(prefix="/api/v1")
 logger = logging.getLogger(__name__)
 
 
-@router.post("/backtest", response_model=BacktestResponse, tags=["Backtest"])
-async def backtest(req: BacktestRequest) -> BacktestResponse:
+def _sanitize(obj):
+    """Replace NaN/Inf floats with None so JSON serialization never fails."""
+    import math
+    if isinstance(obj, float):
+        return None if (math.isnan(obj) or math.isinf(obj)) else obj
+    if isinstance(obj, dict):
+        return {k: _sanitize(v) for k, v in obj.items()}
+    if isinstance(obj, list):
+        return [_sanitize(v) for v in obj]
+    return obj
+
+
+@router.post("/backtest", tags=["Backtest"])
+async def backtest(req: BacktestRequest):
     """
     Run a full portfolio backtest.
 
@@ -36,8 +48,10 @@ async def backtest(req: BacktestRequest) -> BacktestResponse:
     - Computes performance, risk, and diversification metrics
     - Returns time series, correlation matrix, and automated commentary
     """
+    from fastapi.responses import JSONResponse
     try:
-        return run_backtest(req)
+        result = run_backtest(req)
+        return JSONResponse(content=_sanitize(result.dict()))
     except ValueError as e:
         raise HTTPException(status_code=422, detail=str(e))
     except Exception as e:
@@ -130,7 +144,7 @@ async def search_assets(q: str = "") -> dict:
         return {"results": []}
     try:
         import httpx
-        url = f"https://query1.finance.yahoo.com/v1/finance/search?q={q}&lang=en-US&region=US&quotesCount=20&newsCount=0&listsCount=0"
+        url = f"https://query1.finance.yahoo.com/v1/finance/search?q={q}&lang=fr-FR&quotesCount=20&newsCount=0&listsCount=0"
         headers = {"User-Agent": "Mozilla/5.0"}
         async with httpx.AsyncClient(timeout=5.0) as client:
             resp = await client.get(url, headers=headers)
@@ -289,8 +303,8 @@ async def get_trending() -> dict:
         return {"results": {}}
 
 @router.get("/prices", tags=["Prices"])
-async def get_prices(tickers: str = "") -> list:
-    """Get current prices for multiple tickers via batch download."""
+async def get_prices(tickers: str = "", period: str = "1d") -> list:
+    """Get prices + period change for multiple tickers."""
     if not tickers:
         return []
     try:
@@ -303,9 +317,13 @@ async def get_prices(tickers: str = "") -> list:
         if not ticker_list:
             return []
 
+        # Map frontend period → yfinance download window
+        YF_WINDOW = {"1d": "5d", "7d": "12d", "1mo": "35d", "3mo": "95d", "1y": "14mo"}
+        yf_period = YF_WINDOW.get(period, "5d")
+
         def batch_download():
             arg = ticker_list[0] if len(ticker_list) == 1 else ticker_list
-            return yf.download(arg, period="2d", progress=False, auto_adjust=True)
+            return yf.download(arg, period=yf_period, progress=False, auto_adjust=True)
 
         loop = asyncio.get_running_loop()
         with ThreadPoolExecutor(max_workers=1) as pool:
@@ -329,7 +347,8 @@ async def get_prices(tickers: str = "") -> list:
                 if len(series) == 0:
                     continue
                 price = float(series.iloc[-1])
-                prev = float(series.iloc[-2]) if len(series) >= 2 else price
+                # Pour 1d : comparer avant-dernière clôture ; pour les autres : première valeur de la fenêtre
+                prev = float(series.iloc[-2]) if period == "1d" else float(series.iloc[0])
                 if price <= 0:
                     continue
                 change = ((price - prev) / prev * 100) if prev else 0
@@ -430,8 +449,10 @@ async def get_intraday(
         return []
 
     # Binance en priorité pour les cryptos (données complètes, pas de trous sur 1m)
+    # Sauf pour max+daily/weekly : Binance ne remonte qu'à 2017, Yahoo a l'historique complet
+    _is_max_daily = period == "max" and interval in ("1d", "1wk")
     binance_symbol = _yahoo_to_binance_symbol(ticker)
-    if binance_symbol:
+    if binance_symbol and not _is_max_daily:
         try:
             data = await _fetch_binance(binance_symbol, interval, period, start, end)
             if data:
@@ -445,7 +466,7 @@ async def get_intraday(
         import asyncio
         from concurrent.futures import ThreadPoolExecutor
 
-        allowed_intervals = {"1m","2m","5m","15m","30m","60m","1h","1d"}
+        allowed_intervals = {"1m","2m","5m","15m","30m","60m","1h","1d","1wk"}
         allowed_periods = {"1d","2d","5d","7d","14d","60d","1mo","2mo","3mo","6mo","1y","2y","5y","max"}
         if interval not in allowed_intervals:
             return []
@@ -480,4 +501,329 @@ async def get_intraday(
         return result
     except Exception as e:
         logger.error(f"Intraday error: {e}")
+        return []
+
+
+@router.get("/quote/{ticker}", tags=["Market"])
+async def get_quote(ticker: str) -> dict:
+    """Market quote — fast_info + info.sector/country via yfinance."""
+    import yfinance as yf
+    import asyncio, math
+    from concurrent.futures import ThreadPoolExecutor
+    from app.services.rankings import get_rank, update_mcap
+
+    def fetch():
+        t = yf.Ticker(ticker)
+        fi = t.fast_info
+        info = {}
+        try:
+            info = t.info or {}
+        except Exception:
+            pass
+        return fi, info
+
+    try:
+        loop = asyncio.get_running_loop()
+        with ThreadPoolExecutor(max_workers=1) as pool:
+            fi, info = await loop.run_in_executor(pool, fetch)
+
+        def safe(v):
+            try:
+                f = float(v)
+                return None if (math.isnan(f) or math.isinf(f)) else round(f, 6)
+            except Exception:
+                return None
+
+        market_cap = safe(getattr(fi, "market_cap", None))
+        if market_cap:
+            update_mcap(ticker, market_cap)
+
+        return {
+            "open":        safe(getattr(fi, "open",                        None)),
+            "day_high":    safe(getattr(fi, "day_high",                   None)),
+            "day_low":     safe(getattr(fi, "day_low",                    None)),
+            "prev_close":  safe(getattr(fi, "previous_close",             None)),
+            "year_high":   safe(getattr(fi, "year_high",                  None)),
+            "year_low":    safe(getattr(fi, "year_low",                   None)),
+            "volume":      safe(getattr(fi, "last_volume",                None)),
+            "avg_volume":  safe(getattr(fi, "three_month_average_volume", None)),
+            "market_cap":  market_cap,
+            "currency":    getattr(fi, "currency", None) or info.get("currency"),
+            "sector":      info.get("sector"),
+            "country":     info.get("country"),
+            "industry":    info.get("industry"),
+            "global_rank": get_rank(ticker),
+        }
+    except Exception as e:
+        logger.error(f"Quote error {ticker}: {e}")
+        return {"error": str(e)}
+
+
+@router.get("/news/{ticker}", tags=["Market"])
+async def get_news(ticker: str, lang: str = "en") -> list:
+    """Recent news for a ticker via yfinance. Optionally translated via MyMemory."""
+    import yfinance as yf
+    import asyncio, urllib.parse, urllib.request, json, re
+    from concurrent.futures import ThreadPoolExecutor
+
+    def fetch():
+        try:
+            t = yf.Ticker(ticker)
+            news = t.news or []
+            company_kw = ""
+            try:
+                info = t.info or {}
+                short = info.get("shortName", "") or info.get("longName", "")
+                if short:
+                    stops = {"inc","corp","ltd","plc","sa","ag","nv","co","llc","holdings",
+                             "group","int","intl","the","of","and","class","a","b"}
+                    parts = re.sub(r"[,\.\-\(\)]", " ", short).split()
+                    company_kw = next((w for w in parts if w.lower() not in stops and len(w) > 2), "")
+            except Exception:
+                pass
+            return news, company_kw
+        except Exception:
+            return [], ""
+
+    async def translate(text: str, target: str) -> str:
+        if not text or target == "en":
+            return text
+        try:
+            q = urllib.parse.quote(text[:500])
+            url = f"https://api.mymemory.translated.net/get?q={q}&langpair=en|{target}&de=sachadup02@icloud.com"
+            loop = asyncio.get_running_loop()
+            def _get():
+                with urllib.request.urlopen(url, timeout=4) as r:
+                    return json.loads(r.read())
+            data = await loop.run_in_executor(None, _get)
+            translated = data.get("responseData", {}).get("translatedText", "")
+            if translated and not translated.upper().startswith("PLEASE SELECT"):
+                return translated
+        except Exception:
+            pass
+        return text
+
+    try:
+        loop = asyncio.get_running_loop()
+        with ThreadPoolExecutor(max_workers=1) as pool:
+            raw, company_kw = await loop.run_in_executor(pool, fetch)
+
+        # Keywords to match against titles (ticker base + company name)
+        ticker_base = ticker.upper().split(".")[0].split("-")[0]  # AAPL, BTC, CW8
+        keywords = [kw.lower() for kw in {ticker_base, company_kw} if kw]
+
+        def is_relevant(title: str) -> bool:
+            if not keywords:
+                return True
+            t = title.lower()
+            for kw in keywords:
+                idx = t.find(kw)
+                if idx == -1:
+                    continue
+                # Must appear in the first half of the title OR be preceded by a word boundary
+                # (not buried after a list of other tickers)
+                if idx <= len(t) * 0.55:
+                    return True
+                # Accept if it follows a sentence-starting word ("pourquoi l'action apple"...)
+                before = t[:idx].rstrip()
+                if before.endswith(("'", "'", "l'", "d'", "de ", "du ", "le ", "la ", "les ", "l’", "d’")):
+                    return True
+            return False
+
+        all_items = []
+        for item in raw[:20]:
+            content = item.get("content", item) if isinstance(item.get("content"), dict) else item
+            title     = content.get("title", "")
+            provider  = content.get("provider", {}) or {}
+            publisher = provider.get("displayName", "") or content.get("publisher", "") or item.get("publisher", "")
+            url_obj   = content.get("canonicalUrl", {}) or {}
+            link      = url_obj.get("url", "") or item.get("link", "")
+            pub_at    = content.get("pubDate", "") or item.get("providerPublishTime", 0)
+            thumb     = None
+            for src in [content.get("thumbnail"), item.get("thumbnail")]:
+                if src and src.get("resolutions"):
+                    thumb = src["resolutions"][0].get("url")
+                    break
+            if title:
+                all_items.append({"title": title, "publisher": publisher, "link": link,
+                                   "published_at": pub_at, "thumbnail": thumb, "_rel": is_relevant(title)})
+
+        # Prefer relevant articles; fall back to all if fewer than 3 pass the filter
+        relevant = [i for i in all_items if i["_rel"]]
+        result   = (relevant if len(relevant) >= 3 else all_items)[:6]
+        for item in result:
+            del item["_rel"]
+
+        if lang != "en" and result:
+            titles = await asyncio.gather(*[translate(item["title"], lang) for item in result])
+            for item, t in zip(result, titles):
+                item["title"] = t
+
+        return result
+    except Exception as e:
+        logger.error(f"News error {ticker}: {e}")
+        return []
+
+
+_UNIVERSE: dict[str, dict] = {
+    "NVDA":   {"sector":"Technology","country":"US","type":"EQUITY","mcap":"mega"},
+    "AMD":    {"sector":"Technology","country":"US","type":"EQUITY","mcap":"large"},
+    "INTC":   {"sector":"Technology","country":"US","type":"EQUITY","mcap":"large"},
+    "QCOM":   {"sector":"Technology","country":"US","type":"EQUITY","mcap":"large"},
+    "TXN":    {"sector":"Technology","country":"US","type":"EQUITY","mcap":"large"},
+    "AVGO":   {"sector":"Technology","country":"US","type":"EQUITY","mcap":"mega"},
+    "ARM":    {"sector":"Technology","country":"GB","type":"EQUITY","mcap":"large"},
+    "SMCI":   {"sector":"Technology","country":"US","type":"EQUITY","mcap":"mid"},
+    "ASML":   {"sector":"Technology","country":"NL","type":"EQUITY","mcap":"large"},
+    "MSFT":   {"sector":"Technology","country":"US","type":"EQUITY","mcap":"mega"},
+    "ADBE":   {"sector":"Technology","country":"US","type":"EQUITY","mcap":"large"},
+    "CRM":    {"sector":"Technology","country":"US","type":"EQUITY","mcap":"large"},
+    "NOW":    {"sector":"Technology","country":"US","type":"EQUITY","mcap":"large"},
+    "PLTR":   {"sector":"Technology","country":"US","type":"EQUITY","mcap":"large"},
+    "SAP":    {"sector":"Technology","country":"DE","type":"EQUITY","mcap":"large"},
+    "GOOGL":  {"sector":"Technology","country":"US","type":"EQUITY","mcap":"mega"},
+    "GOOG":   {"sector":"Technology","country":"US","type":"EQUITY","mcap":"mega"},
+    "META":   {"sector":"Technology","country":"US","type":"EQUITY","mcap":"mega"},
+    "NFLX":   {"sector":"Technology","country":"US","type":"EQUITY","mcap":"large"},
+    "UBER":   {"sector":"Technology","country":"US","type":"EQUITY","mcap":"large"},
+    "COIN":   {"sector":"Technology","country":"US","type":"EQUITY","mcap":"mid"},
+    "AAPL":   {"sector":"Technology","country":"US","type":"EQUITY","mcap":"mega"},
+    "AMZN":   {"sector":"Consumer Discretionary","country":"US","type":"EQUITY","mcap":"mega"},
+    "TSLA":   {"sector":"Consumer Discretionary","country":"US","type":"EQUITY","mcap":"mega"},
+    "ABNB":   {"sector":"Consumer Discretionary","country":"US","type":"EQUITY","mcap":"mid"},
+    "MCD":    {"sector":"Consumer Discretionary","country":"US","type":"EQUITY","mcap":"large"},
+    "SBUX":   {"sector":"Consumer Discretionary","country":"US","type":"EQUITY","mcap":"large"},
+    "NKE":    {"sector":"Consumer Discretionary","country":"US","type":"EQUITY","mcap":"large"},
+    "HD":     {"sector":"Consumer Discretionary","country":"US","type":"EQUITY","mcap":"large"},
+    "DIS":    {"sector":"Consumer Discretionary","country":"US","type":"EQUITY","mcap":"large"},
+    "MC.PA":  {"sector":"Consumer Discretionary","country":"FR","type":"EQUITY","mcap":"mega"},
+    "KER.PA": {"sector":"Consumer Discretionary","country":"FR","type":"EQUITY","mcap":"large"},
+    "STLA":   {"sector":"Consumer Discretionary","country":"FR","type":"EQUITY","mcap":"large"},
+    "JPM":    {"sector":"Financials","country":"US","type":"EQUITY","mcap":"mega"},
+    "BAC":    {"sector":"Financials","country":"US","type":"EQUITY","mcap":"large"},
+    "GS":     {"sector":"Financials","country":"US","type":"EQUITY","mcap":"large"},
+    "MS":     {"sector":"Financials","country":"US","type":"EQUITY","mcap":"large"},
+    "BLK":    {"sector":"Financials","country":"US","type":"EQUITY","mcap":"large"},
+    "SPGI":   {"sector":"Financials","country":"US","type":"EQUITY","mcap":"large"},
+    "V":      {"sector":"Financials","country":"US","type":"EQUITY","mcap":"mega"},
+    "MA":     {"sector":"Financials","country":"US","type":"EQUITY","mcap":"mega"},
+    "PYPL":   {"sector":"Financials","country":"US","type":"EQUITY","mcap":"large"},
+    "BNP.PA": {"sector":"Financials","country":"FR","type":"EQUITY","mcap":"large"},
+    "ACA.PA": {"sector":"Financials","country":"FR","type":"EQUITY","mcap":"large"},
+    "GLE.PA": {"sector":"Financials","country":"FR","type":"EQUITY","mcap":"mid"},
+    "CS.PA":  {"sector":"Financials","country":"FR","type":"EQUITY","mcap":"large"},
+    "ALV.DE": {"sector":"Financials","country":"DE","type":"EQUITY","mcap":"large"},
+    "JNJ":    {"sector":"Healthcare","country":"US","type":"EQUITY","mcap":"large"},
+    "UNH":    {"sector":"Healthcare","country":"US","type":"EQUITY","mcap":"mega"},
+    "ABBV":   {"sector":"Healthcare","country":"US","type":"EQUITY","mcap":"large"},
+    "MRK":    {"sector":"Healthcare","country":"US","type":"EQUITY","mcap":"large"},
+    "LLY":    {"sector":"Healthcare","country":"US","type":"EQUITY","mcap":"mega"},
+    "SAN.PA": {"sector":"Healthcare","country":"FR","type":"EQUITY","mcap":"large"},
+    "PG":     {"sector":"Consumer Staples","country":"US","type":"EQUITY","mcap":"large"},
+    "KO":     {"sector":"Consumer Staples","country":"US","type":"EQUITY","mcap":"large"},
+    "WMT":    {"sector":"Consumer Staples","country":"US","type":"EQUITY","mcap":"mega"},
+    "COST":   {"sector":"Consumer Staples","country":"US","type":"EQUITY","mcap":"large"},
+    "OR.PA":  {"sector":"Consumer Staples","country":"FR","type":"EQUITY","mcap":"large"},
+    "XOM":    {"sector":"Energy","country":"US","type":"EQUITY","mcap":"mega"},
+    "CVX":    {"sector":"Energy","country":"US","type":"EQUITY","mcap":"large"},
+    "TTE.PA": {"sector":"Energy","country":"FR","type":"EQUITY","mcap":"large"},
+    "HON":    {"sector":"Industrials","country":"US","type":"EQUITY","mcap":"large"},
+    "UPS":    {"sector":"Industrials","country":"US","type":"EQUITY","mcap":"large"},
+    "CAT":    {"sector":"Industrials","country":"US","type":"EQUITY","mcap":"large"},
+    "RTX":    {"sector":"Industrials","country":"US","type":"EQUITY","mcap":"large"},
+    "BA":     {"sector":"Industrials","country":"US","type":"EQUITY","mcap":"large"},
+    "LMT":    {"sector":"Industrials","country":"US","type":"EQUITY","mcap":"large"},
+    "GE":     {"sector":"Industrials","country":"US","type":"EQUITY","mcap":"large"},
+    "DE":     {"sector":"Industrials","country":"US","type":"EQUITY","mcap":"large"},
+    "SIE.DE": {"sector":"Industrials","country":"DE","type":"EQUITY","mcap":"large"},
+    "AIR.PA": {"sector":"Industrials","country":"FR","type":"EQUITY","mcap":"large"},
+    "HO.PA":  {"sector":"Industrials","country":"FR","type":"EQUITY","mcap":"mid"},
+    "DG.PA":  {"sector":"Industrials","country":"FR","type":"EQUITY","mcap":"mid"},
+    "SU.PA":  {"sector":"Industrials","country":"FR","type":"EQUITY","mcap":"large"},
+    "AI.PA":  {"sector":"Industrials","country":"FR","type":"EQUITY","mcap":"large"},
+    "BTC-USD":{"sector":"Cryptocurrency","country":"GLOBAL","type":"CRYPTOCURRENCY","mcap":"mega"},
+    "ETH-USD":{"sector":"Cryptocurrency","country":"GLOBAL","type":"CRYPTOCURRENCY","mcap":"large"},
+    "SOL-USD":{"sector":"Cryptocurrency","country":"GLOBAL","type":"CRYPTOCURRENCY","mcap":"large"},
+    "BNB-USD":{"sector":"Cryptocurrency","country":"GLOBAL","type":"CRYPTOCURRENCY","mcap":"large"},
+    "ADA-USD":{"sector":"Cryptocurrency","country":"GLOBAL","type":"CRYPTOCURRENCY","mcap":"mid"},
+    "DOGE-USD":{"sector":"Cryptocurrency","country":"GLOBAL","type":"CRYPTOCURRENCY","mcap":"mid"},
+    "XRP-USD":{"sector":"Cryptocurrency","country":"GLOBAL","type":"CRYPTOCURRENCY","mcap":"large"},
+    "SPY":    {"sector":"ETF","country":"US","type":"ETF","mcap":"mega"},
+    "QQQ":    {"sector":"ETF","country":"US","type":"ETF","mcap":"mega"},
+    "CW8.PA": {"sector":"ETF","country":"FR","type":"ETF","mcap":"large"},
+    "GLD":    {"sector":"ETF","country":"US","type":"ETF","mcap":"large"},
+    "AGG":    {"sector":"ETF","country":"US","type":"ETF","mcap":"large"},
+    "VTI":    {"sector":"ETF","country":"US","type":"ETF","mcap":"mega"},
+    "IWM":    {"sector":"ETF","country":"US","type":"ETF","mcap":"large"},
+    "EFA":    {"sector":"ETF","country":"US","type":"ETF","mcap":"large"},
+    "EEM":    {"sector":"ETF","country":"US","type":"ETF","mcap":"large"},
+}
+
+
+@router.get("/similar/{ticker}", tags=["Market"])
+async def get_similar(ticker: str, by: str = "sector") -> list:
+    """Return similar assets (sector/geography/class/marketcap) with live prices."""
+    import yfinance as yf
+    import asyncio, math
+    from concurrent.futures import ThreadPoolExecutor
+
+    ticker_up = ticker.upper()
+    meta = _UNIVERSE.get(ticker_up)
+
+    if not meta:
+        def fetch_info():
+            try:
+                info = yf.Ticker(ticker_up).info or {}
+                mc = yf.Ticker(ticker_up).fast_info.market_cap or 0
+                tier = "mega" if mc > 300e9 else ("large" if mc > 30e9 else "mid")
+                return {"sector": info.get("sector"), "country": info.get("country"),
+                        "type": info.get("quoteType", "EQUITY"), "mcap": tier}
+            except Exception:
+                return {}
+        loop = asyncio.get_running_loop()
+        with ThreadPoolExecutor(max_workers=1) as pool:
+            meta = await loop.run_in_executor(pool, fetch_info)
+
+    if not meta:
+        return []
+
+    candidates = [
+        t for t, m in _UNIVERSE.items()
+        if t != ticker_up and (
+            (by == "sector"    and m.get("sector")  == meta.get("sector"))  or
+            (by == "geography" and m.get("country") == meta.get("country")) or
+            (by == "class"     and m.get("type")    == meta.get("type"))    or
+            (by == "marketcap" and m.get("mcap")    == meta.get("mcap"))
+        )
+    ][:10]
+
+    if not candidates:
+        return []
+
+    try:
+        loop = asyncio.get_running_loop()
+        def fetch_prices():
+            return yf.download(candidates, period="2d", progress=False, auto_adjust=True)
+        with ThreadPoolExecutor(max_workers=1) as pool:
+            hist = await loop.run_in_executor(pool, fetch_prices)
+
+        result = []
+        for t in candidates:
+            try:
+                closes = hist["Close"][t].dropna() if len(candidates) > 1 else hist["Close"].dropna()
+                if len(closes) == 0:
+                    continue
+                price  = float(closes.iloc[-1])
+                change = ((price - float(closes.iloc[-2])) / float(closes.iloc[-2]) * 100) if len(closes) >= 2 else 0.0
+                if math.isnan(price):
+                    continue
+                result.append({"ticker": t, "sector": _UNIVERSE[t].get("sector"),
+                                "country": _UNIVERSE[t].get("country"), "type": _UNIVERSE[t].get("type"),
+                                "mcap": _UNIVERSE[t].get("mcap"),
+                                "price": round(price, 4), "change": round(change, 2)})
+            except Exception:
+                continue
+        return result
+    except Exception as e:
+        logger.error(f"Similar error {ticker}: {e}")
         return []

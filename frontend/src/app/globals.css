@@ -29,7 +29,56 @@
   border-radius: 3px;
 }
 
-/* Dark mode */
+/* ── Novac design tokens ──────────────────────────────────────── */
+:root {
+  --novac-bg:             #040F22;
+  --novac-surface:        rgba(255,255,255,0.02);
+  --novac-surface-solid:  #0a1628;
+  --novac-border:         rgba(255,255,255,0.06);
+  --novac-border-strong:  rgba(255,255,255,0.12);
+  --novac-text-primary:   #F8F9FC;
+  --novac-text-secondary: rgba(248,249,252,0.65);
+  --novac-text-muted:     rgba(248,249,252,0.40);
+  --novac-positive:       #4ade80;
+  --novac-negative:       #ef4444;
+  --novac-shadow:         0 1px 3px rgba(0,0,0,0.28);
+  --novac-pill-bg:        rgba(255,255,255,0.07);
+  --novac-pill-border:    rgba(255,255,255,0.06);
+}
+
+[data-theme="light"] {
+  --novac-bg:             #F5F7FA;
+  --novac-surface:        #FFFFFF;
+  --novac-surface-solid:  #FFFFFF;
+  --novac-border:         rgba(16,24,40,0.08);
+  --novac-border-strong:  rgba(16,24,40,0.14);
+  --novac-text-primary:   #1A2233;
+  --novac-text-secondary: #5A6577;
+  --novac-text-muted:     #8B94A3;
+  --novac-positive:       #16A34A;
+  --novac-negative:       #DC2626;
+  --novac-shadow:         0 1px 3px rgba(16,24,40,0.06);
+  --novac-pill-bg:        rgba(16,24,40,0.05);
+  --novac-pill-border:    rgba(16,24,40,0.08);
+}
+
+[data-theme="light"] body {
+  background-color: #F5F7FA;
+  color: #1A2233;
+}
+
+/* Page-level background override */
+[data-theme="light"] [data-novac-page] {
+  background: #F5F7FA !important;
+  color: #1A2233 !important;
+}
+
+/* Scrollbar en mode clair */
+[data-theme="light"] ::-webkit-scrollbar-thumb {
+  background: rgba(16,24,40,0.15);
+}
+
+/* Dark mode (legacy class) */
 .dark {
   --bg-primary: #0f1117;
   --bg-secondary: #1a1d27;

@@ -401,7 +401,7 @@ function PortfolioPageInner() {
   if (!portfolio && !loading) {
     return (
       <div style={{ display: "flex", alignItems: "center", justifyContent: "center",
-        height: "100vh", background: "#040F22", color: "rgba(255,255,255,0.5)",
+        height: "100vh", background: "var(--novac-bg, #040F22)", color: "rgba(255,255,255,0.5)",
         fontSize: 14, flexDirection: "column", gap: 16 }}>
         <div>Aucun portefeuille sélectionné.</div>
         <button onClick={() => router.push("/build")}
@@ -418,7 +418,7 @@ function PortfolioPageInner() {
   return (
     <div style={{
       height: "100vh", display: "flex", flexDirection: "column",
-      background: "#040F22", color: "#F8F9FC",
+      background: "var(--novac-bg, #040F22)", color: "var(--novac-text-primary, #F8F9FC)",
       fontFamily: FONT, boxSizing: "border-box",
       paddingTop: 48, overflow: "hidden",
     }}>
@@ -1147,7 +1147,7 @@ export default function PortfolioPage() {
   return (
     <Suspense fallback={
       <div style={{ display: "flex", alignItems: "center", justifyContent: "center",
-        height: "100vh", background: "#040F22",
+        height: "100vh", background: "var(--novac-bg, #040F22)",
         color: "rgba(255,255,255,0.25)", fontSize: 12 }}>
         Chargement…
       </div>

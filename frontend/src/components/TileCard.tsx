@@ -7,17 +7,20 @@ interface Props {
   children: ReactNode;
   radius?: number;
   style?: CSSProperties;
+  containerStyle?: CSSProperties;
+  onClick?: () => void;
 }
 
-export default function TileCard({ ticker, children, radius = 12, style }: Props) {
+export default function TileCard({ ticker, children, radius = 12, style, containerStyle, onClick }: Props) {
   const { glassBg, borderGrad, rgb, b1cx, b1cy, b2cx, b2cy } = tileData(ticker);
   const [r, g, b] = rgb;
   const id = `tc-${ticker.replace(/[^a-z0-9]/gi, "")}`;
 
   return (
-    <div style={{
+    <div onClick={onClick} style={{
       position: "relative",
       borderRadius: radius,
+      cursor: onClick ? "pointer" : undefined,
       background: `${glassBg} padding-box, ${borderGrad} border-box`,
       backdropFilter: "blur(24px) saturate(1.6) brightness(1.06)",
       WebkitBackdropFilter: "blur(24px) saturate(1.6) brightness(1.06)",
@@ -26,6 +29,7 @@ export default function TileCard({ ticker, children, radius = 12, style }: Props
       overflow: "hidden",
       boxSizing: "border-box",
       flexShrink: 0,
+      ...containerStyle,
     }}>
       <svg
         viewBox="0 0 100 100"

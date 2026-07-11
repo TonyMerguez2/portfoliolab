@@ -4,6 +4,8 @@ import { usePathname, useRouter } from "next/navigation";
 import { useApp } from "@/lib/AppContext";
 import { TRENDING } from "@/lib/assets";
 import AssetLogo from "@/components/AssetLogo";
+import ProfileModal from "@/components/ProfileModal";
+import { useTheme } from "@/lib/theme";
 
 type Asset = { ticker: string; type: string; name: string; };
 type Price = { price: number; change: number; };
@@ -71,6 +73,7 @@ export default function GlobalHeader() {
   const [showDropdown, setShowDropdown] = useState(false);
   const [showPortfolioMenu, setShowPortfolioMenu] = useState(false);
   const [portfolios, setPortfolios] = useState<any[]>([]);
+  const t = useTheme();
   const [showTools, setShowTools] = useState(false);
   const [category, setCategory] = useState("all");
   const [displayCount, setDisplayCount] = useState(20);
@@ -86,6 +89,24 @@ export default function GlobalHeader() {
   const inputRef = useRef<HTMLInputElement>(null);
   const isLanding = pathname === "/";
   const isChartPage = pathname === "/chart";
+  const [user, setUser] = useState<any>(null);
+  const [showProfile, setShowProfile] = useState(false);
+  const [theme, setTheme] = useState<"dark"|"light">(() =>
+    typeof window !== "undefined" ? (localStorage.getItem("novac_theme") as "dark"|"light") ?? "dark" : "dark"
+  );
+  const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
+
+  const toggleTheme = () => {
+    const next = theme === "dark" ? "light" : "dark";
+    setTheme(next);
+    localStorage.setItem("novac_theme", next);
+    document.documentElement.setAttribute("data-theme", next);
+  };
+
+  useEffect(() => {
+    const stored = localStorage.getItem("novac_user");
+    if (stored) { try { setUser(JSON.parse(stored)); } catch {} }
+  }, []);
 
   useEffect(() => {
     fetch("http://localhost:8000/api/v1/portfolios")
@@ -211,13 +232,16 @@ export default function GlobalHeader() {
   }, [highlightIndex]);
 
   const glass = { background:"rgba(255,255,255,0.08)", border:"1px solid rgba(255,255,255,0.14)", backdropFilter:"blur(24px)" as const, WebkitBackdropFilter:"blur(24px)" as const, boxShadow:"0 4px 24px rgba(0,0,0,0.25), 0 1px 0 rgba(255,255,255,0.1) inset" };
+  const pillStyle: React.CSSProperties = { display:"flex", alignItems:"center", borderRadius:"999px", background:t.isDark ? "rgba(255,255,255,0.07)" : "rgba(16,24,40,0.05)", backdropFilter: t.isDark ? "blur(20px)" : "none", WebkitBackdropFilter: t.isDark ? "blur(20px)" : "none" as const, border:`1px solid ${t.border}`, cursor:"pointer", color:t.textPrimary, boxShadow: t.isDark ? "none" : t.shadow };
 
   const handleSelect = useCallback((a: Asset) => {
     setActiveAsset({ ticker: a.ticker, name: a.name });
     setShowDropdown(false);
     setLocalSearch("");
     setHighlightIndex(-1);
-  }, [setActiveAsset]);
+    // Sur la page chart : naviguer directement vers le nouvel actif
+    if (isChartPage) router.push(`/chart?ticker=${encodeURIComponent(a.ticker)}`);
+  }, [setActiveAsset, isChartPage, router]);
 
   const handleChart = useCallback((ticker: string) => {
     router.push(`/chart?ticker=${encodeURIComponent(ticker)}`);
@@ -239,19 +263,25 @@ export default function GlobalHeader() {
     <>
 
       {/* Left: NOVAC + separator + asset pill */}
-      {!isChartPage && (
-        <div style={{ position:"fixed", top:"12px", left:"16px", zIndex:50, display:"flex", alignItems:"center", gap:"10px" }}>
-          {!isLanding && <>
-            <a href="/" style={{ textDecoration:"none", color:"#F8F9FC", fontSize:"13px", fontWeight:700, letterSpacing:"0.22em", opacity:0.85 }}>NOVAC</a>
-            <div style={{ width:"1px", height:"16px", background:"rgba(255,255,255,0.22)", flexShrink:0 }}/>
-          </>}
+      {(
+        <div style={{ position:"fixed", top:"12px", left:"20px", zIndex:50, display:"flex", alignItems:"center", gap:"10px" }}>
+          <a href="/" style={{ textDecoration:"none", color:t.textPrimary, fontSize:"13px", fontWeight:700, letterSpacing:"0.22em", opacity:0.85 }}>NOVAC</a>
+          <div style={{ width:"1px", height:"16px", background:t.borderStrong, flexShrink:0 }}/>
           <div style={{ position:"relative" }}>
             <button onClick={() => { setShowDropdown(v => !v); setShowPortfolioMenu(false); }}
-              style={{ display:"flex", alignItems:"center", gap:"6px", padding:"4px 9px 4px 6px", borderRadius:"8px", border:"1px solid rgba(255,255,255,0.14)", background:"rgba(255,255,255,0.08)", backdropFilter:"blur(20px)", cursor:"pointer", color:"#F8F9FC" }}>
+              style={{ ...pillStyle, gap:"6px", padding:"0 10px 0 8px", height:"36px", boxSizing:"border-box" }}>
               {mode === "portfolio" && activePortfolio ? (
                 <>
                   <div style={{ width:8, height:8, borderRadius:2, background:activePortfolio.color||"#5B8DEF", flexShrink:0 }}/>
                   <span style={{ fontSize:"12px", fontWeight:500, letterSpacing:"0.04em" }}>{activePortfolio.name}</span>
+                </>
+              ) : isChartPage ? (
+                // Sur la page chart : juste une icône recherche — la carte actif gère l'affichage
+                <>
+                  <svg width="13" height="13" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} style={{ opacity:0.5, flexShrink:0 }}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-4.35-4.35M17 11A6 6 0 1 1 5 11a6 6 0 0 1 12 0z"/>
+                  </svg>
+                  <span style={{ fontSize:"12px", fontWeight:500, letterSpacing:"0.04em", opacity:0.6 }}>Actifs</span>
                 </>
               ) : (
                 <>
@@ -348,19 +378,27 @@ export default function GlobalHeader() {
         </div>
       )}
 
-      {/* Nav tabs centrés — plain text */}
-      {!isChartPage && (
-        <div style={{ position:"fixed", top:"14px", left:"50%", transform:"translateX(-50%)", zIndex:50, display:"flex", alignItems:"center", gap:"22px", padding:"7px 18px", borderRadius:"999px", border:"1px solid rgba(255,255,255,0.12)", background:"rgba(255,255,255,0.06)", backdropFilter:"blur(20px)", WebkitBackdropFilter:"blur(20px)" }}>
+      {/* Nav tabs centrés */}
+      {(
+        <div style={{ ...pillStyle, position:"fixed", top:"12px", left:"50%", transform:"translateX(-50%)", zIndex:50, gap:"0", padding:"3px", height:"36px", boxSizing:"border-box" }}>
           {navTabs.map(tab => {
-            const isActive = pathname === tab.href || (tab.href !== "/" && pathname.startsWith(tab.href.split("?")[0]));
+            const tabBase = tab.href.split("?")[0];
+            const isActive = pathname === tabBase || (tabBase !== "/" && pathname.startsWith(tabBase));
             return (
               <a key={tab.label} href={tab.href}
-                style={{ textDecoration:"none", color:"#F8F9FC", fontSize:"12px",
+                onMouseEnter={e => { if (!isActive) (e.currentTarget as HTMLElement).style.opacity = "0.7"; }}
+                onMouseLeave={e => { if (!isActive) (e.currentTarget as HTMLElement).style.opacity = "0.45"; }}
+                style={{ textDecoration:"none", color:t.textPrimary, fontSize:"12px",
                   fontWeight: isActive ? 500 : 400,
-                  opacity: isActive ? 0.9 : 0.45,
+                  opacity: isActive ? 1 : 0.45,
                   letterSpacing:"0.05em",
-                  transition:"opacity 0.2s",
-                  whiteSpace:"nowrap" as const }}>
+                  transition:"all 0.2s",
+                  whiteSpace:"nowrap" as const,
+                  padding:"6px 14px",
+                  borderRadius:"999px",
+                  background: isActive ? (t.isDark ? "rgba(255,255,255,0.08)" : "rgba(16,24,40,0.07)") : "transparent",
+                  display:"block",
+                }}>
                 {tab.label}
               </a>
             );
@@ -372,6 +410,45 @@ export default function GlobalHeader() {
       {showDropdown && <div style={{ position:"fixed", inset:0, zIndex:49 }} onClick={() => setShowDropdown(false)}/>}
       {showPortfolioMenu && <div style={{ position:"fixed", inset:0, zIndex:49 }} onClick={() => setShowPortfolioMenu(false)}/>}
 
+      {/* Right zone: theme toggle + avatar profil */}
+      <div style={{ position:"fixed", top:"12px", right:"20px", zIndex:50, display:"flex", alignItems:"center", gap:"8px" }}>
+        {/* Theme toggle — désactivé temporairement */}
+
+        {/* Avatar profil */}
+        {user && (
+          <button onClick={() => setShowProfile(true)}
+            style={{ ...pillStyle, gap:"7px", padding:"0 10px", height:"36px", boxSizing:"border-box" }}>
+            <div style={{ width:22, height:22, borderRadius:"50%", overflow:"hidden", flexShrink:0, border:"1px solid rgba(255,255,255,0.15)", background:"rgba(255,255,255,0.1)", display:"flex", alignItems:"center", justifyContent:"center" }}>
+              {user.avatar_url ? (
+                <img
+                  src={user.avatar_url.startsWith("/uploads") ? `${API_URL}${user.avatar_url}` : user.avatar_url}
+                  alt="avatar"
+                  style={{ width:"100%", height:"100%", objectFit:"cover" }}
+                  onError={e => { (e.target as HTMLImageElement).style.display = "none"; }}
+                />
+              ) : (
+                <span style={{ fontSize:"10px", fontWeight:700, color:"#F8F9FC", letterSpacing:"-0.01em", userSelect:"none" as const }}>
+                  {(user.username || user.email || "?")[0].toUpperCase()}
+                </span>
+              )}
+            </div>
+            {user.username && (
+              <span style={{ fontSize:"12px", fontWeight:500, letterSpacing:"0.04em", maxWidth:80, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" as const }}>
+                {user.username.split(" ")[0]}
+              </span>
+            )}
+          </button>
+        )}
+      </div>
+
+      {showProfile && user && (
+        <ProfileModal
+          user={user}
+          onClose={() => setShowProfile(false)}
+          onUpdate={u => { setUser(u); setShowProfile(false); }}
+          dark
+        />
+      )}
 
     </>
   );

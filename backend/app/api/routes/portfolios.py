@@ -15,11 +15,17 @@ class PortfolioCreate(BaseModel):
     name: str
     assets: List[AssetInput]
     color: str = "#6366f1"
+    total_value:   float | None = None
+    cost_basis:    float | None = None
+    is_simulation: bool  | None = None
 
 class PortfolioUpdate(BaseModel):
     name: str | None = None
     assets: List[AssetInput] | None = None
     color: str | None = None
+    total_value:   float | None = None
+    cost_basis:    float | None = None
+    is_simulation: bool  | None = None
 
 @router.get("")
 def list_portfolios(db: Session = Depends(get_db)):
@@ -32,6 +38,8 @@ def create_portfolio(data: PortfolioCreate, db: Session = Depends(get_db)):
         name=data.name,
         assets=[a.dict() for a in data.assets],
         color=data.color,
+        total_value=data.total_value,
+        is_simulation=data.is_simulation,
     )
     db.add(p)
     db.commit()
@@ -46,6 +54,9 @@ def update_portfolio(portfolio_id: str, data: PortfolioUpdate, db: Session = Dep
     if data.name is not None: p.name = data.name
     if data.assets is not None: p.assets = [a.dict() for a in data.assets]
     if data.color is not None: p.color = data.color
+    if data.total_value   is not None: p.total_value   = data.total_value
+    if data.cost_basis    is not None: p.cost_basis    = data.cost_basis
+    if data.is_simulation is not None: p.is_simulation = data.is_simulation
     db.commit()
     db.refresh(p)
     return p

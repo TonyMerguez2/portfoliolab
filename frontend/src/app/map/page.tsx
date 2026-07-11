@@ -331,7 +331,7 @@ export default function MapPage() {
   const macroMax = macroValues.length ? Math.max(...macroValues) : 100;
 
   return (
-    <div style={{ position: "relative", height: "100vh", backgroundColor: "#041124", overflow: "hidden" }}>
+    <div style={{ position: "relative", height: "100vh", backgroundColor: "var(--novac-bg, #041124)", overflow: "hidden" }}>
       {/* Ocean canvas */}
       <canvas ref={oceanRef} style={{ position: "absolute", inset: 0, zIndex: 0, pointerEvents: "none", width: "100%", height: "100%" }}/>
 
@@ -347,7 +347,7 @@ export default function MapPage() {
             background: showMacroPanel ? "rgba(91,141,239,0.2)" : "rgba(4,17,36,0.85)",
             border: showMacroPanel ? "1px solid rgba(91,141,239,0.4)" : "1px solid rgba(255,255,255,0.1)",
             borderRadius: "8px", padding: "7px 12px",
-            backdropFilter: "blur(12px)", color: "#F8F9FC", fontSize: "11px", cursor: "pointer",
+            backdropFilter: "blur(12px)", color: "var(--novac-text-primary, #F8F9FC)", fontSize: "11px", cursor: "pointer",
           }}>
             📊 Indicateurs macro {showMacroPanel ? "▲" : "▼"}
           </button>
@@ -361,7 +361,7 @@ export default function MapPage() {
                 {id:"NY.GDP.PCAP.CD",label:"PIB/habitant",unit:"USD"},
               ].map(m => (
                 <button key={m.id} onClick={() => setSelectedMacro(selectedMacro === m.id ? null : m.id)}
-                  style={{ display: "block", width: "100%", padding: "7px 10px", borderRadius: "6px", background: selectedMacro === m.id ? "rgba(91,141,239,0.2)" : "transparent", border: "none", color: "#F8F9FC", fontSize: "11px", textAlign: "left", cursor: "pointer", opacity: selectedMacro === m.id ? 1 : 0.6 }}
+                  style={{ display: "block", width: "100%", padding: "7px 10px", borderRadius: "6px", background: selectedMacro === m.id ? "rgba(91,141,239,0.2)" : "transparent", border: "none", color: "var(--novac-text-primary, #F8F9FC)", fontSize: "11px", textAlign: "left", cursor: "pointer", opacity: selectedMacro === m.id ? 1 : 0.6 }}
                   onMouseEnter={e => (e.currentTarget.style.background = "rgba(255,255,255,0.06)")}
                   onMouseLeave={e => (e.currentTarget.style.background = selectedMacro === m.id ? "rgba(91,141,239,0.2)" : "transparent")}>
                   {m.label}
@@ -403,7 +403,7 @@ export default function MapPage() {
         <div style={{ position: "fixed", left: "20px", top: "80px", zIndex: 30, width: "240px", background: "rgba(4,17,36,0.95)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: "12px", padding: "16px", backdropFilter: "blur(20px)", boxShadow: "0 8px 32px rgba(0,0,0,0.4)", maxHeight: "calc(100vh - 160px)", overflowY: "auto" }}>
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "14px" }}>
             <div>
-              <div style={{ color: "#F8F9FC", fontSize: "12px", fontWeight: 600 }}>{activeAsset.name}</div>
+              <div style={{ color: "var(--novac-text-primary, #F8F9FC)", fontSize: "12px", fontWeight: 600 }}>{activeAsset.name}</div>
               <div style={{ color: "rgba(255,255,255,0.4)", fontSize: "10px", marginTop: "2px" }}>Exposition géographique</div>
             </div>
             <button onClick={() => setShowGeoPanel(false)} style={{ background: "transparent", border: "none", color: "rgba(255,255,255,0.4)", cursor: "pointer", fontSize: "14px" }}>✕</button>
@@ -413,7 +413,7 @@ export default function MapPage() {
             .map(([iso3, pct]: any) => (
             <div key={iso3} style={{ marginBottom: "10px" }}>
               <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "4px" }}>
-                <span style={{ color: "#F8F9FC", fontSize: "11px", opacity: 0.8 }}>{COUNTRY_FLAGS[iso3] || "🌐"} {COUNTRY_NAMES[iso3] || iso3}</span>
+                <span style={{ color: "var(--novac-text-primary, #F8F9FC)", fontSize: "11px", opacity: 0.8 }}>{COUNTRY_FLAGS[iso3] || "🌐"} {COUNTRY_NAMES[iso3] || iso3}</span>
                 <span style={{ color: "#9BB9FF", fontSize: "11px", fontWeight: 700 }}>{pct}%</span>
               </div>
               <div style={{ height: "4px", background: "rgba(255,255,255,0.07)", borderRadius: "2px" }}>
@@ -429,7 +429,7 @@ export default function MapPage() {
         <div style={{ position: "fixed", left: "20px", top: "80px", zIndex: 30, width: "240px", background: "rgba(4,17,36,0.95)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: "12px", padding: "16px", backdropFilter: "blur(20px)", boxShadow: "0 8px 32px rgba(0,0,0,0.4)", maxHeight: "calc(100vh - 160px)", overflowY: "auto" }}>
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "14px" }}>
             <div>
-              <div style={{ color: "#F8F9FC", fontSize: "12px", fontWeight: 600 }}>{activePortfolio.name}</div>
+              <div style={{ color: "var(--novac-text-primary, #F8F9FC)", fontSize: "12px", fontWeight: 600 }}>{activePortfolio.name}</div>
               <div style={{ color: "rgba(255,255,255,0.4)", fontSize: "10px", marginTop: "2px" }}>Exposition géographique</div>
             </div>
             <button onClick={() => setShowGeoPanel(false)} style={{ background: "transparent", border: "none", color: "rgba(255,255,255,0.4)", cursor: "pointer", fontSize: "14px" }}>✕</button>
@@ -440,7 +440,7 @@ export default function MapPage() {
             .map(([iso3, pct]) => (
             <div key={iso3} style={{ marginBottom: "10px" }}>
               <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "4px" }}>
-                <span style={{ color: "#F8F9FC", fontSize: "11px", opacity: 0.8 }}>{COUNTRY_FLAGS[iso3] || "🌐"} {COUNTRY_NAMES[iso3] || iso3}</span>
+                <span style={{ color: "var(--novac-text-primary, #F8F9FC)", fontSize: "11px", opacity: 0.8 }}>{COUNTRY_FLAGS[iso3] || "🌐"} {COUNTRY_NAMES[iso3] || iso3}</span>
                 <span style={{ color: "#9BB9FF", fontSize: "11px", fontWeight: 700 }}>{(pct * 100).toFixed(1)}%</span>
               </div>
               <div style={{ height: "4px", background: "rgba(255,255,255,0.07)", borderRadius: "2px" }}>
@@ -455,7 +455,7 @@ export default function MapPage() {
         <div style={{ position: "fixed", left: hovTooltip.x+14, top: hovTooltip.y-14, background: "rgba(2,10,24,0.97)", border: "1px solid rgba(255,255,255,0.12)", borderRadius: "12px", padding: "10px 14px", pointerEvents: "none", zIndex: 100, boxShadow: "0 8px 32px rgba(0,0,0,0.4)" }}>
           <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "2px" }}>
             <span style={{ fontSize: "20px" }}>{COUNTRY_FLAGS[hovTooltip.iso3] || "🌐"}</span>
-            <span style={{ color: "#F8F9FC", fontSize: "13px", fontWeight: 600 }}>{COUNTRY_NAMES[hovTooltip.iso3]}</span>
+            <span style={{ color: "var(--novac-text-primary, #F8F9FC)", fontSize: "13px", fontWeight: 600 }}>{COUNTRY_NAMES[hovTooltip.iso3]}</span>
           </div>
           {selectedMacro && macroData[hovTooltip.iso3] !== undefined && (
             <div style={{ color: "#9BB9FF", fontSize: "11px", fontWeight: 600, marginTop: "4px" }}>

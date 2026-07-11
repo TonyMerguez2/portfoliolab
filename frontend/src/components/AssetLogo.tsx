@@ -162,7 +162,8 @@ function AssetLogoInner({
   const [status, setStatus] = useState<"loading"|"ok"|"failed">(cachedIdx !== undefined ? "ok" : "loading");
   const [meta,   setMeta]   = useState<LogoMeta>(cachedMeta ?? { hasBg: true, isDark: false });
 
-  const imgRef = useRef<HTMLImageElement>(null);
+  const imgRef    = useRef<HTMLImageElement>(null);
+  const timerRef  = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     const c = _idxCache.get(ticker);
@@ -171,6 +172,16 @@ function AssetLogoInner({
     setStatus(c !== undefined ? "ok" : "loading");
     setMeta(m ?? { hasBg: true, isDark: false });
   }, [ticker]);
+
+  // Timeout de 4s : si l'image ne répond pas (réseau bloqué, adblocker…)
+  // on bascule sur "failed" pour afficher les initiales
+  useEffect(() => {
+    if (status !== "loading") { if (timerRef.current) clearTimeout(timerRef.current); return; }
+    timerRef.current = setTimeout(() => {
+      setStatus(s => s === "loading" ? "failed" : s);
+    }, 4000);
+    return () => { if (timerRef.current) clearTimeout(timerRef.current); };
+  }, [status, idx]);
 
   useEffect(() => {
     if (status === "loading" && imgRef.current?.complete) {

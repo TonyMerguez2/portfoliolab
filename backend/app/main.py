@@ -11,11 +11,15 @@ import os
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.core.config import get_settings
+from app.services.rankings import start_preload
 from app.api.routes.backtest import router as backtest_router
 from app.api.routes.portfolios import router as portfolios_router
 from app.api.routes.auth import router as auth_router
 from app.api.routes.ticker import router as ticker_router
+from app.api.routes.transactions import router as transactions_router
 from app.models.user import User
+# Import pour que SQLAlchemy enregistre le modèle Transaction avant create_all
+from app.core.database import Transaction  # noqa: F401
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -46,8 +50,14 @@ app.include_router(backtest_router)
 app.include_router(portfolios_router)
 app.include_router(auth_router)
 app.include_router(ticker_router)
+app.include_router(transactions_router)
 os.makedirs("uploads", exist_ok=True)
 app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
+
+
+@app.on_event("startup")
+async def on_startup() -> None:
+    start_preload()
 
 
 @app.get("/health", tags=["System"])

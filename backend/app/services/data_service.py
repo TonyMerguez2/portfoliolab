@@ -96,6 +96,13 @@ def fetch_prices(
             close = data["Close"]
             if isinstance(close, pd.DataFrame):
                 close = close.iloc[:, 0]
+            # yfinance auto_adjust can produce negative prices for dividend-heavy stocks
+            # (cumulative adjustment factor exceeds historical price). Drop those rows.
+            close = close[close > 0]
+            if len(close) < 30:
+                logger.warning(f"Insufficient valid data for {ticker} after filtering non-positive prices")
+                failed.append(ticker)
+                continue
             close.name = ticker
             frames[ticker] = close
             successful.append(ticker)

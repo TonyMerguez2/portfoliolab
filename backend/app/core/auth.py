@@ -34,3 +34,10 @@ def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(
         return db.query(User).filter(User.id == user_id).first()
     except JWTError:
         return None
+
+def require_auth(user: User = Depends(get_current_user)):
+    """Dépendance stricte : lève 401 si le JWT est absent ou invalide."""
+    from fastapi import HTTPException
+    if user is None:
+        raise HTTPException(status_code=401, detail="Authentification requise")
+    return user

@@ -1,5 +1,5 @@
 "use client";
-import { useState, useEffect, useMemo, Suspense } from "react";
+import { useState, useEffect, useMemo, useRef, Suspense } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import dynamic from "next/dynamic";
 import { useApp } from "@/lib/AppContext";
@@ -427,36 +427,6 @@ const typeColor = (type?: string) => ({
 });
 
 // Rang de l'actif dans sa catégorie (market cap / AUM / CoinMarketCap)
-const ASSET_RANK: Record<string, number> = {
-  // ── Crypto (CoinMarketCap) ────────────────────────────────────────────────
-  "BTC-USD":1,"ETH-USD":2,"XRP-USD":3,"BNB-USD":4,"SOL-USD":5,
-  "DOGE-USD":7,"ADA-USD":9,"AVAX-USD":11,"LINK-USD":13,"DOT-USD":16,
-  "LTC-USD":19,"NEAR-USD":18,"SUI20947-USD":22,"UNI7083-USD":21,
-  "ATOM-USD":27,"ARB-USD":38,"INJ-USD":47,"OP-USD":50,
-  // ── US Stocks (market cap mondial) ────────────────────────────────────────
-  NVDA:1,AAPL:2,MSFT:3,AMZN:4,GOOGL:5,GOOG:5,META:6,TSLA:7,
-  AVGO:8,TSM:9,LLY:10,JPM:11,V:12,MA:13,UNH:14,WMT:15,
-  XOM:16,HD:17,BAC:18,PG:19,COST:20,MRK:21,ABBV:22,KO:23,
-  MCD:24,NFLX:25,ADBE:26,AMD:27,CRM:28,QCOM:29,NOW:30,
-  GS:31,MS:32,SPGI:33,BLK:34,RTX:35,DE:36,CAT:37,BA:38,
-  LMT:39,GE:40,DIS:41,SBUX:42,NKE:43,PYPL:44,UBER:45,
-  COIN:50,PLTR:42,ARM:36,SMCI:55,ABNB:60,TXN:25,HON:38,
-  // ── Europe (market cap européen) ──────────────────────────────────────────
-  "ASML":1,"MC.PA":2,"NOVN.SW":3,"NESN.SW":4,"SAP":5,
-  "OR.PA":6,"RO.SW":7,"TTE.PA":8,"SU.PA":9,"AIR.PA":10,
-  "SIE.DE":11,"ALV.DE":12,"BNP.PA":13,"ACA.PA":14,"DG.PA":15,
-  "BMW.DE":16,"VOW3.DE":17,"BAYN.DE":18,"BAS.DE":19,"ADS.DE":20,
-  "GLE.PA":21,"SAN.PA":22,"HO.PA":23,"CS.PA":24,"DTE.DE":25,
-  "AI.PA":26,"KER.PA":27,"STLA":28,
-  "HSBA.L":1,"SHEL.L":2,"BP.L":3,"GSK.L":4,"RIO.L":5,
-  "7203.T":1,"6758.T":2,"9984.T":3,
-  "005930.KS":1,BABA:1,TCEHY:2,
-  // ── ETF (AUM) ─────────────────────────────────────────────────────────────
-  SPY:1,VTI:2,QQQ:3,VEA:4,AGG:5,VWO:6,GLD:7,IWM:8,
-  IBIT:9,TLT:10,XLF:11,XLE:12,VNQ:13,XLK:14,XLV:15,
-  XLI:16,EEM:17,FBTC:18,ACWI:19,EWJ:20,HYG:21,SLV:22,ARKK:23,
-  "CW8.PA":1,"EWLD.PA":2,"ESE.PA":3,"PANX.PA":4,
-};
 
 function ChartContent() {
   const searchParams = useSearchParams();
@@ -470,16 +440,47 @@ function ChartContent() {
   const [rawBenchmarkGrowth, setRawBenchmarkGrowth] = useState<{date:string;value:number}[]>([]);
   const [drawdownData, setDrawdownData] = useState<{date:string;drawdown:number;drawdown_eur:number}[]>([]);
   const [currentPrice, setCurrentPrice] = useState<{price:number;change:number}|null>(null);
+  const [priceFlash, setPriceFlash] = useState<"up"|"down"|null>(null);
+  const prevPriceRef = useRef<number|null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string|null>(null);
   const [investedAmount, setInvestedAmount] = useState(10000);
   const [wsLive, setWsLive] = useState(false);
-  const [quote, setQuote] = useState<{day_high?:number;day_low?:number;open?:number;prev_close?:number;year_high?:number;year_low?:number;volume?:number;avg_volume?:number;market_cap?:number;currency?:string}|null>(null);
+
+  useEffect(() => {
+    if (currentPrice == null) return;
+    const prev = prevPriceRef.current;
+    prevPriceRef.current = currentPrice.price;
+    if (prev !== null && currentPrice.price !== prev) {
+      setPriceFlash(currentPrice.price > prev ? "up" : "down");
+      const t = setTimeout(() => setPriceFlash(null), 900);
+      return () => clearTimeout(t);
+    }
+  }, [currentPrice?.price]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const [quote, setQuote] = useState<{day_high?:number;day_low?:number;open?:number;prev_close?:number;year_high?:number;year_low?:number;volume?:number;avg_volume?:number;market_cap?:number;currency?:string;global_rank?:number}|null>(null);
+  const [isFavorite, setIsFavorite] = useState(() => {
+    try { return JSON.parse(localStorage.getItem("favorites") ?? "[]").includes(ticker); } catch { return false; }
+  });
+  const toggleFavorite = () => {
+    setIsFavorite((prev: boolean) => {
+      const next = !prev;
+      try {
+        const list: string[] = JSON.parse(localStorage.getItem("favorites") ?? "[]");
+        const deduped = Array.from(new Set([...list, ticker as string])) as string[];
+        const updated = next ? deduped : list.filter((t: string) => t !== ticker);
+        localStorage.setItem("favorites", JSON.stringify(updated));
+      } catch {}
+      return next;
+    });
+  };
   const [subOpen, setSubOpen] = useState(false);
   const [subTab, setSubTab] = useState<SubTab>("drawdown");
   const [activePeriod, setActivePeriod] = useState("Max");
   const [visibleRange, setVisibleRange]   = useState<{from:string;to:string}|null>(null);
-  const [crosshairTime, setCrosshairTime] = useState<number|null>(null);
+  const [syncView, setSyncView] = useState(false);
+  const [statsTooltip, setStatsTooltip] = useState<string|null>(null);
+  const [activeInterval, setActiveInterval] = useState<string>("1d");
   const [chartPriceData, setChartPriceData] = useState<{date:string;value:number;high?:number;low?:number}[]>([]);
   const [showCustom,    setShowCustom]    = useState(false);
   const [copied,        setCopied]        = useState(false);
@@ -500,7 +501,21 @@ function ChartContent() {
   const [customBmName,    setCustomBmName]    = useState<string>("");
   const [customBmType,    setCustomBmType]    = useState<string>("EQUITY");
   const [rawCustomBmData, setRawCustomBmData] = useState<{date:string;value:number}[]>([]);
+
   const [customBmLoading, setCustomBmLoading] = useState(false);
+  const [bmCurrentPrice,  setBmCurrentPrice]  = useState<{price:number;change:number}|null>(null);
+  const [bmPriceFlash, setBmPriceFlash] = useState<"up"|"down"|null>(null);
+  const prevBmPriceRef = useRef<number|null>(null);
+  useEffect(() => {
+    if (bmCurrentPrice == null) return;
+    const prev = prevBmPriceRef.current;
+    prevBmPriceRef.current = bmCurrentPrice.price;
+    if (prev !== null && bmCurrentPrice.price !== prev) {
+      setBmPriceFlash(bmCurrentPrice.price > prev ? "up" : "down");
+      const t = setTimeout(() => setBmPriceFlash(null), 900);
+      return () => clearTimeout(t);
+    }
+  }, [bmCurrentPrice?.price]); // eslint-disable-line react-hooks/exhaustive-deps
   const [showBmSearch,    setShowBmSearch]    = useState(false);
   const [bmQuery,         setBmQuery]         = useState("");
   const [similarLoading, setSimilarLoading] = useState(false);
@@ -714,6 +729,50 @@ function ChartContent() {
   // Réinitialiser la couleur extraite quand on change de benchmark
   useEffect(() => { setBmExtractedColor(null); }, [customBmTicker]);
 
+  // Prix live du benchmark — WebSocket Binance pour crypto, polling 60s pour actions/ETF
+  const isBmCrypto = customBmType === "CRYPTOCURRENCY" || (customBmTicker?.endsWith("-USD") ?? false);
+
+  useEffect(() => {
+    if (!customBmTicker) { setBmCurrentPrice(null); return; }
+    // fetch initial dans tous les cas
+    fetch(`${API_URL}/api/v1/prices?tickers=${encodeURIComponent(customBmTicker)}`)
+      .then(r => r.json())
+      .then((d: any[]) => { if (Array.isArray(d) && d.length > 0) setBmCurrentPrice({ price: d[0].price, change: d[0].change }); })
+      .catch(() => {});
+  }, [customBmTicker]);
+
+  useEffect(() => {
+    if (!customBmTicker || !isBmCrypto) return;
+    const symbol = customBmTicker.replace(/-USD$/, "USDT").toLowerCase();
+    const ws = new WebSocket(`wss://stream.binance.com:9443/ws/${symbol}@ticker`);
+    let lastUpdate = 0;
+    ws.onmessage = (event) => {
+      try {
+        const data = JSON.parse(event.data);
+        const price = parseFloat(data.c);
+        const changePct = parseFloat(data.P);
+        const now = Date.now();
+        if (price > 0 && now - lastUpdate >= 2000) {
+          lastUpdate = now;
+          setBmCurrentPrice({ price, change: changePct });
+        }
+      } catch {}
+    };
+    ws.onerror = () => ws.close();
+    return () => { if (ws.readyState === WebSocket.OPEN) ws.close(); };
+  }, [customBmTicker, isBmCrypto]);
+
+  useEffect(() => {
+    if (!customBmTicker || isBmCrypto) return;
+    const interval = setInterval(() => {
+      fetch(`${API_URL}/api/v1/prices?tickers=${encodeURIComponent(customBmTicker)}`)
+        .then(r => r.json())
+        .then((d: any[]) => { if (Array.isArray(d) && d.length > 0) setBmCurrentPrice({ price: d[0].price, change: d[0].change }); })
+        .catch(() => {});
+    }, 60000);
+    return () => clearInterval(interval);
+  }, [customBmTicker, isBmCrypto]);
+
   // Custom benchmark fetch
   useEffect(() => {
     if (!customBmTicker) { setRawCustomBmData([]); return; }
@@ -730,6 +789,8 @@ function ChartContent() {
       .catch(() => setRawCustomBmData([]))
       .finally(() => setCustomBmLoading(false));
   }, [customBmTicker]);
+
+
 
   const customBmData = useMemo(() => {
     if (!rawCustomBmData.length || !portfolioData.length) return rawCustomBmData;
@@ -796,6 +857,38 @@ function ChartContent() {
     return first > 0 ? (last - first) / first * 100 : null;
   }, [rawCustomBmData, scaledPortfolioData]);
 
+  // Stats comparatif (365j) pour la vue synchronisée
+  const syncStats = useMemo(() => {
+    if (!rawCustomBmData.length || !chartPriceData.length) return null;
+    const PERIOD_SECS: Record<string,number|null> = { "24h":86400,"1S":7*86400,"1M":30*86400,"3M":91*86400,"6M":183*86400,"1A":365*86400,"3A":1095*86400,"Max":null };
+    const statSecs = PERIOD_SECS[activePeriod] ?? null;
+    const cutStr = statSecs ? new Date(Date.now() - statSecs * 1000).toISOString().slice(0, 10) : null;
+    const aMap = new Map(chartPriceData.filter(p => !cutStr || p.date >= cutStr).map(p => [p.date.slice(0,10), p.value]));
+    const bMap = new Map(rawCustomBmData.filter(p => !cutStr || p.date >= cutStr).map(p => [p.date.slice(0,10), p.value]));
+    const dates = Array.from(aMap.keys()).filter(d => bMap.has(d)).sort();
+    if (dates.length < 5) return null;
+    // daily returns
+    const ra: number[] = [], rb: number[] = [];
+    for (let i = 1; i < dates.length; i++) {
+      const pa0 = aMap.get(dates[i-1])!, pa1 = aMap.get(dates[i])!;
+      const pb0 = bMap.get(dates[i-1])!, pb1 = bMap.get(dates[i])!;
+      ra.push((pa1 - pa0) / pa0);
+      rb.push((pb1 - pb0) / pb0);
+    }
+    const n = ra.length;
+    const meanA = ra.reduce((s, x) => s + x, 0) / n;
+    const meanB = rb.reduce((s, x) => s + x, 0) / n;
+    const cov = ra.reduce((s, x, i) => s + (x - meanA) * (rb[i] - meanB), 0) / n;
+    const varA = ra.reduce((s, x) => s + (x - meanA) ** 2, 0) / n;
+    const varB = rb.reduce((s, x) => s + (x - meanB) ** 2, 0) / n;
+    const corr = varA > 0 && varB > 0 ? cov / Math.sqrt(varA * varB) : 0;
+    const beta = varB > 0 ? cov / varB : 0;
+    const rf = 0.035 / 252; // taux sans risque journalier (~3.5%/an)
+    const alpha = (meanA - (rf + beta * (meanB - rf))) * 252 * 100; // alpha annualisé en %
+    const sameDir = ra.filter((r, i) => Math.sign(r) === Math.sign(rb[i])).length;
+    return { corr: +corr.toFixed(2), beta: +beta.toFixed(2), alpha: +alpha.toFixed(2), sameDir: Math.round(sameDir / n * 100), sameDirN: sameDir, totalN: n };
+  }, [rawCustomBmData, chartPriceData, activePeriod]);
+
   const fullVol    = useMemo(() => computeRollingVol(effectivePriceData), [effectivePriceData]);
   const fullRsi    = useMemo(() => computeRSI(effectivePriceData), [effectivePriceData]);
   const fullCorr   = useMemo(() => computeRollingCorrelation(effectivePriceData, scaledBenchmarkData), [effectivePriceData, scaledBenchmarkData]);
@@ -845,6 +938,8 @@ function ChartContent() {
     return { vol1Y, drawdownVal, perf1Y, perf3M };
   }, [scaledPortfolioData, scaledDrawdownData]);
 
+  // Timeline commune : miroir exact de la range visible du graphique du haut
+
   const tips = useMemo(
     () => generateTips({ vol1Y, drawdown: drawdownVal, perf1Y, perf3M }),
     [vol1Y, drawdownVal, perf1Y, perf3M]
@@ -882,14 +977,9 @@ function ChartContent() {
   })() : [];
 
   return (
-    <div style={{ height:"100vh", background:"#041124", color:"#F8F9FC", fontFamily:"-apple-system,BlinkMacSystemFont,sans-serif", display:"flex", flexDirection:"column", position:"relative", overflow:"hidden" }}>
-      <div style={{ position:"fixed", inset:0, zIndex:0, pointerEvents:"none", background:[
-        "radial-gradient(ellipse 60% 50% at 25% 30%, rgba(80,120,255,0.09) 0%, transparent 100%)",
-        "radial-gradient(ellipse 55% 60% at 75% 65%, rgba(60,200,100,0.06) 0%, transparent 100%)",
-        "radial-gradient(ellipse 50% 45% at 55% 20%, rgba(200,100,255,0.05) 0%, transparent 100%)",
-        "#040F22",
-      ].join(", ") }}/>
-      <div style={{ position:"relative", zIndex:1, display:"flex", flexDirection:"column", flex:1, minHeight:0 }}>
+    <div data-novac-page style={{ height:"100vh", background:"var(--novac-bg, #041124)", color:"var(--novac-text-primary, #F8F9FC)", fontFamily:"-apple-system,BlinkMacSystemFont,sans-serif", display:"flex", flexDirection:"column", position:"relative", overflow:"hidden" }}>
+      {/* Ambient glow — positionné derrière la carte actif (haut-gauche), ellipse large et aplatie */}
+      <div style={{ position:"relative", zIndex:1, display:"flex", flexDirection:"column", flex:1, minHeight:0, paddingTop:48 }}>
 
         {/* Header */}
         {(() => {
@@ -928,80 +1018,117 @@ function ChartContent() {
               <style>{`
                 @keyframes hdr-glow-up{0%,100%{box-shadow:0 0 6px rgba(34,197,94,.15)}50%{box-shadow:0 0 14px rgba(34,197,94,.35)}}
                 @keyframes hdr-glow-dn{0%,100%{box-shadow:0 0 6px rgba(239,68,68,.15)}50%{box-shadow:0 0 14px rgba(239,68,68,.35)}}
+                @keyframes price-flash-up{0%{color:#4ade80}80%{color:#4ade80}100%{color:#F8F9FC}}
+                @keyframes price-flash-dn{0%{color:#ef4444}80%{color:#ef4444}100%{color:#F8F9FC}}
                 @keyframes hdr-pulse{0%,100%{box-shadow:0 0 0 0 rgba(34,197,94,.7)}60%{box-shadow:0 0 0 5px rgba(34,197,94,0)}}
                 @keyframes hdr-pulse-live{0%,100%{box-shadow:0 0 0 0 rgba(34,197,94,.9)}50%{box-shadow:0 0 0 6px rgba(34,197,94,0)}}
                 .chart-action-btn{transition:all 0.18s cubic-bezier(0.34,1.56,0.64,1)!important}
                 .chart-action-btn:hover{transform:scale(1.08) translateY(-0.5px);filter:brightness(1.15)}
                 .chart-action-btn:active{transform:scale(0.94)!important;transition-duration:0.08s!important}
               `}</style>
-              <div style={{ display:"flex", flexDirection:"column", padding:"11px 20px 9px", borderBottom:"1px solid rgba(255,255,255,0.06)", flexShrink:0, gap:8 }}>
+              <div style={{ display:"flex", flexDirection:"column", padding:"11px 20px 9px", borderTop:"1px solid rgba(255,255,255,0.06)", borderBottom:"none", flexShrink:0, gap:8, marginTop:10 }}>
 
                 {/* ── Row 1: back · [logo + compact identity+price] · NOVAC ── */}
                 <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", gap:16 }}>
 
                   <div style={{ display:"flex", alignItems:"center", gap:13, minWidth:0 }}>
-                    <button onClick={() => router.back()} style={{ background:"rgba(255,255,255,0.06)", border:"1px solid rgba(255,255,255,0.1)", borderRadius:8, color:"rgba(255,255,255,0.55)", fontSize:11, padding:"6px 12px", cursor:"pointer", letterSpacing:"0.04em", flexShrink:0 }}>
-                      ← Retour
-                    </button>
-
                     {ticker && (
-                      <TileCard ticker={ticker} style={{ display:"flex", alignItems:"center", gap:12, padding:"8px 10px" }}>
+                      <TileCard ticker={ticker} style={{ display:"flex", alignItems:"center", gap:0, padding:"14px 16px" }}>
+                        {/* Logo */}
                         <AssetLogo
-                          ticker={ticker} type={assetInfo?.type} size={40} radius={10}
+                          ticker={ticker} type={assetInfo?.type} size={56} radius={13}
                           fallbackBg={tc.bg} fallbackBorder={tc.border} fallbackTextColor={tc.text}
                           onColorExtracted={c => { if (!BRAND_COLORS[ticker]) setExtractedColor(c); }}
                           bare
                         />
-                        <div>
-                          {/* Line 1 — ticker · prix · variation  (même taille, même ligne) */}
-                          <div style={{ display:"flex", alignItems:"baseline", gap:10, flexWrap:"nowrap" }}>
-                            <span style={{ fontSize:20, fontWeight:800, color:"#F8F9FC", letterSpacing:"-0.03em", lineHeight:1 }}>
-                              {displayTicker}
-                            </span>
-                            {currentPrice && (
-                              <>
-                                <span style={{ width:1, height:14, background:"rgba(255,255,255,0.3)", flexShrink:0, alignSelf:"center" }}/>
-                                <span style={{ fontSize:20, fontWeight:700, color:"#F8F9FC", letterSpacing:"-0.03em", fontVariantNumeric:"tabular-nums", lineHeight:1 }}>
-                                  {fmtNum(currentPrice.price)}
+                        {/* Identity */}
+                        <div style={{ marginLeft:14, display:"flex", flexDirection:"column", justifyContent:"center", gap:6 }}>
+                          <span style={{ fontSize:18, fontWeight:800, color:"#F8F9FC", letterSpacing:"-0.03em", lineHeight:1 }}>{displayTicker}</span>
+                          <span style={{ fontSize:10, fontWeight:600, color:"rgba(255,255,255,0.85)", lineHeight:1 }}>{assetInfo?.name || ticker}</span>
+                          <div style={{ display:"flex", alignItems:"center", gap:4 }}>
+                            {assetInfo?.type && assetInfo.type !== "INDEX" && (() => {
+                              const col = BRAND_COLORS[ticker as string] ?? extractedColor ?? "#5B8DEF";
+                              return (
+                                <span style={{ fontSize:9, fontWeight:700, color:col, background:`${col}22`, borderRadius:20, padding:"2px 7px", letterSpacing:"0.02em" }}>
+                                  {({"EQUITY":"Action","ETF":"ETF","CRYPTOCURRENCY":"Crypto"} as Record<string,string>)[assetInfo.type] ?? assetInfo.type}
                                 </span>
-                                <span style={{ fontSize:11, fontWeight:600, color: up ? "#4ade80" : "#ef4444", letterSpacing:"-0.01em", fontVariantNumeric:"tabular-nums", lineHeight:1 }}>
-                                  {up ? "▲" : "▼"}{" "}
-                                  {fmtNum(Math.abs(quote?.prev_close ? currentPrice.price - quote.prev_close : currentPrice.price * currentPrice.change / 100))}{" "}
-                                  {up ? "+" : "–"}{Math.abs(currentPrice.change).toFixed(2)}%
-                                </span>
-                              </>
+                              );
+                            })()}
+                            {quote?.global_rank != null && (
+                              <span style={{ fontSize:9, fontWeight:600, color: BRAND_COLORS[ticker as string] ?? extractedColor ?? "#5B8DEF" }}>#{quote.global_rank}</span>
                             )}
-                          </div>
-                          {/* Line 2 — tout statique + statut, même taille, même couleur */}
-                          <div style={{ display:"flex", alignItems:"center", gap:5, marginTop:5 }}>
-                            <span style={{ fontSize:11, color:"#FFFFFF", lineHeight:1, letterSpacing:"0.01em" }}>
-                              {assetInfo?.name || ticker}
-                              {(() => {
-                                if (!ticker || ASSET_RANK[ticker] == null || assetInfo?.type === "INDEX") return null;
-                                const lbl = ({"EQUITY":"Action","ETF":"ETF","CRYPTOCURRENCY":"Crypto"} as Record<string,string>)[assetInfo?.type ?? ""];
-                                return lbl ? ` · #${ASSET_RANK[ticker]} ${lbl}` : null;
-                              })()}
-                            </span>
-                            <span style={{ color:"#FFFFFF", fontSize:11 }}>·</span>
-                            {!isCrypto && (
-                              <span style={{ display:"flex", alignItems:"center", gap:4, flexShrink:0 }}>
-                                <span style={{ width:5, height:5, borderRadius:"50%", display:"inline-block", background: isOpen ? "#22c55e" : "#FFFFFF", animation: isOpen ? "hdr-pulse 2s ease-in-out infinite" : "none", flexShrink:0 }}/>
-                                <span style={{ fontSize:10, letterSpacing:"0.05em", color: isOpen ? "#4ade80" : "#FFFFFF" }}>
-                                  {isOpen ? "Marché ouvert" : "Marché fermé"}
-                                </span>
-                                {isOpen && (
-                                  <span style={{ fontSize:9, color:"#FFFFFF", letterSpacing:"0.04em" }}>↻ 60s</span>
-                                )}
-                              </span>
-                            )}
-                            {isCrypto && (
-                              <span style={{ display:"flex", alignItems:"center", gap:4, flexShrink:0 }}>
-                                <span style={{ width:5, height:5, borderRadius:"50%", background:"#22c55e", display:"inline-block", animation:"hdr-pulse-live 1.5s ease-in-out infinite", flexShrink:0 }}/>
-                                <span style={{ fontSize:10, color:"#4ade80", letterSpacing:"0.05em" }}>LIVE</span>
-                              </span>
+                            {assetInfo?.exchange && !isCrypto && (
+                              <span style={{ fontSize:9, fontWeight:400, color:"rgba(255,255,255,0.38)" }}>{_EXCH[assetInfo.exchange] ?? assetInfo.exchange}</span>
                             )}
                           </div>
                         </div>
+                        {/* Divider */}
+                        <div style={{ width:1, height:44, background:"rgba(255,255,255,0.1)", margin:"0 16px", flexShrink:0 }}/>
+                        {/* Price */}
+                        <div style={{ display:"flex", flexDirection:"column", justifyContent:"space-between", alignSelf:"stretch", gap:0 }}>
+                          <div style={{ display:"flex", alignItems:"baseline", gap:5 }}>
+                            <span style={{ fontSize:18, fontWeight:700, color:"#F8F9FC", letterSpacing:"-0.04em", fontVariantNumeric:"tabular-nums", lineHeight:1, animation: priceFlash === "up" ? "price-flash-up 0.9s ease forwards" : priceFlash === "down" ? "price-flash-dn 0.9s ease forwards" : "none" }}>
+                              {currentPrice ? fmtNum(currentPrice.price) : "—"}
+                            </span>
+                            {quote?.currency && <span style={{ fontSize:11, fontWeight:500, color:"rgba(255,255,255,0.4)", letterSpacing:"0.05em" }}>{quote.currency}</span>}
+                          </div>
+                          {currentPrice && (
+                            <div style={{ display:"flex", alignItems:"center", gap:6 }}>
+                              <span style={{ fontSize:11, fontWeight:600, color: up ? "#4ade80" : "#ef4444", fontVariantNumeric:"tabular-nums" }}>
+                                {up ? "▲" : "▼"} {up ? "+" : ""}{fmtNum(Math.abs(quote?.prev_close ? currentPrice.price - quote.prev_close : currentPrice.price * currentPrice.change / 100))}
+                              </span>
+                              <span style={{ fontSize:10, fontWeight:700, color: up ? "#4ade80" : "#ef4444", background: up ? "rgba(34,197,94,0.28)" : "rgba(239,68,68,0.28)", borderRadius:20, padding:"1px 7px", fontVariantNumeric:"tabular-nums" }}>
+                                {up ? "+" : "–"}{Math.abs(currentPrice.change).toFixed(2)}%
+                              </span>
+                            </div>
+                          )}
+                        </div>
+                        {/* Divider */}
+                        <div style={{ width:1, height:44, background:"rgba(255,255,255,0.1)", margin:"0 16px", flexShrink:0 }}/>
+                        {/* Status + last close */}
+                        <div style={{ display:"flex", flexDirection:"column", justifyContent:"space-between", alignSelf:"stretch", gap:0 }}>
+                          {!isCrypto ? (
+                            <div style={{ display:"flex", alignItems:"center", gap:4, background:"rgba(255,255,255,0.07)", borderRadius:20, padding:"2px 8px" }}>
+                              <span style={{ width:5, height:5, borderRadius:"50%", background: isOpen ? "#22c55e" : "rgba(255,255,255,0.35)", flexShrink:0, animation: isOpen ? "hdr-pulse 2s ease-in-out infinite" : "none" }}/>
+                              <span style={{ fontSize:9, fontWeight:600, color: isOpen ? "#4ade80" : "rgba(255,255,255,0.55)", letterSpacing:"0.02em" }}>
+                                {isOpen ? "Marché ouvert" : "Marché fermé"}
+                              </span>
+                            </div>
+                          ) : (
+                            <div style={{ display:"flex", alignItems:"center", gap:5, background:"rgba(34,197,94,0.1)", borderRadius:7, padding:"4px 9px" }}>
+                              <span style={{ width:6, height:6, borderRadius:"50%", background:"#22c55e", flexShrink:0, animation:"hdr-pulse-live 1.5s ease-in-out infinite" }}/>
+                              <span style={{ fontSize:11, fontWeight:600, color:"#4ade80", letterSpacing:"0.02em" }}>LIVE</span>
+                            </div>
+                          )}
+                          {!isOpen && !isCrypto && (() => {
+                            const d = new Date(now);
+                            const wd = d.getDay();
+                            if (wd === 0) d.setDate(d.getDate() - 2);
+                            else if (wd === 6) d.setDate(d.getDate() - 1);
+                            return (
+                              <div style={{ display:"flex", flexDirection:"column", gap:1 }}>
+                                <span style={{ fontSize:9, color:"rgba(255,255,255,0.32)", letterSpacing:"0.02em" }}>Dernière clôture</span>
+                                <span style={{ fontSize:10, fontWeight:500, color:"rgba(255,255,255,0.7)" }}>
+                                  {d.toLocaleDateString("fr-FR",{day:"numeric",month:"short",year:"numeric"})}
+                                </span>
+                              </div>
+                            );
+                          })()}
+                          {isOpen && <span style={{ fontSize:9, color:"rgba(255,255,255,0.3)", letterSpacing:"0.04em" }}>↻ 60s</span>}
+                        </div>
+                        {/* Fixed-width spacer before star */}
+                        <div style={{ width:16, flexShrink:0 }}/>
+                        {/* Star / favorite */}
+                        <button
+                          onClick={toggleFavorite}
+                          style={{ flexShrink:0, alignSelf:"center", width:28, height:28, borderRadius:7, border:"1px solid rgba(255,255,255,0.12)", background:"rgba(255,255,255,0.06)", display:"flex", alignItems:"center", justifyContent:"center", cursor:"pointer", transition:"all 0.18s" }}
+                          onMouseEnter={e => (e.currentTarget.style.background="rgba(255,255,255,0.12)")}
+                          onMouseLeave={e => (e.currentTarget.style.background="rgba(255,255,255,0.06)")}
+                        >
+                          <svg width="13" height="13" viewBox="0 0 24 24" fill={isFavorite ? "#facc15" : "none"} stroke={isFavorite ? "#facc15" : "rgba(255,255,255,0.5)"} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                            <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>
+                          </svg>
+                        </button>
                       </TileCard>
                     )}
                     {ticker && (() => {
@@ -1023,31 +1150,72 @@ function ChartContent() {
                       return (
                         <div style={{ position:"relative" }}>
                           {/* Tuile benchmark — ghost si rien sélectionné, pleine sinon */}
-                          {customBmTicker ? (
+                          {customBmTicker ? (() => {
+                            const bmInfo = TRENDING.find(a => a.ticker === customBmTicker);
+                            const bmDisplayTicker = customBmTicker.replace(/-USD$/,"").replace(/[0-9]+$/,"").replace(/\.[A-Z]{1,3}$/,"").replace(/^\^/,"");
+                            const bmExchH = bmInfo?.exchange ? (EXCH_HOURS[bmInfo.exchange] ?? EXCH_HOURS.NMS) : EXCH_HOURS.NMS;
+                            const bmParts = new Intl.DateTimeFormat("en-US",{timeZone:bmExchH.tz,weekday:"short",hour:"numeric",minute:"2-digit",hour12:false}).formatToParts(now);
+                            const bmWd = bmParts.find(p=>p.type==="weekday")?.value??"";
+                            const bmH  = parseInt(bmParts.find(p=>p.type==="hour")?.value??"0");
+                            const bmM  = parseInt(bmParts.find(p=>p.type==="minute")?.value??"0");
+                            const bmIsOpen = bmWd!=="Sat" && bmWd!=="Sun" && (bmH*60+bmM)>=bmExchH.o && (bmH*60+bmM)<bmExchH.c;
+                            const bmUp = bmCurrentPrice ? bmCurrentPrice.change >= 0 : true;
+                            return (
                             <TileCard ticker={customBmTicker} onClick={() => setShowBmSearch(s => !s)}
-                              style={{ display:"flex", alignItems:"center", gap:9, padding:"8px 10px", cursor:"pointer" }}>
-                              <AssetLogo ticker={customBmTicker} type={customBmType} size={32} radius={8}
+                              style={{ display:"flex", alignItems:"center", gap:8, padding:"7px 9px", cursor:"pointer" }}>
+                              <AssetLogo ticker={customBmTicker} type={customBmType} size={28} radius={7}
                                 fallbackBg="rgba(255,255,255,0.07)" fallbackBorder="rgba(255,255,255,0.12)" fallbackTextColor="rgba(255,255,255,0.55)" bare
                                 onColorExtracted={c => { if (!BRAND_COLORS[customBmTicker]) setBmExtractedColor(c); }}/>
-                              <div style={{ minWidth:0 }}>
-                                <div style={{ fontSize:11, fontWeight:700, color:"#F8F9FC", lineHeight:1.1, letterSpacing:"-0.01em", whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis", maxWidth:90 }}>{customBmName}</div>
-                                <div style={{ fontSize:9.5, fontWeight:500, color:"rgba(255,255,255,0.40)", marginTop:2, lineHeight:1, whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis", maxWidth:90 }}>
-                                  {customBmTicker}
+                              <div>
+                                {/* Ligne 1 — ticker | prix | variation (miroir carte principale, échelle réduite) */}
+                                <div style={{ display:"flex", alignItems:"baseline", gap:6, flexWrap:"nowrap" as const }}>
+                                  <span style={{ fontSize:13, fontWeight:800, color:"#F8F9FC", letterSpacing:"-0.03em", lineHeight:1 }}>{bmDisplayTicker}</span>
+                                  {bmCurrentPrice && <>
+                                    <span style={{ width:1, height:10, background:"rgba(255,255,255,0.3)", flexShrink:0, alignSelf:"center" }}/>
+                                    <span style={{ fontSize:13, fontWeight:700, letterSpacing:"-0.03em", fontVariantNumeric:"tabular-nums" as const, lineHeight:1, color:"#F8F9FC", animation: bmPriceFlash === "up" ? "price-flash-up 0.9s ease forwards" : bmPriceFlash === "down" ? "price-flash-dn 0.9s ease forwards" : "none" }}>
+                                      {fmtNum(bmCurrentPrice.price)}
+                                    </span>
+                                    <span style={{ fontSize:9, fontWeight:600, color: bmUp ? "#4ade80" : "#ef4444", letterSpacing:"-0.01em", fontVariantNumeric:"tabular-nums" as const, lineHeight:1 }}>
+                                      {bmUp ? "▲" : "▼"}{" "}
+                                      {fmtNum(Math.abs(bmCurrentPrice.price * bmCurrentPrice.change / 100))}{" "}
+                                      {bmUp ? "+" : "–"}{Math.abs(bmCurrentPrice.change).toFixed(2)}%
+                                    </span>
+                                  </>}
                                 </div>
-                                <div style={{ fontSize:10, fontWeight:600, marginTop:3, lineHeight:1, fontVariantNumeric:"tabular-nums",
-                                  color: customBmLoading ? "rgba(255,255,255,0.30)" : bmPerf == null ? "rgba(255,255,255,0.30)" : bmPerf >= 0 ? "#4ade80" : "#f87171" }}>
-                                  {customBmLoading ? "…" : bmPerf != null ? `${bmPerf >= 0 ? "+" : ""}${bmPerf.toFixed(2)}%` : "—"}
+                                {/* Ligne 2 — nom · rank · statut marché */}
+                                <div style={{ display:"flex", alignItems:"center", gap:4, marginTop:3 }}>
+                                  <span style={{ fontSize:9, color:"#FFFFFF", lineHeight:1 }}>
+                                    {customBmName}
+                                  </span>
+                                  <span style={{ color:"#FFFFFF", fontSize:9 }}>·</span>
+                                  {customBmType !== "CRYPTOCURRENCY" ? (
+                                    <span style={{ display:"flex", alignItems:"center", gap:3, flexShrink:0 }}>
+                                      <span style={{ width:4, height:4, borderRadius:"50%", display:"inline-block", background: bmIsOpen ? "#22c55e" : "#FFFFFF", flexShrink:0 }}/>
+                                      <span style={{ fontSize:9, letterSpacing:"0.04em", color: bmIsOpen ? "#4ade80" : "#FFFFFF" }}>
+                                        {bmIsOpen ? "Marché ouvert" : "Marché fermé"}
+                                      </span>
+                                    </span>
+                                  ) : (
+                                    <span style={{ display:"flex", alignItems:"center", gap:3, flexShrink:0 }}>
+                                      <span style={{ width:4, height:4, borderRadius:"50%", background:"#22c55e", display:"inline-block" }}/>
+                                      <span style={{ fontSize:9, color:"#4ade80", letterSpacing:"0.04em" }}>LIVE</span>
+                                    </span>
+                                  )}
                                 </div>
                               </div>
                               {/* × remove */}
-                              <div onClick={e => { e.stopPropagation(); setCustomBmTicker(null); setCustomBmName(""); setRawCustomBmData([]); }}
-                                style={{ marginLeft:2, width:16, height:16, borderRadius:4, display:"flex", alignItems:"center", justifyContent:"center", background:"rgba(255,255,255,0.08)", flexShrink:0 }}>
-                                <svg width="8" height="8" viewBox="0 0 8 8" fill="none" stroke="rgba(255,255,255,0.50)" strokeWidth="1.5" strokeLinecap="round">
-                                  <line x1="1" y1="1" x2="7" y2="7"/><line x1="7" y1="1" x2="1" y2="7"/>
+                              <div onClick={e => { e.stopPropagation(); setCustomBmTicker(null); setCustomBmName(""); setRawCustomBmData([]); setBmCurrentPrice(null); setSyncView(false); }}
+                                onMouseEnter={e => { e.currentTarget.style.background="rgba(255,255,255,0.18)"; (e.currentTarget.querySelectorAll("line") as NodeListOf<SVGLineElement>).forEach(l => l.style.stroke="rgba(255,255,255,0.9)"); }}
+                                onMouseLeave={e => { e.currentTarget.style.background="rgba(255,255,255,0.08)"; (e.currentTarget.querySelectorAll("line") as NodeListOf<SVGLineElement>).forEach(l => l.style.stroke="rgba(255,255,255,0.55)"); }}
+                                style={{ marginLeft:"auto", width:16, height:16, borderRadius:4, background:"rgba(255,255,255,0.08)", flexShrink:0, position:"relative", transition:"background 0.15s", cursor:"pointer" }}>
+                                <svg style={{ position:"absolute", inset:0, width:"100%", height:"100%" }} viewBox="0 0 16 16" fill="none">
+                                  <line x1="5" y1="5" x2="11" y2="11" stroke="rgba(255,255,255,0.55)" strokeWidth="1.5" strokeLinecap="round"/>
+                                  <line x1="11" y1="5" x2="5" y2="11" stroke="rgba(255,255,255,0.55)" strokeWidth="1.5" strokeLinecap="round"/>
                                 </svg>
                               </div>
                             </TileCard>
-                          ) : (
+                            );
+                          })() : (
                             /* Ghost tile */
                             <div onClick={() => setShowBmSearch(s => !s)} style={{
                               display:"flex", alignItems:"center", gap:8, padding:"8px 12px", borderRadius:12, flexShrink:0,
@@ -1095,7 +1263,7 @@ function ChartContent() {
                                     <div style={{ fontSize:8.5, letterSpacing:"0.10em", color:"rgba(255,255,255,0.20)", marginBottom:6, paddingLeft:2 }}>INDICES & CRYPTO</div>
                                     <div style={{ display:"flex", flexDirection:"column", gap:1 }}>
                                       {BM_PRESETS.map(bm => (
-                                        <div key={bm.ticker} onClick={() => { setCustomBmTicker(bm.ticker); setCustomBmName(bm.name); setCustomBmType(bm.type); setShowBmSearch(false); setBmQuery(""); }}
+                                        <div key={bm.ticker} onClick={() => { setCustomBmTicker(bm.ticker); setCustomBmName(bm.name); setCustomBmType(bm.type); setShowBmSearch(false); setBmQuery(""); setSyncView(true); }}
                                           style={{ display:"flex", alignItems:"center", gap:8, padding:"6px 8px", borderRadius:8, cursor:"pointer", transition:"background 0.10s" }}
                                           onMouseEnter={e => e.currentTarget.style.background="rgba(255,255,255,0.07)"}
                                           onMouseLeave={e => e.currentTarget.style.background="transparent"}>
@@ -1116,7 +1284,7 @@ function ChartContent() {
                                 {/* Results list */}
                                 <div style={{ display:"flex", flexDirection:"column", gap:1, maxHeight:220, overflowY:"auto" }}>
                                   {bmResults.map(asset => (
-                                    <div key={asset.ticker} onClick={() => { setCustomBmTicker(asset.ticker); setCustomBmName(asset.name); setCustomBmType(asset.type); setShowBmSearch(false); setBmQuery(""); }}
+                                    <div key={asset.ticker} onClick={() => { setCustomBmTicker(asset.ticker); setCustomBmName(asset.name); setCustomBmType(asset.type); setShowBmSearch(false); setBmQuery(""); setSyncView(true); }}
                                       style={{ display:"flex", alignItems:"center", gap:8, padding:"6px 8px", borderRadius:8, cursor:"pointer", transition:"background 0.10s" }}
                                       onMouseEnter={e => e.currentTarget.style.background="rgba(255,255,255,0.07)"}
                                       onMouseLeave={e => e.currentTarget.style.background="transparent"}>
@@ -1159,7 +1327,6 @@ function ChartContent() {
                     )}
                   </div>
 
-                  <div style={{ color:"rgba(255,255,255,0.1)", fontSize:"11px", letterSpacing:"0.22em", flexShrink:0 }}>NOVAC</div>
                 </div>
 
               </div>
@@ -1187,15 +1354,15 @@ function ChartContent() {
             <>
               <div style={{ display:"flex", gap:12, flex:"1 1 0", minHeight:0 }}>
               {/* Chart column */}
-              <div style={{ flex:1, minWidth:0, display:"flex", flexDirection:"column" }}>
+              <div style={{ flex:1, minWidth:0, display:"flex", flexDirection:"column", minHeight:0 }}>
               {/* Main chart */}
-              <div style={{ border:"1px solid rgba(255,255,255,0.06)", borderRadius:"16px", padding:"14px 18px 10px", flex:"1 1 0", minHeight:220, display:"flex", flexDirection:"column", position:"relative", overflow:"hidden", background:"rgba(255,255,255,0.02)" }}>
+              <div style={{ border:"1px solid rgba(255,255,255,0.06)", borderRadius:"16px", padding:"14px 18px 10px", flex:"3 1 0", minHeight:0, display:"flex", flexDirection:"column", position:"relative", overflow:"hidden", background:"rgba(255,255,255,0.02)" }}>
                 {/* Radial glow derrière le graphique */}
                 <div style={{ position:"absolute", inset:0, pointerEvents:"none", zIndex:0, background:`radial-gradient(ellipse 75% 45% at 50% 75%, ${(lineColor??color)}1A 0%, transparent 70%), radial-gradient(ellipse 40% 30% at 15% 25%, ${(lineColor??color)}0D 0%, transparent 60%)` }}/>
                 <GrowthChart
                   portfolioData={scaledPortfolioData}
-                  benchmarkData={activeBmData}
-                  benchmarkRawData={customBmTicker ? rawCustomBmData : undefined}
+                  benchmarkData={syncView ? [] : activeBmData}
+                  benchmarkRawData={syncView ? undefined : (customBmTicker ? rawCustomBmData : undefined)}
                   benchmarkName={customBmTicker ? customBmName : "S&P 500"}
                   benchmarkColor={activeBmColor}
                   benchmarkTicker={customBmTicker ?? undefined}
@@ -1215,8 +1382,12 @@ function ChartContent() {
                   dailyChangePct={currentPrice?.change ?? null}
                   openPrice={quote?.open ?? null}
                   onPeriodChange={setActivePeriod}
-                  onVisibleRangeChange={(from, to) => { if (!from || !to) { setVisibleRange(null); return; } const fd = new Date(from*1000); const td = new Date(to*1000); if (!isNaN(fd.getTime()) && !isNaN(td.getTime())) setVisibleRange({ from: fd.toISOString().slice(0,10), to: td.toISOString().slice(0,10) }); }}
-                  onCrosshairMove={(t) => setCrosshairTime(t)}
+                  onVisibleRangeChange={(from, to) => {
+                    if (!from || !to) { setVisibleRange(null); return; }
+                    const fd = new Date(from*1000); const td = new Date(to*1000);
+                    if (!isNaN(fd.getTime()) && !isNaN(td.getTime())) setVisibleRange({ from: fd.toISOString().slice(0,10), to: td.toISOString().slice(0,10) });
+                  }}
+                  onIntervalChange={setActiveInterval}
                   onAdaptiveData={setChartPriceData}
                   leftSlot={metaCards.length > 0 ? (
                     <div style={{ display:"flex", alignItems:"center", gap:0, overflow:"hidden" }}>
@@ -1339,6 +1510,29 @@ function ChartContent() {
                         </button>
                       )}
 
+                      {/* Vue synchronisée — visible si benchmark actif */}
+                      {customBmTicker && (
+                        <button
+                          onClick={() => setSyncView(v => !v)}
+                          title="Vue synchronisée"
+                          className="chart-action-btn"
+                          style={{
+                            background: syncView ? "rgba(91,141,239,0.18)" : "rgba(255,255,255,0.06)",
+                            backdropFilter:"blur(10px) saturate(1.5)",
+                            WebkitBackdropFilter:"blur(10px) saturate(1.5)",
+                            border:`1px solid ${syncView ? "rgba(91,141,239,0.45)" : "rgba(255,255,255,0.12)"}`,
+                            borderRadius:9, height:30, padding:"0 10px", cursor:"pointer",
+                            display:"flex", alignItems:"center", gap:5,
+                            color: syncView ? "#9BB9FF" : "rgba(255,255,255,0.50)",
+                            fontSize:11, fontWeight:500, whiteSpace:"nowrap" as const,
+                            boxShadow: syncView ? "0 0 12px rgba(91,141,239,0.20), inset 0 1px 0 rgba(255,255,255,0.10)" : "0 1px 3px rgba(0,0,0,0.20), inset 0 1px 0 rgba(255,255,255,0.07)",
+                          }}
+                        >
+                          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><rect x="3" y="3" width="18" height="8" rx="1"/><rect x="3" y="13" width="18" height="8" rx="1"/></svg>
+                          Vue synchronisée
+                        </button>
+                      )}
+
                       {/* Customisation colours */}
                       <button
                         onClick={() => setShowCustom(v => !v)}
@@ -1376,6 +1570,282 @@ function ChartContent() {
                   onCandleDown={setCandleDown}
                 />}
               </div>
+
+              {/* ── Vue synchronisée : stats + second chart ── */}
+              {syncView && customBmTicker && rawCustomBmData.length > 0 && (
+                <>
+                  {/* Stats panel */}
+                  {syncStats && (() => {
+                    const lA = (ticker ?? "A").replace(/-USD$/,"").replace(/^\^/,"").replace(/\.[A-Z]+$/,"");
+                    const lB = (customBmTicker ?? "B").replace(/-USD$/,"").replace(/^\^/,"").replace(/\.[A-Z]+$/,"");
+
+                    const tooltips: Record<string,string> = {
+                      corr:  `Mesure si deux actifs montent et baissent ensemble (de −1 à +1). Proche de 0 : ils évoluent indépendamment — utile pour diversifier.`,
+                      beta:  `Compare l'amplitude des mouvements. Bêta 0.5 : quand ${lA} fait ±10 %, ${lB} fait ±5 % en moyenne.`,
+                      alpha: `Alpha : la performance de ${lA} au-delà de ce que sa relation avec ${lB} (bêta) laisserait prévoir. Ici ${lB} sert de référence, comme un indice le ferait. Calculé sur ${activePeriod}, taux sans risque 3,5%/an.`,
+                      dir:   `Part des jours où les deux actifs ont clôturé dans la même direction. 50 % = hasard pur.`,
+                    };
+
+                    // Interprétations colorées — corr/beta/dir neutres, seul alpha sémantique
+                    const corrLabel = syncStats.corr >= 0.7 ? { t:`Forte corrélation`, c:"#9BB9FF" }
+                      : syncStats.corr >= 0.3 ? { t:`Corrélation modérée`, c:"#9BB9FF" }
+                      : { t:`Faible corrélation`, c:"rgba(255,255,255,0.45)" };
+
+                    const betaLabel = syncStats.beta < 0.7 ? { t:`${lB} varie moins que ${lA}`, c:"#9BB9FF" }
+                      : syncStats.beta <= 1.3 ? { t:`Volatilités similaires`, c:"rgba(255,255,255,0.45)" }
+                      : { t:`${lB} amplifie ${lA}`, c:"#9BB9FF" };
+
+                    const alphaLabel = syncStats.alpha > 5 ? { t:`${lA} surperforme`, c:"#4ade80" }
+                      : syncStats.alpha < -5 ? { t:`${lA} sous-performe`, c:"#ef4444" }
+                      : { t:`Neutre`, c:"rgba(255,255,255,0.45)" };
+
+                    const dirLabel = { t:`${syncStats.sameDirN} jours sur ${syncStats.totalN}`, c:"#9BB9FF" };
+
+                    // Explications sous la jauge — chaque carte décrit SA métrique
+                    const corrExpl = syncStats.corr < 0.3
+                      ? `${lB} évolue indépendamment de ${lA} sur la période.`
+                      : syncStats.corr < 0.7
+                      ? `Tendances parfois liées, souvent indépendantes.`
+                      : `${lB} suit généralement les mouvements de ${lA}.`;
+                    const betaExpl = `Pour 1% de variation de ${lA}, ${lB} varie de ${Math.abs(syncStats.beta).toFixed(2)}%.`;
+                    const alphaExpl = syncStats.alpha > 5
+                      ? `${lA} génère ${syncStats.alpha.toFixed(1)}%/an au-delà de ce que son risque (bêta) justifie.`
+                      : syncStats.alpha < -5
+                      ? `${lA} sous-performe de ${Math.abs(syncStats.alpha).toFixed(1)}%/an par rapport à son niveau de risque.`
+                      : `La performance de ${lA} est conforme à son exposition au risque.`;
+                    const dirExpl = syncStats.sameDir >= 70
+                      ? `Mouvements souvent synchrones — les hausses et baisses se produisent ensemble.`
+                      : syncStats.sameDir < 50
+                      ? `Les deux actifs évoluent plus souvent en sens opposé que dans le même sens.`
+                      : `Co-mouvement modéré sur la période.`;
+
+                    // Résumé IA — synthèse croisée, pas paraphrase des cartes
+                    const aiLines: string[] = (() => {
+                      const lowCorr = syncStats.corr < 0.35;
+                      const highCorr = syncStats.corr > 0.7;
+                      const nearOneBeta = Math.abs(syncStats.beta - 1) < 0.3;
+                      const posAlpha = syncStats.alpha > 5;
+                      const negAlpha = syncStats.alpha < -5;
+                      const lowDir = syncStats.sameDir < 60;
+                      if (lowCorr && lowDir) {
+                        return [
+                          `Diversification réelle : ${lA} et ${lB} suivent des logiques différentes.`,
+                          `En détenir les deux lisse les à-coups du portefeuille.`,
+                        ];
+                      } else if (highCorr && nearOneBeta && !posAlpha) {
+                        return [
+                          `Quasi-doublons sur la période : corrélation élevée et bêta proche de 1.`,
+                          `Détenir les deux n'apporte presque pas de diversification.`,
+                        ];
+                      } else if (lowCorr && posAlpha) {
+                        return [
+                          `${lA} surperforme nettement, et sans lien fort avec ${lB} : sa dynamique lui est propre.`,
+                          `Combinaison efficace pour diversifier avec un moteur de performance indépendant.`,
+                        ];
+                      } else if (highCorr && posAlpha) {
+                        return [
+                          `Malgré une forte corrélation avec ${lB}, ${lA} génère un surplus de performance.`,
+                          `La diversification est faible, mais le choix de ${lA} s'avère payant sur la période.`,
+                        ];
+                      } else if (!lowCorr && !highCorr && posAlpha) {
+                        return [
+                          `Corrélation modérée et alpha positif : ${lA} maintient une dynamique propre.`,
+                          `Diversification partielle avec un léger avantage de performance.`,
+                        ];
+                      } else if (negAlpha) {
+                        return [
+                          `${lA} sous-performe par rapport au risque qu'il représente face à ${lB}.`,
+                          `Revoir la pertinence de ce couple d'actifs sur la période ${activePeriod}.`,
+                        ];
+                      } else {
+                        return [
+                          `Corrélation modérée entre ${lA} et ${lB} — tendances partiellement liées.`,
+                          `Diversification partielle : les deux actifs peuvent coexister en portefeuille.`,
+                        ];
+                      }
+                    })();
+
+                    const cardBase: React.CSSProperties = {
+                      flex:1, background:"rgba(255,255,255,0.02)", border:"1px solid rgba(255,255,255,0.07)",
+                      borderRadius:12, padding:"11px 12px 10px", display:"flex", flexDirection:"column",
+                      position:"relative", transition:"background 0.15s", cursor:"default",
+                    };
+                    const hov = (e: React.MouseEvent<HTMLDivElement>) => { e.currentTarget.style.background="rgba(255,255,255,0.045)"; };
+                    const unHov = (e: React.MouseEvent<HTMLDivElement>) => { e.currentTarget.style.background="rgba(255,255,255,0.02)"; };
+
+                    const Lbl = ({ k, txt }: { k:string; txt:string }) => (
+                      <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:5 }}>
+                        <span style={{ fontSize:8.5, color:"rgba(255,255,255,0.28)", letterSpacing:"0.08em", textTransform:"uppercase" as const }}>{txt}</span>
+                        <span onMouseEnter={() => setStatsTooltip(k)} onMouseLeave={() => setStatsTooltip(null)}
+                          style={{ fontSize:11, color: statsTooltip===k ? "rgba(255,255,255,0.80)" : "rgba(255,255,255,0.28)", cursor:"help", transition:"color 0.15s", lineHeight:1 }}>ⓘ</span>
+                      </div>
+                    );
+                    const TT = ({ k }: { k:string }) => statsTooltip===k ? (
+                      <div style={{ position:"absolute", bottom:"calc(100% + 6px)", left:0, right:0, zIndex:200,
+                        background:"#111827", border:"1px solid rgba(255,255,255,0.10)", borderRadius:8,
+                        padding:"8px 10px", fontSize:11, color:"rgba(255,255,255,0.68)", lineHeight:1.55,
+                        pointerEvents:"none", boxShadow:"0 4px 24px rgba(0,0,0,0.55)" }}>
+                        {tooltips[k]}
+                      </div>
+                    ) : null;
+
+                    // Gauge: track + fill + cursor + labels below
+                    const G = ({ pct, gradient, fill, fillColor, labels, cursor=true }:{
+                      pct:number; gradient?:string; fill?:{from:number;to:number}; fillColor?:string;
+                      labels:string[]; cursor?:boolean;
+                    }) => {
+                      const cp = Math.max(0, Math.min(100, pct));
+                      return (
+                        <div style={{ position:"relative", marginTop:8, marginBottom:0 }}>
+                          <div style={{ position:"relative", height:6, background: gradient||"rgba(255,255,255,0.09)", borderRadius:3, overflow:"hidden" }}>
+                            {fill && <div style={{ position:"absolute", top:0, bottom:0, left:`${fill.from}%`, width:`${fill.to-fill.from}%`, background: fillColor||"rgba(255,255,255,0.25)" }}/>}
+                          </div>
+                          {cursor && <div style={{ position:"absolute", top:0, left:`calc(${cp}% - 1px)`, width:2, height:6, background:"#fff", borderRadius:1, boxShadow:"0 0 5px rgba(255,255,255,0.6)" }}/>}
+                          <div style={{ display:"flex", justifyContent:"space-between", marginTop:4 }}>
+                            {labels.map((l,i) => <span key={i} style={{ fontSize:8, color:"rgba(255,255,255,0.22)" }}>{l}</span>)}
+                          </div>
+                        </div>
+                      );
+                    };
+
+                    const Expl = ({ txt }: { txt:string }) => (
+                      <span style={{ fontSize:9, color:"rgba(255,255,255,0.32)", lineHeight:1.45, marginTop:5, display:"block", minHeight:26 }}>{txt}</span>
+                    );
+
+                    return (
+                      <div style={{ display:"flex", gap:5, marginTop:6, flexShrink:0, alignItems:"stretch" }}>
+
+                        {/* Corrélation */}
+                        <div style={cardBase} onMouseEnter={hov} onMouseLeave={unHov}>
+                          <TT k="corr"/><Lbl k="corr" txt={`Corrélation (${activePeriod})`}/>
+                          <span style={{ fontSize:20, fontWeight:700, color:"#F8F9FC", fontVariantNumeric:"tabular-nums" as const, lineHeight:1, marginBottom:3 }}>{syncStats.corr.toFixed(2)}</span>
+                          <span style={{ fontSize:10, fontWeight:600, color: corrLabel.c, display:"block", minHeight:28 }}>{corrLabel.t}</span>
+                          <G pct={(syncStats.corr+1)/2*100}
+                            gradient="linear-gradient(to right, rgba(91,141,239,0.07) 0%, rgba(91,141,239,0.28) 100%)"
+                            labels={["-1","0","+1"]}/>
+                          <Expl txt={corrExpl}/>
+                        </div>
+
+                        {/* Bêta */}
+                        <div style={cardBase} onMouseEnter={hov} onMouseLeave={unHov}>
+                          <TT k="beta"/><Lbl k="beta" txt={`Bêta (${activePeriod})`}/>
+                          <span style={{ fontSize:20, fontWeight:700, color:"#F8F9FC", fontVariantNumeric:"tabular-nums" as const, lineHeight:1, marginBottom:3 }}>{syncStats.beta.toFixed(2)}</span>
+                          <span style={{ fontSize:10, fontWeight:600, color: betaLabel.c, display:"block", minHeight:28 }}>{betaLabel.t}</span>
+                          <G pct={Math.min(syncStats.beta,2)/2*100}
+                            gradient="linear-gradient(to right, rgba(91,141,239,0.07) 0%, rgba(91,141,239,0.28) 100%)"
+                            labels={["0","1","2+"]}/>
+                          <Expl txt={betaExpl}/>
+                        </div>
+
+                        {/* Alpha */}
+                        <div style={cardBase} onMouseEnter={hov} onMouseLeave={unHov}>
+                          <TT k="alpha"/><Lbl k="alpha" txt={`Alpha (${activePeriod})`}/>
+                          <span style={{ fontSize:20, fontWeight:700, color: syncStats.alpha > 5 ? "#4ade80" : syncStats.alpha < -5 ? "#ef4444" : "#F8F9FC", fontVariantNumeric:"tabular-nums" as const, lineHeight:1, marginBottom:3 }}>{syncStats.alpha > 0 ? "+" : ""}{syncStats.alpha.toFixed(1)}%</span>
+                          <span style={{ fontSize:10, fontWeight:600, color: alphaLabel.c, display:"block", minHeight:28 }}>{alphaLabel.t}</span>
+                          {(() => {
+                            const alphaBound = Math.max(30, Math.ceil((Math.abs(syncStats.alpha) + 10) / 10) * 10);
+                            const clamped = Math.max(-alphaBound, Math.min(alphaBound, syncStats.alpha));
+                            const curPct = 50 + clamped / alphaBound * 50;
+                            const fill = clamped >= 0 ? { from:50, to:curPct } : { from:curPct, to:50 };
+                            const fillColor = clamped >= 0 ? "rgba(74,222,128,0.30)" : "rgba(239,68,68,0.30)";
+                            return <G pct={curPct} fill={fill} fillColor={fillColor}
+                              gradient="linear-gradient(to right, rgba(239,68,68,0.15) 0%, rgba(255,255,255,0.07) 50%, rgba(74,222,128,0.15) 100%)"
+                              labels={[`−${alphaBound}%`,"0",`+${alphaBound}%`]}/>;
+                          })()}
+                          <Expl txt={alphaExpl}/>
+                        </div>
+
+                        {/* Jours même sens */}
+                        <div style={cardBase} onMouseEnter={hov} onMouseLeave={unHov}>
+                          <TT k="dir"/><Lbl k="dir" txt={`Jours même sens (${activePeriod})`}/>
+                          <span style={{ fontSize:20, fontWeight:700, color:"#F8F9FC", fontVariantNumeric:"tabular-nums" as const, lineHeight:1, marginBottom:3 }}>{syncStats.sameDir}%</span>
+                          <span style={{ fontSize:10, fontWeight:600, color: dirLabel.c, display:"block", minHeight:28 }}>{dirLabel.t}</span>
+                          <G pct={syncStats.sameDir} fill={{ from:0, to:syncStats.sameDir }} fillColor="rgba(91,141,239,0.28)"
+                            gradient="linear-gradient(to right, rgba(91,141,239,0.07) 0%, rgba(91,141,239,0.20) 100%)"
+                            labels={["0%","50%","100%"]}/>
+                          <Expl txt={dirExpl}/>
+                        </div>
+
+                        {/* Résumé IA */}
+                        <div style={{ flex:"0 0 186px", background:"rgba(123,167,247,0.05)", border:"1px solid rgba(123,167,247,0.14)", borderRadius:12, padding:"11px 13px 10px", display:"flex", flexDirection:"column", gap:7 }}>
+                          <div style={{ display:"flex", alignItems:"center", gap:6, marginBottom:1 }}>
+                            <svg width="13" height="13" viewBox="0 0 16 16" fill="none"><path d="M8 1l1.5 4.5L14 8l-4.5 1.5L8 15l-1.5-4.5L2 8l4.5-1.5z" fill="#9BB9FF"/></svg>
+                            <span style={{ fontSize:11, fontWeight:700, color:"#9BB9FF", letterSpacing:"0.03em" }}>Résumé IA</span>
+                          </div>
+                          {aiLines.map((p,i) => (
+                            <p key={i} style={{ fontSize:10, color:"rgba(255,255,255,0.58)", lineHeight:1.6, margin:0 }}>{p}</p>
+                          ))}
+                        </div>
+
+                      </div>
+                    );
+                  })()}
+
+                  {/* Second chart — benchmark */}
+                  <div
+                    style={{ border:"1px solid rgba(255,255,255,0.06)", borderRadius:"16px", padding:"10px 18px 10px", flex:"2 1 0", minHeight:0, display:"flex", flexDirection:"column", position:"relative", overflow:"hidden", background:"rgba(255,255,255,0.02)", marginTop:6 }}>
+                    <div style={{ position:"absolute", inset:0, pointerEvents:"none", zIndex:0, background:`radial-gradient(ellipse 75% 45% at 50% 75%, ${activeBmColor}18 0%, transparent 70%)` }}/>
+                    {/* Meta header */}
+                    <div style={{ display:"flex", alignItems:"center", gap:0, marginBottom:4, flexShrink:0, position:"relative", zIndex:1 }}>
+                      {([
+                        { label:"Type", value:({"EQUITY":"Action","ETF":"ETF","INDEX":"Indice","CRYPTOCURRENCY":"Crypto"} as Record<string,string>)[customBmType] || customBmType },
+                        { label:"Devise", value:"USD" },
+                      ] as {label:string;value:string}[]).map((card, i) => (
+                        <div key={card.label} style={{ display:"flex", alignItems:"center", gap:5, padding: i === 0 ? "0 10px 0 0" : "0 10px", borderLeft: i > 0 ? "1px solid rgba(255,255,255,0.07)" : "none" }}>
+                          <span style={{ fontSize:9, color:"rgba(255,255,255,0.22)", letterSpacing:"0.08em", textTransform:"uppercase" as const }}>{card.label}</span>
+                          <span style={{ fontSize:9, fontWeight:600, color:"rgba(255,255,255,0.75)", letterSpacing:"0.03em" }}>{card.value}</span>
+                        </div>
+                      ))}
+                    </div>
+                    <GrowthChart
+                      ticker={customBmTicker}
+                      portfolioData={[]}
+                      benchmarkData={[]}
+                      benchmarkName=""
+                      portfolioLabel={customBmTicker.replace(/-USD$/,"").replace(/^\^/,"")}
+                      portfolioColor={activeBmColor}
+                      livePrice={bmCurrentPrice?.price}
+                      dailyChangePct={bmCurrentPrice?.change ?? null}
+                      dark={true}
+                      priceMode={true}
+                      hideDrawdown={true}
+                      isCrypto={isBmCrypto}
+                      externalPeriod={activePeriod}
+                      externalInterval={activeInterval}
+                      hideControls={true}
+                      onPeriodChange={() => {}}
+                    />
+                    {/* Period perfs */}
+                    <div style={{ display:"flex", justifyContent:"center", gap:16, paddingTop:4, flexShrink:0, position:"relative", zIndex:1 }}>
+                      {(["24h","1S","1M","3M","6M","1A","3A","Max"] as const).map(key => {
+                        let pct: number | null = null;
+                        if (key === "24h") {
+                          pct = bmCurrentPrice?.change ?? null;
+                        } else {
+                          const SECS: Record<string,number> = { "1S":7*86400,"1M":30*86400,"3M":91*86400,"6M":183*86400,"1A":365*86400,"3A":1095*86400 };
+                          const secs = SECS[key];
+                          const pts = secs
+                            ? rawCustomBmData.filter(p => p.date >= new Date(Date.now() - secs*1000).toISOString().slice(0,10))
+                            : rawCustomBmData;
+                          if (pts.length >= 2) pct = (pts[pts.length-1].value - pts[0].value) / pts[0].value * 100;
+                        }
+                        const isActive = activePeriod === key;
+                        return (
+                          <div key={key} style={{ position:"relative", paddingBottom:4, textAlign:"center", minWidth:36 }}>
+                            <div style={{ fontSize:10, fontWeight:600, color: isActive ? activeBmColor : "#94a3b8" }}>{key}</div>
+                            {pct !== null && (
+                              <div style={{ fontSize:10, fontWeight:700, color: pct >= 0 ? "#4ade80" : "#ef4444", fontVariantNumeric:"tabular-nums" as const }}>
+                                {(() => { const s = pct >= 0 ? "+" : ""; const a = Math.abs(pct); return a >= 10000 ? `${s}${(pct/1000).toFixed(0)}k%` : a >= 1000 ? `${s}${pct.toFixed(0)}%` : `${s}${pct.toFixed(1)}%`; })()}
+                              </div>
+                            )}
+                            {isActive && <div style={{ position:"absolute", bottom:0, left:0, right:0, height:2, borderRadius:1, background:activeBmColor }}/>}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                </>
+              )}
 
               {/* Sub-panel — en dessous, hauteur fixe, pas de scroll */}
               {subOpen ? (
@@ -1428,14 +1898,7 @@ function ChartContent() {
                     )}
                   </div>
                 </div>
-              ) : (
-                <button
-                  onClick={() => setSubOpen(true)}
-                  style={{ marginTop:6, background:"transparent", border:"1px dashed rgba(255,255,255,0.07)", borderRadius:8, padding:"5px 0", cursor:"pointer", color:"rgba(255,255,255,0.18)", fontSize:10, letterSpacing:"0.07em", display:"flex", alignItems:"center", justifyContent:"center", gap:5, flexShrink:0 }}
-                >
-                  <span>＋</span> Indicateur
-                </button>
-              )}
+              ) : null}
 
               </div>{/* end chart column */}
 
@@ -1688,7 +2151,6 @@ function ChartContent() {
                       openPrice={quote?.open ?? null}
                       onPeriodChange={setActivePeriod}
                       onVisibleRangeChange={(from, to) => { if (!from || !to) { setVisibleRange(null); return; } const fd = new Date(from*1000); const td = new Date(to*1000); if (!isNaN(fd.getTime()) && !isNaN(td.getTime())) setVisibleRange({ from: fd.toISOString().slice(0,10), to: td.toISOString().slice(0,10) }); }}
-                      onCrosshairMove={(t) => setCrosshairTime(t)}
                       onAdaptiveData={setChartPriceData}
                     />
                   </div>
