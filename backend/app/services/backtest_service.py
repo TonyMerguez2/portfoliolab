@@ -309,5 +309,11 @@ def run_monte_carlo_advanced(req: MonteCarloRequest, target_value: float | None 
         volatility=metrics["annualized_volatility"],
         max_dd=metrics["max_drawdown"],
         sharpe=metrics["sharpe_ratio"],
+        model=req.simulation_model.value,
+        block_size=req.block_size,
+        parameter_uncertainty=req.parameter_uncertainty,
+        returns_df=returns_all[[a.ticker for a in available]],
+        weights=weights_frac,
+        rebalance=req.rebalance.value,
     )
     return result

@@ -336,15 +336,15 @@ def monte_carlo(
     sigma_daily = float(log_returns.std())
 
     n_days = horizon_years * TRADING_DAYS
-    dt = 1  # 1 trading day
 
     # Simulate: shape (n_simulations, n_days)
+    # mu_daily is the mean of log-returns, i.e. already the log drift — no Itô
+    # correction here (see gbm_log_paths).
     rng = np.random.default_rng(42)
     Z = rng.standard_normal((n_simulations, n_days))
-    drift = (mu_daily - 0.5 * sigma_daily ** 2) * dt
-    diffusion = sigma_daily * np.sqrt(dt) * Z
+    diffusion = sigma_daily * Z
 
-    log_paths = np.cumsum(drift + diffusion, axis=1)
+    log_paths = np.cumsum(mu_daily + diffusion, axis=1)
     # Prepend zeros (initial value)
     log_paths = np.hstack([np.zeros((n_simulations, 1)), log_paths])
 
@@ -371,6 +371,242 @@ def monte_carlo(
     }
 
 
+# ──────────────────────────────────────────────
+# Simulation engines — path generators
+# ──────────────────────────────────────────────
+
+def draw_parameter_posterior(
+    log_returns: pd.Series,
+    n_simulations: int,
+    rng: np.random.Generator,
+) -> tuple[np.ndarray, np.ndarray]:
+    """
+    Sample (mu, sigma) from their joint posterior under a Jeffreys prior.
+
+    mu and sigma are *estimates* from a finite sample, not known constants.
+    With ~5 years of daily data the standard error on the annualised drift is
+    around ±12 points, which dominates the spread of the simulated paths.
+    Holding them fixed produces confidence bands that look far tighter than
+    the evidence supports.
+
+    Standard Normal-Inverse-Chi-Square result:
+        sigma^2 | data ~ (n-1) s^2 / chi2(n-1)
+        mu | sigma^2, data ~ N(xbar, sigma^2 / n)
+    """
+    values = log_returns.to_numpy(dtype=np.float64)
+    n_obs = values.size
+    if n_obs < 3:
+        mu = np.full(n_simulations, float(values.mean()) if n_obs else 0.0)
+        sigma = np.full(n_simulations, float(values.std()) if n_obs else 0.0)
+        return mu, sigma
+
+    xbar = float(values.mean())
+    s2 = float(values.var(ddof=1))
+
+    sigma2 = (n_obs - 1) * s2 / rng.chisquare(n_obs - 1, size=n_simulations)
+    sigma = np.sqrt(sigma2)
+    mu = rng.normal(xbar, np.sqrt(sigma2 / n_obs))
+    return mu, sigma
+
+
+def gbm_log_paths(
+    log_returns: pd.Series,
+    n_days: int,
+    n_simulations: int,
+    rng: np.random.Generator,
+    parameter_uncertainty: bool = False,
+) -> np.ndarray:
+    """
+    Geometric Brownian Motion increments.
+
+    Fits (mu, sigma) to the historical log-returns and assumes i.i.d. Gaussian
+    increments. Fast and analytically tractable, but it discards fat tails,
+    skew and volatility clustering.
+
+    With ``parameter_uncertainty`` each trajectory draws its own (mu, sigma)
+    from the posterior, so the bands widen to reflect estimation error.
+    """
+    Z = rng.standard_normal((n_simulations, n_days))
+
+    if parameter_uncertainty:
+        mu, sigma = draw_parameter_posterior(log_returns, n_simulations, rng)
+        return np.cumsum(mu[:, None] + sigma[:, None] * Z, axis=1)
+
+    mu_daily = float(log_returns.mean())
+    sigma_daily = float(log_returns.std())
+
+    # mu_daily is already estimated in log space, so it *is* the log drift.
+    # The Itô term -0.5*sigma^2 converts an arithmetic drift into a log drift;
+    # applying it here as well would double-count the correction and bias the
+    # median down by exp(0.5*sigma^2*T).
+    return np.cumsum(mu_daily + sigma_daily * Z, axis=1)
+
+
+def block_bootstrap_log_paths(
+    log_returns: pd.Series,
+    n_days: int,
+    n_simulations: int,
+    rng: np.random.Generator,
+    block_size: int = 21,
+    parameter_uncertainty: bool = False,
+) -> np.ndarray:
+    """
+    Circular block bootstrap on the realised log-returns.
+
+    Rather than assuming a distribution, this resamples contiguous blocks of
+    actual history. Because whole blocks are drawn, the resampled series keeps
+    the properties an i.i.d. draw destroys: fat tails, negative skew and
+    volatility clustering (a crash day is followed by the days that actually
+    followed it).
+
+    The block wraps around the end of the series (circular), so every
+    observation is equally likely to be drawn — a plain block bootstrap
+    under-samples the tails of the window.
+    """
+    values = log_returns.to_numpy(dtype=np.float64)
+    n_obs = values.size
+    if n_obs == 0:
+        return np.zeros((n_simulations, n_days))
+
+    block = int(max(1, min(block_size, n_obs)))
+    n_blocks = int(np.ceil(n_days / block))
+
+    starts = rng.integers(0, n_obs, size=(n_simulations, n_blocks), dtype=np.int64)
+    offsets = np.arange(block, dtype=np.int64)
+    idx = (starts[:, :, None] + offsets[None, None, :]) % n_obs
+    idx = idx.reshape(n_simulations, n_blocks * block)[:, :n_days]
+
+    sampled = values[idx]
+
+    if parameter_uncertainty:
+        # Resampling captures the shape of the return distribution but still
+        # anchors every path to the one historical mean. Re-centre each path on
+        # a drift drawn from the posterior so estimation error is represented
+        # too, leaving the resampled shape (tails, clustering) untouched.
+        mu, _ = draw_parameter_posterior(log_returns, n_simulations, rng)
+        sampled = sampled + (mu[:, None] - float(values.mean()))
+
+    return np.cumsum(sampled, axis=1)
+
+
+def multivariate_log_paths(
+    returns_df: pd.DataFrame,
+    weights: dict[str, float],
+    n_days: int,
+    n_simulations: int,
+    rng: np.random.Generator,
+    rebalance: str = "daily",
+    parameter_uncertainty: bool = False,
+) -> np.ndarray:
+    """
+    Simulate each asset separately, correlated via a Cholesky factor.
+
+    The aggregated approaches collapse the portfolio into one series before
+    simulating, which silently assumes the weights are restored every single
+    day. Simulating assets individually makes the rebalancing policy explicit:
+
+    - ``"daily"``   — weights reset every day (matches the aggregated models)
+    - ``"none"``    — buy and hold; winners grow into the portfolio and it
+                      drifts away from its target allocation
+    - ``"annual"``  — reset once per year
+
+    Correlation is imposed with the Cholesky factor L of the covariance matrix:
+    if Z is i.i.d. standard normal then ``L @ Z`` has covariance ``L L' = Sigma``.
+    """
+    tickers = [t for t in returns_df.columns if t in weights]
+    if not tickers:
+        raise ValueError("No asset with a weight to simulate")
+
+    w = np.array([weights[t] for t in tickers], dtype=np.float64)
+    w = w / w.sum()
+
+    log_df = np.log1p(returns_df[tickers]).dropna()
+    if log_df.empty:
+        raise ValueError("No overlapping return history to simulate")
+
+    mu = log_df.mean().to_numpy(dtype=np.float64)          # (k,)
+    cov = log_df.cov().to_numpy(dtype=np.float64)          # (k, k)
+    k = len(tickers)
+    n_obs = len(log_df)
+
+    # Nearest-PSD guard: sample covariance can be numerically indefinite when
+    # assets are nearly collinear or history is short.
+    try:
+        L = np.linalg.cholesky(cov)
+    except np.linalg.LinAlgError:
+        eigvals, eigvecs = np.linalg.eigh(cov)
+        eigvals = np.clip(eigvals, 1e-12, None)
+        L = np.linalg.cholesky(eigvecs @ np.diag(eigvals) @ eigvecs.T)
+
+    # (n_sims, n_days, k) correlated log-return increments
+    Z = rng.standard_normal((n_simulations, n_days, k))
+    increments = Z @ L.T + mu
+
+    if parameter_uncertainty:
+        # Drift is the badly-estimated parameter; give each path its own draw
+        # from N(mu_hat, Sigma / n) — the multivariate analogue of the
+        # univariate posterior, keeping the cross-asset correlation.
+        drift_shift = (rng.standard_normal((n_simulations, k)) @ L.T) / np.sqrt(n_obs)
+        increments = increments + drift_shift[:, None, :]
+
+    if rebalance == "daily":
+        # Weights restored every day: the portfolio earns the weighted mean of
+        # the assets' simple returns on each step.
+        port_simple = np.expm1(increments) @ w
+        port_value = np.cumprod(1.0 + port_simple, axis=1)
+    else:
+        asset_paths = np.exp(np.cumsum(increments, axis=1))  # (n_sims, n_days, k), starts ~1
+
+        if rebalance == "none":
+            # Buy and hold: each sleeve compounds on its own from day zero.
+            port_value = asset_paths @ w
+        elif rebalance == "annual":
+            period = TRADING_DAYS
+            port_value = np.empty((n_simulations, n_days))
+            level = np.ones(n_simulations)
+            for start in range(0, n_days, period):
+                end = min(start + period, n_days)
+                # Growth of each asset since the start of this segment.
+                base = asset_paths[:, start - 1, :] if start > 0 else np.ones((n_simulations, k))
+                growth = asset_paths[:, start:end, :] / base[:, None, :]
+                port_value[:, start:end] = level[:, None] * (growth @ w)
+                level = port_value[:, end - 1]
+        else:
+            raise ValueError(f"Unknown rebalance policy: {rebalance!r}")
+
+    return np.log(np.maximum(port_value, 1e-12))
+
+
+def _build_log_paths(
+    log_returns: pd.Series,
+    n_days: int,
+    n_simulations: int,
+    rng: np.random.Generator,
+    model: str,
+    block_size: int,
+    parameter_uncertainty: bool = False,
+    returns_df: pd.DataFrame | None = None,
+    weights: dict[str, float] | None = None,
+    rebalance: str = "daily",
+) -> np.ndarray:
+    """Dispatch to the requested path generator."""
+    if model == "multivariate":
+        if returns_df is None or weights is None:
+            raise ValueError("Multivariate simulation requires per-asset returns and weights")
+        return multivariate_log_paths(
+            returns_df, weights, n_days, n_simulations, rng, rebalance, parameter_uncertainty
+        )
+    if model == "bootstrap":
+        return block_bootstrap_log_paths(
+            log_returns, n_days, n_simulations, rng, block_size, parameter_uncertainty
+        )
+    if model == "gbm":
+        return gbm_log_paths(
+            log_returns, n_days, n_simulations, rng, parameter_uncertainty
+        )
+    raise ValueError(f"Unknown simulation model: {model!r}")
+
+
 def monte_carlo_advanced(
     portfolio_returns_series: pd.Series,
     horizon_years: int = 10,
@@ -380,22 +616,31 @@ def monte_carlo_advanced(
     volatility: float | None = None,
     max_dd: float | None = None,
     sharpe: float | None = None,
+    model: str = "gbm",
+    block_size: int = 21,
+    parameter_uncertainty: bool = False,
+    returns_df: pd.DataFrame | None = None,
+    weights: dict[str, float] | None = None,
+    rebalance: str = "daily",
+    seed: int = 42,
 ) -> dict:
     """
     Advanced Monte Carlo with goal tracking, robustness score, and distribution analysis.
+
+    ``model`` selects the path generator: ``"gbm"`` (Gaussian i.i.d.) or
+    ``"bootstrap"`` (circular block bootstrap on realised returns).
     """
-    log_returns = np.log(1 + portfolio_returns_series)
+    log_returns = np.log(1 + portfolio_returns_series).dropna()
     mu_daily = float(log_returns.mean())
     sigma_daily = float(log_returns.std())
 
     n_days = horizon_years * TRADING_DAYS
-    dt = 1
 
-    rng = np.random.default_rng(42)
-    Z = rng.standard_normal((n_simulations, n_days))
-    drift = (mu_daily - 0.5 * sigma_daily ** 2) * dt
-    diffusion = sigma_daily * np.sqrt(dt) * Z
-    log_paths = np.cumsum(drift + diffusion, axis=1)
+    rng = np.random.default_rng(seed)
+    log_paths = _build_log_paths(
+        log_returns, n_days, n_simulations, rng, model, block_size,
+        parameter_uncertainty, returns_df, weights, rebalance,
+    )
     log_paths = np.hstack([np.zeros((n_simulations, 1)), log_paths])
     paths = initial_investment * np.exp(log_paths)
 
@@ -438,7 +683,15 @@ def monte_carlo_advanced(
         }
 
     # ── Final value distribution (histogram) ──────────────────────
-    hist_counts, hist_edges = np.histogram(final_values, bins=30)
+    # Log-spaced bins: final values are lognormal and, once parameter
+    # uncertainty is on, span several orders of magnitude. Linear bins would
+    # pile ~everything into the first bucket and show nothing.
+    positive = final_values[final_values > 0]
+    if positive.size:
+        edges = np.geomspace(positive.min(), positive.max(), 31)
+    else:
+        edges = np.linspace(0, 1, 31)
+    hist_counts, hist_edges = np.histogram(final_values, bins=edges)
     distribution = [
         {
             "range_min": round(float(hist_edges[i]), 0),
@@ -542,6 +795,22 @@ def monte_carlo_advanced(
         "robustness_reasons": reasons,
         "annualized_return": float((mu_daily * TRADING_DAYS)),
         "annualized_volatility": float(sigma_daily * np.sqrt(TRADING_DAYS)),
+        "model": model,
+        "rebalance": rebalance if model == "multivariate" else "daily",
+        "parameter_uncertainty": parameter_uncertainty,
+        "n_observations": int(log_returns.size),
+        # Standard error of the annualised drift. Usually large relative to the
+        # drift itself, which is precisely why it is worth surfacing.
+        "drift_std_error": float(
+            sigma_daily * TRADING_DAYS / np.sqrt(log_returns.size)
+        ) if log_returns.size else 0.0,
+        # Tail diagnostics — this is where a bootstrap and a Gaussian GBM
+        # disagree most, so surface them rather than only the central bands.
+        "final_values_p1": float(np.percentile(final_values, 1)),
+        "expected_shortfall_5": float(final_values[final_values <= p5_f].mean())
+            if np.any(final_values <= p5_f) else p5_f,
+        "sample_skew": float(stats.skew(log_returns)),
+        "sample_excess_kurtosis": float(stats.kurtosis(log_returns)),
     }
 
 

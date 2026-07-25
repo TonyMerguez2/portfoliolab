@@ -54,7 +54,10 @@ function resolveUrls(ticker: string, type?: string): string[] {
     return urls;
   }
   const clean = ticker.replace(/\.[A-Z]{1,3}$/, "").replace(/^\^/, "");
-  const urls = [`https://financialmodelingprep.com/image-stock/${ticker}.png`];
+  const urls = [
+    `https://assets.parqet.com/logos/symbol/${encodeURIComponent(ticker)}?format=png`,
+    `https://financialmodelingprep.com/image-stock/${ticker}.png`,
+  ];
   if (clean !== ticker) urls.push(`https://financialmodelingprep.com/image-stock/${clean}.png`);
   return urls;
 }

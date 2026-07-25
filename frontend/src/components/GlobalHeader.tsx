@@ -257,6 +257,7 @@ export default function GlobalHeader() {
     { label: "Marchés", href: "/treemap" },
     { label: "Carte",   href: "/map" },
     { label: "Analyse", href: "/dashboard" },
+    { label: "Simulation", href: "/simulation" },
   ];
 
   return (

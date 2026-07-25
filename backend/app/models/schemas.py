@@ -68,12 +68,41 @@ class EfficientFrontierRequest(BaseModel):
     n_portfolios: int = Field(default=200, ge=50, le=500)
 
 
+class SimulationModel(str, Enum):
+    GBM = "gbm"
+    BOOTSTRAP = "bootstrap"
+    MULTIVARIATE = "multivariate"
+
+
+class RebalancePolicy(str, Enum):
+    DAILY = "daily"
+    ANNUAL = "annual"
+    NONE = "none"
+
+
 class MonteCarloRequest(BaseModel):
     assets: list[AssetInput]
     period: Period = Period.FIVE_YEARS
     horizon_years: int = Field(default=5, ge=1, le=30)
     n_simulations: int = Field(default=500, ge=100, le=2000)
     initial_investment: float = Field(default=10_000.0, gt=0)
+    simulation_model: SimulationModel = Field(
+        default=SimulationModel.GBM,
+        description="Path generator: 'gbm' (Gaussian) or 'bootstrap' (block bootstrap)",
+    )
+    block_size: int = Field(
+        default=21, ge=1, le=252,
+        description="Block length in trading days for the bootstrap (21 ≈ 1 month)",
+    )
+    parameter_uncertainty: bool = Field(
+        default=False,
+        description="Draw (mu, sigma) per trajectory from their posterior instead of "
+                    "treating the point estimates as known constants",
+    )
+    rebalance: RebalancePolicy = Field(
+        default=RebalancePolicy.DAILY,
+        description="Rebalancing policy — only meaningful for the multivariate model",
+    )
 
 
 # ──────────────────────────────────────────────

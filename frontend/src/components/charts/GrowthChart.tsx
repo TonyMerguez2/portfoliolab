@@ -103,6 +103,7 @@ interface Props {
   onCrosshairXPixel?: (x: number | null) => void;
   syncCrosshairXPixel?: number | null;
   timeAxisStart?: number; // UTC timestamp : étend l'axe X avant le 1er bar (sync Max period)
+  displayMode?: "glass" | "black";
 }
 
 function toTs(d: string): UTCTimestamp {
@@ -191,6 +192,45 @@ function getCutoffStr(p: string): string | null {
 
 interface OHLCPt { date: string; value: number; open?: number; high?: number; low?: number; close?: number; }
 
+function finitePrice(value: unknown): number | undefined {
+  if (typeof value === "number") return Number.isFinite(value) ? value : undefined;
+  if (typeof value === "string" && value.trim() !== "") {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : undefined;
+  }
+  return undefined;
+}
+
+// Yahoo peut renvoyer ponctuellement une clôture null alors que l'OHLC existe.
+// lightweight-charts refuse strictement ces valeurs lors d'un setData(), surtout
+// au retour du mode bougies vers la courbe. On normalise donc une seule fois à
+// l'entrée et on ignore uniquement les lignes réellement inexploitables.
+function normalizeOhlcPoints(rows: unknown[]): OHLCPt[] {
+  const normalized: OHLCPt[] = [];
+  for (const raw of rows) {
+    if (!raw || typeof raw !== "object") continue;
+    const row = raw as Record<string, unknown>;
+    const date = typeof row.date === "string" ? row.date : "";
+    if (!date || !Number.isFinite(new Date(date).getTime())) continue;
+
+    const close = finitePrice(row.close) ?? finitePrice(row.value);
+    const open = finitePrice(row.open) ?? close;
+    if (close == null || open == null) continue;
+
+    const rawHigh = finitePrice(row.high);
+    const rawLow = finitePrice(row.low);
+    normalized.push({
+      date,
+      value: close,
+      open,
+      high: Math.max(rawHigh ?? close, open, close),
+      low: Math.min(rawLow ?? close, open, close),
+      close,
+    });
+  }
+  return normalized;
+}
+
 function aggregateCandles(pts: OHLCPt[], getKey: (d: Date) => string): OHLCPt[] {
   const groups = new Map<string, OHLCPt[]>();
   const order: string[] = [];
@@ -243,11 +283,42 @@ function hexToRgba(hex: string, alpha: number): string {
 type GridPreset = "none" | "minimal" | "standard" | "solid";
 
 const GRID_PRESETS: Record<GridPreset, { color: string; style: LineStyle; label: string }> = {
-  none:     { color: "rgba(255,255,255,0)",    style: LineStyle.Dashed, label: "Aucune"   },
-  minimal:  { color: "rgba(255,255,255,0.03)", style: LineStyle.Dashed, label: "Minimal"  },
-  standard: { color: "rgba(255,255,255,0.06)", style: LineStyle.Dashed, label: "Standard" },
-  solid:    { color: "rgba(255,255,255,0.10)", style: LineStyle.Solid,  label: "Solide"   },
+  none:     { color: "rgba(255,255,255,0)",     style: LineStyle.Solid, label: "Aucune"   },
+  minimal:  { color: "rgba(255,255,255,0.040)", style: LineStyle.Solid, label: "Minimal"  },
+  standard: { color: "rgba(255,255,255,0.075)", style: LineStyle.Solid, label: "Standard" },
+  solid:    { color: "rgba(255,255,255,0.110)", style: LineStyle.Solid,  label: "Solide"   },
 };
+
+function resolveGridPreset(
+  preset: GridPreset,
+  displayMode: "glass" | "black",
+  dark: boolean,
+) {
+  const selected = GRID_PRESETS[preset];
+  if (preset === "none") return selected;
+
+  if (!dark) {
+    const lightColors: Record<Exclude<GridPreset, "none">, string> = {
+      minimal: "rgba(100,116,139,0.10)",
+      standard: "rgba(100,116,139,0.16)",
+      solid: "rgba(100,116,139,0.22)",
+    };
+    return { ...selected, color: lightColors[preset] };
+  }
+
+  // Le fond noir demande un soupçon de contraste supplémentaire, mais le
+  // choix de l'utilisateur (pointillé, tireté ou plein) reste inchangé.
+  if (displayMode === "black") {
+    const blackColors: Record<Exclude<GridPreset, "none">, string> = {
+      minimal: "rgba(255,255,255,0.050)",
+      standard: "rgba(255,255,255,0.085)",
+      solid: "rgba(255,255,255,0.130)",
+    };
+    return { ...selected, color: blackColors[preset] };
+  }
+
+  return selected;
+}
 
 export default function GrowthChart({
   portfolioData, benchmarkData, benchmarkName, portfolioLabel,
@@ -261,6 +332,7 @@ export default function GrowthChart({
   syncCrosshairTime = null, externalPeriod, externalInterval, externalVisibleRange,
   onIntervalChange, hideControls = false, syncPriceScaleWidth, onPriceScaleWidthChange,
   onCrosshairXPixel, syncCrosshairXPixel, timeAxisStart,
+  displayMode = "glass",
 }: Props) {
 
   const [periodFilter, setPeriodFilter] = useState<"24h"|"1S"|"1M"|"3M"|"6M"|"1A"|"3A"|"Max">("Max");
@@ -387,7 +459,7 @@ export default function GrowthChart({
       .then(r => r.json())
       .then(data => {
         if (cancelled || !Array.isArray(data)) return;
-        setAdaptiveData(data as typeof adaptiveData);
+        setAdaptiveData(normalizeOhlcPoints(data));
       })
       .catch(() => { if (!cancelled) setAdaptiveData([]); });
     return () => { cancelled = true; };
@@ -410,7 +482,7 @@ export default function GrowthChart({
     let cancelled = false;
     fetch(`${API_URL}/api/v1/intraday?ticker=${encodeURIComponent(benchmarkTicker)}&period=${config.apiPeriod}&interval=${config.apiInterval}`)
       .then(r => r.json())
-      .then(data => { if (!cancelled && Array.isArray(data)) setBmAdaptiveData(data as OHLCPt[]); })
+      .then(data => { if (!cancelled && Array.isArray(data)) setBmAdaptiveData(normalizeOhlcPoints(data)); })
       .catch(() => { if (!cancelled) setBmAdaptiveData([]); });
     return () => { cancelled = true; };
   }, [ticker, benchmarkTicker, intervalKey, fetchKey]); // eslint-disable-line
@@ -446,10 +518,11 @@ export default function GrowthChart({
     if (!containerRef.current) return;
 
     try {
+      const blackDisplay = displayMode === "black";
       const bg  = dark ? "rgba(0,0,0,0)" : "#ffffff";
-      const txt = dark ? "#94a3b8" : "#64748b";
-      const initGrid = dark ? GRID_PRESETS[gridPreset] : { color: "#f1f5f9", style: LineStyle.Dashed };
-      const initVisible = dark ? gridPreset !== "none" : true;
+      const txt = blackDisplay ? "rgba(255,255,255,0.58)" : dark ? "#94a3b8" : "#64748b";
+      const initGrid = resolveGridPreset(gridPreset, displayMode, dark);
+      const initVisible = gridPreset !== "none";
 
       const chart = createChart(containerRef.current, {
         autoSize: true,
@@ -466,17 +539,17 @@ export default function GrowthChart({
         crosshair: {
           mode: CrosshairMode.Normal,
           vertLine: {
-            color: dark ? "rgba(255,255,255,0.2)" : "#94a3b8",
+            color: blackDisplay ? "rgba(255,255,255,0.28)" : dark ? "rgba(255,255,255,0.2)" : "#94a3b8",
             style: LineStyle.Solid,
             width: 1,
-            labelBackgroundColor: dark ? "#334155" : "#1e293b",
+            labelBackgroundColor: blackDisplay ? "#202020" : dark ? "#334155" : "#1e293b",
             labelVisible: !hideControls,
           },
           horzLine: {
-            color: dark ? "rgba(255,255,255,0.2)" : "#94a3b8",
+            color: blackDisplay ? "rgba(255,255,255,0.28)" : dark ? "rgba(255,255,255,0.2)" : "#94a3b8",
             style: LineStyle.Solid,
             width: 1,
-            labelBackgroundColor: dark ? "#334155" : "#1e293b",
+            labelBackgroundColor: blackDisplay ? "#202020" : dark ? "#334155" : "#1e293b",
             visible: true,
             labelVisible: !hideControls,
           },
@@ -779,24 +852,24 @@ export default function GrowthChart({
   useEffect(() => {
     if (!chartRef.current) return;
     const bg  = dark ? "rgba(0,0,0,0)" : "#ffffff";
-    const txt = dark ? "#94a3b8" : "#64748b";
+    const txt = displayMode === "black" ? "rgba(255,255,255,0.58)" : dark ? "#94a3b8" : "#64748b";
     chartRef.current.applyOptions({
       layout: { background: { type: ColorType.Solid, color: bg }, textColor: txt },
     });
-  }, [dark]);
+  }, [dark, displayMode]);
 
   // Update grid when preset or toggles change
   useEffect(() => {
     if (!chartRef.current) return;
-    const p = dark ? GRID_PRESETS[gridPreset] : { color: "#f1f5f9", style: LineStyle.Dashed };
-    const visible = dark ? gridPreset !== "none" : true;
+    const p = resolveGridPreset(gridPreset, displayMode, dark);
+    const visible = gridPreset !== "none";
     chartRef.current.applyOptions({
       grid: {
         vertLines: { color: p.color, style: p.style, visible: visible && showVert },
         horzLines: { color: p.color, style: p.style, visible: visible && showHorz },
       },
     });
-  }, [gridPreset, showHorz, showVert, dark]);
+  }, [gridPreset, showHorz, showVert, dark, displayMode]);
 
   // Update area series color (from logo color extraction)
   useEffect(() => {
@@ -872,22 +945,23 @@ export default function GrowthChart({
                 chartRef.current?.applyOptions({ leftPriceScale: { visible: false } });
                 const dotBase = dotPts[0].value as number;
                 const bmBase  = bmPts[0].value as number;
+                candle.applyOptions({ visible: false });
+                candle.setData([]);
                 area.setData(dedup(sampleDown(dotPts).map(p => ({
                   time: t(p.date), value: Math.round(p.value / dotBase * 10000) / 100,
                 }))));
-                candle.setData([]);
                 bm.setData(dedup(sampleDown(bmPts as DataPoint[]).map(p => ({
                   time: t(p.date), value: Math.round((p.value as number) / bmBase * 10000) / 100,
                 }))));
                 area.applyOptions({ visible: true, priceFormat: base100Fmt, priceScaleId: "right" });
-                candle.applyOptions({ visible: false });
                 bm.applyOptions({ priceFormat: base100Fmt, priceScaleId: "right" });
                 chartPctModeRef.current = true;
               } else {
-                area.setData(dedup(lineData.map(p => ({ time: t(p.date), value: p.value }))));
-                candle.setData([]); bm.setData([]);
-                area.applyOptions({ visible: true, priceFormat: rawFmt, priceScaleId: "right" });
                 candle.applyOptions({ visible: false });
+                candle.setData([]);
+                area.setData(dedup(lineData.map(p => ({ time: t(p.date), value: p.value }))));
+                bm.setData([]);
+                area.applyOptions({ visible: true, priceFormat: rawFmt, priceScaleId: "right" });
                 chartPctModeRef.current = false;
               }
 
@@ -902,10 +976,17 @@ export default function GrowthChart({
               chartRef.current?.applyOptions({
                 leftPriceScale: { visible: true, borderVisible: false, scaleMargins: { top: 0.08, bottom: 0.08 } },
               });
-              area.setData(inCandle ? [] : aData);
-              candle.setData(inCandle ? cData : []);
-              area.applyOptions({ visible: !inCandle, priceFormat: rawFmt, priceScaleId: "right" });
-              candle.applyOptions({ visible: inCandle });
+              if (inCandle) {
+                area.applyOptions({ visible: false, priceFormat: rawFmt, priceScaleId: "right" });
+                area.setData([]);
+                candle.setData(cData);
+                candle.applyOptions({ visible: true });
+              } else {
+                candle.applyOptions({ visible: false });
+                candle.setData([]);
+                area.setData(aData);
+                area.applyOptions({ visible: true, priceFormat: rawFmt, priceScaleId: "right" });
+              }
               bm.applyOptions({ priceScaleId: "left", priceFormat: rawFmt });
               bm.setData(rawBmAligned.length
                 ? dedup(sampleDown(rawBmAligned).map(p => ({ time: t(p.date), value: p.value as number })))
@@ -932,12 +1013,19 @@ export default function GrowthChart({
                 }
               }
             }
-            area.setData(inCandle ? [] : ([...wsPrefix, ...aData] as any));
-            candle.setData(inCandle ? ([...wsPrefix, ...cData] as any) : []);
+            if (inCandle) {
+              area.applyOptions({ visible: false, priceFormat: rawFmt, priceScaleId: "right" });
+              area.setData([]);
+              candle.setData([...wsPrefix, ...cData] as any);
+              candle.applyOptions({ visible: true });
+            } else {
+              candle.applyOptions({ visible: false });
+              candle.setData([]);
+              area.setData([...wsPrefix, ...aData] as any);
+              area.applyOptions({ visible: true, priceFormat: rawFmt, priceScaleId: "right" });
+            }
             bm.setData([]);
             bm.applyOptions({ priceScaleId: "right", priceFormat: rawFmt });
-            area.applyOptions({ visible: !inCandle, priceFormat: rawFmt, priceScaleId: "right" });
-            candle.applyOptions({ visible: inCandle });
             chartPctModeRef.current = false;
           }
 
@@ -974,19 +1062,23 @@ export default function GrowthChart({
   useEffect(() => {
     if (!isIntraday || portfolioData.length === 0 || adaptiveData.length === 0) return;
     const live = portfolioData[portfolioData.length - 1];
-    const livePrice = live.value as number;
+    const livePrice = finitePrice(live.value);
     const lastBar = adaptiveData[adaptiveData.length - 1];
+    if (livePrice == null || !lastBar) return;
     const isBizDay = !isCrypto && ["1d", "1W"].includes(intervalKey);
     const lastTime = isBizDay ? (toDay(lastBar.date) as any) : toTs(lastBar.date);
     try {
-      areaSeriesRef.current?.update({ time: lastTime, value: livePrice });
-      candleSeriesRef.current?.update({
-        time:  lastTime,
-        open:  lastBar.open  ?? lastBar.value,
-        high:  Math.max(lastBar.high ?? lastBar.value, livePrice),
-        low:   lastBar.low   ?? lastBar.value,
-        close: livePrice,
-      });
+      if (chartModeRef.current === "candle") {
+        candleSeriesRef.current?.update({
+          time:  lastTime,
+          open:  lastBar.open  ?? lastBar.value,
+          high:  Math.max(lastBar.high ?? lastBar.value, livePrice),
+          low:   Math.min(lastBar.low ?? lastBar.value, livePrice),
+          close: livePrice,
+        });
+      } else {
+        areaSeriesRef.current?.update({ time: lastTime, value: livePrice });
+      }
     } catch { /* ignore si série pas encore prête */ }
   }, [portfolioData, isCrypto, intervalKey]); // eslint-disable-line
 
@@ -1161,8 +1253,10 @@ export default function GrowthChart({
               <button
                 onClick={() => setShowGridPicker(v => !v)}
                 title="Personnaliser la grille"
+                className="chart-action-btn"
                 style={{
-                  width: 28, height: 28, borderRadius: 7, border: "none",
+                  width: 30, height: 30, borderRadius: 9,
+                  border: `1px solid ${showGridPicker ? "rgba(155,185,255,0.40)" : "rgba(255,255,255,0.12)"}`,
                   background: showGridPicker ? "rgba(155,185,255,0.18)" : "rgba(255,255,255,0.06)",
                   color: showGridPicker ? "#9BB9FF" : "rgba(255,255,255,0.4)",
                   cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center",
@@ -1208,13 +1302,13 @@ export default function GrowthChart({
                                 <line x1="0" y1="10" x2="28" y2="10"
                                   stroke={GRID_PRESETS[p].color === "rgba(255,255,255,0)" ? "none" : GRID_PRESETS[p].color}
                                   strokeWidth="1"
-                                  strokeDasharray={p === "solid" ? "none" : "2 2"}
+                                  strokeDasharray="none"
                                   opacity={p === "minimal" ? 0.5 : 1}
                                 />
                                 <line x1="14" y1="0" x2="14" y2="20"
                                   stroke={GRID_PRESETS[p].color === "rgba(255,255,255,0)" ? "none" : GRID_PRESETS[p].color}
                                   strokeWidth="1"
-                                  strokeDasharray={p === "solid" ? "none" : "2 2"}
+                                  strokeDasharray="none"
                                   opacity={p === "minimal" ? 0.5 : 1}
                                 />
                               </>}
@@ -1349,7 +1443,7 @@ export default function GrowthChart({
           return (
             <div
               key={key}
-              className="relative pb-1 cursor-pointer text-center min-w-[40px]"
+              className="relative pb-1 cursor-pointer text-center w-[48px] flex-none"
               onClick={() => handlePeriodChange(key)}
             >
               <div className="text-xs font-semibold" style={{ color: isActive ? portfolioColor : "#94a3b8" }}>

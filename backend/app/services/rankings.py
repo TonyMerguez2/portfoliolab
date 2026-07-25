@@ -45,6 +45,12 @@ def update_mcap(ticker: str, market_cap: float) -> None:
             _mcap[ticker.upper()] = market_cap
 
 
+def get_market_cap(ticker: str) -> Optional[float]:
+    """Return the latest cached market cap for a ticker, when available."""
+    with _lock:
+        return _mcap.get(ticker.upper())
+
+
 def get_rank(ticker: str) -> Optional[int]:
     """
     Return the rank of *ticker* among all stocks in the cache (market cap desc).

@@ -23,6 +23,71 @@ export interface BacktestRequest {
   lang?: string;
 }
 
+export type SimulationModel = "gbm" | "bootstrap" | "multivariate";
+export type RebalancePolicy = "daily" | "annual" | "none";
+
+export interface MonteCarloRequest {
+  assets: AssetInput[];
+  period: Period;
+  horizon_years: number;
+  n_simulations: number;
+  initial_investment: number;
+  simulation_model: SimulationModel;
+  block_size?: number;
+  parameter_uncertainty?: boolean;
+  rebalance?: RebalancePolicy;
+}
+
+// ─────────────────────────────────────────────
+// Monte Carlo (advanced) response
+// ─────────────────────────────────────────────
+
+export interface MonteCarloGoal {
+  target_value: number;
+  probability_of_reaching: number;
+  reached_by_p5: boolean;
+  reached_by_p50: boolean;
+  reached_by_p95: boolean;
+  years_to_reach_optimistic: number | null;
+  years_to_reach_median: number | null;
+  years_to_reach_pessimistic: number | null;
+}
+
+export interface MonteCarloBin {
+  range_min: number;
+  range_max: number;
+  count: number;
+  pct: number;
+}
+
+export interface MonteCarloResult {
+  percentiles: Record<"p5" | "p25" | "p50" | "p75" | "p95", number[]>;
+  n_days: number;
+  probability_of_loss: number;
+  expected_final_value: number;
+  initial_investment: number;
+  final_values_p5: number;
+  final_values_p50: number;
+  final_values_p95: number;
+  goal_analysis: MonteCarloGoal | null;
+  distribution: MonteCarloBin[];
+  robustness_score: number;
+  robustness_label: string;
+  robustness_color: "green" | "amber" | "red";
+  robustness_reasons: string[];
+  annualized_return: number;
+  annualized_volatility: number;
+  model: SimulationModel;
+  rebalance: RebalancePolicy;
+  parameter_uncertainty: boolean;
+  n_observations: number;
+  drift_std_error: number;
+  final_values_p1: number;
+  expected_shortfall_5: number;
+  sample_skew: number;
+  sample_excess_kurtosis: number;
+}
+
 // ─────────────────────────────────────────────
 // Response sub-types
 // ─────────────────────────────────────────────

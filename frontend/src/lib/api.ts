@@ -1,4 +1,9 @@
-import type { BacktestRequest, BacktestResponse } from "@/types";
+import type {
+  BacktestRequest,
+  BacktestResponse,
+  MonteCarloRequest,
+  MonteCarloResult,
+} from "@/types";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 
@@ -38,6 +43,14 @@ async function get<TRes>(path: string): Promise<TRes> {
 export const api = {
   runBacktest: (req: BacktestRequest) =>
     post<BacktestRequest, BacktestResponse>("/api/v1/backtest", req),
+
+  runMonteCarlo: (req: MonteCarloRequest, target?: number) =>
+    post<MonteCarloRequest, MonteCarloResult>(
+      target && target > 0
+        ? `/api/v1/monte-carlo-advanced?target=${target}`
+        : "/api/v1/monte-carlo-advanced",
+      req,
+    ),
 
   validateTicker: (ticker: string) =>
     get<{ ticker: string; valid: boolean; name?: string }>(`/api/v1/validate-ticker/${ticker}`),

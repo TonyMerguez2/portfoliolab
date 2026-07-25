@@ -17,6 +17,50 @@ import AssetLogo from "@/components/AssetLogo";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 
+const COMPARISON_PERIODS = ["24h", "1S", "1M", "3M", "6M", "1A", "3A", "Max"] as const;
+const COMPARISON_INTERVALS = ["1m", "5m", "15m", "1h", "1d", "1W"] as const;
+const COMPARISON_PERIOD_SECS: Record<string, number | null> = {
+  "24h": 86400, "1S": 7 * 86400, "1M": 30 * 86400, "3M": 91 * 86400,
+  "6M": 183 * 86400, "1A": 365 * 86400, "3A": 1095 * 86400, "Max": null,
+};
+const COMPARISON_ALLOWED_INTERVALS: Record<string, string[]> = {
+  "24h": ["1m", "5m", "15m"],
+  "1S": ["5m", "15m", "1h"],
+  "1M": ["5m", "15m", "1h", "1d"],
+  "3M": ["15m", "1h", "1d"],
+  "6M": ["1h", "1d", "1W"],
+  "1A": ["1h", "1d", "1W"],
+  "3A": ["1d", "1W"],
+  "Max": ["1d", "1W"],
+};
+const COMPARISON_DEFAULT_INTERVAL: Record<string, string> = {
+  "24h": "5m", "1S": "15m", "1M": "1h", "3M": "1h",
+  "6M": "1d", "1A": "1d", "3A": "1d", "Max": "1d",
+};
+
+function computePeriodPerformances(
+  data: { date: string; value: number }[],
+  dailyChange: number | null,
+): Record<string, number | null> {
+  return Object.fromEntries(COMPARISON_PERIODS.map(period => {
+    if (period === "24h" && dailyChange !== null) return [period, dailyChange];
+    const secs = COMPARISON_PERIOD_SECS[period];
+    const cutoff = secs ? new Date(Date.now() - secs * 1000).toISOString().slice(0, 10) : null;
+    const points = cutoff ? data.filter(point => point.date.slice(0, 10) >= cutoff) : data;
+    if (points.length < 2 || points[0].value <= 0) return [period, null];
+    return [period, (points[points.length - 1].value - points[0].value) / points[0].value * 100];
+  }));
+}
+
+function formatComparisonPerformance(value: number | null): string {
+  if (value === null || !Number.isFinite(value)) return "—";
+  const sign = value >= 0 ? "+" : "";
+  const abs = Math.abs(value);
+  if (abs >= 10000) return `${sign}${(value / 1000).toFixed(0)}k%`;
+  if (abs >= 1000) return `${sign}${value.toFixed(0)}%`;
+  return `${sign}${value.toFixed(1)}%`;
+}
+
 function getCutoffDate(days: number): string {
   const d = new Date();
   d.setDate(d.getDate() - days);
@@ -161,24 +205,41 @@ type NewsEventType = "Résultats" | "IA" | "Dividende" | "Régulation" | "Fusion
 function scoreNews(title: string): { impact: NewsImpact; type: NewsEventType; readMin: number } {
   const t = title.toLowerCase();
   let type: NewsEventType = "Marché";
-  if (/earnings|revenue|profit|q[1-4]\b|eps\b|quarterly|annual|résultat|chiffre d.affaire|bénéfice/i.test(title)) type = "Résultats";
+  if (/earnings|revenue|profit|q[1-4]\b|eps\b|quarterly|annual|résultat|chiffre d.affaire|bénéfice|ventes|trimestre|prévision/i.test(title)) type = "Résultats";
   else if (/\bai\b|artificial intelligence|machine learning|chatgpt|\bgpt\b|\bllm\b|openai|gemini|mistral/i.test(title)) type = "IA";
   else if (/dividend|yield|dividende|payout/i.test(title)) type = "Dividende";
-  else if (/\bsec\b|\bftc\b|regulat|fine\b|lawsuit|penalty|antitrust|sanction|amende|probe/i.test(title)) type = "Régulation";
-  else if (/merger|acqui|takeover|\bdeal\b|fusion|buys?\b|purchased?/i.test(title)) type = "Fusion";
-  else if (/analyst|upgrade|downgrade|price target|buy rating|sell rating|outperform|underperform/i.test(title)) type = "Analyse";
-  else if (/\bipo\b|offering|stock split|buyback|repurchase/i.test(title)) type = "Bourse";
-  else if (/\bceo\b|\bcfo\b|\bcto\b|executive|appoint|resign|leadership/i.test(title)) type = "Direction";
+  else if (/\bsec\b|\bftc\b|regulat|fine\b|lawsuit|penalty|antitrust|sanction|amende|probe|procès|enquête|justice|litige|actionnaire/i.test(title)) type = "Régulation";
+  else if (/merger|acqui|takeover|\bdeal\b|fusion|buys?\b|purchased?|rachat|acquisition/i.test(title)) type = "Fusion";
+  else if (/analyst|upgrade|downgrade|price target|buy rating|sell rating|outperform|underperform|objectif de cours|recommandation|dégrade|relève/i.test(title)) type = "Analyse";
+  else if (/\bipo\b|offering|stock split|buyback|repurchase|introduction en bourse|rachat d.action/i.test(title)) type = "Bourse";
+  else if (/\bceo\b|\bcfo\b|\bcto\b|executive|appoint|resign|leadership|direction|dirigeant|nomme|démission/i.test(title)) type = "Direction";
 
   let score = 0;
-  ["miss","beat","surge","plunge","crash","record","bankruptcy","default","fine","merger","acqui","billion","layoff","downgrade","upgrade","warning","recall","investigation","fraud","guidance cut","profit warning","job cut"].forEach(k => { if (t.includes(k)) score += 2; });
-  ["growth","expansion","partnership","launch","announces","targets","dividend","analyst","forecast","results","report"].forEach(k => { if (t.includes(k)) score += 1; });
+  ["miss","beat","surge","plunge","crash","record","bankruptcy","default","fine","merger","acqui","billion","layoff","downgrade","upgrade","warning","recall","investigation","fraud","guidance cut","profit warning","job cut","procès","enquête","amende","fraude","faillite","rappel","licenciement","avertissement","chute","bondit","record","milliard","acquisition","fusion"].forEach(k => { if (t.includes(k)) score += 2; });
+  ["growth","expansion","partnership","launch","announces","targets","dividend","analyst","forecast","results","report","croissance","partenariat","lancement","annonce","objectif","dividende","analyste","prévision","résultat","ventes","trimestre","bénéfice","investit","dépense"].forEach(k => { if (t.includes(k)) score += 1; });
   if (type === "Résultats" || type === "Fusion") score += 2;
   if (type === "Régulation") score += 1;
 
   const impact: NewsImpact = score >= 4 ? "high" : score >= 1 ? "medium" : "low";
   const readMin = Math.max(1, Math.min(5, Math.round(title.split(" ").length * 7 / 60)));
   return { impact, type, readMin };
+}
+
+function newsTimestamp(value: string | number): number {
+  if (typeof value === "number") {
+    const milliseconds = value > 10_000_000_000 ? value : value * 1000;
+    return Number.isFinite(milliseconds) ? milliseconds : 0;
+  }
+  const parsed = new Date(value).getTime();
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function formatNewsAge(timestamp: number): string {
+  if (!timestamp) return "";
+  const diff = Math.max(0, Math.floor((Date.now() - timestamp) / 60000));
+  if (diff < 60) return `il y a ${Math.max(1, diff)} min`;
+  if (diff < 1440) return `il y a ${Math.floor(diff / 60)} h`;
+  return `il y a ${Math.floor(diff / 1440)} j`;
 }
 
 const IMPACT_CONFIG: Record<NewsImpact, { label: string; color: string; bg: string; dot: string }> = {
@@ -426,7 +487,27 @@ const typeColor = (type?: string) => ({
   text: type==="CRYPTOCURRENCY"?"#fcd34d":type==="ETF"?"#c4b5fd":type==="INDEX"?"#67e8f9":"#93c5fd",
 });
 
-// Rang de l'actif dans sa catégorie (market cap / AUM / CoinMarketCap)
+const CRYPTO_COINGECKO_IDS: Record<string,string> = {
+  "BTC-USD":"bitcoin", "ETH-USD":"ethereum", "SOL-USD":"solana", "BNB-USD":"binancecoin",
+  "XRP-USD":"ripple", "DOGE-USD":"dogecoin", "ADA-USD":"cardano", "AVAX-USD":"avalanche-2",
+  "DOT-USD":"polkadot", "INJ-USD":"injective-protocol", "LINK-USD":"chainlink",
+  "UNI7083-USD":"uniswap", "LTC-USD":"litecoin", "ATOM-USD":"cosmos", "NEAR-USD":"near",
+  "ARB-USD":"arbitrum", "OP-USD":"optimism", "SUI20947-USD":"sui",
+};
+
+async function fetchCryptoRank(ticker: string): Promise<number | null> {
+  const id = CRYPTO_COINGECKO_IDS[ticker.toUpperCase()];
+  if (!id) return null;
+  try {
+    const response = await fetch(`https://api.coingecko.com/api/v3/coins/markets?vs_currency=usd&ids=${encodeURIComponent(id)}`);
+    if (!response.ok) return null;
+    const data = await response.json();
+    const rank = Array.isArray(data) ? Number(data[0]?.market_cap_rank) : NaN;
+    return Number.isFinite(rank) && rank > 0 ? rank : null;
+  } catch {
+    return null;
+  }
+}
 
 function ChartContent() {
   const searchParams = useSearchParams();
@@ -483,6 +564,7 @@ function ChartContent() {
   const [activeInterval, setActiveInterval] = useState<string>("1d");
   const [chartPriceData, setChartPriceData] = useState<{date:string;value:number;high?:number;low?:number}[]>([]);
   const [showCustom,    setShowCustom]    = useState(false);
+  const [chartDisplayMode, setChartDisplayMode] = useState<"glass" | "black">("glass");
   const [copied,        setCopied]        = useState(false);
   const [chartViewMode, setChartViewMode] = useState<"line" | "candle">("line");
   const [extractedColor, setExtractedColor] = useState<string | null>(null);
@@ -492,8 +574,8 @@ function ChartContent() {
   const [fxRates,           setFxRates]           = useState<Record<string, number>>({ USD: 1 });
   const [sidebarOpen,    setSidebarOpen]    = useState(false);
   const [sidebarTab,     setSidebarTab]     = useState<"news"|"similar"|"ai">("news");
-  const [similar,        setSimilar]        = useState<{ticker:string;sector?:string;country?:string;type?:string;price:number;change:number}[]>([]);
-  const [similarBy,      setSimilarBy]      = useState<"sector"|"geography"|"class"|"marketcap">("sector");
+  const [similar,        setSimilar]        = useState<{ticker:string;sector?:string;country?:string;type?:string;mcap?:string;market_cap?:number|null;price:number;change:number}[]>([]);
+  const [similarBy,      setSimilarBy]      = useState<"sector"|"geography"|"marketcap">("sector");
   const [news,           setNews]           = useState<{title:string;publisher:string;link:string;published_at:string|number;thumbnail?:string}[]>([]);
   const [newsLoading,    setNewsLoading]    = useState(false);
   const [newsSortBy,      setNewsSortBy]      = useState<"recent" | "impact">("recent");
@@ -504,6 +586,7 @@ function ChartContent() {
 
   const [customBmLoading, setCustomBmLoading] = useState(false);
   const [bmCurrentPrice,  setBmCurrentPrice]  = useState<{price:number;change:number}|null>(null);
+  const [bmQuote,         setBmQuote]         = useState<{day_high?:number;day_low?:number;open?:number;prev_close?:number;year_high?:number;year_low?:number;volume?:number;avg_volume?:number;market_cap?:number;currency?:string;global_rank?:number}|null>(null);
   const [bmPriceFlash, setBmPriceFlash] = useState<"up"|"down"|null>(null);
   const prevBmPriceRef = useRef<number|null>(null);
   useEffect(() => {
@@ -520,6 +603,15 @@ function ChartContent() {
   const [bmQuery,         setBmQuery]         = useState("");
   const [similarLoading, setSimilarLoading] = useState(false);
   const [fullscreen,     setFullscreen]     = useState(false);
+
+  // Apply the persisted display mode after hydration. Keeping the server and
+  // first client render identical prevents the default background from being
+  // left behind when a ticker navigation remounts this page.
+  useEffect(() => {
+    try {
+      setChartDisplayMode(localStorage.getItem("novac_chart_display") === "black" ? "black" : "glass");
+    } catch {}
+  }, []);
 
   // Reset extracted colour whenever the viewed asset changes
   useEffect(() => { setExtractedColor(null); }, [ticker]);
@@ -538,6 +630,13 @@ function ChartContent() {
   const setLineColor  = (v: string | null) => { setLineColorRaw(v);  if (v === null) localStorage.removeItem("novac_chart_lineColor"); else localStorage.setItem("novac_chart_lineColor", v); };
   const setCandleUp   = (v: string)        => { setCandleUpRaw(v);   localStorage.setItem("novac_chart_candleUp",   v); };
   const setCandleDown = (v: string)        => { setCandleDownRaw(v); localStorage.setItem("novac_chart_candleDown", v); };
+  const toggleChartDisplayMode = () => {
+    setChartDisplayMode(current => {
+      const next = current === "glass" ? "black" : "glass";
+      try { localStorage.setItem("novac_chart_display", next); } catch {}
+      return next;
+    });
+  };
 
   const handleShare = () => {
     navigator.clipboard.writeText(window.location.href).then(() => {
@@ -657,9 +756,13 @@ function ChartContent() {
     if (!ticker) { setQuote(null); return; }
     fetch(`${API_URL}/api/v1/quote/${encodeURIComponent(ticker)}`)
       .then(r => r.json())
-      .then(d => { if (!d.error) setQuote(d); })
+      .then(async d => {
+        if (d.error) return;
+        if (isCrypto && d.global_rank == null) d.global_rank = await fetchCryptoRank(ticker);
+        setQuote(d);
+      })
       .catch(() => {});
-  }, [ticker]);
+  }, [ticker, isCrypto]);
 
   // Initialise la devise affichée depuis la devise native de l'actif
   useEffect(() => {
@@ -674,12 +777,15 @@ function ChartContent() {
   // Similar assets
   useEffect(() => {
     if (!ticker) { setSimilar([]); return; }
+    const controller = new AbortController();
+    setSimilar([]);
     setSimilarLoading(true);
-    fetch(`${API_URL}/api/v1/similar/${encodeURIComponent(ticker)}?by=${similarBy}`)
+    fetch(`${API_URL}/api/v1/similar/${encodeURIComponent(ticker)}?by=${similarBy}`, { signal:controller.signal })
       .then(r => r.json())
       .then((d: unknown) => { if (Array.isArray(d)) setSimilar(d); })
-      .catch(() => {})
-      .finally(() => setSimilarLoading(false));
+      .catch(error => { if (error instanceof Error && error.name !== "AbortError") setSimilar([]); })
+      .finally(() => { if (!controller.signal.aborted) setSimilarLoading(false); });
+    return () => controller.abort();
   }, [ticker, similarBy]);
 
   // News
@@ -740,6 +846,19 @@ function ChartContent() {
       .then((d: any[]) => { if (Array.isArray(d) && d.length > 0) setBmCurrentPrice({ price: d[0].price, change: d[0].change }); })
       .catch(() => {});
   }, [customBmTicker]);
+
+  useEffect(() => {
+    if (!customBmTicker) { setBmQuote(null); return; }
+    setBmQuote(null);
+    fetch(`${API_URL}/api/v1/quote/${encodeURIComponent(customBmTicker)}`)
+      .then(r => r.json())
+      .then(async d => {
+        if (d.error) return;
+        if (isBmCrypto && d.global_rank == null) d.global_rank = await fetchCryptoRank(customBmTicker);
+        setBmQuote(d);
+      })
+      .catch(() => {});
+  }, [customBmTicker, isBmCrypto]);
 
   useEffect(() => {
     if (!customBmTicker || !isBmCrypto) return;
@@ -857,6 +976,21 @@ function ChartContent() {
     return first > 0 ? (last - first) / first * 100 : null;
   }, [rawCustomBmData, scaledPortfolioData]);
 
+  const primaryPeriodPerformances = useMemo(
+    () => computePeriodPerformances(scaledPortfolioData, currentPrice?.change ?? null),
+    [scaledPortfolioData, currentPrice?.change],
+  );
+  const secondaryPeriodPerformances = useMemo(
+    () => computePeriodPerformances(rawCustomBmData, bmCurrentPrice?.change ?? null),
+    [rawCustomBmData, bmCurrentPrice?.change],
+  );
+
+  const selectComparisonPeriod = (period: string) => {
+    const allowed = COMPARISON_ALLOWED_INTERVALS[period] ?? [];
+    if (!allowed.includes(activeInterval)) setActiveInterval(COMPARISON_DEFAULT_INTERVAL[period] ?? "1d");
+    setActivePeriod(period);
+  };
+
   // Stats comparatif (365j) pour la vue synchronisée
   const syncStats = useMemo(() => {
     if (!rawCustomBmData.length || !chartPriceData.length) return null;
@@ -949,6 +1083,12 @@ function ChartContent() {
   const _EXCH: Record<string,string> = {
     NMS:"Nasdaq GS", NMQ:"Nasdaq", NYQ:"NYSE", NYSEArca:"NYSE Arca", PAR:"Euronext Paris",
     GER:"Xetra", LSE:"London SE", MCE:"Madrid", AMS:"Amsterdam", MIL:"Milan", SWX:"SIX Swiss",
+    TOR:"Toronto", TSX:"Toronto", HKG:"Hong Kong", JPX:"Tokyo", TYO:"Tokyo", ASX:"Sydney",
+  };
+  const _EXCH_FLAG: Record<string,string> = {
+    NMS:"us", NMQ:"us", NYQ:"us", NYSEArca:"us",
+    PAR:"fr", GER:"de", LSE:"gb", MCE:"es", AMS:"nl", MIL:"it", SWX:"ch",
+    TOR:"ca", TSX:"ca", HKG:"hk", JPX:"jp", TYO:"jp", ASX:"au",
   };
   const _fmtN = (v: number) => v < 1
     ? v.toLocaleString("en-US",{minimumFractionDigits:4,maximumFractionDigits:4})
@@ -975,9 +1115,38 @@ function ChartContent() {
       (quote?.year_low != null && quote?.year_high != null) && { label:"52 sem",  value: `${_fmtN(quote.year_low!)} – ${_fmtN(quote.year_high!)}` },
     ].filter(Boolean) as {label:string;value:string}[];
   })() : [];
+  const bmAssetInfo = customBmTicker ? TRENDING.find(a => a.ticker === customBmTicker) : null;
+  const bmMetaCards = customBmTicker ? (() => {
+    const aType = customBmType || bmAssetInfo?.type;
+    const isIdx = aType === "INDEX";
+    const isEtf = aType === "ETF";
+    const isCrp = aType === "CRYPTOCURRENCY";
+    const exchVal = (isIdx || isCrp)
+      ? null
+      : (bmAssetInfo?.exchange ? (_EXCH[bmAssetInfo.exchange] || bmAssetInfo.exchange) : null);
+    return [
+      exchVal                                                   && { label:"Exchange", value: exchVal },
+      aType                                                     && { label:"Type",     value: ({"EQUITY":"Action","ETF":"ETF","INDEX":"Indice","CRYPTOCURRENCY":"Crypto"} as Record<string,string>)[aType] || aType },
+      bmQuote?.currency                                         && { label:"Devise",   value: bmQuote.currency },
+      bmQuote?.open        != null                              && { label:"Ouv",      value: _fmtN(bmQuote.open!) },
+      bmQuote?.day_high    != null                              && { label:"Haut",     value: _fmtN(bmQuote.day_high!) },
+      bmQuote?.day_low     != null                              && { label:"Bas",      value: _fmtN(bmQuote.day_low!) },
+      !isIdx && bmQuote?.volume     != null                     && { label:"Vol",      value: _fmtV(bmQuote.volume!) },
+      !isIdx && bmQuote?.market_cap != null                     && { label: isEtf ? "AUM" : "Cap", value: _fmtC(bmQuote.market_cap!) },
+      (bmQuote?.year_low != null && bmQuote?.year_high != null) && { label:"52 sem", value: `${_fmtN(bmQuote.year_low!)} – ${_fmtN(bmQuote.year_high!)}` },
+    ].filter(Boolean) as {label:string;value:string}[];
+  })() : [];
 
   return (
-    <div data-novac-page style={{ height:"100vh", background:"var(--novac-bg, #041124)", color:"var(--novac-text-primary, #F8F9FC)", fontFamily:"-apple-system,BlinkMacSystemFont,sans-serif", display:"flex", flexDirection:"column", position:"relative", overflow:"hidden" }}>
+    <div data-novac-page style={{
+      height:"100vh",
+      background:chartDisplayMode === "black"
+        ? "#171717"
+        : "var(--novac-bg, #041124)",
+      color:"var(--novac-text-primary, #F8F9FC)", fontFamily:"-apple-system,BlinkMacSystemFont,sans-serif",
+      display:"flex", flexDirection:"column", position:"relative", overflow:"hidden",
+      transition:"background-color .2s ease",
+    }}>
       {/* Ambient glow — positionné derrière la carte actif (haut-gauche), ellipse large et aplatie */}
       <div style={{ position:"relative", zIndex:1, display:"flex", flexDirection:"column", flex:1, minHeight:0, paddingTop:48 }}>
 
@@ -1022,113 +1191,163 @@ function ChartContent() {
                 @keyframes price-flash-dn{0%{color:#ef4444}80%{color:#ef4444}100%{color:#F8F9FC}}
                 @keyframes hdr-pulse{0%,100%{box-shadow:0 0 0 0 rgba(34,197,94,.7)}60%{box-shadow:0 0 0 5px rgba(34,197,94,0)}}
                 @keyframes hdr-pulse-live{0%,100%{box-shadow:0 0 0 0 rgba(34,197,94,.9)}50%{box-shadow:0 0 0 6px rgba(34,197,94,0)}}
-                .chart-action-btn{transition:all 0.18s cubic-bezier(0.34,1.56,0.64,1)!important}
-                .chart-action-btn:hover{transform:scale(1.08) translateY(-0.5px);filter:brightness(1.15)}
-                .chart-action-btn:active{transform:scale(0.94)!important;transition-duration:0.08s!important}
+                .chart-action-btn{width:30px!important;height:30px!important;box-sizing:border-box!important;border-width:1px!important;border-style:solid!important;border-radius:9px!important;box-shadow:0 2px 7px rgba(0,0,0,.22)!important;transition:transform .16s ease,filter .16s ease,background .16s ease,border-color .16s ease!important}
+                .chart-action-btn:hover{transform:translateY(-1px);filter:brightness(1.12)}
+                .chart-action-btn:active{transform:translateY(0)!important;filter:brightness(.96);transition-duration:0.07s!important}
+                .news-card-link{transition:transform .16s ease,background .16s ease,border-color .16s ease,box-shadow .16s ease}
+                .news-card-link:hover{transform:translateY(-1px);background:rgba(255,255,255,.047)!important;border-color:rgba(147,177,235,.17)!important;box-shadow:0 8px 22px rgba(0,0,0,.13)}
+                .news-card-link:active{transform:translateY(0);transition-duration:.07s}
+                .news-card-link:focus-visible{outline:2px solid rgba(91,141,239,.56);outline-offset:2px}
+                .news-card-arrow{transition:transform .16s ease,opacity .16s ease}
+                .news-card-link:hover .news-card-arrow{transform:translateX(2px);opacity:1!important}
+                .chart-glass-container::before{display:none}
+                .asset-hero-grid{position:relative;z-index:1;display:grid;grid-template-columns:max-content max-content max-content;align-items:center;height:64px;min-height:64px}
+                .asset-hero-row{zoom:.94}
+.asset-hero-card::before{content:"";position:absolute;z-index:4;inset:0;box-sizing:border-box;border-radius:inherit;padding:1px;pointer-events:none;background:linear-gradient(135deg,color-mix(in srgb,currentColor 44%,transparent) 0%,color-mix(in srgb,currentColor 36%,transparent) 24%,color-mix(in srgb,currentColor 17%,transparent) 44%,transparent 54%,color-mix(in srgb,currentColor 15%,transparent) 68%,color-mix(in srgb,currentColor 40%,transparent) 100%);-webkit-mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);-webkit-mask-composite:xor;mask-composite:exclude}
+                .asset-hero-secondary-card{zoom:1}
+                .asset-hero-identity{display:flex;align-items:center;min-width:0;padding-right:18px}
+                .asset-hero-section{align-self:stretch;display:flex;flex-direction:column;justify-content:center;border-left:1px solid rgba(255,255,255,.11);padding:0 18px;min-width:0}
+                .asset-hero-status{padding-right:10px}
+                .asset-hero-reflection{position:absolute;z-index:0;inset:0;border-radius:inherit;pointer-events:none;background:linear-gradient(118deg,rgba(255,255,255,.045) 0%,rgba(255,255,255,.01) 12%,transparent 27%,transparent 100%),radial-gradient(ellipse 17% 58% at 0% -10%,rgba(255,255,255,.052),transparent 70%),linear-gradient(180deg,rgba(255,255,255,.032),transparent 16%);mix-blend-mode:screen}
+                .asset-hero-star{width:18px;height:22px;margin:-3px 0 -3px 5px;padding:0;border:0;background:transparent;display:flex;align-items:center;justify-content:center;cursor:pointer;border-radius:0;flex:0 0 auto;box-shadow:none;appearance:none;opacity:1;transform:none!important;translate:none!important;scale:1!important;transition:none!important}
+                .asset-hero-star:hover{background:transparent;border-color:transparent;opacity:1;transform:none!important;translate:none!important;scale:1!important}
+                .asset-hero-star.is-active{background:transparent;border-color:transparent;box-shadow:none}
+                .asset-hero-star:active{opacity:.58;transform:none!important;scale:1!important}
+                .asset-hero-star:focus-visible{outline:2px solid rgba(255,255,255,.38);outline-offset:2px}
+                .asset-hero-star svg,.asset-hero-star:hover svg{display:block;transform:none!important;translate:none!important;scale:1!important;transition:none!important}
+                .asset-meta-pill{display:inline-flex;align-items:center;min-height:17px;padding:2px 7px;border-radius:999px;border:1px solid rgba(255,255,255,.035);background:rgba(255,255,255,.055);font-size:9px;line-height:1;font-weight:600;white-space:nowrap}
+                .asset-hero-price{justify-content:space-between;padding-top:2px!important;padding-bottom:2px!important;box-sizing:border-box}
+                .asset-performance-pill{display:inline-flex;align-items:center;min-height:17px;padding:2px 7px;border-radius:999px;font-size:9px;line-height:1;font-weight:700;box-sizing:border-box}
+                .asset-exchange-flag{width:12px;height:12px;margin-left:3px;border:0;outline:0;border-radius:50%;flex:0 0 auto;object-fit:cover;display:inline-block;vertical-align:middle;box-shadow:none}
+                .asset-market-pill{display:inline-flex;align-items:center;align-self:flex-start;gap:5px;min-height:17px;padding:2px 7px;box-sizing:border-box;border-radius:9px;border:1px solid rgba(255,255,255,.028);background:rgba(255,255,255,.045);white-space:nowrap}
+                .similar-asset-card{transition:transform .16s ease,filter .16s ease,box-shadow .16s ease!important}
+                .similar-asset-card:hover{transform:translateY(-1px);filter:brightness(1.08);box-shadow:0 9px 24px rgba(0,0,0,.24)!important}
+                .similar-asset-card:active{transform:translateY(0);filter:brightness(.98)}
+                .similar-asset-card:focus-visible{outline:2px solid rgba(155,185,255,.65);outline-offset:2px}
+                @media(max-width:1180px){
+                  .comparison-insights-grid{grid-template-columns:1fr 1fr!important}
+                  .comparison-summary{grid-column:1 / -1}
+                }
+                @media(max-width:1120px){
+                  .asset-hero-grid{grid-template-columns:max-content max-content max-content}
+                  .asset-hero-identity{padding-right:10px}.asset-hero-section{padding:0 10px}.asset-hero-status{padding-right:6px}
+                }
+                @media(max-width:820px){
+                  .asset-hero-row{zoom:1}
+                  .asset-hero-grid{grid-template-columns:minmax(0,1fr) minmax(180px,.75fr);height:auto;min-height:0;row-gap:18px}
+                  .asset-hero-status{grid-column:1 / 3;border-left:0!important;border-top:1px solid rgba(255,255,255,.1);padding:16px 0 0!important;flex-direction:row!important;align-items:center;justify-content:space-between!important}
+                }
+                @media(max-width:620px){
+                  .asset-hero-grid{display:flex;flex-wrap:wrap;min-height:0;gap:18px}
+                  .asset-hero-identity{width:100%;padding:0}.asset-hero-section{flex:1 1 180px;border-left:0;padding:0}
+                  .asset-hero-price{border-top:1px solid rgba(255,255,255,.1);padding-top:16px!important}
+                  .asset-hero-status{flex:1 1 100%;order:3}
+                }
               `}</style>
-              <div style={{ display:"flex", flexDirection:"column", padding:"11px 20px 9px", borderTop:"1px solid rgba(255,255,255,0.06)", borderBottom:"none", flexShrink:0, gap:8, marginTop:10 }}>
+              <div style={{ display:"flex", flexDirection:"column", padding:"8px 20px 8px", borderTop:"1px solid rgba(255,255,255,0.06)", borderBottom:"none", flexShrink:0, gap:8, marginTop:6 }}>
 
                 {/* ── Row 1: back · [logo + compact identity+price] · NOVAC ── */}
                 <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", gap:16 }}>
 
-                  <div style={{ display:"flex", alignItems:"center", gap:13, minWidth:0 }}>
+                  <div className="asset-hero-row" style={{ display:"flex", alignItems:"stretch", gap:10, minWidth:0, width:"100%", flexWrap:"wrap" }}>
                     {ticker && (
-                      <TileCard ticker={ticker} style={{ display:"flex", alignItems:"center", gap:0, padding:"14px 16px" }}>
-                        {/* Logo */}
-                        <AssetLogo
-                          ticker={ticker} type={assetInfo?.type} size={56} radius={13}
-                          fallbackBg={tc.bg} fallbackBorder={tc.border} fallbackTextColor={tc.text}
-                          onColorExtracted={c => { if (!BRAND_COLORS[ticker]) setExtractedColor(c); }}
-                          bare
-                        />
-                        {/* Identity */}
-                        <div style={{ marginLeft:14, display:"flex", flexDirection:"column", justifyContent:"center", gap:6 }}>
-                          <span style={{ fontSize:18, fontWeight:800, color:"#F8F9FC", letterSpacing:"-0.03em", lineHeight:1 }}>{displayTicker}</span>
-                          <span style={{ fontSize:10, fontWeight:600, color:"rgba(255,255,255,0.85)", lineHeight:1 }}>{assetInfo?.name || ticker}</span>
-                          <div style={{ display:"flex", alignItems:"center", gap:4 }}>
-                            {assetInfo?.type && assetInfo.type !== "INDEX" && (() => {
-                              const col = BRAND_COLORS[ticker as string] ?? extractedColor ?? "#5B8DEF";
-                              return (
-                                <span style={{ fontSize:9, fontWeight:700, color:col, background:`${col}22`, borderRadius:20, padding:"2px 7px", letterSpacing:"0.02em" }}>
-                                  {({"EQUITY":"Action","ETF":"ETF","CRYPTOCURRENCY":"Crypto"} as Record<string,string>)[assetInfo.type] ?? assetInfo.type}
+                      <TileCard ticker={ticker} className="asset-hero-card" radius={18} glowStrength={0}
+                        containerStyle={{
+                          flex:"0 0 auto", width:"fit-content", maxWidth:"100%", minWidth:0,
+                          color,
+                          background:`radial-gradient(ellipse 65% 90% at 0% 0%, ${color}58 0%, ${color}40 42%, ${color}1B 72%, ${color}00 100%), radial-gradient(ellipse 65% 90% at 100% 100%, ${color}4C 0%, ${color}38 42%, ${color}18 72%, ${color}00 100%), linear-gradient(138deg, ${color}22 0%, ${color}28 48%, ${color}21 100%), rgba(2,10,24,0.46)`,
+                          border:"none",
+                          boxShadow:`0 14px 44px rgba(0,0,0,0.28), 0 0 28px ${color}10`,
+                        }}
+                        style={{ padding:"10px 12px" }}>
+                        <div className="asset-hero-reflection"/>
+                        <div className="asset-hero-grid">
+                          <div className="asset-hero-identity">
+                            <AssetLogo
+                              ticker={ticker} type={assetInfo?.type} size={60} radius={13}
+                              fallbackBg={tc.bg} fallbackBorder={tc.border} fallbackTextColor={tc.text}
+                              onColorExtracted={c => { if (!BRAND_COLORS[ticker]) setExtractedColor(c); }}
+                              bare
+                            />
+                            <div style={{ marginLeft:12, display:"flex", flexDirection:"column", justifyContent:"center", minWidth:0 }}>
+                              <div style={{ display:"flex", alignItems:"center", minWidth:0 }}>
+                                <span style={{ fontSize:20, fontWeight:800, color:"#F8F9FC", letterSpacing:"-0.04em", lineHeight:.95 }}>{displayTicker}</span>
+                                <button onClick={toggleFavorite} className={`asset-hero-star${isFavorite ? " is-active" : ""}`} title={isFavorite ? "Retirer des favoris" : "Ajouter aux favoris"} aria-pressed={isFavorite}>
+                                  <svg width="13" height="13" viewBox="0 0 24 24" fill={isFavorite ? "#facc15" : "none"} stroke={isFavorite ? "#facc15" : "rgba(255,255,255,0.58)"} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                                    <path d="M12 3.15c.35 0 .68.2.84.54l2.17 4.4 4.86.7c.38.06.69.32.81.69.12.36.02.76-.25 1.02l-3.52 3.43.83 4.84c.06.38-.09.76-.4.99-.31.22-.72.25-1.06.07L12 17.54l-4.35 2.29c-.34.18-.75.15-1.06-.07a1.02 1.02 0 0 1-.4-.99l.83-4.84-3.52-3.43a1.02 1.02 0 0 1-.25-1.02c.12-.37.43-.63.81-.69l4.86-.7 2.17-4.4c.16-.34.49-.54.84-.54Z"/>
+                                  </svg>
+                                </button>
+                              </div>
+                              <span style={{ marginTop:5, fontSize:11, fontWeight:550, color:"rgba(255,255,255,0.9)", lineHeight:1.1, whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>{assetInfo?.name || ticker}</span>
+                              <div style={{ display:"flex", alignItems:"center", gap:7, marginTop:6, minWidth:0 }}>
+                                {assetInfo?.type && assetInfo.type !== "INDEX" && (
+                                  <span className="asset-meta-pill" style={{ color:"rgba(255,255,255,0.72)" }}>
+                                    {({"EQUITY":"Action","ETF":"ETF","CRYPTOCURRENCY":"Crypto"} as Record<string,string>)[assetInfo.type] ?? assetInfo.type}
+                                  </span>
+                                )}
+                                {quote?.global_rank != null && (
+                                  <span className="asset-meta-pill" style={{ color:"rgba(255,255,255,0.72)" }}>#{quote.global_rank}</span>
+                                )}
+                                {assetInfo?.exchange && !isCrypto && (
+                                  <span className="asset-meta-pill" style={{ color:"rgba(255,255,255,0.58)", fontWeight:500, overflow:"hidden", textOverflow:"ellipsis" }}>
+                                    {_EXCH[assetInfo.exchange] ?? assetInfo.exchange}
+                                    {_EXCH_FLAG[assetInfo.exchange] && <img className="asset-exchange-flag" src={`https://hatscripts.github.io/circle-flags/flags/${_EXCH_FLAG[assetInfo.exchange]}.svg`} alt="" aria-label="Pays de la place boursière" />}
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+
+                          <div className="asset-hero-section asset-hero-price">
+                            <div style={{ display:"flex", alignItems:"baseline", gap:7, whiteSpace:"nowrap" }}>
+                              <span style={{ fontSize:34, fontWeight:650, color:"#F8F9FC", letterSpacing:"-0.055em", fontVariantNumeric:"tabular-nums", lineHeight:1, animation:priceFlash === "up" ? "price-flash-up 0.9s ease forwards" : priceFlash === "down" ? "price-flash-dn 0.9s ease forwards" : "none" }}>
+                                {currentPrice ? fmtNum(currentPrice.price) : "—"}
+                              </span>
+                              {quote?.currency && <span style={{ fontSize:10, fontWeight:500, color:"rgba(255,255,255,0.5)", letterSpacing:"0.04em" }}>{quote.currency}</span>}
+                            </div>
+                            {currentPrice && (
+                              <div style={{ display:"flex", alignItems:"center", gap:6, whiteSpace:"nowrap" }}>
+                                <span style={{ fontSize:14, lineHeight:"17px", fontWeight:600, color:up ? "#4ade80" : "#ef4444", fontVariantNumeric:"tabular-nums" }}>
+                                  {up ? "▲" : "▼"} {up ? "+" : "−"}{fmtNum(Math.abs(quote?.prev_close != null ? currentPrice.price - quote.prev_close : currentPrice.price * currentPrice.change / 100))}
                                 </span>
-                              );
-                            })()}
-                            {quote?.global_rank != null && (
-                              <span style={{ fontSize:9, fontWeight:600, color: BRAND_COLORS[ticker as string] ?? extractedColor ?? "#5B8DEF" }}>#{quote.global_rank}</span>
-                            )}
-                            {assetInfo?.exchange && !isCrypto && (
-                              <span style={{ fontSize:9, fontWeight:400, color:"rgba(255,255,255,0.38)" }}>{_EXCH[assetInfo.exchange] ?? assetInfo.exchange}</span>
-                            )}
-                          </div>
-                        </div>
-                        {/* Divider */}
-                        <div style={{ width:1, height:44, background:"rgba(255,255,255,0.1)", margin:"0 16px", flexShrink:0 }}/>
-                        {/* Price */}
-                        <div style={{ display:"flex", flexDirection:"column", justifyContent:"space-between", alignSelf:"stretch", gap:0 }}>
-                          <div style={{ display:"flex", alignItems:"baseline", gap:5 }}>
-                            <span style={{ fontSize:18, fontWeight:700, color:"#F8F9FC", letterSpacing:"-0.04em", fontVariantNumeric:"tabular-nums", lineHeight:1, animation: priceFlash === "up" ? "price-flash-up 0.9s ease forwards" : priceFlash === "down" ? "price-flash-dn 0.9s ease forwards" : "none" }}>
-                              {currentPrice ? fmtNum(currentPrice.price) : "—"}
-                            </span>
-                            {quote?.currency && <span style={{ fontSize:11, fontWeight:500, color:"rgba(255,255,255,0.4)", letterSpacing:"0.05em" }}>{quote.currency}</span>}
-                          </div>
-                          {currentPrice && (
-                            <div style={{ display:"flex", alignItems:"center", gap:6 }}>
-                              <span style={{ fontSize:11, fontWeight:600, color: up ? "#4ade80" : "#ef4444", fontVariantNumeric:"tabular-nums" }}>
-                                {up ? "▲" : "▼"} {up ? "+" : ""}{fmtNum(Math.abs(quote?.prev_close ? currentPrice.price - quote.prev_close : currentPrice.price * currentPrice.change / 100))}
-                              </span>
-                              <span style={{ fontSize:10, fontWeight:700, color: up ? "#4ade80" : "#ef4444", background: up ? "rgba(34,197,94,0.28)" : "rgba(239,68,68,0.28)", borderRadius:20, padding:"1px 7px", fontVariantNumeric:"tabular-nums" }}>
-                                {up ? "+" : "–"}{Math.abs(currentPrice.change).toFixed(2)}%
-                              </span>
-                            </div>
-                          )}
-                        </div>
-                        {/* Divider */}
-                        <div style={{ width:1, height:44, background:"rgba(255,255,255,0.1)", margin:"0 16px", flexShrink:0 }}/>
-                        {/* Status + last close */}
-                        <div style={{ display:"flex", flexDirection:"column", justifyContent:"space-between", alignSelf:"stretch", gap:0 }}>
-                          {!isCrypto ? (
-                            <div style={{ display:"flex", alignItems:"center", gap:4, background:"rgba(255,255,255,0.07)", borderRadius:20, padding:"2px 8px" }}>
-                              <span style={{ width:5, height:5, borderRadius:"50%", background: isOpen ? "#22c55e" : "rgba(255,255,255,0.35)", flexShrink:0, animation: isOpen ? "hdr-pulse 2s ease-in-out infinite" : "none" }}/>
-                              <span style={{ fontSize:9, fontWeight:600, color: isOpen ? "#4ade80" : "rgba(255,255,255,0.55)", letterSpacing:"0.02em" }}>
-                                {isOpen ? "Marché ouvert" : "Marché fermé"}
-                              </span>
-                            </div>
-                          ) : (
-                            <div style={{ display:"flex", alignItems:"center", gap:5, background:"rgba(34,197,94,0.1)", borderRadius:7, padding:"4px 9px" }}>
-                              <span style={{ width:6, height:6, borderRadius:"50%", background:"#22c55e", flexShrink:0, animation:"hdr-pulse-live 1.5s ease-in-out infinite" }}/>
-                              <span style={{ fontSize:11, fontWeight:600, color:"#4ade80", letterSpacing:"0.02em" }}>LIVE</span>
-                            </div>
-                          )}
-                          {!isOpen && !isCrypto && (() => {
-                            const d = new Date(now);
-                            const wd = d.getDay();
-                            if (wd === 0) d.setDate(d.getDate() - 2);
-                            else if (wd === 6) d.setDate(d.getDate() - 1);
-                            return (
-                              <div style={{ display:"flex", flexDirection:"column", gap:1 }}>
-                                <span style={{ fontSize:9, color:"rgba(255,255,255,0.32)", letterSpacing:"0.02em" }}>Dernière clôture</span>
-                                <span style={{ fontSize:10, fontWeight:500, color:"rgba(255,255,255,0.7)" }}>
-                                  {d.toLocaleDateString("fr-FR",{day:"numeric",month:"short",year:"numeric"})}
+                                <span className="asset-performance-pill" style={{ color:up ? "#4ade80" : "#ef4444", background:up ? "rgba(34,197,94,0.25)" : "rgba(239,68,68,0.25)", fontVariantNumeric:"tabular-nums" }}>
+                                  {up ? "+" : "−"}{Math.abs(currentPrice.change).toFixed(2)}%
                                 </span>
                               </div>
-                            );
-                          })()}
-                          {isOpen && <span style={{ fontSize:9, color:"rgba(255,255,255,0.3)", letterSpacing:"0.04em" }}>↻ 60s</span>}
+                            )}
+                          </div>
+
+                          <div className="asset-hero-section asset-hero-status">
+                            {!isCrypto ? (
+                              <div className="asset-market-pill">
+                                <span style={{ width:5, height:5, borderRadius:"50%", background:isOpen ? "#22c55e" : "rgba(255,255,255,0.62)", flexShrink:0, animation:isOpen ? "hdr-pulse 2s ease-in-out infinite" : "none" }}/>
+                                <span style={{ fontSize:9, fontWeight:650, color:isOpen ? "#4ade80" : "rgba(255,255,255,0.76)" }}>{isOpen ? "Marché ouvert" : "Marché fermé"}</span>
+                              </div>
+                            ) : (
+                              <div className="asset-market-pill" style={{ background:"rgba(34,197,94,0.065)" }}>
+                                <span style={{ width:5, height:5, borderRadius:"50%", background:"#22c55e", flexShrink:0, animation:"hdr-pulse-live 1.5s ease-in-out infinite" }}/>
+                                <span style={{ fontSize:9, fontWeight:650, color:"#4ade80" }}>LIVE 24/7</span>
+                              </div>
+                            )}
+                            {!isOpen && !isCrypto && (() => {
+                              const latest = dailyChartData[dailyChartData.length - 1]?.date?.slice(0,10);
+                              const d = latest ? new Date(`${latest}T12:00:00`) : now;
+                              return (
+                                <div style={{ display:"flex", flexDirection:"column", gap:1, marginTop:5 }}>
+                                  <span style={{ fontSize:9, lineHeight:1.1, color:"rgba(255,255,255,0.5)" }}>Dernière clôture</span>
+                                  <span style={{ fontSize:10, lineHeight:1.15, fontWeight:500, color:"rgba(255,255,255,0.72)" }}>
+                                    {d.toLocaleDateString("fr-FR",{day:"2-digit",month:"short",year:"numeric"})}
+                                  </span>
+                                </div>
+                              );
+                            })()}
+                            {isCrypto ? (
+                              <span style={{ marginTop:7, fontSize:9, color:"rgba(255,255,255,0.38)" }}>Cours en temps réel</span>
+                            ) : isOpen ? (
+                              <span style={{ marginTop:7, fontSize:9, color:"rgba(255,255,255,0.38)" }}>Màj toutes les 60 s</span>
+                            ) : null}
+                          </div>
                         </div>
-                        {/* Fixed-width spacer before star */}
-                        <div style={{ width:16, flexShrink:0 }}/>
-                        {/* Star / favorite */}
-                        <button
-                          onClick={toggleFavorite}
-                          style={{ flexShrink:0, alignSelf:"center", width:28, height:28, borderRadius:7, border:"1px solid rgba(255,255,255,0.12)", background:"rgba(255,255,255,0.06)", display:"flex", alignItems:"center", justifyContent:"center", cursor:"pointer", transition:"all 0.18s" }}
-                          onMouseEnter={e => (e.currentTarget.style.background="rgba(255,255,255,0.12)")}
-                          onMouseLeave={e => (e.currentTarget.style.background="rgba(255,255,255,0.06)")}
-                        >
-                          <svg width="13" height="13" viewBox="0 0 24 24" fill={isFavorite ? "#facc15" : "none"} stroke={isFavorite ? "#facc15" : "rgba(255,255,255,0.5)"} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-                            <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>
-                          </svg>
-                        </button>
                       </TileCard>
                     )}
                     {ticker && (() => {
@@ -1160,77 +1379,119 @@ function ChartContent() {
                             const bmM  = parseInt(bmParts.find(p=>p.type==="minute")?.value??"0");
                             const bmIsOpen = bmWd!=="Sat" && bmWd!=="Sun" && (bmH*60+bmM)>=bmExchH.o && (bmH*60+bmM)<bmExchH.c;
                             const bmUp = bmCurrentPrice ? bmCurrentPrice.change >= 0 : true;
+                            const bmColor = BRAND_COLORS[customBmTicker] ?? bmExtractedColor ?? "#5B8DEF";
+                            const bmCurrency = bmQuote?.currency ?? (customBmTicker.endsWith(".PA") || customBmTicker === "^STOXX50E" ? "EUR" : customBmTicker.endsWith(".L") ? "GBX" : customBmTicker.endsWith(".TO") ? "CAD" : "USD");
+                            const bmLatest = rawCustomBmData[rawCustomBmData.length - 1]?.date?.slice(0,10);
+                            const bmCloseDate = bmLatest ? new Date(`${bmLatest}T12:00:00`) : now;
                             return (
-                            <TileCard ticker={customBmTicker} onClick={() => setShowBmSearch(s => !s)}
-                              style={{ display:"flex", alignItems:"center", gap:8, padding:"7px 9px", cursor:"pointer" }}>
-                              <AssetLogo ticker={customBmTicker} type={customBmType} size={28} radius={7}
-                                fallbackBg="rgba(255,255,255,0.07)" fallbackBorder="rgba(255,255,255,0.12)" fallbackTextColor="rgba(255,255,255,0.55)" bare
-                                onColorExtracted={c => { if (!BRAND_COLORS[customBmTicker]) setBmExtractedColor(c); }}/>
-                              <div>
-                                {/* Ligne 1 — ticker | prix | variation (miroir carte principale, échelle réduite) */}
-                                <div style={{ display:"flex", alignItems:"baseline", gap:6, flexWrap:"nowrap" as const }}>
-                                  <span style={{ fontSize:13, fontWeight:800, color:"#F8F9FC", letterSpacing:"-0.03em", lineHeight:1 }}>{bmDisplayTicker}</span>
-                                  {bmCurrentPrice && <>
-                                    <span style={{ width:1, height:10, background:"rgba(255,255,255,0.3)", flexShrink:0, alignSelf:"center" }}/>
-                                    <span style={{ fontSize:13, fontWeight:700, letterSpacing:"-0.03em", fontVariantNumeric:"tabular-nums" as const, lineHeight:1, color:"#F8F9FC", animation: bmPriceFlash === "up" ? "price-flash-up 0.9s ease forwards" : bmPriceFlash === "down" ? "price-flash-dn 0.9s ease forwards" : "none" }}>
-                                      {fmtNum(bmCurrentPrice.price)}
-                                    </span>
-                                    <span style={{ fontSize:9, fontWeight:600, color: bmUp ? "#4ade80" : "#ef4444", letterSpacing:"-0.01em", fontVariantNumeric:"tabular-nums" as const, lineHeight:1 }}>
-                                      {bmUp ? "▲" : "▼"}{" "}
-                                      {fmtNum(Math.abs(bmCurrentPrice.price * bmCurrentPrice.change / 100))}{" "}
-                                      {bmUp ? "+" : "–"}{Math.abs(bmCurrentPrice.change).toFixed(2)}%
-                                    </span>
-                                  </>}
-                                </div>
-                                {/* Ligne 2 — nom · rank · statut marché */}
-                                <div style={{ display:"flex", alignItems:"center", gap:4, marginTop:3 }}>
-                                  <span style={{ fontSize:9, color:"#FFFFFF", lineHeight:1 }}>
-                                    {customBmName}
-                                  </span>
-                                  <span style={{ color:"#FFFFFF", fontSize:9 }}>·</span>
-                                  {customBmType !== "CRYPTOCURRENCY" ? (
-                                    <span style={{ display:"flex", alignItems:"center", gap:3, flexShrink:0 }}>
-                                      <span style={{ width:4, height:4, borderRadius:"50%", display:"inline-block", background: bmIsOpen ? "#22c55e" : "#FFFFFF", flexShrink:0 }}/>
-                                      <span style={{ fontSize:9, letterSpacing:"0.04em", color: bmIsOpen ? "#4ade80" : "#FFFFFF" }}>
-                                        {bmIsOpen ? "Marché ouvert" : "Marché fermé"}
+                            <TileCard ticker={customBmTicker} className="asset-hero-card asset-hero-secondary-card" radius={18} glowStrength={0}
+                              onClick={() => setShowBmSearch(s => !s)}
+                              containerStyle={{
+                                flex:"0 0 auto", width:"fit-content", maxWidth:"100%", minWidth:0, color:bmColor, cursor:"pointer",
+                                background:`radial-gradient(ellipse 65% 90% at 0% 0%, ${bmColor}58 0%, ${bmColor}40 42%, ${bmColor}1B 72%, ${bmColor}00 100%), radial-gradient(ellipse 65% 90% at 100% 100%, ${bmColor}4C 0%, ${bmColor}38 42%, ${bmColor}18 72%, ${bmColor}00 100%), linear-gradient(138deg, ${bmColor}22 0%, ${bmColor}28 48%, ${bmColor}21 100%), rgba(2,10,24,0.46)`,
+                                border:"none",
+                                boxShadow:`0 14px 44px rgba(0,0,0,0.28), 0 0 28px ${bmColor}10`,
+                              }}
+                              style={{ padding:"10px 12px" }}>
+                              <div className="asset-hero-reflection"/>
+                              <div className="asset-hero-grid">
+                                <div className="asset-hero-identity">
+                                  <AssetLogo ticker={customBmTicker} type={customBmType} size={60} radius={13}
+                                    fallbackBg="rgba(255,255,255,0.07)" fallbackBorder="rgba(255,255,255,0.12)" fallbackTextColor="rgba(255,255,255,0.55)" bare
+                                    onColorExtracted={c => { if (!BRAND_COLORS[customBmTicker]) setBmExtractedColor(c); }}/>
+                                  <div style={{ marginLeft:12, display:"flex", flexDirection:"column", justifyContent:"center", minWidth:0 }}>
+                                    <div style={{ display:"flex", alignItems:"center", minWidth:0 }}>
+                                      <span style={{ fontSize:20, fontWeight:800, color:"#F8F9FC", letterSpacing:"-0.04em", lineHeight:.95 }}>{bmDisplayTicker}</span>
+                                      <button onClick={e => { e.stopPropagation(); setCustomBmTicker(null); setCustomBmName(""); setRawCustomBmData([]); setBmCurrentPrice(null); setSyncView(false); }}
+                                        className="asset-hero-star" title="Retirer la comparaison" aria-label="Retirer la comparaison">
+                                        <svg width="11" height="11" viewBox="0 0 16 16" fill="none">
+                                          <path d="M5 5l6 6M11 5l-6 6" stroke="rgba(255,255,255,.58)" strokeWidth="1.5" strokeLinecap="round"/>
+                                        </svg>
+                                      </button>
+                                    </div>
+                                    <span style={{ marginTop:5, fontSize:11, fontWeight:550, color:"rgba(255,255,255,0.9)", lineHeight:1.1, whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>{customBmName}</span>
+                                    <div style={{ display:"flex", alignItems:"center", gap:7, marginTop:6, minWidth:0 }}>
+                                      <span className="asset-meta-pill" style={{ color:"rgba(255,255,255,0.72)" }}>
+                                        {({"EQUITY":"Action","ETF":"ETF","INDEX":"Indice","CRYPTOCURRENCY":"Crypto"} as Record<string,string>)[customBmType] ?? customBmType}
                                       </span>
+                                      {bmQuote?.global_rank != null && (
+                                        <span className="asset-meta-pill" style={{ color:"rgba(255,255,255,0.72)" }}>#{bmQuote.global_rank}</span>
+                                      )}
+                                      {bmInfo?.exchange && customBmType !== "CRYPTOCURRENCY" && (
+                                        <span className="asset-meta-pill" style={{ color:"rgba(255,255,255,0.58)", fontWeight:500 }}>
+                                          {_EXCH[bmInfo.exchange] ?? bmInfo.exchange}
+                                          {_EXCH_FLAG[bmInfo.exchange] && <img className="asset-exchange-flag" src={`https://hatscripts.github.io/circle-flags/flags/${_EXCH_FLAG[bmInfo.exchange]}.svg`} alt="" aria-label="Pays de la place boursière" />}
+                                        </span>
+                                      )}
+                                    </div>
+                                  </div>
+                                </div>
+
+                                <div className="asset-hero-section asset-hero-price">
+                                  <div style={{ display:"flex", alignItems:"baseline", gap:7, whiteSpace:"nowrap" }}>
+                                    <span style={{ fontSize:34, fontWeight:650, color:"#F8F9FC", letterSpacing:"-0.055em", fontVariantNumeric:"tabular-nums", lineHeight:1, animation:bmPriceFlash === "up" ? "price-flash-up 0.9s ease forwards" : bmPriceFlash === "down" ? "price-flash-dn 0.9s ease forwards" : "none" }}>
+                                      {bmCurrentPrice ? fmtNum(bmCurrentPrice.price) : "—"}
                                     </span>
-                                  ) : (
-                                    <span style={{ display:"flex", alignItems:"center", gap:3, flexShrink:0 }}>
-                                      <span style={{ width:4, height:4, borderRadius:"50%", background:"#22c55e", display:"inline-block" }}/>
-                                      <span style={{ fontSize:9, color:"#4ade80", letterSpacing:"0.04em" }}>LIVE</span>
-                                    </span>
+                                    <span style={{ fontSize:10, fontWeight:500, color:"rgba(255,255,255,0.5)", letterSpacing:"0.04em" }}>{bmCurrency}</span>
+                                  </div>
+                                  {bmCurrentPrice && (
+                                    <div style={{ display:"flex", alignItems:"center", gap:6, whiteSpace:"nowrap" }}>
+                                      <span style={{ fontSize:14, lineHeight:"17px", fontWeight:600, color:bmUp ? "#4ade80" : "#ef4444", fontVariantNumeric:"tabular-nums" }}>
+                                        {bmUp ? "▲" : "▼"} {bmUp ? "+" : "−"}{fmtNum(Math.abs(bmCurrentPrice.price * bmCurrentPrice.change / 100))}
+                                      </span>
+                                      <span className="asset-performance-pill" style={{ color:bmUp ? "#4ade80" : "#ef4444", background:bmUp ? "rgba(34,197,94,0.25)" : "rgba(239,68,68,0.25)", fontVariantNumeric:"tabular-nums" }}>
+                                        {bmUp ? "+" : "−"}{Math.abs(bmCurrentPrice.change).toFixed(2)}%
+                                      </span>
+                                    </div>
                                   )}
                                 </div>
-                              </div>
-                              {/* × remove */}
-                              <div onClick={e => { e.stopPropagation(); setCustomBmTicker(null); setCustomBmName(""); setRawCustomBmData([]); setBmCurrentPrice(null); setSyncView(false); }}
-                                onMouseEnter={e => { e.currentTarget.style.background="rgba(255,255,255,0.18)"; (e.currentTarget.querySelectorAll("line") as NodeListOf<SVGLineElement>).forEach(l => l.style.stroke="rgba(255,255,255,0.9)"); }}
-                                onMouseLeave={e => { e.currentTarget.style.background="rgba(255,255,255,0.08)"; (e.currentTarget.querySelectorAll("line") as NodeListOf<SVGLineElement>).forEach(l => l.style.stroke="rgba(255,255,255,0.55)"); }}
-                                style={{ marginLeft:"auto", width:16, height:16, borderRadius:4, background:"rgba(255,255,255,0.08)", flexShrink:0, position:"relative", transition:"background 0.15s", cursor:"pointer" }}>
-                                <svg style={{ position:"absolute", inset:0, width:"100%", height:"100%" }} viewBox="0 0 16 16" fill="none">
-                                  <line x1="5" y1="5" x2="11" y2="11" stroke="rgba(255,255,255,0.55)" strokeWidth="1.5" strokeLinecap="round"/>
-                                  <line x1="11" y1="5" x2="5" y2="11" stroke="rgba(255,255,255,0.55)" strokeWidth="1.5" strokeLinecap="round"/>
-                                </svg>
+
+                                <div className="asset-hero-section asset-hero-status">
+                                  {customBmType !== "CRYPTOCURRENCY" ? (
+                                    <div className="asset-market-pill">
+                                      <span style={{ width:5, height:5, borderRadius:"50%", background:bmIsOpen ? "#22c55e" : "rgba(255,255,255,0.62)", flexShrink:0 }}/>
+                                      <span style={{ fontSize:9, fontWeight:650, color:bmIsOpen ? "#4ade80" : "rgba(255,255,255,0.76)" }}>{bmIsOpen ? "Marché ouvert" : "Marché fermé"}</span>
+                                    </div>
+                                  ) : (
+                                    <div className="asset-market-pill" style={{ background:"rgba(34,197,94,0.065)" }}>
+                                      <span style={{ width:5, height:5, borderRadius:"50%", background:"#22c55e", flexShrink:0 }}/>
+                                      <span style={{ fontSize:9, fontWeight:650, color:"#4ade80" }}>LIVE 24/7</span>
+                                    </div>
+                                  )}
+                                  {isBmCrypto ? (
+                                    <span style={{ marginTop:7, fontSize:9, color:"rgba(255,255,255,0.38)" }}>Cours en temps réel</span>
+                                  ) : bmIsOpen ? (
+                                    <span style={{ marginTop:7, fontSize:9, color:"rgba(255,255,255,0.38)" }}>Màj toutes les 60 s</span>
+                                  ) : (
+                                    <div style={{ display:"flex", flexDirection:"column", gap:1, marginTop:5 }}>
+                                      <span style={{ fontSize:9, lineHeight:1.1, color:"rgba(255,255,255,0.5)" }}>Dernière clôture</span>
+                                      <span style={{ fontSize:10, lineHeight:1.15, fontWeight:500, color:"rgba(255,255,255,0.72)" }}>
+                                        {bmCloseDate.toLocaleDateString("fr-FR",{day:"2-digit",month:"short",year:"numeric"})}
+                                      </span>
+                                    </div>
+                                  )}
+                                </div>
                               </div>
                             </TileCard>
                             );
                           })() : (
                             /* Ghost tile */
                             <div onClick={() => setShowBmSearch(s => !s)} style={{
-                              display:"flex", alignItems:"center", gap:8, padding:"8px 12px", borderRadius:12, flexShrink:0,
-                              border:"1px dashed rgba(255,255,255,0.16)", cursor:"pointer",
-                              background:"rgba(255,255,255,0.03)", backdropFilter:"blur(8px)",
-                              transition:"all 0.18s", height:"100%", boxSizing:"border-box",
+                              display:"flex", alignItems:"center", gap:9, padding:"8px 11px", borderRadius:14, flexShrink:0,
+                              border:"1px solid rgba(255,255,255,0.075)", cursor:"pointer",
+                              background:"linear-gradient(135deg,rgba(255,255,255,0.035),rgba(255,255,255,0.012))",
+                              backdropFilter:"blur(18px) saturate(1.2)", WebkitBackdropFilter:"blur(18px) saturate(1.2)",
+                              boxShadow:"0 8px 24px rgba(0,0,0,0.10)",
+                              transition:"background .18s ease,border-color .18s ease,box-shadow .18s ease", height:"100%", boxSizing:"border-box",
                             }}
-                              onMouseEnter={e => { e.currentTarget.style.background="rgba(255,255,255,0.07)"; e.currentTarget.style.borderColor="rgba(255,255,255,0.28)"; }}
-                              onMouseLeave={e => { e.currentTarget.style.background="rgba(255,255,255,0.03)"; e.currentTarget.style.borderColor="rgba(255,255,255,0.16)"; }}>
-                              <div style={{ width:28, height:28, borderRadius:7, border:"1px solid rgba(255,255,255,0.15)", display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0 }}>
-                                <svg width="11" height="11" viewBox="0 0 11 11" fill="none"><path d="M5.5 1v9M1 5.5h9" stroke="rgba(255,255,255,0.40)" strokeWidth="1.5" strokeLinecap="round"/></svg>
+                              onMouseEnter={e => { e.currentTarget.style.background="linear-gradient(135deg,rgba(255,255,255,0.052),rgba(255,255,255,0.020))"; e.currentTarget.style.borderColor="rgba(255,255,255,0.12)"; e.currentTarget.style.boxShadow="0 10px 28px rgba(0,0,0,0.14)"; }}
+                              onMouseLeave={e => { e.currentTarget.style.background="linear-gradient(135deg,rgba(255,255,255,0.035),rgba(255,255,255,0.012))"; e.currentTarget.style.borderColor="rgba(255,255,255,0.075)"; e.currentTarget.style.boxShadow="0 8px 24px rgba(0,0,0,0.10)"; }}>
+                              <div style={{ width:24, height:24, borderRadius:8, border:"1px solid rgba(255,255,255,0.085)", background:"rgba(255,255,255,0.025)", display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0 }}>
+                                <svg width="10" height="10" viewBox="0 0 11 11" fill="none"><path d="M5.5 1v9M1 5.5h9" stroke="rgba(255,255,255,0.46)" strokeWidth="1.35" strokeLinecap="round"/></svg>
                               </div>
                               <div>
-                                <div style={{ fontSize:11, fontWeight:600, color:"rgba(255,255,255,0.50)", lineHeight:1 }}>Comparer</div>
-                                <div style={{ fontSize:9, color:"rgba(255,255,255,0.25)", marginTop:2, lineHeight:1 }}>ajouter un actif</div>
+                                <div style={{ fontSize:10, fontWeight:600, color:"rgba(255,255,255,0.58)", letterSpacing:"0.005em", lineHeight:1 }}>Comparer</div>
+                                <div style={{ fontSize:8.5, color:"rgba(255,255,255,0.30)", marginTop:3, lineHeight:1 }}>ajouter un actif</div>
                               </div>
                             </div>
                           )}
@@ -1356,9 +1617,15 @@ function ChartContent() {
               {/* Chart column */}
               <div style={{ flex:1, minWidth:0, display:"flex", flexDirection:"column", minHeight:0 }}>
               {/* Main chart */}
-              <div style={{ border:"1px solid rgba(255,255,255,0.06)", borderRadius:"16px", padding:"14px 18px 10px", flex:"3 1 0", minHeight:0, display:"flex", flexDirection:"column", position:"relative", overflow:"hidden", background:"rgba(255,255,255,0.02)" }}>
+              <div className={chartDisplayMode === "black" ? undefined : "chart-glass-container"} data-glass-edge="" style={{
+                border:chartDisplayMode === "black" ? "1px solid rgba(255,255,255,0.30)" : "1px solid rgba(205,225,255,0.16)", borderRadius:"30px", padding:"14px 18px 10px",
+                flex:"1 1 0", minHeight:0, display:"flex", flexDirection:"column", position:"relative", overflow:"hidden",
+                background:chartDisplayMode === "black" ? "linear-gradient(180deg, #0b0b0b 0%, #070707 100%)" : "rgba(9,27,52,0.78)",
+                backdropFilter:chartDisplayMode === "black" ? "none" : "blur(28px) saturate(1.2)", WebkitBackdropFilter:chartDisplayMode === "black" ? "none" : "blur(28px) saturate(1.2)",
+                boxShadow:chartDisplayMode === "black" ? "0 16px 44px rgba(0,0,0,0.28)" : "0 12px 36px rgba(0,0,0,0.10)",
+              }}>
                 {/* Radial glow derrière le graphique */}
-                <div style={{ position:"absolute", inset:0, pointerEvents:"none", zIndex:0, background:`radial-gradient(ellipse 75% 45% at 50% 75%, ${(lineColor??color)}1A 0%, transparent 70%), radial-gradient(ellipse 40% 30% at 15% 25%, ${(lineColor??color)}0D 0%, transparent 60%)` }}/>
+                <div style={{ position:"absolute", inset:chartDisplayMode === "black" ? 0 : -28, pointerEvents:"none", zIndex:0, filter:chartDisplayMode === "black" ? "none" : "blur(20px)", opacity:chartDisplayMode === "black" ? 1 : 0.78, background:chartDisplayMode === "black" ? "radial-gradient(ellipse 62% 38% at 12% 0%, rgba(255,255,255,0.018) 0%, transparent 72%)" : "radial-gradient(ellipse 90% 72% at -10% -10%, rgba(255,255,255,0.035) 0%, rgba(255,255,255,0.014) 42%, rgba(255,255,255,0) 82%), radial-gradient(ellipse 86% 75% at 110% 112%, rgba(60,113,184,0.045) 0%, rgba(60,113,184,0.018) 44%, rgba(60,113,184,0) 84%)" }}/>
                 <GrowthChart
                   portfolioData={scaledPortfolioData}
                   benchmarkData={syncView ? [] : activeBmData}
@@ -1375,6 +1642,7 @@ function ChartContent() {
                   candleUpColor={candleUp}
                   candleDownColor={candleDown}
                   chartMode={chartViewMode}
+                  displayMode={chartDisplayMode}
                   onChartModeChange={setChartViewMode}
                   dark={true}
                   priceMode={!!ticker}
@@ -1388,6 +1656,9 @@ function ChartContent() {
                     if (!isNaN(fd.getTime()) && !isNaN(td.getTime())) setVisibleRange({ from: fd.toISOString().slice(0,10), to: td.toISOString().slice(0,10) });
                   }}
                   onIntervalChange={setActiveInterval}
+                  externalPeriod={syncView ? activePeriod : undefined}
+                  externalInterval={syncView ? activeInterval : undefined}
+                  hideControls={syncView}
                   onAdaptiveData={setChartPriceData}
                   leftSlot={metaCards.length > 0 ? (
                     <div style={{ display:"flex", alignItems:"center", gap:0, overflow:"hidden" }}>
@@ -1510,28 +1781,25 @@ function ChartContent() {
                         </button>
                       )}
 
-                      {/* Vue synchronisée — visible si benchmark actif */}
-                      {customBmTicker && (
-                        <button
-                          onClick={() => setSyncView(v => !v)}
-                          title="Vue synchronisée"
-                          className="chart-action-btn"
-                          style={{
-                            background: syncView ? "rgba(91,141,239,0.18)" : "rgba(255,255,255,0.06)",
-                            backdropFilter:"blur(10px) saturate(1.5)",
-                            WebkitBackdropFilter:"blur(10px) saturate(1.5)",
-                            border:`1px solid ${syncView ? "rgba(91,141,239,0.45)" : "rgba(255,255,255,0.12)"}`,
-                            borderRadius:9, height:30, padding:"0 10px", cursor:"pointer",
-                            display:"flex", alignItems:"center", gap:5,
-                            color: syncView ? "#9BB9FF" : "rgba(255,255,255,0.50)",
-                            fontSize:11, fontWeight:500, whiteSpace:"nowrap" as const,
-                            boxShadow: syncView ? "0 0 12px rgba(91,141,239,0.20), inset 0 1px 0 rgba(255,255,255,0.10)" : "0 1px 3px rgba(0,0,0,0.20), inset 0 1px 0 rgba(255,255,255,0.07)",
-                          }}
-                        >
-                          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><rect x="3" y="3" width="18" height="8" rx="1"/><rect x="3" y="13" width="18" height="8" rx="1"/></svg>
-                          Vue synchronisée
-                        </button>
-                      )}
+                      {/* Mode de surface : verre / noir */}
+                      <button
+                        onClick={toggleChartDisplayMode}
+                        title={chartDisplayMode === "black" ? "Revenir au mode verre" : "Activer le mode noir"}
+                        className="chart-action-btn"
+                        style={{
+                          background:chartDisplayMode === "black" ? "rgba(255,255,255,0.14)" : "rgba(255,255,255,0.06)",
+                          border:`1px solid ${chartDisplayMode === "black" ? "rgba(255,255,255,0.32)" : "rgba(255,255,255,0.12)"}`,
+                          borderRadius:9, width:30, height:30, padding:0, cursor:"pointer",
+                          display:"flex", alignItems:"center", justifyContent:"center",
+                          color:chartDisplayMode === "black" ? "#fff" : "rgba(255,255,255,0.50)",
+                          boxShadow:"0 1px 3px rgba(0,0,0,0.20)",
+                        }}
+                      >
+                        <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+                          <rect x="1" y="1" width="12" height="12" rx="3" fill={chartDisplayMode === "black" ? "#050505" : "rgba(255,255,255,0.04)"} stroke="currentColor"/>
+                          <path d="M1.5 5h11M1.5 9h11M5 1.5v11M9 1.5v11" stroke="currentColor" strokeWidth=".55" opacity=".55"/>
+                        </svg>
+                      </button>
 
                       {/* Customisation colours */}
                       <button
@@ -1574,6 +1842,76 @@ function ChartContent() {
               {/* ── Vue synchronisée : stats + second chart ── */}
               {syncView && customBmTicker && rawCustomBmData.length > 0 && (
                 <>
+                  {/* Commandes communes — performances alignées + intervalle synchronisé */}
+                  <div style={{
+                    order:1, margin:"4px 0 -1px", padding:"5px 18px 4px", flexShrink:0,
+                    display:"flex", flexDirection:"column", alignItems:"center", gap:4,
+                  }}>
+                    <div style={{
+                      width:"min(100%, 690px)", display:"grid",
+                      gridTemplateColumns:"58px repeat(8, minmax(48px, 1fr))", alignItems:"stretch",
+                    }}>
+                      <div style={{ display:"grid", gridTemplateRows:"20px 18px 20px", alignItems:"center", paddingRight:8 }}>
+                        <span style={{ fontSize:9, fontWeight:700, color:lineColor ?? color, letterSpacing:"0.04em", textAlign:"right" }}>{shortLabel}</span>
+                        <span style={{ fontSize:8, color:"rgba(255,255,255,0.22)", letterSpacing:"0.09em", textTransform:"uppercase", textAlign:"right" }}>Période</span>
+                        <span style={{ fontSize:9, fontWeight:700, color:activeBmColor, letterSpacing:"0.04em", textAlign:"right" }}>
+                          {customBmTicker.replace(/-USD$/,"-").replace(/-$/," ").replace(/^\^/,"").replace(/\.[A-Z]+$/," ").trim()}
+                        </span>
+                      </div>
+                      {COMPARISON_PERIODS.map(period => {
+                        const primaryPerf = primaryPeriodPerformances[period];
+                        const secondaryPerf = secondaryPeriodPerformances[period];
+                        const active = activePeriod === period;
+                        const perfColor = (value: number | null) => value === null
+                          ? "rgba(255,255,255,0.22)"
+                          : value >= 0 ? "#34d399" : "#fb4f55";
+                        return (
+                          <button key={period} onClick={() => selectComparisonPeriod(period)} style={{
+                            display:"grid", gridTemplateRows:"20px 18px 20px", alignItems:"center",
+                            minWidth:0, padding:"0 3px", border:0, borderRadius:8, cursor:"pointer",
+                            background:active ? "rgba(255,255,255,0.052)" : "transparent",
+                            boxShadow:active ? `inset 0 0 0 1px rgba(255,255,255,0.07)` : "none",
+                            transition:"background .15s ease, box-shadow .15s ease",
+                          }}>
+                            <span style={{ fontSize:10, fontWeight:650, color:perfColor(primaryPerf), fontVariantNumeric:"tabular-nums", opacity:active ? 1 : .78 }}>
+                              {formatComparisonPerformance(primaryPerf)}
+                            </span>
+                            <span style={{
+                              alignSelf:"stretch", display:"flex", alignItems:"center", justifyContent:"center",
+                              fontSize:9.5, fontWeight:active ? 720 : 600,
+                              color:active ? "rgba(255,255,255,0.92)" : "rgba(255,255,255,0.43)",
+                              borderBottom:active ? `2px solid ${lineColor ?? color}` : "2px solid transparent",
+                            }}>{period}</span>
+                            <span style={{ fontSize:10, fontWeight:650, color:perfColor(secondaryPerf), fontVariantNumeric:"tabular-nums", opacity:active ? 1 : .78 }}>
+                              {formatComparisonPerformance(secondaryPerf)}
+                            </span>
+                          </button>
+                        );
+                      })}
+                    </div>
+
+                    <div style={{
+                      display:"flex", alignItems:"center", gap:2, padding:"2px 4px",
+                      borderRadius:8, background:"rgba(255,255,255,0.025)",
+                      border:"1px solid rgba(255,255,255,0.045)",
+                    }}>
+                      <span style={{ fontSize:8, color:"rgba(255,255,255,0.25)", letterSpacing:"0.08em", textTransform:"uppercase", padding:"0 5px 0 3px" }}>Intervalle</span>
+                      {COMPARISON_INTERVALS.map(interval => {
+                        const allowed = (COMPARISON_ALLOWED_INTERVALS[activePeriod] ?? []).includes(interval);
+                        const active = activeInterval === interval;
+                        return (
+                          <button key={interval} disabled={!allowed} onClick={() => allowed && setActiveInterval(interval)} style={{
+                            minWidth:28, height:20, padding:"0 5px", borderRadius:5,
+                            border:active ? "1px solid rgba(155,185,255,0.26)" : "1px solid transparent",
+                            background:active ? "rgba(91,141,239,0.13)" : "transparent",
+                            color:!allowed ? "rgba(255,255,255,0.11)" : active ? "#9BB9FF" : "rgba(255,255,255,0.38)",
+                            fontSize:9, fontWeight:active ? 700 : 550, cursor:allowed ? "pointer" : "default",
+                          }}>{interval}</button>
+                        );
+                      })}
+                    </div>
+                  </div>
+
                   {/* Stats panel */}
                   {syncStats && (() => {
                     const lA = (ticker ?? "A").replace(/-USD$/,"").replace(/^\^/,"").replace(/\.[A-Z]+$/,"");
@@ -1599,8 +1937,6 @@ function ChartContent() {
                       : syncStats.alpha < -5 ? { t:`${lA} sous-performe`, c:"#ef4444" }
                       : { t:`Neutre`, c:"rgba(255,255,255,0.45)" };
 
-                    const dirLabel = { t:`${syncStats.sameDirN} jours sur ${syncStats.totalN}`, c:"#9BB9FF" };
-
                     // Explications sous la jauge — chaque carte décrit SA métrique
                     const corrExpl = syncStats.corr < 0.3
                       ? `${lB} évolue indépendamment de ${lA} sur la période.`
@@ -1613,12 +1949,6 @@ function ChartContent() {
                       : syncStats.alpha < -5
                       ? `${lA} sous-performe de ${Math.abs(syncStats.alpha).toFixed(1)}%/an par rapport à son niveau de risque.`
                       : `La performance de ${lA} est conforme à son exposition au risque.`;
-                    const dirExpl = syncStats.sameDir >= 70
-                      ? `Mouvements souvent synchrones — les hausses et baisses se produisent ensemble.`
-                      : syncStats.sameDir < 50
-                      ? `Les deux actifs évoluent plus souvent en sens opposé que dans le même sens.`
-                      : `Co-mouvement modéré sur la période.`;
-
                     // Résumé IA — synthèse croisée, pas paraphrase des cartes
                     const aiLines: string[] = (() => {
                       const lowCorr = syncStats.corr < 0.35;
@@ -1666,16 +1996,32 @@ function ChartContent() {
                     })();
 
                     const cardBase: React.CSSProperties = {
-                      flex:1, background:"rgba(255,255,255,0.02)", border:"1px solid rgba(255,255,255,0.07)",
+                      flex:"1 1 0", minWidth:0,
+                      background:"rgba(255,255,255,0.018)",
+                      border:"1px solid rgba(255,255,255,0.055)",
                       borderRadius:12, padding:"11px 12px 10px", display:"flex", flexDirection:"column",
-                      position:"relative", transition:"background 0.15s", cursor:"default",
+                      position:"relative", transition:"background 0.16s ease, border-color 0.16s ease", cursor:"default",
+                      overflow:"hidden",
                     };
-                    const hov = (e: React.MouseEvent<HTMLDivElement>) => { e.currentTarget.style.background="rgba(255,255,255,0.045)"; };
-                    const unHov = (e: React.MouseEvent<HTMLDivElement>) => { e.currentTarget.style.background="rgba(255,255,255,0.02)"; };
+                    const groupBase: React.CSSProperties = {
+                      minWidth:0, display:"flex", flexDirection:"column", gap:8,
+                      padding:"10px 18px 12px", borderRadius:16,
+                      background:"rgba(255,255,255,0.02)",
+                      border:"1px solid rgba(255,255,255,0.06)",
+                      overflow:"hidden",
+                    };
+                    const hov = (e: React.MouseEvent<HTMLDivElement>) => {
+                      e.currentTarget.style.background="linear-gradient(145deg, rgba(255,255,255,0.048) 0%, rgba(255,255,255,0.021) 100%)";
+                      e.currentTarget.style.borderColor="rgba(255,255,255,0.075)";
+                    };
+                    const unHov = (e: React.MouseEvent<HTMLDivElement>) => {
+                      e.currentTarget.style.background="rgba(255,255,255,0.018)";
+                      e.currentTarget.style.borderColor="rgba(255,255,255,0.055)";
+                    };
 
                     const Lbl = ({ k, txt }: { k:string; txt:string }) => (
-                      <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:5 }}>
-                        <span style={{ fontSize:8.5, color:"rgba(255,255,255,0.28)", letterSpacing:"0.08em", textTransform:"uppercase" as const }}>{txt}</span>
+                      <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:7 }}>
+                        <span style={{ fontSize:9, fontWeight:550, color:"rgba(255,255,255,0.38)", letterSpacing:"0.085em", textTransform:"uppercase" as const }}>{txt}</span>
                         <span onMouseEnter={() => setStatsTooltip(k)} onMouseLeave={() => setStatsTooltip(null)}
                           style={{ fontSize:11, color: statsTooltip===k ? "rgba(255,255,255,0.80)" : "rgba(255,255,255,0.28)", cursor:"help", transition:"color 0.15s", lineHeight:1 }}>ⓘ</span>
                       </div>
@@ -1689,121 +2035,102 @@ function ChartContent() {
                       </div>
                     ) : null;
 
-                    // Gauge: track + fill + cursor + labels below
-                    const G = ({ pct, gradient, fill, fillColor, labels, cursor=true }:{
-                      pct:number; gradient?:string; fill?:{from:number;to:number}; fillColor?:string;
-                      labels:string[]; cursor?:boolean;
-                    }) => {
-                      const cp = Math.max(0, Math.min(100, pct));
-                      return (
-                        <div style={{ position:"relative", marginTop:8, marginBottom:0 }}>
-                          <div style={{ position:"relative", height:6, background: gradient||"rgba(255,255,255,0.09)", borderRadius:3, overflow:"hidden" }}>
-                            {fill && <div style={{ position:"absolute", top:0, bottom:0, left:`${fill.from}%`, width:`${fill.to-fill.from}%`, background: fillColor||"rgba(255,255,255,0.25)" }}/>}
-                          </div>
-                          {cursor && <div style={{ position:"absolute", top:0, left:`calc(${cp}% - 1px)`, width:2, height:6, background:"#fff", borderRadius:1, boxShadow:"0 0 5px rgba(255,255,255,0.6)" }}/>}
-                          <div style={{ display:"flex", justifyContent:"space-between", marginTop:4 }}>
-                            {labels.map((l,i) => <span key={i} style={{ fontSize:8, color:"rgba(255,255,255,0.22)" }}>{l}</span>)}
-                          </div>
-                        </div>
-                      );
-                    };
-
                     const Expl = ({ txt }: { txt:string }) => (
-                      <span style={{ fontSize:9, color:"rgba(255,255,255,0.32)", lineHeight:1.45, marginTop:5, display:"block", minHeight:26 }}>{txt}</span>
+                      <span style={{ fontSize:9.25, color:"rgba(255,255,255,0.43)", lineHeight:1.48, marginTop:6, display:"block" }}>{txt}</span>
                     );
+                    const comparisonPeriodLabel = ({
+                      "24h":"24 h", "1S":"1 semaine", "1M":"1 mois", "3M":"3 mois",
+                      "6M":"6 mois", "1A":"1 an", "3A":"3 ans", "Max":"Max",
+                    } as Record<string,string>)[activePeriod] ?? activePeriod;
+                    const directionLabel = syncStats.sameDir >= 70
+                      ? "Mouvements souvent synchrones"
+                      : syncStats.sameDir < 50
+                      ? "Mouvements souvent opposés"
+                      : "Synchronisation modérée";
 
                     return (
-                      <div style={{ display:"flex", gap:5, marginTop:6, flexShrink:0, alignItems:"stretch" }}>
-
-                        {/* Corrélation */}
-                        <div style={cardBase} onMouseEnter={hov} onMouseLeave={unHov}>
-                          <TT k="corr"/><Lbl k="corr" txt={`Corrélation (${activePeriod})`}/>
-                          <span style={{ fontSize:20, fontWeight:700, color:"#F8F9FC", fontVariantNumeric:"tabular-nums" as const, lineHeight:1, marginBottom:3 }}>{syncStats.corr.toFixed(2)}</span>
-                          <span style={{ fontSize:10, fontWeight:600, color: corrLabel.c, display:"block", minHeight:28 }}>{corrLabel.t}</span>
-                          <G pct={(syncStats.corr+1)/2*100}
-                            gradient="linear-gradient(to right, rgba(91,141,239,0.07) 0%, rgba(91,141,239,0.28) 100%)"
-                            labels={["-1","0","+1"]}/>
-                          <Expl txt={corrExpl}/>
-                        </div>
-
-                        {/* Bêta */}
-                        <div style={cardBase} onMouseEnter={hov} onMouseLeave={unHov}>
-                          <TT k="beta"/><Lbl k="beta" txt={`Bêta (${activePeriod})`}/>
-                          <span style={{ fontSize:20, fontWeight:700, color:"#F8F9FC", fontVariantNumeric:"tabular-nums" as const, lineHeight:1, marginBottom:3 }}>{syncStats.beta.toFixed(2)}</span>
-                          <span style={{ fontSize:10, fontWeight:600, color: betaLabel.c, display:"block", minHeight:28 }}>{betaLabel.t}</span>
-                          <G pct={Math.min(syncStats.beta,2)/2*100}
-                            gradient="linear-gradient(to right, rgba(91,141,239,0.07) 0%, rgba(91,141,239,0.28) 100%)"
-                            labels={["0","1","2+"]}/>
-                          <Expl txt={betaExpl}/>
-                        </div>
-
-                        {/* Alpha */}
-                        <div style={cardBase} onMouseEnter={hov} onMouseLeave={unHov}>
-                          <TT k="alpha"/><Lbl k="alpha" txt={`Alpha (${activePeriod})`}/>
-                          <span style={{ fontSize:20, fontWeight:700, color: syncStats.alpha > 5 ? "#4ade80" : syncStats.alpha < -5 ? "#ef4444" : "#F8F9FC", fontVariantNumeric:"tabular-nums" as const, lineHeight:1, marginBottom:3 }}>{syncStats.alpha > 0 ? "+" : ""}{syncStats.alpha.toFixed(1)}%</span>
-                          <span style={{ fontSize:10, fontWeight:600, color: alphaLabel.c, display:"block", minHeight:28 }}>{alphaLabel.t}</span>
-                          {(() => {
-                            const alphaBound = Math.max(30, Math.ceil((Math.abs(syncStats.alpha) + 10) / 10) * 10);
-                            const clamped = Math.max(-alphaBound, Math.min(alphaBound, syncStats.alpha));
-                            const curPct = 50 + clamped / alphaBound * 50;
-                            const fill = clamped >= 0 ? { from:50, to:curPct } : { from:curPct, to:50 };
-                            const fillColor = clamped >= 0 ? "rgba(74,222,128,0.30)" : "rgba(239,68,68,0.30)";
-                            return <G pct={curPct} fill={fill} fillColor={fillColor}
-                              gradient="linear-gradient(to right, rgba(239,68,68,0.15) 0%, rgba(255,255,255,0.07) 50%, rgba(74,222,128,0.15) 100%)"
-                              labels={[`−${alphaBound}%`,"0",`+${alphaBound}%`]}/>;
-                          })()}
-                          <Expl txt={alphaExpl}/>
-                        </div>
-
-                        {/* Jours même sens */}
-                        <div style={cardBase} onMouseEnter={hov} onMouseLeave={unHov}>
-                          <TT k="dir"/><Lbl k="dir" txt={`Jours même sens (${activePeriod})`}/>
-                          <span style={{ fontSize:20, fontWeight:700, color:"#F8F9FC", fontVariantNumeric:"tabular-nums" as const, lineHeight:1, marginBottom:3 }}>{syncStats.sameDir}%</span>
-                          <span style={{ fontSize:10, fontWeight:600, color: dirLabel.c, display:"block", minHeight:28 }}>{dirLabel.t}</span>
-                          <G pct={syncStats.sameDir} fill={{ from:0, to:syncStats.sameDir }} fillColor="rgba(91,141,239,0.28)"
-                            gradient="linear-gradient(to right, rgba(91,141,239,0.07) 0%, rgba(91,141,239,0.20) 100%)"
-                            labels={["0%","50%","100%"]}/>
-                          <Expl txt={dirExpl}/>
-                        </div>
-
-                        {/* Résumé IA */}
-                        <div style={{ flex:"0 0 186px", background:"rgba(123,167,247,0.05)", border:"1px solid rgba(123,167,247,0.14)", borderRadius:12, padding:"11px 13px 10px", display:"flex", flexDirection:"column", gap:7 }}>
-                          <div style={{ display:"flex", alignItems:"center", gap:6, marginBottom:1 }}>
-                            <svg width="13" height="13" viewBox="0 0 16 16" fill="none"><path d="M8 1l1.5 4.5L14 8l-4.5 1.5L8 15l-1.5-4.5L2 8l4.5-1.5z" fill="#9BB9FF"/></svg>
-                            <span style={{ fontSize:11, fontWeight:700, color:"#9BB9FF", letterSpacing:"0.03em" }}>Résumé IA</span>
+                      <div className="comparison-insights-grid" style={{ order:3, display:"grid", gridTemplateColumns:"1.42fr 1.42fr .96fr", gap:8, marginTop:6, flexShrink:0, alignItems:"stretch" }}>
+                        {/* Relation entre les actifs */}
+                        <section style={groupBase}>
+                          <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between" }}>
+                            <span style={{ fontSize:8.5, fontWeight:650, color:"rgba(255,255,255,0.46)", letterSpacing:"0.10em", textTransform:"uppercase" }}>Relation entre les actifs</span>
+                            <span style={{ fontSize:8.5, color:"rgba(255,255,255,0.28)" }}>Sur {comparisonPeriodLabel}</span>
                           </div>
-                          {aiLines.map((p,i) => (
-                            <p key={i} style={{ fontSize:10, color:"rgba(255,255,255,0.58)", lineHeight:1.6, margin:0 }}>{p}</p>
-                          ))}
-                        </div>
+                          <div style={{ display:"flex", gap:8, flex:1, minHeight:0 }}>
+                            <div style={cardBase} onMouseEnter={hov} onMouseLeave={unHov}>
+                              <TT k="corr"/><Lbl k="corr" txt="Corrélation"/>
+                              <span style={{ fontSize:23, fontWeight:720, letterSpacing:"-0.025em", color:"#F8F9FC", fontVariantNumeric:"tabular-nums" as const, lineHeight:1, marginBottom:5 }}>{syncStats.corr.toFixed(2)}</span>
+                              <span style={{ fontSize:10, fontWeight:620, color:corrLabel.c }}>{corrLabel.t}</span>
+                              <Expl txt={corrExpl}/>
+                            </div>
+                            <div style={cardBase} onMouseEnter={hov} onMouseLeave={unHov}>
+                              <TT k="dir"/><Lbl k="dir" txt="Même direction"/>
+                              <span style={{ fontSize:23, fontWeight:720, letterSpacing:"-0.025em", color:"#F8F9FC", fontVariantNumeric:"tabular-nums" as const, lineHeight:1, marginBottom:5 }}>{syncStats.sameDir}%</span>
+                              <span style={{ fontSize:10, fontWeight:620, color:"#9BB9FF" }}>{directionLabel}</span>
+                              <Expl txt={`${syncStats.sameDirN} séances similaires sur ${syncStats.totalN} observées.`}/>
+                            </div>
+                          </div>
+                        </section>
 
+                        {/* Risque & performance */}
+                        <section style={groupBase}>
+                          <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between" }}>
+                            <span style={{ fontSize:8.5, fontWeight:650, color:"rgba(255,255,255,0.46)", letterSpacing:"0.10em", textTransform:"uppercase" }}>Risque &amp; performance</span>
+                            <span style={{ fontSize:8.5, color:"rgba(255,255,255,0.28)" }}>Sur {comparisonPeriodLabel}</span>
+                          </div>
+                          <div style={{ display:"flex", gap:8, flex:1, minHeight:0 }}>
+                            <div style={cardBase} onMouseEnter={hov} onMouseLeave={unHov}>
+                              <TT k="beta"/><Lbl k="beta" txt="Bêta"/>
+                              <span style={{ fontSize:23, fontWeight:720, letterSpacing:"-0.025em", color:"#F8F9FC", fontVariantNumeric:"tabular-nums" as const, lineHeight:1, marginBottom:5 }}>{syncStats.beta.toFixed(2)}×</span>
+                              <span style={{ fontSize:10, fontWeight:620, color:betaLabel.c }}>{betaLabel.t}</span>
+                              <Expl txt={betaExpl}/>
+                            </div>
+                            <div style={cardBase} onMouseEnter={hov} onMouseLeave={unHov}>
+                              <TT k="alpha"/><Lbl k="alpha" txt="Alpha"/>
+                              <span style={{ fontSize:23, fontWeight:720, letterSpacing:"-0.025em", color:syncStats.alpha > 5 ? "#4ade80" : syncStats.alpha < -5 ? "#ff5b5f" : "#F8F9FC", fontVariantNumeric:"tabular-nums" as const, lineHeight:1, marginBottom:5 }}>{syncStats.alpha > 0 ? "+" : ""}{syncStats.alpha.toFixed(1)}%</span>
+                              <span style={{ fontSize:10, fontWeight:620, color:alphaLabel.c }}>{alphaLabel.t}</span>
+                              <Expl txt={alphaExpl}/>
+                            </div>
+                          </div>
+                        </section>
+
+                        {/* Lecture rapide */}
+                        <section className="comparison-summary" style={{ ...groupBase, position:"relative", overflow:"hidden", background:"linear-gradient(145deg, rgba(123,167,247,0.050) 0%, rgba(123,167,247,0.018) 52%, rgba(255,255,255,0.012) 100%)" }}>
+                          <div aria-hidden="true" style={{ position:"absolute", right:16, top:44, width:31, height:31, borderRadius:"50%", background:`${color}2E`, opacity:.55 }}/>
+                          <div aria-hidden="true" style={{ position:"absolute", right:1, top:44, width:31, height:31, borderRadius:"50%", background:`${activeBmColor}32`, opacity:.55 }}/>
+                          <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", position:"relative", zIndex:1 }}>
+                            <span style={{ fontSize:9.5, fontWeight:680, color:"rgba(255,255,255,0.82)", letterSpacing:"0.015em" }}>Lecture rapide</span>
+                            <span style={{ fontSize:8.5, color:"rgba(255,255,255,0.32)" }}>Sur {comparisonPeriodLabel}</span>
+                          </div>
+                          <div style={{ display:"flex", flexDirection:"column", gap:9, paddingTop:12, paddingRight:30, position:"relative", zIndex:1 }}>
+                            <p style={{ fontSize:10.5, fontWeight:620, color:"rgba(255,255,255,0.78)", lineHeight:1.5, margin:0 }}>{aiLines[0]}</p>
+                            <p style={{ fontSize:9.5, color:"rgba(255,255,255,0.48)", lineHeight:1.55, margin:0 }}>{aiLines[1]}</p>
+                          </div>
+                        </section>
                       </div>
                     );
                   })()}
 
                   {/* Second chart — benchmark */}
                   <div
-                    style={{ border:"1px solid rgba(255,255,255,0.06)", borderRadius:"16px", padding:"10px 18px 10px", flex:"2 1 0", minHeight:0, display:"flex", flexDirection:"column", position:"relative", overflow:"hidden", background:"rgba(255,255,255,0.02)", marginTop:6 }}>
-                    <div style={{ position:"absolute", inset:0, pointerEvents:"none", zIndex:0, background:`radial-gradient(ellipse 75% 45% at 50% 75%, ${activeBmColor}18 0%, transparent 70%)` }}/>
-                    {/* Meta header */}
-                    <div style={{ display:"flex", alignItems:"center", gap:0, marginBottom:4, flexShrink:0, position:"relative", zIndex:1 }}>
-                      {([
-                        { label:"Type", value:({"EQUITY":"Action","ETF":"ETF","INDEX":"Indice","CRYPTOCURRENCY":"Crypto"} as Record<string,string>)[customBmType] || customBmType },
-                        { label:"Devise", value:"USD" },
-                      ] as {label:string;value:string}[]).map((card, i) => (
-                        <div key={card.label} style={{ display:"flex", alignItems:"center", gap:5, padding: i === 0 ? "0 10px 0 0" : "0 10px", borderLeft: i > 0 ? "1px solid rgba(255,255,255,0.07)" : "none" }}>
-                          <span style={{ fontSize:9, color:"rgba(255,255,255,0.22)", letterSpacing:"0.08em", textTransform:"uppercase" as const }}>{card.label}</span>
-                          <span style={{ fontSize:9, fontWeight:600, color:"rgba(255,255,255,0.75)", letterSpacing:"0.03em" }}>{card.value}</span>
-                        </div>
-                      ))}
-                    </div>
+                    className={chartDisplayMode === "black" ? undefined : "chart-glass-container"}
+                    data-glass-edge=""
+                    style={{
+                      order:2, border:chartDisplayMode === "black" ? "1px solid rgba(255,255,255,0.30)" : "1px solid rgba(205,225,255,0.16)", borderRadius:"30px", padding:"14px 18px 10px",
+                      flex:"1 1 0", minHeight:0, display:"flex", flexDirection:"column", position:"relative", overflow:"hidden", marginTop:6,
+                      background:chartDisplayMode === "black" ? "linear-gradient(180deg, #0b0b0b 0%, #070707 100%)" : "rgba(9,27,52,0.78)",
+                      backdropFilter:chartDisplayMode === "black" ? "none" : "blur(28px) saturate(1.2)", WebkitBackdropFilter:chartDisplayMode === "black" ? "none" : "blur(28px) saturate(1.2)",
+                      boxShadow:chartDisplayMode === "black" ? "0 16px 44px rgba(0,0,0,0.28)" : "0 12px 36px rgba(0,0,0,0.10)",
+                    }}>
+                    <div style={{ position:"absolute", inset:chartDisplayMode === "black" ? 0 : -28, pointerEvents:"none", zIndex:0, filter:chartDisplayMode === "black" ? "none" : "blur(20px)", opacity:chartDisplayMode === "black" ? 1 : 0.78, background:chartDisplayMode === "black" ? "radial-gradient(ellipse 62% 38% at 12% 0%, rgba(255,255,255,0.018) 0%, transparent 72%)" : "radial-gradient(ellipse 90% 72% at -10% -10%, rgba(255,255,255,0.035) 0%, rgba(255,255,255,0.014) 42%, rgba(255,255,255,0) 82%), radial-gradient(ellipse 86% 75% at 110% 112%, rgba(60,113,184,0.045) 0%, rgba(60,113,184,0.018) 44%, rgba(60,113,184,0) 84%)" }}/>
                     <GrowthChart
                       ticker={customBmTicker}
-                      portfolioData={[]}
+                      portfolioData={rawCustomBmData}
                       benchmarkData={[]}
                       benchmarkName=""
                       portfolioLabel={customBmTicker.replace(/-USD$/,"").replace(/^\^/,"")}
                       portfolioColor={activeBmColor}
+                      displayMode={chartDisplayMode}
                       livePrice={bmCurrentPrice?.price}
                       dailyChangePct={bmCurrentPrice?.change ?? null}
                       dark={true}
@@ -1812,44 +2139,31 @@ function ChartContent() {
                       isCrypto={isBmCrypto}
                       externalPeriod={activePeriod}
                       externalInterval={activeInterval}
+                      onPeriodChange={setActivePeriod}
+                      onIntervalChange={setActiveInterval}
                       hideControls={true}
-                      onPeriodChange={() => {}}
+                      leftSlot={bmMetaCards.length > 0 ? (
+                        <div style={{ display:"flex", alignItems:"center", gap:0, overflow:"hidden" }}>
+                          {bmMetaCards.map((card, i) => (
+                            <div key={card.label} style={{ display:"flex", alignItems:"center", gap:5, padding: i === 0 ? "0 10px 0 0" : "0 10px", borderLeft: i > 0 ? "1px solid rgba(255,255,255,0.07)" : "none" }}>
+                              <span style={{ fontSize:9, color:"rgba(255,255,255,0.22)", letterSpacing:"0.08em", textTransform:"uppercase" as const, flexShrink:0 }}>
+                                {card.label}
+                              </span>
+                              <span style={{ fontSize:11, fontWeight:600, color:"rgba(255,255,255,0.6)", fontVariantNumeric:"tabular-nums" as const }}>
+                                {card.value}
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                      ) : undefined}
                     />
-                    {/* Period perfs */}
-                    <div style={{ display:"flex", justifyContent:"center", gap:16, paddingTop:4, flexShrink:0, position:"relative", zIndex:1 }}>
-                      {(["24h","1S","1M","3M","6M","1A","3A","Max"] as const).map(key => {
-                        let pct: number | null = null;
-                        if (key === "24h") {
-                          pct = bmCurrentPrice?.change ?? null;
-                        } else {
-                          const SECS: Record<string,number> = { "1S":7*86400,"1M":30*86400,"3M":91*86400,"6M":183*86400,"1A":365*86400,"3A":1095*86400 };
-                          const secs = SECS[key];
-                          const pts = secs
-                            ? rawCustomBmData.filter(p => p.date >= new Date(Date.now() - secs*1000).toISOString().slice(0,10))
-                            : rawCustomBmData;
-                          if (pts.length >= 2) pct = (pts[pts.length-1].value - pts[0].value) / pts[0].value * 100;
-                        }
-                        const isActive = activePeriod === key;
-                        return (
-                          <div key={key} style={{ position:"relative", paddingBottom:4, textAlign:"center", minWidth:36 }}>
-                            <div style={{ fontSize:10, fontWeight:600, color: isActive ? activeBmColor : "#94a3b8" }}>{key}</div>
-                            {pct !== null && (
-                              <div style={{ fontSize:10, fontWeight:700, color: pct >= 0 ? "#4ade80" : "#ef4444", fontVariantNumeric:"tabular-nums" as const }}>
-                                {(() => { const s = pct >= 0 ? "+" : ""; const a = Math.abs(pct); return a >= 10000 ? `${s}${(pct/1000).toFixed(0)}k%` : a >= 1000 ? `${s}${pct.toFixed(0)}%` : `${s}${pct.toFixed(1)}%`; })()}
-                              </div>
-                            )}
-                            {isActive && <div style={{ position:"absolute", bottom:0, left:0, right:0, height:2, borderRadius:1, background:activeBmColor }}/>}
-                          </div>
-                        );
-                      })}
-                    </div>
                   </div>
                 </>
               )}
 
               {/* Sub-panel — en dessous, hauteur fixe, pas de scroll */}
               {subOpen ? (
-                <div style={{ background:"rgba(255,255,255,0.02)", border:"1px solid rgba(255,255,255,0.06)", borderRadius:12, marginTop:4, flexShrink:0, display:"flex", flexDirection:"column" }}>
+                <div style={{ order:4, background:"rgba(255,255,255,0.02)", border:"1px solid rgba(255,255,255,0.06)", borderRadius:12, marginTop:4, flexShrink:0, display:"flex", flexDirection:"column" }}>
                   <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", padding:"4px 12px 3px", borderBottom:"1px solid rgba(255,255,255,0.05)" }}>
                     <div style={{ display:"flex", gap:4, overflowX:"auto", scrollbarWidth:"none" as const }}>
                       {SUB_TABS.map(({key, label: lbl}) => (
@@ -1904,7 +2218,29 @@ function ChartContent() {
 
               {/* Sidebar */}
               {ticker && sidebarOpen && (
-                <div style={{ width:336, flexShrink:0, display:"flex", flexDirection:"column", background:"rgba(255,255,255,0.025)", border:"1px solid rgba(255,255,255,0.07)", borderRadius:14, overflow:"hidden" }}>
+                <div
+                  className={chartDisplayMode === "black" ? undefined : "chart-glass-container"}
+                  style={{
+                    width:336,
+                    flexShrink:0,
+                    display:"flex",
+                    flexDirection:"column",
+                    boxSizing:"border-box",
+                    background:chartDisplayMode === "black"
+                      ? "linear-gradient(180deg, #0b0b0b 0%, #070707 100%)"
+                      : "rgba(9,27,52,0.78)",
+                    border:chartDisplayMode === "black"
+                      ? "1px solid rgba(255,255,255,0.30)"
+                      : "1px solid rgba(205,225,255,0.16)",
+                    borderRadius:30,
+                    overflow:"hidden",
+                    backdropFilter:chartDisplayMode === "black" ? "none" : "blur(28px) saturate(1.2)",
+                    WebkitBackdropFilter:chartDisplayMode === "black" ? "none" : "blur(28px) saturate(1.2)",
+                    boxShadow:chartDisplayMode === "black"
+                      ? "0 16px 44px rgba(0,0,0,0.28)"
+                      : "0 12px 36px rgba(0,0,0,0.10)",
+                  }}
+                >
                   {/* Sidebar tabs + close button */}
                   <div style={{ display:"flex", alignItems:"stretch", borderBottom:"1px solid rgba(255,255,255,0.06)", flexShrink:0 }}>
                     {([["news","Actualités"],["similar","Similaires"],["ai","IA"]] as const).map(([tab, label]) => {
@@ -1937,10 +2273,29 @@ function ChartContent() {
                           ))}
                         </div>
                       ) : news.length > 0 ? (() => {
-                        const scored = news.map(n => ({ ...n, ...scoreNews(n.title) }));
-                        const sorted = newsSortBy === "impact"
-                          ? [...scored].sort((a,b) => ({ high:0, medium:1, low:2 }[a.impact] - ({ high:0, medium:1, low:2 }[b.impact])))
-                          : scored;
+                        const seenNews = new Set<string>();
+                        const scored = news
+                          .map(n => ({
+                            ...n,
+                            ...scoreNews(n.title),
+                            timestamp: newsTimestamp(n.published_at),
+                          }))
+                          .filter(n => {
+                            const normalizedTitle = n.title
+                              .normalize("NFD")
+                              .replace(/[\u0300-\u036f]/g, "")
+                              .toLowerCase()
+                              .replace(/[^a-z0-9]+/g, " ")
+                              .trim();
+                            const key = n.link || normalizedTitle;
+                            if (!key || seenNews.has(key)) return false;
+                            seenNews.add(key);
+                            return true;
+                          });
+                        const impactRank: Record<NewsImpact, number> = { high:0, medium:1, low:2 };
+                        const sorted = [...scored].sort((a,b) => newsSortBy === "impact"
+                          ? impactRank[a.impact] - impactRank[b.impact] || b.timestamp - a.timestamp
+                          : b.timestamp - a.timestamp);
                         return (
                           <div style={{ display:"flex", flexDirection:"column", gap:0 }}>
                             {/* Sort bar */}
@@ -1948,13 +2303,17 @@ function ChartContent() {
                               <span style={{ fontSize:9, letterSpacing:"0.08em", color:"rgba(255,255,255,0.25)", textTransform:"uppercase" as const }}>
                                 {sorted.length} actualité{sorted.length > 1 ? "s" : ""}
                               </span>
-                              <div style={{ display:"flex", gap:3 }}>
+                              <div style={{ display:"flex", alignItems:"center", padding:2, borderRadius:8, gap:1,
+                                background:"rgba(255,255,255,0.035)", border:"1px solid rgba(255,255,255,0.07)" }}>
                                 {(["recent","impact"] as const).map(s => (
-                                  <button key={s} onClick={() => setNewsSortBy(s)} style={{
-                                    fontSize:9, letterSpacing:"0.06em", padding:"2px 8px", borderRadius:5, cursor:"pointer",
-                                    border:`1px solid ${newsSortBy===s ? "rgba(155,185,255,0.40)" : "rgba(255,255,255,0.10)"}`,
-                                    background: newsSortBy===s ? "rgba(91,141,239,0.16)" : "transparent",
+                                  <button key={s} onClick={() => setNewsSortBy(s)}
+                                    title={s === "impact" ? "Trier par impact estimé" : "Trier par date de publication"}
+                                    style={{
+                                    fontSize:9, fontWeight:600, letterSpacing:"0.045em", padding:"3px 9px", borderRadius:6, cursor:"pointer",
+                                    border:"none",
+                                    background: newsSortBy===s ? "rgba(91,141,239,0.20)" : "transparent",
                                     color: newsSortBy===s ? "#9BB9FF" : "rgba(255,255,255,0.35)",
+                                    boxShadow: newsSortBy===s ? "inset 0 0 0 1px rgba(155,185,255,0.30), 0 2px 6px rgba(0,0,0,0.14)" : "none",
                                     transition:"all 0.14s",
                                   }}>
                                     {s === "recent" ? "Récent" : "Impact"}
@@ -1965,64 +2324,53 @@ function ChartContent() {
                             {/* News items */}
                             <div style={{ display:"flex", flexDirection:"column", gap:7 }}>
                             {sorted.map((n, i) => {
-                              let timeAgo = "";
-                              try {
-                                const ts = typeof n.published_at === "number"
-                                  ? new Date(n.published_at * 1000)
-                                  : new Date(n.published_at);
-                                const diff = Math.floor((Date.now() - ts.getTime()) / 60000);
-                                if (diff < 60)        timeAgo = `${diff}m`;
-                                else if (diff < 1440) timeAgo = `${Math.floor(diff/60)}h`;
-                                else                  timeAgo = `${Math.floor(diff/1440)}j`;
-                              } catch { timeAgo = ""; }
+                              const timeAgo = formatNewsAge(n.timestamp);
 
                               const imp = IMPACT_CONFIG[n.impact];
 
                               return (
-                                <a key={i} href={n.link} target="_blank" rel="noopener noreferrer"
-                                  style={{ display:"flex", flexDirection:"column", gap:7, padding:"10px 11px", borderRadius:10, background:"rgba(255,255,255,0.025)", border:"1px solid rgba(255,255,255,0.06)", textDecoration:"none", transition:"all 0.14s" }}
-                                  onMouseEnter={e => { e.currentTarget.style.background="rgba(255,255,255,0.05)"; e.currentTarget.style.borderColor="rgba(255,255,255,0.11)"; }}
-                                  onMouseLeave={e => { e.currentTarget.style.background="rgba(255,255,255,0.025)"; e.currentTarget.style.borderColor="rgba(255,255,255,0.06)"; }}>
+                                <a key={n.link || `${n.title}-${i}`} href={n.link} target="_blank" rel="noopener noreferrer"
+                                  className="news-card-link"
+                                  style={{ display:"flex", flexDirection:"column", gap:6, padding:"9px 10px", borderRadius:11, background:"rgba(255,255,255,0.023)", border:"1px solid rgba(255,255,255,0.058)", textDecoration:"none" }}>
                                   {/* Top row: type + impact badge */}
                                   <div style={{ display:"flex", alignItems:"center", gap:5 }}>
-                                    <span style={{ fontSize:8.5, fontWeight:600, letterSpacing:"0.07em", padding:"1.5px 6px", borderRadius:4,
+                                    <span style={{ fontSize:8, fontWeight:650, letterSpacing:"0.075em", padding:"1.5px 6px", borderRadius:5,
                                       background:"rgba(255,255,255,0.08)", color:"rgba(255,255,255,0.50)", textTransform:"uppercase" as const }}>
                                       {n.type}
                                     </span>
-                                    <span style={{ fontSize:8.5, fontWeight:600, letterSpacing:"0.05em", padding:"1.5px 6px", borderRadius:4,
+                                    <span title="Impact estimé à partir du titre et du type d’événement" style={{ fontSize:8, fontWeight:650, letterSpacing:"0.045em", padding:"1.5px 6px", borderRadius:5,
                                       background:imp.bg, color:imp.color, display:"flex", alignItems:"center", gap:3 }}>
                                       <span style={{ width:4, height:4, borderRadius:"50%", background:imp.dot, display:"inline-block", flexShrink:0 }}/>
                                       {imp.label}
                                     </span>
-                                    <span style={{ marginLeft:"auto", fontSize:8.5, color:"rgba(255,255,255,0.22)" }}>{n.readMin} min</span>
+                                    <span style={{ marginLeft:"auto", fontSize:8.5, color:"rgba(255,255,255,0.27)", whiteSpace:"nowrap" }}>{timeAgo}{timeAgo ? " · " : ""}{n.readMin} min</span>
                                   </div>
                                   {/* Content row */}
-                                  <div style={{ display:"flex", gap:9, alignItems:"flex-start" }}>
+                                  <div style={{ display:"flex", gap:9, alignItems:"center" }}>
                                     {n.thumbnail ? (
-                                      <img src={n.thumbnail} alt="" width={44} height={44}
-                                        style={{ borderRadius:6, objectFit:"cover" as const, flexShrink:0 }}
+                                      <img src={n.thumbnail} alt="" width={42} height={42}
+                                        style={{ borderRadius:7, objectFit:"cover" as const, flexShrink:0, background:"rgba(255,255,255,.04)" }}
                                         onError={e => { (e.target as HTMLImageElement).style.display="none"; }} />
                                     ) : (
                                       <div style={{
-                                        width:44, height:44, borderRadius:6, flexShrink:0,
+                                        width:42, height:42, borderRadius:7, flexShrink:0,
                                         background: ["rgba(91,141,239,0.18)","rgba(139,92,246,0.18)","rgba(34,197,94,0.14)","rgba(249,115,22,0.16)","rgba(236,72,153,0.16)"][
                                           (n.publisher?.charCodeAt(0) ?? 65) % 5
                                         ],
                                         display:"flex", alignItems:"center", justifyContent:"center",
-                                        fontSize:18, fontWeight:700, color:"rgba(255,255,255,0.45)",
+                                        fontSize:17, fontWeight:700, color:"rgba(255,255,255,0.45)",
                                       }}>
                                         {n.publisher?.[0]?.toUpperCase() ?? "N"}
                                       </div>
                                     )}
                                     <div style={{ flex:1, minWidth:0 }}>
-                                      <div style={{ fontSize:11, fontWeight:500, color:"rgba(255,255,255,0.84)", lineHeight:1.44,
+                                      <div style={{ fontSize:10.5, fontWeight:560, color:"rgba(255,255,255,0.86)", lineHeight:1.38,
                                         display:"-webkit-box", WebkitLineClamp:2, WebkitBoxOrient:"vertical" as const, overflow:"hidden" }}>
                                         {n.title}
                                       </div>
-                                      <div style={{ marginTop:4, display:"flex", alignItems:"center", gap:5 }}>
-                                        <span style={{ fontSize:9, color:"rgba(255,255,255,0.35)", fontWeight:500 }}>{n.publisher}</span>
-                                        {timeAgo && <><span style={{ width:2, height:2, borderRadius:"50%", background:"rgba(255,255,255,0.18)", display:"inline-block", flexShrink:0 }}/><span style={{ fontSize:9, color:"rgba(255,255,255,0.25)" }}>{timeAgo}</span></>}
-                                        <span style={{ marginLeft:"auto", fontSize:9, color:"rgba(91,141,239,0.55)" }}>→</span>
+                                      <div style={{ marginTop:3, display:"flex", alignItems:"center", gap:5 }}>
+                                        <span style={{ fontSize:8.8, color:"rgba(255,255,255,0.34)", fontWeight:500, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{n.publisher}</span>
+                                        <span className="news-card-arrow" style={{ marginLeft:"auto", fontSize:10, lineHeight:1, color:"rgba(91,141,239,0.62)", opacity:.75 }}>→</span>
                                       </div>
                                     </div>
                                   </div>
@@ -2043,8 +2391,8 @@ function ChartContent() {
                     {sidebarTab === "similar" && (
                       <div>
                         <div style={{ display:"flex", gap:4, marginBottom:12, flexWrap:"wrap" }}>
-                          {(["sector","geography","class","marketcap"] as const).map(by => {
-                            const labels = {sector:"Secteur", geography:"Géographie", class:"Classe", marketcap:"Market Cap"};
+                          {(["sector","geography","marketcap"] as const).map(by => {
+                            const labels = {sector:"Secteur", geography:"Géographie", marketcap:"Market Cap"};
                             const active = similarBy === by;
                             return (
                               <button key={by} onClick={() => setSimilarBy(by)}
@@ -2059,31 +2407,68 @@ function ChartContent() {
                             {[1,2,3,4,5].map(i => <div key={i} style={{ height:44, borderRadius:7, background:"rgba(255,255,255,0.04)" }} />)}
                           </div>
                         ) : similar.length > 0 ? (
-                          <div style={{ display:"flex", flexDirection:"column", gap:5 }}>
+                          <div style={{ display:"flex", flexDirection:"column", gap:7 }}>
                             {similar.map(s => {
-                              const name = TRENDING.find(t => t.ticker === s.ticker)?.name ?? s.ticker;
-                              const pos  = s.change >= 0;
+                              const info = TRENDING.find(t => t.ticker === s.ticker);
+                              const name = info?.name ?? s.ticker;
+                              const assetType = info?.type ?? s.type ?? "EQUITY";
+                              const assetTypeLabel = ({EQUITY:"Action",ETF:"ETF",INDEX:"Indice",CRYPTOCURRENCY:"Crypto"} as Record<string,string>)[assetType] ?? assetType;
+                              const exchange = info?.exchange ? (_EXCH[info.exchange] ?? info.exchange) : "";
+                              const assetColor = BRAND_COLORS[s.ticker] ?? "#5B8DEF";
+                              const currency = assetType === "CRYPTOCURRENCY" ? "USD" : ({
+                                PAR:"EUR", GER:"EUR", AMS:"EUR", MIL:"EUR", MCE:"EUR",
+                                LSE:"GBP", SWX:"CHF", TOR:"CAD", TSX:"CAD", HKG:"HKD",
+                                JPX:"JPY", TYO:"JPY", ASX:"AUD",
+                              } as Record<string,string>)[info?.exchange ?? ""] ?? "USD";
+                              const pos = s.change >= 0;
                               return (
-                                <div key={s.ticker}
-                                  onClick={() => { const url = new URL(window.location.href); url.searchParams.set("ticker", s.ticker); window.location.href = url.toString(); }}
-                                  style={{ display:"flex", alignItems:"center", gap:8, padding:"8px 10px", borderRadius:8, background:"rgba(255,255,255,0.03)", border:"1px solid rgba(255,255,255,0.07)", cursor:"pointer", transition:"background 0.12s" }}
-                                  onMouseEnter={e => e.currentTarget.style.background="rgba(255,255,255,0.07)"}
-                                  onMouseLeave={e => e.currentTarget.style.background="rgba(255,255,255,0.03)"}>
-                                  <AssetLogo ticker={s.ticker} type={s.type ?? "EQUITY"} size={28}
-                                    fallbackBg="rgba(255,255,255,0.07)" fallbackBorder="rgba(255,255,255,0.12)" fallbackTextColor="rgba(255,255,255,0.45)" />
-                                  <div style={{ flex:1, minWidth:0 }}>
-                                    <div style={{ fontSize:11, fontWeight:600, color:"rgba(255,255,255,0.88)" }}>{s.ticker}</div>
-                                    <div style={{ fontSize:9, color:"rgba(255,255,255,0.28)", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{name}</div>
+                                <button key={s.ticker}
+                                  type="button"
+                                  className="asset-hero-card similar-asset-card"
+                                  data-border=""
+                                  onClick={() => {
+                                    const url = new URL(window.location.href);
+                                    url.searchParams.set("ticker", s.ticker);
+                                    router.push(`${url.pathname}${url.search}`);
+                                  }}
+                                  style={{
+                                    position:"relative", isolation:"isolate", overflow:"hidden", width:"100%", minHeight:66,
+                                    display:"grid", gridTemplateColumns:"42px minmax(0,1fr) auto", alignItems:"center", gap:10,
+                                    padding:"9px 10px", border:0, borderRadius:16, color:assetColor, cursor:"pointer",
+                                    fontFamily:"inherit", textAlign:"left", appearance:"none",
+                                    background:`radial-gradient(ellipse 72% 110% at 0% 0%, ${assetColor}42 0%, ${assetColor}25 48%, ${assetColor}00 100%), radial-gradient(ellipse 72% 110% at 100% 100%, ${assetColor}38 0%, ${assetColor}20 48%, ${assetColor}00 100%), linear-gradient(138deg, ${assetColor}1D 0%, ${assetColor}24 50%, ${assetColor}1B 100%), rgba(4,16,35,0.78)`,
+                                    boxShadow:`0 6px 18px rgba(0,0,0,0.18), 0 0 20px ${assetColor}08`,
+                                  }}>
+                                  <div className="asset-hero-reflection"/>
+                                  <div style={{ position:"relative", zIndex:1, display:"flex", alignItems:"center" }}>
+                                    <AssetLogo ticker={s.ticker} type={assetType} size={42} radius={10}
+                                      fallbackBg="rgba(255,255,255,0.07)" fallbackBorder="rgba(255,255,255,0.10)" fallbackTextColor="rgba(255,255,255,0.52)" bare />
                                   </div>
-                                  <div style={{ textAlign:"right", flexShrink:0 }}>
-                                    <div style={{ fontSize:10, fontWeight:600, color:pos?"#4ade80":"#f87171", fontVariantNumeric:"tabular-nums" as const }}>
-                                      {pos?"+":""}{s.change.toFixed(2)}%
-                                    </div>
-                                    <div style={{ fontSize:9, color:"rgba(255,255,255,0.30)", fontVariantNumeric:"tabular-nums" as const }}>
-                                      {s.price < 1 ? s.price.toFixed(4) : s.price < 100 ? s.price.toFixed(2) : s.price.toFixed(0)}
+                                  <div style={{ position:"relative", zIndex:1, minWidth:0, alignSelf:"stretch", display:"flex", flexDirection:"column", justifyContent:"center" }}>
+                                    <span style={{ fontSize:12.5, lineHeight:1, fontWeight:760, letterSpacing:"-0.02em", color:"#F8F9FC", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{s.ticker}</span>
+                                    <span style={{ marginTop:4, fontSize:9, lineHeight:1, color:"rgba(255,255,255,0.52)", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{name}</span>
+                                    <div style={{ display:"flex", alignItems:"center", gap:5, marginTop:6, minWidth:0 }}>
+                                      <span className="asset-meta-pill" style={{ minHeight:15, padding:"2px 6px", fontSize:8, color:"rgba(255,255,255,0.70)" }}>{assetTypeLabel}</span>
+                                      {(similarBy === "marketcap" ? s.market_cap != null : (exchange || s.country)) && (
+                                        <span className="asset-meta-pill" style={{ minHeight:15, maxWidth:88, padding:"2px 6px", fontSize:8, color:"rgba(255,255,255,0.52)", fontWeight:500, overflow:"hidden", textOverflow:"ellipsis" }}>
+                                          <span style={{ overflow:"hidden", textOverflow:"ellipsis" }}>
+                                            {similarBy === "marketcap" && s.market_cap != null ? `Cap ${_fmtC(s.market_cap)}` : (exchange || s.country)}
+                                          </span>
+                                          {similarBy !== "marketcap" && info?.exchange && _EXCH_FLAG[info.exchange] && <img className="asset-exchange-flag" style={{ width:10, height:10 }} src={`https://hatscripts.github.io/circle-flags/flags/${_EXCH_FLAG[info.exchange]}.svg`} alt="" />}
+                                        </span>
+                                      )}
                                     </div>
                                   </div>
-                                </div>
+                                  <div style={{ position:"relative", zIndex:1, minWidth:62, textAlign:"right", display:"flex", flexDirection:"column", alignItems:"flex-end", justifyContent:"center", gap:6 }}>
+                                    <div style={{ display:"flex", alignItems:"baseline", justifyContent:"flex-end", gap:4, whiteSpace:"nowrap" }}>
+                                      <span style={{ fontSize:13, lineHeight:1, fontWeight:680, letterSpacing:"-0.025em", color:"rgba(255,255,255,0.92)", fontVariantNumeric:"tabular-nums" as const }}>{_fmtN(s.price)}</span>
+                                      <span style={{ fontSize:7.5, lineHeight:1, fontWeight:600, color:"rgba(255,255,255,0.38)", letterSpacing:"0.04em" }}>{currency}</span>
+                                    </div>
+                                    <span className="asset-performance-pill" style={{ minHeight:16, padding:"2px 7px", fontSize:8.5, color:pos?"#4ade80":"#ef4444", background:pos?"rgba(34,197,94,0.23)":"rgba(239,68,68,0.23)", fontVariantNumeric:"tabular-nums" as const }}>
+                                      {pos?"+":"−"}{Math.abs(s.change).toFixed(2)}%
+                                    </span>
+                                  </div>
+                                </button>
                               );
                             })}
                           </div>

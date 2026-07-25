@@ -5,19 +5,21 @@ import { tileData } from "@/lib/tileStyle";
 interface Props {
   ticker: string;
   children: ReactNode;
+  className?: string;
   radius?: number;
   style?: CSSProperties;
   containerStyle?: CSSProperties;
   onClick?: () => void;
+  glowStrength?: number;
 }
 
-export default function TileCard({ ticker, children, radius = 12, style, containerStyle, onClick }: Props) {
+export default function TileCard({ ticker, children, className, radius = 12, style, containerStyle, onClick, glowStrength = 1 }: Props) {
   const { glassBg, borderGrad, rgb, b1cx, b1cy, b2cx, b2cy } = tileData(ticker);
   const [r, g, b] = rgb;
   const id = `tc-${ticker.replace(/[^a-z0-9]/gi, "")}`;
 
   return (
-    <div onClick={onClick} style={{
+    <div className={className} onClick={onClick} style={{
       position: "relative",
       borderRadius: radius,
       cursor: onClick ? "pointer" : undefined,
@@ -47,9 +49,9 @@ export default function TileCard({ ticker, children, radius = 12, style, contain
             <feGaussianBlur stdDeviation="13"/>
           </filter>
         </defs>
-        <circle cx="50" cy="50" r="70" fill={`rgba(${r},${g},${b},0.38)`} filter={`url(#ga-${id})`}/>
-        <circle cx={b1cx} cy={b1cy} r="42" fill={`rgba(${r},${g},${b},0.22)`} filter={`url(#gb-${id})`}/>
-        <circle cx={b2cx} cy={b2cy} r="34" fill={`rgba(${r},${g},${b},0.14)`} filter={`url(#gb2-${id})`}/>
+        <circle cx="50" cy="50" r="70" fill={`rgba(${r},${g},${b},${0.38 * glowStrength})`} filter={`url(#ga-${id})`}/>
+        <circle cx={b1cx} cy={b1cy} r="42" fill={`rgba(${r},${g},${b},${0.22 * glowStrength})`} filter={`url(#gb-${id})`}/>
+        <circle cx={b2cx} cy={b2cy} r="34" fill={`rgba(${r},${g},${b},${0.14 * glowStrength})`} filter={`url(#gb2-${id})`}/>
       </svg>
       {/* style spread here so layout props + font-smoothing apply to the text layer, above the blobs */}
       <div style={{

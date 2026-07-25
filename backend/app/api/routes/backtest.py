@@ -648,9 +648,10 @@ async def get_news(ticker: str, lang: str = "en") -> list:
                 all_items.append({"title": title, "publisher": publisher, "link": link,
                                    "published_at": pub_at, "thumbnail": thumb, "_rel": is_relevant(title)})
 
-        # Prefer relevant articles; fall back to all if fewer than 3 pass the filter
+        # Never pad a partially relevant feed with unrelated market stories.
+        # Fall back only when Yahoo supplies no identifiable match at all.
         relevant = [i for i in all_items if i["_rel"]]
-        result   = (relevant if len(relevant) >= 3 else all_items)[:6]
+        result   = (relevant if relevant else all_items)[:6]
         for item in result:
             del item["_rel"]
 
@@ -681,10 +682,10 @@ _UNIVERSE: dict[str, dict] = {
     "NOW":    {"sector":"Technology","country":"US","type":"EQUITY","mcap":"large"},
     "PLTR":   {"sector":"Technology","country":"US","type":"EQUITY","mcap":"large"},
     "SAP":    {"sector":"Technology","country":"DE","type":"EQUITY","mcap":"large"},
-    "GOOGL":  {"sector":"Technology","country":"US","type":"EQUITY","mcap":"mega"},
-    "GOOG":   {"sector":"Technology","country":"US","type":"EQUITY","mcap":"mega"},
-    "META":   {"sector":"Technology","country":"US","type":"EQUITY","mcap":"mega"},
-    "NFLX":   {"sector":"Technology","country":"US","type":"EQUITY","mcap":"large"},
+    "GOOGL":  {"sector":"Communication Services","country":"US","type":"EQUITY","mcap":"mega"},
+    "GOOG":   {"sector":"Communication Services","country":"US","type":"EQUITY","mcap":"mega"},
+    "META":   {"sector":"Communication Services","country":"US","type":"EQUITY","mcap":"mega"},
+    "NFLX":   {"sector":"Communication Services","country":"US","type":"EQUITY","mcap":"large"},
     "UBER":   {"sector":"Technology","country":"US","type":"EQUITY","mcap":"large"},
     "COIN":   {"sector":"Technology","country":"US","type":"EQUITY","mcap":"mid"},
     "AAPL":   {"sector":"Technology","country":"US","type":"EQUITY","mcap":"mega"},
@@ -695,10 +696,10 @@ _UNIVERSE: dict[str, dict] = {
     "SBUX":   {"sector":"Consumer Discretionary","country":"US","type":"EQUITY","mcap":"large"},
     "NKE":    {"sector":"Consumer Discretionary","country":"US","type":"EQUITY","mcap":"large"},
     "HD":     {"sector":"Consumer Discretionary","country":"US","type":"EQUITY","mcap":"large"},
-    "DIS":    {"sector":"Consumer Discretionary","country":"US","type":"EQUITY","mcap":"large"},
+    "DIS":    {"sector":"Communication Services","country":"US","type":"EQUITY","mcap":"large"},
     "MC.PA":  {"sector":"Consumer Discretionary","country":"FR","type":"EQUITY","mcap":"mega"},
     "KER.PA": {"sector":"Consumer Discretionary","country":"FR","type":"EQUITY","mcap":"large"},
-    "STLA":   {"sector":"Consumer Discretionary","country":"FR","type":"EQUITY","mcap":"large"},
+    "STLA":   {"sector":"Consumer Discretionary","country":"NL","type":"EQUITY","mcap":"large"},
     "JPM":    {"sector":"Financials","country":"US","type":"EQUITY","mcap":"mega"},
     "BAC":    {"sector":"Financials","country":"US","type":"EQUITY","mcap":"large"},
     "GS":     {"sector":"Financials","country":"US","type":"EQUITY","mcap":"large"},
@@ -760,42 +761,181 @@ _UNIVERSE: dict[str, dict] = {
 }
 
 
+_SIMILAR_META_CACHE: dict[str, tuple[float, dict]] = {}
+_SECTOR_ALIASES = {
+    "consumer cyclical": "Consumer Discretionary",
+    "consumer defensive": "Consumer Staples",
+    "financial services": "Financials",
+    "health care": "Healthcare",
+}
+_COUNTRY_ALIASES = {
+    "united states": "US", "usa": "US", "united kingdom": "GB",
+    "france": "FR", "germany": "DE", "netherlands": "NL",
+    "switzerland": "CH", "canada": "CA", "japan": "JP",
+    "australia": "AU", "hong kong": "HK",
+}
+_MCAP_ORDER = {"micro": 0, "small": 1, "mid": 2, "large": 3, "mega": 4}
+
+
+def _normalise_similar_sector(value: str | None) -> str | None:
+    if not value:
+        return None
+    return _SECTOR_ALIASES.get(value.strip().lower(), value.strip())
+
+
+def _normalise_similar_country(value: str | None) -> str | None:
+    if not value:
+        return None
+    cleaned = value.strip()
+    return _COUNTRY_ALIASES.get(cleaned.lower(), cleaned.upper() if len(cleaned) <= 3 else cleaned)
+
+
+def _market_cap_tier(value: float | int | None) -> str | None:
+    if not value or value <= 0:
+        return None
+    if value >= 200e9:
+        return "mega"
+    if value >= 50e9:
+        return "large"
+    if value >= 10e9:
+        return "mid"
+    if value >= 2e9:
+        return "small"
+    return "micro"
+
+
 @router.get("/similar/{ticker}", tags=["Market"])
 async def get_similar(ticker: str, by: str = "sector") -> list:
-    """Return similar assets (sector/geography/class/marketcap) with live prices."""
+    """Return relevant peers by sector, geography or closest market cap."""
     import yfinance as yf
-    import asyncio, math
+    import asyncio, math, time
     from concurrent.futures import ThreadPoolExecutor
+    from app.services.rankings import get_market_cap, update_mcap
 
     ticker_up = ticker.upper()
-    meta = _UNIVERSE.get(ticker_up)
+    if by not in {"sector", "geography", "marketcap"}:
+        raise HTTPException(status_code=400, detail="Filtre de similarité invalide")
 
-    if not meta:
-        def fetch_info():
+    fallback_meta = dict(_UNIVERSE.get(ticker_up, {}))
+
+    def fetch_target_meta() -> dict:
+        """Refresh the source asset metadata, while retaining curated fallbacks."""
+        cached = _SIMILAR_META_CACHE.get(ticker_up)
+        if cached and time.time() - cached[0] < 3600:
+            return dict(cached[1])
+        meta = dict(fallback_meta)
+        cached_market_cap = get_market_cap(ticker_up)
+        if meta and cached_market_cap:
+            meta.update({
+                "market_cap": cached_market_cap,
+                "mcap": _market_cap_tier(cached_market_cap) or meta.get("mcap"),
+            })
+            meta["sector"] = _normalise_similar_sector(meta.get("sector"))
+            meta["country"] = _normalise_similar_country(meta.get("country"))
+            _SIMILAR_META_CACHE[ticker_up] = (time.time(), dict(meta))
+            return meta
+        try:
+            asset = yf.Ticker(ticker_up)
+            info = asset.info or {}
+            market_cap = None
             try:
-                info = yf.Ticker(ticker_up).info or {}
-                mc = yf.Ticker(ticker_up).fast_info.market_cap or 0
-                tier = "mega" if mc > 300e9 else ("large" if mc > 30e9 else "mid")
-                return {"sector": info.get("sector"), "country": info.get("country"),
-                        "type": info.get("quoteType", "EQUITY"), "mcap": tier}
+                market_cap = float(asset.fast_info.market_cap or 0) or None
             except Exception:
-                return {}
-        loop = asyncio.get_running_loop()
-        with ThreadPoolExecutor(max_workers=1) as pool:
-            meta = await loop.run_in_executor(pool, fetch_info)
+                market_cap = float(info.get("marketCap") or 0) or None
+            meta.update({
+                "sector": _normalise_similar_sector(info.get("sector")) or meta.get("sector"),
+                "country": _normalise_similar_country(info.get("country")) or meta.get("country"),
+                "type": info.get("quoteType") or meta.get("type") or "EQUITY",
+                "market_cap": market_cap,
+                "mcap": _market_cap_tier(market_cap) or meta.get("mcap"),
+            })
+        except Exception:
+            pass
+        if meta:
+            meta["sector"] = _normalise_similar_sector(meta.get("sector"))
+            meta["country"] = _normalise_similar_country(meta.get("country"))
+            _SIMILAR_META_CACHE[ticker_up] = (time.time(), dict(meta))
+        return meta
+
+    loop = asyncio.get_running_loop()
+    with ThreadPoolExecutor(max_workers=1) as pool:
+        meta = await loop.run_in_executor(pool, fetch_target_meta)
 
     if not meta:
         return []
 
-    candidates = [
-        t for t, m in _UNIVERSE.items()
-        if t != ticker_up and (
-            (by == "sector"    and m.get("sector")  == meta.get("sector"))  or
-            (by == "geography" and m.get("country") == meta.get("country")) or
-            (by == "class"     and m.get("type")    == meta.get("type"))    or
-            (by == "marketcap" and m.get("mcap")    == meta.get("mcap"))
-        )
-    ][:10]
+    source_sector = _normalise_similar_sector(meta.get("sector"))
+    source_country = _normalise_similar_country(meta.get("country"))
+    source_type = meta.get("type") or "EQUITY"
+    source_tier = meta.get("mcap")
+
+    def candidate_matches(candidate: dict) -> bool:
+        if candidate.get("type") != source_type:
+            return False
+        if by == "sector":
+            return _normalise_similar_sector(candidate.get("sector")) == source_sector
+        if by == "geography":
+            return _normalise_similar_country(candidate.get("country")) == source_country
+        return True
+
+    def tier_distance(candidate: dict) -> int:
+        if source_tier not in _MCAP_ORDER or candidate.get("mcap") not in _MCAP_ORDER:
+            return 9
+        return abs(_MCAP_ORDER[source_tier] - _MCAP_ORDER[candidate["mcap"]])
+
+    def relevance(candidate: dict) -> tuple:
+        same_sector = _normalise_similar_sector(candidate.get("sector")) == source_sector
+        same_country = _normalise_similar_country(candidate.get("country")) == source_country
+        # The selected dimension is mandatory; the others order peers by
+        # business relevance rather than dictionary insertion order.
+        if by == "sector":
+            return (tier_distance(candidate), not same_country)
+        if by == "geography":
+            return (not same_sector, tier_distance(candidate))
+        return (tier_distance(candidate), not same_sector, not same_country)
+
+    candidate_pool = [
+        (symbol, candidate)
+        for symbol, candidate in _UNIVERSE.items()
+        if symbol != ticker_up and candidate_matches(candidate)
+    ]
+    candidate_pool.sort(key=lambda item: relevance(item[1]))
+
+    # Market-cap matching uses live numeric values and logarithmic distance,
+    # avoiding very large companies being grouped with much smaller ones merely
+    # because both were in the old broad "large" bucket.
+    live_market_caps: dict[str, float] = {}
+    if by == "marketcap" and candidate_pool:
+        shortlist = [symbol for symbol, _ in candidate_pool[:28]]
+
+        def fetch_market_cap(symbol: str) -> tuple[str, float | None]:
+            cached_value = get_market_cap(symbol)
+            if cached_value:
+                return symbol, cached_value
+            try:
+                asset = yf.Ticker(symbol)
+                value = float(asset.fast_info.market_cap or 0)
+                if value > 0:
+                    update_mcap(symbol, value)
+                return symbol, value if value > 0 else None
+            except Exception:
+                return symbol, None
+
+        with ThreadPoolExecutor(max_workers=6) as pool:
+            for symbol, value in pool.map(fetch_market_cap, shortlist):
+                if value:
+                    live_market_caps[symbol] = value
+
+        source_market_cap = meta.get("market_cap")
+        if source_market_cap:
+            candidate_pool = [item for item in candidate_pool if item[0] in shortlist]
+            candidate_pool.sort(key=lambda item: (
+                abs(math.log(live_market_caps[item[0]] / source_market_cap))
+                if item[0] in live_market_caps else 99,
+                relevance(item[1]),
+            ))
+
+    candidates = [symbol for symbol, _ in candidate_pool[:10]]
 
     if not candidates:
         return []
@@ -820,6 +960,7 @@ async def get_similar(ticker: str, by: str = "sector") -> list:
                 result.append({"ticker": t, "sector": _UNIVERSE[t].get("sector"),
                                 "country": _UNIVERSE[t].get("country"), "type": _UNIVERSE[t].get("type"),
                                 "mcap": _UNIVERSE[t].get("mcap"),
+                                "market_cap": live_market_caps.get(t),
                                 "price": round(price, 4), "change": round(change, 2)})
             except Exception:
                 continue
