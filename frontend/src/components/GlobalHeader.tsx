@@ -67,7 +67,7 @@ const typeColor = (type: string) => ({
 export default function GlobalHeader() {
   const pathname = usePathname();
   const router = useRouter();
-  const { mode, setMode, activePortfolio, setActivePortfolio, activeAsset, setActiveAsset } = useApp();
+  const { mode, setMode, activePortfolio, setActivePortfolio, activeAsset, setActiveAsset, displayMode, toggleDisplayMode } = useApp();
   const [localSearch, setLocalSearch] = useState("");
   const [searchResults, setSearchResults] = useState<Asset[]>([]);
   const [showDropdown, setShowDropdown] = useState(false);
@@ -413,7 +413,27 @@ export default function GlobalHeader() {
 
       {/* Right zone: theme toggle + avatar profil */}
       <div style={{ position:"fixed", top:"12px", right:"20px", zIndex:50, display:"flex", alignItems:"center", gap:"8px" }}>
-        {/* Theme toggle — désactivé temporairement */}
+        {/* Surface theme — global, shared by every chart surface */}
+        <button
+          onClick={toggleDisplayMode}
+          title={displayMode === "black" ? "Revenir au thème verre" : "Passer au thème noir"}
+          aria-label={displayMode === "black" ? "Revenir au thème verre" : "Passer au thème noir"}
+          style={{
+            ...pillStyle,
+            width: "36px",
+            height: "36px",
+            padding: 0,
+            justifyContent: "center",
+            boxSizing: "border-box",
+            color: displayMode === "black" ? "#fff" : "rgba(255,255,255,0.55)",
+          }}
+        >
+          <svg width="15" height="15" viewBox="0 0 14 14" fill="none">
+            <rect x="1" y="1" width="12" height="12" rx="3"
+              fill={displayMode === "black" ? "#050505" : "rgba(255,255,255,0.04)"} stroke="currentColor"/>
+            <path d="M1.5 5h11M1.5 9h11M5 1.5v11M9 1.5v11" stroke="currentColor" strokeWidth=".55" opacity=".55"/>
+          </svg>
+        </button>
 
         {/* Avatar profil */}
         {user && (

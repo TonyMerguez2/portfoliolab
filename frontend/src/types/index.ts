@@ -25,6 +25,7 @@ export interface BacktestRequest {
 
 export type SimulationModel = "gbm" | "bootstrap" | "multivariate";
 export type RebalancePolicy = "daily" | "annual" | "none";
+export type DriftSource = "historical" | "explicit" | "risk_premium";
 
 export interface MonteCarloRequest {
   assets: AssetInput[];
@@ -36,6 +37,9 @@ export interface MonteCarloRequest {
   block_size?: number;
   parameter_uncertainty?: boolean;
   rebalance?: RebalancePolicy;
+  drift_source?: DriftSource;
+  expected_return?: number | null;
+  equity_risk_premium?: number;
 }
 
 // ─────────────────────────────────────────────
@@ -80,6 +84,13 @@ export interface MonteCarloResult {
   model: SimulationModel;
   rebalance: RebalancePolicy;
   parameter_uncertainty: boolean;
+  drift_source: DriftSource;
+  historical_annualized_return: number;
+  expected_return_low: number;
+  expected_return_high: number;
+  betas: Record<string, number>;
+  sample_paths: number[][];
+  path_time_index: number[];
   n_observations: number;
   drift_std_error: number;
   final_values_p1: number;

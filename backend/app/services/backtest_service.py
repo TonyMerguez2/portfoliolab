@@ -24,7 +24,9 @@ from app.models.schemas import (
     EfficientFrontierResponse,
     MonteCarloRequest,
     MonteCarloResponse,
+    DriftSource,
 )
+from app.core.config import get_settings
 from app.services.data_service import (
     fetch_prices,
     compute_returns,
@@ -286,6 +288,53 @@ def run_monte_carlo(req: MonteCarloRequest) -> MonteCarloResponse:
     )
 
 
+def _resolve_drift(
+    req: MonteCarloRequest,
+    returns_all: pd.DataFrame,
+    available: list,
+) -> tuple[float | None, dict[str, float] | None, dict[str, float]]:
+    """
+    Work out which expected return to project with.
+
+    Returns ``(portfolio_expected_return, per_asset_daily_log_drifts, betas)``.
+    Volatility is never touched here — only the drift is in question, because
+    it is the parameter history estimates badly.
+    """
+    if req.drift_source == DriftSource.EXPLICIT:
+        if req.expected_return is None:
+            raise ValueError("expected_return is required when drift_source is 'explicit'")
+        return req.expected_return, None, {}
+
+    if req.drift_source == DriftSource.RISK_PREMIUM:
+        bench_ticker = req.beta_benchmark.value
+        bench_prices, bench_ok, _ = fetch_prices([bench_ticker], req.period)
+        if not bench_ok:
+            # No benchmark, no beta — fall back rather than fail the request.
+            return None, None, {}
+
+        bench_ret = compute_returns(bench_prices[bench_ok])[bench_ok[0]]
+        rf = get_settings().risk_free_rate
+        erp = req.equity_risk_premium
+
+        betas: dict[str, float] = {}
+        drifts: dict[str, float] = {}
+        for asset in available:
+            beta = fin.beta_vs_benchmark(returns_all[asset.ticker], bench_ret)
+            betas[asset.ticker] = round(beta, 3)
+            annual = rf + beta * erp
+            drifts[asset.ticker] = float(np.log1p(annual) / fin.TRADING_DAYS)
+
+        # For the univariate models the portfolio is one series, so collapse
+        # the per-asset expected returns into a weighted portfolio figure.
+        total_w = sum(a.weight for a in available) or 1.0
+        portfolio_expected = sum(
+            (rf + betas[a.ticker] * erp) * a.weight / total_w for a in available
+        )
+        return portfolio_expected, drifts, betas
+
+    return None, None, {}
+
+
 def run_monte_carlo_advanced(req: MonteCarloRequest, target_value: float | None = None) -> dict:
     """Advanced Monte Carlo with goal tracking and robustness score."""
     tickers = [a.ticker for a in req.assets]
@@ -299,6 +348,8 @@ def run_monte_carlo_advanced(req: MonteCarloRequest, target_value: float | None 
     portfolio_ret = fin.portfolio_returns(returns_all[[a.ticker for a in available]], weights_frac)
 
     metrics = fin.compute_all_metrics(portfolio_ret)
+
+    expected_return, asserted_drifts, betas = _resolve_drift(req, returns_all, available)
 
     result = fin.monte_carlo_advanced(
         portfolio_ret,
@@ -315,5 +366,11 @@ def run_monte_carlo_advanced(req: MonteCarloRequest, target_value: float | None 
         returns_df=returns_all[[a.ticker for a in available]],
         weights=weights_frac,
         rebalance=req.rebalance.value,
+        expected_return=expected_return,
+        asserted_drifts=asserted_drifts,
+        drift_source=req.drift_source.value,
+        # Draw every simulated scenario unless the caller asks for fewer.
+        n_sample_paths=req.n_sample_paths if req.n_sample_paths is not None else req.n_simulations,
     )
+    result["betas"] = betas
     return result

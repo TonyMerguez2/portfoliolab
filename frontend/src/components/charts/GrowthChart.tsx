@@ -87,6 +87,18 @@ interface Props {
   livePrice?: number;
   dark?: boolean;
   percentMode?: boolean;
+  /**
+   * lightweight-charts PriceScaleMode: 0 Normal, 1 Logarithmic,
+   * 2 Percentage, 3 IndexedTo100.
+   *
+   * IndexedTo100 re-bases every series to 100 at the left edge of the *visible*
+   * range and follows zooming. Performance mode already emits base-100 values,
+   * but anchored to the start of the loaded period — so zooming in leaves the
+   * curves flat and thousands of percent apart. Re-indexing is safe because the
+   * transform is scale-invariant: dividing by the first visible value gives the
+   * same curve whether the input is a price or an index.
+   */
+  priceScaleMode?: 0 | 1 | 2 | 3;
   priceMode?: boolean;
   hideDrawdown?: boolean;
   dailyChangePct?: number | null;
@@ -327,7 +339,7 @@ export default function GrowthChart({
   chartMode: chartModeProp, onChartModeChange, rightSlot, leftSlot,
   onExitFullscreen, onPeriodChange, onVisibleRangeChange, onCrosshairMove, onAdaptiveData,
   benchmarkRawData, benchmarkColor = "#f59e0b", benchmarkTicker,
-  dark = false, percentMode = false, priceMode = false,
+  dark = false, percentMode = false, priceMode = false, priceScaleMode = 0,
   hideDrawdown = false, dailyChangePct = null, openPrice = null, isCrypto = false, livePrice: livePriceProp,
   syncCrosshairTime = null, externalPeriod, externalInterval, externalVisibleRange,
   onIntervalChange, hideControls = false, syncPriceScaleWidth, onPriceScaleWidthChange,
@@ -369,6 +381,11 @@ export default function GrowthChart({
   const [hoverOHLC,    setHoverOHLC]    = useState<{ open:number; high:number; low:number; close:number } | null>(null);
   const [hoverPoint,   setHoverPoint]   = useState<{ x: number; y: number } | null>(null);
   const [hoverBmPrice, setHoverBmPrice] = useState<number | null>(null);
+  /** Raw price at the hovered date. Kept separately from hoverPrice, which in
+   *  performance mode carries the base-100 series value, so the percentage can
+   *  be computed against a base expressed in the same unit. */
+  const [hoverRawPrice, setHoverRawPrice] = useState<number | null>(null);
+  const [hoverBmRawPrice, setHoverBmRawPrice] = useState<number | null>(null);
 
   // Refs
   const containerRef       = useRef<HTMLDivElement>(null);
@@ -385,6 +402,39 @@ export default function GrowthChart({
   const [comparisonMode, setComparisonMode] = useState<"perf" | "raw">("perf");
   const prevBmTickerRef = useRef<string | undefined>(undefined);
   const chartPctModeRef = useRef(false);
+  /** Time window currently on screen, in unix seconds. Driven by both the
+   *  period buttons and mouse zoom/pan, so it is the single reference the
+   *  legend and the indexed axis can agree on. */
+  const [visibleSecs, setVisibleSecs] = useState<{ from: number; to: number } | null>(null);
+  /** Value of each series at the left edge of the visible window, read from the
+   *  series themselves so the legend and the axis can never disagree. */
+  const [seriesBase, setSeriesBase] = useState<{ a: number | null; b: number | null }>({ a: null, b: null });
+
+  /**
+   * Recompute both bases from the series themselves. Called on range changes
+   * *and* right after data is set — a freshly loaded comparison may not trigger
+   * any range event, which previously left the compared asset with no figure.
+   */
+  const syncSeriesBaseRef = useRef(() => {});
+  syncSeriesBaseRef.current = () => {
+    const ts = chartRef.current?.timeScale();
+    const range = ts?.getVisibleRange();
+    const toSec = (t: any): number =>
+      (t !== null && typeof t === "object")
+        ? new Date(`${t.year}-${String(t.month).padStart(2,"0")}-${String(t.day).padStart(2,"0")}`).getTime() / 1000
+        : (t as number);
+    const fromSec = range ? toSec(range.from) : -Infinity;
+    const firstVisibleOf = (s: ISeriesApi<any> | null): number | null => {
+      const pts = (s?.data() as any[]) ?? [];
+      for (const p of pts) if (toSec(p.time) >= fromSec) return p.value ?? null;
+      return pts.length ? (pts[0].value ?? null) : null;
+    };
+    const next = {
+      a: firstVisibleOf(areaSeriesRef.current),
+      b: firstVisibleOf(benchmarkSeriesRef.current),
+    };
+    setSeriesBase(prev => (prev.a === next.a && prev.b === next.b ? prev : next));
+  };
 
   const glowCanvasRef       = useRef<HTMLCanvasElement>(null);
   const portfolioColorRef   = useRef(portfolioColor);
@@ -405,6 +455,51 @@ export default function GrowthChart({
       : portfolioData.map(p => ({ date: p.date as string, value: p.value as number }));
   }, [adaptiveData, portfolioData]);
   useEffect(() => { adaptiveDataRef.current = adaptiveData; }, [adaptiveData]);
+
+  // Applied with applyOptions so toggling never rebuilds the chart.
+  useEffect(() => {
+    chartRef.current?.priceScale("right").applyOptions({ mode: priceScaleMode });
+  }, [priceScaleMode]);
+
+  /**
+   * Freeze panning and zooming while comparing.
+   *
+   * In relative mode the axis re-bases to the left edge of the view, so a free
+   * zoom makes the 0% reference move continuously. Every derived figure — the
+   * two legend percentages, both axis badges, the period returns — then has to
+   * track a moving anchor, and they drift apart. Pinning navigation to the
+   * period buttons gives one explicit reference that everything shares.
+   */
+  useEffect(() => {
+    const locked = !!benchmarkTicker;
+    // Adding or removing a comparison changes the window the chart is bound to
+    // (it gets clamped to the dates both assets share), so re-frame on the
+    // active period. Without this the view keeps whatever range was on screen
+    // while the period button claims to cover the whole history.
+    setPeriodEpoch(n => n + 1);
+    chartRef.current?.applyOptions({
+      handleScroll: locked
+        ? false
+        : { mouseWheel: true, pressedMouseMove: true, horzTouchDrag: true, vertTouchDrag: false },
+      handleScale: locked
+        ? false
+        : { mouseWheel: true, pinch: true, axisPressedMouseMove: { time: true, price: true } },
+    });
+    // Keyed on the data being present, not just the ticker: the comparison
+    // series is fetched asynchronously, so re-framing on the ticker alone runs
+    // before the shared window is even known.
+  }, [benchmarkTicker, (benchmarkRawData?.length ?? 0) > 0]);
+
+  const benchmarkRawDataRef = useRef<DataPoint[]>([]);
+  useEffect(() => { benchmarkRawDataRef.current = benchmarkRawData ?? []; }, [benchmarkRawData]);
+
+  // The compared asset keeps its own brand colour instead of a fixed orange.
+  const benchmarkColorRef = useRef(benchmarkColor);
+  useEffect(() => {
+    benchmarkColorRef.current = benchmarkColor;
+    benchmarkSeriesRef.current?.applyOptions({ color: benchmarkColor });
+  }, [benchmarkColor]);
+
   useEffect(() => { onVisibleRangeChangeRef.current = onVisibleRangeChange; }, [onVisibleRangeChange]);
   useEffect(() => { onCrosshairMoveRef.current = onCrosshairMove; }, [onCrosshairMove]);
   useEffect(() => { onAdaptiveDataRef.current = onAdaptiveData; }, [onAdaptiveData]);
@@ -432,6 +527,10 @@ export default function GrowthChart({
     return () => ro.disconnect();
   }, []);
 
+  /** Bumped on every period-button click, so re-selecting the active period
+   *  still re-frames the chart. */
+  const [periodEpoch, setPeriodEpoch] = useState(0);
+
   // handlePeriodChange : met à jour la période et auto-switch l'intervalle si incompatible
   const handlePeriodChange = useCallback((p: typeof periodFilter) => {
     const allowed = PERIOD_ALLOWED_INTERVALS[p];
@@ -441,6 +540,10 @@ export default function GrowthChart({
       onIntervalChange?.(newIv); // notifie le parent pour que activeInterval reste en sync
     }
     setPeriodFilter(p);
+    // Re-applying the same period must still reset a manual zoom. Without this
+    // counter React bails out on the identical state and the view stays where
+    // the user dragged it, while the button claims to show the whole period.
+    setPeriodEpoch(n => n + 1);
     onPeriodChange?.(p);
   }, [intervalKey, onPeriodChange, onIntervalChange]); // eslint-disable-line
 
@@ -590,6 +693,15 @@ export default function GrowthChart({
       let rangeDebounce: ReturnType<typeof setTimeout>;
       const rangeHandler = (range: { from: any; to: any } | null) => {
         clearTimeout(rangeDebounce);
+        // Track the window locally too, so the legend can describe what is
+        // actually on screen instead of the selected period button.
+        setVisibleSecs(range ? { from: timeToSec(range.from), to: timeToSec(range.to) } : null);
+
+        // Anchor both legend figures on the *series* data, which is the shared,
+        // sampled grid the chart itself is drawn from. Deriving them from each
+        // asset's raw array instead let the two anchors drift apart by weeks
+        // whenever the window edge fell between two sampled points.
+        syncSeriesBaseRef.current();
         rangeDebounce = setTimeout(() => {
           if (!range) { onVisibleRangeChangeRef.current?.(null, null); return; }
           onVisibleRangeChangeRef.current?.(timeToSec(range.from), timeToSec(range.to));
@@ -614,6 +726,13 @@ export default function GrowthChart({
           },
           minMove: 0.001,
         },
+        // The 0% reference line only appears in percentage / indexedTo100
+        // modes. Keep it — it marks the common starting point and separates
+        // gain from loss — but dim and dashed so it does not read as a series.
+        baseLineVisible: true,
+        baseLineColor: "rgba(255,255,255,0.22)",
+        baseLineWidth: 1,
+        baseLineStyle: LineStyle.Dashed,
       });
       areaSeriesRef.current = area;
 
@@ -628,11 +747,16 @@ export default function GrowthChart({
       candleSeriesRef.current = candle;
 
       const bm = chart.addSeries(LineSeries, {
-        color: "#f59e0b",
+        color: benchmarkColorRef.current,
         lineWidth: 1,
-        lastValueVisible: false,
+        // Show the compared asset's own badge on the axis — with two curves
+        // overlaid, labelling only one of them is confusing.
+        lastValueVisible: true,
         priceLineVisible: false,
         crosshairMarkerVisible: false,
+        // Only the main series draws the 0% reference line; two overlapping
+        // base lines read as a stray third curve.
+        baseLineVisible: false,
       });
       benchmarkSeriesRef.current = bm;
 
@@ -647,6 +771,8 @@ export default function GrowthChart({
           setHoverOHLC(null);
           setHoverPoint(null);
           setHoverBmPrice(null);
+          setHoverRawPrice(null);
+          setHoverBmRawPrice(null);
           onCrosshairMoveRef.current?.(null);
           onCrosshairXPixelRef.current?.(null);
           return;
@@ -673,96 +799,101 @@ export default function GrowthChart({
           }
           setHoverBmPrice(bmData?.value ?? null);
 
-          // Curve glow — timeToCoordinate on actual data points (exact same path as chart)
+          // The percentage must be computed from raw prices, in the same unit
+          // as its reference. In performance mode the series holds base-100
+          // values, so reusing the hovered series value against a raw-price
+          // base divided an index by a price — a plausible-looking but
+          // meaningless number.
+          const dayKey = isoDate.slice(0, 10);
+          const lastAtOrBefore = (arr: { date: any; value?: any }[]): number | null => {
+            for (let i = arr.length - 1; i >= 0; i--) {
+              if (String(arr[i].date).slice(0, 10) <= dayKey) return arr[i].value as number;
+            }
+            return null;
+          };
+          const rawSrc = adaptiveDataRef.current.length ? adaptiveDataRef.current : lineDataRef.current;
+          setHoverRawPrice(lastAtOrBefore(rawSrc));
+          setHoverBmRawPrice(lastAtOrBefore(benchmarkRawDataRef.current));
+
+          // Curve glow.
+          //
+          // Coordinates come from series.data() rather than from the raw price
+          // arrays: in performance mode the series holds base-100 values, so
+          // feeding priceToCoordinate a raw price put the glow at the wrong
+          // height — a bright smudge floating off the curve.
           if (ctx && glowCanvas) {
             ctx.clearRect(0, 0, glowCanvas.width, glowCanvas.height);
             if (aData?.value != null && chartModeRef.current !== "candle") {
-              const lineData = lineDataRef.current;
-              if (lineData.length >= 2) {
-                const halfPx = 22;
-                const cx     = param.point.x;
-                const col    = portfolioColorRef.current;
-                const isBD   = useBusinessDayRef.current;
+              const halfPx = 22;
+              const cx     = param.point.x;
 
-                // Convert date string → the Time type used when the series was populated
-                const toChartTime = (dateStr: string): any => {
-                  if (isBD) {
-                    const [y, m, d] = dateStr.slice(0, 10).split("-");
-                    return { year: +y, month: +m, day: +d };
-                  }
-                  return new Date(dateStr).getTime() / 1000;
-                };
+              const timeToSecLocal = (tm: any): number =>
+                (tm !== null && typeof tm === "object")
+                  ? new Date(`${tm.year}-${String(tm.month).padStart(2,"0")}-${String(tm.day).padStart(2,"0")}`).getTime() / 1000
+                  : (tm as number);
+              const cursorTs = timeToSecLocal(param.time);
 
-                // Find cursor's data index via binary search
-                const tsOf = (i: number) => new Date(lineData[i].date).getTime() / 1000;
-                const cursorTs = typeof param.time === "object"
-                  ? new Date(`${(param.time as any).year}-${String((param.time as any).month).padStart(2,"0")}-${String((param.time as any).day).padStart(2,"0")}`).getTime() / 1000
-                  : (param.time as number);
-                let lo = 0, hi = lineData.length - 1, curIdx = 0;
+              const collect = (series: ISeriesApi<any>): [number, number][] => {
+                const pts = (series.data() as any[]) ?? [];
+                if (pts.length < 2) return [];
+                let lo = 0, hi = pts.length - 1, curIdx = 0;
                 while (lo <= hi) {
                   const m2 = (lo + hi) >> 1;
-                  if (tsOf(m2) <= cursorTs) { curIdx = m2; lo = m2 + 1; } else hi = m2 - 1;
+                  if (timeToSecLocal(pts[m2].time) <= cursorTs) { curIdx = m2; lo = m2 + 1; } else hi = m2 - 1;
                 }
-
-                // ±200 bars window — enough for any density (dense 1D needs ~60, sparse 1W needs ~12)
-                // sampleDown may drop some bars → timeToCoordinate returns null for them → we skip
-                const WINDOW    = 200;
-                const rangeStart = Math.max(0, curIdx - WINDOW);
-                const rangeEnd   = Math.min(lineData.length - 1, curIdx + WINDOW);
-
-                const segPts: [number, number][] = [];
-                let leftEndpoint: [number, number] | null = null;
-                let rightEndpointSet = false;
-                for (let i = rangeStart; i <= rangeEnd; i++) {
-                  const sx = chart.timeScale().timeToCoordinate(toChartTime(lineData[i].date));
-                  const sy = area.priceToCoordinate(lineData[i].value);
+                const WINDOW = 200;
+                const out: [number, number][] = [];
+                let left: [number, number] | null = null;
+                let rightSet = false;
+                for (let i = Math.max(0, curIdx - WINDOW); i <= Math.min(pts.length - 1, curIdx + WINDOW); i++) {
+                  const sx = chart.timeScale().timeToCoordinate(pts[i].time);
+                  const sy = series.priceToCoordinate(pts[i].value);
                   if (sx == null || sy == null || !isFinite(sx) || !isFinite(sy)) continue;
-                  if (sx < cx - halfPx) {
-                    leftEndpoint = [sx, sy];        // rightmost point just left of zone
-                  } else if (sx <= cx + halfPx) {
-                    segPts.push([sx, sy]);
-                  } else if (!rightEndpointSet) {
-                    segPts.push([sx, sy]);           // first point just right of zone
-                    rightEndpointSet = true;
-                  }
+                  if (sx < cx - halfPx) left = [sx, sy];
+                  else if (sx <= cx + halfPx) out.push([sx, sy]);
+                  else if (!rightSet) { out.push([sx, sy]); rightSet = true; }
                 }
-                if (leftEndpoint) segPts.unshift(leftEndpoint);
+                if (left) out.unshift(left);
+                return out;
+              };
 
-                if (segPts.length >= 2) {
-                  const drawPath = () => {
-                    ctx.beginPath();
-                    ctx.moveTo(segPts[0][0], segPts[0][1]);
-                    for (let i = 1; i < segPts.length; i++) ctx.lineTo(segPts[i][0], segPts[i][1]);
-                  };
-
-                  // Clip to ±halfPx so glow never extends beyond fixed width
-                  ctx.save();
+              const paint = (segPts: [number, number][], col: string) => {
+                if (segPts.length < 2) return;
+                const drawPath = () => {
                   ctx.beginPath();
-                  ctx.rect(cx - halfPx, 0, halfPx * 2, glowCanvas.height);
-                  ctx.clip();
+                  ctx.moveTo(segPts[0][0], segPts[0][1]);
+                  for (let i = 1; i < segPts.length; i++) ctx.lineTo(segPts[i][0], segPts[i][1]);
+                };
+                ctx.save();
+                ctx.beginPath();
+                ctx.rect(cx - halfPx, 0, halfPx * 2, glowCanvas.height);
+                ctx.clip();
 
-                  ctx.save(); ctx.filter = "blur(1.5px)";
-                  drawPath(); ctx.strokeStyle = hexToRgba(col, 0.5); ctx.lineWidth = 3;
-                  ctx.lineCap = "round"; ctx.lineJoin = "round"; ctx.stroke();
-                  ctx.restore();
+                ctx.save(); ctx.filter = "blur(1.5px)";
+                drawPath(); ctx.strokeStyle = hexToRgba(col, 0.5); ctx.lineWidth = 3;
+                ctx.lineCap = "round"; ctx.lineJoin = "round"; ctx.stroke();
+                ctx.restore();
 
-                  drawPath(); ctx.strokeStyle = "rgba(255,255,255,0.9)"; ctx.lineWidth = 1.5;
-                  ctx.lineCap = "round"; ctx.lineJoin = "round"; ctx.stroke();
+                drawPath(); ctx.strokeStyle = "rgba(255,255,255,0.9)"; ctx.lineWidth = 1.5;
+                ctx.lineCap = "round"; ctx.lineJoin = "round"; ctx.stroke();
+                ctx.restore();
+              };
 
-                  ctx.restore(); // remove clip
+              paint(collect(area), portfolioColorRef.current);
+              // The compared curve deserves the same treatment: highlighting
+              // only one of two overlaid series looks like a rendering fault.
+              if ((bm.data() as any[])?.length) paint(collect(bm), benchmarkColorRef.current);
 
-                  // Fade left/right edges
-                  ctx.globalCompositeOperation = "destination-in";
-                  const fade = ctx.createLinearGradient(cx - halfPx, 0, cx + halfPx, 0);
-                  fade.addColorStop(0,   "rgba(0,0,0,0)");
-                  fade.addColorStop(0.2, "rgba(0,0,0,1)");
-                  fade.addColorStop(0.8, "rgba(0,0,0,1)");
-                  fade.addColorStop(1,   "rgba(0,0,0,0)");
-                  ctx.fillStyle = fade;
-                  ctx.fillRect(0, 0, glowCanvas.width, glowCanvas.height);
-                  ctx.globalCompositeOperation = "source-over";
-                }
-              }
+              // Fade left/right edges once, over both glows.
+              ctx.globalCompositeOperation = "destination-in";
+              const fade = ctx.createLinearGradient(cx - halfPx, 0, cx + halfPx, 0);
+              fade.addColorStop(0,   "rgba(0,0,0,0)");
+              fade.addColorStop(0.2, "rgba(0,0,0,1)");
+              fade.addColorStop(0.8, "rgba(0,0,0,1)");
+              fade.addColorStop(1,   "rgba(0,0,0,0)");
+              ctx.fillStyle = fade;
+              ctx.fillRect(0, 0, glowCanvas.width, glowCanvas.height);
+              ctx.globalCompositeOperation = "source-over";
             }
           }
         } catch { /* ignore crosshair errors */ }
@@ -943,19 +1074,70 @@ export default function GrowthChart({
 
               if (dotPts.length && bmPts.length) {
                 chartRef.current?.applyOptions({ leftPriceScale: { visible: false } });
-                const dotBase = dotPts[0].value as number;
-                const bmBase  = bmPts[0].value as number;
                 candle.applyOptions({ visible: false });
                 candle.setData([]);
-                area.setData(dedup(sampleDown(dotPts).map(p => ({
-                  time: t(p.date), value: Math.round(p.value / dotBase * 10000) / 100,
-                }))));
-                bm.setData(dedup(sampleDown(bmPts as DataPoint[]).map(p => ({
-                  time: t(p.date), value: Math.round((p.value as number) / bmBase * 10000) / 100,
-                }))));
+
+                // Both series must sit on the *same* dates. Two markets have
+                // different holidays, so sampling each one independently gives
+                // different date grids — and since percentage mode re-bases
+                // each series to its own first visible point, the two curves
+                // then start from slightly different anchors once zoomed.
+                // Match on the full timestamp and carry the compared asset's
+                // last known value forward. Matching on the calendar day alone
+                // collapsed every intraday bar of a day onto that day's *final*
+                // value — a flat staircase, and look-ahead on top of it.
+                // Forward-filling is also what the two curves need when the
+                // markets keep different hours: the compared line simply holds
+                // while its exchange is closed.
+                // Compare real instants, never the raw strings: the two feeds
+                // carry different UTC offsets (Paris +02:00, New York -04:00),
+                // so "14:15-04:00" sorts before "17:15+02:00" as text while it
+                // is actually three hours later. String ordering silently
+                // paired each point with the wrong counterpart.
+                const ms = (d: any) => new Date(String(d)).getTime();
+                const bmSorted = [...(bmPts as DataPoint[])].sort((x, y) => ms(x.date) - ms(y.date));
+                const dotSorted = [...dotPts].sort((x, y) => ms(x.date) - ms(y.date));
+
+                let j = 0;
+                let lastBm: number | null = null;
+                const shared: { date: any; value: number; bm: number }[] = [];
+                for (const p of dotSorted) {
+                  const pt = ms(p.date);
+                  while (j < bmSorted.length && ms(bmSorted[j].date) <= pt) {
+                    lastBm = bmSorted[j].value as number;
+                    j++;
+                  }
+                  if (lastBm != null) shared.push({ date: p.date, value: p.value as number, bm: lastBm });
+                }
+
+                if (shared.length >= 2) {
+                  const sampled = sampleDown(shared as any) as typeof shared;
+                  const dotBase = shared[0].value;
+                  const bmBase  = shared[0].bm;
+                  area.setData(dedup(sampled.map(p => ({
+                    time: t(p.date), value: Math.round(p.value / dotBase * 10000) / 100,
+                  }))));
+                  bm.setData(dedup(sampled.map(p => ({
+                    time: t(p.date), value: Math.round(p.bm / bmBase * 10000) / 100,
+                  }))));
+                } else {
+                  // No overlapping dates — fall back rather than show nothing.
+                  const dotBase = dotPts[0].value as number;
+                  const bmBase  = bmPts[0].value as number;
+                  area.setData(dedup(sampleDown(dotPts).map(p => ({
+                    time: t(p.date), value: Math.round(p.value / dotBase * 10000) / 100,
+                  }))));
+                  bm.setData(dedup(sampleDown(bmPts as DataPoint[]).map(p => ({
+                    time: t(p.date), value: Math.round((p.value as number) / bmBase * 10000) / 100,
+                  }))));
+                }
                 area.applyOptions({ visible: true, priceFormat: base100Fmt, priceScaleId: "right" });
                 bm.applyOptions({ priceFormat: base100Fmt, priceScaleId: "right" });
                 chartPctModeRef.current = true;
+                // Data just changed: refresh the legend anchors even if the
+                // visible range did not move.
+                requestAnimationFrame(() => syncSeriesBaseRef.current());
+                setTimeout(() => syncSeriesBaseRef.current(), 60);
               } else {
                 candle.applyOptions({ visible: false });
                 candle.setData([]);
@@ -1113,14 +1295,14 @@ export default function GrowthChart({
     } else {
       chart.timeScale().fitContent();
     }
-  }, [adaptiveData, periodFilter, useBusinessDay, externalVisibleRange]); // eslint-disable-line
+  }, [adaptiveData, periodFilter, useBusinessDay, externalVisibleRange, periodEpoch]); // eslint-disable-line
 
   // fitContent en mode portfolio (pas de fetch async, données déjà dispo)
   useEffect(() => {
     if (!ticker) {
       chartRef.current?.timeScale().fitContent();
     }
-  }, [periodFilter, ticker]); // eslint-disable-line
+  }, [periodFilter, ticker, periodEpoch]); // eslint-disable-line
 
   // Bascule immédiate de visibilité entre les deux séries au changement de mode
   useEffect(() => {
@@ -1145,6 +1327,28 @@ export default function GrowthChart({
 
   // ─── Perf stats ───────────────────────────────────────────────────────────────
   // Même source que les boutons inactifs → bouton actif = légende, jamais de changement au clic
+  /**
+   * First date both assets have data for. While comparing, the chart is
+   * clamped to it — so the period figures must be too, otherwise "Max" reports
+   * the main asset since its own IPO while the chart shows the common window.
+   */
+  const comparisonRange = useMemo(() => {
+    const bm = benchmarkRawData ?? [];
+    if (!benchmarkTicker || !bm.length) return null;
+    const src = ticker && adaptiveData.length > 0 ? adaptiveData : portfolioData;
+    if (!src.length) return null;
+    const aStart = String(src[0].date).slice(0, 10);
+    const bStart = String(bm[0].date).slice(0, 10);
+    // The end matters as much as the start: one market may have traded a day
+    // longer, and counting that extra session in the period figures but not on
+    // the chart makes the two disagree.
+    const aEnd = String(src[src.length - 1].date).slice(0, 10);
+    const bEnd = String(bm[bm.length - 1].date).slice(0, 10);
+    return { start: aStart > bStart ? aStart : bStart, end: aEnd < bEnd ? aEnd : bEnd };
+  }, [benchmarkTicker, benchmarkRawData, ticker, adaptiveData, portfolioData]);
+  const comparisonStart = comparisonRange?.start ?? null;
+  const comparisonEnd   = comparisonRange?.end ?? null;
+
   const periodPerfData = useMemo(() => {
     // For ticker pages, use adaptiveData (stock prices); for portfolio, use portfolioData
     const source = ticker && adaptiveData.length > 0 ? adaptiveData : portfolioData;
@@ -1157,20 +1361,97 @@ export default function GrowthChart({
     const cutStr = visibleSecs
       ? new Date(Date.now() - visibleSecs * 1000).toISOString().slice(0, 10)
       : null;
-    const pts = cutStr ? source.filter(p => String(p.date).slice(0, 10) >= cutStr) : source;
+    // Never start before the compared asset exists, nor end after its last
+    // session — the chart is bound to the same window.
+    const floor = comparisonStart && (!cutStr || comparisonStart > cutStr) ? comparisonStart : cutStr;
+    const pts = source.filter(p => {
+      const d = String(p.date).slice(0, 10);
+      return (!floor || d >= floor) && (!comparisonEnd || d <= comparisonEnd);
+    });
     if (pts.length < 2) return null;
     return { first: pts[0].value as number, last: pts[pts.length - 1].value as number };
-  }, [ticker, adaptiveData, portfolioData, periodFilter, dailyChangePct]);
+  }, [ticker, adaptiveData, portfolioData, periodFilter, dailyChangePct, comparisonStart, comparisonEnd]);
 
   const periodPerfPct  = periodPerfData ? (periodPerfData.last - periodPerfData.first) / periodPerfData.first * 100 : null;
-  const hoverPerfPct   = (hoverPrice !== null && periodPerfData) ? (hoverPrice - periodPerfData.first) / periodPerfData.first * 100 : null;
+
+  /**
+   * Same figures but anchored to what is on screen rather than to the selected
+   * period button. Zooming changes the indexed axis, so a legend tied to the
+   * button would contradict it; this keeps the two in step whether the user
+   * navigates with the period buttons or the mouse.
+   */
+  const visiblePerfData = useMemo(() => {
+    const source = ticker && adaptiveData.length > 0 ? adaptiveData : portfolioData;
+    if (!visibleSecs || source.length < 2) return periodPerfData;
+    const fromStr = new Date(visibleSecs.from * 1000).toISOString().slice(0, 10);
+    const toStr   = new Date(visibleSecs.to   * 1000).toISOString().slice(0, 10);
+    const pts = source.filter(p => {
+      const d = String(p.date).slice(0, 10);
+      return d >= fromStr && d <= toStr;
+    });
+    if (pts.length < 2) return periodPerfData;
+    return { first: pts[0].value as number, last: pts[pts.length - 1].value as number };
+  }, [ticker, adaptiveData, portfolioData, visibleSecs, periodPerfData]);
+
+  /**
+   * While comparing, both figures come from the series values divided by their
+   * value at the left edge of the window — the exact transform the axis
+   * applies. Outside comparison the raw-price path is kept, since the axis then
+   * shows prices rather than a relative scale.
+   */
+  const cmpMode = !!benchmarkTicker && chartPctModeRef.current;
+
+  const visiblePerfPct = cmpMode
+    ? (() => {
+        const pts = (areaSeriesRef.current?.data() as any[]) ?? [];
+        if (!pts.length || !seriesBase.a) return null;
+        return ((pts[pts.length - 1].value as number) / seriesBase.a - 1) * 100;
+      })()
+    : (visiblePerfData
+        ? (visiblePerfData.last - visiblePerfData.first) / visiblePerfData.first * 100
+        : null);
+
+  const hoverPerfPct = cmpMode
+    ? (hoverPrice !== null && seriesBase.a ? (hoverPrice / seriesBase.a - 1) * 100 : null)
+    : (hoverRawPrice !== null && visiblePerfData
+        ? (hoverRawPrice - visiblePerfData.first) / visiblePerfData.first * 100
+        : null);
+
+  /** Same window, same reference, for the compared asset — so both legend
+   *  figures answer "since the left edge of what you see", like the axis. */
+  const bmVisibleFirst = useMemo(() => {
+    const src = benchmarkRawData ?? [];
+    if (!src.length) return null;
+    if (!visibleSecs) return src[0].value as number;
+    const fromStr = new Date(visibleSecs.from * 1000).toISOString().slice(0, 10);
+    const hit = src.find(p => String(p.date).slice(0, 10) >= fromStr);
+    return (hit?.value ?? src[0].value) as number;
+  }, [benchmarkRawData, visibleSecs]);
+
+  const bmHoverPerfPct = cmpMode
+    ? (hoverBmPrice !== null && seriesBase.b ? (hoverBmPrice / seriesBase.b - 1) * 100 : null)
+    : (hoverBmRawPrice !== null && bmVisibleFirst
+        ? (hoverBmRawPrice - bmVisibleFirst) / bmVisibleFirst * 100
+        : null);
+
+  const bmVisiblePerfPct = (() => {
+    if (cmpMode) {
+      const pts = (benchmarkSeriesRef.current?.data() as any[]) ?? [];
+      if (!pts.length || !seriesBase.b) return null;
+      return ((pts[pts.length - 1].value as number) / seriesBase.b - 1) * 100;
+    }
+    const src = benchmarkRawData ?? [];
+    if (!src.length || !bmVisibleFirst) return null;
+    return ((src[src.length - 1].value as number) - bmVisibleFirst) / bmVisibleFirst * 100;
+  })();
+  const bmDisplayPerfPct = bmHoverPerfPct ?? bmVisiblePerfPct;
   // displayPrice always shows the live price (portfolioData.last), independent of perf calculation.
   const displayPrice   = hoverPrice !== null
     ? hoverPrice
     : hoverDate !== null
       ? 0  // cursor active but in whitespace (no series value)
       : (livePriceProp ?? (portfolioData.length > 0 ? portfolioData[portfolioData.length - 1].value as number : null));
-  const displayPerfPct = hoverPerfPct ?? periodPerfPct;
+  const displayPerfPct = hoverPerfPct ?? visiblePerfPct;
 
   const fmtHoverDate = (iso: string | null): string | null => {
     if (!iso) return null;
@@ -1210,17 +1491,36 @@ export default function GrowthChart({
         </div>
       ) : displayPrice !== null ? (
         <div style={{ fontSize: 11, display: "flex", gap: 12 }}>
-          <span>
-            <span style={{ color: dark ? "rgba(255,255,255,0.35)" : "#94a3b8" }}>{portfolioLabel} </span>
-            <span style={{ fontWeight: 600, fontFamily: "monospace", color: portfolioColor }}>{fmtPrice(displayPrice)}</span>
+          {/* When comparing, both entries are shown as a percentage since the
+              left edge of the visible range — the same reference as the axis.
+              Showing a base-100 index next to a window-based percentage made
+              the two figures contradict each other as soon as you zoomed. */}
+          <span style={{ display: "inline-flex", alignItems: "center", gap: 5 }}>
+            {benchmarkTicker && (
+              <span style={{ width: 9, height: 2, borderRadius: 1, background: portfolioColor, flexShrink: 0 }} />
+            )}
+            <span style={{ color: dark ? "rgba(255,255,255,0.35)" : "#94a3b8" }}>{portfolioLabel}</span>
+            {!benchmarkTicker && (
+              <span style={{ fontWeight: 600, fontFamily: "monospace", color: portfolioColor }}>{fmtPrice(displayPrice)}</span>
+            )}
+            {benchmarkTicker && displayPerfPct != null && (
+              <span style={{ fontWeight: 700, fontFamily: "monospace", color: displayPerfPct >= 0 ? "#22c55e" : "#ef4444" }}>
+                {displayPerfPct >= 0 ? "+" : ""}{displayPerfPct.toFixed(2)}%
+              </span>
+            )}
           </span>
-          {hoverBmPrice != null && (
-            <span>
-              <span style={{ color: dark ? "rgba(255,255,255,0.35)" : "#94a3b8" }}>{benchmarkName} </span>
-              <span style={{ fontWeight: 600, fontFamily: "monospace", color: "#f59e0b" }}>{fmtPrice(hoverBmPrice)}</span>
+          {benchmarkTicker && (
+            <span style={{ display: "inline-flex", alignItems: "center", gap: 5 }}>
+              <span style={{ width: 9, height: 2, borderRadius: 1, background: benchmarkColor, flexShrink: 0 }} />
+              <span style={{ color: dark ? "rgba(255,255,255,0.35)" : "#94a3b8" }}>{benchmarkName}</span>
+              {bmDisplayPerfPct != null && (
+                <span style={{ fontWeight: 700, fontFamily: "monospace", color: bmDisplayPerfPct >= 0 ? "#22c55e" : "#ef4444" }}>
+                  {bmDisplayPerfPct >= 0 ? "+" : ""}{bmDisplayPerfPct.toFixed(2)}%
+                </span>
+              )}
             </span>
           )}
-          {displayPerfPct != null && (
+          {!benchmarkTicker && displayPerfPct != null && (
             <span style={{ fontWeight: 700, color: displayPerfPct >= 0 ? "#22c55e" : "#ef4444" }}>
               {displayPerfPct >= 0 ? "+" : ""}{displayPerfPct.toFixed(2)}%
             </span>
@@ -1435,7 +1735,13 @@ export default function GrowthChart({
           } else {
             const visibleSecs = (PERIOD_VISIBLE_SECS as Record<string, number | undefined>)[key] ?? null;
             const cutStr = visibleSecs ? new Date(Date.now() - visibleSecs * 1000).toISOString().slice(0, 10) : null;
-            const pts = cutStr ? portfolioData.filter(p => p.date >= cutStr) : portfolioData;
+            // Same clamp as the active button, so no period claims a return
+            // reaching back before the compared asset existed.
+            const floor = comparisonStart && (!cutStr || comparisonStart > cutStr) ? comparisonStart : cutStr;
+            const pts = portfolioData.filter(p => {
+              const d = String(p.date).slice(0, 10);
+              return (!floor || d >= floor) && (!comparisonEnd || d <= comparisonEnd);
+            });
             if (pts.length >= 2) {
               pct = (pts[pts.length - 1].value as number - (pts[0].value as number)) / (pts[0].value as number) * 100;
             }

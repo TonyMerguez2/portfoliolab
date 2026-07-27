@@ -80,6 +80,13 @@ class RebalancePolicy(str, Enum):
     NONE = "none"
 
 
+class DriftSource(str, Enum):
+    """Where the expected return used for the projection comes from."""
+    HISTORICAL = "historical"      # extrapolate the realised past
+    EXPLICIT = "explicit"          # the user states it
+    RISK_PREMIUM = "risk_premium"  # risk-free rate + beta x equity risk premium
+
+
 class MonteCarloRequest(BaseModel):
     assets: list[AssetInput]
     period: Period = Period.FIVE_YEARS
@@ -94,6 +101,10 @@ class MonteCarloRequest(BaseModel):
         default=21, ge=1, le=252,
         description="Block length in trading days for the bootstrap (21 ≈ 1 month)",
     )
+    n_sample_paths: int | None = Field(
+        default=None, ge=0, le=2000,
+        description="Trajectories returned for plotting. Defaults to every simulated path.",
+    )
     parameter_uncertainty: bool = Field(
         default=False,
         description="Draw (mu, sigma) per trajectory from their posterior instead of "
@@ -102,6 +113,24 @@ class MonteCarloRequest(BaseModel):
     rebalance: RebalancePolicy = Field(
         default=RebalancePolicy.DAILY,
         description="Rebalancing policy — only meaningful for the multivariate model",
+    )
+    drift_source: DriftSource = Field(
+        default=DriftSource.HISTORICAL,
+        description="Where the expected return comes from. Volatility is always "
+                    "taken from history; only the drift is affected.",
+    )
+    expected_return: float | None = Field(
+        default=None, ge=-0.5, le=1.0,
+        description="Annual expected return as a fraction (0.08 = 8%). "
+                    "Required when drift_source is 'explicit'.",
+    )
+    equity_risk_premium: float = Field(
+        default=0.05, ge=0.0, le=0.20,
+        description="Equity risk premium used when drift_source is 'risk_premium'",
+    )
+    beta_benchmark: Benchmark = Field(
+        default=Benchmark.SP500,
+        description="Benchmark used to estimate beta in 'risk_premium' mode",
     )
 
 

@@ -375,13 +375,48 @@ def monte_carlo(
 # Simulation engines — path generators
 # ──────────────────────────────────────────────
 
+def beta_vs_benchmark(asset_returns: pd.Series, benchmark_returns: pd.Series) -> float:
+    """
+    Sensitivity of an asset to the benchmark: Cov(asset, bench) / Var(bench).
+    """
+    joined = pd.concat([asset_returns, benchmark_returns], axis=1).dropna()
+    if len(joined) < 30:
+        return 1.0
+    a, b = joined.iloc[:, 0], joined.iloc[:, 1]
+    variance = float(b.var())
+    if variance <= 0:
+        return 1.0
+    return float(a.cov(b) / variance)
+
+
+def retarget_drift(log_returns: pd.Series, annual_return: float) -> pd.Series:
+    """
+    Shift a return series so its drift matches ``annual_return``, leaving the
+    shape of the distribution untouched.
+
+    Volatility, skew, kurtosis and autocorrelation all survive — only the mean
+    moves. This matters because sigma is estimable from history while mu is
+    not: the error on sigma shrinks as you sample more finely, whereas the
+    error on mu depends only on the calendar span covered. Halving it needs
+    four times as many *years*, by which point the process is no longer
+    stationary. So we keep the historical sigma and let the caller assert mu.
+    """
+    target_daily = float(np.log1p(annual_return) / TRADING_DAYS)
+    return log_returns - float(log_returns.mean()) + target_daily
+
+
 def draw_parameter_posterior(
     log_returns: pd.Series,
     n_simulations: int,
     rng: np.random.Generator,
+    fixed_mu: float | None = None,
 ) -> tuple[np.ndarray, np.ndarray]:
     """
     Sample (mu, sigma) from their joint posterior under a Jeffreys prior.
+
+    ``fixed_mu`` pins the drift instead of drawing it: when the user asserts an
+    expected return, that assumption replaces estimation error rather than
+    stacking on top of it. Sigma is still drawn.
 
     mu and sigma are *estimates* from a finite sample, not known constants.
     With ~5 years of daily data the standard error on the annualised drift is
@@ -405,6 +440,10 @@ def draw_parameter_posterior(
 
     sigma2 = (n_obs - 1) * s2 / rng.chisquare(n_obs - 1, size=n_simulations)
     sigma = np.sqrt(sigma2)
+
+    if fixed_mu is not None:
+        return np.full(n_simulations, float(fixed_mu)), sigma
+
     mu = rng.normal(xbar, np.sqrt(sigma2 / n_obs))
     return mu, sigma
 
@@ -415,6 +454,7 @@ def gbm_log_paths(
     n_simulations: int,
     rng: np.random.Generator,
     parameter_uncertainty: bool = False,
+    asserted_drift: float | None = None,
 ) -> np.ndarray:
     """
     Geometric Brownian Motion increments.
@@ -429,7 +469,7 @@ def gbm_log_paths(
     Z = rng.standard_normal((n_simulations, n_days))
 
     if parameter_uncertainty:
-        mu, sigma = draw_parameter_posterior(log_returns, n_simulations, rng)
+        mu, sigma = draw_parameter_posterior(log_returns, n_simulations, rng, asserted_drift)
         return np.cumsum(mu[:, None] + sigma[:, None] * Z, axis=1)
 
     mu_daily = float(log_returns.mean())
@@ -449,6 +489,7 @@ def block_bootstrap_log_paths(
     rng: np.random.Generator,
     block_size: int = 21,
     parameter_uncertainty: bool = False,
+    asserted_drift: float | None = None,
 ) -> np.ndarray:
     """
     Circular block bootstrap on the realised log-returns.
@@ -483,7 +524,7 @@ def block_bootstrap_log_paths(
         # anchors every path to the one historical mean. Re-centre each path on
         # a drift drawn from the posterior so estimation error is represented
         # too, leaving the resampled shape (tails, clustering) untouched.
-        mu, _ = draw_parameter_posterior(log_returns, n_simulations, rng)
+        mu, _ = draw_parameter_posterior(log_returns, n_simulations, rng, asserted_drift)
         sampled = sampled + (mu[:, None] - float(values.mean()))
 
     return np.cumsum(sampled, axis=1)
@@ -497,9 +538,13 @@ def multivariate_log_paths(
     rng: np.random.Generator,
     rebalance: str = "daily",
     parameter_uncertainty: bool = False,
+    asserted_drifts: dict[str, float] | None = None,
 ) -> np.ndarray:
     """
     Simulate each asset separately, correlated via a Cholesky factor.
+
+    ``asserted_drifts`` maps ticker -> daily log drift and overrides the
+    historical means, leaving the covariance structure untouched.
 
     The aggregated approaches collapse the portfolio into one series before
     simulating, which silently assumes the weights are restored every single
@@ -525,6 +570,11 @@ def multivariate_log_paths(
         raise ValueError("No overlapping return history to simulate")
 
     mu = log_df.mean().to_numpy(dtype=np.float64)          # (k,)
+    if asserted_drifts:
+        mu = np.array(
+            [asserted_drifts.get(t, mu[i]) for i, t in enumerate(tickers)],
+            dtype=np.float64,
+        )
     cov = log_df.cov().to_numpy(dtype=np.float64)          # (k, k)
     k = len(tickers)
     n_obs = len(log_df)
@@ -542,10 +592,12 @@ def multivariate_log_paths(
     Z = rng.standard_normal((n_simulations, n_days, k))
     increments = Z @ L.T + mu
 
-    if parameter_uncertainty:
+    if parameter_uncertainty and not asserted_drifts:
         # Drift is the badly-estimated parameter; give each path its own draw
         # from N(mu_hat, Sigma / n) — the multivariate analogue of the
         # univariate posterior, keeping the cross-asset correlation.
+        # Skipped when the drift is asserted: that assumption replaces the
+        # estimate rather than adding noise around it.
         drift_shift = (rng.standard_normal((n_simulations, k)) @ L.T) / np.sqrt(n_obs)
         increments = increments + drift_shift[:, None, :]
 
@@ -588,21 +640,25 @@ def _build_log_paths(
     returns_df: pd.DataFrame | None = None,
     weights: dict[str, float] | None = None,
     rebalance: str = "daily",
+    asserted_drift: float | None = None,
+    asserted_drifts: dict[str, float] | None = None,
 ) -> np.ndarray:
     """Dispatch to the requested path generator."""
     if model == "multivariate":
         if returns_df is None or weights is None:
             raise ValueError("Multivariate simulation requires per-asset returns and weights")
         return multivariate_log_paths(
-            returns_df, weights, n_days, n_simulations, rng, rebalance, parameter_uncertainty
+            returns_df, weights, n_days, n_simulations, rng, rebalance,
+            parameter_uncertainty, asserted_drifts,
         )
     if model == "bootstrap":
         return block_bootstrap_log_paths(
-            log_returns, n_days, n_simulations, rng, block_size, parameter_uncertainty
+            log_returns, n_days, n_simulations, rng, block_size,
+            parameter_uncertainty, asserted_drift,
         )
     if model == "gbm":
         return gbm_log_paths(
-            log_returns, n_days, n_simulations, rng, parameter_uncertainty
+            log_returns, n_days, n_simulations, rng, parameter_uncertainty, asserted_drift
         )
     raise ValueError(f"Unknown simulation model: {model!r}")
 
@@ -622,6 +678,11 @@ def monte_carlo_advanced(
     returns_df: pd.DataFrame | None = None,
     weights: dict[str, float] | None = None,
     rebalance: str = "daily",
+    expected_return: float | None = None,
+    asserted_drifts: dict[str, float] | None = None,
+    drift_source: str = "historical",
+    n_sample_paths: int = 220,
+    path_points: int = 140,
     seed: int = 42,
 ) -> dict:
     """
@@ -631,8 +692,24 @@ def monte_carlo_advanced(
     ``"bootstrap"`` (circular block bootstrap on realised returns).
     """
     log_returns = np.log(1 + portfolio_returns_series).dropna()
-    mu_daily = float(log_returns.mean())
+    historical_drift = float(log_returns.mean())
     sigma_daily = float(log_returns.std())
+
+    # Re-centre on the asserted expected return, if any. Only the mean moves;
+    # volatility and the shape of the distribution are kept from history.
+    asserted_drift: float | None = None
+    if expected_return is not None:
+        log_returns = retarget_drift(log_returns, expected_return)
+        asserted_drift = float(log_returns.mean())
+
+    mu_daily = float(log_returns.mean())
+    if asserted_drifts and weights:
+        # Per-asset drifts (risk-premium mode): the portfolio drift the user
+        # effectively asked for is their weighted average.
+        total_w = sum(weights.values()) or 1.0
+        mu_daily = sum(
+            asserted_drifts.get(t, mu_daily) * w / total_w for t, w in weights.items()
+        )
 
     n_days = horizon_years * TRADING_DAYS
 
@@ -640,6 +717,7 @@ def monte_carlo_advanced(
     log_paths = _build_log_paths(
         log_returns, n_days, n_simulations, rng, model, block_size,
         parameter_uncertainty, returns_df, weights, rebalance,
+        asserted_drift, asserted_drifts,
     )
     log_paths = np.hstack([np.zeros((n_simulations, 1)), log_paths])
     paths = initial_investment * np.exp(log_paths)
@@ -651,6 +729,33 @@ def monte_carlo_advanced(
         key = f"p{p}"
         series = np.percentile(paths, p, axis=0)
         percentiles[key] = [float(v) for v in series]
+
+    # ── Individual trajectories for the spaghetti plot ─────────────
+    # A readable sample rather than every path: drawing thousands of lines
+    # would be an unreadable blur and a heavy payload. Time is downsampled to
+    # a fixed number of columns so the response size stays bounded whatever
+    # the horizon.
+    sample_paths: list[list[float]] = []
+    if n_sample_paths > 0:
+        n_show = int(min(n_sample_paths, n_simulations))
+        # Evenly spaced by final value so the sample spans the whole spread
+        # instead of clustering wherever the RNG happened to land.
+        order = np.argsort(final_values)
+        pick = order[np.linspace(0, n_simulations - 1, n_show).astype(int)]
+
+        n_cols = int(min(path_points, paths.shape[1]))
+        col_idx = np.unique(np.linspace(0, paths.shape[1] - 1, n_cols).astype(int))
+        # Rounded to the euro: sub-euro precision is invisible on a chart and
+        # would inflate the payload by a third.
+        sample_paths = [
+            [round(float(v)) for v in row] for row in paths[np.ix_(pick, col_idx)]
+        ]
+        percentiles = {
+            key: [series[i] for i in col_idx] for key, series in percentiles.items()
+        }
+        path_time_index = [int(i) for i in col_idx]
+    else:
+        path_time_index = list(range(paths.shape[1]))
 
     # ── Goal analysis ──────────────────────────────────────────────
     goal_analysis = None
@@ -779,6 +884,8 @@ def monte_carlo_advanced(
 
     return {
         "percentiles": percentiles,
+        "sample_paths": sample_paths,
+        "path_time_index": path_time_index,
         "n_days": n_days,
         "probability_of_loss": prob_loss,
         "expected_final_value": float(np.mean(final_values)),
@@ -793,11 +900,26 @@ def monte_carlo_advanced(
         "robustness_label": robustness_label,
         "robustness_color": robustness_color,
         "robustness_reasons": reasons,
-        "annualized_return": float((mu_daily * TRADING_DAYS)),
+        # Effective compound annual rate, i.e. what "8% a year" actually means
+        # to a user. mu is a log drift, so it needs exponentiating first —
+        # reporting it raw would show 7.70% for an assumed 8%.
+        "annualized_return": float(np.expm1(mu_daily * TRADING_DAYS)),
         "annualized_volatility": float(sigma_daily * np.sqrt(TRADING_DAYS)),
         "model": model,
         "rebalance": rebalance if model == "multivariate" else "daily",
         "parameter_uncertainty": parameter_uncertainty,
+        "drift_source": drift_source,
+        # What history alone would have implied, so the user can see how far
+        # their assumption sits from a naive extrapolation.
+        "historical_annualized_return": float(np.expm1(historical_drift * TRADING_DAYS)),
+        # 95% plausible range for the drift, expressed as effective annual
+        # rates. Asymmetric, so a "± x%" would be wrong.
+        "expected_return_low": float(np.expm1(
+            mu_daily * TRADING_DAYS - 1.96 * sigma_daily * TRADING_DAYS / np.sqrt(log_returns.size)
+        )) if log_returns.size else 0.0,
+        "expected_return_high": float(np.expm1(
+            mu_daily * TRADING_DAYS + 1.96 * sigma_daily * TRADING_DAYS / np.sqrt(log_returns.size)
+        )) if log_returns.size else 0.0,
         "n_observations": int(log_returns.size),
         # Standard error of the annualised drift. Usually large relative to the
         # drift itself, which is precisely why it is worth surfacing.

@@ -4,6 +4,9 @@ import { createContext, useContext, useState, useEffect, ReactNode } from "react
 export type Asset = { ticker: string; name: string; type?: string; };
 export type Portfolio = { id: number; name: string; color: string; assets: { ticker: string; weight: number }[] };
 
+/** Surface style shared by every chart surface in the app. */
+export type DisplayMode = "glass" | "black";
+
 type AppContextType = {
   mode: "portfolio" | "asset";
   setMode: (m: "portfolio" | "asset") => void;
@@ -11,6 +14,8 @@ type AppContextType = {
   setActivePortfolio: (p: Portfolio | null) => void;
   activeAsset: Asset | null;
   setActiveAsset: (a: Asset | null) => void;
+  displayMode: DisplayMode;
+  toggleDisplayMode: () => void;
 };
 
 const AppContext = createContext<AppContextType>({
@@ -20,12 +25,15 @@ const AppContext = createContext<AppContextType>({
   setActivePortfolio: () => {},
   activeAsset: null,
   setActiveAsset: () => {},
+  displayMode: "glass",
+  toggleDisplayMode: () => {},
 });
 
 export function AppProvider({ children }: { children: ReactNode }) {
   const [mode, setModeState] = useState<"portfolio" | "asset">("asset");
   const [activePortfolio, setActivePortfolioState] = useState<Portfolio | null>(null);
   const [activeAsset, setActiveAssetState] = useState<Asset | null>(null);
+  const [displayMode, setDisplayModeState] = useState<DisplayMode>("glass");
 
   useEffect(() => {
     const savedPortfolio = localStorage.getItem("activePortfolio");
@@ -35,7 +43,18 @@ export function AppProvider({ children }: { children: ReactNode }) {
     if (savedAsset) { setActiveAssetState(JSON.parse(savedAsset)); }
     if (savedMode) { setModeState(savedMode); }
     else if (savedPortfolio) { setModeState("portfolio"); }
+    // Same key the chart page used when this was a page-local setting, so
+    // existing preferences carry over.
+    if (localStorage.getItem("novac_chart_display") === "black") setDisplayModeState("black");
   }, []);
+
+  const toggleDisplayMode = () => {
+    setDisplayModeState(current => {
+      const next: DisplayMode = current === "glass" ? "black" : "glass";
+      try { localStorage.setItem("novac_chart_display", next); } catch {}
+      return next;
+    });
+  };
 
   const setMode = (m: "portfolio" | "asset") => {
     setModeState(m);
@@ -55,7 +74,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   };
 
   return (
-    <AppContext.Provider value={{ mode, setMode, activePortfolio, setActivePortfolio, activeAsset, setActiveAsset }}>
+    <AppContext.Provider value={{ mode, setMode, activePortfolio, setActivePortfolio, activeAsset, setActiveAsset, displayMode, toggleDisplayMode }}>
       {children}
     </AppContext.Provider>
   );

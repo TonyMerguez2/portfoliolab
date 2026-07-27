@@ -564,7 +564,8 @@ function ChartContent() {
   const [activeInterval, setActiveInterval] = useState<string>("1d");
   const [chartPriceData, setChartPriceData] = useState<{date:string;value:number;high?:number;low?:number}[]>([]);
   const [showCustom,    setShowCustom]    = useState(false);
-  const [chartDisplayMode, setChartDisplayMode] = useState<"glass" | "black">("glass");
+  // Surface style is global (header toggle), not page-local.
+  const { displayMode: chartDisplayMode } = useApp();
   const [copied,        setCopied]        = useState(false);
   const [chartViewMode, setChartViewMode] = useState<"line" | "candle">("line");
   const [extractedColor, setExtractedColor] = useState<string | null>(null);
@@ -604,15 +605,6 @@ function ChartContent() {
   const [similarLoading, setSimilarLoading] = useState(false);
   const [fullscreen,     setFullscreen]     = useState(false);
 
-  // Apply the persisted display mode after hydration. Keeping the server and
-  // first client render identical prevents the default background from being
-  // left behind when a ticker navigation remounts this page.
-  useEffect(() => {
-    try {
-      setChartDisplayMode(localStorage.getItem("novac_chart_display") === "black" ? "black" : "glass");
-    } catch {}
-  }, []);
-
   // Reset extracted colour whenever the viewed asset changes
   useEffect(() => { setExtractedColor(null); }, [ticker]);
 
@@ -630,14 +622,6 @@ function ChartContent() {
   const setLineColor  = (v: string | null) => { setLineColorRaw(v);  if (v === null) localStorage.removeItem("novac_chart_lineColor"); else localStorage.setItem("novac_chart_lineColor", v); };
   const setCandleUp   = (v: string)        => { setCandleUpRaw(v);   localStorage.setItem("novac_chart_candleUp",   v); };
   const setCandleDown = (v: string)        => { setCandleDownRaw(v); localStorage.setItem("novac_chart_candleDown", v); };
-  const toggleChartDisplayMode = () => {
-    setChartDisplayMode(current => {
-      const next = current === "glass" ? "black" : "glass";
-      try { localStorage.setItem("novac_chart_display", next); } catch {}
-      return next;
-    });
-  };
-
   const handleShare = () => {
     navigator.clipboard.writeText(window.location.href).then(() => {
       setCopied(true);
@@ -1184,7 +1168,12 @@ function ChartContent() {
 
           return (
             <>
-              <style>{`
+              {/* dangerouslySetInnerHTML: <style> is a raw-text element, so the
+                  browser never decodes entities inside it. React's SSR escapes
+                  quotes in JSX children (" -> &quot;), which both breaks the CSS
+                  and makes the server markup differ from the client render — a
+                  hydration mismatch. Setting the HTML directly skips escaping. */}
+              <style dangerouslySetInnerHTML={{ __html: `
                 @keyframes hdr-glow-up{0%,100%{box-shadow:0 0 6px rgba(34,197,94,.15)}50%{box-shadow:0 0 14px rgba(34,197,94,.35)}}
                 @keyframes hdr-glow-dn{0%,100%{box-shadow:0 0 6px rgba(239,68,68,.15)}50%{box-shadow:0 0 14px rgba(239,68,68,.35)}}
                 @keyframes price-flash-up{0%{color:#4ade80}80%{color:#4ade80}100%{color:#F8F9FC}}
@@ -1203,7 +1192,7 @@ function ChartContent() {
                 .chart-glass-container::before{display:none}
                 .asset-hero-grid{position:relative;z-index:1;display:grid;grid-template-columns:max-content max-content max-content;align-items:center;height:64px;min-height:64px}
                 .asset-hero-row{zoom:.94}
-.asset-hero-card::before{content:"";position:absolute;z-index:4;inset:0;box-sizing:border-box;border-radius:inherit;padding:1px;pointer-events:none;background:linear-gradient(135deg,color-mix(in srgb,currentColor 44%,transparent) 0%,color-mix(in srgb,currentColor 36%,transparent) 24%,color-mix(in srgb,currentColor 17%,transparent) 44%,transparent 54%,color-mix(in srgb,currentColor 15%,transparent) 68%,color-mix(in srgb,currentColor 40%,transparent) 100%);-webkit-mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);-webkit-mask-composite:xor;mask-composite:exclude}
+.asset-hero-card::before{content:'';position:absolute;z-index:4;inset:0;box-sizing:border-box;border-radius:inherit;padding:1px;pointer-events:none;background:linear-gradient(135deg,color-mix(in srgb,currentColor 44%,transparent) 0%,color-mix(in srgb,currentColor 36%,transparent) 24%,color-mix(in srgb,currentColor 17%,transparent) 44%,transparent 54%,color-mix(in srgb,currentColor 15%,transparent) 68%,color-mix(in srgb,currentColor 40%,transparent) 100%);-webkit-mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);-webkit-mask-composite:xor;mask-composite:exclude}
                 .asset-hero-secondary-card{zoom:1}
                 .asset-hero-identity{display:flex;align-items:center;min-width:0;padding-right:18px}
                 .asset-hero-section{align-self:stretch;display:flex;flex-direction:column;justify-content:center;border-left:1px solid rgba(255,255,255,.11);padding:0 18px;min-width:0}
@@ -1243,7 +1232,7 @@ function ChartContent() {
                   .asset-hero-price{border-top:1px solid rgba(255,255,255,.1);padding-top:16px!important}
                   .asset-hero-status{flex:1 1 100%;order:3}
                 }
-              `}</style>
+              ` }} />
               <div style={{ display:"flex", flexDirection:"column", padding:"8px 20px 8px", borderTop:"1px solid rgba(255,255,255,0.06)", borderBottom:"none", flexShrink:0, gap:8, marginTop:6 }}>
 
                 {/* ── Row 1: back · [logo + compact identity+price] · NOVAC ── */}
@@ -1524,7 +1513,7 @@ function ChartContent() {
                                     <div style={{ fontSize:8.5, letterSpacing:"0.10em", color:"rgba(255,255,255,0.20)", marginBottom:6, paddingLeft:2 }}>INDICES & CRYPTO</div>
                                     <div style={{ display:"flex", flexDirection:"column", gap:1 }}>
                                       {BM_PRESETS.map(bm => (
-                                        <div key={bm.ticker} onClick={() => { setCustomBmTicker(bm.ticker); setCustomBmName(bm.name); setCustomBmType(bm.type); setShowBmSearch(false); setBmQuery(""); setSyncView(true); }}
+                                        <div key={bm.ticker} onClick={() => { setCustomBmTicker(bm.ticker); setCustomBmName(bm.name); setCustomBmType(bm.type); setShowBmSearch(false); setBmQuery(""); setSyncView(false); }}
                                           style={{ display:"flex", alignItems:"center", gap:8, padding:"6px 8px", borderRadius:8, cursor:"pointer", transition:"background 0.10s" }}
                                           onMouseEnter={e => e.currentTarget.style.background="rgba(255,255,255,0.07)"}
                                           onMouseLeave={e => e.currentTarget.style.background="transparent"}>
@@ -1545,7 +1534,7 @@ function ChartContent() {
                                 {/* Results list */}
                                 <div style={{ display:"flex", flexDirection:"column", gap:1, maxHeight:220, overflowY:"auto" }}>
                                   {bmResults.map(asset => (
-                                    <div key={asset.ticker} onClick={() => { setCustomBmTicker(asset.ticker); setCustomBmName(asset.name); setCustomBmType(asset.type); setShowBmSearch(false); setBmQuery(""); setSyncView(true); }}
+                                    <div key={asset.ticker} onClick={() => { setCustomBmTicker(asset.ticker); setCustomBmName(asset.name); setCustomBmType(asset.type); setShowBmSearch(false); setBmQuery(""); setSyncView(false); }}
                                       style={{ display:"flex", alignItems:"center", gap:8, padding:"6px 8px", borderRadius:8, cursor:"pointer", transition:"background 0.10s" }}
                                       onMouseEnter={e => e.currentTarget.style.background="rgba(255,255,255,0.07)"}
                                       onMouseLeave={e => e.currentTarget.style.background="transparent"}>
@@ -1630,6 +1619,15 @@ function ChartContent() {
                   portfolioData={scaledPortfolioData}
                   benchmarkData={syncView ? [] : activeBmData}
                   benchmarkRawData={syncView ? undefined : (customBmTicker ? rawCustomBmData : undefined)}
+                  // Overlaid comparison: Percentage re-bases both series to the
+                  // left edge of the visible range, so zooming answers "who did
+                  // better over *this* window" — without it the curves stay
+                  // anchored to the start of the loaded history and read flat.
+                  //
+                  // Percentage rather than IndexedTo100: the latter overrides
+                  // the series price formatter and labels the axis with raw
+                  // index values (0…6500), which reads as meaningless numbers.
+                  priceScaleMode={customBmTicker && !syncView ? 2 : 0}
                   benchmarkName={customBmTicker ? customBmName : "S&P 500"}
                   benchmarkColor={activeBmColor}
                   benchmarkTicker={customBmTicker ?? undefined}
@@ -1781,25 +1779,42 @@ function ChartContent() {
                         </button>
                       )}
 
-                      {/* Mode de surface : verre / noir */}
-                      <button
-                        onClick={toggleChartDisplayMode}
-                        title={chartDisplayMode === "black" ? "Revenir au mode verre" : "Activer le mode noir"}
-                        className="chart-action-btn"
-                        style={{
-                          background:chartDisplayMode === "black" ? "rgba(255,255,255,0.14)" : "rgba(255,255,255,0.06)",
-                          border:`1px solid ${chartDisplayMode === "black" ? "rgba(255,255,255,0.32)" : "rgba(255,255,255,0.12)"}`,
-                          borderRadius:9, width:30, height:30, padding:0, cursor:"pointer",
-                          display:"flex", alignItems:"center", justifyContent:"center",
-                          color:chartDisplayMode === "black" ? "#fff" : "rgba(255,255,255,0.50)",
-                          boxShadow:"0 1px 3px rgba(0,0,0,0.20)",
-                        }}
-                      >
-                        <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
-                          <rect x="1" y="1" width="12" height="12" rx="3" fill={chartDisplayMode === "black" ? "#050505" : "rgba(255,255,255,0.04)"} stroke="currentColor"/>
-                          <path d="M1.5 5h11M1.5 9h11M5 1.5v11M9 1.5v11" stroke="currentColor" strokeWidth=".55" opacity=".55"/>
-                        </svg>
-                      </button>
+                      {/* Le mode de surface verre/noir vit désormais dans le header global. */}
+
+                      {/* Contrôles du mode comparaison */}
+                      {customBmTicker && (
+                        <div style={{ display:"flex", alignItems:"center", gap:6, marginRight:2 }}>
+                          {/* Superposé / séparé */}
+                          <div style={{ display:"inline-flex", padding:2, borderRadius:9, gap:2,
+                            border:"1px solid rgba(255,255,255,0.12)", background:"rgba(255,255,255,0.05)" }}>
+                            {([["overlay","Superposé","Les deux actifs sur un même axe, ramenés à une base commune — pour voir lequel surperforme"],
+                               ["split","Séparé","Un graphique par actif, chacun avec son axe de prix — pour lire les niveaux absolus"]] as const)
+                              .map(([v,label,title]) => {
+                                const active = (v === "overlay") === !syncView;
+                                return (
+                                  <button key={v} title={title} onClick={() => setSyncView(v === "split")}
+                                    style={{ padding:"4px 9px", borderRadius:7, border:"none", cursor:"pointer",
+                                      fontSize:10, fontWeight: active ? 650 : 500, letterSpacing:"0.02em",
+                                      color: active ? "#F8F9FC" : "rgba(255,255,255,0.52)",
+                                      background: active ? "rgba(155,185,255,0.22)" : "transparent" }}>
+                                    {label}
+                                  </button>
+                                );
+                              })}
+                          </div>
+
+                          {/* Repère de lecture : en superposé l'axe est un
+                              indice recalculé sur la fenêtre visible, pas un prix. */}
+                          {!syncView && (
+                            <span title="Les deux courbes repartent de 0 % au début de la période choisie : l'écart lu à droite est la surperformance sur cette période. Le zoom est figé en comparaison pour que ce point de référence reste unique — utilise les boutons de période pour changer de fenêtre. La ligne horizontale marque le départ commun."
+                              style={{ padding:"4px 9px", borderRadius:9, fontSize:10, fontWeight:600,
+                                letterSpacing:"0.02em", color:"rgba(255,255,255,0.62)", cursor:"help",
+                                border:"1px solid rgba(255,255,255,0.12)", background:"rgba(255,255,255,0.05)" }}>
+                              Écart en %
+                            </span>
+                          )}
+                        </div>
+                      )}
 
                       {/* Customisation colours */}
                       <button

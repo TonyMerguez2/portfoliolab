@@ -11,12 +11,14 @@ from scipy import stats
 
 from app.utils.finance import (
     TRADING_DAYS,
+    beta_vs_benchmark,
     block_bootstrap_log_paths,
     draw_parameter_posterior,
     gbm_log_paths,
     monte_carlo_advanced,
     multivariate_log_paths,
     portfolio_returns,
+    retarget_drift,
 )
 
 
@@ -227,7 +229,14 @@ def test_monte_carlo_advanced_payload(skewed_returns, model):
     assert result["final_values_p1"] <= result["final_values_p5"]
     assert result["expected_shortfall_5"] <= result["final_values_p5"]
     assert 0 <= result["robustness_score"] <= 100
-    assert len(result["percentiles"]["p50"]) == 5 * TRADING_DAYS + 1
+
+    # Percentiles and sampled trajectories share one downsampled time axis, so
+    # the frontend can plot them against the same x values.
+    n_cols = len(result["path_time_index"])
+    assert len(result["percentiles"]["p50"]) == n_cols
+    assert all(len(p) == n_cols for p in result["sample_paths"])
+    assert result["path_time_index"][0] == 0
+    assert result["path_time_index"][-1] == 5 * TRADING_DAYS
 
 
 def test_histogram_bins_are_log_spaced_and_populated(skewed_returns):
@@ -252,6 +261,97 @@ def test_histogram_bins_are_log_spaced_and_populated(skewed_returns):
 
     widths = [b["range_max"] - b["range_min"] for b in bins]
     assert widths[-1] > widths[0]  # geometric spacing => widening buckets
+
+
+# ─── Drift retargeting ────────────────────────────────────────────
+
+def test_retarget_drift_moves_only_the_mean(skewed_returns):
+    """
+    Asserting an expected return must not quietly change the risk profile:
+    volatility, skew, kurtosis and autocorrelation all have to survive.
+    """
+    log_returns = np.log1p(skewed_returns)
+    shifted = retarget_drift(log_returns, 0.08)
+
+    assert shifted.std() == pytest.approx(log_returns.std(), rel=1e-12)
+    assert stats.skew(shifted) == pytest.approx(stats.skew(log_returns), rel=1e-9)
+    assert stats.kurtosis(shifted) == pytest.approx(stats.kurtosis(log_returns), rel=1e-9)
+
+    a, b = log_returns.to_numpy(), shifted.to_numpy()
+    assert np.corrcoef(b[:-1], b[1:])[0, 1] == pytest.approx(
+        np.corrcoef(a[:-1], a[1:])[0, 1], rel=1e-9
+    )
+
+
+def test_retarget_drift_hits_the_requested_return(skewed_returns):
+    """The compounded drift must equal the requested annual rate."""
+    log_returns = np.log1p(skewed_returns)
+    for annual in (0.03, 0.08, 0.15):
+        shifted = retarget_drift(log_returns, annual)
+        assert np.expm1(shifted.mean() * TRADING_DAYS) == pytest.approx(annual, rel=1e-9)
+
+
+@pytest.mark.parametrize("annual", [0.05, 0.08, 0.12])
+def test_explicit_return_drives_the_median(skewed_returns, annual):
+    """End to end: asking for x% a year must land the median on (1+x)^T."""
+    result = monte_carlo_advanced(
+        skewed_returns,
+        horizon_years=10,
+        n_simulations=6000,
+        initial_investment=10_000.0,
+        model="bootstrap",
+        expected_return=annual,
+        drift_source="explicit",
+    )
+
+    assert result["annualized_return"] == pytest.approx(annual, rel=1e-6)
+    assert result["final_values_p50"] == pytest.approx(10_000 * (1 + annual) ** 10, rel=0.05)
+    # The historical drift is still reported, so the gap stays visible.
+    assert result["historical_annualized_return"] != pytest.approx(annual, rel=1e-6)
+
+
+def test_asserted_drift_suppresses_drift_uncertainty(skewed_returns):
+    """
+    When the user states the return, that assumption replaces estimation error
+    rather than stacking on top of it — so the bands must stay much tighter
+    than in historical mode.
+    """
+    common = dict(
+        horizon_years=10, n_simulations=6000, initial_investment=10_000.0,
+        model="gbm", parameter_uncertainty=True,
+    )
+    historical = monte_carlo_advanced(skewed_returns, **common)
+    explicit = monte_carlo_advanced(
+        skewed_returns, expected_return=0.08, drift_source="explicit", **common
+    )
+
+    width = lambda r: r["final_values_p95"] / r["final_values_p5"]
+    assert width(explicit) < width(historical) / 3
+
+
+def test_posterior_respects_fixed_mu(skewed_returns):
+    log_returns = np.log1p(skewed_returns)
+    mu, sigma = draw_parameter_posterior(
+        log_returns, 500, np.random.default_rng(1), fixed_mu=0.0003
+    )
+
+    assert np.all(mu == 0.0003)
+    assert sigma.std() > 0  # sigma is still drawn
+
+
+# ─── Beta ─────────────────────────────────────────────────────────
+
+def test_beta_recovers_a_known_sensitivity():
+    rng = np.random.default_rng(3)
+    bench = pd.Series(rng.normal(0.0004, 0.01, 2000))
+    asset = 1.5 * bench + pd.Series(rng.normal(0, 0.004, 2000))  # beta = 1.5 by construction
+
+    assert beta_vs_benchmark(asset, bench) == pytest.approx(1.5, abs=0.05)
+
+
+def test_beta_falls_back_when_history_is_too_short():
+    short = pd.Series([0.01, -0.01, 0.02])
+    assert beta_vs_benchmark(short, short) == 1.0
 
 
 def test_unknown_model_is_rejected(skewed_returns):

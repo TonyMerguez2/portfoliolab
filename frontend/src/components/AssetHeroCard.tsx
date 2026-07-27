@@ -119,25 +119,37 @@ export default function AssetHeroCard({
     }
 
     let cancelled = false;
-    Promise.all([
-      fetch(`${API_URL}/api/v1/prices?tickers=${encodeURIComponent(ticker)}`).then(response => response.json()),
-      fetch(`${API_URL}/api/v1/quote/${encodeURIComponent(ticker)}`).then(response => response.json()),
-    ])
-      .then(([prices, nextQuote]) => {
-        if (cancelled) return;
-        const first = Array.isArray(prices) ? prices[0] : null;
-        setPrice(first?.price != null ? { price: Number(first.price), change: Number(first.change ?? 0) } : null);
-        setQuote(nextQuote && typeof nextQuote === "object" ? nextQuote : null);
-      })
-      .catch(() => {
-        if (!cancelled) {
+    let retryTimer: ReturnType<typeof setTimeout> | undefined;
+
+    // The API can be briefly unavailable (server restarting, network blip).
+    // Without a retry the card stays stuck on "—" until a full reload, even
+    // once the backend is healthy again.
+    const load = (attempt = 0) => {
+      Promise.all([
+        fetch(`${API_URL}/api/v1/prices?tickers=${encodeURIComponent(ticker)}`).then(r => r.json()),
+        fetch(`${API_URL}/api/v1/quote/${encodeURIComponent(ticker)}`).then(r => r.json()),
+      ])
+        .then(([prices, nextQuote]) => {
+          if (cancelled) return;
+          const first = Array.isArray(prices) ? prices[0] : null;
+          setPrice(first?.price != null ? { price: Number(first.price), change: Number(first.change ?? 0) } : null);
+          setQuote(nextQuote && typeof nextQuote === "object" ? nextQuote : null);
+        })
+        .catch(() => {
+          if (cancelled) return;
           setPrice(null);
           setQuote(null);
-        }
-      });
+          if (attempt < 4) {
+            retryTimer = setTimeout(() => load(attempt + 1), 1500 * 2 ** attempt);
+          }
+        });
+    };
+
+    load();
 
     return () => {
       cancelled = true;
+      if (retryTimer) clearTimeout(retryTimer);
     };
   }, [ticker]);
 
@@ -168,10 +180,13 @@ export default function AssetHeroCard({
 
   return (
     <>
-      <style>{`
+      {/* dangerouslySetInnerHTML so React does not escape the quotes in
+          content:'' — <style> is raw text, entities are never decoded there,
+          and the escaping also causes a server/client hydration mismatch. */}
+      <style dangerouslySetInnerHTML={{ __html: `
         @keyframes shared-hero-pulse{0%,100%{box-shadow:0 0 0 0 rgba(34,197,94,.7)}60%{box-shadow:0 0 0 5px rgba(34,197,94,0)}}
         .shared-asset-hero-row{zoom:.94}
-        .shared-asset-hero-card::before{content:"";position:absolute;z-index:4;inset:0;box-sizing:border-box;border-radius:inherit;padding:1px;pointer-events:none;background:linear-gradient(135deg,color-mix(in srgb,currentColor 44%,transparent) 0%,color-mix(in srgb,currentColor 36%,transparent) 24%,color-mix(in srgb,currentColor 17%,transparent) 44%,transparent 54%,color-mix(in srgb,currentColor 15%,transparent) 68%,color-mix(in srgb,currentColor 40%,transparent) 100%);-webkit-mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);-webkit-mask-composite:xor;mask-composite:exclude}
+        .shared-asset-hero-card::before{content:'';position:absolute;z-index:4;inset:0;box-sizing:border-box;border-radius:inherit;padding:1px;pointer-events:none;background:linear-gradient(135deg,color-mix(in srgb,currentColor 44%,transparent) 0%,color-mix(in srgb,currentColor 36%,transparent) 24%,color-mix(in srgb,currentColor 17%,transparent) 44%,transparent 54%,color-mix(in srgb,currentColor 15%,transparent) 68%,color-mix(in srgb,currentColor 40%,transparent) 100%);-webkit-mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);-webkit-mask-composite:xor;mask-composite:exclude}
         .shared-asset-hero-grid{position:relative;z-index:1;display:grid;grid-template-columns:max-content max-content max-content;align-items:center;height:64px;min-height:64px}
         .shared-asset-hero-identity{display:flex;align-items:center;min-width:0;padding-right:18px}
         .shared-asset-hero-section{align-self:stretch;display:flex;flex-direction:column;justify-content:center;border-left:1px solid rgba(255,255,255,.11);padding:0 18px;min-width:0}
@@ -186,7 +201,7 @@ export default function AssetHeroCard({
         .shared-asset-exchange-flag{width:12px;height:12px;margin-left:3px;border:0;outline:0;border-radius:50%;flex:0 0 auto;object-fit:cover;display:inline-block;vertical-align:middle;box-shadow:none}
         .shared-asset-market-pill{display:inline-flex;align-items:center;align-self:flex-start;gap:5px;min-height:17px;padding:2px 7px;box-sizing:border-box;border-radius:9px;border:1px solid rgba(255,255,255,.028);background:rgba(255,255,255,.045);white-space:nowrap}
         @media(max-width:820px){.shared-asset-hero-row{zoom:1}.shared-asset-hero-grid{grid-template-columns:minmax(0,1fr) minmax(180px,.75fr);height:auto;row-gap:18px}.shared-asset-hero-status{grid-column:1 / 3;border-left:0!important;border-top:1px solid rgba(255,255,255,.1);padding:16px 0 0!important;flex-direction:row!important;align-items:center;justify-content:space-between!important}}
-      `}</style>
+      ` }} />
 
       <div className="shared-asset-hero-row" style={{ display: "flex", alignItems: "stretch", minWidth: 0 }}>
         <TileCard

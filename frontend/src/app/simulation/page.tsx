@@ -1,29 +1,24 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import {
-  ComposedChart,
-  Area,
-  Line,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-  ReferenceLine,
-  ResponsiveContainer,
-} from "recharts";
+import dynamic from "next/dynamic";
 import { useApp } from "@/lib/AppContext";
 import { useTheme } from "@/lib/theme";
 import { api } from "@/lib/api";
 import { fmtCurrency, fmtPct } from "@/lib/format";
 import type {
   AssetInput,
+  DriftSource,
   MonteCarloResult,
   Period,
   RebalancePolicy,
   SimulationModel,
 } from "@/types";
 import AssetHeroCard from "@/components/AssetHeroCard";
+
+const SimulationChart = dynamic(() => import("@/components/charts/SimulationChart"), {
+  ssr: false,
+});
 
 const ACCENT = "#5B8DEF";
 const ACCENT_STRONG = "#417EEB";
@@ -33,6 +28,45 @@ const SIM_COUNTS = [500, 1000, 2000];
 const INVEST_PRESETS = [5_000, 10_000, 25_000, 50_000];
 
 const CHART_POINTS = 120;
+
+const GLOSSARY: { term: string; text: string }[] = [
+  {
+    term: "Simulation de Monte Carlo",
+    text: "On ne calcule pas UN futur, on en tire des milliers au hasard. Chacun est un scénario possible. En les regardant tous ensemble, on obtient une distribution de résultats plutôt qu'une prédiction unique.",
+  },
+  {
+    term: "Rendement moyen (le « drift »)",
+    text: "La tendance de fond : combien l'actif rapporte par an en moyenne, une fois les hauts et les bas lissés. C'est le paramètre le plus important et le plus mal connu — l'historique ne permet pas de l'estimer précisément.",
+  },
+  {
+    term: "Volatilité",
+    text: "L'amplitude des secousses autour de cette tendance. Une volatilité de 25 % signifie que les écarts d'une année sur l'autre sont typiquement de cet ordre. Contrairement au rendement, elle s'estime bien.",
+  },
+  {
+    term: "Bootstrap (historique rejoué)",
+    text: "Au lieu d'inventer les variations avec une formule, on rejoue des morceaux réels du passé, par blocs d'un mois. Avantage : on garde les krachs, les rebonds et leur enchaînement tels qu'ils se sont produits.",
+  },
+  {
+    term: "GBM (courbe théorique)",
+    text: "Mouvement brownien géométrique. Les variations sont générées par une formule mathématique en cloche. Simple et rapide, mais il lisse la réalité : les krachs violents lui sont structurellement impossibles.",
+  },
+  {
+    term: "Multivarié (par actif)",
+    text: "Chaque actif du portefeuille est simulé séparément, en respectant la façon dont ils bougent ensemble. Seul mode qui permet de choisir si on rééquilibre le portefeuille ou non.",
+  },
+  {
+    term: "Rééquilibrage",
+    text: "Remettre les proportions à leur cible. Sans rééquilibrage, un actif qui monte prend une place croissante. L'écart de résultat entre les deux options peut dépasser 50 %.",
+  },
+  {
+    term: "Marge d'erreur",
+    text: "Le rendement et la volatilité sont mesurés sur un historique limité, donc imparfaitement connus. Activée, cette option en tient compte : la fourchette s'élargit fortement, mais elle devient sincère.",
+  },
+  {
+    term: "Prime de risque",
+    text: "Plutôt que de prolonger le passé, on part de la théorie : rendement = taux sans risque + sensibilité au marché × prime des actions. Une hypothèse discutable, mais assumée.",
+  },
+];
 
 const REBALANCE_LABELS: Record<RebalancePolicy, string> = {
   daily: "quotidien",
@@ -46,36 +80,10 @@ function fmtCompact(value: number): string {
   return `${Math.round(value)} €`;
 }
 
-type ChartPoint = { year: number; band90: [number, number]; band50: [number, number]; median: number };
-
-function buildChartData(res: MonteCarloResult): ChartPoint[] {
-  const { p5, p25, p50, p75, p95 } = res.percentiles;
-  const n = p50.length;
-  if (n === 0) return [];
-  const step = Math.max(1, Math.floor(n / CHART_POINTS));
-  const data: ChartPoint[] = [];
-  for (let i = 0; i < n; i += step) {
-    data.push({
-      year: +(i / 252).toFixed(2),
-      band90: [p5[i], p95[i]],
-      band50: [p25[i], p75[i]],
-      median: p50[i],
-    });
-  }
-  const last = n - 1;
-  if (data.length && data[data.length - 1].year !== +(last / 252).toFixed(2)) {
-    data.push({
-      year: +(last / 252).toFixed(2),
-      band90: [p5[last], p95[last]],
-      band50: [p25[last], p75[last]],
-      median: p50[last],
-    });
-  }
-  return data;
-}
 
 export default function SimulationPage() {
-  const { mode, activeAsset, activePortfolio } = useApp();
+  const { mode, activeAsset, activePortfolio, displayMode } = useApp();
+  const isBlack = displayMode === "black";
   const t = useTheme();
 
   const isAsset = mode === "asset";
@@ -98,12 +106,17 @@ export default function SimulationPage() {
   const [paramUncertainty, setParamUncertainty] = useState(true);
   const [rebalance, setRebalance] = useState<RebalancePolicy>("annual");
   const [estimationPeriod, setEstimationPeriod] = useState<Period>("5y");
+  const [driftSource, setDriftSource] = useState<DriftSource>("historical");
+  const [expectedReturn, setExpectedReturn] = useState<number>(7);
+  const [showGlossary, setShowGlossary] = useState(false);
 
   // ── Run state ─────────────────────────────────
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<MonteCarloResult | null>(null);
-  const [logScale, setLogScale] = useState(false);
+  // Log by default: outcomes are lognormal and span orders of magnitude, so a
+  // linear axis crushes the median against the bottom of the plot.
+  const [logScale, setLogScale] = useState(true);
 
   const assets: AssetInput[] = useMemo(() => {
     if (isAsset && activeAsset) return [{ ticker: activeAsset.ticker, weight: 100 }];
@@ -126,6 +139,9 @@ export default function SimulationPage() {
           simulation_model: simModel,
           parameter_uncertainty: paramUncertainty,
           rebalance,
+          drift_source: driftSource,
+          expected_return:
+            driftSource === "explicit" ? expectedReturn / 100 : null,
         },
         typeof goal === "number" ? goal : undefined,
       );
@@ -138,17 +154,25 @@ export default function SimulationPage() {
     }
   }
 
-  const chartData = useMemo(() => (result ? buildChartData(result) : []), [result]);
+  const hasChart = !!result && result.sample_paths.length > 0;
 
-  const panel: React.CSSProperties = {
-    background: t.isDark
-      ? "linear-gradient(145deg, rgba(14,34,63,0.88), rgba(7,23,46,0.96))"
-      : "rgba(255,255,255,0.94)",
-    border: `1px solid ${t.borderStrong}`,
-    boxShadow: t.isDark ? "0 16px 42px rgba(0,0,0,0.16)" : t.shadow,
-    backdropFilter: "blur(24px) saturate(125%)",
-    WebkitBackdropFilter: "blur(24px) saturate(125%)",
-  };
+  // The black theme applies to the whole page, not just the chart surface.
+  // Values copied from the chart page so both look identical.
+  const panel: React.CSSProperties = isBlack
+    ? {
+        background: "linear-gradient(180deg, #0b0b0b 0%, #070707 100%)",
+        border: "1px solid rgba(255,255,255,0.30)",
+        boxShadow: "0 16px 44px rgba(0,0,0,0.28)",
+      }
+    : {
+        background: t.isDark
+          ? "linear-gradient(145deg, rgba(14,34,63,0.88), rgba(7,23,46,0.96))"
+          : "rgba(255,255,255,0.94)",
+        border: `1px solid ${t.borderStrong}`,
+        boxShadow: t.isDark ? "0 16px 42px rgba(0,0,0,0.16)" : t.shadow,
+        backdropFilter: "blur(24px) saturate(125%)",
+        WebkitBackdropFilter: "blur(24px) saturate(125%)",
+      };
 
   const robustColor =
     result?.robustness_color === "green" ? t.positive
@@ -159,16 +183,29 @@ export default function SimulationPage() {
     <main
       data-novac-page
       style={{
-        minHeight: "100vh",
-        padding: "62px 20px 36px",
-        background: t.bg,
+        height: "100vh",
+        overflow: "hidden",
+        padding: "58px 20px 14px",
+        background: isBlack ? "#171717" : t.bg,
+        transition: "background-color .2s ease",
         color: t.textPrimary,
         fontFamily: "inherit",
+        display: "flex",
+        flexDirection: "column",
       }}
     >
-      <div style={{ width: "100%", margin: "0 auto" }}>
+      <div
+        style={{
+          width: "100%",
+          margin: "0 auto",
+          flex: "1 1 0",
+          minHeight: 0,
+          display: "flex",
+          flexDirection: "column",
+        }}
+      >
         {/* ── Source header ── */}
-        <div style={{ display: "flex", alignItems: "stretch", minWidth: 0, minHeight: "78px" }}>
+        <div style={{ display: "flex", alignItems: "stretch", minWidth: 0, flexShrink: 0 }}>
           {isAsset && activeAsset ? (
             <AssetHeroCard ticker={activeAsset.ticker} name={activeAsset.name} type={activeAsset.type} />
           ) : (
@@ -192,17 +229,387 @@ export default function SimulationPage() {
           )}
         </div>
 
+
+        {/* ── Glossary (overlay so it never pushes the page into a scroll) ── */}
+        {showGlossary && (
+          <>
+            {/* z-index stays below the global header (50) so the nav tabs
+                remain clickable — otherwise the first click on a tab is
+                swallowed by this backdrop and the user has to click twice. */}
+            <div
+              onClick={() => setShowGlossary(false)}
+              style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.55)", zIndex: 40 }}
+            />
+            <section
+              style={{
+                position: "fixed",
+                top: "50%",
+                left: "50%",
+                transform: "translate(-50%, -50%)",
+                zIndex: 41,
+                width: "min(1100px, calc(100vw - 60px))",
+                maxHeight: "min(76vh, 720px)",
+                overflowY: "auto",
+                background: t.isDark ? "rgba(9,27,52,0.97)" : "rgba(255,255,255,0.99)",
+                border: `1px solid ${t.borderStrong}`,
+                borderRadius: "26px",
+                padding: "24px 28px",
+                boxShadow: "0 30px 80px rgba(0,0,0,0.45)",
+              }}
+            >
+            <div style={{ color: t.textPrimary, fontSize: "13px", fontWeight: 650, marginBottom: "4px" }}>
+              Comprendre les réglages
+            </div>
+            <div style={{ color: t.textMuted, fontSize: "11px", marginBottom: "16px" }}>
+              Cette page ne prédit pas l’avenir. Elle montre l’éventail des résultats compatibles avec une hypothèse — et à quel point cette hypothèse compte.
+            </div>
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))",
+                gap: "14px 26px",
+              }}
+            >
+              {GLOSSARY.map((g) => (
+                <div key={g.term}>
+                  <div style={{ color: t.textPrimary, fontSize: "11.5px", fontWeight: 620, marginBottom: "3px" }}>
+                    {g.term}
+                  </div>
+                  <div style={{ color: t.textSecondary, fontSize: "11px", lineHeight: 1.55 }}>
+                    {g.text}
+                  </div>
+                </div>
+              ))}
+            </div>
+            </section>
+          </>
+        )}
+
+        {/* ── Chart + results ── */}
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: "minmax(0, 1fr) minmax(290px, 360px)",
+            gap: "12px",
+            marginTop: "10px",
+            flex: "1 1 0",
+            minHeight: 0,
+          }}
+        >
+          {/* Projection — same shell as the main trading chart */}
+          <section
+            className={isBlack ? undefined : "chart-glass-container"}
+            data-glass-edge=""
+            style={{
+              border: isBlack ? "1px solid rgba(255,255,255,0.30)" : "1px solid rgba(205,225,255,0.16)",
+              borderRadius: "30px",
+              padding: "14px 18px 10px",
+              overflow: "hidden",
+              display: "flex",
+              flexDirection: "column",
+              minHeight: 0,
+              position: "relative",
+              background: isBlack
+                ? "linear-gradient(180deg, #0b0b0b 0%, #070707 100%)"
+                : "rgba(9,27,52,0.78)",
+              backdropFilter: isBlack ? "none" : "blur(28px) saturate(1.2)",
+              WebkitBackdropFilter: isBlack ? "none" : "blur(28px) saturate(1.2)",
+              boxShadow: isBlack ? "0 16px 44px rgba(0,0,0,0.28)" : "0 12px 36px rgba(0,0,0,0.10)",
+            }}
+          >
+            {/* Radial glow behind the plot, as on the chart page */}
+            <div
+              style={{
+                position: "absolute",
+                inset: isBlack ? 0 : -28,
+                pointerEvents: "none",
+                zIndex: 0,
+                filter: isBlack ? "none" : "blur(20px)",
+                opacity: isBlack ? 1 : 0.78,
+                background: isBlack
+                  ? "radial-gradient(ellipse 62% 38% at 12% 0%, rgba(255,255,255,0.018) 0%, transparent 72%)"
+                  : "radial-gradient(ellipse 90% 72% at -10% -10%, rgba(255,255,255,0.035) 0%, rgba(255,255,255,0.014) 42%, rgba(255,255,255,0) 82%), radial-gradient(ellipse 86% 75% at 110% 112%, rgba(60,113,184,0.045) 0%, rgba(60,113,184,0.018) 44%, rgba(60,113,184,0) 84%)",
+              }}
+            />
+            <div style={{ display: "flex", alignItems: "center" }}>
+              <div>
+                <div style={{ color: t.textPrimary, fontSize: "16px", fontWeight: 620 }}>
+                  Projection {hasSource ? `de ${sourceTitle}` : ""}
+                </div>
+                <div style={{ marginTop: "4px", color: t.textMuted, fontSize: "10px" }}>
+                  {result
+                    ? [
+                        `${nSims.toLocaleString("fr-FR")} trajectoires`,
+                        result.model === "bootstrap"
+                          ? "bootstrap par blocs de 21 j"
+                          : result.model === "multivariate"
+                            ? "multivarié (Cholesky)"
+                            : "GBM gaussien",
+                        ...(result.model === "multivariate" && assets.length > 1
+                          ? [`rebalancement ${REBALANCE_LABELS[result.rebalance]}`]
+                          : []),
+                        `estimé sur ${result.n_observations.toLocaleString("fr-FR")} jours (${(
+                          result.n_observations / 252
+                        ).toFixed(1)} ans)`,
+                      ].join(" · ")
+                    : `${nSims.toLocaleString("fr-FR")} trajectoires simulées`}
+                </div>
+              </div>
+              {result && (
+                <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: "14px" }}>
+                  <Legend
+                    swatch="rgba(255,255,255,0.45)"
+                    label={`${result.sample_paths.length.toLocaleString("fr-FR")} scénarios`}
+                    t={t}
+                    line
+                  />
+                  <Legend swatch={ACCENT} label="Médiane" t={t} line />
+                  <button
+                    onClick={() => setLogScale((v) => !v)}
+                    style={{
+                      marginLeft: "4px",
+                      padding: "5px 10px",
+                      borderRadius: "9px",
+                      border: `1px solid ${logScale ? "rgba(91,141,239,0.45)" : t.border}`,
+                      background: logScale ? "rgba(91,141,239,0.14)" : "transparent",
+                      color: logScale ? ACCENT : t.textMuted,
+                      fontSize: "10px",
+                      fontWeight: 600,
+                      cursor: "pointer",
+                    }}
+                  >
+                    Log
+                  </button>
+                </div>
+              )}
+            </div>
+
+            {/* paddingTop gives the topmost price label room; without it the
+                label sits on the canvas edge and is clipped by the panel. */}
+            <div style={{ position: "relative", flex: "1 1 0", minHeight: 0, marginTop: "10px", paddingTop: "8px" }}>
+              {result && hasChart ? (
+                <SimulationChart
+                  paths={result.sample_paths}
+                  median={result.percentiles.p50}
+                  timeIndex={result.path_time_index}
+                  horizonYears={horizon}
+                  target={typeof goal === "number" && goal > 0 ? goal : null}
+                  logScale={logScale}
+                  black={isBlack}
+                />
+              ) : (
+                <div
+                  style={{
+                    position: "absolute",
+                    inset: 0,
+                    display: "grid",
+                    placeItems: "center",
+                    textAlign: "center",
+                    borderTop: `1px solid ${t.border}`,
+                    backgroundImage: `repeating-linear-gradient(to bottom, transparent 0, transparent 72px, ${t.border} 73px)`,
+                  }}
+                >
+                  <div style={{ maxWidth: "340px" }}>
+                    <div style={{ color: t.textPrimary, fontSize: "14px", fontWeight: 560 }}>
+                      {error ? "Erreur" : loading ? "Simulation en cours…" : hasSource ? "Prêt à simuler" : "Sélectionnez une source"}
+                    </div>
+                    <div style={{ marginTop: "7px", color: error ? t.negative : t.textMuted, fontSize: "11px", lineHeight: 1.55 }}>
+                      {error
+                        ? error
+                        : loading
+                          ? "Projection des trajectoires…"
+                          : hasSource
+                            ? "Ajustez les paramètres puis lancez la simulation."
+                            : `Choisissez ${isAsset ? "un actif" : "un portefeuille"} pour afficher les projections.`}
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+          </section>
+
+          {/* Results */}
+          <aside
+            style={{
+              ...panel,
+              borderRadius: "30px",
+              padding: "14px 18px",
+              minHeight: 0,
+              overflowY: "auto",
+            }}
+          >
+            <div style={{ display: "flex", alignItems: "center" }}>
+              <div>
+                <div style={{ color: t.textPrimary, fontSize: "15px", fontWeight: 620 }}>Résultats</div>
+                <div style={{ marginTop: "3px", color: t.textMuted, fontSize: "10px" }}>
+                  À l’horizon de {horizon} ans
+                </div>
+              </div>
+              {result && (
+                <div
+                  style={{
+                    marginLeft: "auto",
+                    display: "flex",
+                    flexDirection: "column",
+                    alignItems: "flex-end",
+                  }}
+                >
+                  <div style={{ color: robustColor, fontSize: "22px", fontWeight: 700, lineHeight: 1 }}>
+                    {result.robustness_score}
+                  </div>
+                  <div style={{ color: robustColor, fontSize: "9px", fontWeight: 600, letterSpacing: "0.06em", textTransform: "uppercase" }}>
+                    {result.robustness_label}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {([
+              {
+                label: "Résultat le plus probable",
+                help: "La valeur médiane : la moitié des scénarios finissent au-dessus, la moitié en dessous.",
+                value: result ? fmtCurrency(result.final_values_p50) : "—",
+              },
+              {
+                label: "Fourchette probable",
+                help: "9 scénarios sur 10 finissent dans cette fourchette. Il reste 1 chance sur 20 de faire moins que la borne basse, et autant de faire mieux que la borne haute.",
+                value: result
+                  ? `${fmtCompact(result.final_values_p5)} – ${fmtCompact(result.final_values_p95)}`
+                  : "—",
+              },
+              {
+                label: "Chances de gagner",
+                help: "Part des scénarios qui finissent au-dessus de la mise de départ.",
+                value: result ? fmtPct(1 - result.probability_of_loss, 0) : "—",
+                color: result ? t.positive : undefined,
+              },
+              {
+                label: "Risque de perdre",
+                help: "Part des scénarios qui finissent en dessous de la mise de départ.",
+                value: result ? fmtPct(result.probability_of_loss, 0) : "—",
+                color: result ? t.negative : undefined,
+              },
+              {
+                label: "Rendement retenu",
+                help: result?.drift_source === "historical"
+                  ? "Rendement annuel moyen supposé, prolongé depuis l'historique. C'est l'hypothèse la plus lourde de toute la simulation."
+                  : result?.drift_source === "explicit"
+                    ? "Rendement annuel que tu as fixé toi-même."
+                    : "Rendement annuel déduit du taux sans risque et de la sensibilité au marché.",
+                value: result ? fmtPct(result.annualized_return, 1) : "—",
+                sub:
+                  result && result.parameter_uncertainty && result.drift_source === "historical"
+                    ? `plage plausible ${fmtPct(result.expected_return_low, 1)} → ${fmtPct(result.expected_return_high, 1)}`
+                    : undefined,
+              },
+              {
+                label: "Volatilité",
+                help: "Amplitude des variations d'une année sur l'autre. Contrairement au rendement, elle s'estime correctement sur un historique court.",
+                value: result ? fmtPct(result.annualized_volatility, 1) : "—",
+              },
+              {
+                label: "Pire scénario sur 100",
+                help: "Seul 1 scénario sur 100 finit en dessous de ce montant.",
+                value: result ? fmtCompact(result.final_values_p1) : "—",
+              },
+              {
+                label: "Moyenne des 5 % pires cas",
+                help: "Quand ça tourne vraiment mal, voilà à quoi s'attendre en moyenne. Plus parlant que la seule pire valeur, car cela résume toute la queue basse.",
+                value: result ? fmtCompact(result.expected_shortfall_5) : "—",
+              },
+            ]).map((row, index) => (
+              <div
+                key={row.label}
+                title={row.help}
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  gap: "12px",
+                  padding: "7px 0",
+                  borderTop: `1px solid ${t.border}`,
+                  marginTop: index === 0 ? "12px" : 0,
+                  cursor: "help",
+                }}
+              >
+                <div style={{ minWidth: 0 }}>
+                  <div style={{ color: t.textSecondary, fontSize: "11px" }}>{row.label}</div>
+                  {"sub" in row && row.sub && (
+                    <div style={{ color: t.textMuted, fontSize: "9.5px", marginTop: "2px" }}>{row.sub}</div>
+                  )}
+                </div>
+                <span style={{ color: row.color ?? (result ? t.textPrimary : t.textMuted), fontSize: "13px", fontWeight: 600, whiteSpace: "nowrap" }}>
+                  {row.value}
+                </span>
+              </div>
+            ))}
+
+            {/* Goal analysis */}
+            {result?.goal_analysis && (
+              <div
+                style={{
+                  marginTop: "16px",
+                  padding: "13px 14px",
+                  borderRadius: "14px",
+                  border: `1px solid ${t.border}`,
+                  background: t.isDark ? "rgba(91,141,239,0.06)" : "rgba(65,126,235,0.05)",
+                }}
+              >
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
+                  <span style={{ color: t.textSecondary, fontSize: "11px" }}>
+                    Atteindre {fmtCurrency(result.goal_analysis.target_value)}
+                  </span>
+                  <span style={{ color: ACCENT_STRONG, fontSize: "15px", fontWeight: 700 }}>
+                    {fmtPct(result.goal_analysis.probability_of_reaching, 0)}
+                  </span>
+                </div>
+                {result.goal_analysis.years_to_reach_median != null && (
+                  <div style={{ marginTop: "6px", color: t.textMuted, fontSize: "10px" }}>
+                    Atteint en ~{result.goal_analysis.years_to_reach_median} ans (scénario médian)
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Distribution histogram */}
+            <div style={{ marginTop: "12px" }}>
+              <div style={{ color: t.textMuted, fontSize: "10px", marginBottom: "6px" }}>
+                Distribution des valeurs finales
+              </div>
+              {result ? (
+                <Histogram result={result} t={t} />
+              ) : (
+                <div
+                  style={{
+                    height: "90px",
+                    borderRadius: "14px",
+                    border: `1px solid ${t.border}`,
+                    background: t.isDark ? "rgba(255,255,255,0.012)" : "rgba(16,24,40,0.015)",
+                    display: "grid",
+                    placeItems: "center",
+                    color: t.textMuted,
+                    fontSize: "10px",
+                  }}
+                >
+                  Lancez une simulation
+                </div>
+              )}
+            </div>
+          </aside>
+        </div>
+
         {/* ── Parameters ── */}
         <section
           style={{
             ...panel,
-            marginTop: "14px",
-            borderRadius: "22px",
+            marginTop: "10px",
+            borderRadius: "20px",
             display: "flex",
             flexWrap: "wrap",
             alignItems: "flex-end",
-            gap: "22px",
-            padding: "16px 18px",
+            gap: "16px 20px",
+            padding: "11px 16px",
+            flexShrink: 0,
           }}
         >
           <Field label="Horizon">
@@ -241,6 +648,56 @@ export default function SimulationPage() {
               t={t}
             />
           </Field>
+
+          <Field label="Rendement attendu">
+            <SegPills<DriftSource>
+              options={[
+                { value: "historical", label: "Passé prolongé", title: "On suppose que l'actif rapportera à l'avenir ce qu'il a rapporté par le passé. Hypothèse forte et souvent trop optimiste." },
+                { value: "explicit", label: "Je le fixe", title: "Tu choisis toi-même le rendement annuel attendu. L'hypothèse devient explicite et discutable." },
+                { value: "risk_premium", label: "Prime de risque", title: "Rendement = taux sans risque + sensibilité au marché (bêta) × prime de risque actions. Ancré sur la théorie financière plutôt que sur le passé de l'actif." },
+              ]}
+              value={driftSource}
+              onChange={setDriftSource}
+              t={t}
+            />
+          </Field>
+
+          {driftSource === "explicit" && (
+            <Field label="Rendement annuel">
+              <div style={{ position: "relative", display: "inline-block" }}>
+                <input
+                  type="number"
+                  step={0.5}
+                  value={expectedReturn}
+                  onChange={(e) => setExpectedReturn(Number(e.target.value))}
+                  style={{
+                    width: "104px",
+                    height: "34px",
+                    padding: "0 26px 0 12px",
+                    borderRadius: "10px",
+                    border: `1px solid ${t.border}`,
+                    background: t.isDark ? "rgba(255,255,255,0.02)" : "rgba(16,24,40,0.02)",
+                    color: t.textPrimary,
+                    fontSize: "13px",
+                    fontWeight: 600,
+                  }}
+                />
+                <span
+                  style={{
+                    position: "absolute",
+                    right: "10px",
+                    top: "50%",
+                    transform: "translateY(-50%)",
+                    fontSize: "12px",
+                    color: t.textMuted,
+                    pointerEvents: "none",
+                  }}
+                >
+                  %
+                </span>
+              </div>
+            </Field>
+          )}
 
           <Field label="Historique estimé">
             <SegPills<Period>
@@ -287,7 +744,7 @@ export default function SimulationPage() {
           <Field label="Incertitude">
             <button
               onClick={() => setParamUncertainty((v) => !v)}
-              title="Tire μ et σ dans leur loi a posteriori à chaque trajectoire, au lieu de traiter les estimations comme certaines. Élargit fortement l'intervalle — c'est l'effet réel de n'avoir que 5 ans de données."
+              title="Le rendement et la volatilité sont estimés sur un historique limité : on ne les connaît pas exactement. Cochée, chaque trajectoire utilise des valeurs légèrement différentes, tirées au sort dans la plage plausible. L'intervalle s'élargit beaucoup — c'est le prix de l'honnêteté."
               style={{
                 display: "inline-flex",
                 alignItems: "center",
@@ -320,7 +777,7 @@ export default function SimulationPage() {
               >
                 {paramUncertainty ? "✓" : ""}
               </span>
-              Paramètres estimés
+              Marge d’erreur
             </button>
           </Field>
 
@@ -336,7 +793,24 @@ export default function SimulationPage() {
             />
           </Field>
 
-          <div style={{ marginLeft: "auto", display: "flex", alignItems: "center" }}>
+          <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: "10px" }}>
+            <button
+              onClick={() => setShowGlossary((v) => !v)}
+              title="Comprendre les réglages et le vocabulaire"
+              style={{
+                width: "34px",
+                height: "34px",
+                borderRadius: "10px",
+                cursor: "pointer",
+                border: `1px solid ${showGlossary ? "rgba(91,141,239,0.45)" : t.border}`,
+                background: showGlossary ? "rgba(91,141,239,0.14)" : "transparent",
+                color: showGlossary ? ACCENT : t.textMuted,
+                fontSize: "14px",
+                fontWeight: 700,
+              }}
+            >
+              ?
+            </button>
             <button
               disabled={!hasSource || loading}
               onClick={runSimulation}
@@ -360,295 +834,6 @@ export default function SimulationPage() {
             </button>
           </div>
         </section>
-
-        {/* ── Chart + results ── */}
-        <div
-          style={{
-            display: "grid",
-            gridTemplateColumns: "minmax(0, 1fr) minmax(290px, 360px)",
-            gap: "14px",
-            marginTop: "14px",
-          }}
-        >
-          {/* Projection */}
-          <section
-            style={{
-              ...panel,
-              minHeight: "472px",
-              borderRadius: "30px",
-              padding: "22px 24px",
-              overflow: "hidden",
-              display: "flex",
-              flexDirection: "column",
-            }}
-          >
-            <div style={{ display: "flex", alignItems: "center" }}>
-              <div>
-                <div style={{ color: t.textPrimary, fontSize: "16px", fontWeight: 620 }}>
-                  Projection {hasSource ? `de ${sourceTitle}` : ""}
-                </div>
-                <div style={{ marginTop: "4px", color: t.textMuted, fontSize: "10px" }}>
-                  {result
-                    ? [
-                        `${nSims.toLocaleString("fr-FR")} trajectoires`,
-                        result.model === "bootstrap"
-                          ? "bootstrap par blocs de 21 j"
-                          : result.model === "multivariate"
-                            ? "multivarié (Cholesky)"
-                            : "GBM gaussien",
-                        ...(result.model === "multivariate" && assets.length > 1
-                          ? [`rebalancement ${REBALANCE_LABELS[result.rebalance]}`]
-                          : []),
-                        `estimé sur ${result.n_observations.toLocaleString("fr-FR")} jours (${(
-                          result.n_observations / 252
-                        ).toFixed(1)} ans)`,
-                      ].join(" · ")
-                    : `${nSims.toLocaleString("fr-FR")} trajectoires simulées`}
-                </div>
-              </div>
-              {result && (
-                <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: "14px" }}>
-                  <Legend swatch={`${ACCENT}55`} label="90 %" t={t} />
-                  <Legend swatch={`${ACCENT}aa`} label="50 %" t={t} />
-                  <Legend swatch={ACCENT_STRONG} label="Médiane" t={t} line />
-                  <button
-                    onClick={() => setLogScale((v) => !v)}
-                    style={{
-                      marginLeft: "4px",
-                      padding: "5px 10px",
-                      borderRadius: "9px",
-                      border: `1px solid ${logScale ? "rgba(91,141,239,0.45)" : t.border}`,
-                      background: logScale ? "rgba(91,141,239,0.14)" : "transparent",
-                      color: logScale ? ACCENT : t.textMuted,
-                      fontSize: "10px",
-                      fontWeight: 600,
-                      cursor: "pointer",
-                    }}
-                  >
-                    Log
-                  </button>
-                </div>
-              )}
-            </div>
-
-            <div style={{ position: "relative", flex: 1, minHeight: "365px", marginTop: "18px" }}>
-              {result && chartData.length ? (
-                <ResponsiveContainer width="100%" height="100%">
-                  <ComposedChart data={chartData} margin={{ top: 8, right: 8, bottom: 0, left: 8 }}>
-                    <defs>
-                      <linearGradient id="band90" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="0%" stopColor={ACCENT} stopOpacity={0.22} />
-                        <stop offset="100%" stopColor={ACCENT} stopOpacity={0.05} />
-                      </linearGradient>
-                    </defs>
-                    <CartesianGrid stroke={t.border} vertical={false} />
-                    <XAxis
-                      dataKey="year"
-                      type="number"
-                      domain={[0, horizon]}
-                      tickFormatter={(v) => `${v} a`}
-                      tick={{ fill: t.textMuted, fontSize: 10 }}
-                      axisLine={{ stroke: t.border }}
-                      tickLine={false}
-                    />
-                    <YAxis
-                      scale={logScale ? "log" : "linear"}
-                      domain={logScale ? ["auto", "auto"] : [0, "auto"]}
-                      allowDataOverflow={false}
-                      tickFormatter={fmtCompact}
-                      tick={{ fill: t.textMuted, fontSize: 10 }}
-                      axisLine={false}
-                      tickLine={false}
-                      width={54}
-                    />
-                    <Tooltip content={<ChartTooltip t={t} />} />
-                    <ReferenceLine
-                      y={result.initial_investment}
-                      stroke={t.textMuted}
-                      strokeDasharray="4 4"
-                    />
-                    {typeof goal === "number" && goal > 0 && (
-                      <ReferenceLine y={goal} stroke={t.positive} strokeDasharray="5 3"
-                        label={{ value: "Objectif", fill: t.positive, fontSize: 10, position: "insideTopRight" }} />
-                    )}
-                    <Area
-                      dataKey="band90"
-                      stroke="none"
-                      fill="url(#band90)"
-                      isAnimationActive={false}
-                      activeDot={false}
-                    />
-                    <Area
-                      dataKey="band50"
-                      stroke="none"
-                      fill={ACCENT}
-                      fillOpacity={0.28}
-                      isAnimationActive={false}
-                      activeDot={false}
-                    />
-                    <Line
-                      dataKey="median"
-                      stroke={ACCENT_STRONG}
-                      strokeWidth={2}
-                      dot={false}
-                      isAnimationActive={false}
-                    />
-                  </ComposedChart>
-                </ResponsiveContainer>
-              ) : (
-                <div
-                  style={{
-                    position: "absolute",
-                    inset: 0,
-                    display: "grid",
-                    placeItems: "center",
-                    textAlign: "center",
-                    borderTop: `1px solid ${t.border}`,
-                    backgroundImage: `repeating-linear-gradient(to bottom, transparent 0, transparent 72px, ${t.border} 73px)`,
-                  }}
-                >
-                  <div style={{ maxWidth: "340px" }}>
-                    <div style={{ color: t.textPrimary, fontSize: "14px", fontWeight: 560 }}>
-                      {error ? "Erreur" : loading ? "Simulation en cours…" : hasSource ? "Prêt à simuler" : "Sélectionnez une source"}
-                    </div>
-                    <div style={{ marginTop: "7px", color: error ? t.negative : t.textMuted, fontSize: "11px", lineHeight: 1.55 }}>
-                      {error
-                        ? error
-                        : loading
-                          ? "Projection des trajectoires…"
-                          : hasSource
-                            ? "Ajustez les paramètres puis lancez la simulation."
-                            : `Choisissez ${isAsset ? "un actif" : "un portefeuille"} pour afficher les projections.`}
-                    </div>
-                  </div>
-                </div>
-              )}
-            </div>
-          </section>
-
-          {/* Results */}
-          <aside
-            style={{
-              ...panel,
-              minHeight: "472px",
-              borderRadius: "30px",
-              padding: "22px",
-            }}
-          >
-            <div style={{ display: "flex", alignItems: "center" }}>
-              <div>
-                <div style={{ color: t.textPrimary, fontSize: "16px", fontWeight: 620 }}>Résultats</div>
-                <div style={{ marginTop: "5px", color: t.textMuted, fontSize: "10px" }}>
-                  À l’horizon de {horizon} ans
-                </div>
-              </div>
-              {result && (
-                <div
-                  style={{
-                    marginLeft: "auto",
-                    display: "flex",
-                    flexDirection: "column",
-                    alignItems: "flex-end",
-                  }}
-                >
-                  <div style={{ color: robustColor, fontSize: "22px", fontWeight: 700, lineHeight: 1 }}>
-                    {result.robustness_score}
-                  </div>
-                  <div style={{ color: robustColor, fontSize: "9px", fontWeight: 600, letterSpacing: "0.06em", textTransform: "uppercase" }}>
-                    {result.robustness_label}
-                  </div>
-                </div>
-              )}
-            </div>
-
-            {[
-              ["Valeur médiane", result ? fmtCurrency(result.final_values_p50) : "—"],
-              ["Intervalle 90 %", result ? `${fmtCompact(result.final_values_p5)} – ${fmtCompact(result.final_values_p95)}` : "—"],
-              ["Probabilité de gain", result ? fmtPct(1 - result.probability_of_loss, 0) : "—", result ? t.positive : undefined],
-              ["Risque de perte", result ? fmtPct(result.probability_of_loss, 0) : "—", result ? t.negative : undefined],
-              [
-                "Rendement annualisé",
-                result
-                  ? result.parameter_uncertainty
-                    ? `${fmtPct(result.annualized_return, 1)} ± ${fmtPct(result.drift_std_error, 1)}`
-                    : fmtPct(result.annualized_return, 1)
-                  : "—",
-              ],
-              ["Volatilité annualisée", result ? fmtPct(result.annualized_volatility, 1) : "—"],
-              ["Pire 1 % (P1)", result ? fmtCompact(result.final_values_p1) : "—"],
-              ["Perte moy. au-delà du P5", result ? fmtCompact(result.expected_shortfall_5) : "—"],
-            ].map(([label, value, color], index) => (
-              <div
-                key={label as string}
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "space-between",
-                  padding: "13px 0",
-                  borderTop: `1px solid ${t.border}`,
-                  marginTop: index === 0 ? "20px" : 0,
-                }}
-              >
-                <span style={{ color: t.textSecondary, fontSize: "11px" }}>{label as string}</span>
-                <span style={{ color: (color as string) ?? (result ? t.textPrimary : t.textMuted), fontSize: "13px", fontWeight: 600 }}>
-                  {value as string}
-                </span>
-              </div>
-            ))}
-
-            {/* Goal analysis */}
-            {result?.goal_analysis && (
-              <div
-                style={{
-                  marginTop: "16px",
-                  padding: "13px 14px",
-                  borderRadius: "14px",
-                  border: `1px solid ${t.border}`,
-                  background: t.isDark ? "rgba(91,141,239,0.06)" : "rgba(65,126,235,0.05)",
-                }}
-              >
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
-                  <span style={{ color: t.textSecondary, fontSize: "11px" }}>
-                    Atteindre {fmtCurrency(result.goal_analysis.target_value)}
-                  </span>
-                  <span style={{ color: ACCENT_STRONG, fontSize: "15px", fontWeight: 700 }}>
-                    {fmtPct(result.goal_analysis.probability_of_reaching, 0)}
-                  </span>
-                </div>
-                {result.goal_analysis.years_to_reach_median != null && (
-                  <div style={{ marginTop: "6px", color: t.textMuted, fontSize: "10px" }}>
-                    Atteint en ~{result.goal_analysis.years_to_reach_median} ans (scénario médian)
-                  </div>
-                )}
-              </div>
-            )}
-
-            {/* Distribution histogram */}
-            <div style={{ marginTop: "18px" }}>
-              <div style={{ color: t.textMuted, fontSize: "10px", marginBottom: "8px" }}>
-                Distribution des valeurs finales
-              </div>
-              {result ? (
-                <Histogram result={result} t={t} />
-              ) : (
-                <div
-                  style={{
-                    height: "90px",
-                    borderRadius: "14px",
-                    border: `1px solid ${t.border}`,
-                    background: t.isDark ? "rgba(255,255,255,0.012)" : "rgba(16,24,40,0.015)",
-                    display: "grid",
-                    placeItems: "center",
-                    color: t.textMuted,
-                    fontSize: "10px",
-                  }}
-                >
-                  Lancez une simulation
-                </div>
-              )}
-            </div>
-          </aside>
-        </div>
       </div>
     </main>
   );
@@ -741,29 +926,6 @@ function Legend({ swatch, label, t, line }: { swatch: string; label: string; t: 
   );
 }
 
-function ChartTooltip({ active, payload, t }: any) {
-  if (!active || !payload?.length) return null;
-  const p = payload[0].payload as ChartPoint;
-  return (
-    <div
-      style={{
-        background: t.isDark ? "rgba(7,23,46,0.96)" : "rgba(255,255,255,0.98)",
-        border: `1px solid ${t.borderStrong}`,
-        borderRadius: "10px",
-        padding: "9px 11px",
-        fontSize: "11px",
-        color: t.textPrimary,
-        boxShadow: "0 8px 24px rgba(0,0,0,0.2)",
-      }}
-    >
-      <div style={{ color: t.textMuted, fontSize: "10px", marginBottom: "5px" }}>Année {p.year.toFixed(1)}</div>
-      <Row label="Médiane" value={fmtCurrency(p.median)} color={ACCENT_STRONG} />
-      <Row label="P25–P75" value={`${fmtCompact(p.band50[0])} – ${fmtCompact(p.band50[1])}`} color={t.textSecondary} />
-      <Row label="P5–P95" value={`${fmtCompact(p.band90[0])} – ${fmtCompact(p.band90[1])}`} color={t.textMuted} />
-    </div>
-  );
-}
-
 function Row({ label, value, color }: { label: string; value: string; color: string }) {
   return (
     <div style={{ display: "flex", justifyContent: "space-between", gap: "16px" }}>
@@ -778,7 +940,7 @@ function Histogram({ result, t }: { result: MonteCarloResult; t: ReturnType<type
   const maxCount = Math.max(...bins.map((b) => b.count), 1);
   const init = result.initial_investment;
   return (
-    <div style={{ display: "flex", alignItems: "flex-end", gap: "2px", height: "90px" }}>
+    <div style={{ display: "flex", alignItems: "flex-end", gap: "2px", height: "62px" }}>
       {bins.map((b, i) => {
         const gain = b.range_min >= init;
         return (
