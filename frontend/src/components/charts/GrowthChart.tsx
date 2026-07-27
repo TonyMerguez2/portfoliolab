@@ -597,6 +597,46 @@ export default function GrowthChart({
 
   const isIntraday = !!(ticker && adaptiveData.length > 0);
   const isIntradayInterval = ["1m", "5m", "15m", "1h"].includes(intervalKey);
+
+  /**
+   * Do the two compared assets trade on the same session?
+   *
+   * Read straight off the feeds' UTC offsets ("+02:00" vs "-04:00"). Paris and
+   * New York overlap barely two hours a day, so at 15m only 25% of the main
+   * asset's bars have a fresh value for the compared one — the rest is a held
+   * plateau. Same-exchange pairs overlap fully and compare cleanly intraday.
+   */
+  const sessionsAligned = useMemo(() => {
+    if (!benchmarkTicker) return true;
+    const off = (d: any) => {
+      const m = String(d).match(/([+-]\d{2}:\d{2})$/);
+      return m ? m[1] : (String(d).endsWith("Z") ? "+00:00" : null);
+    };
+    // Compare the most recent bars, not the oldest: over a long history the
+    // two series start in different seasons, so their first points can differ
+    // by an hour purely from daylight saving and look like distinct markets.
+    const a = adaptiveData.length ? off(adaptiveData[adaptiveData.length - 1].date) : null;
+    const b = bmAdaptiveData.length ? off(bmAdaptiveData[bmAdaptiveData.length - 1].date) : null;
+    if (!a || !b) return true; // unknown — do not restrict on a guess
+    return a === b;
+  }, [benchmarkTicker, adaptiveData, bmAdaptiveData]);
+
+  /** Intraday is only offered when it is actually comparable. */
+  const intradayLocked = !!benchmarkTicker && !sessionsAligned;
+
+  // Leave an interval that just became unavailable, rather than sitting on a
+  // disabled button.
+  useEffect(() => {
+    if (intradayLocked && ["1m", "5m", "15m", "1h"].includes(intervalKey)) {
+      setIntervalKey("1d");
+      onIntervalChange?.("1d");
+    }
+  }, [intradayLocked, intervalKey]); // eslint-disable-line
+
+  // 24h has no daily equivalent — a single bar says nothing.
+  useEffect(() => {
+    if (intradayLocked && periodFilter === "24h") handlePeriodChange("1S");
+  }, [intradayLocked, periodFilter]); // eslint-disable-line
   const hasComparison = !!(benchmarkTicker && benchmarkData.length > 0);
   // BusinessDay supprime les trous weekend/jours fériés sur les actions en 1d/1W
   const useBusinessDay = !isCrypto && ["1d", "1W"].includes(intervalKey);
@@ -1231,8 +1271,16 @@ export default function GrowthChart({
 
       // Ne restaure pas le range si un range externe gère la plage (mode sync)
       // Également ignoré si externalPeriod est actif — le time-range effect applique la bonne plage
-      if (savedRange && chartRef.current && !externalVisibleRangeRef.current && !externalPeriod) {
+      // Not while comparing: navigation is locked there, so there is no user
+      // range worth preserving — and restoring the pre-comparison one fought
+      // the re-frame, collapsing a one-week view down to the last few bars.
+      if (savedRange && chartRef.current && !externalVisibleRangeRef.current && !externalPeriod && !benchmarkTicker) {
         try { chartRef.current.timeScale().setVisibleRange(savedRange as any); } catch {}
+      }
+      if (benchmarkTicker) {
+        // Frame on the period instead, once the new series are in place.
+        requestAnimationFrame(() => chartRef.current?.timeScale().fitContent());
+        setTimeout(() => chartRef.current?.timeScale().fitContent(), 60);
       }
     } catch (err: any) {
       console.warn("GrowthChart setData error:", err?.message);
@@ -1749,8 +1797,15 @@ export default function GrowthChart({
           return (
             <div
               key={key}
-              className="relative pb-1 cursor-pointer text-center w-[48px] flex-none"
-              onClick={() => handlePeriodChange(key)}
+              className="relative pb-1 text-center w-[48px] flex-none"
+              title={intradayLocked && key === "24h"
+                ? "Indisponible en comparaison entre places aux horaires différents : une seule séance quotidienne ne suffit pas à comparer."
+                : undefined}
+              style={{
+                cursor: intradayLocked && key === "24h" ? "not-allowed" : "pointer",
+                opacity: intradayLocked && key === "24h" ? 0.35 : 1,
+              }}
+              onClick={() => { if (!(intradayLocked && key === "24h")) handlePeriodChange(key); }}
             >
               <div className="text-xs font-semibold" style={{ color: isActive ? portfolioColor : "#94a3b8" }}>
                 {key}
@@ -1773,12 +1828,19 @@ export default function GrowthChart({
         <div className="flex justify-center gap-2 pb-2 flex-shrink-0">
           {(["1m","5m","15m","1h","1d","1W"] as const).map(iv => {
             const allowed = PERIOD_ALLOWED_INTERVALS[periodFilter] ?? [];
-            const isAllowed = allowed.includes(iv);
+            const blockedByComparison = intradayLocked && ["1m","5m","15m","1h"].includes(iv);
+            // Short periods only list intraday intervals; when those are locked
+            // the daily bar becomes the fallback so the period stays usable.
+            const dailyFallback = intradayLocked && iv === "1d";
+            const isAllowed = (allowed.includes(iv) || dailyFallback) && !blockedByComparison;
             const isActive  = intervalKey === iv;
             return (
               <button
                 key={iv}
                 disabled={!isAllowed}
+                title={blockedByComparison
+                  ? "Indisponible en comparaison : les deux actifs cotent sur des places aux horaires différents. À cette finesse, la courbe comparée serait un palier plat les trois quarts du temps."
+                  : undefined}
                 onClick={() => { if (isAllowed) { setIntervalKey(iv); onIntervalChange?.(iv); } }}
                 style={{
                   fontSize: 10, fontWeight: isActive ? 700 : 500,
