@@ -197,3 +197,30 @@ canvas + div {
     radial-gradient(ellipse 17% 58% at 0% -10%, rgba(255,255,255,.052), transparent 70%),
     linear-gradient(180deg, rgba(255,255,255,.032), transparent 16%);
 }
+
+/* Tramage.
+
+   Le fond de la tuile descend de 88 à 0 en alpha sur plusieurs centaines de
+   pixels. Sur 8 bits cela fait un palier tous les 10 à 15 px, que l'œil lit
+   comme des auréoles concentriques — le défaut est la quantification, pas le
+   réglage : ajouter des arrêts de couleur n'y change rien, le moteur arrondit
+   de toute façon.
+
+   Un bruit d'amplitude inférieure au palier déplace la frontière entre deux
+   niveaux de façon irrégulière, ce qui la dissout. Les couleurs et les
+   opacités du dégradé ne bougent pas. */
+.novac-tile::after {
+  content: '';
+  position: absolute;
+  z-index: 0;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  /* Amplitude : environ deux niveaux sur 255, contre un palier de banding qui
+     en vaut moins d'un. Assez pour le dissoudre, pas assez pour se voir en
+     grain. C'est le seul reglage a toucher si des aureoles subsistent — le
+     monter — ou si un grain apparait — le baisser. */
+  opacity: 0.025;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  background-size: 160px 160px;
+}
