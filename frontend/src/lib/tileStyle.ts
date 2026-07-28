@@ -69,16 +69,15 @@ export function brandHex(ticker: string): string {
  * the surface itself belongs here so the two cannot drift again.
  *
  * `colorHex` overrides the brand colour, for pages that extract one from the
- * asset's logo.
+ * asset's logo. C'est le seul paramètre qui varie d'un appelant à l'autre.
  *
- * `intensity` scales the tint and the darkening together. It exists because a
- * given alpha does not make the same impression at every size: on a banner of
- * 554×79 it reads as a coloured card, on a tile of 790×367 the same value
- * covers five times the area and reads as opaque, glass gone. One value cannot
- * serve both. The default keeps the asset cards exactly as they were; the
- * portfolio map halves it.
+ * Il y a eu un paramètre d'intensité, que la carte de portefeuille réglait à
+ * moitié parce que ses tuiles couvrent cinq fois l'aire d'une carte d'actif et
+ * paraissaient plus opaques à alpha égal. Retiré : la consigne est que les deux
+ * rendent exactement la même surface, et un réglage qui les distingue ne peut
+ * que les faire diverger de nouveau. Seuls le contenu et la taille changent.
  */
-export function tileSurface(ticker: string, radius = 18, colorHex?: string, intensity = 1): {
+export function tileSurface(ticker: string, radius = 18, colorHex?: string): {
   borderRadius: number;
   background: string;
   backdropFilter: string;
@@ -89,8 +88,8 @@ export function tileSurface(ticker: string, radius = 18, colorHex?: string, inte
   boxSizing: "border-box";
 } {
   const c = colorHex ?? brandHex(ticker);
-  /** Alpha as two hex digits, scaled by the surface's intensity. */
-  const a = (v: number) => Math.round(Math.min(255, Math.max(0, v * intensity)))
+  /** Alpha sur deux chiffres hexadécimaux. */
+  const a = (v: number) => Math.round(Math.min(255, Math.max(0, v)))
     .toString(16).padStart(2, "0");
   return {
     borderRadius: radius,
@@ -111,7 +110,7 @@ export function tileSurface(ticker: string, radius = 18, colorHex?: string, inte
     background: [
       `radial-gradient(ellipse 260% 300% at 0% 0%, ${c}${a(88)} 0%, ${c}${a(77)} 18%, ${c}${a(59)} 36%, ${c}${a(41)} 54%, ${c}${a(23)} 72%, ${c}${a(10)} 88%, ${c}00 100%)`,
       `radial-gradient(ellipse 260% 300% at 100% 100%, ${c}${a(76)} 0%, ${c}${a(66)} 18%, ${c}${a(51)} 36%, ${c}${a(35)} 54%, ${c}${a(20)} 72%, ${c}${a(9)} 88%, ${c}00 100%)`,
-      `rgba(2,10,24,${(0.46 * intensity).toFixed(3)})`,
+      "rgba(2,10,24,0.46)",
     ].join(", "),
     backdropFilter: "blur(24px) saturate(1.6) brightness(1.06)",
     WebkitBackdropFilter: "blur(24px) saturate(1.6) brightness(1.06)",
