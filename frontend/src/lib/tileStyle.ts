@@ -84,9 +84,17 @@ export function tileSurface(ticker: string, radius = 18, colorHex?: string): {
   const c = colorHex ?? brandHex(ticker);
   return {
     borderRadius: radius,
+    // The washes overflow the tile on purpose, and fade on an eased curve.
+    //
+    // At 65% × 90% the ellipse fits inside the box, so its rim is drawn within
+    // the tile. On a card 554×79 the eye reads that as a corner wash; on a
+    // 790×367 tile it reads as a circle with an edge. Sizing it past the box
+    // means only the smooth middle is ever visible, whatever the tile's shape.
+    // The extra stops keep each alpha step small enough not to band once the
+    // fade is stretched over hundreds of pixels.
     background: [
-      `radial-gradient(ellipse 65% 90% at 0% 0%, ${c}58 0%, ${c}40 42%, ${c}1B 72%, ${c}00 100%)`,
-      `radial-gradient(ellipse 65% 90% at 100% 100%, ${c}4C 0%, ${c}38 42%, ${c}18 72%, ${c}00 100%)`,
+      `radial-gradient(ellipse 125% 145% at 0% 0%, ${c}58 0%, ${c}4C 18%, ${c}3A 36%, ${c}28 54%, ${c}18 72%, ${c}0A 88%, ${c}00 100%)`,
+      `radial-gradient(ellipse 125% 145% at 100% 100%, ${c}4C 0%, ${c}42 18%, ${c}33 36%, ${c}24 54%, ${c}16 72%, ${c}09 88%, ${c}00 100%)`,
       `linear-gradient(138deg, ${c}22 0%, ${c}28 48%, ${c}21 100%)`,
       "rgba(2,10,24,0.46)",
     ].join(", "),
