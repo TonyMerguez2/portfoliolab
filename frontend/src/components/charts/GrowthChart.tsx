@@ -85,24 +85,18 @@ function timeToSeconds(t: unknown): number {
 }
 
 /**
- * Last plotted value of a series at or before `untilSec`.
+ * Last plotted value of a series.
  *
- * Bounded on purpose. Taking the series' final point instead reports up to the
- * end of the *data* while the reference is taken at the left edge of the
- * *view* — so a zoomed window ending in April would still be described by a
- * July value, over a span not on screen. Invisible while navigation was
- * frozen, since both edges then coincided.
+ * Deliberately the final point, not the last one inside the view: paired with
+ * a base fixed at the start of the period, it makes the legend answer "where
+ * does this asset stand now, since the period began" — one figure, equal to
+ * the period button, that panning and zooming leave alone. The same reason
+ * single-asset mode keeps showing the current price however you navigate.
  */
-function lastSeriesValue(series: ISeriesApi<any> | null, untilSec?: number | null): number | null {
-  const pts = (series?.data() as { time?: unknown; value?: number }[]) ?? [];
-  if (!pts.length) return null;
-  let value: number | null = null;
-  for (const p of pts) {
-    if (untilSec != null && timeToSeconds(p.time) > untilSec) break;
-    if (typeof p.value === "number") value = p.value;
-  }
-  // A window entirely before the first point leaves nothing to report.
-  return value;
+function lastSeriesValue(series: ISeriesApi<any> | null): number | null {
+  const pts = (series?.data() as { value?: number }[]) ?? [];
+  const last = pts.length ? pts[pts.length - 1].value : null;
+  return typeof last === "number" ? last : null;
 }
 
 
@@ -133,18 +127,6 @@ interface Props {
   livePrice?: number;
   dark?: boolean;
   percentMode?: boolean;
-  /**
-   * lightweight-charts PriceScaleMode: 0 Normal, 1 Logarithmic,
-   * 2 Percentage, 3 IndexedTo100.
-   *
-   * IndexedTo100 re-bases every series to 100 at the left edge of the *visible*
-   * range and follows zooming. Performance mode already emits base-100 values,
-   * but anchored to the start of the loaded period — so zooming in leaves the
-   * curves flat and thousands of percent apart. Re-indexing is safe because the
-   * transform is scale-invariant: dividing by the first visible value gives the
-   * same curve whether the input is a price or an index.
-   */
-  priceScaleMode?: 0 | 1 | 2 | 3;
   priceMode?: boolean;
   hideDrawdown?: boolean;
   dailyChangePct?: number | null;
@@ -385,7 +367,7 @@ export default function GrowthChart({
   chartMode: chartModeProp, onChartModeChange, rightSlot, leftSlot,
   onExitFullscreen, onPeriodChange, onVisibleRangeChange, onCrosshairMove, onAdaptiveData,
   benchmarkRawData, benchmarkColor = "#f59e0b", benchmarkTicker,
-  dark = false, percentMode = false, priceMode = false, priceScaleMode = 0,
+  dark = false, percentMode = false, priceMode = false,
   hideDrawdown = false, dailyChangePct = null, openPrice = null, isCrypto = false, livePrice: livePriceProp,
   syncCrosshairTime = null, externalPeriod, externalInterval, externalVisibleRange,
   onIntervalChange, hideControls = false, syncPriceScaleWidth, onPriceScaleWidthChange,
@@ -452,29 +434,32 @@ export default function GrowthChart({
    *  period buttons and mouse zoom/pan, so it is the single reference the
    *  legend and the indexed axis can agree on. */
   const [visibleSecs, setVisibleSecs] = useState<{ from: number; to: number } | null>(null);
-  /** Value of each series at the left edge of the visible window, read from the
-   *  series themselves so the legend and the axis can never disagree. */
+  /** Value each series starts from — its first plotted point, which is the start
+   *  of the selected period. Read from the series themselves, so the legend and
+   *  the axis are anchored on the very same number. */
   const [seriesBase, setSeriesBase] = useState<{ a: number | null; b: number | null }>({ a: null, b: null });
 
   /**
-   * Recompute both bases from the series themselves. Called on range changes
-   * *and* right after data is set — a freshly loaded comparison may not trigger
-   * any range event, which previously left the compared asset with no figure.
+   * Recompute both bases from the series themselves.
+   *
+   * The base is each series' *first* point, not its first visible one. Both
+   * series are indexed to 100 at the start of the selected period, so this
+   * anchors every figure there and leaves it untouched by zoom and pan —
+   * navigation changes what you see, never what the numbers mean.
+   *
+   * Called right after data is set, and again on range changes: a freshly
+   * loaded comparison may not trigger any range event, which previously left
+   * the compared asset with no figure at all.
    */
   const syncSeriesBaseRef = useRef(() => {});
   syncSeriesBaseRef.current = () => {
-    const ts = chartRef.current?.timeScale();
-    const range = ts?.getVisibleRange();
-    const toSec = timeToSeconds;
-    const fromSec = range ? toSec(range.from) : -Infinity;
-    const firstVisibleOf = (s: ISeriesApi<any> | null): number | null => {
-      const pts = (s?.data() as any[]) ?? [];
-      for (const p of pts) if (toSec(p.time) >= fromSec) return p.value ?? null;
+    const firstOf = (s: ISeriesApi<any> | null): number | null => {
+      const pts = (s?.data() as { value?: number }[]) ?? [];
       return pts.length ? (pts[0].value ?? null) : null;
     };
     const next = {
-      a: firstVisibleOf(areaSeriesRef.current),
-      b: firstVisibleOf(benchmarkSeriesRef.current),
+      a: firstOf(areaSeriesRef.current),
+      b: firstOf(benchmarkSeriesRef.current),
     };
     setSeriesBase(prev => (prev.a === next.a && prev.b === next.b ? prev : next));
   };
@@ -499,10 +484,6 @@ export default function GrowthChart({
   }, [adaptiveData, portfolioData]);
   useEffect(() => { adaptiveDataRef.current = adaptiveData; }, [adaptiveData]);
 
-  // Applied with applyOptions so toggling never rebuilds the chart.
-  useEffect(() => {
-    chartRef.current?.priceScale("right").applyOptions({ mode: priceScaleMode });
-  }, [priceScaleMode]);
 
   /**
    * Comparison navigates exactly like the single-asset chart.
@@ -1497,7 +1478,7 @@ export default function GrowthChart({
    * at which a base from one source can meet a value from the other.
    */
   const mainCurve = cmpMode
-    ? { base: seriesBase.a, last: lastSeriesValue(areaSeriesRef.current, visibleSecs?.to), hover: hoverPrice }
+    ? { base: seriesBase.a, last: lastSeriesValue(areaSeriesRef.current), hover: hoverPrice }
     : { base: visiblePerfData?.first ?? null, last: visiblePerfData?.last ?? null, hover: hoverRawPrice };
 
   const visiblePerfPct = pctChange(mainCurve.last, mainCurve.base);
@@ -1523,7 +1504,7 @@ export default function GrowthChart({
   }, [benchmarkRawData, visibleSecs]);
 
   const bmCurve = cmpMode
-    ? { base: seriesBase.b, last: lastSeriesValue(benchmarkSeriesRef.current, visibleSecs?.to), hover: hoverBmPrice }
+    ? { base: seriesBase.b, last: lastSeriesValue(benchmarkSeriesRef.current), hover: hoverBmPrice }
     : { base: bmVisibleWindow?.first ?? null, last: bmVisibleWindow?.last ?? null, hover: hoverBmRawPrice };
 
   const bmHoverPerfPct   = pctChange(bmCurve.hover, bmCurve.base);

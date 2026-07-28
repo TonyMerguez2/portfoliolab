@@ -1619,15 +1619,17 @@ function ChartContent() {
                   portfolioData={scaledPortfolioData}
                   benchmarkData={syncView ? [] : activeBmData}
                   benchmarkRawData={syncView ? undefined : (customBmTicker ? rawCustomBmData : undefined)}
-                  // Overlaid comparison: Percentage re-bases both series to the
-                  // left edge of the visible range, so zooming answers "who did
-                  // better over *this* window" — without it the curves stay
-                  // anchored to the start of the loaded history and read flat.
+                  // Normal, deliberately, even when comparing.
                   //
-                  // Percentage rather than IndexedTo100: the latter overrides
-                  // the series price formatter and labels the axis with raw
-                  // index values (0…6500), which reads as meaningless numbers.
-                  priceScaleMode={customBmTicker && !syncView ? 2 : 0}
+                  // The series are already indexed to 100 at the start of the
+                  // selected period, and their formatter renders that as a
+                  // percentage. PriceScaleMode.Percentage would re-base them a
+                  // second time, onto the left edge of the *visible* range: every
+                  // figure then moved on each zoom, and two assets whose paths
+                  // crossed between the two window starts swapped places — a
+                  // curve ahead over Max could read behind once zoomed. Anchoring
+                  // on the period start keeps navigation purely a change of view,
+                  // and keeps the legend equal to the period button.
                   benchmarkName={customBmTicker ? customBmName : "S&P 500"}
                   benchmarkColor={activeBmColor}
                   benchmarkTicker={customBmTicker ?? undefined}
