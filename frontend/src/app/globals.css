@@ -197,38 +197,17 @@ canvas + div {
    pareil sans elle, et les tuiles deviennent homogènes. Il reste le fond et le
    bord — deux couches, aucune forme. */
 
-/* Tramage.
+/* Il n'y a pas de couche de tramage, et c'est réglé autrement.
 
-   Sur un fond sombre l'œil résout un seul niveau sur 255. Un dégradé large et
-   doux franchit donc ses paliers de quantification de façon visible, quelle que
-   soit sa géométrie : en anneaux s'il est radial, en bandes s'il est linéaire.
-   Changer de courbe déplace la forme, elle ne la supprime pas. Seul un bruit
-   d'amplitude inférieure au palier dissout la frontière entre deux niveaux.
+   Un bruit dissout les paliers de quantification qui font les anneaux, mais il
+   se paie : à trois octaves, ses basses fréquences se voient en taches ; à une
+   seule, son pavage se répète en grille ; et à l'amplitude nécessaire, il se
+   voit tout simplement en grain. Trois réglages, trois défauts différents.
 
-   Trois réglages comptent, et je me suis trompé sur les trois avant d'y
-   arriver :
+   L'autre levier est en amont, dans tileSurface() : un dégradé ne peut pas
+   montrer plus de frontières qu'il ne traverse de niveaux d'alpha. Ramené à
+   six niveaux au lieu de quatre-vingt-huit, il n'a plus de quoi former un
+   anneau, et le bruit devient inutile.
 
-   - une seule octave. feTurbulence additionne les échelles qu'on lui demande ;
-     à trois, ses basses fréquences se voient en taches nuageuses ;
-   - un pavé large. À 96 px le motif se répétait en grille perceptible ;
-   - une amplitude d'un niveau, pas davantage.
-
-   Ce dernier point se calcule plutôt qu'il ne se tâtonne. feTurbulence produit
-   des valeurs d'écart-type d'environ quarante niveaux ; l'opacité les ramène à
-   l'amplitude voulue. Le palier à dissoudre en vaut un, il faut donc environ
-   un niveau : 40 × 0.022 ≈ 0.9. À 0.045 le bruit valait ±1.8, presque le
-   double du nécessaire — et se voyait en grain. */
-.novac-tile::after {
-  content: '';
-  position: absolute;
-  z-index: 0;
-  inset: 0;
-  border-radius: inherit;
-  pointer-events: none;
-  /* ±0.9 niveau. Descendre plus bas laisse repasser les anneaux ; monter les
-     couvre mieux au prix du grain. Supprimer la règle entière rend les anneaux
-     tels quels. */
-  opacity: 0.022;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.75' numOctaves='1' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
-  background-size: 320px 320px;
-}
+   Ce fichier a porté un tramage pendant plusieurs itérations parce que je
+   traitais le symptôme. L'amplitude était la cause. */

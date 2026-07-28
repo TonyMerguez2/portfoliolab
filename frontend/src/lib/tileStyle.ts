@@ -94,17 +94,24 @@ export function tileSurface(ticker: string, radius = 18, colorHex?: string, inte
     .toString(16).padStart(2, "0");
   return {
     borderRadius: radius,
-    // Two corner washes, as the asset cards have always had them.
+    // Un dégradé de faible amplitude — six niveaux d'alpha, pas quatre-vingts.
     //
-    // Swapping them for a single linear gradient did remove the ridge where two
-    // radials meet — and replaced it with straight bands, because the real
-    // defect is neither shape but the quantisation underneath. On a dark
-    // surface the eye resolves a single level out of 255, so any wide, gentle
-    // gradient bands whatever its geometry. The answer is the dither layer in
-    // globals.css, not the choice of curve.
+    // Sur un fond sombre l'œil résout un seul niveau sur 255 : chaque palier de
+    // quantification franchi devient une frontière visible. Un dégradé ne peut
+    // pas en montrer plus qu'il n'en traverse. C'est le seul levier qui agisse
+    // sans tramage, et il se calcule au lieu de se régler à l'œil.
+    //
+    // L'historique de ce fichier est celui de cette erreur. À quatre-vingt-huit
+    // niveaux, deux lavis radiaux donnaient des anneaux ; le même écart en
+    // linéaire donnait des bandes. Changer de géométrie déplaçait la forme,
+    // jamais elle ne la supprimait — parce que la géométrie n'était pas en
+    // cause, seulement l'amplitude.
+    //
+    // La teinte reste soutenue : c'est l'alpha de départ qui la porte, et
+    // l'écart entre les deux extrémités qui fait le dégradé. Les deux sont
+    // indépendants.
     background: [
-      `radial-gradient(ellipse 260% 300% at 0% 0%, ${c}${a(88)} 0%, ${c}${a(77)} 18%, ${c}${a(59)} 36%, ${c}${a(41)} 54%, ${c}${a(23)} 72%, ${c}${a(10)} 88%, ${c}00 100%)`,
-      `radial-gradient(ellipse 260% 300% at 100% 100%, ${c}${a(76)} 0%, ${c}${a(66)} 18%, ${c}${a(51)} 36%, ${c}${a(35)} 54%, ${c}${a(20)} 72%, ${c}${a(9)} 88%, ${c}00 100%)`,
+      `linear-gradient(150deg, ${c}${a(88)} 0%, ${c}${a(82)} 100%)`,
       `rgba(2,10,24,${(0.46 * intensity).toFixed(3)})`,
     ].join(", "),
     backdropFilter: "blur(24px) saturate(1.6) brightness(1.06)",
