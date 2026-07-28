@@ -75,11 +75,34 @@ function pctChange(value: number | null | undefined, base: number | null | undef
   return (value / base - 1) * 100;
 }
 
-/** Last plotted value of a chart series, or null when it holds no data. */
-function lastSeriesValue(series: ISeriesApi<any> | null): number | null {
-  const pts = (series?.data() as { value?: number }[]) ?? [];
-  const last = pts.length ? pts[pts.length - 1].value : null;
-  return typeof last === "number" ? last : null;
+/** A lightweight-charts Time — timestamp or BusinessDay — as Unix seconds. */
+function timeToSeconds(t: unknown): number {
+  if (t !== null && typeof t === "object") {
+    const d = t as { year: number; month: number; day: number };
+    return Date.UTC(d.year, d.month - 1, d.day) / 1000;
+  }
+  return t as number;
+}
+
+/**
+ * Last plotted value of a series at or before `untilSec`.
+ *
+ * Bounded on purpose. Taking the series' final point instead reports up to the
+ * end of the *data* while the reference is taken at the left edge of the
+ * *view* — so a zoomed window ending in April would still be described by a
+ * July value, over a span not on screen. Invisible while navigation was
+ * frozen, since both edges then coincided.
+ */
+function lastSeriesValue(series: ISeriesApi<any> | null, untilSec?: number | null): number | null {
+  const pts = (series?.data() as { time?: unknown; value?: number }[]) ?? [];
+  if (!pts.length) return null;
+  let value: number | null = null;
+  for (const p of pts) {
+    if (untilSec != null && timeToSeconds(p.time) > untilSec) break;
+    if (typeof p.value === "number") value = p.value;
+  }
+  // A window entirely before the first point leaves nothing to report.
+  return value;
 }
 
 
@@ -442,10 +465,7 @@ export default function GrowthChart({
   syncSeriesBaseRef.current = () => {
     const ts = chartRef.current?.timeScale();
     const range = ts?.getVisibleRange();
-    const toSec = (t: any): number =>
-      (t !== null && typeof t === "object")
-        ? new Date(`${t.year}-${String(t.month).padStart(2,"0")}-${String(t.day).padStart(2,"0")}`).getTime() / 1000
-        : (t as number);
+    const toSec = timeToSeconds;
     const fromSec = range ? toSec(range.from) : -Infinity;
     const firstVisibleOf = (s: ISeriesApi<any> | null): number | null => {
       const pts = (s?.data() as any[]) ?? [];
@@ -485,29 +505,25 @@ export default function GrowthChart({
   }, [priceScaleMode]);
 
   /**
-   * Freeze panning and zooming while comparing.
+   * Comparison navigates exactly like the single-asset chart.
    *
-   * In relative mode the axis re-bases to the left edge of the view, so a free
-   * zoom makes the 0% reference move continuously. Every derived figure — the
-   * two legend percentages, both axis badges, the period returns — then has to
-   * track a moving anchor, and they drift apart. Pinning navigation to the
-   * period buttons gives one explicit reference that everything shares.
+   * Panning and zooming used to be frozen here: the axis re-bases to the left
+   * edge of the view, so a moving window moved the 0% reference, and the
+   * figures derived from it drifted apart. That was a symptom of each figure
+   * resolving its own reference. They now share one, recomputed from the
+   * window on every range change, so a moving anchor is no longer a problem —
+   * and freezing navigation to work around it is no longer warranted.
+   *
+   * Intraday stays restricted when the two assets trade on venues with
+   * different hours; that limit is about the data, not the arithmetic, and is
+   * handled by `intradayLocked`.
    */
   useEffect(() => {
-    const locked = !!benchmarkTicker;
     // Adding or removing a comparison changes the window the chart is bound to
     // (it gets clamped to the dates both assets share), so re-frame on the
     // active period. Without this the view keeps whatever range was on screen
     // while the period button claims to cover the whole history.
     setPeriodEpoch(n => n + 1);
-    chartRef.current?.applyOptions({
-      handleScroll: locked
-        ? false
-        : { mouseWheel: true, pressedMouseMove: true, horzTouchDrag: true, vertTouchDrag: false },
-      handleScale: locked
-        ? false
-        : { mouseWheel: true, pinch: true, axisPressedMouseMove: { time: true, price: true } },
-    });
     // Keyed on the data being present, not just the ticker: the comparison
     // series is fetched asynchronously, so re-framing on the ticker alone runs
     // before the shared window is even known.
@@ -748,11 +764,7 @@ export default function GrowthChart({
 
       // Sync visible time range to parent (debounced 150ms)
       // Convertit un Time lightweight-charts (UTCTimestamp ou BusinessDay) en Unix seconds
-      const timeToSec = (t: any): number => {
-        if (t !== null && typeof t === "object")
-          return new Date(`${t.year}-${String(t.month).padStart(2,"0")}-${String(t.day).padStart(2,"0")}`).getTime() / 1000;
-        return t as number;
-      };
+      const timeToSec = timeToSeconds;
       let rangeDebounce: ReturnType<typeof setTimeout>;
       const rangeHandler = (range: { from: any; to: any } | null) => {
         clearTimeout(rangeDebounce);
@@ -1485,7 +1497,7 @@ export default function GrowthChart({
    * at which a base from one source can meet a value from the other.
    */
   const mainCurve = cmpMode
-    ? { base: seriesBase.a, last: lastSeriesValue(areaSeriesRef.current), hover: hoverPrice }
+    ? { base: seriesBase.a, last: lastSeriesValue(areaSeriesRef.current, visibleSecs?.to), hover: hoverPrice }
     : { base: visiblePerfData?.first ?? null, last: visiblePerfData?.last ?? null, hover: hoverRawPrice };
 
   const visiblePerfPct = pctChange(mainCurve.last, mainCurve.base);
@@ -1511,7 +1523,7 @@ export default function GrowthChart({
   }, [benchmarkRawData, visibleSecs]);
 
   const bmCurve = cmpMode
-    ? { base: seriesBase.b, last: lastSeriesValue(benchmarkSeriesRef.current), hover: hoverBmPrice }
+    ? { base: seriesBase.b, last: lastSeriesValue(benchmarkSeriesRef.current, visibleSecs?.to), hover: hoverBmPrice }
     : { base: bmVisibleWindow?.first ?? null, last: bmVisibleWindow?.last ?? null, hover: hoverBmRawPrice };
 
   const bmHoverPerfPct   = pctChange(bmCurve.hover, bmCurve.base);
