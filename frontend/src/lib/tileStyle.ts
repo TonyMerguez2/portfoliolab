@@ -94,31 +94,21 @@ export function tileSurface(ticker: string, radius = 18, colorHex?: string, inte
     .toString(16).padStart(2, "0");
   return {
     borderRadius: radius,
-    // The washes are far larger than the tile, on purpose.
+    // One linear gradient, and nothing else. This is the whole answer to the
+    // shapes that kept appearing on the tiles.
     //
-    // A radial anchored on a corner reads differently depending on the shape it
-    // fills. On a banner 554×79 the eye follows it left to right and sees a
-    // tint; on a tile 470×241 it sees the two-dimensional falloff — a corner
-    // halo with a visible rim. Same percentages, same relative coverage, wholly
-    // different impression.
+    // Every attempt before this used two radials anchored on opposite corners.
+    // Two opposing radials necessarily form a saddle where they meet, and that
+    // ridge reads as a diagonal band with an edge. Widening them, softening
+    // their stops, dithering over them — none of it removes a ridge that the
+    // geometry itself creates; it only moves it.
     //
-    // Sized at 260% × 300%, only the near-flat middle of the falloff lands
-    // inside the tile whatever its proportions. What remains is a smooth
-    // directional tint: no rim, no rings, and the brand colour still tells the
-    // tiles apart — which a flat tint does not.
-    //
-    // The diagonal veil is flat. It used to run 0x22 → 0x28 → 0x21 — six levels
-    // spread over the whole diagonal, one band every eighty pixels or so, and
-    // those were the streaks left once the halo was gone. A variation that
-    // small contributes nothing but its own banding.
+    // A linear gradient is constant along every line perpendicular to its axis.
+    // It cannot produce a shape, at any size or aspect ratio. That is why this
+    // holds on a banner of 554×79 and on a tile of 470×241 alike, where nothing
+    // else did.
     background: [
-      `radial-gradient(ellipse 260% 300% at 0% 0%, ${c}${a(88)} 0%, ${c}${a(77)} 18%, ${c}${a(59)} 36%, ${c}${a(41)} 54%, ${c}${a(23)} 72%, ${c}${a(10)} 88%, ${c}00 100%)`,
-      `radial-gradient(ellipse 260% 300% at 100% 100%, ${c}${a(76)} 0%, ${c}${a(66)} 18%, ${c}${a(51)} 36%, ${c}${a(35)} 54%, ${c}${a(20)} 72%, ${c}${a(9)} 88%, ${c}00 100%)`,
-      // Written as a gradient, not a plain colour: in the `background`
-      // shorthand only the last layer may be a colour, and one placed earlier
-      // invalidates the whole declaration — the tile then has no background at
-      // all, which is exactly how the asset card ended up bare.
-      `linear-gradient(${c}${a(36)}, ${c}${a(36)})`,
+      `linear-gradient(150deg, ${c}${a(89)} 0%, ${c}${a(59)} 50%, ${c}${a(31)} 100%)`,
       `rgba(2,10,24,${(0.46 * intensity).toFixed(3)})`,
     ].join(", "),
     backdropFilter: "blur(24px) saturate(1.6) brightness(1.06)",
