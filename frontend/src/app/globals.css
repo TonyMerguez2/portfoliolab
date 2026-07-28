@@ -146,3 +146,54 @@ canvas + div {
   padding: 0 !important;
   border-radius: 0 !important;
 }
+
+/* ─────────────────────────────────────────────────────────────
+   Tuile Novac — le bord et le reflet.
+
+   Le fond vient de tileSurface() ; ces deux couches-ci ne sont pas
+   exprimables en propriétés inline, d'où leur présence ici plutôt que
+   dans le composant :
+
+   - le bord est un dégradé peint sur 1 px par un pseudo-élément masqué,
+     pas une bordure. Il suit currentColor, donc l'appelant fixe `color`
+     sur la couleur de marque de l'actif ;
+   - le reflet est une couche de verre en mode screen.
+
+   Global, et non dans le <style> d'une page, parce que la carte de
+   portefeuille et les cartes d'actif doivent rendre la même tuile. Les
+   avoir laissées locales à la page graphique est précisément ce qui les
+   avait fait diverger.
+   ───────────────────────────────────────────────────────────── */
+.novac-tile::before {
+  content: '';
+  position: absolute;
+  z-index: 4;
+  inset: 0;
+  box-sizing: border-box;
+  border-radius: inherit;
+  padding: 1px;
+  pointer-events: none;
+  background: linear-gradient(135deg,
+    color-mix(in srgb, currentColor 44%, transparent) 0%,
+    color-mix(in srgb, currentColor 36%, transparent) 24%,
+    color-mix(in srgb, currentColor 17%, transparent) 44%,
+    transparent 54%,
+    color-mix(in srgb, currentColor 15%, transparent) 68%,
+    color-mix(in srgb, currentColor 40%, transparent) 100%);
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+}
+
+.novac-tile-reflection {
+  position: absolute;
+  z-index: 0;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  mix-blend-mode: screen;
+  background:
+    linear-gradient(118deg, rgba(255,255,255,.045) 0%, rgba(255,255,255,.01) 12%, transparent 27%, transparent 100%),
+    radial-gradient(ellipse 17% 58% at 0% -10%, rgba(255,255,255,.052), transparent 70%),
+    linear-gradient(180deg, rgba(255,255,255,.032), transparent 16%);
+}

@@ -1192,12 +1192,12 @@ function ChartContent() {
                 .chart-glass-container::before{display:none}
                 .asset-hero-grid{position:relative;z-index:1;display:grid;grid-template-columns:max-content max-content max-content;align-items:center;height:64px;min-height:64px}
                 .asset-hero-row{zoom:.94}
-.asset-hero-card::before{content:'';position:absolute;z-index:4;inset:0;box-sizing:border-box;border-radius:inherit;padding:1px;pointer-events:none;background:linear-gradient(135deg,color-mix(in srgb,currentColor 44%,transparent) 0%,color-mix(in srgb,currentColor 36%,transparent) 24%,color-mix(in srgb,currentColor 17%,transparent) 44%,transparent 54%,color-mix(in srgb,currentColor 15%,transparent) 68%,color-mix(in srgb,currentColor 40%,transparent) 100%);-webkit-mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);-webkit-mask-composite:xor;mask-composite:exclude}
+
                 .asset-hero-secondary-card{zoom:1}
                 .asset-hero-identity{display:flex;align-items:center;min-width:0;padding-right:18px}
                 .asset-hero-section{align-self:stretch;display:flex;flex-direction:column;justify-content:center;border-left:1px solid rgba(255,255,255,.11);padding:0 18px;min-width:0}
                 .asset-hero-status{padding-right:10px}
-                .asset-hero-reflection{position:absolute;z-index:0;inset:0;border-radius:inherit;pointer-events:none;background:linear-gradient(118deg,rgba(255,255,255,.045) 0%,rgba(255,255,255,.01) 12%,transparent 27%,transparent 100%),radial-gradient(ellipse 17% 58% at 0% -10%,rgba(255,255,255,.052),transparent 70%),linear-gradient(180deg,rgba(255,255,255,.032),transparent 16%);mix-blend-mode:screen}
+                
                 .asset-hero-star{width:18px;height:22px;margin:-3px 0 -3px 5px;padding:0;border:0;background:transparent;display:flex;align-items:center;justify-content:center;cursor:pointer;border-radius:0;flex:0 0 auto;box-shadow:none;appearance:none;opacity:1;transform:none!important;translate:none!important;scale:1!important;transition:none!important}
                 .asset-hero-star:hover{background:transparent;border-color:transparent;opacity:1;transform:none!important;translate:none!important;scale:1!important}
                 .asset-hero-star.is-active{background:transparent;border-color:transparent;box-shadow:none}
@@ -1240,12 +1240,12 @@ function ChartContent() {
 
                   <div className="asset-hero-row" style={{ display:"flex", alignItems:"stretch", gap:10, minWidth:0, width:"100%", flexWrap:"wrap" }}>
                     {ticker && (
-                      <TileCard ticker={ticker} className="asset-hero-card" radius={18} glowStrength={0} colorHex={color}
+                      <TileCard ticker={ticker} className="asset-hero-card novac-tile" radius={18} glowStrength={0} colorHex={color}
                         containerStyle={{                          flex:"0 0 auto", width:"fit-content", maxWidth:"100%", minWidth:0,
                           color,
                         }}
                         style={{ padding:"10px 12px" }}>
-                        <div className="asset-hero-reflection"/>
+                        <div className="novac-tile-reflection"/>
                         <div className="asset-hero-grid">
                           <div className="asset-hero-identity">
                             <AssetLogo
@@ -1369,12 +1369,12 @@ function ChartContent() {
                             const bmLatest = rawCustomBmData[rawCustomBmData.length - 1]?.date?.slice(0,10);
                             const bmCloseDate = bmLatest ? new Date(`${bmLatest}T12:00:00`) : now;
                             return (
-                            <TileCard ticker={customBmTicker} className="asset-hero-card asset-hero-secondary-card" radius={18} glowStrength={0} colorHex={bmColor}
+                            <TileCard ticker={customBmTicker} className="asset-hero-card asset-hero-secondary-card novac-tile" radius={18} glowStrength={0} colorHex={bmColor}
                               onClick={() => setShowBmSearch(s => !s)}
                               containerStyle={{                                flex:"0 0 auto", width:"fit-content", maxWidth:"100%", minWidth:0, color:bmColor, cursor:"pointer",
                               }}
                               style={{ padding:"10px 12px" }}>
-                              <div className="asset-hero-reflection"/>
+                              <div className="novac-tile-reflection"/>
                               <div className="asset-hero-grid">
                                 <div className="asset-hero-identity">
                                   <AssetLogo ticker={customBmTicker} type={customBmType} size={60} radius={13}
@@ -2448,7 +2448,7 @@ function ChartContent() {
                                     background:`radial-gradient(ellipse 72% 110% at 0% 0%, ${assetColor}42 0%, ${assetColor}25 48%, ${assetColor}00 100%), radial-gradient(ellipse 72% 110% at 100% 100%, ${assetColor}38 0%, ${assetColor}20 48%, ${assetColor}00 100%), linear-gradient(138deg, ${assetColor}1D 0%, ${assetColor}24 50%, ${assetColor}1B 100%), rgba(4,16,35,0.78)`,
                                     boxShadow:`0 6px 18px rgba(0,0,0,0.18), 0 0 20px ${assetColor}08`,
                                   }}>
-                                  <div className="asset-hero-reflection"/>
+                                  <div className="novac-tile-reflection"/>
                                   <div style={{ position:"relative", zIndex:1, display:"flex", alignItems:"center" }}>
                                     <AssetLogo ticker={s.ticker} type={assetType} size={42} radius={10}
                                       fallbackBg="rgba(255,255,255,0.07)" fallbackBorder="rgba(255,255,255,0.10)" fallbackTextColor="rgba(255,255,255,0.52)" bare />

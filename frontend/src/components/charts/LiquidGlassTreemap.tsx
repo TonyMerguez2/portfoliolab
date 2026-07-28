@@ -2,7 +2,7 @@
 import { useRef, useEffect, useState, useMemo } from "react";
 import * as d3 from "d3";
 import AssetLogo from "@/components/AssetLogo";
-import { tileData, tileSurface, brandRgb, hexToRgb } from "@/lib/tileStyle";
+import { tileData, tileSurface, brandHex, brandRgb, hexToRgb } from "@/lib/tileStyle";
 import type { RGB } from "@/lib/tileStyle";
 
 type AssetItem = { ticker: string; weight: number; change: number | null; type?: string; price?: number | null; spark?: number[]; updatedAt?: number; value?: number | null; perfEur?: number | null };
@@ -251,6 +251,9 @@ export default function LiquidGlassTreemap({ assets: propAssets, onAssetClick }:
           ...surface,
           position:             "absolute",
           left: x, top: y, width: w, height: h,
+          // The .novac-tile edge is painted from currentColor, so the brand
+          // colour has to be set here for the border to pick it up.
+          color:                brandHex(asset.ticker),
           // Hover lifts the tile; the surface underneath stays the one above.
           ...(isHov ? {
             backdropFilter:       "blur(26px) saturate(1.75) brightness(1.10)",
@@ -317,11 +320,13 @@ export default function LiquidGlassTreemap({ assets: propAssets, onAssetClick }:
           const spH = Math.min(Math.round(h * 0.35), 130);
           return (
             <div key={asset.ticker}
+              className="novac-tile"
               style={{ ...baseStyle, display: "flex", flexDirection: "column", padding: pad }}
               onMouseEnter={() => setHovered(asset.ticker)}
               onMouseLeave={() => setHovered(null)}
               onClick={() => onAssetClick?.(asset.ticker)}
             >
+              <div className="novac-tile-reflection" />
               {showSpark && (
                 <div style={{
                   position: "absolute",
@@ -386,11 +391,13 @@ export default function LiquidGlassTreemap({ assets: propAssets, onAssetClick }:
             const showSpark = asset.spark && asset.spark.length > 1 && h > 80;
             return (
               <div key={asset.ticker}
-                style={{ ...baseStyle, display: "flex", flexDirection: "column", padding: pad }}
+                className="novac-tile"
+              style={{ ...baseStyle, display: "flex", flexDirection: "column", padding: pad }}
                 onMouseEnter={() => setHovered(asset.ticker)}
                 onMouseLeave={() => setHovered(null)}
                 onClick={() => onAssetClick?.(asset.ticker)}
               >
+              <div className="novac-tile-reflection" />
                 {showSpark && (() => {
                   const spW = Math.round(w * 0.82); const spH = Math.round(h * 0.22);
                   return (
@@ -429,11 +436,13 @@ export default function LiquidGlassTreemap({ assets: propAssets, onAssetClick }:
           const showSpark = asset.spark && asset.spark.length > 1 && h > 65;
           return (
             <div key={asset.ticker}
+              className="novac-tile"
               style={{ ...baseStyle, display: "flex", flexDirection: "column", padding: pad }}
               onMouseEnter={() => setHovered(asset.ticker)}
               onMouseLeave={() => setHovered(null)}
               onClick={() => onAssetClick?.(asset.ticker)}
             >
+              <div className="novac-tile-reflection" />
               {showSpark && (() => {
                 const spW = Math.round(w * 0.38); const spH = Math.round(h * 0.28);
                 return (
@@ -479,12 +488,14 @@ export default function LiquidGlassTreemap({ assets: propAssets, onAssetClick }:
         const perfFs   = Math.min(10, Math.max(7, minDim * 0.10));
         return (
           <div key={asset.ticker}
+            className="novac-tile"
             style={{ ...baseStyle, display: "flex", flexDirection: "column",
               alignItems: "center", justifyContent: "center", gap: 2, padding: 5 }}
             onMouseEnter={() => { setHovered(asset.ticker); setMiniPop({ asset, x, y, w, h }); }}
             onMouseLeave={() => { setHovered(null); setMiniPop(null); }}
             onClick={() => onAssetClick?.(asset.ticker)}
           >
+              <div className="novac-tile-reflection" />
             <span style={{
               position: "relative",
               fontSize: tickerFs, fontWeight: 700,
