@@ -1277,11 +1277,10 @@ export default function GrowthChart({
       if (savedRange && chartRef.current && !externalVisibleRangeRef.current && !externalPeriod && !benchmarkTicker) {
         try { chartRef.current.timeScale().setVisibleRange(savedRange as any); } catch {}
       }
-      if (benchmarkTicker) {
-        // Frame on the period instead, once the new series are in place.
-        requestAnimationFrame(() => chartRef.current?.timeScale().fitContent());
-        setTimeout(() => chartRef.current?.timeScale().fitContent(), 60);
-      }
+      // No fitContent here: the period effect already sets the exact window.
+      // Fitting the content instead framed on every loaded bar, and since the
+      // common start is truncated to the day, "24h" stretched to cover the
+      // whole previous session.
     } catch (err: any) {
       console.warn("GrowthChart setData error:", err?.message);
     }
