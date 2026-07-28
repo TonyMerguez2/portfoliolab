@@ -192,10 +192,16 @@ canvas + div {
   border-radius: inherit;
   pointer-events: none;
   mix-blend-mode: screen;
+  /* En pixels, pas en pourcentages.
+     Un reflet est un effet de matière : son épaisseur ne dépend pas de la
+     taille de l'objet. Exprimé en pourcentages, il valait 13 px de haut sur
+     une carte de 79 px et 59 px sur une tuile de 367 — une bande claire assez
+     large pour se lire comme un liseré. Les valeurs ci-dessous sont celles que
+     la carte d'actif rendait, figées en pixels pour tenir à toute taille. */
   background:
-    linear-gradient(118deg, rgba(255,255,255,.045) 0%, rgba(255,255,255,.01) 12%, transparent 27%, transparent 100%),
-    radial-gradient(ellipse 17% 58% at 0% -10%, rgba(255,255,255,.052), transparent 70%),
-    linear-gradient(180deg, rgba(255,255,255,.032), transparent 16%);
+    linear-gradient(118deg, rgba(255,255,255,.045) 0px, rgba(255,255,255,.01) 63px, transparent 142px, transparent 100%),
+    radial-gradient(ellipse 94px 46px at 0% -8px, rgba(255,255,255,.052), transparent 70%),
+    linear-gradient(180deg, rgba(255,255,255,.032), transparent 13px);
 }
 
 /* Tramage.
