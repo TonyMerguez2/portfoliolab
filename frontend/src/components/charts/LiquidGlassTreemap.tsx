@@ -2,7 +2,7 @@
 import { useRef, useEffect, useState, useMemo } from "react";
 import * as d3 from "d3";
 import AssetLogo from "@/components/AssetLogo";
-import { tileData, tileSurface, brandHex, brandRgb, hexToRgb } from "@/lib/tileStyle";
+import { tileData, tileSurface, brandHex, brandRgb, hexToRgb, trackSpecular, releaseSpecular } from "@/lib/tileStyle";
 import { assetName } from "@/lib/assets";
 import type { RGB } from "@/lib/tileStyle";
 
@@ -325,8 +325,9 @@ export default function LiquidGlassTreemap({ assets: propAssets, onAssetClick }:
             <div key={asset.ticker}
               className="novac-tile"
               style={{ ...baseStyle, display: "flex", flexDirection: "column", padding: pad }}
+              onPointerMove={trackSpecular}
               onMouseEnter={() => setHovered(asset.ticker)}
-              onMouseLeave={() => setHovered(null)}
+              onMouseLeave={e => { setHovered(null); releaseSpecular(e); }}
               onClick={() => onAssetClick?.(asset.ticker)}
             >
               {showSpark && (
@@ -407,8 +408,9 @@ export default function LiquidGlassTreemap({ assets: propAssets, onAssetClick }:
               <div key={asset.ticker}
                 className="novac-tile"
               style={{ ...baseStyle, display: "flex", flexDirection: "column", padding: pad }}
+                onPointerMove={trackSpecular}
                 onMouseEnter={() => setHovered(asset.ticker)}
-                onMouseLeave={() => setHovered(null)}
+                onMouseLeave={e => { setHovered(null); releaseSpecular(e); }}
                 onClick={() => onAssetClick?.(asset.ticker)}
               >
                 {showSpark && (() => {
@@ -451,8 +453,9 @@ export default function LiquidGlassTreemap({ assets: propAssets, onAssetClick }:
             <div key={asset.ticker}
               className="novac-tile"
               style={{ ...baseStyle, display: "flex", flexDirection: "column", padding: pad }}
+              onPointerMove={trackSpecular}
               onMouseEnter={() => setHovered(asset.ticker)}
-              onMouseLeave={() => setHovered(null)}
+              onMouseLeave={e => { setHovered(null); releaseSpecular(e); }}
               onClick={() => onAssetClick?.(asset.ticker)}
             >
               {showSpark && (() => {
@@ -503,8 +506,9 @@ export default function LiquidGlassTreemap({ assets: propAssets, onAssetClick }:
             className="novac-tile"
             style={{ ...baseStyle, display: "flex", flexDirection: "column",
               alignItems: "center", justifyContent: "center", gap: 2, padding: 5 }}
+            onPointerMove={trackSpecular}
             onMouseEnter={() => { setHovered(asset.ticker); setMiniPop({ asset, x, y, w, h }); }}
-            onMouseLeave={() => { setHovered(null); setMiniPop(null); }}
+            onMouseLeave={e => { setHovered(null); setMiniPop(null); releaseSpecular(e); }}
             onClick={() => onAssetClick?.(asset.ticker)}
           >
             <span style={{

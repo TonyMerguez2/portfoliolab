@@ -1,6 +1,6 @@
 "use client";
 import { ReactNode, CSSProperties } from "react";
-import { tileData, tileSurface } from "@/lib/tileStyle";
+import { tileData, tileSurface, trackSpecular, releaseSpecular } from "@/lib/tileStyle";
 
 interface Props {
   ticker: string;
@@ -21,13 +21,18 @@ export default function TileCard({ ticker, children, className, radius = 12, sty
   const id = `tc-${ticker.replace(/[^a-z0-9]/gi, "")}`;
 
   return (
-    <div className={className} onClick={onClick} style={{
-      ...tileSurface(ticker, radius, colorHex),
-      position: "relative",
-      cursor: onClick ? "pointer" : undefined,
-      flexShrink: 0,
-      ...containerStyle,
-    }}>
+    <div
+      className={className}
+      onClick={onClick}
+      onPointerMove={trackSpecular}
+      onPointerLeave={releaseSpecular}
+      style={{
+        ...tileSurface(ticker, radius, colorHex),
+        position: "relative",
+        cursor: onClick ? "pointer" : undefined,
+        flexShrink: 0,
+        ...containerStyle,
+      }}>
       <svg
         viewBox="0 0 100 100"
         preserveAspectRatio="none"

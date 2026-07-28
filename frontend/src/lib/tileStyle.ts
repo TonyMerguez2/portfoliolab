@@ -108,9 +108,20 @@ export function tileSurface(ticker: string, radius = 18, colorHex?: string): {
     // choisie ici, et le tramage vit dans globals.css. Toute la difficulté
     // tient à la finesse de son grain : voir le commentaire là-bas.
     background: [
+      // Spéculaire : l'éclat qui dit « verre ».
+      //
+      // Sa position vient de --tile-mx / --tile-my, que trackSpecular() met à
+      // jour au passage du curseur ; par défaut il se pose en haut à gauche,
+      // là où les lavis sont les plus clairs, donc l'absence de JS ne se voit
+      // pas. Petit et contrasté, à l'inverse des lavis — c'est ce qui le rend
+      // sûr : un dégradé de 180 px ne traverse pas assez de surface pour que
+      // ses paliers se lisent en anneaux.
+      `radial-gradient(circle 180px at var(--tile-mx, 18%) var(--tile-my, 8%), rgba(255,255,255,0.085) 0%, rgba(255,255,255,0.035) 42%, rgba(255,255,255,0) 72%)`,
       `radial-gradient(ellipse 260% 300% at 0% 0%, ${c}${a(88)} 0%, ${c}${a(77)} 18%, ${c}${a(59)} 36%, ${c}${a(41)} 54%, ${c}${a(23)} 72%, ${c}${a(10)} 88%, ${c}00 100%)`,
       `radial-gradient(ellipse 260% 300% at 100% 100%, ${c}${a(76)} 0%, ${c}${a(66)} 18%, ${c}${a(51)} 36%, ${c}${a(35)} 54%, ${c}${a(20)} 72%, ${c}${a(9)} 88%, ${c}00 100%)`,
-      "rgba(2,10,24,0.46)",
+      // Assombrissement de fond, volontairement plus léger qu'avant : la tuile
+      // laisse davantage passer ce qu'il y a derrière.
+      "rgba(2,10,24,0.38)",
     ].join(", "),
     backdropFilter: "blur(24px) saturate(1.6) brightness(1.06)",
     WebkitBackdropFilter: "blur(24px) saturate(1.6) brightness(1.06)",
@@ -119,4 +130,29 @@ export function tileSurface(ticker: string, radius = 18, colorHex?: string): {
     overflow: "hidden",
     boxSizing: "border-box",
   };
+}
+
+/**
+ * Déplace le spéculaire d'une tuile sous le curseur.
+ *
+ * À brancher sur onPointerMove, et son pendant releaseSpecular() sur
+ * onPointerLeave pour que l'éclat revienne à sa position de repos plutôt que
+ * de rester figé là où la souris est sortie.
+ *
+ * Écrit deux propriétés personnalisées sur l'élément, sans état React ni
+ * rendu : un pointermove est fréquent, et un re-rendu par mouvement sur
+ * plusieurs tuiles coûterait bien plus que l'effet ne vaut.
+ */
+export function trackSpecular(e: { currentTarget: HTMLElement; clientX: number; clientY: number }): void {
+  const el = e.currentTarget;
+  const r = el.getBoundingClientRect();
+  if (!r.width || !r.height) return;
+  el.style.setProperty("--tile-mx", `${(((e.clientX - r.left) / r.width) * 100).toFixed(1)}%`);
+  el.style.setProperty("--tile-my", `${(((e.clientY - r.top) / r.height) * 100).toFixed(1)}%`);
+}
+
+/** Rend le spéculaire à sa position de repos. */
+export function releaseSpecular(e: { currentTarget: HTMLElement }): void {
+  e.currentTarget.style.removeProperty("--tile-mx");
+  e.currentTarget.style.removeProperty("--tile-my");
 }
