@@ -3,6 +3,7 @@ import { useRef, useEffect, useState, useMemo } from "react";
 import * as d3 from "d3";
 import AssetLogo from "@/components/AssetLogo";
 import { tileData, tileSurface, brandHex, brandRgb, hexToRgb } from "@/lib/tileStyle";
+import { assetName } from "@/lib/assets";
 import type { RGB } from "@/lib/tileStyle";
 
 type AssetItem = { ticker: string; weight: number; change: number | null; type?: string; price?: number | null; spark?: number[]; updatedAt?: number; value?: number | null; perfEur?: number | null };
@@ -102,8 +103,10 @@ function getTier(w: number, h: number, weight = 0): Tier {
   return "mini";
 }
 
-const FONT      = "'Inter', 'SF Pro Display', system-ui, sans-serif";
-const FONT_MONO = "'SF Mono', 'Fira Code', monospace";
+// Même pile que le corps de page, donc que les cartes d'actif. Les chiffres
+// étaient en monospace : d'où un pourcentage qui ne ressemblait pas au leur.
+// Les chiffres tabulaires suffisent à les aligner sans changer de famille.
+const FONT = "Inter, -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', sans-serif";
 
 const TILE_ANIM = `
 @keyframes tileIn {
@@ -194,7 +197,7 @@ export default function LiquidGlassTreemap({ assets: propAssets, onAssetClick }:
                 fallbackTextColor="#F8F9FC" bare/>
               <span style={{ fontSize: 13, fontWeight: 700, color: "rgba(255,255,255,0.92)", fontFamily: FONT }}>{a.ticker}</span>
               <span style={{
-                fontSize: 10, fontWeight: 600, fontFamily: FONT_MONO,
+                fontSize: 10, fontWeight: 600, fontFamily: FONT, fontVariantNumeric: "tabular-nums",
                 color: "rgba(255,255,255,0.65)",
                 background: "rgba(255,255,255,0.08)", border: "1px solid rgba(255,255,255,0.12)",
                 borderRadius: 4, padding: "1px 4px", marginLeft: "auto",
@@ -202,7 +205,7 @@ export default function LiquidGlassTreemap({ assets: propAssets, onAssetClick }:
             </div>
             {/* Valeur portefeuille ou prix unitaire */}
             {(a.value != null || a.price != null) && (
-              <span style={{ fontSize: 15, fontWeight: 700, color: "rgba(255,255,255,0.92)", fontFamily: FONT_MONO }}>
+              <span style={{ fontSize: 15, fontWeight: 700, color: "rgba(255,255,255,0.92)", fontFamily: FONT, fontVariantNumeric: "tabular-nums" }}>
                 {a.value != null
                   ? a.value.toLocaleString("fr-FR", { maximumFractionDigits: 0 }) + " €"
                   : a.price!.toLocaleString("fr-FR", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + " €"}
@@ -210,16 +213,16 @@ export default function LiquidGlassTreemap({ assets: propAssets, onAssetClick }:
             )}
             {/* Perf % + perf € */}
             <div style={{ display: "flex", alignItems: "baseline", gap: 5 }}>
-              <span style={{ fontSize: 13, fontWeight: 700, color: chgColor, fontFamily: FONT_MONO }}>{chgStr}</span>
+              <span style={{ fontSize: 13, fontWeight: 700, color: chgColor, fontFamily: FONT, fontVariantNumeric: "tabular-nums" }}>{chgStr}</span>
               {a.perfEur != null && (
-                <span style={{ fontSize: 11, fontWeight: 600, color: chgColor, fontFamily: FONT_MONO, opacity: 0.72 }}>
+                <span style={{ fontSize: 11, fontWeight: 600, color: chgColor, fontFamily: FONT, fontVariantNumeric: "tabular-nums", opacity: 0.72 }}>
                   {`${a.perfEur >= 0 ? "+" : ""}${Math.round(a.perfEur).toLocaleString("fr-FR")} €`}
                 </span>
               )}
             </div>
             {/* Prix unitaire en secondaire si valeur dispo */}
             {a.value != null && a.price != null && (
-              <span style={{ fontSize: 10, color: "rgba(255,255,255,0.30)", fontFamily: FONT_MONO }}>
+              <span style={{ fontSize: 10, color: "rgba(255,255,255,0.30)", fontFamily: FONT, fontVariantNumeric: "tabular-nums" }}>
                 {a.price.toLocaleString("fr-FR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €
               </span>
             )}
@@ -279,19 +282,19 @@ export default function LiquidGlassTreemap({ assets: propAssets, onAssetClick }:
         const perfBlock = (perfFs: number, gap = 6) => (
           <div style={{ display: "flex", alignItems: "baseline", gap }}>
             <span style={{ fontSize: perfFs * 1.18, fontWeight: 800, color: changeColor,
-              fontFamily: FONT_MONO, lineHeight: 1 }}>
+              fontFamily: FONT, fontVariantNumeric: "tabular-nums", lineHeight: 1 }}>
               {triangle}
             </span>
             <FlipValue
               value={`${Math.abs(change).toFixed(2)}%`}
               style={{ fontSize: perfFs, fontWeight: 600, color: changeColor,
-                fontFamily: FONT_MONO, letterSpacing: "0.01em" }}
+                fontFamily: FONT, fontVariantNumeric: "tabular-nums", letterSpacing: "0.01em" }}
             />
             {asset.perfEur != null && (
               <FlipValue
                 value={`${asset.perfEur >= 0 ? "+" : ""}${Math.round(asset.perfEur).toLocaleString("fr-FR")} €`}
                 style={{ fontSize: Math.max(perfFs * 0.68, 9), fontWeight: 600,
-                  color: changeColor, fontFamily: FONT_MONO, opacity: 0.80 }}
+                  color: changeColor, fontFamily: FONT, fontVariantNumeric: "tabular-nums", opacity: 0.80 }}
               />
             )}
           </div>
@@ -353,7 +356,19 @@ export default function LiquidGlassTreemap({ assets: propAssets, onAssetClick }:
                   }}>
                     {asset.ticker}
                   </span>
-                  <span style={{ fontSize: weightFs, fontWeight: 700, lineHeight: 1, color: "rgba(255,255,255,0.50)", fontFamily: FONT_MONO }}>
+                  {/* Nom complet sous le ticker, comme sur la carte d'actif.
+                      Omis quand le catalogue ne connaît pas le ticker : mieux
+                      vaut s'en passer qu'afficher un intitulé inventé. */}
+                  {assetName(asset.ticker) && (
+                    <span style={{
+                      fontSize: Math.max(10, tickerFs * 0.46), fontWeight: 550, lineHeight: 1.1,
+                      color: "rgba(255,255,255,0.90)", fontFamily: FONT,
+                      whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
+                    }}>
+                      {assetName(asset.ticker)}
+                    </span>
+                  )}
+                  <span style={{ fontSize: weightFs, fontWeight: 700, lineHeight: 1, color: "rgba(255,255,255,0.50)", fontFamily: FONT, fontVariantNumeric: "tabular-nums" }}>
                     {asset.weight}%
                   </span>
                 </div>
@@ -363,12 +378,12 @@ export default function LiquidGlassTreemap({ assets: propAssets, onAssetClick }:
                 {asset.value != null ? (
                   <FlipValue
                     value={asset.value.toLocaleString("fr-FR", { maximumFractionDigits: 0 }) + " €"}
-                    style={{ fontSize: valFs, fontWeight: 700, color: "rgba(255,255,255,0.92)", fontFamily: FONT_MONO, letterSpacing: "0.01em" }}
+                    style={{ fontSize: valFs, fontWeight: 700, color: "rgba(255,255,255,0.92)", fontFamily: FONT, fontVariantNumeric: "tabular-nums", letterSpacing: "0.01em" }}
                   />
                 ) : asset.price != null ? (
                   <FlipValue
                     value={fmtPrice(asset.price)}
-                    style={{ fontSize: valFs, fontWeight: 700, color: "rgba(255,255,255,0.82)", fontFamily: FONT_MONO, letterSpacing: "0.01em" }}
+                    style={{ fontSize: valFs, fontWeight: 700, color: "rgba(255,255,255,0.82)", fontFamily: FONT, fontVariantNumeric: "tabular-nums", letterSpacing: "0.01em" }}
                   />
                 ) : null}
                 {perfBlock(perfFs)}
@@ -421,7 +436,7 @@ export default function LiquidGlassTreemap({ assets: propAssets, onAssetClick }:
                         ? asset.value.toLocaleString("fr-FR", { maximumFractionDigits: 0 }) + " €"
                         : fmtPrice(asset.price!)}
                       style={{ fontSize: Math.min(perfFs * 1.10, 17), fontWeight: 700,
-                        color: "rgba(255,255,255,0.88)", fontFamily: FONT_MONO }}
+                        color: "rgba(255,255,255,0.88)", fontFamily: FONT, fontVariantNumeric: "tabular-nums" }}
                     />
                   )}
                   {perfBlock(perfFs, 4)}
@@ -457,7 +472,7 @@ export default function LiquidGlassTreemap({ assets: propAssets, onAssetClick }:
                     whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
                     {asset.ticker}
                   </span>
-                  <span style={{ fontSize: tickerFs * 0.72, fontWeight: 700, lineHeight: 1, color: "rgba(255,255,255,0.55)", fontFamily: FONT_MONO }}>
+                  <span style={{ fontSize: tickerFs * 0.72, fontWeight: 700, lineHeight: 1, color: "rgba(255,255,255,0.55)", fontFamily: FONT, fontVariantNumeric: "tabular-nums" }}>
                     {asset.weight}%
                   </span>
                 </div>
@@ -470,7 +485,7 @@ export default function LiquidGlassTreemap({ assets: propAssets, onAssetClick }:
                       ? asset.value.toLocaleString("fr-FR", { maximumFractionDigits: 0 }) + " €"
                       : fmtPrice(asset.price!)}
                     style={{ fontSize: Math.min(perfFs * 1.10, 17), fontWeight: 700,
-                      color: "rgba(255,255,255,0.88)", fontFamily: FONT_MONO }}
+                      color: "rgba(255,255,255,0.88)", fontFamily: FONT, fontVariantNumeric: "tabular-nums" }}
                   />
                 )}
                 {perfBlock(perfFs, 4)}
@@ -504,7 +519,7 @@ export default function LiquidGlassTreemap({ assets: propAssets, onAssetClick }:
             <span style={{
               position: "relative",
               fontSize: perfFs, fontWeight: 600,
-              color: changeColor, fontFamily: FONT_MONO,
+              color: changeColor, fontFamily: FONT, fontVariantNumeric: "tabular-nums",
               textAlign: "center",
             }}>
               {changeStr}

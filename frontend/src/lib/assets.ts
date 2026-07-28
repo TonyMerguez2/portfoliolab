@@ -227,3 +227,17 @@ export const BRAND_COLORS: Record<string, string> = {
   "^HSI":     "#CC0000", "^STOXX50E":"#4466CC", "^IBEX":    "#CC1A25",
   "^AEX":     "#FF6600", "^SSMI":    "#CC1A35",
 };
+
+/**
+ * Nom complet d'un actif, depuis le catalogue ci-dessus.
+ *
+ * Renvoie null pour un ticker inconnu plutôt qu'un intitulé inventé : la tuile
+ * n'affiche alors que le ticker, ce qui vaut mieux qu'une ligne fausse.
+ */
+const NAME_BY_TICKER: Record<string, string> = Object.fromEntries(
+  TRENDING.map(a => [a.ticker, a.name]),
+);
+
+export function assetName(ticker: string): string | null {
+  return NAME_BY_TICKER[ticker] ?? null;
+}
