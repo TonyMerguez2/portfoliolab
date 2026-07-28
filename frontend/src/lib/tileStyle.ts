@@ -84,17 +84,24 @@ export function tileSurface(ticker: string, radius = 18, colorHex?: string): {
   const c = colorHex ?? brandHex(ticker);
   return {
     borderRadius: radius,
-    // The washes overflow the tile on purpose, and fade on an eased curve.
+    // The washes are far larger than the tile, on purpose.
     //
-    // At 65% × 90% the ellipse fits inside the box, so its rim is drawn within
-    // the tile. On a card 554×79 the eye reads that as a corner wash; on a
-    // 790×367 tile it reads as a circle with an edge. Sizing it past the box
-    // means only the smooth middle is ever visible, whatever the tile's shape.
-    // The extra stops keep each alpha step small enough not to band once the
-    // fade is stretched over hundreds of pixels.
+    // A radial anchored on a corner reads differently depending on the shape it
+    // fills. On a banner 554×79 the eye follows it left to right and sees a
+    // tint; on a tile 470×241 it sees the two-dimensional falloff — a corner
+    // halo with a visible rim. Same percentages, same relative coverage, wholly
+    // different impression.
+    //
+    // Sized at 260% × 300%, only the near-flat middle of the falloff lands
+    // inside the tile whatever its proportions. What remains is a smooth
+    // directional tint: no rim, no rings, and the brand colour still tells the
+    // tiles apart — which a flat tint does not.
+    //
+    // Peak and end opacities are unchanged; the intermediate stops are spaced
+    // for the wider span so no step becomes perceptible.
     background: [
-      `radial-gradient(ellipse 125% 145% at 0% 0%, ${c}58 0%, ${c}4C 18%, ${c}3A 36%, ${c}28 54%, ${c}18 72%, ${c}0A 88%, ${c}00 100%)`,
-      `radial-gradient(ellipse 125% 145% at 100% 100%, ${c}4C 0%, ${c}42 18%, ${c}33 36%, ${c}24 54%, ${c}16 72%, ${c}09 88%, ${c}00 100%)`,
+      `radial-gradient(ellipse 260% 300% at 0% 0%, ${c}58 0%, ${c}4D 18%, ${c}3B 36%, ${c}29 54%, ${c}17 72%, ${c}0A 88%, ${c}00 100%)`,
+      `radial-gradient(ellipse 260% 300% at 100% 100%, ${c}4C 0%, ${c}42 18%, ${c}33 36%, ${c}24 54%, ${c}14 72%, ${c}09 88%, ${c}00 100%)`,
       `linear-gradient(138deg, ${c}22 0%, ${c}28 48%, ${c}21 100%)`,
       "rgba(2,10,24,0.46)",
     ].join(", "),
