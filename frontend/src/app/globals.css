@@ -211,7 +211,13 @@ canvas + div {
    - une seule octave. feTurbulence additionne les échelles qu'on lui demande ;
      à trois, ses basses fréquences se voient en taches nuageuses ;
    - un pavé large. À 96 px le motif se répétait en grille perceptible ;
-   - une amplitude de quelques niveaux seulement. Au-delà, c'est du grain. */
+   - une amplitude d'un niveau, pas davantage.
+
+   Ce dernier point se calcule plutôt qu'il ne se tâtonne. feTurbulence produit
+   des valeurs d'écart-type d'environ quarante niveaux ; l'opacité les ramène à
+   l'amplitude voulue. Le palier à dissoudre en vaut un, il faut donc environ
+   un niveau : 40 × 0.022 ≈ 0.9. À 0.045 le bruit valait ±1.8, presque le
+   double du nécessaire — et se voyait en grain. */
 .novac-tile::after {
   content: '';
   position: absolute;
@@ -219,7 +225,10 @@ canvas + div {
   inset: 0;
   border-radius: inherit;
   pointer-events: none;
-  opacity: 0.045;
+  /* ±0.9 niveau. Descendre plus bas laisse repasser les anneaux ; monter les
+     couvre mieux au prix du grain. Supprimer la règle entière rend les anneaux
+     tels quels. */
+  opacity: 0.022;
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.75' numOctaves='1' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
   background-size: 320px 320px;
 }
