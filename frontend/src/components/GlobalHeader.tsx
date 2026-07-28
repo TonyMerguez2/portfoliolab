@@ -263,11 +263,11 @@ export default function GlobalHeader() {
   return (
     <>
 
-      {/* Left: NOVAC + separator + asset pill */}
+      {/* Sélecteur de portefeuille ou d'actif.
+          La marque vit dans SideNav depuis le passage en panneau latéral ; la
+          garder ici la ferait apparaître deux fois à l'écran. */}
       {(
-        <div style={{ position:"fixed", top:"12px", left:"20px", zIndex:50, display:"flex", alignItems:"center", gap:"10px" }}>
-          <a href="/" style={{ textDecoration:"none", color:t.textPrimary, fontSize:"13px", fontWeight:700, letterSpacing:"0.22em", opacity:0.85 }}>NOVAC</a>
-          <div style={{ width:"1px", height:"16px", background:t.borderStrong, flexShrink:0 }}/>
+        <div style={{ position:"fixed", top:"12px", left:"calc(var(--novac-nav-w, 232px) + 20px)", zIndex:50, display:"flex", alignItems:"center", gap:"10px", transition:"left 220ms cubic-bezier(0.4,0,0.2,1)" }}>
           <div style={{ position:"relative" }}>
             <button onClick={() => { setShowDropdown(v => !v); setShowPortfolioMenu(false); }}
               style={{ ...pillStyle, gap:"6px", padding:"0 10px 0 8px", height:"36px", boxSizing:"border-box" }}>
@@ -379,34 +379,7 @@ export default function GlobalHeader() {
         </div>
       )}
 
-      {/* Nav tabs centrés */}
-      {(
-        <div style={{ ...pillStyle, position:"fixed", top:"12px", left:"50%", transform:"translateX(-50%)", zIndex:50, gap:"0", padding:"3px", height:"36px", boxSizing:"border-box" }}>
-          {navTabs.map(tab => {
-            const tabBase = tab.href.split("?")[0];
-            const isActive = pathname === tabBase || (tabBase !== "/" && pathname.startsWith(tabBase));
-            return (
-              <a key={tab.label} href={tab.href}
-                onMouseEnter={e => { if (!isActive) (e.currentTarget as HTMLElement).style.opacity = "0.7"; }}
-                onMouseLeave={e => { if (!isActive) (e.currentTarget as HTMLElement).style.opacity = "0.45"; }}
-                style={{ textDecoration:"none", color:t.textPrimary, fontSize:"12px",
-                  fontWeight: isActive ? 500 : 400,
-                  opacity: isActive ? 1 : 0.45,
-                  letterSpacing:"0.05em",
-                  transition:"all 0.2s",
-                  whiteSpace:"nowrap" as const,
-                  padding:"6px 14px",
-                  borderRadius:"999px",
-                  background: isActive ? (t.isDark ? "rgba(255,255,255,0.08)" : "rgba(16,24,40,0.07)") : "transparent",
-                  display:"block",
-                }}>
-                {tab.label}
-              </a>
-            );
-          })}
-        </div>
-      )}
-
+      {/* La navigation vit désormais dans SideNav, en panneau latéral. */}
 
       {showDropdown && <div style={{ position:"fixed", inset:0, zIndex:49 }} onClick={() => setShowDropdown(false)}/>}
       {showPortfolioMenu && <div style={{ position:"fixed", inset:0, zIndex:49 }} onClick={() => setShowPortfolioMenu(false)}/>}

@@ -3,6 +3,7 @@ import { AppProvider } from "@/lib/AppContext";
 import { Inter } from "next/font/google";
 import "./globals.css";
 import GlobalHeader from "@/components/GlobalHeader";
+import SideNav from "@/components/SideNav";
 
 const inter = Inter({ subsets: ["latin"] });
 
@@ -16,8 +17,11 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     <html lang="fr">
       <body className={inter.className}>
         <AppProvider>
-          <GlobalHeader/>
-          {children}
+          <SideNav/>
+          <div className="novac-shell">
+            <GlobalHeader/>
+            {children}
+          </div>
         </AppProvider>
       </body>
     </html>
