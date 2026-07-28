@@ -10,6 +10,13 @@ import {
   AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip,
   ResponsiveContainer, ReferenceLine, Customized,
 } from "recharts";
+// Pure series arithmetic lives outside the component so it can be tested
+// without a browser. Every function imported here has regression tests in
+// src/lib/chart/series.test.ts covering a defect that once reached the screen.
+import {
+  pctChange, timeToSeconds, isoToSeconds, isoToBusinessDay,
+  sampleDown, dedupByTime, windowEnds, joinOnMainGrid,
+} from "@/lib/chart/series";
 
 // Fetch config par intervalle — charge tout le disponible Yahoo en un seul fetch
 const INTERVAL_FETCH_CONFIG: Record<string, { apiPeriod: string; apiInterval: string }> = {
@@ -58,31 +65,6 @@ const PERIOD_VISIBLE_SECS: Record<string, number> = {
 };
 
 interface DataPoint { date: string; [key: string]: number | string; }
-
-/**
- * The one place a percentage change is computed.
- *
- * Every figure on this chart — both legends, both axis badges, the hover
- * readouts — is a value divided by a reference. The recurring defect was never
- * the arithmetic but the pairing: a base-100 index divided by a raw price
- * reads 763% instead of 692%, and the result looks plausible enough to ship.
- * Callers must therefore hand over both terms together, from a single source,
- * so a mismatched pair cannot be assembled by accident.
- */
-function pctChange(value: number | null | undefined, base: number | null | undefined): number | null {
-  if (value == null || base == null) return null;
-  if (!Number.isFinite(value) || !Number.isFinite(base) || base === 0) return null;
-  return (value / base - 1) * 100;
-}
-
-/** A lightweight-charts Time — timestamp or BusinessDay — as Unix seconds. */
-function timeToSeconds(t: unknown): number {
-  if (t !== null && typeof t === "object") {
-    const d = t as { year: number; month: number; day: number };
-    return Date.UTC(d.year, d.month - 1, d.day) / 1000;
-  }
-  return t as number;
-}
 
 /**
  * Last plotted value of a series.
@@ -146,80 +128,9 @@ interface Props {
   displayMode?: "glass" | "black";
 }
 
-function toTs(d: string): UTCTimestamp {
-  return Math.floor(new Date(d).getTime() / 1000) as UTCTimestamp;
-}
-
-function toDay(d: string): { year: number; month: number; day: number } {
-  const p = d.slice(0, 10).split("-");
-  return { year: +p[0], month: +p[1], day: +p[2] };
-}
-
-function sampleDown<T>(arr: T[], max = 3000): T[] {
-  if (arr.length <= max) return arr;
-  const step = Math.ceil(arr.length / max);
-  return arr.filter((_, i) => i % step === 0 || i === arr.length - 1);
-}
-
-// Calcul de perf partagé entre légende chart et boutons période
-// → garantit que bouton et légende affichent exactement la même valeur
-function computePerfForPeriod(
-  period: string,
-  adaptiveData: { date: string; value: number }[],
-  portfolioData: DataPoint[],
-  isIntradayInterval: boolean,
-): { first: number; last: number } | null {
-  const visibleSecs = (PERIOD_VISIBLE_SECS as Record<string, number | undefined>)[period] ?? null;
-
-  if (isIntradayInterval && adaptiveData.length >= 2) {
-    const adaptiveLast = adaptiveData[adaptiveData.length - 1].value;
-    const liveLast = portfolioData.length > 0
-      ? portfolioData[portfolioData.length - 1].value as number
-      : adaptiveLast;
-
-    if (visibleSecs) {
-      const nowSec  = Math.floor(Date.now() / 1000);
-      const lastTs  = toTs(adaptiveData[adaptiveData.length - 1].date);
-      const toSec   = nowSec - lastTs > visibleSecs / 2 ? lastTs : nowSec;
-      const fromSec = toSec - visibleSecs;
-      const fp = adaptiveData.find(p => toTs(p.date) >= fromSec);
-      // fp not found = adaptiveData doesn't cover this period → fall through to daily branch
-      if (fp) return { first: fp.value, last: liveLast };
-    } else {
-      return { first: adaptiveData[0].value, last: liveLast };
-    }
-  }
-
-  // Intervalle daily/weekly ou mode portfolio
-  const cutStr = visibleSecs
-    ? new Date(Date.now() - visibleSecs * 1000).toISOString().slice(0, 10)
-    : null;
-  const pts = cutStr
-    ? portfolioData.filter(p => p.date >= cutStr)
-    : portfolioData;
-  if (pts.length < 2) return null;
-  return { first: pts[0].value as number, last: pts[pts.length - 1].value as number };
-}
-
-function timeKey(t: any): string {
-  if (t !== null && typeof t === "object") return `${t.year}-${t.month}-${t.day}`;
-  return String(t);
-}
-function timeNum(t: any): number {
-  if (t !== null && typeof t === "object")
-    return new Date(`${t.year}-${String(t.month).padStart(2,"0")}-${String(t.day).padStart(2,"0")}`).getTime();
-  return t as number;
-}
-
-function dedup<T extends { time: any }>(arr: T[]): T[] {
-  const seen = new Set<string>();
-  const out: T[] = [];
-  for (const item of arr) {
-    const k = timeKey(item.time);
-    if (!seen.has(k)) { seen.add(k); out.push(item); }
-  }
-  return out.sort((a, b) => timeNum(a.time) - timeNum(b.time));
-}
+/** Thin adapters onto the tested helpers, keeping lightweight-charts' types. */
+const toTs = (d: string): UTCTimestamp => isoToSeconds(d) as UTCTimestamp;
+const toDay = isoToBusinessDay;
 
 function getCutoffStr(p: string): string | null {
   if (p === "Max") return null;
@@ -290,25 +201,6 @@ function aggregateCandles(pts: OHLCPt[], getKey: (d: Date) => string): OHLCPt[] 
       close: bars[bars.length - 1].close ?? bars[bars.length - 1].value,
     };
   });
-}
-
-function agg2h(pts: OHLCPt[]): OHLCPt[] {
-  return aggregateCandles(pts, d =>
-    `${d.toISOString().slice(0, 10)}_${Math.floor(d.getUTCHours() / 2)}`
-  );
-}
-
-function aggWeekly(pts: OHLCPt[]): OHLCPt[] {
-  return aggregateCandles(pts, d => {
-    const day = d.getUTCDay();
-    const mon = new Date(d);
-    mon.setUTCDate(d.getUTCDate() - (day === 0 ? 6 : day - 1));
-    return mon.toISOString().slice(0, 10);
-  });
-}
-
-function aggMonthly(pts: OHLCPt[]): OHLCPt[] {
-  return aggregateCandles(pts, d => d.toISOString().slice(0, 7));
 }
 
 function hexToRgba(hex: string, alpha: number): string {
@@ -430,6 +322,9 @@ export default function GrowthChart({
   const [comparisonMode, setComparisonMode] = useState<"perf" | "raw">("perf");
   const prevBmTickerRef = useRef<string | undefined>(undefined);
   const chartPctModeRef = useRef(false);
+  /** Raw value the area series was indexed against while comparing, so a live
+   *  tick can be expressed in the same unit as the curve it lands on. */
+  const pctBaseRef = useRef<number | null>(null);
   /** Time window currently on screen, in unix seconds. Driven by both the
    *  period buttons and mouse zoom/pan, so it is the single reference the
    *  legend and the indexed axis can agree on. */
@@ -1166,57 +1061,37 @@ export default function GrowthChart({
                 candle.applyOptions({ visible: false });
                 candle.setData([]);
 
-                // Both series must sit on the *same* dates. Two markets have
-                // different holidays, so sampling each one independently gives
-                // different date grids — and since percentage mode re-bases
-                // each series to its own first visible point, the two curves
-                // then start from slightly different anchors once zoomed.
-                // Match on the full timestamp and carry the compared asset's
-                // last known value forward. Matching on the calendar day alone
-                // collapsed every intraday bar of a day onto that day's *final*
-                // value — a flat staircase, and look-ahead on top of it.
-                // Forward-filling is also what the two curves need when the
-                // markets keep different hours: the compared line simply holds
-                // while its exchange is closed.
-                // Compare real instants, never the raw strings: the two feeds
-                // carry different UTC offsets (Paris +02:00, New York -04:00),
-                // so "14:15-04:00" sorts before "17:15+02:00" as text while it
-                // is actually three hours later. String ordering silently
-                // paired each point with the wrong counterpart.
-                const ms = (d: any) => new Date(String(d)).getTime();
-                const bmSorted = [...(bmPts as DataPoint[])].sort((x, y) => ms(x.date) - ms(y.date));
-                const dotSorted = [...dotPts].sort((x, y) => ms(x.date) - ms(y.date));
-
-                let j = 0;
-                let lastBm: number | null = null;
-                const shared: { date: any; value: number; bm: number }[] = [];
-                for (const p of dotSorted) {
-                  const pt = ms(p.date);
-                  while (j < bmSorted.length && ms(bmSorted[j].date) <= pt) {
-                    lastBm = bmSorted[j].value as number;
-                    j++;
-                  }
-                  if (lastBm != null) shared.push({ date: p.date, value: p.value as number, bm: lastBm });
-                }
+                // Both series must sit on the *same* instants: two markets keep
+                // different hours and holidays, so sampling each independently
+                // gives different grids and two curves anchored a few sessions
+                // apart. See joinOnMainGrid — the rules it must respect, and
+                // what went wrong when it did not, are documented and tested
+                // there rather than restated here.
+                const shared = joinOnMainGrid(
+                  dotPts.map(p => ({ date: String(p.date), value: p.value as number })),
+                  (bmPts as DataPoint[]).map(p => ({ date: String(p.date), value: p.value as number })),
+                );
 
                 if (shared.length >= 2) {
-                  const sampled = sampleDown(shared as any) as typeof shared;
+                  const sampled = sampleDown(shared);
                   const dotBase = shared[0].value;
-                  const bmBase  = shared[0].bm;
-                  area.setData(dedup(sampled.map(p => ({
+                  const bmBase  = shared[0].compared;
+                  pctBaseRef.current = dotBase;
+                  area.setData(dedupByTime(sampled.map(p => ({
                     time: t(p.date), value: Math.round(p.value / dotBase * 10000) / 100,
                   }))));
-                  bm.setData(dedup(sampled.map(p => ({
-                    time: t(p.date), value: Math.round(p.bm / bmBase * 10000) / 100,
+                  bm.setData(dedupByTime(sampled.map(p => ({
+                    time: t(p.date), value: Math.round(p.compared / bmBase * 10000) / 100,
                   }))));
                 } else {
                   // No overlapping dates — fall back rather than show nothing.
                   const dotBase = dotPts[0].value as number;
                   const bmBase  = bmPts[0].value as number;
-                  area.setData(dedup(sampleDown(dotPts).map(p => ({
+                  pctBaseRef.current = dotBase;
+                  area.setData(dedupByTime(sampleDown(dotPts).map(p => ({
                     time: t(p.date), value: Math.round(p.value / dotBase * 10000) / 100,
                   }))));
-                  bm.setData(dedup(sampleDown(bmPts as DataPoint[]).map(p => ({
+                  bm.setData(dedupByTime(sampleDown(bmPts as DataPoint[]).map(p => ({
                     time: t(p.date), value: Math.round((p.value as number) / bmBase * 10000) / 100,
                   }))));
                 }
@@ -1235,17 +1110,18 @@ export default function GrowthChart({
               } else {
                 candle.applyOptions({ visible: false });
                 candle.setData([]);
-                area.setData(dedup(lineData.map(p => ({ time: t(p.date), value: p.value }))));
+                area.setData(dedupByTime(lineData.map(p => ({ time: t(p.date), value: p.value }))));
                 bm.setData([]);
                 area.applyOptions({ visible: true, priceFormat: rawFmt, priceScaleId: "right" });
                 chartPctModeRef.current = false;
+                pctBaseRef.current = null;
               }
 
             } else {
               // ── Prix réel ──
               const rawBmAligned = (benchmarkRawData ?? []).filter(p => p.date >= dotStartStr);
-              const aData = dedup(lineData.map(p => ({ time: t(p.date), value: p.value })));
-              const cData = dedup(candleData.map(p => ({
+              const aData = dedupByTime(lineData.map(p => ({ time: t(p.date), value: p.value })));
+              const cData = dedupByTime(candleData.map(p => ({
                 time: t(p.date), open: p.open ?? p.value, high: p.high ?? p.value,
                 low: p.low ?? p.value, close: p.close ?? p.value,
               })));
@@ -1265,16 +1141,17 @@ export default function GrowthChart({
               }
               bm.applyOptions({ priceScaleId: "left", priceFormat: rawFmt });
               bm.setData(rawBmAligned.length
-                ? dedup(sampleDown(rawBmAligned).map(p => ({ time: t(p.date), value: p.value as number })))
+                ? dedupByTime(sampleDown(rawBmAligned).map(p => ({ time: t(p.date), value: p.value as number })))
                 : []);
               chartPctModeRef.current = false;
+              pctBaseRef.current = null;
             }
 
           } else {
             // ── Pas de benchmark ──
             chartRef.current?.applyOptions({ leftPriceScale: { visible: false } });
-            const aData = dedup(lineData.map(p => ({ time: t(p.date), value: p.value })));
-            const cData = dedup(candleData.map(p => ({
+            const aData = dedupByTime(lineData.map(p => ({ time: t(p.date), value: p.value })));
+            const cData = dedupByTime(candleData.map(p => ({
               time: t(p.date), open: p.open ?? p.value, high: p.high ?? p.value,
               low: p.low ?? p.value, close: p.close ?? p.value,
             })));
@@ -1303,18 +1180,20 @@ export default function GrowthChart({
             bm.setData([]);
             bm.applyOptions({ priceScaleId: "right", priceFormat: rawFmt });
             chartPctModeRef.current = false;
+            pctBaseRef.current = null;
           }
 
         } else {
           area.setData([]); candle.setData([]); bm.setData([]);
           chartPctModeRef.current = false;
+          pctBaseRef.current = null;
         }
       } else {
         // Portfolio mode
         const rawFmtPortfolio = { type: "custom" as const, formatter: (v: number) => { try { return fmtPrice(v); } catch { return String(v); } }, minMove: 0.001 };
-        const aData = dedup(filterDate(portfolioData).map(p => ({ time: toTs(p.date), value: p.value as number })));
+        const aData = dedupByTime(filterDate(portfolioData).map(p => ({ time: toTs(p.date), value: p.value as number })));
         const bmData = benchmarkData.length
-          ? dedup(filterDate(benchmarkData).map(p => ({ time: toTs(p.date), value: p.value as number })))
+          ? dedupByTime(filterDate(benchmarkData).map(p => ({ time: toTs(p.date), value: p.value as number })))
           : [];
         area.setData(aData);
         candle.setData([]);
@@ -1344,26 +1223,40 @@ export default function GrowthChart({
   // series.update() met à jour uniquement la dernière barre sans reset de vue.
   useEffect(() => {
     if (!isIntraday || portfolioData.length === 0 || adaptiveData.length === 0) return;
-    const live = portfolioData[portfolioData.length - 1];
-    const livePrice = finitePrice(live.value);
+    // On a ticker page `portfolioData` is a backtested position, not a price:
+    // its last value is a euro amount in the tens of thousands. Writing it into
+    // a price series put a spike at the right edge; writing it into a series
+    // indexed to 100 while comparing made the legend read +84 000 %. Take the
+    // live price where there is one, and fall back to the bar being replaced.
+    const fallback = ticker
+      ? finitePrice(adaptiveData[adaptiveData.length - 1].value)
+      : finitePrice(portfolioData[portfolioData.length - 1].value);
+    const rawLive = (ticker ? finitePrice(livePriceProp) : undefined) ?? fallback;
     const lastBar = adaptiveData[adaptiveData.length - 1];
-    if (livePrice == null || !lastBar) return;
+    if (rawLive == null || !lastBar) return;
+    // The curve may be indexed; the tick has to reach it in the same unit.
+    const livePrice = chartPctModeRef.current
+      ? (pctBaseRef.current ? (rawLive / pctBaseRef.current) * 100 : null)
+      : rawLive;
+    if (livePrice == null) return;
     const isBizDay = !isCrypto && ["1d", "1W"].includes(intervalKey);
     const lastTime = isBizDay ? (toDay(lastBar.date) as any) : toTs(lastBar.date);
     try {
       if (chartModeRef.current === "candle") {
+        // Candles are never indexed — they are hidden while comparing — so they
+        // take the raw tick, alongside the raw open/high/low of the same bar.
         candleSeriesRef.current?.update({
           time:  lastTime,
           open:  lastBar.open  ?? lastBar.value,
-          high:  Math.max(lastBar.high ?? lastBar.value, livePrice),
-          low:   Math.min(lastBar.low ?? lastBar.value, livePrice),
-          close: livePrice,
+          high:  Math.max(lastBar.high ?? lastBar.value, rawLive),
+          low:   Math.min(lastBar.low ?? lastBar.value, rawLive),
+          close: rawLive,
         });
       } else {
         areaSeriesRef.current?.update({ time: lastTime, value: livePrice });
       }
     } catch { /* ignore si série pas encore prête */ }
-  }, [portfolioData, isCrypto, intervalKey]); // eslint-disable-line
+  }, [portfolioData, adaptiveData, livePriceProp, ticker, isCrypto, intervalKey]);
 
   // Applique la fenêtre visible quand les données changent OU quand la période change
   useEffect(() => {
@@ -1484,16 +1377,12 @@ export default function GrowthChart({
    * navigates with the period buttons or the mouse.
    */
   const visiblePerfData = useMemo(() => {
-    const source = ticker && adaptiveData.length > 0 ? adaptiveData : portfolioData;
+    const source = (ticker && adaptiveData.length > 0 ? adaptiveData : portfolioData)
+      .map(p => ({ date: String(p.date), value: p.value as number }));
     if (!visibleSecs || source.length < 2) return periodPerfData;
     const fromStr = new Date(visibleSecs.from * 1000).toISOString().slice(0, 10);
     const toStr   = new Date(visibleSecs.to   * 1000).toISOString().slice(0, 10);
-    const pts = source.filter(p => {
-      const d = String(p.date).slice(0, 10);
-      return d >= fromStr && d <= toStr;
-    });
-    if (pts.length < 2) return periodPerfData;
-    return { first: pts[0].value as number, last: pts[pts.length - 1].value as number };
+    return windowEnds(source, fromStr, toStr) ?? periodPerfData;
   }, [ticker, adaptiveData, portfolioData, visibleSecs, periodPerfData]);
 
   /**
@@ -1524,18 +1413,13 @@ export default function GrowthChart({
    *  Both ends are taken, and from the same filter the main asset uses, so the
    *  two curves cannot end up reporting over different spans. */
   const bmVisibleWindow = useMemo(() => {
-    const src = benchmarkRawData ?? [];
+    const src = (benchmarkRawData ?? []).map(p => ({ date: String(p.date), value: p.value as number }));
     if (!src.length) return null;
-    const whole = { first: src[0].value as number, last: src[src.length - 1].value as number };
+    const whole = windowEnds(src, null, null);
     if (!visibleSecs) return whole;
     const fromStr = new Date(visibleSecs.from * 1000).toISOString().slice(0, 10);
     const toStr   = new Date(visibleSecs.to   * 1000).toISOString().slice(0, 10);
-    const pts = src.filter(p => {
-      const d = String(p.date).slice(0, 10);
-      return d >= fromStr && d <= toStr;
-    });
-    if (pts.length < 2) return whole;
-    return { first: pts[0].value as number, last: pts[pts.length - 1].value as number };
+    return windowEnds(src, fromStr, toStr) ?? whole;
   }, [benchmarkRawData, visibleSecs]);
 
   const bmCurve = cmpMode
