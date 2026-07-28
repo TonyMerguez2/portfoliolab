@@ -15,8 +15,11 @@ import {
 // src/lib/chart/series.test.ts covering a defect that once reached the screen.
 import {
   pctChange, timeToSeconds, isoToSeconds, isoToBusinessDay,
-  sampleDown, dedupByTime, windowEnds, joinOnMainGrid,
+  sampleDown, dedupByTime, windowEnds,
 } from "@/lib/chart/series";
+// The two comparison curves are built entirely here — grid, anchor, indexing —
+// so the effect below only has to write the result. See comparison.test.ts.
+import { buildComparison } from "@/lib/chart/comparison";
 
 // Fetch config par intervalle — charge tout le disponible Yahoo en un seul fetch
 const INTERVAL_FETCH_CONFIG: Record<string, { apiPeriod: string; apiInterval: string }> = {
@@ -1069,15 +1072,14 @@ export default function GrowthChart({
               const useBmIntraday = bmAdaptiveData.length > 0;
               const bmSource = useBmIntraday ? bmAdaptiveData : benchmarkData.filter(p => p.date >= dotStartStr);
 
-              const periodRef  = cutStr ?? dotStartStr;
-              const dotRef     = adaptiveData.find(p => String(p.date).slice(0, 10) >= periodRef);
-              const bmRef      = (bmSource as DataPoint[]).find(p => String(p.date).slice(0, 10) >= periodRef);
-              const dotRefDate = dotRef ? String(dotRef.date).slice(0, 10) : dotStartStr;
-              const bmRefDate  = bmRef  ? String(bmRef.date).slice(0, 10)  : (bmSource.length ? String(bmSource[0].date).slice(0, 10) : dotStartStr);
-              const commonStart = dotRefDate > bmRefDate ? dotRefDate : bmRefDate;
-
-              const dotPts = adaptiveData.filter(p => String(p.date).slice(0, 10) >= commonStart);
-              const bmPts  = (bmSource as DataPoint[]).filter(p => String(p.date).slice(0, 10) >= commonStart);
+              // Everything the two curves are made of is decided by
+              // buildComparison, which is pure and covered by tests. What is
+              // left here is writing the result onto the chart.
+              const curves = buildComparison(
+                adaptiveData.map(p => ({ date: String(p.date), value: p.value as number })),
+                (bmSource as DataPoint[]).map(p => ({ date: String(p.date), value: p.value as number })),
+                cutStr,
+              );
 
               const base100Fmt = {
                 type: "custom" as const,
@@ -1090,45 +1092,14 @@ export default function GrowthChart({
                 minMove: 0.01,
               };
 
-              if (dotPts.length && bmPts.length) {
+              if (curves) {
                 chartRef.current?.applyOptions({ leftPriceScale: { visible: false } });
                 candle.applyOptions({ visible: false });
                 candle.setData([]);
 
-                // Both series must sit on the *same* instants: two markets keep
-                // different hours and holidays, so sampling each independently
-                // gives different grids and two curves anchored a few sessions
-                // apart. See joinOnMainGrid — the rules it must respect, and
-                // what went wrong when it did not, are documented and tested
-                // there rather than restated here.
-                const shared = joinOnMainGrid(
-                  dotPts.map(p => ({ date: String(p.date), value: p.value as number })),
-                  (bmPts as DataPoint[]).map(p => ({ date: String(p.date), value: p.value as number })),
-                );
-
-                if (shared.length >= 2) {
-                  const sampled = sampleDown(shared);
-                  const dotBase = shared[0].value;
-                  const bmBase  = shared[0].compared;
-                  pctBaseRef.current = dotBase;
-                  safeSetData(area, dedupByTime(sampled.map(p => ({
-                    time: t(p.date), value: Math.round(p.value / dotBase * 10000) / 100,
-                  }))));
-                  safeSetData(bm, dedupByTime(sampled.map(p => ({
-                    time: t(p.date), value: Math.round(p.compared / bmBase * 10000) / 100,
-                  }))));
-                } else {
-                  // No overlapping dates — fall back rather than show nothing.
-                  const dotBase = dotPts[0].value as number;
-                  const bmBase  = bmPts[0].value as number;
-                  pctBaseRef.current = dotBase;
-                  safeSetData(area, dedupByTime(sampleDown(dotPts).map(p => ({
-                    time: t(p.date), value: Math.round(p.value / dotBase * 10000) / 100,
-                  }))));
-                  safeSetData(bm, dedupByTime(sampleDown(bmPts as DataPoint[]).map(p => ({
-                    time: t(p.date), value: Math.round((p.value as number) / bmBase * 10000) / 100,
-                  }))));
-                }
+                pctBaseRef.current = curves.base;
+                safeSetData(area, dedupByTime(curves.main.map(p => ({ time: t(p.date), value: p.value }))));
+                safeSetData(bm, dedupByTime(curves.compared.map(p => ({ time: t(p.date), value: p.value }))));
                 area.applyOptions({ visible: true, priceFormat: base100Fmt, priceScaleId: "right" });
                 bm.applyOptions({ priceFormat: base100Fmt, priceScaleId: "right" });
                 chartPctModeRef.current = true;
