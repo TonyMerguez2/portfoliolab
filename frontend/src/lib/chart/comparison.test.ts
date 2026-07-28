@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { buildComparison, resolveCommonStart } from "./comparison";
+import { buildComparison, resolveCommonStart, previousSessionClose } from "./comparison";
 import { pctChange } from "./series";
 
 const daily = (from: string, values: number[]): { date: string; value: number }[] => {
@@ -109,10 +109,78 @@ describe("buildComparison", () => {
 
   it("thins long series while keeping both sides the same length", () => {
     const values = Array.from({ length: 500 }, (_, i) => i + 1);
-    const out = buildComparison(daily("2020-01-01", values), daily("2020-01-01", values), null, 50)!;
+    const out = buildComparison(daily("2020-01-01", values), daily("2020-01-01", values), null, { maxPoints: 50 })!;
     expect(out.main.length).toBeLessThanOrEqual(51);
     expect(out.main).toHaveLength(out.compared.length);
     expect(out.main[out.main.length - 1].date).toBe(out.compared[out.compared.length - 1].date);
+  });
+
+  // A one-day view has to answer the same question as the asset card: where is
+  // the price against yesterday's close. A "now minus 24 hours" cut-off instead
+  // lands on yesterday's *open*, and the two disagreed on screen.
+  describe("anchor: session", () => {
+    // Real LVMH bars, 27 and 28 July 2026.
+    const intraday = [
+      { date: "2026-07-27T09:00:00+02:00", value: 468.50 }, // previous open
+      { date: "2026-07-27T13:00:00+02:00", value: 470.00 },
+      { date: "2026-07-27T17:25:00+02:00", value: 466.30 }, // previous close
+      { date: "2026-07-28T09:00:00+02:00", value: 477.70 }, // today's open
+      { date: "2026-07-28T16:50:00+02:00", value: 468.35 }, // latest
+    ];
+    const compared = intraday.map(p => ({ ...p, value: p.value / 2 }));
+
+    it("finds the close of the session before the last", () => {
+      expect(previousSessionClose(intraday)).toBe(466.30);
+    });
+
+    it("measures against that close, matching the asset card", () => {
+      const out = buildComparison(intraday, compared, "2026-07-27", { anchor: "session" })!;
+      const last = out.main[out.main.length - 1].value;
+      expect(pctChange(last, 100)).toBeCloseTo(0.44, 2);
+      // The period cut-off would have anchored on 468.50 and read -0.03 %.
+      const wrong = buildComparison(intraday, compared, "2026-07-27")!;
+      expect(pctChange(wrong.main[wrong.main.length - 1].value, 100)).toBeCloseTo(-0.03, 2);
+    });
+
+    it("plots the latest session only, opening on the overnight gap", () => {
+      const out = buildComparison(intraday, compared, "2026-07-27", { anchor: "session" })!;
+      expect(out.commonStart).toBe("2026-07-28");
+      expect(out.main).toHaveLength(2);
+      // 477.70 against 466.30 — the gap is visible instead of being flattened.
+      expect(pctChange(out.main[0].value, 100)).toBeCloseTo(2.44, 2);
+    });
+
+    it("reports the raw close as the base a live tick divides by", () => {
+      const out = buildComparison(intraday, compared, "2026-07-27", { anchor: "session" })!;
+      expect(out.base).toBe(466.30);
+    });
+
+    // The daily bar carries the closing auction, the 5-minute feed stops
+    // before it: 466.80 against 466.30 on LVMH. The asset card reads the daily
+    // series, so the chart has to be given the same close to agree with it.
+    it("prefers a close supplied by the caller over the intraday one", () => {
+      const out = buildComparison(intraday, compared, "2026-07-27", {
+        anchor: "session",
+        bases: { main: 466.80, compared: 233.15 },
+      })!;
+      expect(out.base).toBe(466.80);
+      const last = out.main[out.main.length - 1].value;
+      expect(pctChange(last, 100)).toBeCloseTo(0.33, 2); // 468.35 / 466.80
+    });
+
+    it("falls back to the intraday close when none is supplied", () => {
+      const out = buildComparison(intraday, compared, "2026-07-27", {
+        anchor: "session",
+        bases: { main: null, compared: null },
+      })!;
+      expect(out.base).toBe(466.30);
+    });
+
+    it("falls back to the period anchor when there is no earlier session", () => {
+      const oneDay = intraday.filter(p => p.date.startsWith("2026-07-28"));
+      const out = buildComparison(oneDay, oneDay, null, { anchor: "session" })!;
+      expect(out.main[0].value).toBe(100);
+    });
   });
 
   it("holds the compared curve flat while its market is shut", () => {

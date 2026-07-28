@@ -19,7 +19,7 @@ import {
 } from "@/lib/chart/series";
 // The two comparison curves are built entirely here — grid, anchor, indexing —
 // so the effect below only has to write the result. See comparison.test.ts.
-import { buildComparison } from "@/lib/chart/comparison";
+import { buildComparison, previousSessionClose } from "@/lib/chart/comparison";
 
 // Fetch config par intervalle — charge tout le disponible Yahoo en un seul fetch
 const INTERVAL_FETCH_CONFIG: Record<string, { apiPeriod: string; apiInterval: string }> = {
@@ -356,35 +356,17 @@ export default function GrowthChart({
    *  period buttons and mouse zoom/pan, so it is the single reference the
    *  legend and the indexed axis can agree on. */
   const [visibleSecs, setVisibleSecs] = useState<{ from: number; to: number } | null>(null);
-  /** Value each series starts from — its first plotted point, which is the start
-   *  of the selected period. Read from the series themselves, so the legend and
-   *  the axis are anchored on the very same number. */
-  const [seriesBase, setSeriesBase] = useState<{ a: number | null; b: number | null }>({ a: null, b: null });
-
   /**
-   * Recompute both bases from the series themselves.
+   * The reference both compared curves are measured against.
    *
-   * The base is each series' *first* point, not its first visible one. Both
-   * series are indexed to 100 at the start of the selected period, so this
-   * anchors every figure there and leaves it untouched by zoom and pan —
-   * navigation changes what you see, never what the numbers mean.
-   *
-   * Called right after data is set, and again on range changes: a freshly
-   * loaded comparison may not trigger any range event, which previously left
-   * the compared asset with no figure at all.
+   * A constant, because buildComparison always indexes so that the reference
+   * *is* 100 — whatever it stands for: the start of the period, or yesterday's
+   * close on a one-day view. Reading the first plotted point instead only
+   * agreed with it by coincidence, and stopped agreeing the moment the anchor
+   * moved: on "24h" the first plotted point is today's open, so the legend
+   * measured the day from the open while the card measured it from the close.
    */
-  const syncSeriesBaseRef = useRef(() => {});
-  syncSeriesBaseRef.current = () => {
-    const firstOf = (s: ISeriesApi<any> | null): number | null => {
-      const pts = (s?.data() as { value?: number }[]) ?? [];
-      return pts.length ? (pts[0].value ?? null) : null;
-    };
-    const next = {
-      a: firstOf(areaSeriesRef.current),
-      b: firstOf(benchmarkSeriesRef.current),
-    };
-    setSeriesBase(prev => (prev.a === next.a && prev.b === next.b ? prev : next));
-  };
+  const INDEXED_BASE = 100;
 
   const glowCanvasRef       = useRef<HTMLCanvasElement>(null);
   const portfolioColorRef   = useRef(portfolioColor);
@@ -724,11 +706,6 @@ export default function GrowthChart({
         // actually on screen instead of the selected period button.
         setVisibleSecs(range ? { from: timeToSec(range.from), to: timeToSec(range.to) } : null);
 
-        // Anchor both legend figures on the *series* data, which is the shared,
-        // sampled grid the chart itself is drawn from. Deriving them from each
-        // asset's raw array instead let the two anchors drift apart by weeks
-        // whenever the window edge fell between two sampled points.
-        syncSeriesBaseRef.current();
         rangeDebounce = setTimeout(() => {
           if (!range) { onVisibleRangeChangeRef.current?.(null, null); return; }
           onVisibleRangeChangeRef.current?.(timeToSec(range.from), timeToSec(range.to));
@@ -1092,6 +1069,25 @@ export default function GrowthChart({
                 adaptiveData.map(p => ({ date: String(p.date), value: p.value as number })),
                 (bmSource as DataPoint[]).map(p => ({ date: String(p.date), value: p.value as number })),
                 cutStr,
+                // "24h" means the day's move against yesterday's close, the
+                // same question the asset card answers. A plain now-minus-24h
+                // cut-off anchors on yesterday's open instead. The closes come
+                // from the daily series both here and in the card, because the
+                // intraday feed stops before the closing auction and would put
+                // the two a few tenths of a percent apart.
+                periodFilter === "24h"
+                  ? {
+                      anchor: "session",
+                      bases: {
+                        main: previousSessionClose(
+                          dailyHistory.map(p => ({ date: String(p.date), value: p.value })),
+                        ),
+                        compared: previousSessionClose(
+                          (benchmarkRawData ?? []).map(p => ({ date: String(p.date), value: p.value as number })),
+                        ),
+                      },
+                    }
+                  : {},
               );
 
               const base100Fmt = {
@@ -1116,15 +1112,6 @@ export default function GrowthChart({
                 area.applyOptions({ visible: true, priceFormat: base100Fmt, priceScaleId: "right" });
                 bm.applyOptions({ priceFormat: base100Fmt, priceScaleId: "right" });
                 chartPctModeRef.current = true;
-                // Data just changed: refresh the legend anchors even if the
-                // visible range did not move.
-                //
-                // Synchronous, and deliberately not deferred. The anchors come
-                // from `series.data()`, which is populated by the call above,
-                // and from the visible range, which cannot be stale here: a
-                // range that moves fires `rangeHandler`, which syncs again.
-                // The two cases together leave no window needing a timer.
-                syncSeriesBaseRef.current();
               } else {
                 candle.applyOptions({ visible: false });
                 candle.setData([]);
@@ -1431,7 +1418,7 @@ export default function GrowthChart({
    * at which a base from one source can meet a value from the other.
    */
   const mainCurve = cmpMode
-    ? { base: seriesBase.a, last: lastSeriesValue(areaSeriesRef.current), hover: hoverPrice }
+    ? { base: INDEXED_BASE, last: lastSeriesValue(areaSeriesRef.current), hover: hoverPrice }
     : { base: visiblePerfData?.first ?? null, last: visiblePerfData?.last ?? null, hover: hoverRawPrice };
 
   const visiblePerfPct = pctChange(mainCurve.last, mainCurve.base);
@@ -1452,7 +1439,7 @@ export default function GrowthChart({
   }, [benchmarkRawData, visibleSecs]);
 
   const bmCurve = cmpMode
-    ? { base: seriesBase.b, last: lastSeriesValue(benchmarkSeriesRef.current), hover: hoverBmPrice }
+    ? { base: INDEXED_BASE, last: lastSeriesValue(benchmarkSeriesRef.current), hover: hoverBmPrice }
     : { base: bmVisibleWindow?.first ?? null, last: bmVisibleWindow?.last ?? null, hover: hoverBmRawPrice };
 
   const bmHoverPerfPct   = pctChange(bmCurve.hover, bmCurve.base);

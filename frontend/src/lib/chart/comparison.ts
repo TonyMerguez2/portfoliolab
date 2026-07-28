@@ -38,6 +38,32 @@ export interface ComparisonCurves {
 const day = (d: string) => d.slice(0, 10);
 
 /**
+ * Where a one-day view measures from.
+ *
+ * `session` is what every finance site shows and what the asset card already
+ * says: today's bars, read against yesterday's *close*. Anchoring on the first
+ * bar of the previous day instead — which a plain "now minus 24 hours" cut-off
+ * gives — put the reference at yesterday's open, 468.50 rather than 466.30 on
+ * LVMH, and the legend read -0.03 % where the card said +0.44 %.
+ */
+export type Anchor = "period" | "session";
+
+/** Close of the last session before the most recent one, or null. */
+export function previousSessionClose(pts: Point[]): number | null {
+  if (!pts.length) return null;
+  const lastDay = day(pts[pts.length - 1].date);
+  for (let i = pts.length - 1; i >= 0; i--) {
+    if (day(pts[i].date) < lastDay) return pts[i].value;
+  }
+  return null;
+}
+
+/** First instant of the most recent session present in the series. */
+function lastSessionStart(pts: Point[]): string | null {
+  return pts.length ? day(pts[pts.length - 1].date) : null;
+}
+
+/**
  * First instant both series can be measured from.
  *
  * Anchoring on the later of the two starts is what makes the comparison fair:
@@ -76,12 +102,37 @@ export function buildComparison(
   main: Point[],
   compared: Point[],
   periodCut: string | null,
-  maxPoints = 3000,
+  opts: {
+    maxPoints?: number;
+    anchor?: Anchor;
+    /**
+     * Closes to measure a session view against, when the caller has a better
+     * source than the intraday feed.
+     *
+     * They disagree: the daily bar carries the closing auction, the 5-minute
+     * feed stops before it. On LVMH that is 466.80 against 466.30 — half a
+     * euro, but enough for the chart to read +0.17 % while the asset card,
+     * fed by the daily series, reads +0.06 %. Passing the same closes the rest
+     * of the app uses is what makes them agree.
+     */
+    bases?: { main?: number | null; compared?: number | null };
+  } = {},
 ): ComparisonCurves | null {
+  const { maxPoints = 3000, anchor = "period", bases } = opts;
   if (!main.length || !compared.length) return null;
 
-  const commonStart = resolveCommonStart(main, compared, periodCut);
+  // A session view plots the latest day and measures it against the close
+  // before it; anything else runs from the period cut-off.
+  const sessionDay = anchor === "session" ? lastSessionStart(main) : null;
+  const commonStart = sessionDay ?? resolveCommonStart(main, compared, periodCut);
   if (!commonStart) return null;
+
+  const overrideBase = anchor === "session"
+    ? (bases?.main ?? previousSessionClose(main))
+    : null;
+  const overrideComparedBase = anchor === "session"
+    ? (bases?.compared ?? previousSessionClose(compared))
+    : null;
 
   const mainPts = main.filter(p => day(p.date) >= commonStart);
   const comparedPts = compared.filter(p => day(p.date) >= commonStart);
@@ -93,8 +144,8 @@ export function buildComparison(
   // grids never really met and each series is indexed on its own instead.
   if (shared.length >= 2) {
     const sampled = sampleDown(shared, maxPoints);
-    const base = shared[0].value;
-    const comparedBase = shared[0].compared;
+    const base = overrideBase ?? shared[0].value;
+    const comparedBase = overrideComparedBase ?? shared[0].compared;
     if (!base || !comparedBase) return null;
     return {
       main: indexAgainst(sampled.map(p => ({ date: p.date, value: p.value })), base),
@@ -105,8 +156,8 @@ export function buildComparison(
     };
   }
 
-  const base = mainPts[0].value;
-  const comparedBase = comparedPts[0].value;
+  const base = overrideBase ?? mainPts[0].value;
+  const comparedBase = overrideComparedBase ?? comparedPts[0].value;
   if (!base || !comparedBase) return null;
   return {
     main: indexAgainst(sampleDown(mainPts, maxPoints), base),
