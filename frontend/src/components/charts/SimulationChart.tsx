@@ -71,6 +71,8 @@ export default function SimulationChart({
   const extraRef = useRef<ISeriesApi<"Line">[]>([]);
   const drawRef = useRef<() => void>(() => {});
   const rafRef = useRef<number | null>(null);
+  const roRef = useRef<ResizeObserver | null>(null);
+  const observedCellsRef = useRef<Element[]>([]);
 
   /**
    * Coalesce repaints onto one animation frame.
@@ -167,13 +169,31 @@ export default function SimulationChart({
     const onRange = () => scheduleDraw();
     chart.timeScale().subscribeVisibleLogicalRangeChange(onRange);
 
+    // Two elements matter, and they resize at different moments:
+    //   • the container drives the canvas backing size — it changes with the
+    //     window;
+    //   • the pane is the plot area the bundle is projected onto — it changes
+    //     on its own when the price-scale labels are measured and the axis
+    //     gutter is reserved, which happens *after* the container has settled.
+    // Observing only the container missed the second, which is why the first
+    // paint could land on a provisional width.
     const ro = new ResizeObserver(() => scheduleDraw());
     ro.observe(containerRef.current);
+    roRef.current = ro;
 
     return () => {
+      // Reset, not just cancel. These two are the guard `scheduleDraw` tests
+      // to coalesce repaints; leaving a stale id behind meant the guard stayed
+      // shut for the life of the component and every scheduled repaint —
+      // resize, zoom, pan — was silently dropped. React remounts effects on
+      // mount in development, so this triggered on every single page load.
       if (rafRef.current !== null) cancelAnimationFrame(rafRef.current);
       if (timerRef.current !== null) clearTimeout(timerRef.current);
+      rafRef.current = null;
+      timerRef.current = null;
       ro.disconnect();
+      roRef.current = null;
+      observedCellsRef.current = [];
       chart.timeScale().unsubscribeVisibleLogicalRangeChange(onRange);
       chart.remove();
       chartRef.current = null;
@@ -306,6 +326,15 @@ export default function SimulationChart({
       const span = range.to - range.from;
       const xs = times.map((_, i) => ((i - range.from) / span) * plotW);
 
+      // The canvas spans the whole container, the plot area stops short of the
+      // price-scale gutter. Without this, zooming in pushes scenarios out from
+      // under the axis labels — the chart's own background is transparent, so
+      // they would show straight through.
+      ctx.save();
+      ctx.beginPath();
+      ctx.rect(0, 0, plotW, h);
+      ctx.clip();
+
       ctx.lineWidth = 1;
       ctx.strokeStyle = `rgba(255,255,255,${scenarioAlpha(paths.length)})`;
       ctx.lineJoin = "round";
@@ -323,19 +352,41 @@ export default function SimulationChart({
         // single batched path would render flat and lose the density cue.
         if (started) ctx.stroke();
       }
+
+      ctx.restore();
     };
 
     // Frame the data exactly. fitContent alone leaves a gap on the left now
     // that the edges are no longer pinned, so pin the logical range instead.
     chart.timeScale().fitContent();
     chart.timeScale().setVisibleLogicalRange({ from: 0, to: median.length - 1 });
-    // Paint immediately so the bundle is never missing, then repaint as the
-    // layout settles: the pane width shrinks once the price-scale labels are
-    // measured, and a bundle drawn against the provisional width ends up
-    // horizontally squeezed.
+
+    // Watch the plot area, which is what the bundle is projected onto.
+    //
+    // `getHTMLElement()` returns the pane's table *row*, not the plot area: it
+    // spans the full chart width and so never changes when the price-scale
+    // gutter is reserved — only the split between its cells does. Its cells
+    // are therefore what has to be observed. They are taken as a group rather
+    // than singled out by index or width, so no assumption is made about which
+    // side the axis sits on or whether a left scale is present.
+    //
+    // The row only exists once a series has been added, hence here rather than
+    // at chart creation. This replaces the timed retries this used to rely on:
+    // the bundle is repainted when the plot area actually reaches its final
+    // width, however long that takes, instead of at guessed delays a slow
+    // machine could outrun.
+    const row = chart.panes()[0]?.getHTMLElement() ?? null;
+    const cells = row ? Array.from(row.children) : [];
+    const previous = observedCellsRef.current;
+    if (cells.length !== previous.length || cells.some((c, i) => c !== previous[i])) {
+      for (const c of previous) roRef.current?.unobserve(c);
+      for (const c of cells) roRef.current?.observe(c);
+      observedCellsRef.current = cells;
+    }
+
+    // Paint immediately so the bundle is never missing while the layout
+    // settles; the observer above corrects it if the pane then moves.
     drawRef.current();
-    const passes = [60, 200, 500].map((d) => setTimeout(() => drawRef.current(), d));
-    return () => passes.forEach(clearTimeout);
   }, [paths, median, timeIndex, horizonYears, target]);
 
   return (

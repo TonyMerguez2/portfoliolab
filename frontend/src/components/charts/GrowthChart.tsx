@@ -59,6 +59,29 @@ const PERIOD_VISIBLE_SECS: Record<string, number> = {
 
 interface DataPoint { date: string; [key: string]: number | string; }
 
+/**
+ * The one place a percentage change is computed.
+ *
+ * Every figure on this chart — both legends, both axis badges, the hover
+ * readouts — is a value divided by a reference. The recurring defect was never
+ * the arithmetic but the pairing: a base-100 index divided by a raw price
+ * reads 763% instead of 692%, and the result looks plausible enough to ship.
+ * Callers must therefore hand over both terms together, from a single source,
+ * so a mismatched pair cannot be assembled by accident.
+ */
+function pctChange(value: number | null | undefined, base: number | null | undefined): number | null {
+  if (value == null || base == null) return null;
+  if (!Number.isFinite(value) || !Number.isFinite(base) || base === 0) return null;
+  return (value / base - 1) * 100;
+}
+
+/** Last plotted value of a chart series, or null when it holds no data. */
+function lastSeriesValue(series: ISeriesApi<any> | null): number | null {
+  const pts = (series?.data() as { value?: number }[]) ?? [];
+  const last = pts.length ? pts[pts.length - 1].value : null;
+  return typeof last === "number" ? last : null;
+}
+
 
 interface Props {
   portfolioData: DataPoint[];
@@ -1176,8 +1199,13 @@ export default function GrowthChart({
                 chartPctModeRef.current = true;
                 // Data just changed: refresh the legend anchors even if the
                 // visible range did not move.
-                requestAnimationFrame(() => syncSeriesBaseRef.current());
-                setTimeout(() => syncSeriesBaseRef.current(), 60);
+                //
+                // Synchronous, and deliberately not deferred. The anchors come
+                // from `series.data()`, which is populated by the call above,
+                // and from the visible range, which cannot be stale here: a
+                // range that moves fires `rangeHandler`, which syncs again.
+                // The two cases together leave no window needing a timer.
+                syncSeriesBaseRef.current();
               } else {
                 candle.applyOptions({ visible: false });
                 candle.setData([]);
@@ -1448,49 +1476,46 @@ export default function GrowthChart({
    */
   const cmpMode = !!benchmarkTicker && chartPctModeRef.current;
 
-  const visiblePerfPct = cmpMode
-    ? (() => {
-        const pts = (areaSeriesRef.current?.data() as any[]) ?? [];
-        if (!pts.length || !seriesBase.a) return null;
-        return ((pts[pts.length - 1].value as number) / seriesBase.a - 1) * 100;
-      })()
-    : (visiblePerfData
-        ? (visiblePerfData.last - visiblePerfData.first) / visiblePerfData.first * 100
-        : null);
+  /**
+   * Resolve each curve to one reference and the values measured against it.
+   *
+   * Comparison mode reads the series, whose values are already rebased to 100;
+   * price mode reads the raw arrays. Picking the pair in a single expression is
+   * what makes the two modes structurally unable to disagree: there is no point
+   * at which a base from one source can meet a value from the other.
+   */
+  const mainCurve = cmpMode
+    ? { base: seriesBase.a, last: lastSeriesValue(areaSeriesRef.current), hover: hoverPrice }
+    : { base: visiblePerfData?.first ?? null, last: visiblePerfData?.last ?? null, hover: hoverRawPrice };
 
-  const hoverPerfPct = cmpMode
-    ? (hoverPrice !== null && seriesBase.a ? (hoverPrice / seriesBase.a - 1) * 100 : null)
-    : (hoverRawPrice !== null && visiblePerfData
-        ? (hoverRawPrice - visiblePerfData.first) / visiblePerfData.first * 100
-        : null);
+  const visiblePerfPct = pctChange(mainCurve.last, mainCurve.base);
+  const hoverPerfPct   = pctChange(mainCurve.hover, mainCurve.base);
 
   /** Same window, same reference, for the compared asset — so both legend
-   *  figures answer "since the left edge of what you see", like the axis. */
-  const bmVisibleFirst = useMemo(() => {
+   *  figures answer "since the left edge of what you see", like the axis.
+   *  Both ends are taken, and from the same filter the main asset uses, so the
+   *  two curves cannot end up reporting over different spans. */
+  const bmVisibleWindow = useMemo(() => {
     const src = benchmarkRawData ?? [];
     if (!src.length) return null;
-    if (!visibleSecs) return src[0].value as number;
+    const whole = { first: src[0].value as number, last: src[src.length - 1].value as number };
+    if (!visibleSecs) return whole;
     const fromStr = new Date(visibleSecs.from * 1000).toISOString().slice(0, 10);
-    const hit = src.find(p => String(p.date).slice(0, 10) >= fromStr);
-    return (hit?.value ?? src[0].value) as number;
+    const toStr   = new Date(visibleSecs.to   * 1000).toISOString().slice(0, 10);
+    const pts = src.filter(p => {
+      const d = String(p.date).slice(0, 10);
+      return d >= fromStr && d <= toStr;
+    });
+    if (pts.length < 2) return whole;
+    return { first: pts[0].value as number, last: pts[pts.length - 1].value as number };
   }, [benchmarkRawData, visibleSecs]);
 
-  const bmHoverPerfPct = cmpMode
-    ? (hoverBmPrice !== null && seriesBase.b ? (hoverBmPrice / seriesBase.b - 1) * 100 : null)
-    : (hoverBmRawPrice !== null && bmVisibleFirst
-        ? (hoverBmRawPrice - bmVisibleFirst) / bmVisibleFirst * 100
-        : null);
+  const bmCurve = cmpMode
+    ? { base: seriesBase.b, last: lastSeriesValue(benchmarkSeriesRef.current), hover: hoverBmPrice }
+    : { base: bmVisibleWindow?.first ?? null, last: bmVisibleWindow?.last ?? null, hover: hoverBmRawPrice };
 
-  const bmVisiblePerfPct = (() => {
-    if (cmpMode) {
-      const pts = (benchmarkSeriesRef.current?.data() as any[]) ?? [];
-      if (!pts.length || !seriesBase.b) return null;
-      return ((pts[pts.length - 1].value as number) / seriesBase.b - 1) * 100;
-    }
-    const src = benchmarkRawData ?? [];
-    if (!src.length || !bmVisibleFirst) return null;
-    return ((src[src.length - 1].value as number) - bmVisibleFirst) / bmVisibleFirst * 100;
-  })();
+  const bmHoverPerfPct   = pctChange(bmCurve.hover, bmCurve.base);
+  const bmVisiblePerfPct = pctChange(bmCurve.last, bmCurve.base);
   const bmDisplayPerfPct = bmHoverPerfPct ?? bmVisiblePerfPct;
   // displayPrice always shows the live price (portfolioData.last), independent of perf calculation.
   const displayPrice   = hoverPrice !== null
