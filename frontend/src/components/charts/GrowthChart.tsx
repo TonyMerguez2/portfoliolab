@@ -132,6 +132,30 @@ interface Props {
 const toTs = (d: string): UTCTimestamp => isoToSeconds(d) as UTCTimestamp;
 const toDay = isoToBusinessDay;
 
+/**
+ * `getVisibleRange()` throws "Value is null" on a chart whose time scale holds
+ * no points — the state right after an interval change clears the data. Read
+ * through here: as the first statement of the data effect, an unguarded call
+ * aborted the whole update before a single series was written, and the compared
+ * curve then kept the previous period's data while the main one moved on.
+ */
+function safeVisibleRange(chart: IChartApi | null) {
+  try { return chart?.timeScale().getVisibleRange() ?? null; } catch { return null; }
+}
+
+/**
+ * Write one series without letting it take the others down.
+ *
+ * lightweight-charts notifies its visible-range subscribers synchronously from
+ * within `setData`, and that notification can itself throw while the chart is
+ * in the transient state above. Writing the two comparison series in sequence
+ * therefore left the second one stale. Each write now stands alone.
+ */
+function safeSetData(series: ISeriesApi<any> | null, data: unknown[]): void {
+  try { series?.setData(data as never); }
+  catch (err) { console.warn("GrowthChart: setData rejected", err); }
+}
+
 function getCutoffStr(p: string): string | null {
   if (p === "Max") return null;
   const now = new Date();
@@ -1015,7 +1039,7 @@ export default function GrowthChart({
     if (!area || !candle || !bm) return;
 
     try {
-      const savedRange = chartRef.current?.timeScale().getVisibleRange() ?? null;
+      const savedRange = safeVisibleRange(chartRef.current);
       const cutStr = getCutoffStr(periodFilter);
       const filterDate = (arr: DataPoint[]) => cutStr ? arr.filter(p => p.date >= cutStr) : arr;
 
@@ -1077,10 +1101,10 @@ export default function GrowthChart({
                   const dotBase = shared[0].value;
                   const bmBase  = shared[0].compared;
                   pctBaseRef.current = dotBase;
-                  area.setData(dedupByTime(sampled.map(p => ({
+                  safeSetData(area, dedupByTime(sampled.map(p => ({
                     time: t(p.date), value: Math.round(p.value / dotBase * 10000) / 100,
                   }))));
-                  bm.setData(dedupByTime(sampled.map(p => ({
+                  safeSetData(bm, dedupByTime(sampled.map(p => ({
                     time: t(p.date), value: Math.round(p.compared / bmBase * 10000) / 100,
                   }))));
                 } else {
@@ -1088,10 +1112,10 @@ export default function GrowthChart({
                   const dotBase = dotPts[0].value as number;
                   const bmBase  = bmPts[0].value as number;
                   pctBaseRef.current = dotBase;
-                  area.setData(dedupByTime(sampleDown(dotPts).map(p => ({
+                  safeSetData(area, dedupByTime(sampleDown(dotPts).map(p => ({
                     time: t(p.date), value: Math.round(p.value / dotBase * 10000) / 100,
                   }))));
-                  bm.setData(dedupByTime(sampleDown(bmPts as DataPoint[]).map(p => ({
+                  safeSetData(bm, dedupByTime(sampleDown(bmPts as DataPoint[]).map(p => ({
                     time: t(p.date), value: Math.round((p.value as number) / bmBase * 10000) / 100,
                   }))));
                 }
@@ -1214,8 +1238,12 @@ export default function GrowthChart({
       // Fitting the content instead framed on every loaded bar, and since the
       // common start is truncated to the day, "24h" stretched to cover the
       // whole previous session.
-    } catch (err: any) {
-      console.warn("GrowthChart setData error:", err?.message);
+    } catch (err) {
+      // Keep the stack. This handler used to log the message alone, which hid
+      // where the throw came from — and because the two series are written one
+      // after the other, a throw in between left the compared curve holding the
+      // previous period's data while the main one had moved on.
+      console.warn("GrowthChart setData error:", err);
     }
   }, [adaptiveData, bmAdaptiveData, benchmarkData, benchmarkRawData, isIntraday, periodFilter, comparisonMode, chartMode, externalVisibleRange, timeAxisStart]); // eslint-disable-line
 
