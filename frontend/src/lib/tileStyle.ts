@@ -70,8 +70,15 @@ export function brandHex(ticker: string): string {
  *
  * `colorHex` overrides the brand colour, for pages that extract one from the
  * asset's logo.
+ *
+ * `intensity` scales the tint and the darkening together. It exists because a
+ * given alpha does not make the same impression at every size: on a banner of
+ * 554×79 it reads as a coloured card, on a tile of 790×367 the same value
+ * covers five times the area and reads as opaque, glass gone. One value cannot
+ * serve both. The default keeps the asset cards exactly as they were; the
+ * portfolio map halves it.
  */
-export function tileSurface(ticker: string, radius = 18, colorHex?: string): {
+export function tileSurface(ticker: string, radius = 18, colorHex?: string, intensity = 1): {
   borderRadius: number;
   background: string;
   backdropFilter: string;
@@ -82,6 +89,9 @@ export function tileSurface(ticker: string, radius = 18, colorHex?: string): {
   boxSizing: "border-box";
 } {
   const c = colorHex ?? brandHex(ticker);
+  /** Alpha as two hex digits, scaled by the surface's intensity. */
+  const a = (v: number) => Math.round(Math.min(255, Math.max(0, v * intensity)))
+    .toString(16).padStart(2, "0");
   return {
     borderRadius: radius,
     // The washes are far larger than the tile, on purpose.
@@ -97,13 +107,19 @@ export function tileSurface(ticker: string, radius = 18, colorHex?: string): {
     // directional tint: no rim, no rings, and the brand colour still tells the
     // tiles apart — which a flat tint does not.
     //
-    // Peak and end opacities are unchanged; the intermediate stops are spaced
-    // for the wider span so no step becomes perceptible.
+    // The diagonal veil is flat. It used to run 0x22 → 0x28 → 0x21 — six levels
+    // spread over the whole diagonal, one band every eighty pixels or so, and
+    // those were the streaks left once the halo was gone. A variation that
+    // small contributes nothing but its own banding.
     background: [
-      `radial-gradient(ellipse 260% 300% at 0% 0%, ${c}58 0%, ${c}4D 18%, ${c}3B 36%, ${c}29 54%, ${c}17 72%, ${c}0A 88%, ${c}00 100%)`,
-      `radial-gradient(ellipse 260% 300% at 100% 100%, ${c}4C 0%, ${c}42 18%, ${c}33 36%, ${c}24 54%, ${c}14 72%, ${c}09 88%, ${c}00 100%)`,
-      `linear-gradient(138deg, ${c}22 0%, ${c}28 48%, ${c}21 100%)`,
-      "rgba(2,10,24,0.46)",
+      `radial-gradient(ellipse 260% 300% at 0% 0%, ${c}${a(88)} 0%, ${c}${a(77)} 18%, ${c}${a(59)} 36%, ${c}${a(41)} 54%, ${c}${a(23)} 72%, ${c}${a(10)} 88%, ${c}00 100%)`,
+      `radial-gradient(ellipse 260% 300% at 100% 100%, ${c}${a(76)} 0%, ${c}${a(66)} 18%, ${c}${a(51)} 36%, ${c}${a(35)} 54%, ${c}${a(20)} 72%, ${c}${a(9)} 88%, ${c}00 100%)`,
+      // Written as a gradient, not a plain colour: in the `background`
+      // shorthand only the last layer may be a colour, and one placed earlier
+      // invalidates the whole declaration — the tile then has no background at
+      // all, which is exactly how the asset card ended up bare.
+      `linear-gradient(${c}${a(36)}, ${c}${a(36)})`,
+      `rgba(2,10,24,${(0.46 * intensity).toFixed(3)})`,
     ].join(", "),
     backdropFilter: "blur(24px) saturate(1.6) brightness(1.06)",
     WebkitBackdropFilter: "blur(24px) saturate(1.6) brightness(1.06)",

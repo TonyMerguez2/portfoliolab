@@ -245,7 +245,9 @@ export default function LiquidGlassTreemap({ assets: propAssets, onAssetClick }:
         // the point of these tiles is to read as the same object across pages.
         const tileRadius = 18;
 
-        const surface = tileSurface(asset.ticker, tileRadius);
+        // Half intensity: these tiles are several times the area of an asset card,
+        // where the same alpha stops reading as glass.
+        const surface = tileSurface(asset.ticker, tileRadius, undefined, 0.5);
 
         const baseStyle: React.CSSProperties = {
           ...surface,
