@@ -148,16 +148,12 @@ canvas + div {
 }
 
 /* ─────────────────────────────────────────────────────────────
-   Tuile Novac — le bord et le reflet.
+   Tuile Novac — le bord.
 
-   Le fond vient de tileSurface() ; ces deux couches-ci ne sont pas
-   exprimables en propriétés inline, d'où leur présence ici plutôt que
-   dans le composant :
-
-   - le bord est un dégradé peint sur 1 px par un pseudo-élément masqué,
-     pas une bordure. Il suit currentColor, donc l'appelant fixe `color`
-     sur la couleur de marque de l'actif ;
-   - le reflet est une couche de verre en mode screen.
+   Le fond vient de tileSurface(). Le bord est ici parce qu'il n'est pas
+   exprimable en propriété inline : c'est un dégradé peint sur 1 px par un
+   pseudo-élément masqué, pas une bordure. Il suit currentColor, donc
+   l'appelant fixe `color` sur la couleur de marque de l'actif.
 
    Global, et non dans le <style> d'une page, parce que la carte de
    portefeuille et les cartes d'actif doivent rendre la même tuile. Les
@@ -185,24 +181,21 @@ canvas + div {
   mask-composite: exclude;
 }
 
-.novac-tile-reflection {
-  position: absolute;
-  z-index: 0;
-  inset: 0;
-  border-radius: inherit;
-  pointer-events: none;
-  mix-blend-mode: screen;
-  /* En pixels, pas en pourcentages.
-     Un reflet est un effet de matière : son épaisseur ne dépend pas de la
-     taille de l'objet. Exprimé en pourcentages, il valait 13 px de haut sur
-     une carte de 79 px et 59 px sur une tuile de 367 — une bande claire assez
-     large pour se lire comme un liseré. Les valeurs ci-dessous sont celles que
-     la carte d'actif rendait, figées en pixels pour tenir à toute taille. */
-  background:
-    linear-gradient(118deg, rgba(255,255,255,.045) 0px, rgba(255,255,255,.01) 63px, transparent 142px, transparent 100%),
-    radial-gradient(ellipse 94px 46px at 0% -8px, rgba(255,255,255,.052), transparent 70%),
-    linear-gradient(180deg, rgba(255,255,255,.032), transparent 13px);
-}
+/* Il n'y a pas non plus de couche de reflet, et c'est délibéré.
+
+   Il y en a eu une : trois dégradés blancs superposés en mode screen, un voile
+   diagonal et deux accroches lumineuses dans le coin haut-gauche. Écrite pour
+   une bannière de 554x79, où elle se lit comme un éclat de verre.
+
+   Sur une tuile de proportions quelconques elle se lit tout autrement. Ses
+   arrêts — 63 px, 142 px — tombent au milieu de la surface au lieu d'en border
+   le coin, et le voile devient une bande diagonale à frontière franche : les
+   formes géométriques claires et sombres. Aucun réglage n'y change rien, un
+   dégradé linéaire à arrêts fixes produira toujours une arête quelque part.
+
+   Retirée après vérification à l'écran : la carte d'actif rend exactement
+   pareil sans elle, et les tuiles deviennent homogènes. Il reste le fond et le
+   bord — deux couches, aucune forme. */
 
 /* Il n'y a pas de couche de tramage, et c'est délibéré.
 

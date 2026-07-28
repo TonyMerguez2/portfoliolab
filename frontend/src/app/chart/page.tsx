@@ -1245,7 +1245,6 @@ function ChartContent() {
                           color,
                         }}
                         style={{ padding:"10px 12px" }}>
-                        <div className="novac-tile-reflection"/>
                         <div className="asset-hero-grid">
                           <div className="asset-hero-identity">
                             <AssetLogo
@@ -1374,7 +1373,6 @@ function ChartContent() {
                               containerStyle={{                                flex:"0 0 auto", width:"fit-content", maxWidth:"100%", minWidth:0, color:bmColor, cursor:"pointer",
                               }}
                               style={{ padding:"10px 12px" }}>
-                              <div className="novac-tile-reflection"/>
                               <div className="asset-hero-grid">
                                 <div className="asset-hero-identity">
                                   <AssetLogo ticker={customBmTicker} type={customBmType} size={60} radius={13}
@@ -2448,7 +2446,6 @@ function ChartContent() {
                                     background:`radial-gradient(ellipse 72% 110% at 0% 0%, ${assetColor}42 0%, ${assetColor}25 48%, ${assetColor}00 100%), radial-gradient(ellipse 72% 110% at 100% 100%, ${assetColor}38 0%, ${assetColor}20 48%, ${assetColor}00 100%), linear-gradient(138deg, ${assetColor}1D 0%, ${assetColor}24 50%, ${assetColor}1B 100%), rgba(4,16,35,0.78)`,
                                     boxShadow:`0 6px 18px rgba(0,0,0,0.18), 0 0 20px ${assetColor}08`,
                                   }}>
-                                  <div className="novac-tile-reflection"/>
                                   <div style={{ position:"relative", zIndex:1, display:"flex", alignItems:"center" }}>
                                     <AssetLogo ticker={s.ticker} type={assetType} size={42} radius={10}
                                       fallbackBg="rgba(255,255,255,0.07)" fallbackBorder="rgba(255,255,255,0.10)" fallbackTextColor="rgba(255,255,255,0.52)" bare />

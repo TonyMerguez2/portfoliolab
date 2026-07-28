@@ -328,7 +328,6 @@ export default function LiquidGlassTreemap({ assets: propAssets, onAssetClick }:
               onMouseLeave={() => setHovered(null)}
               onClick={() => onAssetClick?.(asset.ticker)}
             >
-              <div className="novac-tile-reflection" />
               {showSpark && (
                 <div style={{
                   position: "absolute",
@@ -399,7 +398,6 @@ export default function LiquidGlassTreemap({ assets: propAssets, onAssetClick }:
                 onMouseLeave={() => setHovered(null)}
                 onClick={() => onAssetClick?.(asset.ticker)}
               >
-              <div className="novac-tile-reflection" />
                 {showSpark && (() => {
                   const spW = Math.round(w * 0.82); const spH = Math.round(h * 0.22);
                   return (
@@ -444,7 +442,6 @@ export default function LiquidGlassTreemap({ assets: propAssets, onAssetClick }:
               onMouseLeave={() => setHovered(null)}
               onClick={() => onAssetClick?.(asset.ticker)}
             >
-              <div className="novac-tile-reflection" />
               {showSpark && (() => {
                 const spW = Math.round(w * 0.38); const spH = Math.round(h * 0.28);
                 return (
@@ -497,7 +494,6 @@ export default function LiquidGlassTreemap({ assets: propAssets, onAssetClick }:
             onMouseLeave={() => { setHovered(null); setMiniPop(null); }}
             onClick={() => onAssetClick?.(asset.ticker)}
           >
-              <div className="novac-tile-reflection" />
             <span style={{
               position: "relative",
               fontSize: tickerFs, fontWeight: 700,
