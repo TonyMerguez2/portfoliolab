@@ -588,6 +588,39 @@ export default function GrowthChart({
     return () => { cancelled = true; };
   }, [ticker, intervalKey, fetchKey]); // eslint-disable-line
 
+  /**
+   * Full daily history of the asset, fetched once per ticker.
+   *
+   * The period figures need a series that always spans the whole history.
+   * `adaptiveData` cannot serve: it follows the selected interval, so at 1m it
+   * holds about sixty days — every period longer than that then reported the
+   * same number. And `portfolioData` is a backtested position on a ticker page,
+   * not a price, so it answered a different question entirely: Max read +836%
+   * from it against +747% from the prices.
+   *
+   * Deliberately keyed on the ticker alone, never on the interval: switching
+   * from 1d to 1m must not change what "3 ans" means.
+   */
+  const [dailyHistory, setDailyHistory] = useState<OHLCPt[]>([]);
+  useEffect(() => {
+    if (!ticker) { setDailyHistory([]); return; }
+    const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
+    let cancelled = false;
+    fetch(`${API_URL}/api/v1/intraday?ticker=${encodeURIComponent(ticker)}&period=max&interval=1d`)
+      .then(r => r.json())
+      .then(data => { if (!cancelled && Array.isArray(data)) setDailyHistory(normalizeOhlcPoints(data)); })
+      .catch(() => { if (!cancelled) setDailyHistory([]); });
+    return () => { cancelled = true; };
+  }, [ticker, fetchKey]);
+
+  /**
+   * The single series every period figure is read from — the eight buttons and
+   * the window they clamp to. Anything deriving a period return must go through
+   * here, so no two of them can end up describing different things.
+   */
+  const periodSource: { date: string; value?: number | string }[] =
+    ticker && dailyHistory.length ? dailyHistory : portfolioData;
+
   // Fetch intraday data pour le benchmark — même intervalle que la courbe principale
   useEffect(() => {
     if (!ticker || !benchmarkTicker) {
@@ -1403,7 +1436,10 @@ export default function GrowthChart({
   const comparisonRange = useMemo(() => {
     const bm = benchmarkRawData ?? [];
     if (!benchmarkTicker || !bm.length) return null;
-    const src = ticker && adaptiveData.length > 0 ? adaptiveData : portfolioData;
+    // The full history, not the displayed one: bounding on the intraday window
+    // clamped every period longer than it to the same start, so 3M, 6M, 1A, 3A
+    // and Max all reported one identical figure.
+    const src = periodSource;
     if (!src.length) return null;
     const aStart = String(src[0].date).slice(0, 10);
     const bStart = String(bm[0].date).slice(0, 10);
@@ -1413,13 +1449,12 @@ export default function GrowthChart({
     const aEnd = String(src[src.length - 1].date).slice(0, 10);
     const bEnd = String(bm[bm.length - 1].date).slice(0, 10);
     return { start: aStart > bStart ? aStart : bStart, end: aEnd < bEnd ? aEnd : bEnd };
-  }, [benchmarkTicker, benchmarkRawData, ticker, adaptiveData, portfolioData]);
+  }, [benchmarkTicker, benchmarkRawData, periodSource]);
   const comparisonStart = comparisonRange?.start ?? null;
   const comparisonEnd   = comparisonRange?.end ?? null;
 
   const periodPerfData = useMemo(() => {
-    // For ticker pages, use adaptiveData (stock prices); for portfolio, use portfolioData
-    const source = ticker && adaptiveData.length > 0 ? adaptiveData : portfolioData;
+    const source = periodSource;
     if (periodFilter === "24h" && dailyChangePct !== null && source.length > 0) {
       const last  = source[source.length - 1].value as number;
       const first = last / (1 + dailyChangePct / 100);
@@ -1438,7 +1473,7 @@ export default function GrowthChart({
     });
     if (pts.length < 2) return null;
     return { first: pts[0].value as number, last: pts[pts.length - 1].value as number };
-  }, [ticker, adaptiveData, portfolioData, periodFilter, dailyChangePct, comparisonStart, comparisonEnd]);
+  }, [periodSource, periodFilter, dailyChangePct, comparisonStart, comparisonEnd]);
 
   const periodPerfPct  = periodPerfData ? (periodPerfData.last - periodPerfData.first) / periodPerfData.first * 100 : null;
 
@@ -1803,7 +1838,10 @@ export default function GrowthChart({
             // Same clamp as the active button, so no period claims a return
             // reaching back before the compared asset existed.
             const floor = comparisonStart && (!cutStr || comparisonStart > cutStr) ? comparisonStart : cutStr;
-            const pts = portfolioData.filter(p => {
+            // Same series the active button reads, so a period cannot report one
+            // figure when selected and another when not — Max used to swing from
+            // +747% to +836% on selection alone.
+            const pts = periodSource.filter(p => {
               const d = String(p.date).slice(0, 10);
               return (!floor || d >= floor) && (!comparisonEnd || d <= comparisonEnd);
             });
