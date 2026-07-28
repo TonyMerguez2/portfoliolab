@@ -197,21 +197,29 @@ canvas + div {
    pareil sans elle, et les tuiles deviennent homogènes. Il reste le fond et le
    bord — deux couches, aucune forme. */
 
-/* Il n'y a pas de couche de tramage, et c'est délibéré.
+/* Tramage.
 
-   Il y en a eu une : le fond descendait alors de 88 à 0 en alpha à l'intérieur
-   de la tuile, soit un palier tous les dix à quinze pixels, que l'œil lisait en
-   auréoles concentriques. Un bruit sert à dissoudre ces paliers.
+   Sur un fond sombre l'œil résout un seul niveau sur 255. Un dégradé large et
+   doux franchit donc ses paliers de quantification de façon visible, quelle que
+   soit sa géométrie : en anneaux s'il est radial, en bandes s'il est linéaire.
+   Changer de courbe déplace la forme, elle ne la supprime pas. Seul un bruit
+   d'amplitude inférieure au palier dissout la frontière entre deux niveaux.
 
-   Mais le bruit se paie. À trois octaves feTurbulence produit du fractal, dont
-   les basses fréquences se voient en taches nuageuses ; réduit à une octave, il
-   reste pavé, et le motif se répète en grille visible. Chaque réglage corrigeait
-   le défaut du précédent.
+   Trois réglages comptent, et je me suis trompé sur les trois avant d'y
+   arriver :
 
-   La cause a disparu d'elle-même en baissant l'intensité des lavis : l'alpha ne
-   varie plus que d'une dizaine de niveaux sur toute la tuile, contre 88 avant,
-   et la quantification passe sous le seuil de perception. Le remède n'avait plus
-   d'objet, seulement ses propres artefacts.
-
-   À rétablir uniquement si des auréoles réapparaissent — c'est-à-dire si
-   l'intensité des lavis remonte. */
+   - une seule octave. feTurbulence additionne les échelles qu'on lui demande ;
+     à trois, ses basses fréquences se voient en taches nuageuses ;
+   - un pavé large. À 96 px le motif se répétait en grille perceptible ;
+   - une amplitude de quelques niveaux seulement. Au-delà, c'est du grain. */
+.novac-tile::after {
+  content: '';
+  position: absolute;
+  z-index: 0;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  opacity: 0.045;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.75' numOctaves='1' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  background-size: 320px 320px;
+}

@@ -94,21 +94,17 @@ export function tileSurface(ticker: string, radius = 18, colorHex?: string, inte
     .toString(16).padStart(2, "0");
   return {
     borderRadius: radius,
-    // One linear gradient, and nothing else. This is the whole answer to the
-    // shapes that kept appearing on the tiles.
+    // Two corner washes, as the asset cards have always had them.
     //
-    // Every attempt before this used two radials anchored on opposite corners.
-    // Two opposing radials necessarily form a saddle where they meet, and that
-    // ridge reads as a diagonal band with an edge. Widening them, softening
-    // their stops, dithering over them — none of it removes a ridge that the
-    // geometry itself creates; it only moves it.
-    //
-    // A linear gradient is constant along every line perpendicular to its axis.
-    // It cannot produce a shape, at any size or aspect ratio. That is why this
-    // holds on a banner of 554×79 and on a tile of 470×241 alike, where nothing
-    // else did.
+    // Swapping them for a single linear gradient did remove the ridge where two
+    // radials meet — and replaced it with straight bands, because the real
+    // defect is neither shape but the quantisation underneath. On a dark
+    // surface the eye resolves a single level out of 255, so any wide, gentle
+    // gradient bands whatever its geometry. The answer is the dither layer in
+    // globals.css, not the choice of curve.
     background: [
-      `linear-gradient(150deg, ${c}${a(89)} 0%, ${c}${a(59)} 50%, ${c}${a(31)} 100%)`,
+      `radial-gradient(ellipse 260% 300% at 0% 0%, ${c}${a(88)} 0%, ${c}${a(77)} 18%, ${c}${a(59)} 36%, ${c}${a(41)} 54%, ${c}${a(23)} 72%, ${c}${a(10)} 88%, ${c}00 100%)`,
+      `radial-gradient(ellipse 260% 300% at 100% 100%, ${c}${a(76)} 0%, ${c}${a(66)} 18%, ${c}${a(51)} 36%, ${c}${a(35)} 54%, ${c}${a(20)} 72%, ${c}${a(9)} 88%, ${c}00 100%)`,
       `rgba(2,10,24,${(0.46 * intensity).toFixed(3)})`,
     ].join(", "),
     backdropFilter: "blur(24px) saturate(1.6) brightness(1.06)",
