@@ -418,6 +418,9 @@ export default function GrowthChart({
    * different hours; that limit is about the data, not the arithmetic, and is
    * handled by `intradayLocked`.
    */
+  // Named rather than inlined in the dependency array: an expression there
+  // cannot be checked statically, so the linter gives up on the whole effect.
+  const hasBenchmarkRawData = (benchmarkRawData?.length ?? 0) > 0;
   useEffect(() => {
     // Adding or removing a comparison changes the window the chart is bound to
     // (it gets clamped to the dates both assets share), so re-frame on the
@@ -427,7 +430,7 @@ export default function GrowthChart({
     // Keyed on the data being present, not just the ticker: the comparison
     // series is fetched asynchronously, so re-framing on the ticker alone runs
     // before the shared window is even known.
-  }, [benchmarkTicker, (benchmarkRawData?.length ?? 0) > 0]);
+  }, [benchmarkTicker, hasBenchmarkRawData]);
 
   const benchmarkRawDataRef = useRef<DataPoint[]>([]);
   useEffect(() => { benchmarkRawDataRef.current = benchmarkRawData ?? []; }, [benchmarkRawData]);
@@ -484,7 +487,7 @@ export default function GrowthChart({
     // the user dragged it, while the button claims to show the whole period.
     setPeriodEpoch(n => n + 1);
     onPeriodChange?.(p);
-  }, [intervalKey, onPeriodChange, onIntervalChange]); // eslint-disable-line
+  }, [intervalKey, onPeriodChange, onIntervalChange]);
 
   // Fetch intraday data — charge toute la plage disponible Yahoo pour l'intervalle choisi
   useEffect(() => {
@@ -505,7 +508,7 @@ export default function GrowthChart({
       })
       .catch(() => { if (!cancelled) setAdaptiveData([]); });
     return () => { cancelled = true; };
-  }, [ticker, intervalKey, fetchKey]); // eslint-disable-line
+  }, [ticker, intervalKey, fetchKey]);
 
   /**
    * Full daily history of the asset, fetched once per ticker.
@@ -560,7 +563,7 @@ export default function GrowthChart({
       .then(data => { if (!cancelled && Array.isArray(data)) setBmAdaptiveData(normalizeOhlcPoints(data)); })
       .catch(() => { if (!cancelled) setBmAdaptiveData([]); });
     return () => { cancelled = true; };
-  }, [ticker, benchmarkTicker, intervalKey, fetchKey]); // eslint-disable-line
+  }, [ticker, benchmarkTicker, intervalKey, fetchKey]);
 
   useEffect(() => {
     setTimeout(() => window.dispatchEvent(new Event("resize")), 100);
@@ -603,12 +606,12 @@ export default function GrowthChart({
       setIntervalKey("1d");
       onIntervalChange?.("1d");
     }
-  }, [intradayLocked, intervalKey]); // eslint-disable-line
+  }, [intradayLocked, intervalKey, onIntervalChange]);
 
   // 24h has no daily equivalent — a single bar says nothing.
   useEffect(() => {
     if (intradayLocked && periodFilter === "24h") handlePeriodChange("1S");
-  }, [intradayLocked, periodFilter]); // eslint-disable-line
+  }, [intradayLocked, periodFilter, handlePeriodChange]);
   const hasComparison = !!(benchmarkTicker && benchmarkData.length > 0);
   // BusinessDay supprime les trous weekend/jours fériés sur les actions en 1d/1W
   const useBusinessDay = !isCrypto && ["1d", "1W"].includes(intervalKey);
@@ -920,7 +923,14 @@ export default function GrowthChart({
     } catch (err: any) {
       setChartError(err?.message ?? "Chart init failed");
     }
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+    // The chart is built once and afterwards mutated through applyOptions.
+    // Listing the colours, theme and formatters here would tear it down and
+    // rebuild it on every appearance change — which is precisely what happened
+    // when `black` was once in this array: the series were dropped and the data
+    // effect, whose own dependencies had not changed, never re-ran to restore
+    // them. Anything that must react to a prop belongs in its own effect below.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Sync period from external source (split-view mode)
   useEffect(() => {
@@ -948,7 +958,7 @@ export default function GrowthChart({
     } else {
       try { chart.timeScale().fitContent(); } catch {}
     }
-  }, [externalPeriod, useBusinessDay]); // eslint-disable-line
+  }, [externalPeriod, useBusinessDay]);
 
   // Sync interval from external source
   useEffect(() => {
@@ -1245,7 +1255,14 @@ export default function GrowthChart({
       // previous period's data while the main one had moved on.
       console.warn("GrowthChart setData error:", err);
     }
-  }, [adaptiveData, bmAdaptiveData, benchmarkData, benchmarkRawData, isIntraday, periodFilter, comparisonMode, chartMode, externalVisibleRange, timeAxisStart]); // eslint-disable-line
+    // Listed on purpose, and deliberately short of what the linter wants.
+    // `portfolioData` changes on every live tick — including it would rewrite
+    // every series once a minute and reset the view under the cursor; the live
+    // price has its own effect for that. `t` and `fmtPrice` are rebuilt on each
+    // render, so they would loop. What remains is the set that genuinely
+    // changes the data being plotted.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [adaptiveData, bmAdaptiveData, benchmarkData, benchmarkRawData, isIntraday, periodFilter, comparisonMode, chartMode, externalVisibleRange, timeAxisStart]);
 
   // Mise à jour du prix live (toutes les ~60s pour les actions Yahoo Finance).
   // series.update() met à jour uniquement la dernière barre sans reset de vue.
@@ -1284,7 +1301,7 @@ export default function GrowthChart({
         areaSeriesRef.current?.update({ time: lastTime, value: livePrice });
       }
     } catch { /* ignore si série pas encore prête */ }
-  }, [portfolioData, adaptiveData, livePriceProp, ticker, isCrypto, intervalKey]);
+  }, [portfolioData, adaptiveData, livePriceProp, ticker, isCrypto, intervalKey, isIntraday]);
 
   // Applique la fenêtre visible quand les données changent OU quand la période change
   useEffect(() => {
@@ -1317,14 +1334,14 @@ export default function GrowthChart({
     } else {
       chart.timeScale().fitContent();
     }
-  }, [adaptiveData, periodFilter, useBusinessDay, externalVisibleRange, periodEpoch]); // eslint-disable-line
+  }, [adaptiveData, periodFilter, useBusinessDay, externalVisibleRange, periodEpoch]);
 
   // fitContent en mode portfolio (pas de fetch async, données déjà dispo)
   useEffect(() => {
     if (!ticker) {
       chartRef.current?.timeScale().fitContent();
     }
-  }, [periodFilter, ticker, periodEpoch]); // eslint-disable-line
+  }, [periodFilter, ticker, periodEpoch]);
 
   // Bascule immédiate de visibilité entre les deux séries au changement de mode
   useEffect(() => {
