@@ -48,3 +48,53 @@ export function tileData(ticker: string): {
 
   return { glassBg, borderGrad, rgb: [r, g, b], b1cx, b1cy, b2cx, b2cy };
 }
+
+/** Brand colour as a hex string, for the `#RRGGBBAA` washes below. */
+export function brandHex(ticker: string): string {
+  const [r, g, b] = brandRgb(ticker);
+  return `#${[r, g, b].map(v => v.toString(16).padStart(2, "0")).join("")}`;
+}
+
+/**
+ * The tile surface, as the asset cards render it.
+ *
+ * Two corner washes of the brand colour, a diagonal veil, and a near-black
+ * base. No drawn border: the edge is the wash fading out. Lifted by a soft
+ * drop shadow and the faintest coloured halo.
+ *
+ * It lives here because it was written inline on the chart page and copied
+ * nowhere. The portfolio map had meanwhile grown its own look — radial glow
+ * blobs, an extra SVG edge stroke, a radius derived from the tile size — while
+ * both were called the same tile. Callers add position, size and hover on top;
+ * the surface itself belongs here so the two cannot drift again.
+ *
+ * `colorHex` overrides the brand colour, for pages that extract one from the
+ * asset's logo.
+ */
+export function tileSurface(ticker: string, radius = 18, colorHex?: string): {
+  borderRadius: number;
+  background: string;
+  backdropFilter: string;
+  WebkitBackdropFilter: string;
+  border: string;
+  boxShadow: string;
+  overflow: "hidden";
+  boxSizing: "border-box";
+} {
+  const c = colorHex ?? brandHex(ticker);
+  return {
+    borderRadius: radius,
+    background: [
+      `radial-gradient(ellipse 65% 90% at 0% 0%, ${c}58 0%, ${c}40 42%, ${c}1B 72%, ${c}00 100%)`,
+      `radial-gradient(ellipse 65% 90% at 100% 100%, ${c}4C 0%, ${c}38 42%, ${c}18 72%, ${c}00 100%)`,
+      `linear-gradient(138deg, ${c}22 0%, ${c}28 48%, ${c}21 100%)`,
+      "rgba(2,10,24,0.46)",
+    ].join(", "),
+    backdropFilter: "blur(24px) saturate(1.6) brightness(1.06)",
+    WebkitBackdropFilter: "blur(24px) saturate(1.6) brightness(1.06)",
+    border: "none",
+    boxShadow: `0 14px 44px rgba(0,0,0,0.28), 0 0 28px ${c}10`,
+    overflow: "hidden",
+    boxSizing: "border-box",
+  };
+}

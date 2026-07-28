@@ -2,7 +2,7 @@
 import { useRef, useEffect, useState, useMemo } from "react";
 import * as d3 from "d3";
 import AssetLogo from "@/components/AssetLogo";
-import { tileData, brandRgb, hexToRgb } from "@/lib/tileStyle";
+import { tileData, tileSurface, brandRgb, hexToRgb } from "@/lib/tileStyle";
 import type { RGB } from "@/lib/tileStyle";
 
 type AssetItem = { ticker: string; weight: number; change: number | null; type?: string; price?: number | null; spark?: number[]; updatedAt?: number; value?: number | null; perfEur?: number | null };
@@ -18,7 +18,6 @@ const DEMO_ASSETS: AssetItem[] = [
 ];
 
 const GAP    = 6;
-const RADIUS = 16; // valeur de référence, remplacée par tileRadius ci-dessous
 
 
 function TileSparkline({ pts, color, w, h, updatedAt }: { pts: number[]; color: string; w: number; h: number; updatedAt?: number }) {
@@ -91,37 +90,6 @@ function FlipValue({ value, style }: { value: string; style?: React.CSSPropertie
     }}>
       {current}
     </span>
-  );
-}
-
-// SVG layer avec vrais blobs Gaussiens — zéro artefact de transition CSS
-function BlobLayer({ r, g, b, b1cx, b1cy, b2cx, b2cy, id }: {
-  r: number; g: number; b: number;
-  b1cx: number; b1cy: number;
-  b2cx: number; b2cy: number;
-  id: string;
-}) {
-  return (
-    <svg
-      viewBox="0 0 100 100"
-      preserveAspectRatio="none"
-      style={{ position: "absolute", inset: 0, width: "100%", height: "100%", pointerEvents: "none" }}
-    >
-      <defs>
-        <filter id={`ga-${id}`} x="-60%" y="-60%" width="220%" height="220%" colorInterpolationFilters="sRGB">
-          <feGaussianBlur stdDeviation="28" />
-        </filter>
-        <filter id={`gb-${id}`} x="-80%" y="-80%" width="260%" height="260%" colorInterpolationFilters="sRGB">
-          <feGaussianBlur stdDeviation="16" />
-        </filter>
-        <filter id={`gb2-${id}`} x="-80%" y="-80%" width="260%" height="260%" colorInterpolationFilters="sRGB">
-          <feGaussianBlur stdDeviation="13" />
-        </filter>
-      </defs>
-      <circle cx="50" cy="50" r="70" fill={`rgba(${r},${g},${b},0.38)`} filter={`url(#ga-${id})`} />
-      <circle cx={b1cx} cy={b1cy} r="42" fill={`rgba(${r},${g},${b},0.22)`} filter={`url(#gb-${id})`} />
-      <circle cx={b2cx} cy={b2cy} r="34" fill={`rgba(${r},${g},${b},0.14)`} filter={`url(#gb2-${id})`} />
-    </svg>
   );
 }
 
@@ -266,30 +234,32 @@ export default function LiquidGlassTreemap({ assets: propAssets, onAssetClick }:
         const tier   = getTier(w, h, asset.weight);
         const isHov  = hovered === asset.ticker;
 
-        const { glassBg, borderGrad, rgb, b1cx, b1cy, b2cx, b2cy } = tileData(asset.ticker);
-        const [cr, cg, cb] = rgb;
+        // Only the brand colour is needed here now; the surface itself comes
+        // from tileSurface, and the glow blobs are gone.
+        const [cr, cg, cb] = tileData(asset.ticker).rgb;
         const changeColor  = change >= 0 ? "#4ade80" : "#f87171";
         const triangle     = change >= 0 ? "▲" : "▼";
         const changeStr    = `${triangle} ${Math.abs(change).toFixed(2)}%`;
 
-        const tileRadius = Math.min(18, Math.max(8, Math.min(w, h) * 0.055));
+        // Same radius as the asset cards, not one derived from the tile size:
+        // the point of these tiles is to read as the same object across pages.
+        const tileRadius = 18;
+
+        const surface = tileSurface(asset.ticker, tileRadius);
 
         const baseStyle: React.CSSProperties = {
+          ...surface,
           position:             "absolute",
           left: x, top: y, width: w, height: h,
-          borderRadius:         tileRadius,
-          background:           `${glassBg} padding-box, ${borderGrad} border-box`,
-          backdropFilter:       isHov ? "blur(26px) saturate(1.75) brightness(1.10)" : "blur(24px) saturate(1.6) brightness(1.06)",
-          WebkitBackdropFilter: isHov ? "blur(26px) saturate(1.75) brightness(1.10)" : "blur(24px) saturate(1.6) brightness(1.06)",
-          border:               "1px solid transparent",
-          boxShadow:            isHov
-            ? `0 20px 48px rgba(0,0,0,0.65), 0 8px 20px rgba(${cr},${cg},${cb},0.32), 0 0 0 1px rgba(${cr},${cg},${cb},0.18)`
-            : `0 1px 6px rgba(0,0,0,0.28)`,
+          // Hover lifts the tile; the surface underneath stays the one above.
+          ...(isHov ? {
+            backdropFilter:       "blur(26px) saturate(1.75) brightness(1.10)",
+            WebkitBackdropFilter: "blur(26px) saturate(1.75) brightness(1.10)",
+            boxShadow: `0 20px 48px rgba(0,0,0,0.65), 0 8px 20px rgba(${cr},${cg},${cb},0.32), ${surface.boxShadow}`,
+          } : {}),
           transform:            isHov ? "scale(1.07) translateY(-6px) translateZ(0)" : "scale(1) translateY(0) translateZ(0)",
           zIndex:               isHov ? 10 : 1,
           transition:           "box-shadow 200ms ease, transform 200ms cubic-bezier(0.34,1.4,0.64,1), backdrop-filter 200ms ease, z-index 0ms",
-          overflow:             "hidden",
-          boxSizing:            "border-box",
           cursor:               "pointer",
           animationName:        "tileIn",
           animationDuration:    "300ms",
@@ -298,34 +268,9 @@ export default function LiquidGlassTreemap({ assets: propAssets, onAssetClick }:
           animationTimingFunction: "cubic-bezier(0.34,1.4,0.64,1)",
         };
 
-        const blob = (
-          <BlobLayer r={cr} g={cg} b={cb} b1cx={b1cx} b1cy={b1cy} b2cx={b2cx} b2cy={b2cy} id={asset.ticker} />
-        );
-
-        // Reflet verre SVG : viewBox en pixels pour que rx colle exactement au border-radius CSS
-        const glassEdge = (
-          <svg viewBox={`0 0 ${w} ${h}`} preserveAspectRatio="none"
-            style={{ position:"absolute", inset:0, width:"100%", height:"100%", pointerEvents:"none" }}>
-            <defs>
-              <linearGradient id={`ge-${asset.ticker}`} x1="0%" y1="0%" x2="100%" y2="100%">
-                <stop offset="0%"   stopColor={isHov ? "rgba(255,255,255,0.65)" : "rgba(255,255,255,0.55)"} />
-                <stop offset="8%"   stopColor={isHov ? `rgba(${cr},${cg},${cb},0.65)` : `rgba(${cr},${cg},${cb},0.55)`} />
-                <stop offset="40%"  stopColor={isHov ? `rgba(${cr},${cg},${cb},0.28)` : `rgba(${cr},${cg},${cb},0.22)`} />
-                <stop offset="70%"  stopColor={isHov ? `rgba(${cr},${cg},${cb},0.22)` : `rgba(${cr},${cg},${cb},0.18)`} />
-                <stop offset="92%"  stopColor={isHov ? `rgba(${cr},${cg},${cb},0.48)` : `rgba(${cr},${cg},${cb},0.40)`} />
-                <stop offset="100%" stopColor={isHov ? "rgba(255,255,255,0.38)" : "rgba(255,255,255,0.30)"} />
-              </linearGradient>
-            </defs>
-            <rect x="0.5" y="0.5" width={w - 1} height={h - 1}
-              rx={tileRadius - 0.5} ry={tileRadius - 0.5}
-              fill="none"
-              stroke={`url(#ge-${asset.ticker})`}
-              strokeWidth="1"
-            />
-          </svg>
-        );
-
-
+        // Neither a coloured glow nor a second edge stroke: the asset cards
+        // have neither, and these tiles are meant to read as the same object
+        // across pages. tileSurface carries the whole surface, edge included.
 
         // Bloc perf réutilisable : triangle plus grand + % semi-bold + perf€
         const perfBlock = (perfFs: number, gap = 6) => (
@@ -377,8 +322,6 @@ export default function LiquidGlassTreemap({ assets: propAssets, onAssetClick }:
               onMouseLeave={() => setHovered(null)}
               onClick={() => onAssetClick?.(asset.ticker)}
             >
-              {blob}
-              {glassEdge}
               {showSpark && (
                 <div style={{
                   position: "absolute",
@@ -448,8 +391,6 @@ export default function LiquidGlassTreemap({ assets: propAssets, onAssetClick }:
                 onMouseLeave={() => setHovered(null)}
                 onClick={() => onAssetClick?.(asset.ticker)}
               >
-                {blob}
-                {glassEdge}
                 {showSpark && (() => {
                   const spW = Math.round(w * 0.82); const spH = Math.round(h * 0.22);
                   return (
@@ -493,8 +434,6 @@ export default function LiquidGlassTreemap({ assets: propAssets, onAssetClick }:
               onMouseLeave={() => setHovered(null)}
               onClick={() => onAssetClick?.(asset.ticker)}
             >
-              {blob}
-              {glassEdge}
               {showSpark && (() => {
                 const spW = Math.round(w * 0.38); const spH = Math.round(h * 0.28);
                 return (
@@ -546,8 +485,6 @@ export default function LiquidGlassTreemap({ assets: propAssets, onAssetClick }:
             onMouseLeave={() => { setHovered(null); setMiniPop(null); }}
             onClick={() => onAssetClick?.(asset.ticker)}
           >
-            {blob}
-            {glassEdge}
             <span style={{
               position: "relative",
               fontSize: tickerFs, fontWeight: 700,

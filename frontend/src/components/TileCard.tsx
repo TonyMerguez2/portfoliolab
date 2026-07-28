@@ -1,6 +1,6 @@
 "use client";
 import { ReactNode, CSSProperties } from "react";
-import { tileData } from "@/lib/tileStyle";
+import { tileData, tileSurface } from "@/lib/tileStyle";
 
 interface Props {
   ticker: string;
@@ -11,25 +11,20 @@ interface Props {
   containerStyle?: CSSProperties;
   onClick?: () => void;
   glowStrength?: number;
+  /** Overrides the brand colour — for pages that extract one from the logo. */
+  colorHex?: string;
 }
 
-export default function TileCard({ ticker, children, className, radius = 12, style, containerStyle, onClick, glowStrength = 1 }: Props) {
-  const { glassBg, borderGrad, rgb, b1cx, b1cy, b2cx, b2cy } = tileData(ticker);
+export default function TileCard({ ticker, children, className, radius = 12, style, containerStyle, onClick, glowStrength = 1, colorHex }: Props) {
+  const { rgb, b1cx, b1cy, b2cx, b2cy } = tileData(ticker);
   const [r, g, b] = rgb;
   const id = `tc-${ticker.replace(/[^a-z0-9]/gi, "")}`;
 
   return (
     <div className={className} onClick={onClick} style={{
+      ...tileSurface(ticker, radius, colorHex),
       position: "relative",
-      borderRadius: radius,
       cursor: onClick ? "pointer" : undefined,
-      background: `${glassBg} padding-box, ${borderGrad} border-box`,
-      backdropFilter: "blur(24px) saturate(1.6) brightness(1.06)",
-      WebkitBackdropFilter: "blur(24px) saturate(1.6) brightness(1.06)",
-      border: "1px solid transparent",
-      boxShadow: `0 1px 6px rgba(0,0,0,0.28), inset 1px 1px 0 rgba(255,255,255,0.22), inset -1px -1px 0 rgba(${r},${g},${b},0.20)`,
-      overflow: "hidden",
-      boxSizing: "border-box",
       flexShrink: 0,
       ...containerStyle,
     }}>

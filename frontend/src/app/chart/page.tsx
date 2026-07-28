@@ -1240,13 +1240,9 @@ function ChartContent() {
 
                   <div className="asset-hero-row" style={{ display:"flex", alignItems:"stretch", gap:10, minWidth:0, width:"100%", flexWrap:"wrap" }}>
                     {ticker && (
-                      <TileCard ticker={ticker} className="asset-hero-card" radius={18} glowStrength={0}
-                        containerStyle={{
-                          flex:"0 0 auto", width:"fit-content", maxWidth:"100%", minWidth:0,
+                      <TileCard ticker={ticker} className="asset-hero-card" radius={18} glowStrength={0} colorHex={color}
+                        containerStyle={{                          flex:"0 0 auto", width:"fit-content", maxWidth:"100%", minWidth:0,
                           color,
-                          background:`radial-gradient(ellipse 65% 90% at 0% 0%, ${color}58 0%, ${color}40 42%, ${color}1B 72%, ${color}00 100%), radial-gradient(ellipse 65% 90% at 100% 100%, ${color}4C 0%, ${color}38 42%, ${color}18 72%, ${color}00 100%), linear-gradient(138deg, ${color}22 0%, ${color}28 48%, ${color}21 100%), rgba(2,10,24,0.46)`,
-                          border:"none",
-                          boxShadow:`0 14px 44px rgba(0,0,0,0.28), 0 0 28px ${color}10`,
                         }}
                         style={{ padding:"10px 12px" }}>
                         <div className="asset-hero-reflection"/>
@@ -1373,13 +1369,9 @@ function ChartContent() {
                             const bmLatest = rawCustomBmData[rawCustomBmData.length - 1]?.date?.slice(0,10);
                             const bmCloseDate = bmLatest ? new Date(`${bmLatest}T12:00:00`) : now;
                             return (
-                            <TileCard ticker={customBmTicker} className="asset-hero-card asset-hero-secondary-card" radius={18} glowStrength={0}
+                            <TileCard ticker={customBmTicker} className="asset-hero-card asset-hero-secondary-card" radius={18} glowStrength={0} colorHex={bmColor}
                               onClick={() => setShowBmSearch(s => !s)}
-                              containerStyle={{
-                                flex:"0 0 auto", width:"fit-content", maxWidth:"100%", minWidth:0, color:bmColor, cursor:"pointer",
-                                background:`radial-gradient(ellipse 65% 90% at 0% 0%, ${bmColor}58 0%, ${bmColor}40 42%, ${bmColor}1B 72%, ${bmColor}00 100%), radial-gradient(ellipse 65% 90% at 100% 100%, ${bmColor}4C 0%, ${bmColor}38 42%, ${bmColor}18 72%, ${bmColor}00 100%), linear-gradient(138deg, ${bmColor}22 0%, ${bmColor}28 48%, ${bmColor}21 100%), rgba(2,10,24,0.46)`,
-                                border:"none",
-                                boxShadow:`0 14px 44px rgba(0,0,0,0.28), 0 0 28px ${bmColor}10`,
+                              containerStyle={{                                flex:"0 0 auto", width:"fit-content", maxWidth:"100%", minWidth:0, color:bmColor, cursor:"pointer",
                               }}
                               style={{ padding:"10px 12px" }}>
                               <div className="asset-hero-reflection"/>
