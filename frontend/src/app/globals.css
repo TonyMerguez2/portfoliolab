@@ -197,17 +197,38 @@ canvas + div {
    pareil sans elle, et les tuiles deviennent homogènes. Il reste le fond et le
    bord — deux couches, aucune forme. */
 
-/* Il n'y a pas de couche de tramage, et c'est réglé autrement.
+/* Tramage.
 
-   Un bruit dissout les paliers de quantification qui font les anneaux, mais il
-   se paie : à trois octaves, ses basses fréquences se voient en taches ; à une
-   seule, son pavage se répète en grille ; et à l'amplitude nécessaire, il se
-   voit tout simplement en grain. Trois réglages, trois défauts différents.
+   Les lavis de tileSurface() traversent quatre-vingt-huit niveaux d'alpha, et
+   sur un fond sombre l'œil en résout un seul : chaque palier de quantification
+   franchi devient une frontière, et l'ensemble se lit en anneaux. Ce bruit les
+   dissout en déplaçant ces frontières de façon irrégulière.
 
-   L'autre levier est en amont, dans tileSurface() : un dégradé ne peut pas
-   montrer plus de frontières qu'il ne traverse de niveaux d'alpha. Ramené à
-   six niveaux au lieu de quatre-vingt-huit, il n'a plus de quoi former un
-   anneau, et le bruit devient inutile.
+   Tout tient à la finesse du grain, et c'est là que je m'étais trompé.
+   Un bruit ne dissout que s'il varie d'un pixel écran au suivant ; s'il varie
+   plus lentement, il ne masque plus rien et se voit lui-même.
 
-   Ce fichier a porté un tramage pendant plusieurs itérations parce que je
-   traitais le symptôme. L'amplitude était la cause. */
+   baseFrequency est en motifs par pixel CSS. À 0.75 les motifs faisaient 1.3
+   pixel CSS, donc 2.6 pixels écran sur un affichage à ratio 2 : des paquets
+   assez gros pour se lire en grain. À 2.5 ils font 0.4 pixel CSS, soit moins
+   d'un pixel écran — le bruit redevient invisible et redevient utile.
+
+   Deux autres réglages, tous deux sources d'erreur avant :
+   - une seule octave. À trois, feTurbulence ajoute des basses fréquences qui
+     se voient en taches nuageuses ;
+   - un pavé de 256 px. Plus petit, la répétition du motif se remarque.
+
+   L'amplitude, elle, se calcule : feTurbulence produit un écart-type d'environ
+   quarante niveaux, ramené par l'opacité. Le palier à dissoudre en vaut un,
+   40 × 0.028 ≈ 1.1. */
+.novac-tile::after {
+  content: '';
+  position: absolute;
+  z-index: 0;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  opacity: 0.028;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='2.5' numOctaves='1' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  background-size: 256px 256px;
+}

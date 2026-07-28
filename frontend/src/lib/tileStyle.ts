@@ -94,24 +94,23 @@ export function tileSurface(ticker: string, radius = 18, colorHex?: string, inte
     .toString(16).padStart(2, "0");
   return {
     borderRadius: radius,
-    // Un dégradé de faible amplitude — six niveaux d'alpha, pas quatre-vingts.
+    // Deux lavis d'angle de pleine amplitude — l'aspect voulu, avec sa
+    // profondeur.
     //
-    // Sur un fond sombre l'œil résout un seul niveau sur 255 : chaque palier de
-    // quantification franchi devient une frontière visible. Un dégradé ne peut
-    // pas en montrer plus qu'il n'en traverse. C'est le seul levier qui agisse
-    // sans tramage, et il se calcule au lieu de se régler à l'œil.
+    // Sur un fond sombre l'œil résout un niveau sur 255, et ces lavis en
+    // traversent quatre-vingt-huit : autant de frontières possibles, que l'on
+    // voyait en anneaux. Deux leviers existent contre cela, et ils s'excluent.
     //
-    // L'historique de ce fichier est celui de cette erreur. À quatre-vingt-huit
-    // niveaux, deux lavis radiaux donnaient des anneaux ; le même écart en
-    // linéaire donnait des bandes. Changer de géométrie déplaçait la forme,
-    // jamais elle ne la supprimait — parce que la géométrie n'était pas en
-    // cause, seulement l'amplitude.
+    // Réduire l'amplitude les supprime par construction — un dégradé ne peut
+    // pas montrer plus de marches qu'il ne traverse de niveaux — mais aplatit
+    // l'aspect au passage. Essayé : lisse, et sans relief.
     //
-    // La teinte reste soutenue : c'est l'alpha de départ qui la porte, et
-    // l'écart entre les deux extrémités qui fait le dégradé. Les deux sont
-    // indépendants.
+    // Trames par-dessus, la pleine amplitude est conservée. C'est la voie
+    // choisie ici, et le tramage vit dans globals.css. Toute la difficulté
+    // tient à la finesse de son grain : voir le commentaire là-bas.
     background: [
-      `linear-gradient(150deg, ${c}${a(88)} 0%, ${c}${a(82)} 100%)`,
+      `radial-gradient(ellipse 260% 300% at 0% 0%, ${c}${a(88)} 0%, ${c}${a(77)} 18%, ${c}${a(59)} 36%, ${c}${a(41)} 54%, ${c}${a(23)} 72%, ${c}${a(10)} 88%, ${c}00 100%)`,
+      `radial-gradient(ellipse 260% 300% at 100% 100%, ${c}${a(76)} 0%, ${c}${a(66)} 18%, ${c}${a(51)} 36%, ${c}${a(35)} 54%, ${c}${a(20)} 72%, ${c}${a(9)} 88%, ${c}00 100%)`,
       `rgba(2,10,24,${(0.46 * intensity).toFixed(3)})`,
     ].join(", "),
     backdropFilter: "blur(24px) saturate(1.6) brightness(1.06)",
