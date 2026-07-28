@@ -701,12 +701,25 @@ export default function GrowthChart({
       });
       chartRef.current = chart;
 
-      // Sync visible time range to parent (debounced 150ms)
-      // Convertit un Time lightweight-charts (UTCTimestamp ou BusinessDay) en Unix seconds
+      // Sync visible time range to parent (debounced)
       const timeToSec = timeToSeconds;
       let rangeDebounce: ReturnType<typeof setTimeout>;
-      const rangeHandler = (range: { from: any; to: any } | null) => {
+      /**
+       * Driven by the *logical* range, deliberately, though what we need is the
+       * time range.
+       *
+       * Subscribing to the time range makes lightweight-charts call
+       * `getVisibleRange()` itself before handing it over, and that throws
+       * "Value is null" on an empty scale — the state between clearing a series
+       * and setting the next one. Merely holding a listener was enough: going
+       * from Max to 3 ans in comparison raised an unhandled error, outside any
+       * try of ours since the call happens in the library's own paint cycle.
+       * The logical range returns null instead of throwing, so we take that as
+       * the trigger and read the time range through our own guard.
+       */
+      const rangeHandler = () => {
         clearTimeout(rangeDebounce);
+        const range = safeVisibleRange(chartRef.current);
         // Track the window locally too, so the legend can describe what is
         // actually on screen instead of the selected period button.
         setVisibleSecs(range ? { from: timeToSec(range.from), to: timeToSec(range.to) } : null);
@@ -723,7 +736,7 @@ export default function GrowthChart({
           if (typeof w === "number" && w > 0) onPriceScaleWidthChangeRef.current?.(w);
         }, 30);
       };
-      chart.timeScale().subscribeVisibleTimeRangeChange(rangeHandler as any);
+      chart.timeScale().subscribeVisibleLogicalRangeChange(rangeHandler);
 
       const area = chart.addSeries(AreaSeries, {
         lineColor: portfolioColor,
