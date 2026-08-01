@@ -355,6 +355,8 @@ function PortfolioPageInner() {
   const [twr, setTwr] = useState<number | null>(null);
   /** Rendement du S&P 500 sur exactement la même fenêtre. */
   const [repere, setRepere] = useState<number | null>(null);
+  /** Ce que l'argent versé a rapporté sur la période : gain en euros et en %. */
+  const [gain, setGain] = useState<{ eur: number; pct: number | null } | null>(null);
   /** Date de la première transaction — l'origine du portefeuille. */
   const [origine, setOrigine] = useState<string | null>(null);
 
@@ -365,13 +367,19 @@ function PortfolioPageInner() {
     fetch(`http://localhost:8000/api/v1/portfolios/${id}/history?period=${PERIOD_MAP[period]}`,
           { headers: enTetesAuth() })
       .then(r => (r.ok ? r.json() : null))
-      .then((d: { twr_pct?: number | null; benchmark_pct?: number | null; start?: string | null } | null) => {
+      .then((d: {
+        twr_pct?: number | null; benchmark_pct?: number | null; start?: string | null;
+        gain_eur?: number | null; gain_pct?: number | null;
+      } | null) => {
         if (annule) return;
         setTwr(typeof d?.twr_pct === "number" ? d.twr_pct : null);
         setRepere(typeof d?.benchmark_pct === "number" ? d.benchmark_pct : null);
         setOrigine(d?.start ?? null);
+        setGain(typeof d?.gain_eur === "number"
+          ? { eur: d.gain_eur, pct: typeof d.gain_pct === "number" ? d.gain_pct : null }
+          : null);
       })
-      .catch(() => { if (!annule) { setTwr(null); setRepere(null); } });
+      .catch(() => { if (!annule) { setTwr(null); setRepere(null); setGain(null); } });
     return () => { annule = true; };
   }, [portfolio?.id, surTransactions, period, txRefreshKey]);
 
@@ -509,6 +517,24 @@ function PortfolioPageInner() {
    * « vs S&P 500 −2 500 % » qui ne comparait rien.
    */
   const reperePeriode = surTransactions ? repere : spyChange;
+
+  /**
+   * Gain de l'épargnant sur la période — ce qu'il a réellement encaissé.
+   *
+   * Hors transactions, on n'a que la variation moyenne des actifs ; on en
+   * déduit le gain comme avant, en retranchant la valeur de début de période.
+   */
+  const gainAffiche: { eur: number; pct: number | null } | null =
+    surTransactions
+      ? gain
+      : (valeurTotale != null && weightedChange != null
+          ? {
+              eur: weightedChange > -100
+                ? valeurTotale - valeurTotale / (1 + weightedChange / 100)
+                : valeurTotale,
+              pct: weightedChange,
+            }
+          : null);
 
   /**
    * Libellé de la période.
@@ -711,20 +737,21 @@ function PortfolioPageInner() {
     {/* Perf sur la période choisie. Le libellé la suit : il disait
         « Aujourd'hui » quelle que soit la période, et annonçait donc
         un gain d'un an comme s'il datait du matin. */}
-    {valeurTotale != null && perfPeriode != null && (
-      <div style={{ fontSize: 11, fontFamily: FONT, color: perfPeriode >= 0 ? "#4ade80" : "#f87171", fontWeight: 600 }}>
+    {/* Ce que l'argent a rapporté, et non ce que les fonds ont fait.
+        C'est la question qu'on se pose devant son relevé : « j'ai versé
+        4 960 €, j'ai 5 134 €, donc j'ai gagné 175 € ». La performance des
+        fonds, plus élevée quand les versements sont récents, figure à côté
+        sous son propre nom. */}
+    {gainAffiche != null && (
+      <div style={{ fontSize: 11, fontFamily: FONT, color: gainAffiche.eur >= 0 ? "#4ade80" : "#f87171", fontWeight: 600 }}>
         {libellePeriode}&nbsp;
         <span>
-            {perfPeriode >= 0 ? "+" : ""}
-            {Math.round(
-              // On retranche la valeur de début de période à celle
-              // d'aujourd'hui, au lieu d'appliquer le rendement au montant actuel.
-              perfPeriode > -100
-                ? valeurTotale - valeurTotale / (1 + perfPeriode / 100)
-                : valeurTotale
-            ).toLocaleString("fr-FR")} €
-          </span>
-        <span style={{ opacity: 0.55, marginLeft: 4 }}>({fmtChange(perfPeriode)})</span>
+          {gainAffiche.eur >= 0 ? "+" : ""}
+          {Math.round(gainAffiche.eur).toLocaleString("fr-FR")} €
+        </span>
+        {gainAffiche.pct != null && (
+          <span style={{ opacity: 0.55, marginLeft: 4 }}>({fmtChange(gainAffiche.pct)})</span>
+        )}
       </div>
     )}
         </div>
@@ -789,6 +816,36 @@ function PortfolioPageInner() {
         <div style={{ width: 1, alignSelf: "stretch", background: "rgba(255,255,255,0.07)" }} />
         <div style={{ minWidth: 120 }}>
           <p style={{ margin: "0 0 4px", fontSize: 11.5, fontWeight: 500, color: "rgba(255,255,255,0.55)" }}>Comparaison</p>
+    {/* Performance des fonds — distincte du gain de l'épargnant.
+        C'est elle qu'on oppose à l'indice : comparer un versement progressif
+        à un indice supposé investi d'un coup pénaliserait le premier sans
+        que ses choix d'actifs y soient pour rien. */}
+    {surTransactions && perfPeriode != null && (
+      <div style={{ position: "relative", marginTop: 3 }}
+        onMouseEnter={() => setActiveTooltip("fonds")}
+        onMouseLeave={() => setActiveTooltip(null)}>
+        <div style={{ fontSize: 10, color: "rgba(255,255,255,0.40)", fontFamily: FONT, cursor: "default" }}>
+          Fonds&nbsp;
+          <span style={{ color: perfPeriode >= 0 ? "#4ade80" : "#f87171", fontWeight: 700 }}>
+            {fmtChange(perfPeriode)}
+          </span>
+        </div>
+        {activeTooltip === "fonds" && (
+          <div style={{
+            position: "absolute", bottom: "calc(100% + 6px)", left: 0, zIndex: 50, width: 230,
+            background: "rgba(4,17,36,0.97)", border: "1px solid rgba(255,255,255,0.10)",
+            borderRadius: 8, padding: "8px 10px", boxShadow: "0 8px 24px rgba(0,0,0,0.50)",
+            pointerEvents: "none",
+          }}>
+            <span style={{ fontSize: 10, color: "rgba(255,255,255,0.62)", lineHeight: 1.55 }}>
+              Ce que vos fonds ont fait sur la période, indépendamment de la date
+              de vos versements. Votre gain est plus faible si vous avez investi
+              récemment : cet argent n&apos;a pas encore travaillé.
+            </span>
+          </div>
+        )}
+      </div>
+    )}
     {/* Benchmark SPY */}
     {reperePeriode != null && perfPeriode != null && (() => {
       const diff    = perfPeriode - reperePeriode;
@@ -803,15 +860,15 @@ function PortfolioPageInner() {
           </div>
           {activeTooltip === "spy" && (
             <div style={{
-              position: "absolute", bottom: "calc(100% + 6px)", left: 0, right: 0, zIndex: 50,
+              position: "absolute", bottom: "calc(100% + 6px)", left: 0, zIndex: 50, width: 230,
               background: "rgba(4,17,36,0.97)", border: "1px solid rgba(255,255,255,0.10)",
               borderRadius: 8, padding: "8px 10px", boxShadow: "0 8px 24px rgba(0,0,0,0.50)",
-              pointerEvents: "none", whiteSpace: "nowrap",
+              pointerEvents: "none",
             }}>
-              <span style={{ fontSize: 10, color: "rgba(255,255,255,0.62)", lineHeight: 1.5 }}>
-                Votre portefeuille&nbsp;
-                {diff >= 0 ? "surperforme" : "sous-performe"}&nbsp;
-                le S&amp;P 500 de {Math.abs(diff).toFixed(2)}% sur la période.
+              <span style={{ fontSize: 10, color: "rgba(255,255,255,0.62)", lineHeight: 1.55 }}>
+                Vos fonds&nbsp;
+                {diff >= 0 ? "font mieux que" : "font moins bien que"}&nbsp;
+                le S&amp;P 500 de {Math.abs(diff).toFixed(2)} points sur la même période.
               </span>
             </div>
           )}

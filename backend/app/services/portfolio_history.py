@@ -129,6 +129,10 @@ def courbe_portefeuille(
             # recalculer depuis les valeurs de début et de fin recompterait les
             # versements de la période comme performance.
             "ret":      r_jour,
+            # Flux du jour, retenu pour mesurer le rendement de l'épargnant sur
+            # une fenêtre : un versement de la veille n'a pas travaillé autant
+            # qu'un versement du premier jour.
+            "flow":     round(f, 4),
         })
 
     valeur_finale = points[-1]["value"]
@@ -157,3 +161,55 @@ def twr_sur_fenetre(points: list[dict], depuis: str) -> float | None:
     for p in fenetre[1:]:
         facteur *= 1.0 + p.get("ret", 0.0)
     return round((facteur - 1.0) * 100, 4)
+
+
+def dietz_sur_fenetre(points: list[dict], depuis: str) -> dict:
+    """
+    Rendement de l'épargnant sur une fenêtre, méthode de Dietz modifiée.
+
+    Le TWR répond à « comment mes fonds se sont-ils comportés ? ». Celui-ci
+    répond à « qu'a rapporté mon argent ? », qui est la question que l'on se
+    pose devant son relevé — et les deux diffèrent d'autant plus que les
+    versements sont récents.
+
+    Chaque versement est pondéré par la fraction de la période où il a
+    travaillé : verser la veille de la clôture ne peut pas peser autant que
+    verser le premier jour.
+    """
+    fenetre = [p for p in points if p["date"] >= depuis]
+    if len(fenetre) < 2:
+        return {"gain_eur": 0.0, "gain_pct": 0.0 if fenetre else None}
+
+    # La valeur de départ est celle d'avant la fenêtre ; à défaut, le
+    # portefeuille commence ici et vaut zéro.
+    avant = [p for p in points if p["date"] < depuis]
+    v_debut = avant[-1]["value"] if avant else 0.0
+    v_fin = fenetre[-1]["value"]
+
+    # Les flux du premier jour de la fenêtre en font partie s'il n'y a pas de
+    # veille : sinon le capital initial serait compté comme un gain.
+    flux = fenetre if not avant else fenetre[1:]
+
+    # Pondération par le temps réellement écoulé, et non par le rang du point.
+    # Les deux coïncident sur un calendrier quotidien, mais divergent dès qu'il
+    # comporte des trous — un pont de plusieurs jours y compterait pour un.
+    d0 = date.fromisoformat(fenetre[0]["date"])
+    d1 = date.fromisoformat(fenetre[-1]["date"])
+    duree = (d1 - d0).days or 1
+
+    total_flux = 0.0
+    flux_pondere = 0.0
+    for p in flux:
+        f = p.get("flow", 0.0)
+        if not f:
+            continue
+        ecoule = (date.fromisoformat(p["date"]) - d0).days
+        total_flux += f
+        flux_pondere += f * max(0.0, (duree - ecoule) / duree)
+
+    base = v_debut + flux_pondere
+    gain = v_fin - v_debut - total_flux
+    return {
+        "gain_eur": round(gain, 4),
+        "gain_pct": round(gain / base * 100, 4) if base > 1e-9 else None,
+    }

@@ -378,7 +378,7 @@ async def get_history(
 
     import yfinance as yf
 
-    from app.services.portfolio_history import courbe_portefeuille, twr_sur_fenetre
+    from app.services.portfolio_history import courbe_portefeuille, twr_sur_fenetre, dietz_sur_fenetre
 
     _get_portfolio_or_404(portfolio_id, db, user)
 
@@ -444,8 +444,13 @@ async def get_history(
     # entière, un « gain sur trois mois » n'ayant pas de sens en euros quand des
     # versements ont eu lieu entre-temps.
     resultat["twr_pct"] = twr_sur_fenetre(resultat["points"], depart.isoformat())
+    # Ce que l'argent de l'épargnant a rapporté sur la fenêtre — la question
+    # qu'on se pose devant son relevé, distincte du comportement des fonds.
+    gain = dietz_sur_fenetre(resultat["points"], depart.isoformat())
+    resultat["gain_eur"] = gain["gain_eur"]
+    resultat["gain_pct"] = gain["gain_pct"]
     resultat["points"] = [
-        {k: v for k, v in p.items() if k != "ret"}
+        {k: v for k, v in p.items() if k not in ("ret", "flow")}
         for p in resultat["points"] if p["date"] >= depart.isoformat()
     ]
     resultat["source"] = "transactions"

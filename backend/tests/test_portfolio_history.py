@@ -15,7 +15,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 import pytest
 
-from app.services.portfolio_history import courbe_portefeuille, twr_sur_fenetre
+from app.services.portfolio_history import courbe_portefeuille, twr_sur_fenetre, dietz_sur_fenetre
 
 
 def tx(ticker, qty, prix, jour, side="BUY", fees=0.0):
@@ -187,3 +187,78 @@ class TestTWRSurFenetre:
         cours = {"A": {j: 10.0 for j in d}}
         r = courbe_portefeuille([tx("A", 10, 10.0, d[0])], cours, d)
         assert twr_sur_fenetre(r["points"], d[1].isoformat()) == 0.0
+
+
+class TestRendementDeLEpargnant:
+    def test_gain_en_euros_est_la_difference_nette(self):
+        d = jours(date(2026, 1, 1), 3)
+        cours = {"A": {d[0]: 10.0, d[1]: 10.0, d[2]: 11.0}}
+        r = courbe_portefeuille([tx("A", 10, 10.0, d[0])], cours, d)
+        g = dietz_sur_fenetre(r["points"], d[0].isoformat())
+        assert g["gain_eur"] == pytest.approx(10.0)     # 100 € → 110 €
+        assert g["gain_pct"] == pytest.approx(10.0)
+
+    def test_un_versement_tardif_pese_moins(self):
+        """
+        C'est tout l'objet : verser la veille de la clôture ne peut pas peser
+        autant que verser le premier jour.
+
+        Sans pondération, le second versement gonflerait la base et écraserait
+        le rendement.
+        """
+        d = jours(date(2026, 1, 1), 5)
+        cours = {"A": {d[0]: 10.0, d[1]: 10.0, d[2]: 10.0, d[3]: 10.0, d[4]: 11.0}}
+        r = courbe_portefeuille(
+            [tx("A", 10, 10.0, d[0]), tx("A", 10, 10.0, d[3])], cours, d)
+        g = dietz_sur_fenetre(r["points"], d[0].isoformat())
+        # 200 € valent 220 € : +20 € réels. La base pondérée est inférieure à
+        # 200 €, donc le pourcentage dépasse 10 %.
+        assert g["gain_eur"] == pytest.approx(20.0)
+        assert g["gain_pct"] > 10.0
+
+    def test_versement_sans_hausse_ne_rapporte_rien(self):
+        d = jours(date(2026, 1, 1), 3)
+        cours = {"A": {j: 10.0 for j in d}}
+        r = courbe_portefeuille([tx("A", 10, 10.0, d[0]), tx("A", 10, 10.0, d[2])], cours, d)
+        g = dietz_sur_fenetre(r["points"], d[0].isoformat())
+        assert g["gain_eur"] == pytest.approx(0.0, abs=1e-6)
+        assert g["gain_pct"] == pytest.approx(0.0, abs=1e-6)
+
+    def test_inferieur_au_twr_quand_l_argent_arrive_tard(self):
+        """
+        Le cas de l'utilisateur : les fonds montent, mais l'argent arrive après.
+
+        Le TWR mesure les fonds, Dietz mesure l'épargnant — le second est plus
+        bas, et c'est lui qui répond à « qu'ai-je gagné ? ».
+        """
+        d = jours(date(2026, 1, 1), 5)
+        cours = {"A": {d[0]: 10.0, d[1]: 11.0, d[2]: 12.0, d[3]: 12.0, d[4]: 12.0}}
+        r = courbe_portefeuille(
+            [tx("A", 1, 10.0, d[0]), tx("A", 100, 12.0, d[3])], cours, d)
+        g = dietz_sur_fenetre(r["points"], d[0].isoformat())
+        assert r["twr_pct"] > g["gain_pct"]
+
+    def test_fenetre_vide(self):
+        d = jours(date(2026, 1, 1), 2)
+        cours = {"A": {j: 10.0 for j in d}}
+        r = courbe_portefeuille([tx("A", 10, 10.0, d[0])], cours, d)
+        assert dietz_sur_fenetre(r["points"], "2030-01-01")["gain_pct"] is None
+
+
+    def test_pondere_par_le_temps_pas_par_le_rang(self):
+        """
+        Un calendrier à trous ne doit pas fausser la pondération.
+
+        Compter les points au lieu des jours ferait peser un versement suivi
+        d'un long pont comme s'il datait de la veille.
+        """
+        # Deux points seulement, séparés de dix jours.
+        pts = [
+            {"date": "2026-01-01", "value": 100.0, "flow": 100.0, "ret": 0.0},
+            {"date": "2026-01-11", "value": 210.0, "flow": 100.0, "ret": 0.0},
+        ]
+        g = dietz_sur_fenetre(pts, "2026-01-01")
+        # 200 € versés, 210 € au bout : +10 €. Le second versement, arrivé le
+        # dernier jour, ne pèse rien dans la base — qui vaut donc 100 €.
+        assert g["gain_eur"] == pytest.approx(10.0)
+        assert g["gain_pct"] == pytest.approx(10.0)
