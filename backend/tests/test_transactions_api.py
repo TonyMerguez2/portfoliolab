@@ -256,3 +256,38 @@ def test_portefeuilles_sans_proprietaire_adoptes(client):
 
     noms = [p["name"] for p in client.get("/api/v1/portfolios").json()]
     assert "Ancien" in noms
+
+
+# ── Session ───────────────────────────────────────────────────────────────────
+
+def test_me_refuse_sans_session():
+    """
+    `/auth/me` doit rejeter une session absente ou invalide.
+
+    Elle renvoyait `{"message": "use Authorization header"}` avec un 200 : toute
+    vérification de session la croyait valide, et l'interface qui enregistrait
+    la réponse remplaçait le compte mémorisé — pseudo et avatar compris — par
+    ce message.
+    """
+    from fastapi.testclient import TestClient
+    from app.main import app
+
+    app.dependency_overrides.clear()
+    with TestClient(app) as c:
+        assert c.get("/api/v1/auth/me").status_code == 401
+        assert c.get("/api/v1/auth/me",
+                     headers={"Authorization": "Bearer pas-un-jeton"}).status_code == 401
+
+
+def test_me_renvoie_le_compte(client):
+    """La réponse porte le pseudo et l'avatar, que l'interface réaffiche."""
+    from app.main import app
+    from app.core.auth import require_auth
+
+    compte = SimpleNamespace(id="u1", email="a@b.c", username="Sacha", avatar_url="/uploads/u1.jpg")
+    app.dependency_overrides[require_auth] = lambda: compte
+
+    d = client.get("/api/v1/auth/me").json()
+    assert d["username"] == "Sacha"
+    assert d["avatar_url"] == "/uploads/u1.jpg"
+    assert "message" not in d

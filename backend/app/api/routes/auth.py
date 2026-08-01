@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Header
 import os, shutil
 from sqlalchemy.orm import Session
 from app.core.database import get_db
-from app.core.auth import hash_password, verify_password, create_token
+from app.core.auth import hash_password, verify_password, create_token, require_auth
 from app.models.user import User
 from pydantic import BaseModel, EmailStr
 import uuid
@@ -47,10 +47,21 @@ def login(data: LoginInput, db: Session = Depends(get_db)):
     return {"token": token, "user": {"id": user.id, "email": user.email, "username": user.username, "avatar_url": user.avatar_url}}
 
 @router.get("/me")
-def me(token: str = None, db: Session = Depends(get_db)):
-    from app.core.auth import get_current_user
-    from fastapi.security import OAuth2PasswordBearer
-    return {"message": "use Authorization header"}
+def me(user: User = Depends(require_auth)):
+    """
+    Le compte de la session en cours.
+
+    Cette route était un talon : elle renvoyait `{"message": ...}` avec un 200
+    quel que soit le jeton — ou son absence. Tout appelant s'en servant pour
+    vérifier une session la croyait donc valide, et celui qui enregistrait la
+    réponse remplaçait le compte mémorisé par ce message.
+    """
+    return {
+        "id":         user.id,
+        "email":      user.email,
+        "username":   user.username,
+        "avatar_url": user.avatar_url,
+    }
 
 @router.put("/profile")
 def update_profile(data: UpdateProfileInput, authorization: str = Header(None), db: Session = Depends(get_db)):
