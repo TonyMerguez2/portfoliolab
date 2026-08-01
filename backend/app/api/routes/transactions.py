@@ -450,6 +450,7 @@ async def get_history(
     gain = dietz_sur_fenetre(resultat["points"], depart.isoformat())
     resultat["gain_eur"] = gain["gain_eur"]
     resultat["gain_pct"] = gain["gain_pct"]
+    resultat["taux_pct"] = gain["taux_pct"]
     # Les points complets (flux compris) servent encore à la simulation du
     # repère ; ceux renvoyés au client en sont allégés.
     points_complets = resultat["points"]

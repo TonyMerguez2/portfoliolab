@@ -165,16 +165,19 @@ def twr_sur_fenetre(points: list[dict], depuis: str) -> float | None:
 
 def dietz_sur_fenetre(points: list[dict], depuis: str) -> dict:
     """
-    Rendement de l'épargnant sur une fenêtre, méthode de Dietz modifiée.
+    Gain de l'épargnant sur une fenêtre : en euros, et rapporté au capital
+    engagé.
 
     Le TWR répond à « comment mes fonds se sont-ils comportés ? ». Celui-ci
     répond à « qu'a rapporté mon argent ? », qui est la question que l'on se
-    pose devant son relevé — et les deux diffèrent d'autant plus que les
-    versements sont récents.
+    pose devant son relevé.
 
-    Chaque versement est pondéré par la fraction de la période où il a
-    travaillé : verser la veille de la clôture ne peut pas peser autant que
-    verser le premier jour.
+    Le pourcentage rapporte le gain au capital réellement déployé — valeur de
+    début plus versements. C'est le calcul que fait l'épargnant de tête :
+    175 € gagnés sur 4 960 € versés font 3,5 %. La méthode de Dietz, qui
+    pondère chaque versement par son temps de présence, donnerait ici 8,4 % :
+    plus juste comme *taux*, mais incomparable au repère et étranger à ce
+    qu'on lit sur son relevé. Elle reste calculée, sous son propre nom.
     """
     fenetre = [p for p in points if p["date"] >= depuis]
     if len(fenetre) < 2:
@@ -207,11 +210,16 @@ def dietz_sur_fenetre(points: list[dict], depuis: str) -> dict:
         total_flux += f
         flux_pondere += f * max(0.0, (duree - ecoule) / duree)
 
-    base = v_debut + flux_pondere
     gain = v_fin - v_debut - total_flux
+    # Capital engagé : ce qu'on a mis sur la table. Le repère est mesuré sur la
+    # même base, sans quoi les deux pourcentages ne se compareraient pas.
+    engage = v_debut + total_flux
+    # Base pondérée par le temps de présence, pour le taux au sens de Dietz.
+    base_dietz = v_debut + flux_pondere
     return {
-        "gain_eur": round(gain, 4),
-        "gain_pct": round(gain / base * 100, 4) if base > 1e-9 else None,
+        "gain_eur":  round(gain, 4),
+        "gain_pct":  round(gain / engage * 100, 4) if engage > 1e-9 else None,
+        "taux_pct":  round(gain / base_dietz * 100, 4) if base_dietz > 1e-9 else None,
     }
 
 

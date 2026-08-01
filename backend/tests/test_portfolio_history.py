@@ -199,23 +199,34 @@ class TestRendementDeLEpargnant:
         assert g["gain_eur"] == pytest.approx(10.0)     # 100 € → 110 €
         assert g["gain_pct"] == pytest.approx(10.0)
 
-    def test_un_versement_tardif_pese_moins(self):
+    def test_pourcentage_rapporte_au_capital_engage(self):
         """
-        C'est tout l'objet : verser la veille de la clôture ne peut pas peser
-        autant que verser le premier jour.
+        Le pourcentage affiché est celui que l'épargnant calcule de tête :
+        gain divisé par ce qu'il a mis sur la table.
 
-        Sans pondération, le second versement gonflerait la base et écraserait
-        le rendement.
+        C'est aussi la base du repère : deux pourcentages calculés autrement ne
+        se compareraient pas.
         """
         d = jours(date(2026, 1, 1), 5)
         cours = {"A": {d[0]: 10.0, d[1]: 10.0, d[2]: 10.0, d[3]: 10.0, d[4]: 11.0}}
         r = courbe_portefeuille(
             [tx("A", 10, 10.0, d[0]), tx("A", 10, 10.0, d[3])], cours, d)
         g = dietz_sur_fenetre(r["points"], d[0].isoformat())
-        # 200 € valent 220 € : +20 € réels. La base pondérée est inférieure à
-        # 200 €, donc le pourcentage dépasse 10 %.
         assert g["gain_eur"] == pytest.approx(20.0)
-        assert g["gain_pct"] > 10.0
+        assert g["gain_pct"] == pytest.approx(10.0)      # 20 € sur 200 € versés
+
+    def test_taux_dietz_pondere_le_temps_de_presence(self):
+        """
+        Le taux, lui, tient compte du moment des versements : celui du 4e jour
+        n'a pas travaillé autant que celui du 1er, la base est plus faible et
+        le taux plus élevé.
+        """
+        d = jours(date(2026, 1, 1), 5)
+        cours = {"A": {d[0]: 10.0, d[1]: 10.0, d[2]: 10.0, d[3]: 10.0, d[4]: 11.0}}
+        r = courbe_portefeuille(
+            [tx("A", 10, 10.0, d[0]), tx("A", 10, 10.0, d[3])], cours, d)
+        g = dietz_sur_fenetre(r["points"], d[0].isoformat())
+        assert g["taux_pct"] > g["gain_pct"]
 
     def test_versement_sans_hausse_ne_rapporte_rien(self):
         d = jours(date(2026, 1, 1), 3)
@@ -259,10 +270,12 @@ class TestRendementDeLEpargnant:
             {"date": "2026-01-11", "value": 210.0, "flow": 100.0, "ret": 0.0},
         ]
         g = dietz_sur_fenetre(pts, "2026-01-01")
-        # 200 € versés, 210 € au bout : +10 €. Le second versement, arrivé le
-        # dernier jour, ne pèse rien dans la base — qui vaut donc 100 €.
+        # 200 € versés, 210 € au bout : +10 €, soit +5 % du capital engagé.
         assert g["gain_eur"] == pytest.approx(10.0)
-        assert g["gain_pct"] == pytest.approx(10.0)
+        assert g["gain_pct"] == pytest.approx(5.0)
+        # Le second versement, arrivé le dernier jour, ne pèse rien dans la
+        # base pondérée — qui vaut donc 100 €, d'où un taux de 10 %.
+        assert g["taux_pct"] == pytest.approx(10.0)
 
 
 class TestSimulationBenchmark:
