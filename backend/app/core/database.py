@@ -39,15 +39,24 @@ class Transaction(Base):
     unit_price   = Column(Float,  nullable=False)
     fees         = Column(Float,  default=0.0)
     executed_at  = Column(DateTime, nullable=False)
+    # Mémo libre : « PEA Boursorama », « arbitrage », « dividende réinvesti ».
+    # Six mois plus tard, la raison d'une ligne ne se retrouve nulle part
+    # ailleurs.
+    note         = Column(String, nullable=True)
     created_at   = Column(DateTime, default=datetime.utcnow)
 
 Base.metadata.create_all(engine)
 
 # Migration douce : ajoute les colonnes si elles n'existent pas encore
-for col, typedef in [("total_value", "REAL"), ("cost_basis", "REAL"), ("is_simulation", "INTEGER")]:
+for table, col, typedef in [
+    ("portfolios",   "total_value",   "REAL"),
+    ("portfolios",   "cost_basis",    "REAL"),
+    ("portfolios",   "is_simulation", "INTEGER"),
+    ("transactions", "note",          "TEXT"),
+]:
     try:
         with engine.connect() as conn:
-            conn.execute(text(f"ALTER TABLE portfolios ADD COLUMN {col} {typedef} DEFAULT NULL"))
+            conn.execute(text(f"ALTER TABLE {table} ADD COLUMN {col} {typedef} DEFAULT NULL"))
             conn.commit()
     except Exception:
         pass

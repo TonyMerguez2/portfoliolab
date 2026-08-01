@@ -193,6 +193,11 @@ const COLORS = [
 export default function BuildPage() {
     const router = useRouter();
     const { setActivePortfolio } = useApp();
+    /**
+     * Source des positions. `null` tant que l'utilisateur n'a pas choisi entre
+     * la saisie manuelle et la synchronisation avec un courtier.
+     */
+    const [source, setSource] = useState<"manuel" | null>(null);
     /** Actif dont on saisit une transaction, quand le panneau est ouvert. */
     const [actifSaisi, setActifSaisi] = useState<{ ticker: string; name: string; type: string } | null>(null);
     const [query, setQuery] = useState("");
@@ -529,7 +534,8 @@ export default function BuildPage() {
                         quantity: tx.quantity,
                         unit_price: tx.unit_price,
                         fees: tx.fees,
-                        executed_at: tx.executed_at
+                        executed_at: tx.executed_at,
+                        note: tx.note ?? null
                     })
                 });
                 if (!res.ok) {
@@ -677,10 +683,70 @@ export default function BuildPage() {
                                     letterSpacing: "0.04em",
                                     margin: 0
                                 }}>
-        Composez, pondérez et analysez votre allocation
+        {source === null
+          ? "D'où viennent vos positions ?"
+          : "Ajoutez vos transactions, la composition en découle"}
       </p>
     </div>
-    <div style={{
+    {/* ── Choix de la source ───────────────────────────────────────────────
+        Deux façons d'alimenter un portefeuille. La synchronisation avec un
+        courtier viendra ; en attendant, elle est annoncée mais inactive —
+        mieux vaut un bouton grisé qu'une promesse absente. */}
+    {source === null && <div style={{
+                            display: "grid",
+                            gridTemplateColumns: "1fr 1fr",
+                            gap: "16px",
+                            maxWidth: "760px",
+                            margin: "0 auto"
+                        }}>
+      <button onClick={()=>setSource("manuel")} style={{
+                            ...glass,
+                            borderRadius: "14px",
+                            padding: "28px 24px",
+                            textAlign: "left",
+                            cursor: "pointer",
+                            color: "inherit",
+                            fontFamily: "inherit",
+                            transition: "all 0.15s"
+                        }}
+        onMouseEnter={(e: any)=>{ e.currentTarget.style.background = "rgba(91,141,239,0.10)"; e.currentTarget.style.borderColor = "rgba(91,141,239,0.35)"; }}
+        onMouseLeave={(e: any)=>{ e.currentTarget.style.background = "rgba(255,255,255,0.05)"; e.currentTarget.style.borderColor = "rgba(255,255,255,0.1)"; }}>
+        <div style={{ fontSize: "22px", marginBottom: "12px" }}>✎</div>
+        <div style={{ fontSize: "14px", fontWeight: 500, color: "#F8F9FC", marginBottom: "6px" }}>
+          Ajouter des transactions manuellement
+        </div>
+        <div style={{ fontSize: "11px", color: "rgba(255,255,255,0.32)", lineHeight: 1.6 }}>
+          Cherchez un actif, indiquez ce que vous avez acheté et quand. Le prix de
+          revient et la répartition se calculent à partir de là.
+        </div>
+      </button>
+      <div title="Bientôt disponible" style={{
+                            ...glass,
+                            borderRadius: "14px",
+                            padding: "28px 24px",
+                            opacity: 0.42,
+                            cursor: "not-allowed",
+                            position: "relative"
+                        }}>
+        <div style={{ fontSize: "22px", marginBottom: "12px" }}>⇄</div>
+        <div style={{ fontSize: "14px", fontWeight: 500, color: "#F8F9FC", marginBottom: "6px" }}>
+          Connecter un portefeuille
+        </div>
+        <div style={{ fontSize: "11px", color: "rgba(255,255,255,0.32)", lineHeight: 1.6 }}>
+          Trade Republic, Binance, Coinbase… Vos positions et votre historique
+          importés automatiquement.
+        </div>
+        <span style={{
+            position: "absolute", top: "18px", right: "18px",
+            fontSize: "8px", letterSpacing: "0.14em", fontWeight: 700,
+            color: "#9BB9FF", background: "rgba(91,141,239,0.16)",
+            border: "1px solid rgba(91,141,239,0.30)", borderRadius: "5px", padding: "3px 7px"
+        }}>
+          BIENTÔT
+        </span>
+      </div>
+    </div>}
+    {source === "manuel" && <div style={{
                             display: "grid",
                             gridTemplateColumns: "1fr 300px",
                             gap: "24px",
@@ -1259,7 +1325,7 @@ export default function BuildPage() {
           ← RETOUR
         </button>
       </div>
-    </div>
+    </div>}
   </div>
   {presetHover && <div style={{
                     position: "fixed",

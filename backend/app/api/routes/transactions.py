@@ -47,6 +47,7 @@ class TransactionCreate(BaseModel):
     unit_price:  float
     fees:        float = 0.0
     executed_at: datetime
+    note:        str | None = None
 
     @field_validator("side")
     @classmethod
@@ -98,6 +99,7 @@ def _tx_to_dict(tx: Transaction) -> dict:
         "fees":         tx.fees,
         "total":        round(tx.quantity * tx.unit_price + (tx.fees or 0), 4),
         "executed_at":  tx.executed_at.isoformat(),
+        "note":         tx.note,
         "created_at":   tx.created_at.isoformat(),
     }
 
@@ -140,6 +142,7 @@ def create_transaction(
         unit_price   = data.unit_price,
         fees         = data.fees,
         executed_at  = data.executed_at,
+        note         = (data.note or "").strip() or None,
     )
     db.add(tx)
     db.commit()

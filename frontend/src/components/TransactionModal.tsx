@@ -17,6 +17,8 @@ export type DraftTx = {
   unit_price:  number;
   fees:        number;
   executed_at: string;
+  /** Mémo libre, facultatif. */
+  note?:       string;
   /** Nom lisible, conservé pour l'affichage des brouillons. */
   name:        string;
 };
@@ -93,6 +95,14 @@ export default function TransactionModal({
   const [error,          setError]          = useState<string | null>(null);
   const [heldQty,        setHeldQty]        = useState<number | null>(null);
   const [fetchingPrice,  setFetchingPrice]  = useState(false);
+  const [note,           setNote]           = useState("");
+  /**
+   * Unité de saisie. On raisonne tantôt en titres — « j'ai acheté 5 Apple » —,
+   * tantôt en euros — « j'ai mis 500 € sur Apple ». Imposer l'un des deux
+   * oblige à sortir la calculatrice ; la quantité manquante se déduit du cours.
+   */
+  const [saisieEn,       setSaisieEn]       = useState<"quantite" | "montant">("quantite");
+  const [montant,        setMontant]        = useState("");
   const [focusedField,   setFocusedField]   = useState<string | null>(null);
   const [cardVisible,    setCardVisible]    = useState(false);
 
@@ -137,6 +147,9 @@ export default function TransactionModal({
       setUnitPrice(String(initialDraft.unit_price));
       setFees(String(initialDraft.fees));
       setDate(initialDraft.executed_at.slice(0, 10));
+      setNote(initialDraft.note ?? "");
+      setSaisieEn("quantite");
+      setMontant("");
       prixEdite.current = true;   // le prix repris ne doit pas être écrasé
       return;
     }
@@ -147,6 +160,9 @@ export default function TransactionModal({
     setUnitPrice("");
     setFees("0");
     setDate(todayStr());
+    setNote("");
+    setSaisieEn("quantite");
+    setMontant("");
     prixEdite.current = false;
   }, [isOpen, prefillAsset, initialDraft]);
 
@@ -239,9 +255,14 @@ export default function TransactionModal({
   }
 
   // ── Computed ─────────────────────────────────────────────────────────────────
-  const qty      = parseFloat(quantity)  || 0;
   const price    = parseFloat(unitPrice.replace(",", ".")) || 0;
   const feesVal  = parseFloat(fees.replace(",", "."))      || 0;
+  const montantVal = parseFloat(montant.replace(",", ".")) || 0;
+  // En mode « montant », la quantité se déduit du cours retenu. Sans cours, on
+  // ne peut pas conclure : mieux vaut zéro qu'une division par zéro.
+  const qty      = saisieEn === "quantite"
+    ? (parseFloat(quantity) || 0)
+    : (price > 0 ? montantVal / price : 0);
   const total    = qty * price + feesVal;
   const isValid  = !!selectedAsset && qty > 0 && price > 0;
 
@@ -264,6 +285,7 @@ export default function TransactionModal({
         unit_price:  price,
         fees:        feesVal,
         executed_at: `${date}T00:00:00`,
+        note:        note.trim() || undefined,
       });
       onSuccess();
       return;
@@ -285,6 +307,7 @@ export default function TransactionModal({
           unit_price:  price,
           fees:        feesVal,
           executed_at: `${date}T00:00:00`,
+          note:        note.trim() || null,
         }),
       });
       if (!res.ok) {
@@ -324,9 +347,12 @@ export default function TransactionModal({
   };
 
   const ticker  = selectedAsset?.ticker ?? "—";
+  // Une quantité déduite d'un montant tombe rarement rond : 1 000 € d'Apple
+  // font 3,237188825224175 titres, qu'il ne sert à rien d'afficher en entier.
+  const qtyLisible = qty.toLocaleString("fr-FR", { maximumFractionDigits: 8 });
   const btnLabel = submitting
     ? "Enregistrement…"
-    : `${side === "BUY" ? "Acheter" : "Vendre"}${qty > 0 ? ` ${qty}` : ""} ${ticker}${isValid ? ` pour ${fmtEur(total)}` : ""}`;
+    : `${side === "BUY" ? "Acheter" : "Vendre"}${qty > 0 ? ` ${qtyLisible}` : ""} ${ticker}${isValid ? ` pour ${fmtEur(total)}` : ""}`;
 
   const contenu = (
         <div style={{ padding: embedded ? 0 : "20px 24px 24px" }}>
@@ -479,24 +505,81 @@ export default function TransactionModal({
             )}
           </div>
 
-          {/* ── Fields 2-col grid ────────────────────────────────────────────── */}
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 12 }}>
-
-            {/* Quantité */}
-            <div>
-              <label style={labelStyle}>QUANTITÉ</label>
+          {/* ── Saisie principale : quantité ou montant ──────────────────────── */}
+          <div style={{
+            marginBottom: 14, padding: "14px 16px", borderRadius: 12,
+            background: "rgba(255,255,255,0.05)",
+            border: `1px solid ${focusedField === "hero" ? "rgba(91,141,239,0.45)" : "rgba(255,255,255,0.09)"}`,
+            transition: "border-color 160ms",
+          }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
               <input
                 type="number"
-                value={quantity} onChange={e => setQuantity(e.target.value)}
-                onFocus={() => setFocusedField("qty")} onBlur={() => setFocusedField(null)}
+                value={saisieEn === "quantite" ? quantity : montant}
+                onChange={e => saisieEn === "quantite" ? setQuantity(e.target.value) : setMontant(e.target.value)}
+                onFocus={() => setFocusedField("hero")} onBlur={() => setFocusedField(null)}
                 min={0} step="any" placeholder="0"
-                style={inputStyle("qty")}
+                style={{
+                  flex: 1, minWidth: 0, background: "transparent", border: "none", outline: "none",
+                  color: "#F8F9FC", fontSize: 30, fontWeight: 600, fontFamily: FONT,
+                  letterSpacing: "-0.02em", padding: 0,
+                }}
               />
-              {side === "SELL" && selectedAsset && (
-                <div style={{ marginTop: 5, fontSize: 10, color: "rgba(255,255,255,0.28)", fontFamily: FONT }}>
-                  Détenu : {heldQty !== null ? heldQty.toLocaleString("fr-FR", { maximumFractionDigits: 8 }) : "—"}
-                </div>
-              )}
+              <span style={{ fontSize: 13, fontWeight: 600, color: "rgba(255,255,255,0.45)", flexShrink: 0 }}>
+                {saisieEn === "quantite" ? (selectedAsset?.ticker ?? "—") : "€"}
+              </span>
+              {/* Bascule d'unité : on raisonne en titres ou en euros selon le jour. */}
+              <button
+                onClick={() => {
+                  // On convertit pour que le basculement ne perde pas la saisie.
+                  if (saisieEn === "quantite") {
+                    setMontant(qty > 0 && price > 0 ? String(+(qty * price).toFixed(2)) : "");
+                    setSaisieEn("montant");
+                  } else {
+                    setQuantity(qty > 0 ? String(+qty.toFixed(8)) : "");
+                    setSaisieEn("quantite");
+                  }
+                }}
+                title={saisieEn === "quantite" ? "Saisir un montant en euros" : "Saisir un nombre de titres"}
+                style={{
+                  flexShrink: 0, width: 30, height: 30, borderRadius: 8,
+                  background: "rgba(255,255,255,0.07)", border: "1px solid rgba(255,255,255,0.11)",
+                  color: "rgba(255,255,255,0.55)", cursor: "pointer", fontSize: 13, lineHeight: 1,
+                  display: "flex", alignItems: "center", justifyContent: "center",
+                }}
+              >⇅</button>
+            </div>
+            {/* L'autre unité, en lecture : ce que la saisie implique. */}
+            <div style={{ marginTop: 4, fontSize: 11, color: "rgba(255,255,255,0.32)", fontFamily: FONT }}>
+              {qty > 0 && price > 0
+                ? (saisieEn === "quantite"
+                    ? `≈ ${fmtEur(qty * price)}`
+                    : `≈ ${qty.toLocaleString("fr-FR", { maximumFractionDigits: 8 })} ${selectedAsset?.ticker ?? ""}`)
+                : saisieEn === "quantite" ? "Nombre de titres" : "Montant investi"}
+            </div>
+            {side === "SELL" && selectedAsset && (
+              <div style={{ marginTop: 6, fontSize: 10, color: "rgba(255,255,255,0.28)", fontFamily: FONT }}>
+                Détenu : {heldQty !== null ? heldQty.toLocaleString("fr-FR", { maximumFractionDigits: 8 }) : "—"}
+              </div>
+            )}
+          </div>
+
+          {/* ── Détails ──────────────────────────────────────────────────────── */}
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 12 }}>
+
+            {/* Date — aujourd'hui par défaut ; la changer change le cours. */}
+            <div>
+              <label style={labelStyle}>DATE</label>
+              <input
+                type="date"
+                value={date} onChange={e => setDate(e.target.value)}
+                onFocus={() => setFocusedField("date")} onBlur={() => setFocusedField(null)}
+                max={todayStr()}
+                style={{ ...inputStyle("date"), colorScheme: "dark" as const, fontFamily: FONT }}
+              />
+              <div style={{ marginTop: 5, fontSize: 10, color: "rgba(255,255,255,0.28)", fontFamily: FONT }}>
+                {date === todayStr() ? "Aujourd'hui — cours du jour" : "Cours de clôture de ce jour"}
+              </div>
             </div>
 
             {/* Prix unitaire */}
@@ -511,18 +594,11 @@ export default function TransactionModal({
                 placeholder={fetchingPrice ? "…" : "0,00"}
                 style={inputStyle("price")}
               />
-            </div>
-
-            {/* Date */}
-            <div>
-              <label style={labelStyle}>DATE</label>
-              <input
-                type="date"
-                value={date} onChange={e => setDate(e.target.value)}
-                onFocus={() => setFocusedField("date")} onBlur={() => setFocusedField(null)}
-                max={todayStr()}
-                style={{ ...inputStyle("date"), colorScheme: "dark" as const, fontFamily: FONT }}
-              />
+              {prixEdite.current && (
+                <div style={{ marginTop: 5, fontSize: 10, color: "rgba(255,255,255,0.28)", fontFamily: FONT }}>
+                  Saisi à la main
+                </div>
+              )}
             </div>
 
             {/* Frais */}
@@ -536,6 +612,19 @@ export default function TransactionModal({
                 style={inputStyle("fees")}
               />
             </div>
+
+            {/* Note */}
+            <div>
+              <label style={labelStyle}>NOTE</label>
+              <input
+                type="text"
+                value={note} onChange={e => setNote(e.target.value)}
+                onFocus={() => setFocusedField("note")} onBlur={() => setFocusedField(null)}
+                placeholder="PEA, arbitrage…"
+                maxLength={120}
+                style={inputStyle("note")}
+              />
+            </div>
           </div>
 
           {/* ── Live recap ───────────────────────────────────────────────────── */}
@@ -546,7 +635,7 @@ export default function TransactionModal({
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
               <span style={{ fontSize: 10, color: "rgba(255,255,255,0.30)", fontFamily: FONT }}>
                 {qty > 0 && price > 0
-                  ? `${qty} × ${price}${feesVal > 0 ? ` + ${feesVal}` : ""} =`
+                  ? `${qtyLisible} × ${price}${feesVal > 0 ? ` + ${feesVal}` : ""} =`
                   : "Total :"}
               </span>
               <span style={{ fontSize: 15, fontWeight: 700, fontFamily: FONT, color: isValid ? accentColor : "rgba(255,255,255,0.22)" }}>

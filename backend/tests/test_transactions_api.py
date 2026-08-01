@@ -59,11 +59,11 @@ def creer_portefeuille(client, nom="Test"):
     return r.json()["id"]
 
 
-def ecriture(ticker, qty, prix, date, side="BUY", fees=0.0):
+def ecriture(ticker, qty, prix, date, side="BUY", fees=0.0, note=None):
     return {
         "ticker": ticker, "asset_type": "EQUITY", "side": side,
         "quantity": qty, "unit_price": prix, "fees": fees,
-        "executed_at": f"{date}T00:00:00",
+        "executed_at": f"{date}T00:00:00", "note": note,
     }
 
 
@@ -148,3 +148,45 @@ def test_portefeuille_inconnu(client):
     r = client.post("/api/v1/portfolios/inexistant/transactions",
                     json=ecriture("AAPL", 1, 150.0, "2024-03-15"))
     assert r.status_code == 404
+
+
+# ── Note libre ────────────────────────────────────────────────────────────────
+
+def test_note_conservee(client):
+    """Le mémo doit survivre à l'aller-retour ; sans lui il n'est qu'un champ mort."""
+    pid = creer_portefeuille(client)
+    r = client.post(f"/api/v1/portfolios/{pid}/transactions",
+                    json=ecriture("AAPL", 5, 122.93, "2023-01-05", note="PEA Boursorama"))
+    assert r.status_code == 201
+    assert r.json()["note"] == "PEA Boursorama"
+
+    txs = client.get(f"/api/v1/portfolios/{pid}/transactions").json()
+    txs = txs["transactions"] if isinstance(txs, dict) else txs
+    assert txs[0]["note"] == "PEA Boursorama"
+
+
+def test_note_absente_vaut_null(client):
+    """Une note vide ne doit pas s'enregistrer comme chaîne vide."""
+    pid = creer_portefeuille(client)
+    r = client.post(f"/api/v1/portfolios/{pid}/transactions",
+                    json=ecriture("AAPL", 5, 122.93, "2023-01-05"))
+    assert r.json()["note"] is None
+
+    r2 = client.post(f"/api/v1/portfolios/{pid}/transactions",
+                     json=ecriture("MSFT", 1, 300.0, "2023-01-05", note="   "))
+    assert r2.json()["note"] is None
+
+
+def test_quantite_fractionnaire(client):
+    """
+    Saisir un montant produit des quantités à huit décimales.
+
+    1 000 € d'Apple à 308,91 € font 3,23718883 titres : la quantité doit être
+    stockée telle quelle, sans arrondi qui décalerait le prix de revient.
+    """
+    pid = creer_portefeuille(client)
+    q = 3.23718883
+    client.post(f"/api/v1/portfolios/{pid}/transactions", json=ecriture("AAPL", q, 308.91, "2026-01-05"))
+    pos = {p["ticker"]: p for p in client.get(f"/api/v1/portfolios/{pid}/positions").json()["positions"]}
+    assert pos["AAPL"]["quantity"] == pytest.approx(q, abs=1e-8)
+    assert pos["AAPL"]["invested"] == pytest.approx(1000.0, abs=1e-2)
