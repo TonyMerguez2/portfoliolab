@@ -23,6 +23,16 @@ out/
 .env.local
 .env.production
 
+# Bases de données locales
+#
+# Suivre `portfoliolab.db` a fait perdre des portefeuilles : les manipulations
+# de git (checkout, stash) remplacent le fichier sous le nez du serveur, qui
+# le garde ouvert et réécrit ensuite une image périmée. C'est une donnée de
+# travail, pas du code.
+*.db
+*.db-journal
+*.db-wal
+
 # General
 .DS_Store
 *.log
