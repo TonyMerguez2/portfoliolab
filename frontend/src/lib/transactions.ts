@@ -56,6 +56,69 @@ export function sansCours(assets: Pondere[], cours: Record<string, number>): str
     .map(a => a.ticker);
 }
 
+/** Une ligne du portefeuille, telle que les écritures la produisent. */
+export type LignePortefeuille = {
+  ticker: string; name: string; type: string;
+  quantity: number; invested: number; avgCost: number;
+  price: number | null; value: number | null; weight: number;
+};
+
+/**
+ * Agrège les écritures en composition.
+ *
+ * Les poids ne sont plus saisis, ils se déduisent : un poids réglé au curseur
+ * décrit une intention, une quantité décrit une détention. Les deux divergent
+ * dès la première séance, et c'est la seconde qui est vraie.
+ *
+ * Le prix de revient suit la même règle que le backend (`compute_positions`) :
+ * une vente ne le déplace pas, elle réduit la quantité et le capital engagé au
+ * prorata. Vendre à perte ne doit pas faire baisser le prix d'achat moyen.
+ */
+export function agreger(
+  lignes: DraftTx[],
+  cours: Record<string, { price?: number | null } | undefined> = {},
+): LignePortefeuille[] {
+  const parTicker = new Map<string, LignePortefeuille>();
+
+  // Chronologique : le prix de revient dépend de l'ordre des opérations.
+  const ordonnees = [...lignes].sort((a, b) => a.executed_at.localeCompare(b.executed_at));
+
+  for (const t of ordonnees) {
+    const l = parTicker.get(t.ticker) ?? {
+      ticker: t.ticker, name: t.name, type: t.asset_type,
+      quantity: 0, invested: 0, avgCost: 0, price: null, value: null, weight: 0,
+    };
+    if (t.side === "BUY") {
+      l.invested += t.quantity * t.unit_price + t.fees;
+      l.quantity += t.quantity;
+      l.avgCost   = l.quantity > 0 ? l.invested / l.quantity : 0;
+    } else {
+      l.quantity = Math.max(0, l.quantity - t.quantity);
+      l.invested = l.avgCost * l.quantity;   // le PRU ne bouge pas à la vente
+    }
+    parTicker.set(t.ticker, l);
+  }
+
+  // Une position soldée n'est plus détenue : elle sort de la composition.
+  const lignesGardees = Array.from(parTicker.values()).filter(l => l.quantity > 1e-9);
+
+  for (const l of lignesGardees) {
+    const p = cours[l.ticker]?.price;
+    l.price = typeof p === "number" && p > 0 ? p : null;
+    l.value = l.price != null ? l.quantity * l.price : null;
+  }
+
+  // Poids sur la valeur de marché quand elle est connue, sinon sur le capital
+  // engagé — sans quoi un cours manquant effacerait la ligne du croissant.
+  const base = lignesGardees.map(l => l.value ?? l.invested);
+  const total = base.reduce((s, v) => s + v, 0);
+  lignesGardees.forEach((l, i) => {
+    l.weight = total > 0 ? (base[i] / total) * 100 : 0;
+  });
+
+  return lignesGardees.sort((a, b) => (b.value ?? b.invested) - (a.value ?? a.invested));
+}
+
 /**
  * Capital réellement engagé par une série d'écritures.
  *

@@ -1,5 +1,7 @@
 import { describe, it, expect } from "vitest";
-import { repartir, sansCours, capitalEngage, arrondirCours, type Pondere } from "./transactions";
+import { repartir, sansCours, capitalEngage, arrondirCours, agreger,
+  type Pondere } from "./transactions";
+import type { DraftTx } from "@/components/TransactionModal";
 
 const A = (ticker: string, weight: number, type = "EQUITY"): Pondere =>
   ({ ticker, name: ticker, weight, type });
@@ -76,5 +78,78 @@ describe("capitalEngage", () => {
 
   it("vaut zéro sans écriture", () => {
     expect(capitalEngage([])).toBe(0);
+  });
+});
+
+
+// ── Composition déduite des écritures ─────────────────────────────────────────
+
+const tx = (ticker: string, qty: number, prix: number, date: string,
+            side: "BUY" | "SELL" = "BUY", fees = 0): DraftTx => ({
+  ticker, asset_type: "EQUITY", name: ticker, side,
+  quantity: qty, unit_price: prix, fees, executed_at: `${date}T00:00:00`,
+});
+
+describe("agreger", () => {
+  it("regroupe plusieurs achats du même actif", () => {
+    const [l] = agreger([tx("AAPL", 10, 100, "2024-01-05"), tx("AAPL", 10, 200, "2024-06-05")]);
+    expect(l.quantity).toBe(20);
+    expect(l.avgCost).toBeCloseTo(150, 6);
+    expect(l.invested).toBeCloseTo(3000, 6);
+  });
+
+  it("intègre les frais au prix de revient", () => {
+    const [l] = agreger([tx("AAPL", 10, 100, "2024-01-05", "BUY", 10)]);
+    expect(l.avgCost).toBeCloseTo(101, 6);
+  });
+
+  it("une vente ne déplace pas le prix de revient", () => {
+    // Vendre à perte ne rend pas l'achat meilleur marché.
+    const [l] = agreger([tx("AAPL", 10, 100, "2024-01-05"), tx("AAPL", 4, 50, "2024-06-05", "SELL")]);
+    expect(l.quantity).toBe(6);
+    expect(l.avgCost).toBeCloseTo(100, 6);
+    expect(l.invested).toBeCloseTo(600, 6);
+  });
+
+  it("retire une position soldée de la composition", () => {
+    expect(agreger([tx("AAPL", 10, 100, "2024-01-05"), tx("AAPL", 10, 120, "2024-06-05", "SELL")]))
+      .toEqual([]);
+  });
+
+  it("respecte l'ordre chronologique, pas l'ordre de saisie", () => {
+    // La vente est saisie en premier mais datée après : elle doit s'appliquer
+    // ensuite, sinon elle porterait sur une position encore vide.
+    const l = agreger([tx("AAPL", 4, 150, "2024-06-05", "SELL"), tx("AAPL", 10, 100, "2024-01-05")]);
+    expect(l[0].quantity).toBe(6);
+  });
+
+  it("déduit les poids de la valeur de marché", () => {
+    const lignes = agreger(
+      [tx("AAPL", 10, 100, "2024-01-05"), tx("NVDA", 10, 100, "2024-01-05")],
+      { AAPL: { price: 300 }, NVDA: { price: 100 } },
+    );
+    // 3 000 € contre 1 000 € : 75 / 25, quels que soient les prix d'achat.
+    expect(lignes.map(l => l.ticker)).toEqual(["AAPL", "NVDA"]);
+    expect(lignes[0].weight).toBeCloseTo(75, 6);
+    expect(lignes[1].weight).toBeCloseTo(25, 6);
+  });
+
+  it("retombe sur le capital engagé quand le cours manque", () => {
+    // Sinon une ligne sans cours pèserait zéro et disparaîtrait du croissant.
+    const lignes = agreger([tx("AAPL", 10, 100, "2024-01-05"), tx("XXXX", 10, 100, "2024-01-05")]);
+    expect(lignes[0].weight).toBeCloseTo(50, 6);
+    expect(lignes[1].weight).toBeCloseTo(50, 6);
+  });
+
+  it("les poids somment à 100", () => {
+    const lignes = agreger(
+      [tx("A", 1, 10, "2024-01-05"), tx("B", 3, 7, "2024-01-05"), tx("C", 2, 13, "2024-01-05")],
+      { A: { price: 11 }, B: { price: 6 }, C: { price: 20 } },
+    );
+    expect(lignes.reduce((s, l) => s + l.weight, 0)).toBeCloseTo(100, 6);
+  });
+
+  it("ne rend rien sans écriture", () => {
+    expect(agreger([])).toEqual([]);
   });
 });

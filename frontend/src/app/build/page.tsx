@@ -1,12 +1,12 @@
 "use client";
-import React, { useState, useEffect, useRef, useCallback } from "react";
+import React, { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { useApp } from "@/lib/AppContext";
 import AssetLogo from "@/components/AssetLogo";
 import { TRENDING } from "@/lib/assets";
 import { ResponsiveContainer, PieChart, Pie, Cell, Tooltip } from "recharts";
 import TransactionModal, { type DraftTx } from "@/components/TransactionModal";
-import { repartir, sansCours, capitalEngage } from "@/lib/transactions";
+import { repartir, sansCours, capitalEngage, agreger } from "@/lib/transactions";
 
 /**
  * Construction d'un portefeuille.
@@ -193,7 +193,8 @@ const COLORS = [
 export default function BuildPage() {
     const router = useRouter();
     const { setActivePortfolio } = useApp();
-    const [assets, setAssets] = useState<Asset[]>([]);
+    /** Actif dont on saisit une transaction, quand le panneau est ouvert. */
+    const [actifSaisi, setActifSaisi] = useState<{ ticker: string; name: string; type: string } | null>(null);
     const [query, setQuery] = useState("");
     const [results, setResults] = useState<SearchResult[]>([]);
     const [searchFocused, setSearchFocused] = useState(false);
@@ -256,6 +257,14 @@ export default function BuildPage() {
     useEffect(()=>{
         fetchPrices(TRENDING.slice(0, 20).map((a: any)=>a.ticker));
     }, []);
+    // Les cours des actifs détenus, sans quoi la composition se lit au prix
+    // d'achat : les poids resteraient figés à la répartition du jour de
+    // l'achat, alors que c'est précisément leur dérive qui intéresse.
+    useEffect(()=>{
+        const manquants = Array.from(new Set(lignes.map((t)=>t.ticker))).filter((t)=>!prices[t]);
+        if (manquants.length) fetchPrices(manquants);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [lignes]);
     useEffect(()=>{
         const canvas = canvasRef.current;
         if (!canvas) return;
@@ -342,8 +351,13 @@ export default function BuildPage() {
         query,
         search
     ]);
-    const totalWeight = assets.reduce((s: any, a: any)=>s + (a.weight || 0), 0);
-    const isBalanced = totalWeight >= 98 && totalWeight <= 102;
+    // La composition n'est plus saisie : elle se déduit des écritures. Un poids
+    // réglé au curseur décrit une intention, une quantité décrit une détention ;
+    // les deux divergent dès la première séance, et c'est la seconde qui est vraie.
+    const composition = useMemo(()=>agreger(lignes, prices), [lignes, prices]);
+    const assets: Asset[] = useMemo(
+        ()=>composition.map((l)=>({ ticker: l.ticker, name: l.name, weight: l.weight, type: l.type })),
+        [composition]);
     const displayList = query ? results : POPULAR;
     const filtered = displayList.filter((r: any)=>category === "all" || r.type === category);
     const displayed = filtered.slice(0, displayCount);
@@ -414,34 +428,28 @@ export default function BuildPage() {
             (_searchRef_current = searchRef.current) === null || _searchRef_current === void 0 ? void 0 : _searchRef_current.blur();
         }
     };
+    /**
+     * Choisir un actif ouvre la saisie d'une transaction.
+     *
+     * La recherche ajoutait auparavant une ligne d'allocation avec un poids, et
+     * les écritures n'arrivaient qu'au moment d'enregistrer. Un actif « dans le
+     * portefeuille » sans quantité ni date ne décrit rien : ni ce qui est
+     * détenu, ni à quel prix il a été acheté.
+     */
     const addAssetDirect = (r: any) =>{
-        if (assets.find((a: any)=>a.ticker === r.ticker)) return;
-        const rem = Math.max(0, 100 - totalWeight);
-        setAssets((prev: any) =>[
-                ...prev,
-                {
-                    ticker: r.ticker,
-                    name: r.name,
-                    weight: rem,
-                    type: r.type
-                }
-            ]);
+        setActifSaisi({
+            ticker: r.ticker,
+            name: r.name,
+            type: r.type || "EQUITY"
+        });
+        setLigneEditee(null);
+        setPanneauTx(true);
+        setQuery("");
+        setHighlightIndex(-1);
     };
     const addAsset = addAssetDirect;
-    const removeAsset = (ticker: any) =>setAssets((prev: any) =>prev.filter((a: any)=>a.ticker !== ticker));
-    const updateWeight = (ticker: any, w: any) =>setAssets((prev: any) =>prev.map((a: any)=>a.ticker === ticker ? {
-                    ...a,
-                    weight: Math.max(0, Math.min(100, w))
-                } : a));
-    const autoBalance = ()=>{
-        const n = assets.length;
-        if (!n) return;
-        const w = Math.floor(100 / n), rem = 100 - w * n;
-        setAssets((prev: any) =>prev.map((a: any, i: any) =>({
-                    ...a,
-                    weight: i === 0 ? w + rem : w
-                })));
-    };
+    /** Retirer un actif retire les écritures qui le concernent. */
+    const removeAsset = (ticker: any) =>setLignes((prev)=>prev.filter((t)=>t.ticker !== ticker));
     const closeSaveModal = ()=>{
         setShowSave(false);
         setSavePhase("form");
@@ -453,7 +461,6 @@ export default function BuildPage() {
     };
     const openSaveModal = ()=>{
         if (assets.length === 0) return;
-        if (!isBalanced) autoBalance();
         setSavePhase("form");
         setPriceError([]);
         setTxErrors([]);
@@ -465,30 +472,33 @@ export default function BuildPage() {
         setShowSave(true);
     };
     /**
-     * Répartit un capital sur l'allocation, à une date donnée.
+     * Matérialise un modèle en transactions datées.
      *
-     * Le cours retenu est celui de cette date-là, pas celui d'aujourd'hui. La
-     * version précédente prenait le prix courant tout en datant l'écriture du
-     * jour choisi : sur un achat de mars, le prix de revient affiché était celui
-     * d'août. Les lignes produites restent modifiables une par une.
+     * Un modèle ne porte que des poids ; il lui manque un capital et une date
+     * pour devenir des écritures. Le cours retenu est celui de cette date-là,
+     * pas celui d'aujourd'hui : dater un achat de mars en le valorisant au
+     * cours d'août fausse le prix de revient sans que rien ne le signale. Les
+     * lignes produites restent modifiables une par une.
      */
-    const repartirCapital = async ()=>{
+    const appliquerPreset = async (preset: Preset)=>{
         const montant = parseFloat(capital.replace(/\s/g, "").replace(",", "."));
-        if (!montant || montant <= 0 || assets.length === 0) return;
+        if (!montant || montant <= 0 || preset.assets.length === 0) return;
         setRepartition(true);
         setPriceError([]);
         try {
-            const tickers = assets.map((a)=>a.ticker).join(",");
+            const tickers = preset.assets.map((a)=>a.ticker).join(",");
             const res = await fetch("".concat(API_URL, "/api/v1/price-at?tickers=").concat(encodeURIComponent(tickers), "&date=").concat(investDate));
             const cours: Record<string, number> = await res.json();
-            const manquants = sansCours(assets, cours);
+            const manquants = sansCours(preset.assets, cours);
             if (manquants.length > 0) {
                 setPriceError(manquants);
                 return;
             }
-            setLignes(repartir(assets, cours, montant, investDate));
+            setLignes(repartir(preset.assets, cours, montant, investDate));
+            setPresetToConfirm(null);
+            setCapital("");
         } catch (e) {
-            setPriceError(assets.map((a)=>a.ticker));
+            setPriceError(preset.assets.map((a)=>a.ticker));
         } finally{
             setRepartition(false);
         }
@@ -915,11 +925,9 @@ export default function BuildPage() {
                                                     gap: "8px"
                                                 }}>
             {PRESETS.map((p: any)=><button key={p.name} onClick={()=>{
-                                                            if (assets.length > 0) {
-                                                                setPresetToConfirm(p);
-                                                                return;
-                                                            }
-                                                            setAssets(p.assets);
+                                                            // Un modèle ne décrit qu'une répartition : il lui manque
+                                                            // un capital et une date pour devenir des écritures.
+                                                            setPresetToConfirm(p);
                                                         }} style={{
                                                             display: "flex",
                                                             alignItems: "center",
@@ -998,58 +1006,13 @@ export default function BuildPage() {
           {assets.length}
            actifs
         </span>
-        <span style={{
-                                                                            color: isBalanced ? "#22c55e" : totalWeight > 100 ? "#ef4444" : "#fcd34d",
-                                                                            fontSize: "11px",
-                                                                            fontWeight: 600
-                                                                        }}>
-          {totalWeight.toFixed(1)}
-          %
-        </span>
       </div>
-      <div style={{
-                                                                    display: "flex",
-                                                                    gap: "6px"
-                                                                }}>
-        <button onClick={autoBalance} style={{
-                                                                            padding: "4px 10px",
-                                                                            borderRadius: "5px",
-                                                                            background: "rgba(255,255,255,0.04)",
-                                                                            border: "1px solid rgba(255,255,255,0.08)",
-                                                                            color: "rgba(255,255,255,0.45)",
-                                                                            fontSize: "9px",
-                                                                            cursor: "pointer",
-                                                                            letterSpacing: "0.08em"
-                                                                        }}>
-          ÉQUILIBRER
-        </button>
-        <button title="Bientôt disponible — optimisation Markowitz" style={{
-                                                                            padding: "4px 10px",
-                                                                            borderRadius: "5px",
-                                                                            background: "rgba(255,255,255,0.02)",
-                                                                            border: "1px solid rgba(255,255,255,0.05)",
-                                                                            color: "rgba(255,255,255,0.2)",
-                                                                            fontSize: "9px",
-                                                                            cursor: "not-allowed",
-                                                                            letterSpacing: "0.08em"
-                                                                        }}>
-          OPTIMISER
-        </button>
-      </div>
-    </div>
-    <div style={{
-                                                            height: "3px",
-                                                            background: "rgba(255,255,255,0.06)",
-                                                            borderRadius: "2px",
-                                                            marginTop: "8px"
-                                                        }}>
-      <div style={{
-                                                                width: "".concat(String(Math.min(totalWeight, 100)), "%"),
-                                                                height: "100%",
-                                                                borderRadius: "2px",
-                                                                background: totalWeight > 100 ? "#ef4444" : isBalanced ? "#22c55e" : "#fcd34d",
-                                                                transition: "width 0.3s"
-                                                            }} />
+      {/* Le total des poids et « Équilibrer » n'ont plus d'objet : les poids
+          se déduisent des quantités, ils somment donc à 100 par construction.
+          On montre à la place le capital réellement engagé. */}
+      <span style={{ color: "rgba(255,255,255,0.45)", fontSize: "11px", fontWeight: 500 }}>
+        {capitalEngage(lignes).toLocaleString("fr-FR", { maximumFractionDigits: 0 })} € investis
+      </span>
     </div>
   </div>
   <div style={{
@@ -1091,36 +1054,30 @@ export default function BuildPage() {
       {a.ticker}
     </div>
   </div>
-  <input type="range" min={0} max={100} value={a.weight} onChange={(e: any)=>updateWeight(a.ticker, parseFloat(e.target.value) || 0)} style={{
-                                                                    width: "90px",
-                                                                    accentColor: COLORS[i % COLORS.length],
-                                                                    cursor: "pointer",
-                                                                    flexShrink: 0
-                                                                }} />
-  <div style={{
-                                                                    display: "flex",
-                                                                    alignItems: "center",
-                                                                    gap: "3px",
-                                                                    flexShrink: 0
-                                                                }}>
-    <input type="number" value={a.weight} min={0} max={100} onChange={(e: any)=>updateWeight(a.ticker, parseFloat(e.target.value) || 0)} style={{
-                                                                            width: "40px",
-                                                                            background: "rgba(255,255,255,0.06)",
-                                                                            border: "1px solid rgba(255,255,255,0.09)",
-                                                                            borderRadius: "5px",
-                                                                            padding: "4px 5px",
-                                                                            color: "#F8F9FC",
-                                                                            fontSize: "11px",
-                                                                            textAlign: "right",
-                                                                            outline: "none"
-                                                                        }} />
-    <span style={{
-                                                                            color: "rgba(255,255,255,0.25)",
-                                                                            fontSize: "10px"
-                                                                        }}>
-      %
-    </span>
+  {/* Ce que les écritures disent de cette ligne. Le poids se lit, il ne se
+      règle plus : le modifier reviendrait à réécrire l'histoire des achats. */}
+  <div style={{ textAlign: "right", flexShrink: 0, minWidth: 130 }}>
+    <div style={{ color: "#F8F9FC", fontSize: "12px", fontWeight: 500 }}>
+      {(composition[i].value ?? composition[i].invested).toLocaleString("fr-FR", { maximumFractionDigits: 0 })} €
+    </div>
+    <div style={{ color: "rgba(255,255,255,0.28)", fontSize: "10px", marginTop: "1px" }}>
+      {composition[i].quantity.toLocaleString("fr-FR", { maximumFractionDigits: 6 })}
+      {" × "}
+      {composition[i].avgCost.toLocaleString("fr-FR", { maximumFractionDigits: 2 })} €
+    </div>
   </div>
+  <div style={{ width: 46, textAlign: "right", flexShrink: 0,
+                color: COLORS[i % COLORS.length], fontSize: "11px", fontWeight: 600 }}>
+    {composition[i].weight.toFixed(1)}%
+  </div>
+  <button onClick={()=>{ setActifSaisi({ ticker: a.ticker, name: a.name, type: a.type }); setLigneEditee(null); setPanneauTx(true); }}
+    title="Ajouter une transaction sur cet actif"
+    style={{ background: "transparent", border: "none", color: "rgba(255,255,255,0.28)",
+             cursor: "pointer", fontSize: "15px", lineHeight: 1, flexShrink: 0, padding: "0 2px" }}
+    onMouseEnter={(e: any)=>e.currentTarget.style.color = "#9BB9FF"}
+    onMouseLeave={(e: any)=>e.currentTarget.style.color = "rgba(255,255,255,0.28)"}>
+    +
+  </button>
   <button onClick={()=>removeAsset(a.ticker)} style={{
                                                                     background: "transparent",
                                                                     border: "none",
@@ -1267,7 +1224,8 @@ export default function BuildPage() {
                                                                             fontSize: "10px",
                                                                             fontWeight: 600
                                                                         }}>
-    {a.weight}
+    {/* Un poids déduit est un réel, pas l'entier que réglait le curseur. */}
+    {a.weight.toFixed(1)}
     %
   </span>
 </div>)}
@@ -1286,7 +1244,7 @@ export default function BuildPage() {
                                             letterSpacing: "0.1em",
                                             transition: "all 0.2s"
                                         }}>
-          {assets.length === 0 ? "AUCUN ACTIF" : isBalanced ? "SAUVEGARDER →" : "\xc9QUILIBRER ET SAUVEGARDER →"}
+          {lignes.length === 0 ? "AUCUNE TRANSACTION" : "SAUVEGARDER →"}
         </button>
         <button onClick={()=>router.push("/")} style={{
                                             padding: "9px",
@@ -1543,31 +1501,9 @@ export default function BuildPage() {
       </p>
     </div>
     {!isSimulation && savePhase === "form" && <>
-      {/* Répartition d'un capital : un raccourci pour ne pas saisir dix lignes
-          à la main. Il produit des écritures ordinaires, modifiables ensuite. */}
-      {lignes.length === 0 && <div style={{ marginBottom: "16px" }}>
-        <label style={labelCss}>RÉPARTIR UN CAPITAL (OPTIONNEL)</label>
-        <div style={{ display: "flex", gap: "8px" }}>
-          <div style={{ position: "relative", flex: 1 }}>
-            <input value={capital} onChange={(e: any)=>setCapital(e.target.value)} placeholder="10 000" type="number" min="0"
-              style={{ ...inputCss, paddingRight: "28px" }} />
-            <span style={{ position: "absolute", right: "10px", top: "50%", transform: "translateY(-50%)", fontSize: "12px", color: "rgba(255,255,255,0.28)" }}>€</span>
-          </div>
-          <input value={investDate} onChange={(e: any)=>setInvestDate(e.target.value)} type="date" max={today}
-            style={{ ...inputCss, width: "150px", colorScheme: "dark" }} />
-          <button onClick={repartirCapital} disabled={repartition || !capital}
-            style={{ padding: "0 14px", borderRadius: "8px", border: "1px solid rgba(91,141,239,0.35)",
-              background: "rgba(91,141,239,0.14)", color: "#9BB9FF", fontSize: "11px", fontWeight: 600,
-              cursor: repartition || !capital ? "default" : "pointer", opacity: repartition || !capital ? 0.45 : 1,
-              whiteSpace: "nowrap", fontFamily: "inherit" }}>
-            {repartition ? "…" : "Générer"}
-          </button>
-        </div>
-        <p style={{ margin: "5px 0 0", fontSize: "10px", color: "rgba(255,255,255,0.20)", lineHeight: 1.5 }}>
-          Une transaction par actif, au cours de clôture de cette date — pas au cours du jour.
-        </p>
-      </div>}
-
+      {/* La répartition d'un capital a rejoint la boîte des modèles : elle n'a
+          de sens qu'au moment de choisir une allocation, pas à l'enregistrement,
+          où les écritures existent déjà. */}
       {priceError.length > 0 && <div style={{ marginBottom: "14px", padding: "10px 12px", borderRadius: "8px",
         background: "rgba(248,113,113,0.10)", border: "1px solid rgba(248,113,113,0.25)", color: "#fca5a5", fontSize: "11px" }}>
         Cours introuvable à cette date pour : {priceError.join(", ")}. Choisissez une autre date, ou saisissez ces lignes à la main.
@@ -1614,32 +1550,10 @@ export default function BuildPage() {
           </div>
         )}
 
-        {!panneauTx && <button onClick={()=>{ setLigneEditee(null); setPanneauTx(true); }}
-          style={{ marginTop: "8px", width: "100%", padding: "9px", borderRadius: "8px",
-            border: "1px dashed rgba(255,255,255,0.14)", background: "transparent",
-            color: "rgba(255,255,255,0.45)", fontSize: "11px", cursor: "pointer", fontFamily: "inherit" }}>
-          + Ajouter une transaction
-        </button>}
       </div>
-
-      {/* La saisie elle-même — le composant du dashboard, à l'identique. */}
-      {panneauTx && <div style={{ marginBottom: "16px", padding: "16px", borderRadius: "12px",
-        background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.08)" }}>
-        <TransactionModal
-          isOpen={true}
-          embedded
-          initialDraft={ligneEditee !== null ? lignes[ligneEditee] : null}
-          onDraft={(tx)=>{
-            setLignes(prev => ligneEditee !== null
-              ? prev.map((l, j)=> j === ligneEditee ? tx : l)
-              : [...prev, tx]);
-            setPanneauTx(false);
-            setLigneEditee(null);
-          }}
-          onSuccess={()=>{}}
-          onClose={()=>{ setPanneauTx(false); setLigneEditee(null); }}
-        />
-      </div>}
+      {/* La saisie ne vit plus ici : elle part de la recherche, sur la page.
+          Ce récapitulatif reste en lecture, le temps de vérifier avant
+          d'enregistrer. */}
     </>}
     {isSimulation && savePhase === "form" && <div style={{
                                     marginBottom: "18px"
@@ -1828,6 +1742,25 @@ export default function BuildPage() {
   </div>
 </div>;
             })()}
+  {/* La saisie d'une transaction — le composant du dashboard, à l'identique.
+      Elle s'ouvre depuis la recherche : choisir un actif, c'est déclarer une
+      opération sur cet actif, pas l'inscrire à une allocation. */}
+  {panneauTx && <TransactionModal
+        isOpen={true}
+        prefillAsset={actifSaisi ?? undefined}
+        lockAsset={!!actifSaisi && ligneEditee === null}
+        initialDraft={ligneEditee !== null ? lignes[ligneEditee] : null}
+        onDraft={(tx)=>{
+            setLignes((prev)=>ligneEditee !== null
+                ? prev.map((l, j)=>j === ligneEditee ? tx : l)
+                : [...prev, tx]);
+            setPanneauTx(false);
+            setLigneEditee(null);
+            setActifSaisi(null);
+        }}
+        onSuccess={()=>{}}
+        onClose={()=>{ setPanneauTx(false); setLigneEditee(null); setActifSaisi(null); }}
+    />}
   {presetToConfirm && <div style={{
                     position: "fixed",
                     inset: 0,
@@ -1865,12 +1798,32 @@ export default function BuildPage() {
     <p style={{
                                 color: "rgba(255,255,255,0.3)",
                                 fontSize: "11px",
-                                margin: "0 0 24px",
+                                margin: "0 0 18px",
                                 lineHeight: 1.7,
                                 letterSpacing: "0.02em"
                             }}>
-      Votre composition actuelle sera remplacée. Cette action est irréversible.
+      {lignes.length > 0
+        ? "Vos transactions actuelles seront remplacées. Cette action est irréversible."
+        : "Un modèle ne décrit qu'une répartition. Indiquez le capital et la date de l'achat : une transaction sera créée par actif, au cours de clôture de ce jour-là."}
     </p>
+    <div style={{ display: "flex", gap: "8px", marginBottom: "16px" }}>
+      <div style={{ position: "relative", flex: 1 }}>
+        <input value={capital} onChange={(e: any)=>setCapital(e.target.value)} placeholder="10 000" type="number" min="0"
+          style={{ width: "100%", background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.10)",
+                   borderRadius: "8px", padding: "10px 28px 10px 12px", color: "#F8F9FC", fontSize: "13px",
+                   outline: "none", boxSizing: "border-box", fontFamily: "inherit" }} />
+        <span style={{ position: "absolute", right: "10px", top: "50%", transform: "translateY(-50%)",
+                       fontSize: "12px", color: "rgba(255,255,255,0.28)" }}>€</span>
+      </div>
+      <input value={investDate} onChange={(e: any)=>setInvestDate(e.target.value)} type="date"
+        max={new Date().toISOString().slice(0, 10)}
+        style={{ width: "150px", background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.10)",
+                 borderRadius: "8px", padding: "10px 12px", color: "#F8F9FC", fontSize: "13px",
+                 outline: "none", boxSizing: "border-box", fontFamily: "inherit", colorScheme: "dark" }} />
+    </div>
+    {priceError.length > 0 && <p style={{ margin: "0 0 14px", fontSize: "10px", color: "#fca5a5", lineHeight: 1.6 }}>
+      Cours introuvable à cette date pour : {priceError.join(", ")}. Essayez une autre date.
+    </p>}
     <div style={{
                                 display: "flex",
                                 gap: "10px"
@@ -1888,22 +1841,21 @@ export default function BuildPage() {
                                     }}>
         ANNULER
       </button>
-      <button onClick={()=>{
-                                        setAssets(presetToConfirm.assets);
-                                        setPresetToConfirm(null);
-                                    }} style={{
+      <button onClick={()=>appliquerPreset(presetToConfirm)}
+                                    disabled={repartition || !capital} style={{
                                         flex: 2,
                                         padding: "11px",
                                         borderRadius: "8px",
                                         background: "rgba(91,141,239,0.18)",
                                         border: "1px solid rgba(91,141,239,0.35)",
                                         color: "#9BB9FF",
+                                        opacity: repartition || !capital ? 0.45 : 1,
                                         fontSize: "11px",
                                         fontWeight: 500,
                                         cursor: "pointer",
                                         letterSpacing: "0.08em"
                                     }}>
-        REMPLACER →
+        {repartition ? "…" : "CRÉER LES TRANSACTIONS →"}
       </button>
     </div>
   </div>
