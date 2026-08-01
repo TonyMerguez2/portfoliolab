@@ -4,8 +4,14 @@ __pycache__/
 *.egg-info/
 .venv/
 venv/
-dist/
-build/
+# Ancrés à la racine et au backend. Sans ancrage, `build/` attrapait aussi
+# `frontend/src/app/build/` — une route de l'App Router, donc du code source.
+# Elle est restée hors de git jusqu'à ce qu'un script la détruise, sans rien
+# à restaurer.
+/dist/
+/build/
+backend/dist/
+backend/build/
 .pytest_cache/
 .ruff_cache/
 
@@ -13,6 +19,7 @@ build/
 node_modules/
 .next/
 out/
+*.tsbuildinfo
 .env.local
 .env.production
 
