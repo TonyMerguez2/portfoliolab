@@ -302,9 +302,128 @@ async def get_trending() -> dict:
     except Exception as e:
         return {"results": {}}
 
+# Fenêtres téléchargées : volontairement plus larges que la période demandée,
+# pour que week-ends et jours fériés n'entament pas l'historique utile.
+_YF_WINDOW = {"1d": "5d", "7d": "12d", "1mo": "35d", "3mo": "95d",
+              "6mo": "8mo", "1y": "14mo", "3y": "40mo", "max": "max"}
+# `max` n'y figure pas : il n'a pas de borne à couper, on garde tout.
+_PERIOD_DAYS = {"7d": 7, "1mo": 30, "3mo": 91, "6mo": 183, "1y": 365, "3y": 1095}
+
+
+def _trim_to_period(obj, period: str):
+    """Ramène une fenêtre téléchargée à la période réellement demandée.
+
+    Sans cette coupe, la marge de sécurité de `_YF_WINDOW` était comptée comme
+    de la période : la variation « 7 jours » en couvrait douze, et « 1 an »
+    quatorze mois. L'écart n'avait rien d'anecdotique — NVDA affichait +41,74 %
+    sur un an là où la vraie variation valait +11,61 %, et MSFT sortait un
+    mois à -4,47 % quand il était à +5,46 %. Le signe lui-même était faux.
+
+    Le point de référence est la dernière cotation *antérieure ou égale* à la
+    borne, et non la première postérieure : « il y a un mois » désigne le
+    dernier cours connu à cette date, pas celui de la séance qui a suivi.
+    """
+    from datetime import datetime, timedelta
+    import pandas as pd
+
+    days = _PERIOD_DAYS.get(period)
+    if days is None or len(obj) == 0:
+        return obj
+    idx = obj.index
+    cutoff = pd.Timestamp(datetime.today().date() - timedelta(days=days))
+    tz = getattr(idx, "tz", None)
+    if tz is not None:
+        cutoff = cutoff.tz_localize(tz)
+    before = idx[idx <= cutoff]
+    start = before[-1] if len(before) else idx[0]
+    return obj[idx >= start]
+
+
+def _session_with_base(frame, sessions):
+    """Dernière séance, précédée de la clôture de la séance d'avant.
+
+    Cette ligne supplémentaire est la référence de la journée. Sans elle, la
+    courbe partait de l'ouverture : mesurée depuis 9h30 quand la variation
+    affichée partout ailleurs part de la veille. Les deux se contredisaient à
+    l'écran — +0,40 % dans la bande de tête, -0,18 % sur la courbe, signes
+    opposés le même jour.
+    """
+    import numpy as np
+    import pandas as pd
+
+    if len(frame) == 0:
+        return frame
+    # `sessions` doit être un tableau pour que la comparaison soit terme à
+    # terme : sur une liste Python, `sessions == derniere` renvoie le scalaire
+    # False, et l'indexation lève au lieu de filtrer.
+    sessions = np.asarray(sessions)
+    derniere = max(sessions)
+    seance = frame[sessions == derniere]
+    if len(seance) == 0:
+        return seance
+    avant = frame[sessions < derniere]
+    return pd.concat([avant.iloc[[-1]], seance]) if len(avant) else seance
+
+
+def _intraday_session(close, sessions, ticker: str, n_tickers: int) -> list[float]:
+    """Barres intraday de la dernière séance ouverte, pour un ticker.
+
+    On isole la dernière séance plutôt que de prendre les N dernières barres :
+    une fenêtre de deux jours enjambe une clôture, et la courbe montrerait
+    alors un saut de nuit que la variation du jour ne contient pas.
+    """
+    import pandas as pd
+
+    if close is None or sessions is None:
+        return []
+    try:
+        if n_tickers == 1:
+            s = close if isinstance(close, pd.Series) else close.iloc[:, 0]
+        else:
+            if ticker not in close.columns:
+                return []
+            s = close[ticker]
+        by_session = pd.Series(s.values, index=sessions).dropna()
+        if by_session.empty:
+            return []
+        last = max(by_session.index)
+        return [float(v) for v in by_session[by_session.index == last].values]
+    except Exception:
+        return []
+
+
+def _downsample(values: list[float], max_points: int = 40) -> list[float]:
+    """Réduit une série à un nombre de points tenant dans une sparkline.
+
+    Le dernier point est réimposé après l'échantillonnage : c'est le prix
+    courant, celui que le reste de la carte affiche en chiffres. Un pas
+    régulier le manquerait presque toujours, et la courbe finirait alors
+    ailleurs que le montant écrit juste à côté.
+    """
+    n = len(values)
+    if n <= max_points:
+        return values
+    step = n / max_points
+    out = [values[int(i * step)] for i in range(max_points)]
+    out[-1] = values[-1]
+    return out
+
+
 @router.get("/prices", tags=["Prices"])
 async def get_prices(tickers: str = "", period: str = "1d") -> list:
-    """Get prices + period change for multiple tickers."""
+    """Prix courant, variation sur la période, et série pour la sparkline.
+
+    La série accompagne la variation : elle part du même point de référence
+    (clôture précédente en 1d, début de fenêtre sinon) et finit sur le même
+    prix. Courbe et pourcentage racontent donc la même chose.
+
+    Sur 1d, la fenêtre journalière ne contient qu'un point depuis la clôture
+    précédente — il n'y a pas de courbe à en tirer. On télécharge alors le
+    pas de 15 minutes en plus, uniquement pour la série : la variation
+    continue d'être calculée sur les clôtures journalières, à l'identique.
+    Les dériver de l'intraday donnerait des chiffres légèrement différents
+    (0,02 à 0,03 point mesuré), et cet écart se verrait d'une page à l'autre.
+    """
     if not tickers:
         return []
     try:
@@ -317,22 +436,33 @@ async def get_prices(tickers: str = "", period: str = "1d") -> list:
         if not ticker_list:
             return []
 
-        # Map frontend period → yfinance download window
-        YF_WINDOW = {"1d": "5d", "7d": "12d", "1mo": "35d", "3mo": "95d", "1y": "14mo"}
-        yf_period = YF_WINDOW.get(period, "5d")
+        yf_period = _YF_WINDOW.get(period, "5d")
 
         def batch_download():
             arg = ticker_list[0] if len(ticker_list) == 1 else ticker_list
             return yf.download(arg, period=yf_period, progress=False, auto_adjust=True)
 
+        def batch_intraday():
+            arg = ticker_list[0] if len(ticker_list) == 1 else ticker_list
+            return yf.download(arg, period="2d", interval="15m", progress=False, auto_adjust=True)
+
         loop = asyncio.get_running_loop()
         with ThreadPoolExecutor(max_workers=1) as pool:
             hist = await loop.run_in_executor(pool, batch_download)
+            intra = await loop.run_in_executor(pool, batch_intraday) if period == "1d" else None
 
         if hist.empty:
             return []
 
         close = hist["Close"]
+        # Séances repérées dans le fuseau de la place, pas en UTC : une séance
+        # américaine se termine à 20h UTC et déborderait sur le lendemain.
+        intra_close, intra_sessions = None, None
+        if intra is not None and not intra.empty:
+            intra_close = intra["Close"]
+            idx = intra_close.index
+            intra_sessions = (idx.tz_convert("America/New_York") if idx.tz is not None else idx).date
+
         results = []
 
         for ticker in ticker_list:
@@ -343,7 +473,7 @@ async def get_prices(tickers: str = "", period: str = "1d") -> list:
                     if ticker not in close.columns:
                         continue
                     series = close[ticker]
-                series = series.dropna()
+                series = _trim_to_period(series.dropna(), period)
                 if len(series) == 0:
                     continue
                 price = float(series.iloc[-1])
@@ -352,7 +482,27 @@ async def get_prices(tickers: str = "", period: str = "1d") -> list:
                 if price <= 0:
                     continue
                 change = ((price - prev) / prev * 100) if prev else 0
-                results.append({"symbol": ticker, "price": round(price, 4), "change": round(change, 2)})
+
+                # Les deux extrémités sont clouées sur `prev` et `price`, c'est-à-dire
+                # sur les nombres mêmes dont la variation est tirée. Le tracé intraday
+                # vient d'un pas de 15 minutes et la variation de clôtures journalières :
+                # laissés libres, ils divergeaient de 0,02 à 0,03 point, et la courbe
+                # ne finissait donc pas sur le montant écrit à côté d'elle. L'intérieur
+                # reste la vraie trajectoire.
+                if period == "1d":
+                    series_vals = _intraday_session(intra_close, intra_sessions, ticker, len(ticker_list))
+                else:
+                    series_vals = [float(v) for v in series.values]
+                if series_vals:
+                    series_vals = [prev] + series_vals
+                    series_vals[-1] = price
+
+                results.append({
+                    "symbol": ticker,
+                    "price": round(price, 4),
+                    "change": round(change, 2),
+                    "series": [round(v, 4) for v in _downsample(series_vals)],
+                })
             except Exception:
                 continue
 
@@ -360,6 +510,230 @@ async def get_prices(tickers: str = "", period: str = "1d") -> list:
     except Exception as e:
         logger.error(f"Prices error: {e}")
         return []
+
+@router.get("/price-at", tags=["Prices"])
+async def price_at(tickers: str = "", date: str = "") -> dict:
+    """Cours de clôture à une date donnée, pour plusieurs tickers.
+
+    Nécessaire à la saisie d'un portefeuille existant : jusqu'ici la page de
+    construction enregistrait les achats **au prix du jour** même lorsqu'on
+    déclarait les avoir faits deux ans plus tôt. Le prix de revient était donc
+    faux, et la plus-value avec lui.
+
+    Renvoie la dernière clôture *antérieure ou égale* à la date demandée : un
+    achat un samedi se règle au cours du vendredi, et une date antérieure à
+    l'introduction en bourse ne renvoie rien plutôt qu'un prix inventé.
+    """
+    if not tickers or not date:
+        return {}
+    try:
+        import yfinance as yf
+        import pandas as pd
+        from concurrent.futures import ThreadPoolExecutor
+        from datetime import datetime, timedelta
+        import asyncio
+
+        ticker_list = [t.strip() for t in tickers.split(",") if t.strip()][:50]
+        if not ticker_list:
+            return {}
+        cible = datetime.fromisoformat(date).date()
+        # Fenêtre large en amont : week-ends, fériés et suspensions de cotation.
+        debut = (cible - timedelta(days=12)).isoformat()
+        fin = (cible + timedelta(days=1)).isoformat()
+
+        def download():
+            arg = ticker_list[0] if len(ticker_list) == 1 else ticker_list
+            return yf.download(arg, start=debut, end=fin, progress=False, auto_adjust=True)
+
+        loop = asyncio.get_running_loop()
+        with ThreadPoolExecutor(max_workers=1) as pool:
+            hist = await loop.run_in_executor(pool, download)
+        if hist.empty:
+            return {}
+
+        close = hist["Close"]
+        if isinstance(close, pd.Series):
+            close = close.to_frame(name=ticker_list[0])
+
+        out: dict = {}
+        for t in ticker_list:
+            if t not in close.columns:
+                continue
+            serie = close[t].dropna()
+            if len(serie):
+                out[t] = round(float(serie.iloc[-1]), 4)
+        return out
+    except Exception as e:
+        logger.error(f"Price-at error: {e}")
+        return {}
+
+
+@router.get("/portfolio-history", tags=["Prices"])
+async def portfolio_history(tickers: str = "", weights: str = "", period: str = "1mo") -> dict:
+    """Valeur d'un portefeuille au fil du temps, en base 1 au début de la fenêtre.
+
+    Endpoint distinct de /backtest à dessein : celui-ci refuse les fenêtres de
+    moins de trente séances, et il a raison — il annualise une volatilité et un
+    Sharpe, qui ne veulent rien dire sur vingt points. Mais une courbe, si. D'où
+    ce calcul séparé, qui ne produit qu'une trajectoire et aucune statistique.
+
+    Achat-conservation aux pondérations courantes : value(t) = Σ wᵢ·Pᵢ(t)/Pᵢ(0).
+    Les dates sont intersectées, non complétées — un actif qui cote le week-end
+    et une action qui ne cote pas se rejoignent sur les seules séances communes,
+    plutôt que d'inventer un prix figé pour le samedi.
+    """
+    if not tickers or not weights:
+        return {"points": [], "change": None}
+    try:
+        import yfinance as yf
+        import pandas as pd
+        from concurrent.futures import ThreadPoolExecutor
+        import asyncio
+
+        ticker_list = [t.strip() for t in tickers.split(",") if t.strip()][:50]
+        try:
+            weight_list = [float(w) for w in weights.split(",")]
+        except ValueError:
+            return {"points": [], "change": None}
+        if not ticker_list or len(weight_list) != len(ticker_list):
+            return {"points": [], "change": None}
+
+        total_w = sum(weight_list)
+        if total_w <= 0:
+            return {"points": [], "change": None}
+
+        interval = "15m" if period == "1d" else "1d"
+        yf_period = "2d" if period == "1d" else _YF_WINDOW.get(period, "35d")
+
+        def download():
+            arg = ticker_list[0] if len(ticker_list) == 1 else ticker_list
+            return yf.download(arg, period=yf_period, interval=interval,
+                               progress=False, auto_adjust=True)
+
+        def download_daily():
+            arg = ticker_list[0] if len(ticker_list) == 1 else ticker_list
+            return yf.download(arg, period="5d", progress=False, auto_adjust=True)
+
+        loop = asyncio.get_running_loop()
+        with ThreadPoolExecutor(max_workers=1) as pool:
+            hist = await loop.run_in_executor(pool, download)
+            # Sur 1d seulement : les mêmes clôtures journalières que /prices,
+            # pour clore la courbe sur le prix de l'instant (cf. plus bas).
+            daily = await loop.run_in_executor(pool, download_daily) if period == "1d" else None
+
+        if hist.empty:
+            return {"points": [], "change": None}
+
+        close = hist["Close"]
+        if isinstance(close, pd.Series):
+            close = close.to_frame(name=ticker_list[0])
+
+        cols = [t for t in ticker_list if t in close.columns]
+        if not cols:
+            return {"points": [], "change": None}
+        frame = _trim_to_period(close[cols].dropna(), period)
+        if len(frame) < 2:
+            return {"points": [], "change": None}
+
+        if period == "1d":
+            idx = frame.index
+            sessions = (idx.tz_convert("America/New_York") if idx.tz is not None else idx).date
+            frame = _session_with_base(frame, sessions)
+            if len(frame) < 2:
+                return {"points": [], "change": None}
+
+        # Les poids sont renormalisés sur les seuls actifs récupérés : sinon la
+        # courbe d'un portefeuille dont un ticker a échoué démarrerait sous 1.
+        w = {t: weight_list[ticker_list.index(t)] for t in cols}
+        w_sum = sum(w.values())
+        if w_sum <= 0:
+            return {"points": [], "change": None}
+
+        normed = frame / frame.iloc[0]
+        value = sum(normed[t] * (w[t] / w_sum) for t in cols)
+
+        points = [
+            {"date": d.isoformat(), "value": round(float(v), 6)}
+            for d, v in value.items()
+        ]
+
+        # Le pas de 15 minutes ne livre que des barres *achevées* : en début de
+        # séance la courbe accusait jusqu'à un quart d'heure de retard sur le
+        # prix courant. Assez pour contredire la bande de tête — mesuré à
+        # +0,40 % d'un côté et -0,18 % de l'autre, signes opposés le même jour.
+        # On ajoute donc un point final au prix de l'instant, tiré des mêmes
+        # clôtures journalières que /prices : la trajectoire reste celle de
+        # l'intraday, mais elle finit sur le chiffre écrit à côté d'elle.
+        if period == "1d" and daily is not None and not daily.empty:
+            dclose = daily["Close"]
+            if isinstance(dclose, pd.Series):
+                dclose = dclose.to_frame(name=ticker_list[0])
+            courant = 0.0
+            couvert = 0.0
+            for t in cols:
+                if t not in dclose.columns:
+                    continue
+                serie = dclose[t].dropna()
+                if len(serie) < 2:
+                    continue
+                prix, veille = float(serie.iloc[-1]), float(serie.iloc[-2])
+                if veille <= 0:
+                    continue
+                courant += (prix / veille) * (w[t] / w_sum)
+                couvert += w[t] / w_sum
+            if couvert > 0:
+                # Renormalisé sur les seuls actifs couverts, sinon un ticker
+                # sans clôture journalière tirerait la valeur finale vers zéro.
+                points.append({"date": frame.index[-1].isoformat(),
+                               "value": round(courant / couvert, 6)})
+
+        change = round((points[-1]["value"] - 1) * 100, 2)
+        return {"points": points, "change": change}
+    except Exception as e:
+        logger.error(f"Portfolio history error: {e}")
+        return {"points": [], "change": None}
+
+
+_FNG_CACHE: dict = {"at": 0.0, "data": None}
+
+
+@router.get("/fear-greed", tags=["Market"])
+async def fear_greed() -> dict:
+    """Indice Fear & Greed d'alternative.me.
+
+    C'est un indice de sentiment **crypto**, pas actions — celui de CNN, qui
+    porte sur les marchés américains, n'a pas d'API publique. Le champ `scope`
+    le dit explicitement pour que l'interface le nomme correctement : présenté
+    comme un baromètre général au-dessus d'un portefeuille d'actions, il
+    induirait en erreur.
+
+    Mis en cache : l'indice n'est recalculé qu'une fois par jour, le
+    redemander à chaque affichage de page ne ferait qu'ajouter de la latence
+    et solliciter un service gratuit pour rien.
+    """
+    import time
+
+    if _FNG_CACHE["data"] is not None and time.time() - _FNG_CACHE["at"] < 1800:
+        return _FNG_CACHE["data"]
+    try:
+        import httpx
+        async with httpx.AsyncClient(timeout=6.0) as client:
+            resp = await client.get("https://api.alternative.me/fng/?limit=1")
+        entry = (resp.json().get("data") or [{}])[0]
+        valeur = int(entry.get("value"))
+        out = {
+            "value": valeur,
+            "label": entry.get("value_classification"),
+            "scope": "crypto",
+        }
+        _FNG_CACHE.update({"at": time.time(), "data": out})
+        return out
+    except Exception as e:
+        logger.error(f"Fear & Greed error: {e}")
+        # Ni valeur par défaut ni zéro : l'interface doit pouvoir taire le
+        # panneau plutôt que d'afficher un chiffre inventé.
+        return {"value": None, "label": None, "scope": "crypto"}
+
 
 def _yahoo_to_binance_symbol(ticker: str) -> str | None:
     """Convertit un ticker Yahoo (BTC-USD) en symbole Binance (BTCUSDT). None si non applicable."""

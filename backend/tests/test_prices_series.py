@@ -1,0 +1,210 @@
+"""Série de sparkline renvoyée par /prices.
+
+Les deux invariants testés ici sont ceux qui, une fois rompus, font mentir la
+carte d'actif sans rien casser de visible : une courbe qui ne finit pas sur le
+prix affiché, ou qui enjambe une clôture.
+"""
+from datetime import datetime, timedelta
+
+import pandas as pd
+import pytest
+
+from app.api.routes.backtest import _downsample, _intraday_session, _session_with_base, _trim_to_period
+
+
+class TestTrimToPeriod:
+    """La fenêtre téléchargée est plus large que la période, à dessein.
+
+    Sans coupe, cette marge était comptée comme de la période : « 7 jours »
+    en couvrait douze, « 1 an » quatorze mois. Mesuré sur données réelles,
+    NVDA affichait +41,74 % sur un an au lieu de +11,61 %, et MSFT sortait un
+    mois à -4,47 % quand il valait +5,46 % — signe inversé.
+    """
+
+    @staticmethod
+    def _serie(jours: int):
+        fin = datetime.today().date()
+        idx = pd.to_datetime([fin - timedelta(days=n) for n in range(jours, -1, -1)])
+        return pd.Series(range(len(idx)), index=idx, dtype=float)
+
+    def test_coupe_a_sept_jours(self):
+        s = self._serie(30)
+        coupe = _trim_to_period(s, "7d")
+        assert (coupe.index[-1] - coupe.index[0]).days == 7
+
+    def test_coupe_a_un_an(self):
+        s = self._serie(420)
+        coupe = _trim_to_period(s, "1y")
+        assert (coupe.index[-1] - coupe.index[0]).days == 365
+
+    def test_garde_la_derniere_cotation_avant_la_borne(self):
+        """« Il y a sept jours » désigne le dernier cours connu à cette date.
+
+        Ici seuls les jours pairs cotent, et la borne à J-7 tombe un jour sans
+        cotation : la référence doit être J-8, la dernière séance antérieure,
+        et non J-6 qui raccourcirait la période.
+        """
+        fin = datetime.today().date()
+        idx = pd.to_datetime([fin - timedelta(days=n) for n in range(20, -1, -2)])
+        s = pd.Series(range(len(idx)), index=idx, dtype=float)
+        coupe = _trim_to_period(s, "7d")
+        assert (fin - coupe.index[0].date()).days == 8
+
+    def test_periode_inconnue_intacte(self):
+        """1d garde son propre calcul, sur les deux dernières clôtures."""
+        s = self._serie(30)
+        assert len(_trim_to_period(s, "1d")) == len(s)
+
+    def test_fenetre_plus_courte_que_la_periode(self):
+        """Un actif récemment coté n'a pas un an d'historique : on garde tout."""
+        s = self._serie(40)
+        assert len(_trim_to_period(s, "1y")) == len(s)
+
+    def test_serie_vide(self):
+        assert len(_trim_to_period(pd.Series(dtype=float), "1y")) == 0
+
+    def test_index_avec_fuseau(self):
+        """Les séries intraday portent un fuseau ; comparer sans lui lève."""
+        idx = pd.date_range(datetime.today().date() - timedelta(days=30),
+                            periods=31, freq="D", tz="America/New_York")
+        s = pd.Series(range(31), index=idx, dtype=float)
+        assert len(_trim_to_period(s, "7d")) > 0
+
+    def test_dataframe_accepte(self):
+        """portfolio-history coupe un tableau entier, pas une seule série."""
+        s = self._serie(30)
+        df = pd.DataFrame({"AAPL": s, "MSFT": s})
+        coupe = _trim_to_period(df, "7d")
+        assert (coupe.index[-1] - coupe.index[0]).days == 7
+        assert list(coupe.columns) == ["AAPL", "MSFT"]
+
+
+class TestDownsample:
+    def test_serie_courte_intacte(self):
+        assert _downsample([1.0, 2.0, 3.0], max_points=40) == [1.0, 2.0, 3.0]
+
+    def test_respecte_la_borne(self):
+        assert len(_downsample([float(i) for i in range(1000)], max_points=40)) == 40
+
+    def test_conserve_le_dernier_point(self):
+        """Le dernier point est le prix courant, celui écrit sur la carte.
+
+        Un pas régulier le manque presque toujours : sur 1000 points ramenés à
+        40, l'échantillonnage s'arrête à l'indice 975. La courbe finirait alors
+        ailleurs que le montant affiché juste à côté d'elle.
+        """
+        vals = [float(i) for i in range(1000)]
+        assert _downsample(vals, max_points=40)[-1] == 999.0
+
+    def test_conserve_le_premier_point(self):
+        """Le premier point est la référence de la variation."""
+        vals = [float(i) for i in range(1000)]
+        assert _downsample(vals, max_points=40)[0] == 0.0
+
+    def test_serie_vide(self):
+        assert _downsample([], max_points=40) == []
+
+
+class TestIntradaySession:
+    @staticmethod
+    def _frame():
+        """Deux séances de trois barres, deux tickers."""
+        sessions = [
+            pd.Timestamp("2026-07-27").date(), pd.Timestamp("2026-07-27").date(), pd.Timestamp("2026-07-27").date(),
+            pd.Timestamp("2026-07-28").date(), pd.Timestamp("2026-07-28").date(), pd.Timestamp("2026-07-28").date(),
+        ]
+        close = pd.DataFrame(
+            {"AAPL": [10.0, 11.0, 12.0, 20.0, 21.0, 22.0],
+             "MSFT": [30.0, 31.0, 32.0, 40.0, 41.0, 42.0]},
+            index=pd.date_range("2026-07-27", periods=6, freq="15min", tz="America/New_York"),
+        )
+        return close, sessions
+
+    def test_ne_garde_que_la_derniere_seance(self):
+        """Le point capital : une fenêtre de deux jours enjambe une clôture.
+
+        Prendre les N dernières barres ferait apparaître le saut de nuit
+        (12 → 20 ici), que la variation du jour ne contient pas.
+        """
+        close, sessions = self._frame()
+        assert _intraday_session(close, sessions, "AAPL", 2) == [20.0, 21.0, 22.0]
+
+    def test_isole_le_bon_ticker(self):
+        close, sessions = self._frame()
+        assert _intraday_session(close, sessions, "MSFT", 2) == [40.0, 41.0, 42.0]
+
+    def test_ticker_absent(self):
+        close, sessions = self._frame()
+        assert _intraday_session(close, sessions, "TSLA", 2) == []
+
+    def test_sans_donnee(self):
+        assert _intraday_session(None, None, "AAPL", 1) == []
+
+    def test_ticker_unique_en_serie(self):
+        """Sur un seul ticker, yfinance renvoie une Series, pas un DataFrame."""
+        close, sessions = self._frame()
+        assert _intraday_session(close["AAPL"], sessions, "AAPL", 1) == [20.0, 21.0, 22.0]
+
+
+class TestSessionWithBase:
+    """La courbe du jour part de la clôture de la veille, pas de l'ouverture.
+
+    Défaut mesuré en conditions réelles : la bande de tête annonçait +0,40 %
+    quand la courbe descendait à -0,18 %. Deux signes opposés pour la même
+    journée, sur le même écran, parce que l'une partait de la clôture
+    précédente et l'autre de la première barre du jour.
+    """
+
+    @staticmethod
+    def _frame():
+        """Deux séances : trois barres hier, deux aujourd'hui."""
+        sessions = [
+            pd.Timestamp("2026-07-28").date(), pd.Timestamp("2026-07-28").date(), pd.Timestamp("2026-07-28").date(),
+            pd.Timestamp("2026-07-29").date(), pd.Timestamp("2026-07-29").date(),
+        ]
+        frame = pd.DataFrame(
+            {"AAPL": [10.0, 11.0, 12.0, 11.5, 11.8]},
+            index=pd.date_range("2026-07-28 09:30", periods=5, freq="15min", tz="America/New_York"),
+        )
+        return frame, sessions
+
+    def test_ajoute_la_cloture_de_la_veille(self):
+        frame, sessions = self._frame()
+        out = _session_with_base(frame, sessions)
+        assert list(out["AAPL"]) == [12.0, 11.5, 11.8]
+
+    def test_la_base_donne_le_bon_signe(self):
+        """Le cœur du défaut : la journée est en baisse, pas en hausse.
+
+        Depuis l'ouverture du jour (11,5 → 11,8) on lisait +2,6 %. Depuis la
+        clôture de la veille (12,0 → 11,8) la journée vaut -1,7 %.
+        """
+        frame, sessions = self._frame()
+        out = _session_with_base(frame, sessions)
+        depuis_base = (out["AAPL"].iloc[-1] / out["AAPL"].iloc[0] - 1) * 100
+        assert depuis_base < 0
+        assert depuis_base == pytest.approx(-1.667, abs=0.01)
+
+    def test_ne_garde_qu_une_ligne_de_la_veille(self):
+        """Une seule, la dernière : deux feraient apparaître le saut de nuit."""
+        frame, sessions = self._frame()
+        out = _session_with_base(frame, sessions)
+        assert len(out) == 3
+
+    def test_premiere_seance_disponible(self):
+        """Sans séance antérieure, on garde le jour seul plutôt que de vider."""
+        frame = pd.DataFrame({"AAPL": [10.0, 11.0]},
+                             index=pd.date_range("2026-07-29 09:30", periods=2, freq="15min", tz="America/New_York"))
+        sessions = [pd.Timestamp("2026-07-29").date()] * 2
+        out = _session_with_base(frame, sessions)
+        assert len(out) == 2
+
+    def test_tableau_vide(self):
+        assert len(_session_with_base(pd.DataFrame(), [])) == 0
+
+    def test_conserve_toutes_les_colonnes(self):
+        frame, sessions = self._frame()
+        frame["MSFT"] = [20.0, 21.0, 22.0, 21.5, 21.8]
+        out = _session_with_base(frame, sessions)
+        assert list(out.columns) == ["AAPL", "MSFT"]
+        assert list(out["MSFT"]) == [22.0, 21.5, 21.8]
