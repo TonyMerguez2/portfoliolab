@@ -18,6 +18,9 @@ class Base(DeclarativeBase):
 class Portfolio(Base):
     __tablename__ = "portfolios"
     id = Column(String, primary_key=True)
+    # Propriétaire. Nullable pour les portefeuilles créés avant l'introduction
+    # des comptes ; ils sont rattachés au chargement plutôt que perdus.
+    user_id = Column(String, nullable=True, index=True)
     name = Column(String, nullable=False)
     assets = Column(JSON, nullable=False)  # [{ticker, weight}]
     color = Column(String, default="#6366f1")
@@ -52,6 +55,7 @@ for table, col, typedef in [
     ("portfolios",   "total_value",   "REAL"),
     ("portfolios",   "cost_basis",    "REAL"),
     ("portfolios",   "is_simulation", "INTEGER"),
+    ("portfolios",   "user_id",       "TEXT"),
     ("transactions", "note",          "TEXT"),
 ]:
     try:

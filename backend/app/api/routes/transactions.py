@@ -104,9 +104,18 @@ def _tx_to_dict(tx: Transaction) -> dict:
     }
 
 
-def _get_portfolio_or_404(portfolio_id: str, db: Session) -> Portfolio:
+def _get_portfolio_or_404(portfolio_id: str, db: Session, user=None) -> Portfolio:
+    """
+    Le portefeuille demandé, s'il appartient au compte.
+
+    Celui d'autrui renvoie 404 plutôt que 403 : répondre « interdit »
+    confirmerait son existence. `user_id` nul vise les portefeuilles d'avant
+    les comptes, adoptés au premier chargement de la liste.
+    """
     p = db.query(Portfolio).filter(Portfolio.id == portfolio_id).first()
     if not p:
+        raise HTTPException(status_code=404, detail="Portefeuille introuvable")
+    if user is not None and p.user_id is not None and p.user_id != getattr(user, "id", None):
         raise HTTPException(status_code=404, detail="Portefeuille introuvable")
     return p
 
@@ -118,9 +127,9 @@ def create_transaction(
     portfolio_id: str,
     data: TransactionCreate,
     db:   Session = Depends(get_db),
-    _:    User    = Depends(require_auth),
+    user: User    = Depends(require_auth),
 ):
-    _get_portfolio_or_404(portfolio_id, db)
+    _get_portfolio_or_404(portfolio_id, db, user)
 
     all_txs = (
         db.query(Transaction)
@@ -160,9 +169,9 @@ def list_transactions(
     date_from: Optional[datetime] = Query(None),
     date_to:   Optional[datetime] = Query(None),
     db:        Session = Depends(get_db),
-    _:         User    = Depends(require_auth),
+    user:      User    = Depends(require_auth),
 ):
-    _get_portfolio_or_404(portfolio_id, db)
+    _get_portfolio_or_404(portfolio_id, db, user)
 
     q = db.query(Transaction).filter(Transaction.portfolio_id == portfolio_id)
 
@@ -189,9 +198,9 @@ def delete_transaction(
     portfolio_id:   str,
     transaction_id: int,
     db:             Session = Depends(get_db),
-    _:              User    = Depends(require_auth),
+    user:           User    = Depends(require_auth),
 ):
-    _get_portfolio_or_404(portfolio_id, db)
+    _get_portfolio_or_404(portfolio_id, db, user)
 
     tx = (
         db.query(Transaction)
@@ -225,7 +234,7 @@ def delete_transaction(
 async def get_positions(
     portfolio_id: str,
     db:           Session = Depends(get_db),
-    _:            User    = Depends(require_auth),
+    user:         User    = Depends(require_auth),
 ):
     """
     Retourne les positions calculées depuis les transactions, enrichies des prix actuels.
@@ -233,7 +242,7 @@ async def get_positions(
     Si le portefeuille n'a aucune transaction, retourne les positions en poids %
     sans P&L (compatibilité avec les portefeuilles legacy).
     """
-    portfolio = _get_portfolio_or_404(portfolio_id, db)
+    portfolio = _get_portfolio_or_404(portfolio_id, db, user)
 
     all_txs = (
         db.query(Transaction)

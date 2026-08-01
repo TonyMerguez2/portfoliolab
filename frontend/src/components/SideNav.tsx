@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useApp } from "@/lib/AppContext";
 import ProfileModal from "@/components/ProfileModal";
+import AuthModal from "@/components/AuthModal";
 
 /**
  * Navigation principale, en panneau latéral repliable.
@@ -48,16 +49,48 @@ export default function SideNav() {
   const [ready, setReady] = useState(false);
   const [user, setUser] = useState<{ username?: string; email?: string; avatar_url?: string } | null>(null);
   const [showProfile, setShowProfile] = useState(false);
+  const [showAuth, setShowAuth] = useState(false);
 
   useEffect(() => {
     try {
       setCollapsed(localStorage.getItem(STORAGE_KEY) === "1");
-      // Même source que le bandeau : le compte est déjà en stockage local, le
-      // relire ici ne coûte aucun appel réseau supplémentaire.
       const stored = localStorage.getItem("novac_user");
       if (stored) setUser(JSON.parse(stored));
     } catch { /* stockage refusé ou contenu illisible */ }
     setReady(true);
+  }, []);
+
+  // Vérifie que la session tient encore.
+  //
+  // `novac_user` et `novac_token` sont deux entrées distinctes du stockage :
+  // le compte survivait à la disparition du jeton, et l'interface affichait un
+  // utilisateur connecté qui ne pouvait plus rien enregistrer. L'échec ne se
+  // découvrait qu'à la sauvegarde, sous forme d'« Authentification requise ».
+  useEffect(() => {
+    const token = typeof window !== "undefined" ? localStorage.getItem("novac_token") : null;
+    if (!token) {
+      if (typeof window !== "undefined") localStorage.removeItem("novac_user");
+      setUser(null);
+      return;
+    }
+    let annule = false;
+    fetch(`${API_URL}/api/v1/auth/me`, { headers: { Authorization: `Bearer ${token}` } })
+      .then(r => (r.ok ? r.json() : Promise.reject(new Error("session close"))))
+      .then((u) => {
+        if (annule) return;
+        // Le serveur fait foi : pseudo et avatar peuvent avoir changé ailleurs.
+        setUser(u);
+        try { localStorage.setItem("novac_user", JSON.stringify(u)); } catch { /* stockage refusé */ }
+      })
+      .catch(() => {
+        if (annule) return;
+        try {
+          localStorage.removeItem("novac_token");
+          localStorage.removeItem("novac_user");
+        } catch { /* stockage refusé */ }
+        setUser(null);
+      });
+    return () => { annule = true; };
   }, []);
 
   useEffect(() => {
@@ -217,6 +250,39 @@ export default function SideNav() {
             </span>
           </button>
         )}
+
+        {/* Hors session : l'entrée du compte reste, mais elle mène à la
+            connexion. Sans elle, il fallait repasser par la page d'accueil
+            pour se connecter — donc quitter ce qu'on était en train de faire. */}
+        {ready && !user && (
+          <button
+            type="button"
+            onClick={() => setShowAuth(true)}
+            title={collapsed ? "Se connecter" : undefined}
+            style={{
+              display: "flex", alignItems: "center", gap: 12, width: "100%",
+              height: 44, padding: "0 8px", borderRadius: 10, marginBottom: 4,
+              background: "transparent", border: "none", cursor: "pointer",
+              color: "rgba(255,255,255,0.88)", fontSize: 13, fontWeight: 500,
+              whiteSpace: "nowrap", textAlign: "left",
+            }}
+            onMouseEnter={e => { e.currentTarget.style.background = "rgba(255,255,255,0.045)"; }}
+            onMouseLeave={e => { e.currentTarget.style.background = "transparent"; }}
+          >
+            <span style={{
+              width: 28, height: 28, borderRadius: "50%", flexShrink: 0,
+              display: "flex", alignItems: "center", justifyContent: "center",
+              border: "1px solid rgba(91,141,239,0.35)", background: "rgba(91,141,239,0.16)",
+              color: "#9BB9FF", fontSize: 13, lineHeight: 1,
+            }}>↪</span>
+            <span style={{
+              opacity: collapsed ? 0 : 1, transition: "opacity 160ms",
+              overflow: "hidden", textOverflow: "ellipsis",
+            }}>
+              Se connecter
+            </span>
+          </button>
+        )}
         <button
           onClick={toggleDisplayMode}
           title={displayMode === "black" ? "Revenir au thème verre" : "Passer au thème noir"}
@@ -262,6 +328,24 @@ export default function SideNav() {
           }
         }}
       />
+      </div>
+    )}
+
+    {showAuth && (
+      <div style={{ position: "relative", zIndex: 70 }}>
+        <AuthModal
+          dark
+          onClose={() => setShowAuth(false)}
+          onAuth={(u: { username?: string; email?: string; avatar_url?: string }) => {
+            setUser(u);
+            setShowAuth(false);
+            // Les portefeuilles appartiennent au compte : ce qui est affiché
+            // vient de l'ancienne session, ou de personne. Un rechargement
+            // complet plutôt qu'un router.refresh() — l'état des pages vit
+            // dans des `useState` que le rafraîchissement serveur ne touche pas.
+            window.location.reload();
+          }}
+        />
       </div>
     )}
     </>

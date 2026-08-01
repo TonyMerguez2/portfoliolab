@@ -16,6 +16,7 @@ import tempfile
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 import pytest
+from types import SimpleNamespace
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
@@ -38,8 +39,12 @@ def client_fixture():
         with Session(engine) as session:
             yield session
 
+    # Un compte de test : les portefeuilles appartiennent désormais à
+    # quelqu'un, une dépendance renvoyant None ne suffit plus.
+    compte = SimpleNamespace(id="user-test", email="test@novac.local", username="Test")
+
     app.dependency_overrides[get_db] = get_db_test
-    app.dependency_overrides[require_auth] = lambda: None
+    app.dependency_overrides[require_auth] = lambda: compte
 
     with TestClient(app) as c:
         yield c
@@ -190,3 +195,64 @@ def test_quantite_fractionnaire(client):
     pos = {p["ticker"]: p for p in client.get(f"/api/v1/portfolios/{pid}/positions").json()["positions"]}
     assert pos["AAPL"]["quantity"] == pytest.approx(q, abs=1e-8)
     assert pos["AAPL"]["invested"] == pytest.approx(1000.0, abs=1e-2)
+
+
+# ── Cloisonnement entre comptes ───────────────────────────────────────────────
+
+def test_portefeuille_d_autrui_invisible(client):
+    """
+    Le portefeuille d'un autre compte doit rester hors d'atteinte.
+
+    404 et non 403 : répondre « interdit » confirmerait son existence à qui
+    essaie des identifiants au hasard.
+    """
+    from app.main import app
+    from app.core.auth import require_auth
+
+    pid = creer_portefeuille(client, "Le mien")
+
+    autre = SimpleNamespace(id="user-autre", email="autre@novac.local", username="Autre")
+    app.dependency_overrides[require_auth] = lambda: autre
+
+    assert client.get("/api/v1/portfolios").json() == []
+    r = client.post(f"/api/v1/portfolios/{pid}/transactions",
+                    json=ecriture("AAPL", 1, 150.0, "2024-03-15"))
+    assert r.status_code == 404
+    assert client.delete(f"/api/v1/portfolios/{pid}").status_code == 404
+    assert client.put(f"/api/v1/portfolios/{pid}", json={"name": "Volé"}).status_code == 404
+
+
+def test_liste_limitee_au_compte(client):
+    """Chaque compte ne voit que les siens."""
+    from app.main import app
+    from app.core.auth import require_auth
+
+    creer_portefeuille(client, "A1")
+    creer_portefeuille(client, "A2")
+
+    autre = SimpleNamespace(id="user-autre", email="autre@novac.local", username="Autre")
+    app.dependency_overrides[require_auth] = lambda: autre
+    creer_portefeuille(client, "B1")
+    assert [p["name"] for p in client.get("/api/v1/portfolios").json()] == ["B1"]
+
+
+def test_portefeuilles_sans_proprietaire_adoptes(client):
+    """
+    Les portefeuilles d'avant les comptes sont rattachés, pas masqués.
+
+    Les filtrer sans les adopter les ferait disparaître de la liste — pour qui
+    les a créés, cela ne se distingue pas d'une perte de données.
+    """
+    from app.core.database import Portfolio
+
+    pid = creer_portefeuille(client, "Ancien")
+
+    # On simule l'état d'avant la migration.
+    from app.main import app
+    from app.core.database import get_db
+    db = next(app.dependency_overrides[get_db]())
+    db.query(Portfolio).filter(Portfolio.id == pid).first().user_id = None
+    db.commit()
+
+    noms = [p["name"] for p in client.get("/api/v1/portfolios").json()]
+    assert "Ancien" in noms

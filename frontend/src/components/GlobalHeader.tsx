@@ -2,6 +2,7 @@
 import { useEffect, useRef, useState, memo, useCallback } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { useApp } from "@/lib/AppContext";
+import { enTetesAuth } from "@/lib/session";
 import { TRENDING } from "@/lib/assets";
 import AssetLogo from "@/components/AssetLogo";
 import { useTheme } from "@/lib/theme";
@@ -104,7 +105,7 @@ export default function GlobalHeader() {
   const isLanding = pathname === "/";
   const isChartPage = pathname === "/chart";
   useEffect(() => {
-    fetch("http://localhost:8000/api/v1/portfolios")
+    fetch("http://localhost:8000/api/v1/portfolios", { headers: enTetesAuth() })
       .then(r => r.json())
       .then(d => { if (Array.isArray(d)) setPortfolios(d); })
       .catch(() => {});

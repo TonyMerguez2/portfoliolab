@@ -13,6 +13,7 @@ import RecentActivity from "@/components/portfolio/RecentActivity";
 import PortfolioTabs from "@/components/portfolio/PortfolioTabs";
 import { donutArcs } from "@/lib/donut";
 import { valoriser } from "@/lib/portfolio";
+import { enTetesAuth } from "@/lib/session";
 import { FONT } from "@/lib/typography";
 import type { Period } from "@/lib/chart/portfolioCurve";
 
@@ -263,7 +264,7 @@ function PortfolioPageInner() {
 
   useEffect(() => {
     const idFromUrl = searchParams.get("id");
-    fetch("http://localhost:8000/api/v1/portfolios")
+    fetch("http://localhost:8000/api/v1/portfolios", { headers: enTetesAuth() })
       .then(r => r.json())
       .then((list: PortfolioData[]) => {
         if (!Array.isArray(list) || !list.length) { setLoading(false); return; }
@@ -304,7 +305,7 @@ function PortfolioPageInner() {
     });
 
     let cancelled = false;
-    fetch("http://localhost:8000/api/v1/portfolios")
+    fetch("http://localhost:8000/api/v1/portfolios", { headers: enTetesAuth() })
       .then(r => r.json())
       .then((list: PortfolioData[]) => {
         if (cancelled || !Array.isArray(list)) return;
@@ -328,13 +329,11 @@ function PortfolioPageInner() {
   useEffect(() => {
     const id = portfolio?.id;
     if (!id) { setPositions(null); return; }
-    const token = typeof window !== "undefined" ? localStorage.getItem("novac_token") : null;
-    if (!token) { setPositions(null); return; }   // hors session : repli sur les poids
+    const auth = enTetesAuth();
+    if (!auth.Authorization) { setPositions(null); return; }   // hors session : repli sur les poids
 
     let cancelled = false;
-    fetch(`http://localhost:8000/api/v1/portfolios/${id}/positions`, {
-      headers: { Authorization: `Bearer ${token}` },
-    })
+    fetch(`http://localhost:8000/api/v1/portfolios/${id}/positions`, { headers: auth })
       .then(r => (r.ok ? r.json() : null))
       .then((d: PositionsData | null) => { if (!cancelled) setPositions(d); })
       .catch(() => { if (!cancelled) setPositions(null); });
@@ -508,7 +507,7 @@ function PortfolioPageInner() {
     const v = parseFloat(valueInput.replace(/\s/g, "").replace(",", "."));
     if (isNaN(v) || v <= 0) { setEditingValue(false); return; }
     await fetch(`http://localhost:8000/api/v1/portfolios/${portfolio.id}`, {
-      method: "PUT", headers: { "Content-Type": "application/json" },
+      method: "PUT", headers: { "Content-Type": "application/json", ...enTetesAuth() },
       body: JSON.stringify({ total_value: v }),
     }).catch(() => {});
     setPortfolio(p => p ? { ...p, total_value: v } : p);
@@ -520,7 +519,7 @@ function PortfolioPageInner() {
     const v = parseFloat(costInput.replace(/\s/g, "").replace(",", "."));
     if (isNaN(v) || v <= 0) { setEditingCost(false); return; }
     await fetch(`http://localhost:8000/api/v1/portfolios/${portfolio.id}`, {
-      method: "PUT", headers: { "Content-Type": "application/json" },
+      method: "PUT", headers: { "Content-Type": "application/json", ...enTetesAuth() },
       body: JSON.stringify({ cost_basis: v }),
     }).catch(() => {});
     setPortfolio(p => p ? { ...p, cost_basis: v } : p);

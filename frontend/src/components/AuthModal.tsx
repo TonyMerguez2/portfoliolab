@@ -1,5 +1,6 @@
 "use client";
 import { useState } from "react";
+import { enregistrerSession } from "@/lib/session";
 
 interface Props {
   onClose: () => void;
@@ -34,8 +35,9 @@ export default function AuthModal({ onClose, onAuth, dark = false }: Props) {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.detail || "Erreur");
-      localStorage.setItem("novac_token", data.token);
-      localStorage.setItem("novac_user", JSON.stringify(data.user));
+      // Les deux entrées ensemble : les dissocier laissait un compte affiché
+      // sans jeton, donc une interface qui se croyait connectée.
+      enregistrerSession(data.user, data.token);
       onAuth(data.user, data.token);
       onClose();
     } catch (e: any) {

@@ -1,5 +1,6 @@
 "use client";
 import { useState, useRef } from "react";
+import { fermerSession } from "@/lib/session";
 
 interface Props {
   user: any;
@@ -66,10 +67,11 @@ export default function ProfileModal({ user, onClose, onUpdate, dark = false }: 
   };
 
   const handleLogout = () => {
-    localStorage.removeItem("novac_token");
-    localStorage.removeItem("novac_user");
+    fermerSession();
     onUpdate(null);
     onClose();
+    // Les portefeuilles affichés appartiennent au compte qui vient de partir.
+    window.location.reload();
   };
 
   const avatarSrc = user?.avatar_url
@@ -114,7 +116,7 @@ export default function ProfileModal({ user, onClose, onUpdate, dark = false }: 
 
         {/* Username */}
         <div style={{ marginBottom: "16px" }}>
-          <label style={{ color: text, opacity: 0.4, fontSize: "11px", letterSpacing: "0.08em", display: "block", marginBottom: "6px" }}>NOM D'UTILISATEUR</label>
+          <label style={{ color: text, opacity: 0.4, fontSize: "11px", letterSpacing: "0.08em", display: "block", marginBottom: "6px" }}>NOM D&apos;UTILISATEUR</label>
           <input value={username} onChange={e => setUsername(e.target.value)}
             style={{ width: "100%", backgroundColor: inputBg, border: `1px solid ${border}`, borderRadius: "10px", padding: "10px 14px", fontSize: "13px", color: text, outline: "none", boxSizing: "border-box" }}
           />

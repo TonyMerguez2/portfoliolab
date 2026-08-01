@@ -7,6 +7,7 @@ import { TRENDING } from "@/lib/assets";
 import { ResponsiveContainer, PieChart, Pie, Cell, Tooltip } from "recharts";
 import TransactionModal, { type DraftTx } from "@/components/TransactionModal";
 import { repartir, sansCours, capitalEngage, agreger } from "@/lib/transactions";
+import { enTetesAuth } from "@/lib/session";
 
 /**
  * Construction d'un portefeuille.
@@ -623,7 +624,8 @@ export default function BuildPage() {
             const pRes2 = await fetch("".concat(API_URL, "/api/v1/portfolios"), {
                 method: "POST",
                 headers: {
-                    "Content-Type": "application/json"
+                    "Content-Type": "application/json",
+                    ...enTetesAuth()
                 },
                 body: JSON.stringify({
                     name: portfolioName.trim(),
