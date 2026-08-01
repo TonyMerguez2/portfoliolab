@@ -1,7 +1,9 @@
 "use client";
 import { useState, useEffect, useCallback } from "react";
+import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useApp } from "@/lib/AppContext";
+import ProfileModal from "@/components/ProfileModal";
 
 /**
  * Navigation principale, en panneau latéral repliable.
@@ -14,6 +16,7 @@ import { useApp } from "@/lib/AppContext";
 const EXPANDED = 232;
 const COLLAPSED = 68;
 const STORAGE_KEY = "novac_nav_collapsed";
+const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 
 type Item = { label: string; href: string; icon: JSX.Element };
 
@@ -43,9 +46,17 @@ export default function SideNav() {
   // que le rendu serveur et le premier rendu client concordent.
   const [collapsed, setCollapsed] = useState(false);
   const [ready, setReady] = useState(false);
+  const [user, setUser] = useState<{ username?: string; email?: string; avatar_url?: string } | null>(null);
+  const [showProfile, setShowProfile] = useState(false);
 
   useEffect(() => {
-    try { setCollapsed(localStorage.getItem(STORAGE_KEY) === "1"); } catch { /* stockage refusé */ }
+    try {
+      setCollapsed(localStorage.getItem(STORAGE_KEY) === "1");
+      // Même source que le bandeau : le compte est déjà en stockage local, le
+      // relire ici ne coûte aucun appel réseau supplémentaire.
+      const stored = localStorage.getItem("novac_user");
+      if (stored) setUser(JSON.parse(stored));
+    } catch { /* stockage refusé ou contenu illisible */ }
     setReady(true);
   }, []);
 
@@ -78,6 +89,7 @@ export default function SideNav() {
   const width = collapsed ? COLLAPSED : EXPANDED;
 
   return (
+    <>
     <nav
       aria-label="Navigation principale"
       style={{
@@ -95,15 +107,22 @@ export default function SideNav() {
     >
       {/* Marque + bouton de repli */}
       <div style={{ display: "flex", alignItems: "center", gap: 10, height: 60, padding: "0 16px", flexShrink: 0 }}>
-        <a href="/" aria-label="Accueil Novac" style={{
+        <Link href="/" aria-label="Accueil Novac" style={{
           textDecoration: "none", color: "#F8F9FC", fontSize: 13, fontWeight: 700,
           letterSpacing: "0.22em", whiteSpace: "nowrap",
           // Effacé sans être démonté : le retirer du flux ferait sauter le
           // bouton de repli d'un côté à l'autre pendant l'animation.
           opacity: collapsed ? 0 : 0.85,
           width: collapsed ? 0 : "auto",
+          // Une largeur nulle ne retient pas le texte : sans découpe, « NOVAC »
+          // débordait par-dessus le bouton de repli et, quoique invisible,
+          // captait son clic — déplier ne faisait donc rien. Les évènements
+          // sont coupés en plus de la découpe, la seconde ne valant que pour
+          // ce qui dépasse.
+          overflow: "hidden",
+          pointerEvents: collapsed ? "none" : undefined,
           transition: "opacity 160ms",
-        }}>NOVAC</a>
+        }}>NOVAC</Link>
         <button
           onClick={toggle}
           aria-label={collapsed ? "Déplier la navigation" : "Replier la navigation"}
@@ -129,7 +148,7 @@ export default function SideNav() {
           const base = item.href.split("?")[0];
           const active = pathname === base || (base !== "/" && pathname.startsWith(base));
           return (
-            <a key={item.label} href={item.href}
+            <Link key={item.label} href={item.href}
               title={collapsed ? item.label : undefined}
               aria-current={active ? "page" : undefined}
               style={{
@@ -137,7 +156,8 @@ export default function SideNav() {
                 height: 40, padding: "0 12px", borderRadius: 10,
                 textDecoration: "none", whiteSpace: "nowrap",
                 color: active ? "#F8F9FC" : "rgba(255,255,255,0.55)",
-                background: active ? "rgba(255,255,255,0.07)" : "transparent",
+                background: active ? "rgba(255,255,255,0.11)" : "transparent",
+                boxShadow: active ? "inset 0 0 0 1px rgba(255,255,255,0.10)" : "none",
                 fontSize: 13, fontWeight: active ? 600 : 500,
                 transition: "background 160ms, color 160ms",
               }}
@@ -146,13 +166,57 @@ export default function SideNav() {
             >
               <span style={{ flexShrink: 0, display: "flex" }}>{item.icon}</span>
               <span style={{ opacity: collapsed ? 0 : 1, transition: "opacity 160ms" }}>{item.label}</span>
-            </a>
+            </Link>
           );
         })}
       </div>
 
-      {/* Bas de panneau */}
+      {/* Bas de panneau : compte puis thème.
+          Tout ce qui touche au compte est réuni ici — il était auparavant
+          coupé en deux, avatar dans le bandeau et thème dans le panneau. */}
       <div style={{ padding: "10px", borderTop: "1px solid rgba(255,255,255,0.06)", flexShrink: 0 }}>
+        {user && (
+          <button
+            type="button"
+            onClick={() => setShowProfile(true)}
+            title={collapsed ? (user.username || user.email || "Compte") : undefined}
+            style={{
+              display: "flex", alignItems: "center", gap: 12, width: "100%",
+              height: 44, padding: "0 8px", borderRadius: 10, marginBottom: 4,
+              background: "transparent", border: "none", cursor: "pointer",
+              color: "rgba(255,255,255,0.88)", fontSize: 13, fontWeight: 500,
+              whiteSpace: "nowrap", textAlign: "left",
+            }}
+            onMouseEnter={e => { e.currentTarget.style.background = "rgba(255,255,255,0.045)"; }}
+            onMouseLeave={e => { e.currentTarget.style.background = "transparent"; }}
+          >
+            <span style={{
+              width: 28, height: 28, borderRadius: "50%", flexShrink: 0, overflow: "hidden",
+              display: "flex", alignItems: "center", justifyContent: "center",
+              border: "1px solid rgba(255,255,255,0.15)", background: "rgba(255,255,255,0.1)",
+            }}>
+              {user.avatar_url ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={user.avatar_url.startsWith("/uploads") ? `${API_URL}${user.avatar_url}` : user.avatar_url}
+                  alt=""
+                  style={{ width: "100%", height: "100%", objectFit: "cover" }}
+                  onError={e => { (e.target as HTMLImageElement).style.display = "none"; }}
+                />
+              ) : (
+                <span style={{ fontSize: 11, fontWeight: 700, color: "#F8F9FC", userSelect: "none" }}>
+                  {(user.username || user.email || "?")[0].toUpperCase()}
+                </span>
+              )}
+            </span>
+            <span style={{
+              opacity: collapsed ? 0 : 1, transition: "opacity 160ms",
+              overflow: "hidden", textOverflow: "ellipsis",
+            }}>
+              {user.username?.split(" ")[0] || user.email || "Compte"}
+            </span>
+          </button>
+        )}
         <button
           onClick={toggleDisplayMode}
           title={displayMode === "black" ? "Revenir au thème verre" : "Passer au thème noir"}
@@ -172,6 +236,34 @@ export default function SideNav() {
           </span>
         </button>
       </div>
+
     </nav>
+
+    {/* Hors du <nav> à dessein : son backdrop-filter en fait le bloc conteneur
+        des descendants en position fixe, qui seraient donc enfermés dans les
+        232 px du panneau — et rognés par son overflow: hidden. */}
+    {showProfile && user && (
+      // Le conteneur ne sert qu'à la superposition : la modale se voile en
+      // z-index 50, le panneau vit en 60, et sans cela le panneau restait seul
+      // éclairé au-dessus du voile. Un ancêtre positionné crée un contexte
+      // d'empilement qui emporte la modale avec lui, sans la déplacer.
+      <div style={{ position: "relative", zIndex: 70 }}>
+      <ProfileModal
+        user={user}
+        dark
+        onClose={() => setShowProfile(false)}
+        onUpdate={updated => {
+          // La déconnexion remonte null après avoir vidé le stockage ; s'y
+          // fier plutôt que d'y réécrire "null", que le JSON.parse d'une
+          // prochaine visite relirait sans erreur comme un compte connecté.
+          setUser(updated);
+          if (updated) {
+            try { localStorage.setItem("novac_user", JSON.stringify(updated)); } catch { /* stockage refusé */ }
+          }
+        }}
+      />
+      </div>
+    )}
+    </>
   );
 }

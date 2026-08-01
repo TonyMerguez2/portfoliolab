@@ -4,18 +4,44 @@ import type { ReactNode } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { useApp } from "@/lib/AppContext";
 import AssetLogo from "@/components/AssetLogo";
-import LiquidGlassTreemap from "@/components/charts/LiquidGlassTreemap";
 import TransactionModal from "@/components/TransactionModal";
 import TransactionsList from "@/components/TransactionsList";
+import PerformanceChart from "@/components/portfolio/PerformanceChart";
+import AssetGrid from "@/components/portfolio/AssetGrid";
+import AllocationDonut from "@/components/portfolio/AllocationDonut";
+import RecentActivity from "@/components/portfolio/RecentActivity";
+import PortfolioTabs from "@/components/portfolio/PortfolioTabs";
+import { donutArcs } from "@/lib/donut";
+import { valoriser } from "@/lib/portfolio";
+import { FONT } from "@/lib/typography";
+import type { Period } from "@/lib/chart/portfolioCurve";
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 type PortfolioAsset = { ticker: string; weight: number };
 type PortfolioData  = { id: string; name: string; assets: PortfolioAsset[]; color: string; total_value?: number | null; cost_basis?: number | null };
-type PriceData      = { symbol: string; price: number; change: number };
-type Enriched       = PortfolioAsset & { price: number | null; change: number | null; type?: string; value: number | null; perfEur: number | null };
+type PriceData      = { symbol: string; price: number; change: number; series?: number[] };
+type Enriched       = PortfolioAsset & {
+  price: number | null; change: number | null; type?: string;
+  value: number | null; perfEur: number | null;
+  /** Renseignés quand la valorisation vient des transactions. */
+  quantity?: number | null; avgCost?: number | null; invested?: number | null; pnlEur?: number | null;
+};
 
-const FONT      = "'Inter', 'SF Pro Display', system-ui, sans-serif";
-const FONT_MONO = "'SF Mono', 'Fira Code', monospace";
+/** Une ligne de `/positions` : ce que les transactions impliquent réellement. */
+type Position = {
+  ticker: string; quantity: number; avg_cost: number; invested: number;
+  current_price: number | null; current_value: number | null;
+  pnl_eur: number | null; pnl_pct: number | null; weight: number | null;
+};
+type PositionsData = {
+  source: "transactions" | "weights";
+  positions: Position[];
+  total_value: number | null;
+  total_invested: number | null;
+  total_pnl_eur: number | null;
+  total_pnl_pct: number | null;
+};
+
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
 function fmtChange(v: number | null) {
@@ -44,38 +70,13 @@ const EXPO_COLORS: Record<string, string> = {
 };
 
 // ── Sparkline ──────────────────────────────────────────────────────────────────
-function seededRand(seed: number) {
-  let s = seed;
-  return () => { s = (s * 9301 + 49297) % 233280; return s / 233280; };
-}
-
-function genSparkline(seed: number, pts = 20, trend = 0.008): number[] {
-  const r = seededRand(seed);
-  let v = 0.4;
-  return Array.from({ length: pts }, () => {
-    v += trend + (r() - 0.48) * 0.07;
-    return (v = Math.max(0.05, Math.min(0.95, v)));
-  });
-}
-
-// Brownian bridge de startPrice → price avec volatilité réaliste
-function initPriceHistory(price: number, change: number, pts = 24): number[] {
-  const seed = Math.abs(Math.round(price * 100));
-  const r    = seededRand(seed);
-  const startPrice = price / (1 + change / 100);
-  const vol  = price * 0.007; // volatilité par step ~0.7% du prix
-  let v = startPrice;
-  const result: number[] = [startPrice];
-  for (let i = 1; i < pts; i++) {
-    const drift = (price - v) / (pts - i + 1); // attire vers le prix final
-    v += drift + (r() - 0.48) * vol;
-    result.push(Math.max(0.001, v));
-  }
-  result[result.length - 1] = price;
-  return result;
-}
-
-const portfolioCurve = genSparkline(42, 56, 0.007);
+/* Les séries viennent du backend, qui les renvoie avec le prix — même appel,
+   aucun coût réseau supplémentaire. Il y avait ici trois générateurs de fausses
+   courbes : `seededRand`, `genSparkline` et `initPriceHistory` fabriquaient une
+   marche aléatoire à graine fixe entre le cours d'ouverture et le prix courant.
+   Le résultat était crédible, stable d'un rendu à l'autre, et faux : une page
+   qui affiche des montants en euros ne peut pas dessiner des cours inventés
+   juste à côté. */
 
 function Sparkline({ pts, color, w = 48, h = 18, glow = false }: {
   pts: number[]; color: string; w?: number; h?: number; glow?: boolean;
@@ -107,9 +108,12 @@ function Sparkline({ pts, color, w = 48, h = 18, glow = false }: {
 function Card({ children, style }: { children: ReactNode; style?: React.CSSProperties }) {
   return (
     <div style={{
-      background: "rgba(255,255,255,0.03)",
-      border: "1px solid rgba(255,255,255,0.07)",
-      borderRadius: 12,
+      // Mêmes bord, fond et rayon que le conteneur du graphique : les cartes
+      // de la colonne de droite avaient un rayon de 12 px pour 30 à gauche, ce
+      // qui se voyait dès qu'on les regardait ensemble.
+      background: "rgba(9,27,52,0.78)",
+      border: "1px solid rgba(205,225,255,0.16)",
+      borderRadius: 30,
       ...style,
     }}>
       {children}
@@ -133,27 +137,39 @@ function SectionLabel({ children }: { children: ReactNode }) {
 function scoreColor(s: number) { return s >= 60 ? "#4ade80" : s >= 40 ? "#fbbf24" : "#f87171"; }
 function scoreLabel(s: number) { return s >= 80 ? "Excellent" : s >= 60 ? "Bon" : s >= 40 ? "Moyen" : "À risque"; }
 
-function CircleScore({ score, size = 88 }: { score: number; size?: number }) {
-  const r    = (size - 14) / 2;
-  const cx   = size / 2, cy = size / 2;
-  const circ = 2 * Math.PI * r;
-  const dash = Math.max(0, Math.min(1, score / 100)) * circ;
+function CircleScore({ score, size = 88, nu = false }: { score: number; size?: number; nu?: boolean }) {
   const color = scoreColor(score);
+  const atteint = Math.max(0, Math.min(100, score));
+  // Même traitement que la répartition : couleurs pleines, aucun écart, aucun
+  // arrondi, aucun liseré. Le verre — liseré blanc, halo flouté, angles
+  // émoussés — a été retiré des deux au même titre.
+  //
+  // Un anneau et non un disque, en revanche : le score s'y lit comme une jauge
+  // remplie, et le centre porte le chiffre partout sauf dans la bande de tête.
+  const arcs = donutArcs(
+    [
+      { key: "atteint", value: atteint, color },
+      { key: "reste", value: 100 - atteint, color: "rgba(255,255,255,0.10)" },
+    ],
+    { cx: size / 2, cy: size / 2, r: size / 2, thickness: Math.max(7, size * 0.15), gap: 0 },
+  );
   return (
     <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 4 }}>
-      <div style={{ position: "relative", width: size, height: size }}>
-        <svg width={size} height={size} style={{ transform: "rotate(-90deg)", display: "block" }}>
-          <circle cx={cx} cy={cy} r={r} fill="none" stroke="rgba(255,255,255,0.07)" strokeWidth={9} />
-          <circle cx={cx} cy={cy} r={r} fill="none" stroke={color} strokeWidth={9}
-            strokeDasharray={`${dash} ${circ}`} strokeLinecap="round"
-            style={{ filter: `drop-shadow(0 0 6px ${color}99)`, transition: "stroke-dasharray 1s cubic-bezier(0.34,1,0.64,1)" }} />
+      <div style={{ position: "relative", width: size, height: size, flexShrink: 0 }}>
+        <svg width={size} height={size} style={{ display: "block" }}>
+          {arcs.map(a => <path key={a.key} d={a.path} fill={a.color} />)}
         </svg>
-        <div style={{ position: "absolute", inset: 0, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center" }}>
-          <span style={{ fontSize: 28, fontWeight: 800, fontFamily: FONT_MONO, color: "#fff", lineHeight: 1 }}>{score}</span>
-          <span style={{ fontSize: 9, color: "rgba(255,255,255,0.30)", letterSpacing: "0.04em" }}>/100</span>
-        </div>
+        {!nu && (
+          <div style={{
+            position: "absolute", inset: 0, display: "flex", flexDirection: "column",
+            alignItems: "center", justifyContent: "center", pointerEvents: "none",
+          }}>
+            <span style={{ fontSize: size * 0.32, fontWeight: 800, fontFamily: FONT, color: "#fff", lineHeight: 1 }}>{score}</span>
+            <span style={{ fontSize: Math.max(8, size * 0.10), color: "rgba(255,255,255,0.30)", letterSpacing: "0.04em" }}>/100</span>
+          </div>
+        )}
       </div>
-      <span style={{ fontSize: 11, fontWeight: 700, color, letterSpacing: "0.02em" }}>{scoreLabel(score)}</span>
+      {!nu && <span style={{ fontSize: 11, fontWeight: 700, color, letterSpacing: "0.02em" }}>{scoreLabel(score)}</span>}
     </div>
   );
 }
@@ -191,10 +207,20 @@ function RadarChart({ metrics, size = 170 }: { metrics: { label: string; value: 
 }
 
 // ── Main page ──────────────────────────────────────────────────────────────────
-type Period = "1J" | "7J" | "1M" | "3M" | "1A";
-const PERIODS: Period[] = ["1J", "7J", "1M", "3M", "1A"];
-const PERIOD_MAP: Record<Period, string> = { "1J": "1d", "7J": "7d", "1M": "1mo", "3M": "3mo", "1A": "1y" };
-const PERIOD_LABEL: Record<Period, string> = { "1J": "24h", "7J": "7j", "1M": "1 mois", "3M": "3 mois", "1A": "1 an" };
+// Les périodes viennent du module partagé : la page et le graphique doivent
+// parler des mêmes fenêtres, et les libellés sont ceux de la page graphique.
+const PERIODS: Period[] = ["24h", "1S", "1M", "3M", "6M", "1A", "3A", "Max"];
+
+/** Retrait latéral commun à la bande, aux onglets et au contenu. */
+const MARGE = 10;
+const PERIOD_MAP: Record<Period, string> = {
+  "24h": "1d", "1S": "7d", "1M": "1mo", "3M": "3mo",
+  "6M": "6mo", "1A": "1y", "3A": "3y", "Max": "max",
+};
+const PERIOD_LABEL: Record<Period, string> = {
+  "24h": "24h", "1S": "1 semaine", "1M": "1 mois", "3M": "3 mois",
+  "6M": "6 mois", "1A": "1 an", "3A": "3 ans", "Max": "tout l'historique",
+};
 
 function PortfolioPageInner() {
   const { activePortfolio, setActivePortfolio, setMode } = useApp();
@@ -205,7 +231,7 @@ function PortfolioPageInner() {
   const [prices,        setPrices]        = useState<Record<string, PriceData>>({});
   const [loading,       setLoading]       = useState(true);
   const [view,          setView]          = useState<"carte" | "liste">("carte");
-  const [period,        setPeriod]        = useState<Period>("1J");
+  const [period,        setPeriod]        = useState<Period>("Max")   // Vue d'ensemble en arrivant : une journée ne dit rien d'un portefeuille;
   const [mounted,       setMounted]       = useState(false);
   const [sparkHistory,    setSparkHistory]    = useState<Record<string, number[]>>({});
   const [priceUpdatedAt,  setPriceUpdatedAt]  = useState<Record<string, number>>({});
@@ -214,11 +240,24 @@ function PortfolioPageInner() {
   const [editingCost,     setEditingCost]     = useState(false);
   const [costInput,       setCostInput]       = useState("");
   const [spyChange,       setSpyChange]       = useState<number | null>(null);
-  const [legendTooltip,   setLegendTooltip]   = useState(false);
   const [dashView,        setDashView]        = useState<"resume"|"analyse"|"evenements"|"objectifs"|"transactions">("resume");
   const [activeTooltip,   setActiveTooltip]   = useState<string | null>(null);
   const [showTxModal,     setShowTxModal]     = useState(false);
   const [txRefreshKey,    setTxRefreshKey]    = useState(0);
+  const [positions,       setPositions]       = useState<PositionsData | null>(null);
+  const [prenom,          setPrenom]          = useState<string | null>(null);
+  const [masque,          setMasque]          = useState(false);
+
+  // Lu après montage : le lire pendant le rendu ferait diverger serveur et client.
+  useEffect(() => {
+    try {
+      const brut = localStorage.getItem("novac_user");
+      if (!brut) return;
+      const u = JSON.parse(brut);
+      const nom = (u?.username || u?.email || "").trim();
+      if (nom) setPrenom(nom.split(/[\s@]/)[0]);
+    } catch { /* stockage refusé ou contenu illisible */ }
+  }, []);
 
   useEffect(() => { const t = setTimeout(() => setMounted(true), 60); return () => clearTimeout(t); }, []);
 
@@ -235,32 +274,93 @@ function PortfolioPageInner() {
             : list[0];
         const p = target ?? list[0];
         setPortfolio(p);
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        setActivePortfolio({ id: p.id as any, name: p.name, assets: p.assets, color: p.color });
+        // Le contexte type l'identifiant en number, l'API le renvoie en UUID.
+        // La désactivation ESLint qui était ici visait une règle absente de la
+        // configuration, ce qui faisait échouer le lint du fichier au lieu de
+        // taire quoi que ce soit.
+        setActivePortfolio({ id: p.id as unknown as number, name: p.name, assets: p.assets, color: p.color });
         setMode("portfolio");
       })
       .catch(() => setLoading(false));
   }, [searchParams]); // eslint-disable-line
 
-  // Réagit aux changements de portefeuille depuis le GlobalHeader
+  // Réagit aux changements de portefeuille depuis le GlobalHeader.
+  //
+  // Le contexte ne transporte que { id, name, assets, color }. S'en contenter,
+  // comme on le faisait, perdait `total_value` et `cost_basis` : changer de
+  // portefeuille par le menu affichait « Valeur — » sur chaque carte, « Non
+  // défini » en tête, et retirait au graphique son échelle en euros — jusqu'au
+  // prochain rechargement complet de la page, seul endroit qui les relisait.
+  // On repasse donc par l'API, en gardant l'objet partiel comme affichage
+  // provisoire pour que la page ne se vide pas pendant l'aller-retour.
   useEffect(() => {
     if (!activePortfolio) return;
-    setPortfolio(prev => {
-      if (prev?.id === String(activePortfolio.id)) return prev;
-      return {
-        id:     String(activePortfolio.id),
-        name:   activePortfolio.name,
-        assets: (activePortfolio.assets || []) as PortfolioAsset[],
-        color:  activePortfolio.color || "#5B8DEF",
-      };
+    const id = String(activePortfolio.id);
+    setPortfolio(prev => prev?.id === id ? prev : {
+      id,
+      name:   activePortfolio.name,
+      assets: (activePortfolio.assets || []) as PortfolioAsset[],
+      color:  activePortfolio.color || "#5B8DEF",
     });
+
+    let cancelled = false;
+    fetch("http://localhost:8000/api/v1/portfolios")
+      .then(r => r.json())
+      .then((list: PortfolioData[]) => {
+        if (cancelled || !Array.isArray(list)) return;
+        const complet = list.find(p => String(p.id) === id);
+        if (complet) setPortfolio(complet);
+      })
+      .catch(() => { /* l'objet partiel reste affiché */ });
+    return () => { cancelled = true; };
   }, [activePortfolio?.id]); // eslint-disable-line
+
+  // Positions réelles, déduites des transactions.
+  //
+  // C'est la valorisation juste : quantité détenue × cours du jour, et un prix
+  // de revient issu des écritures. Le calcul par les poids qui suit ne vaut
+  // qu'à défaut — il suppose une valeur totale saisie à la main et des poids
+  // qui n'ont pas dérivé depuis, deux hypothèses fausses dès le premier
+  // mouvement de marché.
+  //
+  // Relancé à chaque écriture ajoutée : `txRefreshKey` est déjà le signal
+  // qu'utilise « Activité récente ».
+  useEffect(() => {
+    const id = portfolio?.id;
+    if (!id) { setPositions(null); return; }
+    const token = typeof window !== "undefined" ? localStorage.getItem("novac_token") : null;
+    if (!token) { setPositions(null); return; }   // hors session : repli sur les poids
+
+    let cancelled = false;
+    fetch(`http://localhost:8000/api/v1/portfolios/${id}/positions`, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+      .then(r => (r.ok ? r.json() : null))
+      .then((d: PositionsData | null) => { if (!cancelled) setPositions(d); })
+      .catch(() => { if (!cancelled) setPositions(null); });
+    return () => { cancelled = true; };
+  }, [portfolio?.id, txRefreshKey]);
+
+  /** Vrai quand la page valorise sur les écritures plutôt que sur les poids. */
+  const surTransactions =
+    positions?.source === "transactions" && positions.positions.length > 0;
+
+  const valeurTotale  = surTransactions ? positions!.total_value    : (portfolio?.total_value ?? null);
+  const prixDeRevient = surTransactions ? positions!.total_invested : (portfolio?.cost_basis  ?? null);
 
   const isFirstLoad = useRef(true);
 
+  // Union allocation ∪ positions : un actif détenu hors allocation cible doit
+  // avoir un cours, sans quoi il s'affiche sans prix ni variation.
+  const tickersSuivis = useMemo(() => {
+    const set = new Set<string>((portfolio?.assets ?? []).map(a => a.ticker));
+    if (surTransactions) positions!.positions.forEach(p => set.add(p.ticker));
+    return Array.from(set);
+  }, [portfolio, surTransactions, positions]);
+
   useEffect(() => {
-    if (!portfolio?.assets?.length) return;
-    const tickers = portfolio.assets.map(a => a.ticker).join(",");
+    if (!tickersSuivis.length) return;
+    const tickers = tickersSuivis.join(",");
     if (isFirstLoad.current) {
       setLoading(true);
       setSparkHistory({});
@@ -272,20 +372,26 @@ function PortfolioPageInner() {
         .then((list: PriceData[]) => {
           const map: Record<string, PriceData> = {};
           list.forEach(p => { if (p.symbol) map[p.symbol] = p; });
-          if (isInit) setPrices(map);
+          // Mis à jour à chaque tour, pas seulement au premier. La condition
+          // `isInit` gelait prix et variation au chargement pendant que la
+          // sparkline, elle, continuait d'avancer : la courbe montait à côté
+          // d'un montant qui ne bougeait plus.
+          setPrices(map);
 
           const newUpdatedAt: Record<string, number> = {};
           setSparkHistory(prev => {
             const next = { ...prev };
             list.forEach(p => {
               if (p.price == null) return;
+              // La série du backend fait foi ; entre deux tours on lui ajoute
+              // le prix courant, qui bouge plus vite que le pas de 15 minutes.
               if (!next[p.symbol] || isInit) {
-                next[p.symbol] = initPriceHistory(p.price, p.change ?? 0, 24);
+                next[p.symbol] = p.series?.length ? p.series : [p.price];
                 newUpdatedAt[p.symbol] = Date.now();
               } else {
                 const lastPrice = next[p.symbol][next[p.symbol].length - 1];
                 if (Math.abs(p.price - lastPrice) > 0.0001) {
-                  next[p.symbol] = [...next[p.symbol], p.price].slice(-50);
+                  next[p.symbol] = [...next[p.symbol], p.price].slice(-60);
                   newUpdatedAt[p.symbol] = Date.now(); // prix réellement changé
                 }
               }
@@ -301,7 +407,7 @@ function PortfolioPageInner() {
 
     const interval = setInterval(() => fetchPrices(false), 15000);
     return () => clearInterval(interval);
-  }, [portfolio, period]);
+  }, [tickersSuivis, period]);
 
   // Benchmark SPY — fetch séparé, silencieux en cas d'échec
   useEffect(() => {
@@ -316,15 +422,41 @@ function PortfolioPageInner() {
 
   const enriched: Enriched[] = useMemo(() => {
     if (!portfolio) return [];
+
+    // Sur transactions, la liste des lignes vient des positions, pas de
+    // l'allocation cible : un actif entièrement vendu n'est plus détenu, et un
+    // actif acheté hors allocation l'est bel et bien. Partir des poids
+    // afficherait le portefeuille voulu au lieu du portefeuille réel.
+    if (surTransactions) {
+      const base = valoriser(positions!.positions, prices);
+      return base.map((a, i) => ({
+        ...a,
+        quantity: positions!.positions[i].quantity,
+        avgCost:  positions!.positions[i].avg_cost,
+        invested: positions!.positions[i].invested,
+        pnlEur:   positions!.positions[i].pnl_eur,
+      }));
+    }
+
     return portfolio.assets.map(a => {
       const price  = prices[a.ticker]?.price  ?? null;
       const change = prices[a.ticker]?.change ?? null;
       const tv     = portfolio.total_value ?? null;
       const value  = tv != null ? (a.weight / 100) * tv : null;
-      const perfEur = value != null && change != null ? value * (change / 100) : null;
+      // Gain sur la période, à partir de la valeur d'*aujourd'hui*.
+      //
+      // `valeur × variation` était faux : il suppose que la valeur actuelle
+      // était déjà celle du début de période. Le bon calcul est
+      // V − V/(1+r), c'est-à-dire ce que la ligne vaut aujourd'hui moins ce
+      // qu'elle valait alors. L'écart passait inaperçu sur 24 h ; sur la
+      // fenêtre Max il annonçait des millions d'euros de plus-value sur un
+      // portefeuille de cinq mille.
+      const perfEur = value != null && change != null && change > -100
+        ? value - value / (1 + change / 100)
+        : null;
       return { ...a, price, change, value, perfEur };
     });
-  }, [portfolio, prices]);
+  }, [portfolio, prices, surTransactions, positions]);
 
   const totalWeight    = enriched.reduce((s, a) => s + a.weight, 0);
   const weightedChange = enriched.reduce((s, a) => {
@@ -359,11 +491,14 @@ function PortfolioPageInner() {
     return { global, diversification, risque, momentum, qualite };
   }, [enriched, top3Conc, weightedChange]);
 
-  // Sparklines per asset — deterministic, trending per change direction
+  // Repli le temps que la série arrive : un segment plat entre les deux seules
+  // valeurs connues, plutôt qu'une courbe inventée qui aurait l'air d'un cours.
   const assetSparks = useMemo(() => {
     const map: Record<string, number[]> = {};
-    enriched.forEach((a, i) => {
-      map[a.ticker] = genSparkline(i * 37 + 11, 20, (a.change ?? 0) >= 0 ? 0.010 : -0.010);
+    enriched.forEach(a => {
+      if (a.price == null) return;
+      const start = a.change != null ? a.price / (1 + a.change / 100) : a.price;
+      map[a.ticker] = [start, a.price];
     });
     return map;
   }, [enriched]);
@@ -420,135 +555,295 @@ function PortfolioPageInner() {
       height: "100vh", display: "flex", flexDirection: "column",
       background: "var(--novac-bg, #040F22)", color: "var(--novac-text-primary, #F8F9FC)",
       fontFamily: FONT, boxSizing: "border-box",
-      paddingTop: 48, overflow: "hidden",
+      paddingTop: 62, overflow: "hidden",
     }}>
 
-      {/* ── SUB-HEADER ──────────────────────────────────────────────────────── */}
-      <header style={{
-        display: "flex", alignItems: "center",
-        justifyContent: "space-between",
-        padding: "10px 18px",
-        borderBottom: "1px solid rgba(255,255,255,0.05)",
-        flexShrink: 0,
-        ...anim(0),
-      }}>
-        {/* Gauche : nom */}
-        <div>
-          <p style={{ margin: 0, fontSize: 10, color: "rgba(255,255,255,0.30)", letterSpacing: "0.06em", fontWeight: 600 }}>PORTEFEUILLE</p>
-          <p style={{ margin: "2px 0 0", fontSize: 15, fontWeight: 700, color: "#fff" }}>
-            {portfolio?.name ?? "—"}
-          </p>
-        </div>
+      {/* ── Bande de tête ─────────────────────────────────────────────────
+          Les trois chiffres que la maquette met en avant. Ceux qu'elle
+          montrait en plus — rendement TWR, cash disponible — n'ont aucune
+          source : ni calcul au backend, ni champ au modèle. Les afficher
+          à vide aurait donné trois cases vides plutôt qu'un tableau de bord.
 
-        {/* Droite : vues dashboard */}
-        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-          {(["resume","analyse","evenements","objectifs","transactions"] as const).map(v => {
-            const labels = { resume: "Résumé", analyse: "Analyse", evenements: "Événements", objectifs: "Objectifs", transactions: "Transactions" };
-            const isAct  = dashView === v;
-            return (
-              <button key={v} onClick={() => setDashView(v)} style={{
-                padding: "5px 14px", borderRadius: 8, border: "none", cursor: "pointer",
-                fontSize: 11, fontWeight: isAct ? 700 : 500, fontFamily: FONT,
-                background: isAct ? "rgba(91,141,239,0.18)" : "transparent",
-                color: isAct ? "#9BB9FF" : "rgba(255,255,255,0.32)",
-                borderBottom: isAct ? "2px solid #5B8DEF" : "2px solid transparent",
-                transition: "all 180ms ease",
-              }}>
-                {labels[v]}
-              </button>
-            );
-          })}
+          Le retrait latéral vaut MARGE, comme les onglets et le contenu :
+          remontée au niveau de la page, la bande avait perdu le retrait de la
+          vue Résumé et touchait les deux bords. */}
+      <div style={{ padding: `0 ${MARGE}px`, flexShrink: 0 }}>
+      <Card style={{ padding: "13px 18px", flexShrink: 0, display: "flex", alignItems: "center", gap: 22, flexWrap: "wrap" }}>
+        {/* Identité du portefeuille. La maquette met ici une illustration
+            décorative ; elle ne dit rien qu'on ne sache déjà. Ces pixels
+            répondent plutôt à une question que la mise en page a fait
+            disparaître : depuis que la pastille est partie à droite du
+            bandeau, la bande n'indiquait plus de quel portefeuille il s'agit.
+            Les logos empilés montrent en plus ce qu'il contient. */}
+        {portfolio && (
+          <div style={{ display: "flex", alignItems: "center", gap: 11, minWidth: 0, flexShrink: 0 }}>
+            <div style={{ display: "flex", alignItems: "center" }}>
+              {enriched.slice(0, 4).map((a, i) => (
+                <div key={a.ticker} title={a.ticker} style={{
+                  width: 30, height: 30, borderRadius: "50%", overflow: "hidden",
+                  // Chevauchement vers la gauche, le premier logo devant : sans
+                  // l'ordre inverse, chaque logo masquait le précédent.
+                  marginLeft: i ? -10 : 0, zIndex: 4 - i,
+                  border: "2px solid var(--novac-bg, #040F22)",
+                  background: "rgba(255,255,255,0.06)", flexShrink: 0,
+                  display: "flex", alignItems: "center", justifyContent: "center",
+                }}>
+                  <AssetLogo ticker={a.ticker} type={a.type || "EQUITY"} size={26} radius={13}
+                    fallbackBg="rgba(255,255,255,0.10)" fallbackBorder="transparent"
+                    fallbackTextColor="#fff" bare />
+                </div>
+              ))}
+              {enriched.length > 4 && (
+                <div style={{
+                  width: 30, height: 30, borderRadius: "50%", marginLeft: -10, zIndex: 0,
+                  border: "2px solid var(--novac-bg, #040F22)", background: "rgba(255,255,255,0.10)",
+                  display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0,
+                  fontSize: 10, fontWeight: 700, color: "rgba(255,255,255,0.70)", fontFamily: FONT,
+                }}>
+                  +{enriched.length - 4}
+                </div>
+              )}
+            </div>
+            <div style={{ minWidth: 0 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                <span style={{ width: 7, height: 7, borderRadius: 2, background: portfolio.color || "#5B8DEF", flexShrink: 0 }} />
+                <span style={{ fontSize: 13, fontWeight: 700, color: "#fff", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                  {portfolio.name}
+                </span>
+              </div>
+              <span style={{ fontSize: 10.5, color: "rgba(255,255,255,0.35)" }}>
+                {enriched.length} actif{enriched.length > 1 ? "s" : ""}
+              </span>
+            </div>
+          </div>
+        )}
+        <div style={{ width: 1, alignSelf: "stretch", background: "rgba(255,255,255,0.07)" }} />
+        <div style={{ minWidth: 200 }}>
+    {/* VALEUR TOTALE + édition inline */}
+    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 2 }}>
+      <span style={{ display: "flex", alignItems: "center", gap: 6 }}>
+        <p style={{ margin: 0, fontSize: 11.5, fontWeight: 500, color: "rgba(255,255,255,0.55)" }}>Valeur totale</p>
+        <button onClick={() => setMasque(v => !v)} title={masque ? "Afficher les montants" : "Masquer les montants"}
+          aria-label={masque ? "Afficher les montants" : "Masquer les montants"}
+          style={{ background: "none", border: "none", cursor: "pointer", padding: 0, display: "flex", color: "rgba(255,255,255,0.32)" }}>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round">
+            {masque
+              ? <><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19M1 1l22 22"/><path d="M9.9 9.9a3 3 0 1 0 4.2 4.2"/></>
+              : <><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></>}
+          </svg>
+        </button>
+      </span>
+    </div>
+    {editingValue ? (
+      <div style={{ display: "flex", alignItems: "center", gap: 5, marginBottom: 4 }}>
+        <input autoFocus value={valueInput} onChange={e => setValueInput(e.target.value)}
+          onKeyDown={e => { if (e.key === "Enter") saveTotalValue(); if (e.key === "Escape") setEditingValue(false); }}
+          onBlur={saveTotalValue} placeholder="Ex: 10000" type="number"
+          style={{ width: 100, background: "rgba(255,255,255,0.07)", border: "1px solid rgba(91,141,239,0.40)", borderRadius: 6, padding: "3px 8px", color: "#fff", fontSize: 11, outline: "none", fontFamily: FONT }} />
+        <span style={{ fontSize: 11, color: "rgba(255,255,255,0.35)" }}>€</span>
+      </div>
+    ) : (
+      <div style={{ fontSize: 32, fontWeight: 600, fontFamily: FONT, color: "#fff", letterSpacing: "-0.02em", lineHeight: 1, marginBottom: 5 }}>
+        {masque
+          ? "•••• €"
+          : valeurTotale != null
+            ? valeurTotale.toLocaleString("fr-FR", { maximumFractionDigits: 0 }) + " €"
+            : <span style={{ fontSize: 13, color: "rgba(255,255,255,0.25)" }}>Non défini</span>}
+      </div>
+    )}
+    {/* Perf sur la période choisie. Le libellé la suit : il disait
+        « Aujourd'hui » quelle que soit la période, et annonçait donc
+        un gain d'un an comme s'il datait du matin. */}
+    {valeurTotale != null && weightedChange != null && (
+      <div style={{ fontSize: 11, fontFamily: FONT, color: perfColor, fontWeight: 600 }}>
+        {period === "24h" ? "Aujourd'hui" : `Sur ${PERIOD_LABEL[period]}`}&nbsp;
+        <span>
+            {weightedChange >= 0 ? "+" : ""}
+            {Math.round(
+              // Idem : on retranche la valeur de début de période à celle
+              // d'aujourd'hui, au lieu d'appliquer le rendement au montant actuel.
+              weightedChange > -100
+                ? valeurTotale - valeurTotale / (1 + weightedChange / 100)
+                : valeurTotale
+            ).toLocaleString("fr-FR")} €
+          </span>
+        <span style={{ opacity: 0.55, marginLeft: 4 }}>({fmtChange(weightedChange)})</span>
+      </div>
+    )}
         </div>
-      </header>
+        <div style={{ width: 1, alignSelf: "stretch", background: "rgba(255,255,255,0.07)" }} />
+        <div style={{ minWidth: 150 }}>
+          <p style={{ margin: "0 0 4px", fontSize: 11.5, fontWeight: 500, color: "rgba(255,255,255,0.55)" }}>Gains / pertes</p>
+    {/* P&L total depuis achat */}
+    {valeurTotale != null && (() => {
+      const cb = prixDeRevient;
+      if (cb == null) {
+        return (
+          <div style={{ marginTop: 3 }}>
+            {editingCost ? (
+              <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
+                <input autoFocus value={costInput} onChange={e => setCostInput(e.target.value)}
+                  onKeyDown={e => { if (e.key === "Enter") saveCostBasis(); if (e.key === "Escape") setEditingCost(false); }}
+                  onBlur={saveCostBasis} placeholder="Prix de revient" type="number"
+                  style={{ width: 110, background: "rgba(255,255,255,0.07)", border: "1px solid rgba(91,141,239,0.40)", borderRadius: 6, padding: "3px 8px", color: "#fff", fontSize: 10, outline: "none", fontFamily: FONT }} />
+                <span style={{ fontSize: 10, color: "rgba(255,255,255,0.35)" }}>€</span>
+              </div>
+            ) : (
+              <button onClick={() => { setCostInput(""); setEditingCost(true); }}
+                style={{ background: "none", border: "none", cursor: "pointer", fontSize: 10, color: "rgba(255,255,255,0.22)", padding: 0, textDecoration: "underline dotted", fontFamily: FONT, transition: "color 150ms" }}
+                onMouseEnter={e => (e.currentTarget.style.color = "rgba(255,255,255,0.50)")}
+                onMouseLeave={e => (e.currentTarget.style.color = "rgba(255,255,255,0.22)")}>
+                + Définir prix de revient
+              </button>
+            )}
+          </div>
+        );
+      }
+      const plEur = valeurTotale - cb;
+      const plPct = (plEur / cb) * 100;
+      const plCol = plEur >= 0 ? "#4ade80" : "#f87171";
+      return (
+        <div style={{ marginTop: 3, fontSize: 11, fontFamily: FONT, color: plCol, fontWeight: 600, display: "flex", alignItems: "center", gap: 6 }}>
+          Total
+          <span>{plEur >= 0 ? "+" : ""}{Math.round(plEur).toLocaleString("fr-FR")} €</span>
+          <span style={{ opacity: 0.55 }}>({plPct >= 0 ? "+" : ""}{plPct.toFixed(1)}%)</span>
+          {/* Le crayon disparaît dès que le prix de revient vient des
+              écritures : la valeur saisie serait enregistrée puis ignorée,
+              le calcul repartant des transactions au rafraîchissement. */}
+          {!surTransactions && (
+            <button onClick={() => { setCostInput(cb.toString()); setEditingCost(true); }}
+              style={{ background: "none", border: "none", cursor: "pointer", fontSize: 9, color: "rgba(255,255,255,0.22)", padding: 0, transition: "color 150ms" }}
+              onMouseEnter={e => (e.currentTarget.style.color = "rgba(255,255,255,0.50)")}
+              onMouseLeave={e => (e.currentTarget.style.color = "rgba(255,255,255,0.22)")}>✏</button>
+          )}
+          {editingCost && !surTransactions && (
+            <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
+              <input autoFocus value={costInput} onChange={e => setCostInput(e.target.value)}
+                onKeyDown={e => { if (e.key === "Enter") saveCostBasis(); if (e.key === "Escape") setEditingCost(false); }}
+                onBlur={saveCostBasis} type="number"
+                style={{ width: 90, background: "rgba(255,255,255,0.07)", border: "1px solid rgba(91,141,239,0.40)", borderRadius: 6, padding: "2px 7px", color: "#fff", fontSize: 10, outline: "none", fontFamily: FONT }} />
+              <span style={{ fontSize: 10, color: "rgba(255,255,255,0.35)" }}>€</span>
+            </div>
+          )}
+        </div>
+      );
+    })()}
+        </div>
+        <div style={{ width: 1, alignSelf: "stretch", background: "rgba(255,255,255,0.07)" }} />
+        <div style={{ minWidth: 120 }}>
+          <p style={{ margin: "0 0 4px", fontSize: 11.5, fontWeight: 500, color: "rgba(255,255,255,0.55)" }}>Comparaison</p>
+    {/* Benchmark SPY */}
+    {spyChange != null && weightedChange != null && (() => {
+      const diff    = weightedChange - spyChange;
+      const diffCol = diff >= 0 ? "#4ade80" : "#f87171";
+      return (
+        <div style={{ position: "relative", marginTop: 3 }}
+          onMouseEnter={() => setActiveTooltip("spy")}
+          onMouseLeave={() => setActiveTooltip(null)}>
+          <div style={{ fontSize: 10, color: "rgba(255,255,255,0.40)", fontFamily: FONT, cursor: "default" }}>
+            vs S&amp;P 500&nbsp;
+            <span style={{ color: diffCol, fontWeight: 700 }}>{diff >= 0 ? "+" : ""}{diff.toFixed(2)}%</span>
+          </div>
+          {activeTooltip === "spy" && (
+            <div style={{
+              position: "absolute", bottom: "calc(100% + 6px)", left: 0, right: 0, zIndex: 50,
+              background: "rgba(4,17,36,0.97)", border: "1px solid rgba(255,255,255,0.10)",
+              borderRadius: 8, padding: "8px 10px", boxShadow: "0 8px 24px rgba(0,0,0,0.50)",
+              pointerEvents: "none", whiteSpace: "nowrap",
+            }}>
+              <span style={{ fontSize: 10, color: "rgba(255,255,255,0.62)", lineHeight: 1.5 }}>
+                Votre portefeuille&nbsp;
+                {diff >= 0 ? "surperforme" : "sous-performe"}&nbsp;
+                le S&amp;P 500 de {Math.abs(diff).toFixed(2)}% sur la période.
+              </span>
+            </div>
+          )}
+        </div>
+      );
+    })()}
+        </div>
+        {novacScore && <>
+          <div style={{ width: 1, alignSelf: "stretch", background: "rgba(255,255,255,0.07)" }} />
+          {/* Santé du portefeuille : le titre chiffré passe en tête, la carte
+              de droite ne garde que le détail par critère. */}
+          <div style={{ display: "flex", alignItems: "center", gap: 12, minWidth: 170 }}>
+            <CircleScore score={novacScore.global} size={54} nu />
+            <div>
+              <p style={{ margin: "0 0 3px", fontSize: 11.5, fontWeight: 500, color: "rgba(255,255,255,0.55)" }}>Santé du portefeuille</p>
+              <div style={{ display: "flex", alignItems: "baseline", gap: 3 }}>
+                <span style={{ fontSize: 20, fontWeight: 800, fontFamily: FONT, color: "#fff", lineHeight: 1 }}>{novacScore.global}</span>
+                <span style={{ fontSize: 10, color: "rgba(255,255,255,0.32)" }}>/100</span>
+              </div>
+              <span style={{ fontSize: 11, fontWeight: 600, color: scoreColor(novacScore.global) }}>
+                {scoreLabel(novacScore.global)}
+              </span>
+            </div>
+          </div>
+        </>}
+      </Card>
+      </div>
+
+      {/* Navigation des sections, sous la bande de valeur : on lit d'abord
+          combien on a, puis on choisit ce qu'on veut en voir.
+          Au niveau de la page et non dans la vue Résumé — laissée dedans,
+          elle disparaissait dès qu'on changeait d'onglet, donc sans retour. */}
+      <div style={{ padding: `8px ${MARGE}px 0`, flexShrink: 0, ...anim(40) }}>
+        <PortfolioTabs active={dashView} onChange={setDashView} />
+      </div>
 
       {/* ── MAIN ────────────────────────────────────────────────────────────── */}
       <div style={{ flex: 1, minHeight: 0, overflow: "hidden", position: "relative" }}>
 
       {/* ══ VUE RÉSUMÉ ══════════════════════════════════════════════════════════ */}
-      <div style={{ display: dashView === "resume" ? "flex" : "none", height: "100%", gap: 0, padding: "10px 10px 0", overflow: "hidden" }}>
+      <div style={{ display: dashView === "resume" ? "flex" : "none", flexDirection: "column", height: "100%", gap: 8, padding: `8px ${MARGE}px 0`, overflowY: "auto", overflowX: "hidden" }}>
+
+        <div style={{ display: "flex", flex: 1, minHeight: 0, gap: 0, alignItems: "stretch" }}>
 
         {/* Treemap / Liste */}
         <div style={{ flex: 1, minWidth: 0, minHeight: 0, display: "flex", flexDirection: "column", gap: 8, ...anim(80) }}>
-          {/* Barre contrôles : période (gauche) · ⓘ + carte/liste (droite) */}
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexShrink: 0 }}>
-            {/* Sélecteur de période */}
-            <div style={{ display: "flex", gap: 2, background: "rgba(255,255,255,0.05)", borderRadius: 8, padding: 3, border: "1px solid rgba(255,255,255,0.07)" }}>
-              {PERIODS.map(p => (
-                <button key={p} onClick={() => setPeriod(p)} style={{
-                  padding: "3px 9px", borderRadius: 6, border: "none", cursor: "pointer",
-                  fontSize: 10, fontWeight: 600, fontFamily: FONT,
-                  background: period === p ? "rgba(255,255,255,0.11)" : "transparent",
-                  color: period === p ? "#fff" : "rgba(255,255,255,0.32)",
-                  transition: "all 160ms ease",
-                }}>
-                  {p}
-                </button>
-              ))}
-            </div>
-            {/* ⓘ + toggle vue */}
-            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-              {/* Légende ⓘ */}
-              <div style={{ position: "relative" }}
-                onMouseEnter={() => setLegendTooltip(true)}
-                onMouseLeave={() => setLegendTooltip(false)}>
-                <span style={{ fontSize: 16, color: "rgba(255,255,255,0.22)", cursor: "default", lineHeight: 1, userSelect: "none" }}>ⓘ</span>
-                {legendTooltip && (
-                  <div style={{
-                    position: "absolute", bottom: "calc(100% + 8px)", right: 0, zIndex: 50, whiteSpace: "nowrap",
-                    background: "rgba(4,17,36,0.97)", border: "1px solid rgba(255,255,255,0.10)",
-                    borderRadius: 8, padding: "8px 12px", boxShadow: "0 8px 24px rgba(0,0,0,0.50)",
-                    pointerEvents: "none",
-                  }}>
-                    <span style={{ fontSize: 10, color: "rgba(255,255,255,0.62)" }}>
-                      Fond = couleur de marque &nbsp;·&nbsp;
-                      <span style={{ color: "#4ade80" }}>▲</span>
-                      <span style={{ color: "#f87171" }}>▼</span> = performance du jour
-                    </span>
-                  </div>
-                )}
-              </div>
-              {/* Toggle carte / liste */}
-              <div style={{ display: "flex", background: "rgba(255,255,255,0.05)", borderRadius: 8, padding: 3, gap: 1, border: "1px solid rgba(255,255,255,0.07)" }}>
-                {(["carte", "liste"] as const).map(v => (
-                  <button key={v} onClick={() => setView(v)} style={{
-                    padding: "3px 10px", borderRadius: 6, border: "none", cursor: "pointer",
-                    fontSize: 10, fontWeight: 600, fontFamily: FONT,
-                    background: view === v ? "rgba(255,255,255,0.11)" : "transparent",
-                    color: view === v ? "#fff" : "rgba(255,255,255,0.32)",
-                    transition: "all 160ms ease",
-                  }}>
-                    {v === "carte" ? "⊞ Carte" : "≡ Liste"}
-                  </button>
-                ))}
-              </div>
-              {/* Nouvelle transaction */}
-              {portfolio && (
-                <button
-                  onClick={() => setShowTxModal(true)}
-                  style={{
-                    display: "flex", alignItems: "center", gap: 5,
-                    padding: "4px 10px", borderRadius: 8, cursor: "pointer",
-                    fontSize: 10, fontWeight: 600, fontFamily: FONT,
-                    border: "1px solid rgba(74,222,128,0.30)",
-                    background: "rgba(74,222,128,0.08)", color: "#4ade80",
-                    transition: "all 160ms ease",
-                  }}
-                  onMouseEnter={e => { e.currentTarget.style.background = "rgba(74,222,128,0.15)"; e.currentTarget.style.borderColor = "rgba(74,222,128,0.50)"; }}
-                  onMouseLeave={e => { e.currentTarget.style.background = "rgba(74,222,128,0.08)"; e.currentTarget.style.borderColor = "rgba(74,222,128,0.30)"; }}
-                >
-                  + Transaction
-                </button>
-              )}
+          {/* Performance du portefeuille — l'élément central de la maquette, et
+              le seul qui manquait entièrement. La période est celle de la page :
+              un unique sélecteur commande la courbe, les tuiles et les chiffres,
+              plutôt que deux réglages qui se contredisent. */}
+          {/* Conteneur repris à l'identique de la page graphique : même rayon de
+              30 px, même bord, même fond, même rembourrage, et la même couche
+              de halo interne. Un `Card` générique donnait un cadre visiblement
+              différent pour le même objet. */}
+          <div className="chart-glass-container" data-glass-edge="" style={{
+            border: "1px solid rgba(205,225,255,0.16)", borderRadius: 30, padding: "14px 18px 10px",
+            flex: 1, minHeight: 150, display: "flex", flexDirection: "column",
+            position: "relative", overflow: "hidden", background: "rgba(9,27,52,0.78)",
+          }}>
+            <div style={{
+              position: "absolute", inset: -28, pointerEvents: "none", zIndex: 0,
+              filter: "blur(20px)", opacity: 0.78,
+              background: "radial-gradient(ellipse 90% 72% at -10% -10%, rgba(255,255,255,0.035) 0%, rgba(255,255,255,0.014) 42%, rgba(255,255,255,0) 82%), radial-gradient(ellipse 86% 75% at 110% 112%, rgba(60,113,184,0.045) 0%, rgba(60,113,184,0.018) 44%, rgba(60,113,184,0) 84%)",
+            }} />
+            <div style={{ position: "relative", zIndex: 1, display: "flex", flexDirection: "column", flex: 1, minHeight: 0 }}>
+            <PerformanceChart
+              assets={enriched.map(a => ({ ticker: a.ticker, weight: a.weight }))}
+              totalValue={valeurTotale}
+              period={period}
+              onPeriodChange={setPeriod}
+              color={portfolio?.color || "#5B8DEF"}
+            />
             </div>
           </div>
+
+          {/* Le titre, les filtres et le tri tenaient sur deux lignes, avec
+              une infobulle de légende et un bouton d'ajout que le concept n'a
+              pas. Tout est descendu dans la grille, sur une seule ligne. */}
           {loading ? (
             <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", color: "rgba(255,255,255,0.20)", fontSize: 12 }}>
               Chargement…
             </div>
           ) : (<>
-            {/* Carte — toujours monté pour éviter le re-init D3 */}
-            <div style={{ flex: 1, minHeight: 0, display: view === "carte" ? "flex" : "none", flexDirection: "column" }}>
-              <LiquidGlassTreemap
+            {/* Grille à cartes égales. La treemap pondérée codait le poids
+                par la surface : les petites lignes en devenaient illisibles,
+                et deux rectangles de proportions différentes se comparent mal.
+                Le poids se lit maintenant en chiffres sur chaque carte. */}
+            <div style={{ flexShrink: 0 }}>
+              <AssetGrid
                 assets={enriched.map(a => ({
                   ticker: a.ticker, weight: a.weight,
                   change: a.change, type: a.type, price: a.price,
@@ -558,12 +853,16 @@ function PortfolioPageInner() {
                   perfEur:   a.perfEur,
                 }))}
                 onAssetClick={ticker => router.push(`/chart?ticker=${encodeURIComponent(ticker)}`)}
+                view={view}
               />
             </div>
             {/* Liste — toujours monté */}
             <div style={{ overflowY: "auto", flex: 1, borderRadius: 10, border: "1px solid rgba(255,255,255,0.06)", display: view === "liste" ? "block" : "none" }}>
               <div style={{ display: "grid", gridTemplateColumns: "1fr 70px 100px 70px" }}>
-                {["Actif", "Poids", "Prix", "24h"].map(h => (
+                {/* La dernière colonne suit la période, comme les libellés de
+                    la bande de tête : figée sur « 24h », elle annonçait une
+                    variation d'un an comme celle de la journée. */}
+                {["Actif", "Poids", "Prix", PERIOD_LABEL[period]].map(h => (
                   <div key={h} style={{ padding: "8px 14px", fontSize: 9, fontWeight: 700,
                     color: "rgba(255,255,255,0.28)", letterSpacing: "0.10em",
                     borderBottom: "1px solid rgba(255,255,255,0.05)" }}>{h}</div>
@@ -576,10 +875,10 @@ function PortfolioPageInner() {
                     <span style={{ fontSize: 12, fontWeight: 500 }}>{a.ticker.replace(/-USD$/, "")}</span>
                   </div>,
                   <div key={`${a.ticker}-w`} style={{ padding: "9px 14px", fontSize: 11, color: "rgba(255,255,255,0.55)", borderBottom: "1px solid rgba(255,255,255,0.04)", display: "flex", alignItems: "center" }}>{a.weight.toFixed(1)}%</div>,
-                  <div key={`${a.ticker}-p`} style={{ padding: "9px 14px", fontSize: 11, color: "rgba(255,255,255,0.55)", borderBottom: "1px solid rgba(255,255,255,0.04)", display: "flex", alignItems: "center", fontFamily: FONT_MONO }}>
+                  <div key={`${a.ticker}-p`} style={{ padding: "9px 14px", fontSize: 11, color: "rgba(255,255,255,0.55)", borderBottom: "1px solid rgba(255,255,255,0.04)", display: "flex", alignItems: "center", fontFamily: FONT }}>
                     {a.price !== null ? `${a.price.toLocaleString("fr-FR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €` : "—"}
                   </div>,
-                  <div key={`${a.ticker}-c`} style={{ padding: "9px 14px", fontSize: 11, fontWeight: 700, borderBottom: "1px solid rgba(255,255,255,0.04)", display: "flex", alignItems: "center", fontFamily: FONT_MONO, color: a.change === null ? "rgba(255,255,255,0.25)" : a.change >= 0 ? "#4ade80" : "#f87171" }}>
+                  <div key={`${a.ticker}-c`} style={{ padding: "9px 14px", fontSize: 11, fontWeight: 700, borderBottom: "1px solid rgba(255,255,255,0.04)", display: "flex", alignItems: "center", fontFamily: FONT, color: a.change === null ? "rgba(255,255,255,0.25)" : a.change >= 0 ? "#4ade80" : "#f87171" }}>
                     {fmtChange(a.change)}
                   </div>,
                 ])}
@@ -587,186 +886,24 @@ function PortfolioPageInner() {
             </div>
           </>)}
 
-          {/* Bottom KPI row — 2 cartes après fusion/suppression */}
-          {view === "carte" && (() => {
-            const riskLevel = top3Conc > 70 ? 3 : top3Conc > 50 ? 2 : 1;
-            const riskColor = riskLevel === 3 ? "#f87171" : riskLevel === 2 ? "#fbbf24" : "#4ade80";
-            const riskLabel = riskLevel === 3 ? "Élevé" : riskLevel === 2 ? "Modéré" : "Faible";
-            const totalGain = enriched.reduce((s, a) => s + Math.max(0, a.perfEur ?? 0), 0);
-            const totalLoss = enriched.reduce((s, a) => s + Math.min(0, a.perfEur ?? 0), 0);
-            return (
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, flexShrink: 0, ...anim(240) }}>
-
-                {/* RISQUE — fusion Concentration + Risque avec bordure gauche sémantique */}
-                <Card style={{ padding: "8px 14px", display: "flex", alignItems: "center", gap: 14,
-                  borderLeft: `3px solid ${riskColor}`, borderRadius: "0 12px 12px 0" }}>
-                  <div style={{ flexShrink: 0 }}>
-                    <p style={{ margin: 0, fontSize: 9, fontWeight: 700, letterSpacing: "0.10em", color: "rgba(255,255,255,0.25)" }}>RISQUE</p>
-                    <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 3 }}>
-                      <div style={{ width: 8, height: 8, borderRadius: "50%", background: riskColor, boxShadow: `0 0 6px ${riskColor}88`, flexShrink: 0 }} />
-                      <span style={{ fontSize: 18, fontWeight: 700, color: riskColor, lineHeight: 1 }}>{riskLabel}</span>
-                    </div>
-                    <p style={{ margin: "4px 0 0", fontSize: 9, color: "rgba(255,255,255,0.28)" }}>Concentration top 3 : {top3Conc.toFixed(0)}%</p>
-                  </div>
-                  <div style={{ flex: 1 }}>
-                    <div style={{ position: "relative", height: 5, borderRadius: 3, background: "linear-gradient(to right, #4ade80, #fbbf24, #f87171)" }}>
-                      <div style={{
-                        position: "absolute", top: "50%", transform: "translate(-50%,-50%)",
-                        left: `${riskLevel === 1 ? 20 : riskLevel === 2 ? 55 : 85}%`,
-                        width: 11, height: 11, borderRadius: "50%",
-                        background: riskColor, border: "2px solid #040F22",
-                        boxShadow: `0 0 7px ${riskColor}`,
-                        transition: "left 600ms cubic-bezier(0.34,1,0.64,1)",
-                      }} />
-                    </div>
-                  </div>
-                </Card>
-
-                {/* BILAN JOURNALIER */}
-                <Card style={{ padding: "8px 14px" }}>
-                  <p style={{ margin: "0 0 4px", fontSize: 9, fontWeight: 700, letterSpacing: "0.10em", color: "rgba(255,255,255,0.25)" }}>BILAN JOURNALIER</p>
-                  <div style={{ display: "flex", alignItems: "baseline", gap: 6 }}>
-                    <span style={{ fontSize: 18, fontWeight: 800, fontFamily: FONT_MONO, color: "#4ade80", lineHeight: 1 }}>
-                      +{Math.round(totalGain).toLocaleString("fr-FR")} €
-                    </span>
-                    <span style={{ fontSize: 11, color: "rgba(255,255,255,0.20)" }}>/</span>
-                    <span style={{ fontSize: 18, fontWeight: 800, fontFamily: FONT_MONO, color: lossCount > 0 ? "#f87171" : "rgba(255,255,255,0.18)", lineHeight: 1 }}>
-                      {Math.round(totalLoss).toLocaleString("fr-FR")} €
-                    </span>
-                  </div>
-                  <div style={{ marginTop: 5, fontSize: 10, color: "rgba(255,255,255,0.35)", fontFamily: FONT }}>
-                    <span style={{ color: "#4ade80", fontWeight: 600 }}>{gainCount}</span>
-                    {" hausse"}{gainCount !== 1 ? "s" : ""}
-                    {" · "}
-                    <span style={{ color: lossCount > 0 ? "#f87171" : "rgba(255,255,255,0.35)", fontWeight: 600 }}>{lossCount}</span>
-                    {" baisse"}{lossCount !== 1 ? "s" : ""}
-                  </div>
-                </Card>
-              </div>
-            );
-          })()}
+          {/* La bande « À surveiller » vivait ici — mouvements notables,
+              repères de marché, sentiment. Retirée : le concept arrête la
+              colonne sur « Voir tous les actifs ». Les cartes « Risque » et
+              « Bilan journalier » l'avaient précédée au même endroit. */}
         </div>
 
         {/* ── Right sidebar ─────────────────────────────────────────────────── */}
         <div style={{
-          width: 248, flexShrink: 0,
+          width: 296, flexShrink: 0,
           display: "flex", flexDirection: "column", gap: 8,
           paddingLeft: 10, overflow: "hidden",
           ...anim(160),
         }}>
 
-          {/* 1. ÉTAT DE SANTÉ — Valeur totale + Score NOVAC fusionnés */}
+          {/* Santé du portefeuille. La valeur totale est remontée dans la
+              bande de tête : elle y est le premier chiffre qu'on cherche, et
+              son départ rend une centaine de pixels à cette colonne. */}
           <Card style={{ padding: "14px 16px", flexShrink: 0 }}>
-            {/* VALEUR TOTALE + édition inline */}
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 2 }}>
-              <p style={{ margin: 0, fontSize: 9, fontWeight: 700, letterSpacing: "0.10em", color: "rgba(255,255,255,0.28)" }}>VALEUR TOTALE</p>
-              <button onClick={() => { setValueInput(portfolio?.total_value?.toString() ?? ""); setEditingValue(true); }}
-                style={{ background: "none", border: "none", cursor: "pointer", fontSize: 10, color: "rgba(255,255,255,0.28)", padding: "0 2px", transition: "color 150ms" }}
-                onMouseEnter={e => (e.currentTarget.style.color = "rgba(255,255,255,0.65)")}
-                onMouseLeave={e => (e.currentTarget.style.color = "rgba(255,255,255,0.28)")}>✏</button>
-            </div>
-            {editingValue ? (
-              <div style={{ display: "flex", alignItems: "center", gap: 5, marginBottom: 4 }}>
-                <input autoFocus value={valueInput} onChange={e => setValueInput(e.target.value)}
-                  onKeyDown={e => { if (e.key === "Enter") saveTotalValue(); if (e.key === "Escape") setEditingValue(false); }}
-                  onBlur={saveTotalValue} placeholder="Ex: 10000" type="number"
-                  style={{ width: 100, background: "rgba(255,255,255,0.07)", border: "1px solid rgba(91,141,239,0.40)", borderRadius: 6, padding: "3px 8px", color: "#fff", fontSize: 11, outline: "none", fontFamily: FONT_MONO }} />
-                <span style={{ fontSize: 11, color: "rgba(255,255,255,0.35)" }}>€</span>
-              </div>
-            ) : (
-              <div style={{ fontSize: 24, fontWeight: 800, fontFamily: FONT_MONO, color: "#fff", letterSpacing: "-0.02em", lineHeight: 1, marginBottom: 4 }}>
-                {portfolio?.total_value != null
-                  ? portfolio.total_value.toLocaleString("fr-FR", { maximumFractionDigits: 0 }) + " €"
-                  : <span style={{ fontSize: 13, color: "rgba(255,255,255,0.25)" }}>Non défini</span>}
-              </div>
-            )}
-            {/* Perf du jour */}
-            {portfolio?.total_value != null && weightedChange != null && (
-              <div style={{ fontSize: 11, fontFamily: FONT_MONO, color: perfColor, fontWeight: 600 }}>
-                Aujourd&apos;hui&nbsp;
-                <span>{weightedChange >= 0 ? "+" : ""}{Math.round(portfolio.total_value * weightedChange / 100).toLocaleString("fr-FR")} €</span>
-                <span style={{ opacity: 0.55, marginLeft: 4 }}>({fmtChange(weightedChange)})</span>
-              </div>
-            )}
-            {/* P&L total depuis achat */}
-            {portfolio?.total_value != null && (() => {
-              const cb = portfolio.cost_basis;
-              if (cb == null) {
-                return (
-                  <div style={{ marginTop: 3 }}>
-                    {editingCost ? (
-                      <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
-                        <input autoFocus value={costInput} onChange={e => setCostInput(e.target.value)}
-                          onKeyDown={e => { if (e.key === "Enter") saveCostBasis(); if (e.key === "Escape") setEditingCost(false); }}
-                          onBlur={saveCostBasis} placeholder="Prix de revient" type="number"
-                          style={{ width: 110, background: "rgba(255,255,255,0.07)", border: "1px solid rgba(91,141,239,0.40)", borderRadius: 6, padding: "3px 8px", color: "#fff", fontSize: 10, outline: "none", fontFamily: FONT_MONO }} />
-                        <span style={{ fontSize: 10, color: "rgba(255,255,255,0.35)" }}>€</span>
-                      </div>
-                    ) : (
-                      <button onClick={() => { setCostInput(""); setEditingCost(true); }}
-                        style={{ background: "none", border: "none", cursor: "pointer", fontSize: 10, color: "rgba(255,255,255,0.22)", padding: 0, textDecoration: "underline dotted", fontFamily: FONT, transition: "color 150ms" }}
-                        onMouseEnter={e => (e.currentTarget.style.color = "rgba(255,255,255,0.50)")}
-                        onMouseLeave={e => (e.currentTarget.style.color = "rgba(255,255,255,0.22)")}>
-                        + Définir prix de revient
-                      </button>
-                    )}
-                  </div>
-                );
-              }
-              const plEur = portfolio.total_value - cb;
-              const plPct = (plEur / cb) * 100;
-              const plCol = plEur >= 0 ? "#4ade80" : "#f87171";
-              return (
-                <div style={{ marginTop: 3, fontSize: 11, fontFamily: FONT_MONO, color: plCol, fontWeight: 600, display: "flex", alignItems: "center", gap: 6 }}>
-                  Total
-                  <span>{plEur >= 0 ? "+" : ""}{Math.round(plEur).toLocaleString("fr-FR")} €</span>
-                  <span style={{ opacity: 0.55 }}>({plPct >= 0 ? "+" : ""}{plPct.toFixed(1)}%)</span>
-                  <button onClick={() => { setCostInput(cb.toString()); setEditingCost(true); }}
-                    style={{ background: "none", border: "none", cursor: "pointer", fontSize: 9, color: "rgba(255,255,255,0.22)", padding: 0, transition: "color 150ms" }}
-                    onMouseEnter={e => (e.currentTarget.style.color = "rgba(255,255,255,0.50)")}
-                    onMouseLeave={e => (e.currentTarget.style.color = "rgba(255,255,255,0.22)")}>✏</button>
-                  {editingCost && (
-                    <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
-                      <input autoFocus value={costInput} onChange={e => setCostInput(e.target.value)}
-                        onKeyDown={e => { if (e.key === "Enter") saveCostBasis(); if (e.key === "Escape") setEditingCost(false); }}
-                        onBlur={saveCostBasis} type="number"
-                        style={{ width: 90, background: "rgba(255,255,255,0.07)", border: "1px solid rgba(91,141,239,0.40)", borderRadius: 6, padding: "2px 7px", color: "#fff", fontSize: 10, outline: "none", fontFamily: FONT_MONO }} />
-                      <span style={{ fontSize: 10, color: "rgba(255,255,255,0.35)" }}>€</span>
-                    </div>
-                  )}
-                </div>
-              );
-            })()}
-            {/* Benchmark SPY */}
-            {spyChange != null && weightedChange != null && (() => {
-              const diff    = weightedChange - spyChange;
-              const diffCol = diff >= 0 ? "#4ade80" : "#f87171";
-              return (
-                <div style={{ position: "relative", marginTop: 3 }}
-                  onMouseEnter={() => setActiveTooltip("spy")}
-                  onMouseLeave={() => setActiveTooltip(null)}>
-                  <div style={{ fontSize: 10, color: "rgba(255,255,255,0.40)", fontFamily: FONT_MONO, cursor: "default" }}>
-                    vs S&amp;P 500&nbsp;
-                    <span style={{ color: diffCol, fontWeight: 700 }}>{diff >= 0 ? "+" : ""}{diff.toFixed(2)}%</span>
-                  </div>
-                  {activeTooltip === "spy" && (
-                    <div style={{
-                      position: "absolute", bottom: "calc(100% + 6px)", left: 0, right: 0, zIndex: 50,
-                      background: "rgba(4,17,36,0.97)", border: "1px solid rgba(255,255,255,0.10)",
-                      borderRadius: 8, padding: "8px 10px", boxShadow: "0 8px 24px rgba(0,0,0,0.50)",
-                      pointerEvents: "none", whiteSpace: "nowrap",
-                    }}>
-                      <span style={{ fontSize: 10, color: "rgba(255,255,255,0.62)", lineHeight: 1.5 }}>
-                        Votre portefeuille&nbsp;
-                        {diff >= 0 ? "surperforme" : "sous-performe"}&nbsp;
-                        le S&amp;P 500 de {Math.abs(diff).toFixed(2)}% sur la période.
-                      </span>
-                    </div>
-                  )}
-                </div>
-              );
-            })()}
-            <div style={{ margin: "12px 0", height: 1, background: "rgba(255,255,255,0.06)" }} />
             {novacScore && (() => {
               const subScores = [
                 { key: "diversification", label: "Diversification", value: novacScore.diversification,
@@ -780,10 +917,15 @@ function PortfolioPageInner() {
               ];
               return (
                 <>
-                  <div style={{ display: "flex", alignItems: "center", gap: 14, marginBottom: 14 }}>
-                    <CircleScore score={novacScore.global} size={88} />
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <p style={{ margin: "0 0 10px", fontSize: 9, fontWeight: 700, letterSpacing: "0.10em", color: "rgba(255,255,255,0.28)" }}>SCORE NOVAC</p>
+                  <div style={{ display: "flex", alignItems: "center", gap: 5, marginBottom: 10 }}>
+                    <p style={{ margin: 0, fontSize: 12.5, fontWeight: 600, color: "rgba(255,255,255,0.88)" }}>Détail du score</p>
+                    <span title="Quatre critères pondérés : diversification, concentration, tendance et part d'actifs en hausse."
+                      style={{ display: "flex", color: "rgba(255,255,255,0.28)", cursor: "help" }}>
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
+                        <circle cx="12" cy="12" r="10" /><path d="M12 16v-4M12 8h.01" strokeLinecap="round" />
+                      </svg>
+                    </span>
+                  </div>
                       <div style={{ display: "flex", flexDirection: "column", gap: 7 }}>
                         {subScores.map(m => {
                           const col = scoreColor(m.value);
@@ -793,7 +935,7 @@ function PortfolioPageInner() {
                               onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = "transparent"; setActiveTooltip(null); }}>
                               <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 3, cursor: "default" }}>
                                 <span style={{ fontSize: 10, color: activeTooltip === m.key ? "rgba(255,255,255,0.75)" : "rgba(255,255,255,0.42)", transition: "color 120ms" }}>{m.label}</span>
-                                <span style={{ fontSize: 10, fontWeight: 700, fontFamily: FONT_MONO, color: col }}>{m.value}</span>
+                                <span style={{ fontSize: 10, fontWeight: 700, fontFamily: FONT, color: col }}>{m.value}</span>
                               </div>
                               <div style={{ height: 5, borderRadius: 3, background: "rgba(255,255,255,0.07)" }}>
                                 <div style={{ height: "100%", borderRadius: 3, background: col, width: `${m.value}%`, opacity: 0.85, transition: "width 800ms ease" }} />
@@ -811,106 +953,52 @@ function PortfolioPageInner() {
                             </div>
                           );
                         })}
-                      </div>
-                    </div>
                   </div>
+                  <button type="button" onClick={() => setDashView("analyse")}
+                    style={{
+                      display: "flex", alignItems: "center", gap: 5, marginTop: 10,
+                      background: "none", border: "none", cursor: "pointer", padding: 0,
+                      fontFamily: FONT, fontSize: 11, fontWeight: 500, color: "rgba(129,168,255,0.85)",
+                    }}>
+                    Voir le détail du score
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                      strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                      <path d="M5 12h14M13 6l6 6-6 6" />
+                    </svg>
+                  </button>
                 </>
               );
             })()}
           </Card>
 
-          {/* 2. MOUVEMENTS — triés par contribution € absolue, avec perfEur */}
-          <Card style={{ padding: "11px 13px", flexShrink: 0 }}>
-            <SectionLabel>MOUVEMENTS</SectionLabel>
-            {/* Hausses — top 3 par |perfEur| décroissant */}
-            <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-              {[...enriched]
-                .filter(a => a.change !== null && (a.change ?? 0) >= 0)
-                .sort((a, b) => Math.abs(b.perfEur ?? 0) - Math.abs(a.perfEur ?? 0))
-                .slice(0, 3)
-                .map(a => (
-                  <div key={a.ticker} style={{ display: "flex", alignItems: "center", gap: 7, borderRadius: 6, padding: "3px 4px", transition: "background 150ms" }}
-                    onMouseEnter={e => (e.currentTarget.style.background = "rgba(255,255,255,0.04)")}
-                    onMouseLeave={e => (e.currentTarget.style.background = "transparent")}>
-                    <AssetLogo ticker={a.ticker} type={a.type} size={18} radius={4}
-                      fallbackBg="rgba(74,222,128,0.12)" fallbackBorder="rgba(74,222,128,0.25)" fallbackTextColor="#4ade80"
-                      bare />
-                    <span style={{ fontSize: 11, fontWeight: 600, flex: 1, color: "rgba(255,255,255,0.75)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                      {a.ticker.replace(/-USD$/, "")}
-                    </span>
-                    <span style={{ fontSize: 10, fontFamily: FONT_MONO, color: "#4ade80", fontWeight: 600, textAlign: "right", lineHeight: 1.3 }}>
-                      {fmtChange(a.change)}
-                      {a.perfEur != null && (
-                        <span style={{ display: "block", fontSize: 9, opacity: 0.65 }}>
-                          +{Math.round(a.perfEur).toLocaleString("fr-FR")} €
-                        </span>
-                      )}
-                    </span>
-                  </div>
-                ))}
-            </div>
-            {/* Séparateur */}
-            <div style={{ margin: "8px 0", height: 1, background: "rgba(255,255,255,0.05)" }} />
-            {/* Baisses — uniquement change < 0, triées par |perfEur| décroissant */}
-            {(() => {
-              const losers = [...enriched]
-                .filter(a => (a.change ?? 0) < 0)
-                .sort((a, b) => Math.abs(b.perfEur ?? 0) - Math.abs(a.perfEur ?? 0))
-                .slice(0, 3);
-              if (!losers.length) return (
-                <p style={{ margin: 0, fontSize: 10, color: "rgba(255,255,255,0.22)", textAlign: "center", padding: "4px 0" }}>
-                  Aucun actif en baisse
-                </p>
-              );
-              return (
-                <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-                  {losers.map(a => (
-                    <div key={a.ticker} style={{ display: "flex", alignItems: "center", gap: 6, borderRadius: 6, padding: "3px 4px", transition: "background 150ms" }}
-                      onMouseEnter={e => (e.currentTarget.style.background = "rgba(255,255,255,0.04)")}
-                      onMouseLeave={e => (e.currentTarget.style.background = "transparent")}>
-                      <AssetLogo ticker={a.ticker} type={a.type} size={18} radius={4}
-                        fallbackBg="rgba(248,113,113,0.12)" fallbackBorder="rgba(248,113,113,0.25)" fallbackTextColor="#f87171"
-                        bare />
-                      <span style={{ fontSize: 11, fontWeight: 600, flex: 1, color: "rgba(255,255,255,0.75)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                        {a.ticker.replace(/-USD$/, "")}
-                      </span>
-                      <span style={{ fontSize: 10, fontFamily: FONT_MONO, color: "#f87171", fontWeight: 600, textAlign: "right", lineHeight: 1.3 }}>
-                        {fmtChange(a.change)}
-                        {a.perfEur != null && (
-                          <span style={{ display: "block", fontSize: 9, opacity: 0.65 }}>
-                            {Math.round(a.perfEur).toLocaleString("fr-FR")} €
-                          </span>
-                        )}
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              );
-            })()}
+          {/* « Mouvements » vivait ici : les trois plus fortes hausses et
+              baisses en contribution. Retiré — chaque carte d'actif affiche
+              déjà sa variation et sa contribution en euros, et le tri par
+              performance de la grille refait le classement à la demande. Sa
+              place revient à l'allocation, dont la légende était rognée. */}
+          {/* Allocation. Remplace l'exposition sectorielle, qui rangeait
+              tout un portefeuille d'actions dans une barre unique à 100 %. */}
+          <Card style={{ padding: "13px 15px", flexShrink: 0, display: "flex", flexDirection: "column", overflow: "hidden" }}>
+            <AllocationDonut
+              assets={enriched.map(a => ({
+                ticker: a.ticker, weight: a.weight, price: a.price,
+                change: a.change, value: a.value, perfEur: a.perfEur,
+              }))}
+              totalValue={valeurTotale}
+              onSeeAll={() => setDashView("analyse")}
+            />
           </Card>
-
-          {/* 3. EXPOSITION SECTEUR — seul endroit */}
-          <Card style={{ padding: "11px 13px", flex: 1, minHeight: 0, display: "flex", flexDirection: "column" }}>
-            <SectionLabel>EXPOSITION SECTEUR</SectionLabel>
-            <div style={{ display: "flex", flexDirection: "column", gap: 9, justifyContent: "center", flex: 1 }}>
-              {Object.entries(exposition).sort((a, b) => b[1] - a[1]).map(([k, v]) => (
-                <div key={k} style={{ borderRadius: 6, padding: "2px 4px", transition: "background 150ms" }}
-                  onMouseEnter={e => (e.currentTarget.style.background = "rgba(255,255,255,0.04)")}
-                  onMouseLeave={e => (e.currentTarget.style.background = "transparent")}>
-                  <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
-                    <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                      <div style={{ width: 6, height: 6, borderRadius: "50%", background: EXPO_COLORS[k] ?? "#94a3b8" }} />
-                      <span style={{ fontSize: 11, color: "rgba(255,255,255,0.55)" }}>{k}</span>
-                    </div>
-                    <span style={{ fontSize: 11, fontWeight: 700, fontFamily: FONT_MONO, color: EXPO_COLORS[k] ?? "#94a3b8" }}>{v.toFixed(1)}%</span>
-                  </div>
-                  <div style={{ height: 4, borderRadius: 2, background: "rgba(255,255,255,0.07)" }}>
-                    <div style={{ height: "100%", width: `${v}%`, borderRadius: 2, background: EXPO_COLORS[k] ?? "#94a3b8", opacity: 0.80, transition: "width 600ms ease" }} />
-                  </div>
-                </div>
-              ))}
-            </div>
+          {/* Activité récente. Le « Voir toute l'activité → » de la maquette
+              n'avait aucune destination ; il mène à l'onglet Transactions,
+              qui porte déjà le tableau complet. */}
+          <Card style={{ padding: "13px 15px", flex: 1, minHeight: 128, display: "flex", flexDirection: "column", overflow: "hidden" }}>
+            <RecentActivity
+              portfolioId={portfolio?.id}
+              refreshKey={txRefreshKey}
+              onSeeAll={() => setDashView("transactions")}
+            />
           </Card>
+        </div>
         </div>
       </div>{/* fin Vue Résumé */}
 
@@ -940,7 +1028,7 @@ function PortfolioPageInner() {
                   <div key={m.label} style={{ minWidth: 140 }}>
                     <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
                       <span style={{ fontSize: 11, color: "rgba(255,255,255,0.55)" }}>{m.label}</span>
-                      <span style={{ fontSize: 11, fontWeight: 700, fontFamily: FONT_MONO, color: m.color }}>{m.value}</span>
+                      <span style={{ fontSize: 11, fontWeight: 700, fontFamily: FONT, color: m.color }}>{m.value}</span>
                     </div>
                     <div style={{ height: 4, borderRadius: 2, background: "rgba(255,255,255,0.07)" }}>
                       <div style={{ height: "100%", borderRadius: 2, background: m.color, width: `${m.value}%`, opacity: 0.8, transition: "width 600ms ease" }} />
@@ -962,13 +1050,13 @@ function PortfolioPageInner() {
                 { label: "Bitcoin +20%", impact: 0.031, color: "#4ade80" },
                 { label: "Taux +1%", impact: -0.012, color: "#fbbf24" },
               ].map(s => {
-                const eurImpact = portfolio?.total_value ? portfolio.total_value * s.impact : null;
+                const eurImpact = valeurTotale ? valeurTotale * s.impact : null;
                 return (
                   <div key={s.label} style={{ display: "flex", alignItems: "center", justifyContent: "space-between",
                     padding: "8px 10px", borderRadius: 8, background: `${s.color}12`, border: `1px solid ${s.color}22` }}>
                     <span style={{ fontSize: 11, color: "rgba(255,255,255,0.75)" }}>{s.label}</span>
                     <div style={{ textAlign: "right" }}>
-                      <span style={{ fontSize: 12, fontWeight: 700, fontFamily: FONT_MONO, color: s.color }}>
+                      <span style={{ fontSize: 12, fontWeight: 700, fontFamily: FONT, color: s.color }}>
                         {s.impact >= 0 ? "+" : ""}{(s.impact * 100).toFixed(1)}%
                       </span>
                       {eurImpact != null && (
@@ -992,7 +1080,7 @@ function PortfolioPageInner() {
                       <div style={{ width: 7, height: 7, borderRadius: "50%", background: EXPO_COLORS[k] ?? "#94a3b8" }} />
                       <span style={{ fontSize: 12, color: "rgba(255,255,255,0.65)" }}>{k}</span>
                     </div>
-                    <span style={{ fontSize: 12, fontWeight: 700, fontFamily: FONT_MONO, color: EXPO_COLORS[k] ?? "#94a3b8" }}>{v.toFixed(1)}%</span>
+                    <span style={{ fontSize: 12, fontWeight: 700, fontFamily: FONT, color: EXPO_COLORS[k] ?? "#94a3b8" }}>{v.toFixed(1)}%</span>
                   </div>
                   <div style={{ height: 5, borderRadius: 3, background: "rgba(255,255,255,0.07)" }}>
                     <div style={{ height: "100%", borderRadius: 3, background: EXPO_COLORS[k] ?? "#94a3b8", width: `${v}%`, transition: "width 600ms ease" }} />
@@ -1058,27 +1146,45 @@ function PortfolioPageInner() {
           <SectionLabel>OBJECTIFS</SectionLabel>
           <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
             {[
-              { label: "Retraite 2035",         current: portfolio?.total_value ?? 0, target: 400000, color: "#5B8DEF" },
-              { label: "Achat immobilier",       current: (portfolio?.total_value ?? 0) * 0.42, target: 100000, color: "#a78bfa" },
-              { label: "Indépendance financière", current: (portfolio?.total_value ?? 0) * 0.28, target: 500000, color: "#4ade80" },
+              { label: "Retraite 2035",         current: valeurTotale ?? 0, target: 400000, color: "#5B8DEF" },
+              { label: "Achat immobilier",       current: (valeurTotale ?? 0) * 0.42, target: 100000, color: "#a78bfa" },
+              { label: "Indépendance financière", current: (valeurTotale ?? 0) * 0.28, target: 500000, color: "#4ade80" },
             ].map(g => {
               const pct = Math.min(100, g.target > 0 ? (g.current / g.target) * 100 : 0);
               return (
                 <div key={g.label}>
                   <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
                     <span style={{ fontSize: 12, fontWeight: 600, color: "rgba(255,255,255,0.78)" }}>{g.label}</span>
-                    <span style={{ fontSize: 12, fontWeight: 700, fontFamily: FONT_MONO, color: g.color }}>{pct.toFixed(0)}%</span>
+                    <span style={{ fontSize: 12, fontWeight: 700, fontFamily: FONT, color: g.color }}>{pct.toFixed(0)}%</span>
                   </div>
                   <div style={{ height: 5, borderRadius: 3, background: "rgba(255,255,255,0.07)" }}>
                     <div style={{ height: "100%", borderRadius: 3, background: g.color, width: `${pct}%`, transition: "width 600ms ease" }} />
                   </div>
-                  <div style={{ marginTop: 4, fontSize: 10, color: "rgba(255,255,255,0.25)", fontFamily: FONT_MONO }}>
+                  <div style={{ marginTop: 4, fontSize: 10, color: "rgba(255,255,255,0.25)", fontFamily: FONT }}>
                     {Math.round(g.current).toLocaleString("fr-FR")} € / {g.target.toLocaleString("fr-FR")} €
                   </div>
                 </div>
               );
             })}
           </div>
+          {novacScore && <>
+            <div style={{ width: 1, alignSelf: "stretch", background: "rgba(255,255,255,0.07)" }} />
+            {/* Santé du portefeuille : le titre chiffré passe en tête, la carte
+                de droite ne garde que le détail par critère. */}
+            <div style={{ display: "flex", alignItems: "center", gap: 12, minWidth: 170 }}>
+              <CircleScore score={novacScore.global} size={54} nu />
+              <div>
+                <p style={{ margin: "0 0 3px", fontSize: 11.5, fontWeight: 500, color: "rgba(255,255,255,0.55)" }}>Santé du portefeuille</p>
+                <div style={{ display: "flex", alignItems: "baseline", gap: 3 }}>
+                  <span style={{ fontSize: 20, fontWeight: 800, fontFamily: FONT, color: "#fff", lineHeight: 1 }}>{novacScore.global}</span>
+                  <span style={{ fontSize: 10, color: "rgba(255,255,255,0.32)" }}>/100</span>
+                </div>
+                <span style={{ fontSize: 11, fontWeight: 600, color: scoreColor(novacScore.global) }}>
+                  {scoreLabel(novacScore.global)}
+                </span>
+              </div>
+            </div>
+          </>}
         </Card>
         <Card style={{ padding: "16px 18px", display: "flex", flexDirection: "column" }}>
           <SectionLabel>MEILLEURS CONTRIBUTEURS</SectionLabel>
@@ -1092,14 +1198,32 @@ function PortfolioPageInner() {
                   bare />
                 <span style={{ fontSize: 12, fontWeight: 600, flex: 1, color: "rgba(255,255,255,0.78)" }}>{a.ticker.replace(/-USD$/,"")}</span>
                 <div style={{ textAlign: "right" }}>
-                  <div style={{ fontSize: 12, fontWeight: 700, fontFamily: FONT_MONO, color: (a.perfEur ?? 0) >= 0 ? "#4ade80" : "#f87171" }}>
+                  <div style={{ fontSize: 12, fontWeight: 700, fontFamily: FONT, color: (a.perfEur ?? 0) >= 0 ? "#4ade80" : "#f87171" }}>
                     {(a.perfEur ?? 0) >= 0 ? "+" : ""}{Math.round(a.perfEur!).toLocaleString("fr-FR")} €
                   </div>
-                  <div style={{ fontSize: 10, color: "rgba(255,255,255,0.30)", fontFamily: FONT_MONO }}>{fmtChange(a.change)}</div>
+                  <div style={{ fontSize: 10, color: "rgba(255,255,255,0.30)", fontFamily: FONT }}>{fmtChange(a.change)}</div>
                 </div>
               </div>
             ))}
           </div>
+          {novacScore && <>
+            <div style={{ width: 1, alignSelf: "stretch", background: "rgba(255,255,255,0.07)" }} />
+            {/* Santé du portefeuille : le titre chiffré passe en tête, la carte
+                de droite ne garde que le détail par critère. */}
+            <div style={{ display: "flex", alignItems: "center", gap: 12, minWidth: 170 }}>
+              <CircleScore score={novacScore.global} size={54} nu />
+              <div>
+                <p style={{ margin: "0 0 3px", fontSize: 11.5, fontWeight: 500, color: "rgba(255,255,255,0.55)" }}>Santé du portefeuille</p>
+                <div style={{ display: "flex", alignItems: "baseline", gap: 3 }}>
+                  <span style={{ fontSize: 20, fontWeight: 800, fontFamily: FONT, color: "#fff", lineHeight: 1 }}>{novacScore.global}</span>
+                  <span style={{ fontSize: 10, color: "rgba(255,255,255,0.32)" }}>/100</span>
+                </div>
+                <span style={{ fontSize: 11, fontWeight: 600, color: scoreColor(novacScore.global) }}>
+                  {scoreLabel(novacScore.global)}
+                </span>
+              </div>
+            </div>
+          </>}
         </Card>
         <Card style={{ padding: "16px 18px", display: "flex", flexDirection: "column" }}>
           <SectionLabel>RÉPARTITION PAR CLASSE</SectionLabel>
@@ -1108,10 +1232,28 @@ function PortfolioPageInner() {
               <div key={k} style={{ display: "flex", alignItems: "center", gap: 10 }}>
                 <div style={{ width: 8, height: 8, borderRadius: "50%", background: EXPO_COLORS[k] ?? "#94a3b8", flexShrink: 0 }} />
                 <span style={{ fontSize: 12, color: "rgba(255,255,255,0.60)", flex: 1 }}>{k}</span>
-                <span style={{ fontSize: 14, fontWeight: 700, fontFamily: FONT_MONO, color: EXPO_COLORS[k] ?? "#94a3b8" }}>{v.toFixed(1)}%</span>
+                <span style={{ fontSize: 14, fontWeight: 700, fontFamily: FONT, color: EXPO_COLORS[k] ?? "#94a3b8" }}>{v.toFixed(1)}%</span>
               </div>
             ))}
           </div>
+          {novacScore && <>
+            <div style={{ width: 1, alignSelf: "stretch", background: "rgba(255,255,255,0.07)" }} />
+            {/* Santé du portefeuille : le titre chiffré passe en tête, la carte
+                de droite ne garde que le détail par critère. */}
+            <div style={{ display: "flex", alignItems: "center", gap: 12, minWidth: 170 }}>
+              <CircleScore score={novacScore.global} size={54} nu />
+              <div>
+                <p style={{ margin: "0 0 3px", fontSize: 11.5, fontWeight: 500, color: "rgba(255,255,255,0.55)" }}>Santé du portefeuille</p>
+                <div style={{ display: "flex", alignItems: "baseline", gap: 3 }}>
+                  <span style={{ fontSize: 20, fontWeight: 800, fontFamily: FONT, color: "#fff", lineHeight: 1 }}>{novacScore.global}</span>
+                  <span style={{ fontSize: 10, color: "rgba(255,255,255,0.32)" }}>/100</span>
+                </div>
+                <span style={{ fontSize: 11, fontWeight: 600, color: scoreColor(novacScore.global) }}>
+                  {scoreLabel(novacScore.global)}
+                </span>
+              </div>
+            </div>
+          </>}
         </Card>
       </div>{/* fin Vue Objectifs */}
 

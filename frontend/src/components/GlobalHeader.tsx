@@ -4,7 +4,6 @@ import { usePathname, useRouter } from "next/navigation";
 import { useApp } from "@/lib/AppContext";
 import { TRENDING } from "@/lib/assets";
 import AssetLogo from "@/components/AssetLogo";
-import ProfileModal from "@/components/ProfileModal";
 import { useTheme } from "@/lib/theme";
 
 type Asset = { ticker: string; type: string; name: string; };
@@ -72,6 +71,21 @@ export default function GlobalHeader() {
   const [searchResults, setSearchResults] = useState<Asset[]>([]);
   const [showDropdown, setShowDropdown] = useState(false);
   const [showPortfolioMenu, setShowPortfolioMenu] = useState(false);
+  const [showSearch, setShowSearch] = useState(false);
+  const [showNotifs, setShowNotifs] = useState(false);
+  const [prenom, setPrenom] = useState<string | null>(null);
+
+  // Après montage : le lire pendant le rendu ferait diverger serveur et client.
+  useEffect(() => {
+    try {
+      const brut = localStorage.getItem("novac_user");
+      if (!brut) return;
+      const u = JSON.parse(brut);
+      const nom = (u?.username || u?.email || "").trim();
+      if (nom) setPrenom(nom.split(/[\s@]/)[0]);
+    } catch { /* stockage refusé ou contenu illisible */ }
+  }, []);
+  const searchRef = useRef<HTMLInputElement>(null);
   const [portfolios, setPortfolios] = useState<any[]>([]);
   const t = useTheme();
   const [showTools, setShowTools] = useState(false);
@@ -89,25 +103,6 @@ export default function GlobalHeader() {
   const inputRef = useRef<HTMLInputElement>(null);
   const isLanding = pathname === "/";
   const isChartPage = pathname === "/chart";
-  const [user, setUser] = useState<any>(null);
-  const [showProfile, setShowProfile] = useState(false);
-  const [theme, setTheme] = useState<"dark"|"light">(() =>
-    typeof window !== "undefined" ? (localStorage.getItem("novac_theme") as "dark"|"light") ?? "dark" : "dark"
-  );
-  const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
-
-  const toggleTheme = () => {
-    const next = theme === "dark" ? "light" : "dark";
-    setTheme(next);
-    localStorage.setItem("novac_theme", next);
-    document.documentElement.setAttribute("data-theme", next);
-  };
-
-  useEffect(() => {
-    const stored = localStorage.getItem("novac_user");
-    if (stored) { try { setUser(JSON.parse(stored)); } catch {} }
-  }, []);
-
   useEffect(() => {
     fetch("http://localhost:8000/api/v1/portfolios")
       .then(r => r.json())
@@ -225,13 +220,27 @@ export default function GlobalHeader() {
     else if (e.key === "Escape") { setShowDropdown(false); setHighlightIndex(-1); inputRef.current?.blur(); }
   };
 
+  // ⌘K, comme dans la maquette. Le raccourci est posé sur le document parce que
+  // le champ n'a pas le focus au moment où on veut l'y amener.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
+        e.preventDefault();
+        setShowSearch(true);
+        searchRef.current?.focus();
+      }
+      if (e.key === "Escape") { setShowSearch(false); setShowNotifs(false); }
+    };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, []);
+
   useEffect(() => {
     if (highlightIndex < 0 || !listRef.current) return;
     const el = listRef.current.querySelector(`[data-idx="${highlightIndex}"]`) as HTMLElement;
     el?.scrollIntoView({ block: "nearest" });
   }, [highlightIndex]);
 
-  const glass = { background:"rgba(255,255,255,0.08)", border:"1px solid rgba(255,255,255,0.14)", backdropFilter:"blur(24px)" as const, WebkitBackdropFilter:"blur(24px)" as const, boxShadow:"0 4px 24px rgba(0,0,0,0.25), 0 1px 0 rgba(255,255,255,0.1) inset" };
   const pillStyle: React.CSSProperties = { display:"flex", alignItems:"center", borderRadius:"999px", background:t.isDark ? "rgba(255,255,255,0.07)" : "rgba(16,24,40,0.05)", backdropFilter: t.isDark ? "blur(20px)" : "none", WebkitBackdropFilter: t.isDark ? "blur(20px)" : "none" as const, border:`1px solid ${t.border}`, cursor:"pointer", color:t.textPrimary, boxShadow: t.isDark ? "none" : t.shadow };
 
   const handleSelect = useCallback((a: Asset) => {
@@ -248,26 +257,40 @@ export default function GlobalHeader() {
     setShowDropdown(false);
   }, [router]);
 
-  const firstTab = mode === "portfolio"
-    ? { label: "Dashboard", href: "/portfolio" }
-    : { label: "Graphique", href: activeAsset ? `/chart?ticker=${encodeURIComponent(activeAsset.ticker)}` : "/chart" };
-
-  const navTabs = [
-    firstTab,
-    { label: "Marchés", href: "/treemap" },
-    { label: "Carte",   href: "/map" },
-    { label: "Analyse", href: "/dashboard" },
-    { label: "Simulation", href: "/simulation" },
-  ];
-
   return (
     <>
 
-      {/* Sélecteur de portefeuille ou d'actif.
-          La marque vit dans SideNav depuis le passage en panneau latéral ; la
-          garder ici la ferait apparaître deux fois à l'écran. */}
-      {(
-        <div style={{ position:"fixed", top:"12px", left:"calc(var(--novac-nav-w, 232px) + 20px)", zIndex:50, display:"flex", alignItems:"center", gap:"10px", transition:"left 220ms cubic-bezier(0.4,0,0.2,1)" }}>
+      {/* Salut, au même niveau que la recherche. Il vivait dans un
+          sous-en-tête propre à la page portefeuille, donc décalé d'une ligne
+          sous le bandeau. */}
+      <div style={{
+        position:"fixed", top:"11px", left:"calc(var(--novac-nav-w, 232px) + 20px)", zIndex:50,
+        lineHeight:1.25, transition:"left 220ms cubic-bezier(0.4,0,0.2,1)",
+      }}>
+        <p style={{ margin:0, fontSize:"15px", fontWeight:700, color:t.textPrimary, letterSpacing:"-0.01em", whiteSpace:"nowrap" }}>
+          {prenom ? `Bonjour ${prenom}` : "Bonjour"} <span aria-hidden="true">👋</span>
+        </p>
+        {pathname.startsWith("/portfolio") && (
+          <p style={{ margin:"1px 0 0", fontSize:"11px", color:"rgba(248,249,252,0.38)", whiteSpace:"nowrap" }}>
+            Voici la performance de votre portefeuille
+          </p>
+        )}
+      </div>
+
+      {/* La navigation vit désormais dans SideNav, en panneau latéral. */}
+
+      {showDropdown && <div style={{ position:"fixed", inset:0, zIndex:49 }} onClick={() => setShowDropdown(false)}/>}
+      {showPortfolioMenu && <div style={{ position:"fixed", inset:0, zIndex:49 }} onClick={() => setShowPortfolioMenu(false)}/>}
+
+
+      {/* Recherche globale.
+          Elle n'existait que repliée dans le menu du portefeuille, et sur la
+          page portefeuille ce menu ne montre que les portefeuilles : il n'y
+          avait donc aucun moyen de chercher un actif depuis cette page. */}
+      <div style={{ position:"fixed", top:"12px", right:"20px", zIndex:50, display:"flex", alignItems:"flex-start", gap:"8px" }}>
+        {/* Sélecteur de portefeuille ou d'actif, désormais dans le groupe de
+            droite : c'est un choix de contexte, il appartient aux contrôles,
+            pas au titre de la page. */}
           <div style={{ position:"relative" }}>
             <button onClick={() => { setShowDropdown(v => !v); setShowPortfolioMenu(false); }}
               style={{ ...pillStyle, gap:"6px", padding:"0 10px 0 8px", height:"36px", boxSizing:"border-box" }}>
@@ -376,74 +399,100 @@ export default function GlobalHeader() {
               </div>
             )}
           </div>
-        </div>
-      )}
 
-      {/* La navigation vit désormais dans SideNav, en panneau latéral. */}
-
-      {showDropdown && <div style={{ position:"fixed", inset:0, zIndex:49 }} onClick={() => setShowDropdown(false)}/>}
-      {showPortfolioMenu && <div style={{ position:"fixed", inset:0, zIndex:49 }} onClick={() => setShowPortfolioMenu(false)}/>}
-
-      {/* Right zone: theme toggle + avatar profil */}
-      <div style={{ position:"fixed", top:"12px", right:"20px", zIndex:50, display:"flex", alignItems:"center", gap:"8px" }}>
-        {/* Surface theme — global, shared by every chart surface */}
-        <button
-          onClick={toggleDisplayMode}
-          title={displayMode === "black" ? "Revenir au thème verre" : "Passer au thème noir"}
-          aria-label={displayMode === "black" ? "Revenir au thème verre" : "Passer au thème noir"}
-          style={{
-            ...pillStyle,
-            width: "36px",
-            height: "36px",
-            padding: 0,
-            justifyContent: "center",
-            boxSizing: "border-box",
-            color: displayMode === "black" ? "#fff" : "rgba(255,255,255,0.55)",
-          }}
-        >
-          <svg width="15" height="15" viewBox="0 0 14 14" fill="none">
-            <rect x="1" y="1" width="12" height="12" rx="3"
-              fill={displayMode === "black" ? "#050505" : "rgba(255,255,255,0.04)"} stroke="currentColor"/>
-            <path d="M1.5 5h11M1.5 9h11M5 1.5v11M9 1.5v11" stroke="currentColor" strokeWidth=".55" opacity=".55"/>
+        <div style={{ position:"relative", width:"320px" }}>
+        <div style={{
+          display:"flex", alignItems:"center", gap:"8px", height:"36px", padding:"0 12px",
+          borderRadius:"999px", boxSizing:"border-box",
+          background: showSearch ? "rgba(255,255,255,0.10)" : "rgba(255,255,255,0.06)",
+          border:`1px solid ${showSearch ? "rgba(91,141,239,0.45)" : t.border}`,
+          backdropFilter:"blur(20px)", WebkitBackdropFilter:"blur(20px)",
+          transition:"background 150ms, border-color 150ms",
+        }}>
+          <svg width="13" height="13" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}
+            style={{ opacity:0.4, flexShrink:0, color:t.textPrimary }}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-4.35-4.35M17 11A6 6 0 1 1 5 11a6 6 0 0 1 12 0z"/>
           </svg>
-        </button>
+          <input ref={searchRef} value={localSearch}
+            onChange={e => { setLocalSearch(e.target.value); setHighlightIndex(-1); setShowSearch(true); }}
+            onFocus={() => setShowSearch(true)}
+            onKeyDown={handleKeyDown}
+            placeholder="Rechercher un actif, un ETF, un indice…"
+            style={{ background:"transparent", border:"none", outline:"none", color:t.textPrimary, fontSize:"12px", flex:1, minWidth:0 }}/>
+          {localSearch
+            ? <button onMouseDown={e => e.preventDefault()}
+                onClick={() => { setLocalSearch(""); setSearchResults([]); setHighlightIndex(-1); }}
+                style={{ background:"transparent", border:"none", cursor:"pointer", opacity:0.4, color:t.textPrimary, padding:0, fontSize:"12px" }}>✕</button>
+            : <span style={{ fontSize:"10px", opacity:0.32, color:t.textPrimary, flexShrink:0, letterSpacing:"0.04em" }}>⌘K</span>}
+        </div>
 
-        {/* Avatar profil */}
-        {user && (
-          <button onClick={() => setShowProfile(true)}
-            style={{ ...pillStyle, gap:"7px", padding:"0 10px", height:"36px", boxSizing:"border-box" }}>
-            <div style={{ width:22, height:22, borderRadius:"50%", overflow:"hidden", flexShrink:0, border:"1px solid rgba(255,255,255,0.15)", background:"rgba(255,255,255,0.1)", display:"flex", alignItems:"center", justifyContent:"center" }}>
-              {user.avatar_url ? (
-                <img
-                  src={user.avatar_url.startsWith("/uploads") ? `${API_URL}${user.avatar_url}` : user.avatar_url}
-                  alt="avatar"
-                  style={{ width:"100%", height:"100%", objectFit:"cover" }}
-                  onError={e => { (e.target as HTMLImageElement).style.display = "none"; }}
-                />
-              ) : (
-                <span style={{ fontSize:"10px", fontWeight:700, color:"#F8F9FC", letterSpacing:"-0.01em", userSelect:"none" as const }}>
-                  {(user.username || user.email || "?")[0].toUpperCase()}
-                </span>
+        {showSearch && (
+          <div style={{
+            position:"absolute", top:"calc(100% + 6px)", right:0, width:"420px",
+            background:"rgba(4,17,36,0.97)", border:"1px solid rgba(255,255,255,0.1)",
+            borderRadius:"12px", overflow:"hidden", boxShadow:"0 16px 48px rgba(0,0,0,0.5)", zIndex:60,
+          }} onMouseDown={e => e.preventDefault()}>
+            <div style={{ display:"flex", gap:"2px", padding:"6px 8px", borderBottom:"1px solid rgba(255,255,255,0.06)" }}>
+              {[{id:"all",label:"Tous"},{id:"EQUITY",label:"Actions"},{id:"ETF",label:"Fonds"},{id:"INDEX",label:"Indices"},{id:"CRYPTOCURRENCY",label:"Crypto"}].map(cat => (
+                <button key={cat.id} onClick={() => { setCategory(cat.id); setDisplayCount(20); }}
+                  style={{ padding:"3px 10px", borderRadius:"6px", border:"none", fontSize:"10px", cursor:"pointer",
+                    background:category===cat.id?"rgba(91,141,239,0.2)":"transparent",
+                    color:category===cat.id?"#9BB9FF":"rgba(255,255,255,0.4)",
+                    fontWeight:category===cat.id?600:400, letterSpacing:"0.04em" }}>{cat.label}</button>
+              ))}
+            </div>
+            <div ref={listRef} onScroll={handleScroll} style={{ maxHeight:"320px", overflowY:"auto" }}>
+              {!localSearch && <div style={{ padding:"6px 12px 2px", color:"rgba(255,255,255,0.2)", fontSize:"9px", letterSpacing:"0.12em" }}>POPULAIRES</div>}
+              {displayAssets.map((a, i) => (
+                <AssetRow key={a.ticker} a={a} highlighted={i===0 && !!localSearch} focused={i===highlightIndex}
+                  idx={i} price={prices[a.ticker]}
+                  onSelect={x => { handleSelect(x); setShowSearch(false); }}
+                  onChart={x => { handleChart(x); setShowSearch(false); }}/>
+              ))}
+              {localSearch && displayAssets.length === 0 && !isSearching && (
+                <div style={{ padding:"18px 14px", textAlign:"center", color:"rgba(255,255,255,0.25)", fontSize:"11px" }}>Aucun résultat</div>
               )}
             </div>
-            {user.username && (
-              <span style={{ fontSize:"12px", fontWeight:500, letterSpacing:"0.04em", maxWidth:80, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" as const }}>
-                {user.username.split(" ")[0]}
-              </span>
-            )}
-          </button>
+          </div>
         )}
+        </div>
+
+        {/* Cloche. Pas de pastille de notification : il n'existe aucune source
+            d'alertes dans le projet, et un point coloré promettrait du contenu
+            qui n'arriverait jamais. Elle dit ce qu'elle sait. */}
+        <div style={{ position:"relative" }}>
+          <button type="button" onClick={() => setShowNotifs(v => !v)}
+            aria-label="Notifications" title="Notifications"
+            style={{
+              width:36, height:36, borderRadius:"50%", flexShrink:0, cursor:"pointer",
+              display:"flex", alignItems:"center", justifyContent:"center",
+              background: showNotifs ? "rgba(255,255,255,0.10)" : "rgba(255,255,255,0.06)",
+              border:`1px solid ${t.border}`, color:t.textPrimary,
+              backdropFilter:"blur(20px)", WebkitBackdropFilter:"blur(20px)",
+            }}>
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+              strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" style={{ opacity:0.7 }}>
+              <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9M13.73 21a2 2 0 0 1-3.46 0"/>
+            </svg>
+          </button>
+          {showNotifs && (
+            <div style={{
+              position:"absolute", top:"calc(100% + 6px)", right:0, width:"250px",
+              background:"rgba(4,17,36,0.97)", border:"1px solid rgba(255,255,255,0.1)",
+              borderRadius:"12px", padding:"18px 14px", textAlign:"center", zIndex:60,
+              boxShadow:"0 16px 48px rgba(0,0,0,0.5)",
+            }}>
+              <span style={{ fontSize:"11px", color:"rgba(255,255,255,0.35)", lineHeight:1.5 }}>
+                Aucune notification
+              </span>
+            </div>
+          )}
+        </div>
       </div>
-
-      {showProfile && user && (
-        <ProfileModal
-          user={user}
-          onClose={() => setShowProfile(false)}
-          onUpdate={u => { setUser(u); setShowProfile(false); }}
-          dark
-        />
+      {(showSearch || showNotifs) && (
+        <div style={{ position:"fixed", inset:0, zIndex:49 }}
+          onClick={() => { setShowSearch(false); setShowNotifs(false); }}/>
       )}
-
     </>
   );
 }

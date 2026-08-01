@@ -244,3 +244,8 @@ canvas + div {
   padding-left: var(--novac-nav-w, 232px);
   transition: padding-left 220ms cubic-bezier(0.4, 0, 0.2, 1);
 }
+
+/* Rail d'actifs : la barre native est masquée au profit des flèches et des
+   voiles de bord, qui disent la même chose sans occuper 6 px sous les cartes.
+   `scrollbar-width` couvre Firefox, ce sélecteur couvre WebKit. */
+.novac-rail::-webkit-scrollbar { height: 0; width: 0; }

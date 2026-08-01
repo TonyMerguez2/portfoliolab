@@ -1,0 +1,490 @@
+"use client";
+import { useEffect, useMemo, useRef, useState } from "react";
+import {
+  createChart, AreaSeries, CandlestickSeries, ColorType, CrosshairMode, LineStyle,
+  type IChartApi, type ISeriesApi, type UTCTimestamp,
+} from "lightweight-charts";
+import type { HistoryPoint, Period } from "@/lib/chart/portfolioCurve";
+import { FONT, NUM } from "@/lib/typography";
+
+export type { HistoryPoint, Period };
+
+/**
+ * Courbe de valeur du portefeuille.
+ *
+ * Sur lightweight-charts, comme la page graphique, et non sur un tracé SVG
+ * maison : c'est la seule façon d'obtenir *exactement* la même échelle à
+ * droite, la même pastille de dernière valeur et la même croix de visée. Deux
+ * implémentations auraient divergé au premier réglage, et le même portefeuille
+ * se serait lu différemment selon la page.
+ *
+ * La série vient de `/portfolio-history`, en base 1 au début de la fenêtre.
+ * C'est ici qu'on la ramène en euros, en clouant le *dernier* point sur la
+ * valeur totale — le seul montant que l'utilisateur connaisse pour de vrai.
+ * L'ancrer au début produirait une courbe finissant à côté du chiffre affiché
+ * juste au-dessus d'elle.
+ */
+
+// Mêmes périodes et mêmes libellés que la page graphique : le même portefeuille
+// doit s'interroger avec les mêmes mots d'un écran à l'autre.
+const PERIOD_API: Record<Period, string> = {
+  "24h": "1d", "1S": "7d", "1M": "1mo", "3M": "3mo",
+  "6M": "6mo", "1A": "1y", "3A": "3y", "Max": "max",
+};
+const PERIODES = Object.keys(PERIOD_API) as Period[];
+const API = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
+
+/** Demi-largeur, en pixels, de la portion de courbe éclairée au survol. */
+const HALO = 22;
+
+/**
+ * Regroupe la série en bougies.
+ *
+ * L'ouverture, le sommet, le creux et la clôture sont tirés des **valeurs
+ * réelles du portefeuille** contenues dans chaque paquet. C'est important :
+ * composer la bougie à partir des plus hauts de chaque ligne donnerait une
+ * borne supérieure et non un vrai sommet — AAPL peut culminer à 10 h et NVDA à
+ * 15 h, le portefeuille n'a jamais valu la somme des deux.
+ *
+ * La contrepartie est que le sommet vaut celui des points échantillonnés : sur
+ * une série de clôtures journalières, les extrêmes intraday manquent. C'est la
+ * limite ordinaire de toute bougie construite sur des clôtures.
+ */
+function agregerEnBougies(
+  data: { time: UTCTimestamp; value: number }[],
+  cible = 60,
+): { time: UTCTimestamp; open: number; high: number; low: number; close: number }[] {
+  if (data.length < 2) return [];
+  const taille = Math.max(1, Math.ceil(data.length / cible));
+  const out: { time: UTCTimestamp; open: number; high: number; low: number; close: number }[] = [];
+  for (let i = 0; i < data.length; i += taille) {
+    const paquet = data.slice(i, i + taille);
+    const valeurs = paquet.map(p => p.value);
+    out.push({
+      time: paquet[0].time,
+      open: valeurs[0],
+      high: Math.max(...valeurs),
+      low: Math.min(...valeurs),
+      close: valeurs[valeurs.length - 1],
+    });
+  }
+  return out;
+}
+
+/** Abrégé des grands nombres, comme sur la page graphique. */
+function fmtPct(pct: number): string {
+  const signe = pct >= 0 ? "+" : "";
+  const abs = Math.abs(pct);
+  if (abs >= 10000) return `${signe}${(pct / 1000).toFixed(0)}k%`;
+  if (abs >= 1000) return `${signe}${pct.toFixed(0)}%`;
+  return `${signe}${pct.toFixed(1)}%`;
+}
+
+/** Fenêtres en secondes, pour découper la série Max période par période. */
+const PERIOD_SECS: Record<Period, number | null> = {
+  "24h": 86400, "1S": 604800, "1M": 2592000, "3M": 7862400,
+  "6M": 15811200, "1A": 31536000, "3A": 94608000, "Max": null,
+};
+
+export default function PerformanceChart({
+  assets, totalValue, period, onPeriodChange, color = "#5B8DEF", height,
+}: {
+  assets: { ticker: string; weight: number }[];
+  totalValue: number | null;
+  period: Period;
+  onPeriodChange: (p: Period) => void;
+  color?: string;
+  height?: number;
+}) {
+  const boxRef = useRef<HTMLDivElement>(null);
+  const plotRef = useRef<HTMLDivElement>(null);
+  const glowRef = useRef<HTMLCanvasElement>(null);
+  const chartRef = useRef<IChartApi | null>(null);
+  const serieRef = useRef<ISeriesApi<"Area"> | null>(null);
+  const bougieRef = useRef<ISeriesApi<"Candlestick"> | null>(null);
+  const colorRef = useRef(color);
+
+  const [points, setPoints] = useState<HistoryPoint[]>([]);
+  const [state, setState] = useState<"idle" | "loading" | "error">("loading");
+  const [survol, setSurvol] = useState<{ valeur: number; date: string } | null>(null);
+  const [mode, setMode] = useState<"ligne" | "bougie">("ligne");
+
+  // ── Données ────────────────────────────────────────────────────────────────
+  const key = assets.map(a => `${a.ticker}:${a.weight}`).join(",");
+  useEffect(() => {
+    if (!assets.length) { setPoints([]); setState("idle"); return; }
+    let cancelled = false;
+    setState("loading");
+    const tickers = assets.map(a => a.ticker).join(",");
+    const weights = assets.map(a => a.weight).join(",");
+    fetch(`${API}/api/v1/portfolio-history?tickers=${encodeURIComponent(tickers)}&weights=${encodeURIComponent(weights)}&period=${PERIOD_API[period]}`)
+      .then(r => r.json())
+      .then((d: { points?: HistoryPoint[] }) => {
+        if (cancelled) return;
+        const pts = Array.isArray(d.points) ? d.points : [];
+        setPoints(pts);
+        setState(pts.length ? "idle" : "error");
+      })
+      .catch(() => { if (!cancelled) { setPoints([]); setState("error"); } });
+    return () => { cancelled = true; };
+  }, [key, period]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // ── Rendements par période ─────────────────────────────────────────────────
+  //
+  // Un appel par période, et non une seule série Max qu'on découperait.
+  //
+  // La tentation était forte — un appel au lieu de huit — mais les deux ne
+  // décrivent pas le même portefeuille. La série renvoyée pour une fenêtre
+  // applique les pondérations courantes *au début de cette fenêtre* ; découper
+  // la série Max donne, elle, ce qu'un achat-conservation de 2020 vaut
+  // aujourd'hui, poids dérivés compris. Mesuré sur douze lignes : +10,2 % sur
+  // un an par appel direct, -25,3 % par découpe de Max. Signes opposés.
+  //
+  // Et c'est bien le premier qu'il faut afficher, puisque c'est la série que
+  // la courbe trace au-dessus du chiffre.
+  const [rendements, setRendements] = useState<Record<Period, number | null>>(
+    () => Object.fromEntries(PERIODES.map(p => [p, null])) as Record<Period, number | null>);
+
+  useEffect(() => {
+    if (!assets.length) return;
+    let cancelled = false;
+    const tickers = encodeURIComponent(assets.map(a => a.ticker).join(","));
+    const weights = encodeURIComponent(assets.map(a => a.weight).join(","));
+    Promise.all(PERIODES.map(p =>
+      fetch(`${API}/api/v1/portfolio-history?tickers=${tickers}&weights=${weights}&period=${PERIOD_API[p]}`)
+        .then(r => r.json())
+        .then((d: { change?: number | null }) => [p, typeof d.change === "number" ? d.change : null] as const)
+        .catch(() => [p, null] as const)
+    )).then(paires => {
+      if (!cancelled) setRendements(Object.fromEntries(paires) as Record<Period, number | null>);
+    });
+    return () => { cancelled = true; };
+  }, [key]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // ── Création du graphique ──────────────────────────────────────────────────
+  useEffect(() => {
+    const el = plotRef.current;
+    if (!el) return;
+
+    const chart = createChart(el, {
+      autoSize: true,
+      layout: {
+        attributionLogo: false,
+        background: { type: ColorType.Solid, color: "transparent" },
+        textColor: "rgba(248,249,252,0.42)",
+        fontSize: 11,
+      },
+      grid: {
+        vertLines: { visible: false },
+        horzLines: { color: "rgba(255,255,255,0.045)", style: LineStyle.Solid, visible: true },
+      },
+      crosshair: {
+        mode: CrosshairMode.Normal,
+        vertLine: { color: "rgba(255,255,255,0.2)", style: LineStyle.Solid, width: 1, labelBackgroundColor: "#334155" },
+        horzLine: { color: "rgba(255,255,255,0.2)", style: LineStyle.Solid, width: 1, labelBackgroundColor: "#334155" },
+      },
+      // Échelle à droite, sans bordure et avec les mêmes marges que la page
+      // graphique : c'est là que lightweight-charts pose la pastille de
+      // dernière valeur.
+      rightPriceScale: { borderVisible: false, scaleMargins: { top: 0.12, bottom: 0.08 } },
+      // `fixLeftEdge` doit rester faux pour que `setVisibleRange` ne soit pas
+      // contraint au premier point — la page graphique porte la même remarque.
+      timeScale: { borderVisible: false, timeVisible: false, secondsVisible: false },
+      handleScroll: { mouseWheel: true, pressedMouseMove: true, horzTouchDrag: true, vertTouchDrag: false },
+      handleScale: { mouseWheel: true, pinch: true, axisPressedMouseMove: { time: true, price: true } },
+    });
+
+    const serie = chart.addSeries(AreaSeries, {
+      lineColor: colorRef.current,
+      topColor: colorRef.current + "55",
+      bottomColor: colorRef.current + "00",
+      lineWidth: 2,
+      lastValueVisible: true,
+      priceLineVisible: false,
+      crosshairMarkerVisible: false,
+      priceFormat: { type: "price", precision: 0, minMove: 1 },
+    });
+
+    // Série bougies, créée d'emblée et laissée vide : la basculer revient
+    // ainsi à échanger des données, pas à détruire et recréer une série — ce
+    // qui emporterait le cadrage avec elle.
+    const bougies = chart.addSeries(CandlestickSeries, {
+      upColor: "#10b981", downColor: "#ef4444",
+      borderUpColor: "#10b981", borderDownColor: "#ef4444",
+      wickUpColor: "#10b981", wickDownColor: "#ef4444",
+      lastValueVisible: true, priceLineVisible: false,
+      priceFormat: { type: "price", precision: 0, minMove: 1 },
+    });
+
+    chartRef.current = chart;
+    serieRef.current = serie;
+    bougieRef.current = bougies;
+
+    // Halo de survol : la portion de courbe sous le curseur est repeinte en
+    // flou coloré puis d'un trait blanc fin, découpée à une fenêtre autour du
+    // curseur et estompée sur ses bords. Repris de la page graphique.
+    chart.subscribeCrosshairMove(param => {
+      const cv = glowRef.current;
+      const ctx = cv?.getContext("2d");
+      if (!cv || !ctx) return;
+      ctx.clearRect(0, 0, cv.width, cv.height);
+
+      const data = (param.seriesData.get(serie) ?? param.seriesData.get(bougies)) as { value?: number; close?: number } | undefined;
+      const val = data?.value ?? data?.close;
+      if (!param.point || !param.time || val == null) { setSurvol(null); return; }
+      setSurvol({ valeur: val, date: new Date((param.time as number) * 1000).toISOString() });
+
+      const cx = param.point.x;
+      // `data()` renvoie un tableau en lecture seule mêlant points et blancs :
+      // on ne garde que ceux qui portent une valeur.
+      const pts = (serie.data() as readonly { time: unknown; value?: number }[])
+        .filter((p): p is { time: number; value: number } => typeof p.value === "number");
+      if (pts.length < 2) return;
+
+      const seg: [number, number][] = [];
+      let gauche: [number, number] | null = null;
+      let droitePosee = false;
+      for (const p of pts) {
+        const sx = chart.timeScale().timeToCoordinate(p.time as UTCTimestamp);
+        const sy = serie.priceToCoordinate(p.value);
+        if (sx == null || sy == null || !isFinite(sx) || !isFinite(sy)) continue;
+        // Un point de part et d'autre de la fenêtre est conservé : sans eux le
+        // halo commencerait et finirait dans le vide au lieu de suivre la
+        // courbe jusqu'au bord de la découpe.
+        if (sx < cx - HALO) gauche = [sx, sy];
+        else if (sx <= cx + HALO) seg.push([sx, sy]);
+        else if (!droitePosee) { seg.push([sx, sy]); droitePosee = true; }
+      }
+      if (gauche) seg.unshift(gauche);
+      if (seg.length < 2) return;
+
+      const trace = () => {
+        ctx.beginPath();
+        ctx.moveTo(seg[0][0], seg[0][1]);
+        for (let i = 1; i < seg.length; i++) ctx.lineTo(seg[i][0], seg[i][1]);
+      };
+
+      ctx.save();
+      ctx.beginPath();
+      ctx.rect(cx - HALO, 0, HALO * 2, cv.height);
+      ctx.clip();
+
+      ctx.save();
+      ctx.filter = "blur(1.5px)";
+      trace();
+      ctx.strokeStyle = colorRef.current + "80";
+      ctx.lineWidth = 3; ctx.lineCap = "round"; ctx.lineJoin = "round";
+      ctx.stroke();
+      ctx.restore();
+
+      trace();
+      ctx.strokeStyle = "rgba(255,255,255,0.9)";
+      ctx.lineWidth = 1.5; ctx.lineCap = "round"; ctx.lineJoin = "round";
+      ctx.stroke();
+      ctx.restore();
+
+      // Estompage des deux bords, pour que la découpe ne se voie pas.
+      ctx.globalCompositeOperation = "destination-in";
+      const fondu = ctx.createLinearGradient(cx - HALO, 0, cx + HALO, 0);
+      fondu.addColorStop(0, "rgba(0,0,0,0)");
+      fondu.addColorStop(0.2, "rgba(0,0,0,1)");
+      fondu.addColorStop(0.8, "rgba(0,0,0,1)");
+      fondu.addColorStop(1, "rgba(0,0,0,0)");
+      ctx.fillStyle = fondu;
+      ctx.fillRect(0, 0, cv.width, cv.height);
+      ctx.globalCompositeOperation = "source-over";
+    });
+
+    // Le canevas du halo suit la taille du graphique, en pixels physiques.
+    const ro = new ResizeObserver(() => {
+      const cv = glowRef.current;
+      if (!cv) return;
+      cv.width = el.clientWidth;
+      cv.height = el.clientHeight;
+    });
+    ro.observe(el);
+
+    return () => {
+      ro.disconnect();
+      chart.remove();
+      chartRef.current = null;
+      serieRef.current = null;
+    };
+  }, []);
+
+  // ── Alimentation ───────────────────────────────────────────────────────────
+  useEffect(() => {
+    const serie = serieRef.current, chart = chartRef.current;
+    if (!serie || !chart) return;
+
+    if (!points.length) { serie.setData([]); return; }
+    const dernier = points[points.length - 1].value || 1;
+    const echelle = (totalValue ?? 0) > 0 ? totalValue! / dernier : 1;
+
+    const data = points
+      .map(p => ({
+        time: Math.floor(new Date(p.date).getTime() / 1000) as UTCTimestamp,
+        value: p.value * echelle,
+      }))
+      .filter(d => isFinite(d.time) && isFinite(d.value))
+      // lightweight-charts exige un temps strictement croissant : deux points
+      // au même horodatage font lever la série entière.
+      .filter((d, i, arr) => i === 0 || d.time > arr[i - 1].time);
+
+    const bougies = mode === "bougie" ? agregerEnBougies(data) : [];
+    if (mode === "bougie") {
+      serie.setData([]);
+      bougieRef.current?.setData(bougies);
+    } else {
+      bougieRef.current?.setData([]);
+      serie.setData(data);
+    }
+    // Le cadrage porte sur la série réellement affichée : les bougies sont
+    // agrégées, donc bien moins nombreuses que les points de la ligne. Régler
+    // la fenêtre sur le compte de la ligne tassait soixante bougies dans le
+    // premier vingtième du tracé.
+    const nbBarres = mode === "bougie" ? bougies.length : data.length;
+    // Cadrage sur les horodatages réels plutôt que `fitContent()`.
+    //
+    // `fitContent` encadre les *barres*, pas les points : il ajoute une demi-barre
+    // de marge de chaque côté. Sur la page graphique cela ne se voit pas, ses
+    // séries comptant plusieurs centaines de points — la demi-barre y vaut deux
+    // pixels. Ici, 27 points intraday sur 860 px donnent des barres de 32 px,
+    // donc 16 px de vide entre le dernier point et la pastille de valeur.
+    // En fixant la fenêtre aux horodatages extrêmes, la courbe touche les deux
+    // bords quel que soit le nombre de points.
+    if (nbBarres > 1) {
+      // Cadrage sur [0,5 ; n−1,5], et non [0 ; n−1].
+      //
+      // La bibliothèque répartit la largeur sur `to − from + 1` barres, puis
+      // dessine le point i au *centre* de la sienne. Demander [0 ; n−1] laisse
+      // donc une demi-barre de vide de chaque côté. Invisible sur la fenêtre
+      // Max — 5 500 points, la demi-barre vaut un dixième de pixel — mais
+      // énorme sur 1 semaine : mesuré à 70 px pour 6 points, la courbe se
+      // détachait visiblement de l'échelle et de la marge gauche.
+      //
+      // Décaler les deux bornes d'une demi-barre place le premier et le
+      // dernier point exactement sur les bords : mesuré à 1 px après coup.
+      //
+      // Différé d'une trame : appliqué dans la foulée de `setData`, le cadrage
+      // est écrasé par la mise en page que la bibliothèque enchaîne.
+      const id = requestAnimationFrame(() => {
+        try {
+          chart.timeScale().applyOptions({ rightOffset: 0 });
+          chart.timeScale().setVisibleLogicalRange({ from: 0.5, to: nbBarres - 1.5 });
+        } catch { /* graphique démonté entre-temps */ }
+      });
+      return () => cancelAnimationFrame(id);
+    }
+    chart.timeScale().fitContent();
+  }, [points, totalValue, mode]);
+
+  // L'heure ne s'affiche que sur la journée. Sur une série journalière,
+  // `timeVisible` intercalait des numéros de jour entre les noms de mois —
+  // « nov. 2026 mars avr. juin 5 » sur la fenêtre d'un an.
+  useEffect(() => {
+    chartRef.current?.timeScale().applyOptions({ timeVisible: period === "24h" });
+  }, [period]);
+
+  // Couleur et mode s'appliquent à la série existante. En mode ligne, le
+  // dégradé est simplement rendu transparent.
+  const encre = color;
+  // Le halo de survol lit la couleur dans une référence, mise à jour ici :
+  // la déclaration de `colorRef` précède celle de l'état de teinte.
+  colorRef.current = encre;
+  useEffect(() => {
+    serieRef.current?.applyOptions({
+      lineColor: encre,
+      topColor: encre + "55",
+      bottomColor: encre + "00",
+    });
+  }, [encre, mode]);
+
+  const eur = (v: number) => v.toLocaleString("fr-FR", { maximumFractionDigits: 0 }) + " €";
+  const dernier = points.length && totalValue ? totalValue : null;
+
+  return (
+    <div ref={boxRef} style={{ width: "100%", height: "100%", display: "flex", flexDirection: "column", minHeight: 0 }}>
+      {/* Périodes reprises de la page graphique : libellé, rendement de la
+          période dessous, et un filet sous celle qui est active. Les huit
+          pourcentages sont tirés d'une seule série — celle de la fenêtre Max —
+          plutôt que d'un appel par période : sinon un même intervalle pourrait
+          annoncer un chiffre une fois sélectionné et un autre au repos. */}
+      <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 10, marginBottom: 4 }}>
+        <div style={{ display: "flex", gap: 14, flexWrap: "wrap" }}>
+          {PERIODES.map(p => {
+            const actif = p === period;
+            const pct = rendements[p];
+            return (
+              <div key={p} onClick={() => onPeriodChange(p)}
+                style={{ position: "relative", paddingBottom: 4, textAlign: "center", width: 46, cursor: "pointer", flex: "none" }}>
+                <div style={{ fontFamily: FONT, fontSize: 12, fontWeight: 600, color: actif ? encre : "#94a3b8" }}>{p}</div>
+                {pct != null && (
+                  <div style={{
+                    ...NUM, fontSize: 11, fontWeight: 700,
+                    color: pct >= 0 ? "#10b981" : "#ef4444",
+                  }}>
+                    {fmtPct(pct)}
+                  </div>
+                )}
+                {actif && (
+                  <div style={{ position: "absolute", bottom: 0, left: 0, right: 0, height: 2, borderRadius: 2, background: encre }} />
+                )}
+              </div>
+            );
+          })}
+        </div>
+
+        {/* Courbe / bougies, même bouton que la page graphique. */}
+        <button type="button" onClick={() => setMode(m => (m === "ligne" ? "bougie" : "ligne"))}
+          title={mode === "ligne" ? "Passer en bougies" : "Passer en courbe"}
+          style={{
+            background: mode === "bougie" ? "rgba(155,185,255,0.16)" : "rgba(255,255,255,0.06)",
+            backdropFilter: "blur(10px) saturate(1.5)", WebkitBackdropFilter: "blur(10px) saturate(1.5)",
+            border: `1px solid ${mode === "bougie" ? "rgba(155,185,255,0.40)" : "rgba(255,255,255,0.12)"}`,
+            borderRadius: 9, width: 30, height: 30, cursor: "pointer", flexShrink: 0,
+            display: "flex", alignItems: "center", justifyContent: "center",
+            color: mode === "bougie" ? "#9BB9FF" : "rgba(255,255,255,0.50)",
+            boxShadow: mode === "bougie"
+              ? "0 0 12px rgba(155,185,255,0.16), inset 0 1px 0 rgba(255,255,255,0.10)"
+              : "0 1px 3px rgba(0,0,0,0.20), inset 0 1px 0 rgba(255,255,255,0.07)",
+          }}>
+          {mode === "ligne" ? (
+            <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
+              <rect x="3" y="4" width="3" height="6" rx="0.5" />
+              <line x1="4.5" y1="2" x2="4.5" y2="4" />
+              <line x1="4.5" y1="10" x2="4.5" y2="14" />
+              <rect x="10" y="6" width="3" height="5" rx="0.5" />
+              <line x1="11.5" y1="3" x2="11.5" y2="6" />
+              <line x1="11.5" y1="11" x2="11.5" y2="13" />
+            </svg>
+          ) : (
+            <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
+              <polyline points="1,12 4,8 7,10 10,5 13,7 15,4" />
+            </svg>
+          )}
+        </button>
+      </div>
+
+      <div style={{ position: "relative", flex: height ? undefined : 1, height, minHeight: 0 }}>
+        <div ref={plotRef} style={{ position: "absolute", inset: 0 }} />
+        <canvas ref={glowRef} style={{
+          position: "absolute", inset: 0, pointerEvents: "none",
+          // Repris de la page graphique. Sans z-index, le canevas passait sous
+          // ceux que la bibliothèque empile elle-même : le halo était peint
+          // mais invisible. Le mode « screen » le fait rayonner sur la courbe
+          // au lieu de la recouvrir d'un trait opaque.
+          zIndex: 5, mixBlendMode: "screen",
+        }} />
+        {(state === "loading" && !points.length) || state === "error" ? (
+          <div style={{
+            position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center",
+            fontFamily: FONT, fontSize: 12, color: "rgba(248,249,252,0.35)", pointerEvents: "none",
+          }}>
+            {state === "error" ? "Historique indisponible pour cette période" : "Chargement…"}
+          </div>
+        ) : null}
+      </div>
+    </div>
+  );
+}

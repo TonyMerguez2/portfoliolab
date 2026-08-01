@@ -1,10 +1,9 @@
 "use client";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import AssetLogo from "@/components/AssetLogo";
+import { FONT } from "@/lib/typography";
 
 const API       = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
-const FONT      = "'Inter', 'SF Pro Display', system-ui, sans-serif";
-const FONT_MONO = "'SF Mono', 'Fira Code', monospace";
 
 type TxSide   = "BUY" | "SELL";
 type TxPeriod = "all" | "7j" | "30j" | "3m" | "1a";
@@ -213,7 +212,7 @@ export default function TransactionsList({ portfolioId, refreshKey, onNewTransac
         <div style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
           <span style={{ fontSize: 13, fontWeight: 700, color: "#fff" }}>Transactions</span>
           {!loading && (
-            <span style={{ fontSize: 11, color: "rgba(255,255,255,0.28)", fontFamily: FONT_MONO }}>
+            <span style={{ fontSize: 11, color: "rgba(255,255,255,0.28)", fontFamily: FONT }}>
               {filtered.length} opération{filtered.length !== 1 ? "s" : ""}
             </span>
           )}
@@ -284,7 +283,7 @@ export default function TransactionsList({ portfolioId, refreshKey, onNewTransac
 
       {/* Synthesis */}
       {!loading && transactions.length > 0 && (
-        <div style={{ marginBottom: 8, flexShrink: 0, fontSize: 11, fontFamily: FONT_MONO, color: "rgba(255,255,255,0.28)" }}>
+        <div style={{ marginBottom: 8, flexShrink: 0, fontSize: 11, fontFamily: FONT, color: "rgba(255,255,255,0.28)" }}>
           Total investi&nbsp;: <span style={{ color: "rgba(255,255,255,0.55)" }}>{fmtNum(totalInvested)} €</span>
           <span style={{ margin: "0 8px", opacity: 0.4 }}>·</span>
           Total vendu&nbsp;: <span style={{ color: "rgba(255,255,255,0.55)" }}>{fmtNum(totalSold)} €</span>
@@ -319,7 +318,7 @@ export default function TransactionsList({ portfolioId, refreshKey, onNewTransac
             {!loading && filtered.length === 0 && (
               <tr>
                 <td colSpan={8} style={{ padding: "56px 20px", textAlign: "center" }}>
-                  <div style={{ fontSize: 22, color: "rgba(255,255,255,0.13)", marginBottom: 12, fontFamily: FONT_MONO }}>≣</div>
+                  <div style={{ fontSize: 22, color: "rgba(255,255,255,0.13)", marginBottom: 12, fontFamily: FONT }}>≣</div>
                   {isFiltered ? (
                     <>
                       <p style={{ margin: "0 0 8px", fontSize: 13, fontWeight: 600, color: "rgba(255,255,255,0.38)" }}>
@@ -416,24 +415,24 @@ export default function TransactionsList({ portfolioId, refreshKey, onNewTransac
                   </td>
 
                   {/* Quantité */}
-                  <td style={{ padding: "11px 14px", textAlign: "right", fontFamily: FONT_MONO, color: "rgba(255,255,255,0.70)", fontSize: 12 }}>
+                  <td style={{ padding: "11px 14px", textAlign: "right", fontFamily: FONT, color: "rgba(255,255,255,0.70)", fontSize: 12 }}>
                     {fmtQty(tx.quantity)}
                   </td>
 
                   {/* Prix unitaire */}
-                  <td style={{ padding: "11px 14px", textAlign: "right", fontFamily: FONT_MONO, color: "rgba(255,255,255,0.70)", fontSize: 12 }}>
+                  <td style={{ padding: "11px 14px", textAlign: "right", fontFamily: FONT, color: "rgba(255,255,255,0.70)", fontSize: 12 }}>
                     {fmtNum(tx.unit_price)} €
                   </td>
 
                   {/* Frais */}
-                  <td style={{ padding: "11px 14px", textAlign: "right", fontFamily: FONT_MONO, color: "rgba(255,255,255,0.36)", fontSize: 12 }}>
+                  <td style={{ padding: "11px 14px", textAlign: "right", fontFamily: FONT, color: "rgba(255,255,255,0.36)", fontSize: 12 }}>
                     {tx.fees > 0
                       ? `${fmtNum(tx.fees)} €`
                       : <span style={{ opacity: 0.35 }}>—</span>}
                   </td>
 
                   {/* Total */}
-                  <td style={{ padding: "11px 14px", textAlign: "right", fontFamily: FONT_MONO, fontSize: 13, fontWeight: 600, color: "#F8F9FC" }}>
+                  <td style={{ padding: "11px 14px", textAlign: "right", fontFamily: FONT, fontSize: 13, fontWeight: 600, color: "#F8F9FC" }}>
                     {fmtNum(tx.total)} €
                   </td>
 
