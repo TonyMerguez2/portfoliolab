@@ -14,6 +14,7 @@ Ownership : les portefeuilles n'ont pas de user_id pour l'instant ; on vérifie
 """
 from __future__ import annotations
 
+import logging
 from datetime import datetime
 from typing import Optional
 
@@ -30,6 +31,8 @@ from app.utils.positions import (
     check_delete_feasible,
     fetch_current_prices,
 )
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/v1/portfolios", tags=["Transactions"])
 
@@ -340,3 +343,103 @@ async def get_positions(
         "total_pnl_eur":  total_pnl_eur,
         "total_pnl_pct":  total_pnl_pct,
     }
+
+
+# ── GET — trajectoire réelle du portefeuille ──────────────────────────────────
+
+# Fenêtres de téléchargement, généreuses : la courbe est ensuite coupée à la
+# première transaction, qui commande le vrai début.
+_HISTO_JOURS = {
+    "7d": 7, "1mo": 31, "3mo": 92, "6mo": 183,
+    "1y": 366, "3y": 1096, "max": None,
+}
+
+
+@router.get("/{portfolio_id}/history")
+async def get_history(
+    portfolio_id: str,
+    period:       str     = Query("max"),
+    db:           Session = Depends(get_db),
+    user:         User    = Depends(require_auth),
+):
+    """
+    Valeur du portefeuille au fil du temps, d'après ses transactions.
+
+    À distinguer de `/portfolio-history`, qui simule un achat-conservation aux
+    pondérations courantes : celui-ci suit les quantités réellement détenues et
+    part de la première opération. Un PEA ouvert en février affichait sinon la
+    performance des fonds depuis leur création — « +371 % sur tout l'historique »
+    sur six mois de détention.
+    """
+    from datetime import date, timedelta
+
+    import yfinance as yf
+
+    from app.services.portfolio_history import courbe_portefeuille, twr_sur_fenetre
+
+    _get_portfolio_or_404(portfolio_id, db, user)
+
+    txs = (
+        db.query(Transaction)
+        .filter(Transaction.portfolio_id == portfolio_id)
+        .order_by(Transaction.executed_at.asc())
+        .all()
+    )
+    if not txs:
+        return {"points": [], "start": None, "twr_pct": None, "pnl_eur": None, "source": "aucune"}
+
+    debut_reel = min(t.executed_at for t in txs).date()
+    jours = _HISTO_JOURS.get(period)
+    depart = debut_reel if jours is None else max(debut_reel, date.today() - timedelta(days=jours))
+
+    tickers = sorted({t.ticker for t in txs})
+    try:
+        brut = yf.download(
+            tickers, start=debut_reel - timedelta(days=7),
+            progress=False, auto_adjust=True, threads=True,
+        )["Close"]
+    except Exception as exc:                                  # pragma: no cover
+        logger.error("history download failed: %s", exc)
+        return {"points": [], "start": debut_reel.isoformat(), "twr_pct": None, "pnl_eur": None}
+
+    if brut is None or len(brut) == 0:                        # pragma: no cover
+        return {"points": [], "start": debut_reel.isoformat(), "twr_pct": None, "pnl_eur": None}
+
+    # yfinance rend une Series pour un ticker unique, un DataFrame au-delà.
+    if len(tickers) == 1:
+        brut = brut.to_frame(tickers[0])
+
+    cours: dict[str, dict] = {}
+    for tk in tickers:
+        if tk not in brut:
+            continue
+        serie = brut[tk].dropna()
+        cours[tk] = {idx.date(): float(v) for idx, v in serie.items()}
+
+    calendrier = sorted({j for m in cours.values() for j in m})
+    resultat = courbe_portefeuille(
+        [
+            {
+                "ticker":      t.ticker,
+                "side":        t.side,
+                "quantity":    t.quantity,
+                "unit_price":  t.unit_price,
+                "fees":        t.fees or 0.0,
+                "executed_at": t.executed_at,
+            }
+            for t in txs
+        ],
+        cours,
+        calendrier,
+    )
+
+    # Le TWR suit la fenêtre demandée ; le P&L reste celui de la détention
+    # entière, un « gain sur trois mois » n'ayant pas de sens en euros quand des
+    # versements ont eu lieu entre-temps.
+    resultat["twr_pct"] = twr_sur_fenetre(resultat["points"], depart.isoformat())
+    resultat["points"] = [
+        {k: v for k, v in p.items() if k != "ret"}
+        for p in resultat["points"] if p["date"] >= depart.isoformat()
+    ]
+    resultat["source"] = "transactions"
+    return resultat

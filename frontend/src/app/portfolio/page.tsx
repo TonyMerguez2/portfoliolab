@@ -344,6 +344,30 @@ function PortfolioPageInner() {
   const surTransactions =
     positions?.source === "transactions" && positions.positions.length > 0;
 
+  /**
+   * Rendement du portefeuille sur la période, en TWR.
+   *
+   * `weightedChange` est la moyenne pondérée des variations d'actifs : sur la
+   * fenêtre Max, il rend la performance des fonds depuis leur création, et non
+   * celle de l'épargnant. Un PEA ouvert en février affichait ainsi « +417 %
+   * sur tout l'historique » à côté d'un « Total +175 € » exact.
+   */
+  const [twr, setTwr] = useState<number | null>(null);
+
+  useEffect(() => {
+    const id = portfolio?.id;
+    if (!id || !surTransactions) { setTwr(null); return; }
+    let annule = false;
+    fetch(`http://localhost:8000/api/v1/portfolios/${id}/history?period=${PERIOD_MAP[period]}`,
+          { headers: enTetesAuth() })
+      .then(r => (r.ok ? r.json() : null))
+      .then((d: { twr_pct?: number | null } | null) => {
+        if (!annule) setTwr(typeof d?.twr_pct === "number" ? d.twr_pct : null);
+      })
+      .catch(() => { if (!annule) setTwr(null); });
+    return () => { annule = true; };
+  }, [portfolio?.id, surTransactions, period, txRefreshKey]);
+
   const valeurTotale  = surTransactions ? positions!.total_value    : (portfolio?.total_value ?? null);
   const prixDeRevient = surTransactions ? positions!.total_invested : (portfolio?.cost_basis  ?? null);
 
@@ -462,7 +486,12 @@ function PortfolioPageInner() {
     if (a.change === null) return s;
     return s + (a.weight / totalWeight) * a.change;
   }, 0);
-  const isUp       = weightedChange >= 0;
+  /**
+   * Le rendement à afficher : celui du portefeuille quand on le connaît, la
+   * moyenne pondérée des actifs à défaut.
+   */
+  const perfPeriode = surTransactions ? twr : weightedChange;
+  const isUp       = (perfPeriode ?? 0) >= 0;
   const perfColor  = isUp ? "#4ade80" : "#f87171";
 
   const topPerformers    = [...enriched].filter(a => a.change !== null)
@@ -653,20 +682,20 @@ function PortfolioPageInner() {
     {/* Perf sur la période choisie. Le libellé la suit : il disait
         « Aujourd'hui » quelle que soit la période, et annonçait donc
         un gain d'un an comme s'il datait du matin. */}
-    {valeurTotale != null && weightedChange != null && (
-      <div style={{ fontSize: 11, fontFamily: FONT, color: perfColor, fontWeight: 600 }}>
+    {valeurTotale != null && perfPeriode != null && (
+      <div style={{ fontSize: 11, fontFamily: FONT, color: perfPeriode >= 0 ? "#4ade80" : "#f87171", fontWeight: 600 }}>
         {period === "24h" ? "Aujourd'hui" : `Sur ${PERIOD_LABEL[period]}`}&nbsp;
         <span>
-            {weightedChange >= 0 ? "+" : ""}
+            {perfPeriode >= 0 ? "+" : ""}
             {Math.round(
-              // Idem : on retranche la valeur de début de période à celle
+              // On retranche la valeur de début de période à celle
               // d'aujourd'hui, au lieu d'appliquer le rendement au montant actuel.
-              weightedChange > -100
-                ? valeurTotale - valeurTotale / (1 + weightedChange / 100)
+              perfPeriode > -100
+                ? valeurTotale - valeurTotale / (1 + perfPeriode / 100)
                 : valeurTotale
             ).toLocaleString("fr-FR")} €
           </span>
-        <span style={{ opacity: 0.55, marginLeft: 4 }}>({fmtChange(weightedChange)})</span>
+        <span style={{ opacity: 0.55, marginLeft: 4 }}>({fmtChange(perfPeriode)})</span>
       </div>
     )}
         </div>
@@ -825,6 +854,8 @@ function PortfolioPageInner() {
               period={period}
               onPeriodChange={setPeriod}
               color={portfolio?.color || "#5B8DEF"}
+              portfolioId={portfolio?.id}
+              surTransactions={surTransactions}
             />
             </div>
           </div>

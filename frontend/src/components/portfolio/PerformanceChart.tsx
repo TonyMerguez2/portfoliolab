@@ -6,6 +6,7 @@ import {
 } from "lightweight-charts";
 import type { HistoryPoint, Period } from "@/lib/chart/portfolioCurve";
 import { FONT, NUM } from "@/lib/typography";
+import { enTetesAuth } from "@/lib/session";
 
 export type { HistoryPoint, Period };
 
@@ -88,6 +89,7 @@ const PERIOD_SECS: Record<Period, number | null> = {
 
 export default function PerformanceChart({
   assets, totalValue, period, onPeriodChange, color = "#5B8DEF", height,
+  portfolioId, surTransactions = false,
 }: {
   assets: { ticker: string; weight: number }[];
   totalValue: number | null;
@@ -95,6 +97,18 @@ export default function PerformanceChart({
   onPeriodChange: (p: Period) => void;
   color?: string;
   height?: number;
+  /**
+   * Portefeuille dont on trace la trajectoire réelle. Sans lui, la courbe
+   * simule un achat-conservation aux pondérations courantes.
+   */
+  portfolioId?: string;
+  /**
+   * Vrai quand les positions viennent des transactions. La courbe part alors
+   * de la première opération, au lieu de remonter à la création du plus ancien
+   * fonds — un PEA ouvert en février affichait sinon « +371 % sur tout
+   * l'historique ».
+   */
+  surTransactions?: boolean;
 }) {
   const boxRef = useRef<HTMLDivElement>(null);
   const plotRef = useRef<HTMLDivElement>(null);
@@ -117,7 +131,10 @@ export default function PerformanceChart({
     setState("loading");
     const tickers = assets.map(a => a.ticker).join(",");
     const weights = assets.map(a => a.weight).join(",");
-    fetch(`${API}/api/v1/portfolio-history?tickers=${encodeURIComponent(tickers)}&weights=${encodeURIComponent(weights)}&period=${PERIOD_API[period]}`)
+    const url = surTransactions && portfolioId
+      ? `${API}/api/v1/portfolios/${portfolioId}/history?period=${PERIOD_API[period]}`
+      : `${API}/api/v1/portfolio-history?tickers=${encodeURIComponent(tickers)}&weights=${encodeURIComponent(weights)}&period=${PERIOD_API[period]}`;
+    fetch(url, { headers: enTetesAuth() })
       .then(r => r.json())
       .then((d: { points?: HistoryPoint[] }) => {
         if (cancelled) return;
@@ -127,7 +144,7 @@ export default function PerformanceChart({
       })
       .catch(() => { if (!cancelled) { setPoints([]); setState("error"); } });
     return () => { cancelled = true; };
-  }, [key, period]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [key, period, portfolioId, surTransactions]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Rendements par période ─────────────────────────────────────────────────
   //
@@ -150,16 +167,24 @@ export default function PerformanceChart({
     let cancelled = false;
     const tickers = encodeURIComponent(assets.map(a => a.ticker).join(","));
     const weights = encodeURIComponent(assets.map(a => a.weight).join(","));
-    Promise.all(PERIODES.map(p =>
-      fetch(`${API}/api/v1/portfolio-history?tickers=${tickers}&weights=${weights}&period=${PERIOD_API[p]}`)
+    Promise.all(PERIODES.map(p => {
+      const u = surTransactions && portfolioId
+        ? `${API}/api/v1/portfolios/${portfolioId}/history?period=${PERIOD_API[p]}`
+        : `${API}/api/v1/portfolio-history?tickers=${tickers}&weights=${weights}&period=${PERIOD_API[p]}`;
+      return fetch(u, { headers: enTetesAuth() })
         .then(r => r.json())
-        .then((d: { change?: number | null }) => [p, typeof d.change === "number" ? d.change : null] as const)
-        .catch(() => [p, null] as const)
-    )).then(paires => {
+        // Sur transactions, c'est le TWR qu'il faut lire : `change` compterait
+        // les versements de la période comme performance.
+        .then((d: { change?: number | null; twr_pct?: number | null }) => {
+          const v = surTransactions ? d.twr_pct : d.change;
+          return [p, typeof v === "number" ? v : null] as const;
+        })
+        .catch(() => [p, null] as const);
+    })).then(paires => {
       if (!cancelled) setRendements(Object.fromEntries(paires) as Record<Period, number | null>);
     });
     return () => { cancelled = true; };
-  }, [key]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [key, portfolioId, surTransactions]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Création du graphique ──────────────────────────────────────────────────
   useEffect(() => {
