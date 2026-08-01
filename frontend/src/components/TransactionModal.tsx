@@ -1,20 +1,62 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
 import AssetLogo from "@/components/AssetLogo";
+import { FONT } from "@/lib/typography";
 
 const API       = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
-const FONT      = "'Inter', 'SF Pro Display', system-ui, sans-serif";
-const FONT_MONO = "'SF Mono', 'Fira Code', monospace";
 
 type Side        = "BUY" | "SELL";
 type SearchAsset = { ticker: string; name: string; type: string };
 
+/** Une écriture, telle que la saisie la produit — avant tout envoi. */
+export type DraftTx = {
+  ticker:      string;
+  asset_type:  string;
+  side:        Side;
+  quantity:    number;
+  unit_price:  number;
+  fees:        number;
+  executed_at: string;
+  /** Nom lisible, conservé pour l'affichage des brouillons. */
+  name:        string;
+};
+
 interface Props {
-  portfolioId:    string;
+  /**
+   * Portefeuille destinataire. Facultatif : la page de construction saisit des
+   * transactions avant que le portefeuille existe, et les remet via `onDraft`.
+   */
+  portfolioId?:   string;
   isOpen:         boolean;
   onClose:        () => void;
   onSuccess:      () => void;
   prefillTicker?: string;
+  /**
+   * Actif imposé, quand l'appelant le connaît déjà — évite l'aller-retour de
+   * recherche de `prefillTicker`.
+   */
+  prefillAsset?:  SearchAsset;
+  /** Empêche de changer d'actif : la ligne saisie porte sur celui-là. */
+  lockAsset?:     boolean;
+  /**
+   * Reçoit l'écriture au lieu de l'envoyer. Sert à collecter des transactions
+   * pour un portefeuille qui n'est pas encore créé.
+   */
+  onDraft?:       (tx: DraftTx) => void;
+  /** Valeurs de départ, pour reprendre une écriture déjà saisie. */
+  initialDraft?:  DraftTx | null;
+  /**
+   * Rendu intégré : le panneau s'affiche dans le flux au lieu de flotter
+   * au-dessus d'un voile.
+   *
+   * C'est la même saisie, au même endroit du code. La page de construction en
+   * avait une autre — poids et montant global, une seule date pour tout — qui
+   * produisait un prix de revient approché. Deux formulaires pour la même
+   * écriture auraient divergé, et le prix de revient avec eux.
+   */
+  embedded?: boolean;
+  /** Masque la croix de fermeture, inutile en rendu intégré. */
+  hideClose?: boolean;
 }
 
 function todayStr(): string {
@@ -33,7 +75,10 @@ function fmtEur(v: number): string {
   return v.toLocaleString("fr-FR", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + " €";
 }
 
-export default function TransactionModal({ portfolioId, isOpen, onClose, onSuccess, prefillTicker }: Props) {
+export default function TransactionModal({
+  portfolioId, isOpen, onClose, onSuccess, prefillTicker, prefillAsset,
+  lockAsset = false, onDraft, initialDraft, embedded = false, hideClose = false,
+}: Props) {
   const [side,           setSide]           = useState<Side>("BUY");
   const [searchQuery,    setSearchQuery]    = useState("");
   const [searchResults,  setSearchResults]  = useState<SearchAsset[]>([]);
@@ -53,6 +98,11 @@ export default function TransactionModal({ portfolioId, isOpen, onClose, onSucce
 
   const debounceRef   = useRef<NodeJS.Timeout>();
   const searchInputRef = useRef<HTMLInputElement>(null);
+  /**
+   * Vrai dès que le prix a été saisi à la main. Le cours proposé ne doit plus
+   * l'écraser : une transaction réelle se passe rarement au cours de clôture.
+   */
+  const prixEdite     = useRef(false);
 
   // ── Animation d'entrée (remplace le @keyframes CSS) ─────────────────────────
   useEffect(() => {
@@ -72,35 +122,69 @@ export default function TransactionModal({ portfolioId, isOpen, onClose, onSucce
   // ── Reset form on open ───────────────────────────────────────────────────────
   useEffect(() => {
     if (!isOpen) return;
-    setSide("BUY");
     setSearchQuery("");
     setSearchResults([]);
     setShowDrop(false);
-    setSelectedAsset(null);
+    setError(null);
+    setHeldQty(null);
+
+    if (initialDraft) {
+      setSide(initialDraft.side);
+      setSelectedAsset({
+        ticker: initialDraft.ticker, type: initialDraft.asset_type, name: initialDraft.name,
+      });
+      setQuantity(String(initialDraft.quantity));
+      setUnitPrice(String(initialDraft.unit_price));
+      setFees(String(initialDraft.fees));
+      setDate(initialDraft.executed_at.slice(0, 10));
+      prixEdite.current = true;   // le prix repris ne doit pas être écrasé
+      return;
+    }
+
+    setSide("BUY");
+    setSelectedAsset(prefillAsset ?? null);
     setQuantity("");
     setUnitPrice("");
     setFees("0");
     setDate(todayStr());
-    setError(null);
-    setHeldQty(null);
-  }, [isOpen]);
+    prixEdite.current = false;
+  }, [isOpen, prefillAsset, initialDraft]);
 
   // ── Prefill ticker ───────────────────────────────────────────────────────────
   useEffect(() => {
-    if (!isOpen || !prefillTicker) return;
+    if (!isOpen || !prefillTicker || prefillAsset) return;
     fetch(`${API}/api/v1/search?q=${encodeURIComponent(prefillTicker)}`)
       .then(r => r.json())
-      .then(async (d: any) => {
+      .then((d: any) => {
         const results: SearchAsset[] = (d?.results || []).map((x: any) => ({
           ticker: x.ticker, type: x.type || "EQUITY", name: x.name || x.ticker,
         }));
         const match = results.find(r => r.ticker === prefillTicker) ?? results[0];
-        if (!match) return;
-        setSelectedAsset(match);
-        await prefetchPrice(match.ticker);
+        if (match) setSelectedAsset(match);
       })
       .catch(() => {});
-  }, [isOpen, prefillTicker]); // eslint-disable-line
+  }, [isOpen, prefillTicker, prefillAsset]);
+
+  // ── Cours proposé, à la date de l'opération ──────────────────────────────────
+  //
+  // Le prix de revient n'est juste que si le cours retenu est celui du jour de
+  // l'achat. Proposer le cours du jour pour une transaction datée de mars
+  // dernier fausserait tout le calcul, sans que rien ne le signale.
+  useEffect(() => {
+    if (!isOpen || !selectedAsset || prixEdite.current) return;
+    let annule = false;
+    setFetchingPrice(true);
+    fetch(`${API}/api/v1/price-at?tickers=${encodeURIComponent(selectedAsset.ticker)}&date=${date}`)
+      .then(r => r.json())
+      .then((d: any) => {
+        if (annule || prixEdite.current) return;
+        const p = d?.[selectedAsset.ticker];
+        if (typeof p === "number" && p > 0) setUnitPrice(p >= 1 ? p.toFixed(2) : p.toFixed(6));
+      })
+      .catch(() => {})
+      .finally(() => { if (!annule) setFetchingPrice(false); });
+    return () => { annule = true; };
+  }, [isOpen, selectedAsset, date]);
 
   // ── Search debounce ──────────────────────────────────────────────────────────
   useEffect(() => {
@@ -122,7 +206,7 @@ export default function TransactionModal({ portfolioId, isOpen, onClose, onSucce
 
   // ── Held quantity (SELL only) ────────────────────────────────────────────────
   useEffect(() => {
-    if (!selectedAsset || side !== "SELL") { setHeldQty(null); return; }
+    if (!selectedAsset || side !== "SELL" || !portfolioId) { setHeldQty(null); return; }
     const token = localStorage.getItem("novac_token");
     if (!token) return;
     fetch(`${API}/api/v1/portfolios/${portfolioId}/positions`, {
@@ -137,32 +221,20 @@ export default function TransactionModal({ portfolioId, isOpen, onClose, onSucce
   }, [selectedAsset, side, portfolioId]);
 
   // ── Helpers ──────────────────────────────────────────────────────────────────
-  async function prefetchPrice(ticker: string) {
-    setFetchingPrice(true);
-    try {
-      const r = await fetch(`${API}/api/v1/prices?tickers=${encodeURIComponent(ticker)}&period=1d`);
-      const d = await r.json();
-      const item = (d || []).find((x: any) => x.symbol === ticker);
-      if (item?.price && item.price > 0) {
-        const p = item.price as number;
-        setUnitPrice(p >= 1 ? p.toFixed(2) : p.toFixed(6));
-      }
-    } catch {} finally { setFetchingPrice(false); }
-  }
-
-  async function pickAsset(asset: SearchAsset) {
+  function pickAsset(asset: SearchAsset) {
     setSelectedAsset(asset);
     setSearchQuery("");
     setShowDrop(false);
     setSearchResults([]);
     setUnitPrice("");
-    await prefetchPrice(asset.ticker);
+    prixEdite.current = false;   // le cours du nouvel actif reprend la main
   }
 
   function clearAsset() {
     setSelectedAsset(null);
     setHeldQty(null);
     setUnitPrice("");
+    prixEdite.current = false;
     setTimeout(() => searchInputRef.current?.focus(), 50);
   }
 
@@ -180,6 +252,23 @@ export default function TransactionModal({ portfolioId, isOpen, onClose, onSucce
   // ── Submit ───────────────────────────────────────────────────────────────────
   async function handleSubmit() {
     if (!isValid || submitting) return;
+
+    // Portefeuille pas encore créé : on remet l'écriture à l'appelant.
+    if (onDraft) {
+      onDraft({
+        ticker:      selectedAsset!.ticker,
+        asset_type:  selectedAsset!.type,
+        name:        selectedAsset!.name,
+        side,
+        quantity:    qty,
+        unit_price:  price,
+        fees:        feesVal,
+        executed_at: `${date}T00:00:00`,
+      });
+      onSuccess();
+      return;
+    }
+
     const token = localStorage.getItem("novac_token");
     if (!token) { setError("Vous devez être connecté pour enregistrer une transaction."); return; }
     setSubmitting(true);
@@ -224,7 +313,7 @@ export default function TransactionModal({ portfolioId, isOpen, onClose, onSucce
       width: "100%", background: "rgba(255,255,255,0.06)",
       border: `1px solid ${focusedField === field ? "rgba(91,141,239,0.50)" : "rgba(255,255,255,0.10)"}`,
       borderRadius: 10, padding: "9px 12px", fontSize: 13, color: "#F8F9FC",
-      fontFamily: FONT_MONO, boxSizing: "border-box",
+      fontFamily: FONT, boxSizing: "border-box",
       transition: "border-color 160ms", outline: "none",
     };
   }
@@ -239,52 +328,25 @@ export default function TransactionModal({ portfolioId, isOpen, onClose, onSucce
     ? "Enregistrement…"
     : `${side === "BUY" ? "Acheter" : "Vendre"}${qty > 0 ? ` ${qty}` : ""} ${ticker}${isValid ? ` pour ${fmtEur(total)}` : ""}`;
 
-  return (
-    <>
-      {/* Overlay */}
-      <div
-        onClick={onClose}
-        style={{
-          position: "fixed", inset: 0, zIndex: 200,
-          background: "rgba(0,0,0,0.60)",
-          backdropFilter: "blur(4px)", WebkitBackdropFilter: "blur(4px)",
-        }}
-      />
-
-      {/* Card — animation JS fade+scale pour éviter le <style> global */}
-      <div
-        onKeyDown={handleCardKey}
-        onClick={e => e.stopPropagation()}
-        style={{
-          position: "fixed", top: "50%", left: "50%", zIndex: 201,
-          transform: `translate(-50%,-50%) scale(${cardVisible ? 1 : 0.97})`,
-          opacity: cardVisible ? 1 : 0,
-          transition: "opacity 180ms ease, transform 180ms cubic-bezier(0.34,1,0.56,1)",
-          width: 440, maxWidth: "calc(100vw - 32px)",
-          background: "rgba(4,17,36,0.97)",
-          border: "1px solid rgba(255,255,255,0.10)",
-          backdropFilter: "blur(32px)", WebkitBackdropFilter: "blur(32px)",
-          borderRadius: 16,
-          boxShadow: "0 32px 80px rgba(0,0,0,0.65), 0 1px 0 rgba(255,255,255,0.07) inset",
-          fontFamily: FONT,
-        }}
-      >
-        <div style={{ padding: "20px 24px 24px" }}>
+  const contenu = (
+        <div style={{ padding: embedded ? 0 : "20px 24px 24px" }}>
 
           {/* ── Header ──────────────────────────────────────────────────────── */}
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 20 }}>
             <span style={{ fontSize: 15, fontWeight: 700, color: "#F8F9FC", letterSpacing: "0.02em" }}>
               Nouvelle transaction
             </span>
-            <button
-              onClick={onClose}
-              style={{
-                background: "rgba(255,255,255,0.07)", border: "1px solid rgba(255,255,255,0.10)",
-                borderRadius: 8, color: "rgba(255,255,255,0.50)", width: 28, height: 28,
-                cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center",
-                fontSize: 13, lineHeight: 1, flexShrink: 0,
-              }}
-            >✕</button>
+            {!hideClose && (
+              <button
+                onClick={onClose}
+                style={{
+                  background: "rgba(255,255,255,0.07)", border: "1px solid rgba(255,255,255,0.10)",
+                  borderRadius: 8, color: "rgba(255,255,255,0.50)", width: 28, height: 28,
+                  cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center",
+                  fontSize: 13, lineHeight: 1, flexShrink: 0,
+                }}
+              >✕</button>
+            )}
           </div>
 
           {/* ── Error banner ─────────────────────────────────────────────────── */}
@@ -342,15 +404,17 @@ export default function TransactionModal({ portfolioId, isOpen, onClose, onSucce
                   {selectedAsset.name}
                 </span>
                 {fetchingPrice && <span style={{ fontSize: 10, color: "rgba(255,255,255,0.30)" }}>…</span>}
-                <button
-                  onClick={clearAsset}
-                  style={{
-                    background: "rgba(255,255,255,0.08)", border: "1px solid rgba(255,255,255,0.10)",
-                    borderRadius: 6, color: "rgba(255,255,255,0.45)", width: 22, height: 22,
-                    cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center",
-                    fontSize: 12, flexShrink: 0,
-                  }}
-                >×</button>
+                {!lockAsset && (
+                  <button
+                    onClick={clearAsset}
+                    style={{
+                      background: "rgba(255,255,255,0.08)", border: "1px solid rgba(255,255,255,0.10)",
+                      borderRadius: 6, color: "rgba(255,255,255,0.45)", width: 22, height: 22,
+                      cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center",
+                      fontSize: 12, flexShrink: 0,
+                    }}
+                  >×</button>
+                )}
               </div>
             ) : (
               /* Search input */
@@ -429,7 +493,7 @@ export default function TransactionModal({ portfolioId, isOpen, onClose, onSucce
                 style={inputStyle("qty")}
               />
               {side === "SELL" && selectedAsset && (
-                <div style={{ marginTop: 5, fontSize: 10, color: "rgba(255,255,255,0.28)", fontFamily: FONT_MONO }}>
+                <div style={{ marginTop: 5, fontSize: 10, color: "rgba(255,255,255,0.28)", fontFamily: FONT }}>
                   Détenu : {heldQty !== null ? heldQty.toLocaleString("fr-FR", { maximumFractionDigits: 8 }) : "—"}
                 </div>
               )}
@@ -440,7 +504,8 @@ export default function TransactionModal({ portfolioId, isOpen, onClose, onSucce
               <label style={labelStyle}>PRIX UNITAIRE (€)</label>
               <input
                 type="number"
-                value={unitPrice} onChange={e => setUnitPrice(e.target.value)}
+                value={unitPrice}
+                onChange={e => { prixEdite.current = true; setUnitPrice(e.target.value); }}
                 onFocus={() => setFocusedField("price")} onBlur={() => setFocusedField(null)}
                 min={0} step="any"
                 placeholder={fetchingPrice ? "…" : "0,00"}
@@ -479,12 +544,12 @@ export default function TransactionModal({ portfolioId, isOpen, onClose, onSucce
             background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.07)",
           }}>
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-              <span style={{ fontSize: 10, color: "rgba(255,255,255,0.30)", fontFamily: FONT_MONO }}>
+              <span style={{ fontSize: 10, color: "rgba(255,255,255,0.30)", fontFamily: FONT }}>
                 {qty > 0 && price > 0
                   ? `${qty} × ${price}${feesVal > 0 ? ` + ${feesVal}` : ""} =`
                   : "Total :"}
               </span>
-              <span style={{ fontSize: 15, fontWeight: 700, fontFamily: FONT_MONO, color: isValid ? accentColor : "rgba(255,255,255,0.22)" }}>
+              <span style={{ fontSize: 15, fontWeight: 700, fontFamily: FONT, color: isValid ? accentColor : "rgba(255,255,255,0.22)" }}>
                 {isValid ? fmtEur(total) : "—"}
               </span>
             </div>
@@ -509,6 +574,41 @@ export default function TransactionModal({ portfolioId, isOpen, onClose, onSucce
           </button>
 
         </div>
+  );
+
+  if (embedded) return contenu;
+
+  return (
+    <>
+      {/* Voile */}
+      <div
+        onClick={onClose}
+        style={{
+          position: "fixed", inset: 0, zIndex: 200,
+          background: "rgba(0,0,0,0.60)",
+          backdropFilter: "blur(4px)", WebkitBackdropFilter: "blur(4px)",
+        }}
+      />
+      {/* Fenêtre — animation en JS pour éviter un <style> global */}
+      <div
+        onKeyDown={handleCardKey}
+        onClick={e => e.stopPropagation()}
+        style={{
+          position: "fixed", top: "50%", left: "50%", zIndex: 201,
+          transform: `translate(-50%,-50%) scale(${cardVisible ? 1 : 0.97})`,
+          opacity: cardVisible ? 1 : 0,
+          transition: "opacity 180ms ease, transform 180ms cubic-bezier(0.34,1,0.56,1)",
+          width: 440, maxWidth: "calc(100vw - 32px)",
+          background: "rgba(4,17,36,0.97)",
+          border: "1px solid rgba(255,255,255,0.10)",
+          backdropFilter: "blur(32px)", WebkitBackdropFilter: "blur(32px)",
+          borderRadius: 16,
+          boxShadow: "0 32px 80px rgba(0,0,0,0.65), 0 1px 0 rgba(255,255,255,0.07) inset",
+          fontFamily: FONT,
+          padding: "20px 24px 24px",
+        }}
+      >
+        {contenu}
       </div>
     </>
   );
