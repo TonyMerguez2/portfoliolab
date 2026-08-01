@@ -378,7 +378,8 @@ async def get_history(
 
     import yfinance as yf
 
-    from app.services.portfolio_history import courbe_portefeuille, twr_sur_fenetre, dietz_sur_fenetre
+    from app.services.portfolio_history import (courbe_portefeuille, twr_sur_fenetre,
+                                                dietz_sur_fenetre, simuler_benchmark)
 
     _get_portfolio_or_404(portfolio_id, db, user)
 
@@ -449,20 +450,33 @@ async def get_history(
     gain = dietz_sur_fenetre(resultat["points"], depart.isoformat())
     resultat["gain_eur"] = gain["gain_eur"]
     resultat["gain_pct"] = gain["gain_pct"]
+    # Les points complets (flux compris) servent encore à la simulation du
+    # repère ; ceux renvoyés au client en sont allégés.
+    points_complets = resultat["points"]
+    dernier_jour = points_complets[-1]["date"] if points_complets else depart.isoformat()
     resultat["points"] = [
         {k: v for k, v in p.items() if k not in ("ret", "flow")}
-        for p in resultat["points"] if p["date"] >= depart.isoformat()
+        for p in points_complets if p["date"] >= depart.isoformat()
     ]
     resultat["source"] = "transactions"
 
-    # Rendement du repère sur exactement la même fenêtre.
+    # Le repère, rejoué avec les mêmes versements aux mêmes dates.
+    #
+    # Opposer deux pourcentages laisse ouvert ce que l'épargnant aurait
+    # réellement eu : « mes fonds +9 %, l'indice +8 % » ne dit pas combien
+    # d'euros séparent les deux. Rejouer les flux répond en euros, sur le même
+    # calendrier et avec le même étalement.
     resultat["benchmark"] = _BENCHMARK
     resultat["benchmark_pct"] = None
-    if _BENCHMARK in brut and resultat["points"]:
+    resultat["benchmark_sim"] = {"value": None, "gain_eur": None, "gain_pct": None}
+    if _BENCHMARK in brut:
         serie = brut[_BENCHMARK].dropna()
+        cours_repere = {i.date(): float(v) for i, v in serie.items()}
+        resultat["benchmark_sim"] = simuler_benchmark(points_complets, cours_repere, depart.isoformat())
+
         bornes = [
-            float(v) for i, v in serie.items()
-            if depart.isoformat() <= i.date().isoformat() <= resultat["points"][-1]["date"]
+            v for d, v in sorted(cours_repere.items())
+            if depart.isoformat() <= d.isoformat() <= dernier_jour
         ]
         if len(bornes) >= 2 and bornes[0] > 0:
             resultat["benchmark_pct"] = round((bornes[-1] / bornes[0] - 1.0) * 100, 4)

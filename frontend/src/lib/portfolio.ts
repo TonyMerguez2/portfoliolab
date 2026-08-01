@@ -15,6 +15,16 @@ export type GridAsset = {
   spark?: number[];
   updatedAt?: number;
   type?: string;
+  /**
+   * Plus-value de la position depuis son achat, quand les écritures la
+   * donnent. Distincte de `change`, qui est la variation du cours sur la
+   * période affichée : sur la fenêtre Max, un ETF né en 2021 affichait
+   * « +520 % · +2 992 € » sur une ligne qui n'a jamais rapporté cela.
+   */
+  pnlEur?: number | null;
+  pnlPct?: number | null;
+  avgCost?: number | null;
+  quantity?: number | null;
 };
 
 export type SortKey = "poids" | "perf" | "valeur" | "alpha";

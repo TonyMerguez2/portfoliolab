@@ -213,3 +213,54 @@ def dietz_sur_fenetre(points: list[dict], depuis: str) -> dict:
         "gain_eur": round(gain, 4),
         "gain_pct": round(gain / base * 100, 4) if base > 1e-9 else None,
     }
+
+
+def simuler_benchmark(
+    points: list[dict],
+    cours_repere: dict[date, float],
+    depuis: str,
+) -> dict:
+    """
+    Rejoue les mêmes versements, aux mêmes dates, sur un indice.
+
+    Comparer deux pourcentages ne dit pas grand-chose quand les versements sont
+    étalés : « mes fonds ont fait +9 %, l'indice +8 % » laisse ouvert ce que
+    l'épargnant aurait réellement eu. Rejouer ses flux répond en euros, sur le
+    même calendrier et avec le même étalement — la seule comparaison qui parle.
+    """
+    fenetre = [p for p in points if p["date"] >= depuis]
+    if not fenetre:
+        return {"value": None, "gain_eur": None, "gain_pct": None}
+
+    def cours_le(jour: date) -> float | None:
+        p = cours_repere.get(jour)
+        if p is not None:
+            return p
+        # Dernière cotation connue avant ce jour : les places ne cotent pas les
+        # mêmes jours fériés, et un versement un lundi férié à New York reste
+        # un versement.
+        anterieurs = [d for d in cours_repere if d <= jour]
+        return cours_repere[max(anterieurs)] if anterieurs else None
+
+    quantite = 0.0
+    verse = 0.0
+    for p in fenetre:
+        f = p.get("flow", 0.0)
+        if not f:
+            continue
+        prix = cours_le(date.fromisoformat(p["date"]))
+        if not prix:
+            continue
+        quantite += f / prix
+        verse += f
+
+    prix_fin = cours_le(date.fromisoformat(fenetre[-1]["date"]))
+    if not prix_fin or verse <= 0:
+        return {"value": None, "gain_eur": None, "gain_pct": None}
+
+    valeur = quantite * prix_fin
+    return {
+        "value":    round(valeur, 4),
+        "gain_eur": round(valeur - verse, 4),
+        "gain_pct": round((valeur / verse - 1.0) * 100, 4),
+    }

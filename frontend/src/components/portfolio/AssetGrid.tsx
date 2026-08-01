@@ -237,14 +237,40 @@ export default function AssetGrid({
                 <div style={{ ...NUM, fontSize: 20, fontWeight: 700, color: "rgba(255,255,255,0.94)", lineHeight: 1.1 }}>
                   {a.price != null ? eur(a.price) : "—"}
                 </div>
-                <div style={{ ...NUM, fontSize: 12.5, fontWeight: 600, color: chg, marginTop: 3 }}>
-                  {a.change != null ? `${up ? "+" : ""}${a.change.toFixed(2)} %` : "—"}
-                  {a.perfEur != null && (
-                    <span style={{ opacity: 0.62, marginLeft: 5 }}>
-                      {up ? "+" : ""}{Math.round(a.perfEur).toLocaleString("fr-FR")} €
-                    </span>
-                  )}
-                </div>
+                {/* Ce que la ligne a rapporté depuis son achat, et non la
+                    variation du cours sur la période affichée. Sur la fenêtre
+                    Max, un ETF né en 2021 annonçait « +520 % · +2 992 € » sur
+                    une position ouverte en février, qui n'a jamais rapporté
+                    cela. On retombe sur la variation quand le prix de revient
+                    est inconnu — portefeuilles sans transactions. */}
+                {a.pnlEur != null ? (() => {
+                  const gagne = a.pnlEur >= 0;
+                  const col = gagne ? "#4ade80" : "#f87171";
+                  return (
+                    <div style={{ ...NUM, fontSize: 12.5, fontWeight: 600, color: col, marginTop: 3 }}>
+                      {gagne ? "+" : ""}{Math.round(a.pnlEur).toLocaleString("fr-FR")} €
+                      {a.pnlPct != null && (
+                        <span style={{ opacity: 0.62, marginLeft: 5 }}>
+                          {gagne ? "+" : ""}{a.pnlPct.toFixed(1)} %
+                        </span>
+                      )}
+                      {a.avgCost != null && (
+                        <span style={{ opacity: 0.42, marginLeft: 5, fontWeight: 500 }}>
+                          · PRU {eur(a.avgCost)}
+                        </span>
+                      )}
+                    </div>
+                  );
+                })() : (
+                  <div style={{ ...NUM, fontSize: 12.5, fontWeight: 600, color: chg, marginTop: 3 }}>
+                    {a.change != null ? `${up ? "+" : ""}${a.change.toFixed(2)} %` : "—"}
+                    {a.perfEur != null && (
+                      <span style={{ opacity: 0.62, marginLeft: 5 }}>
+                        {up ? "+" : ""}{Math.round(a.perfEur).toLocaleString("fr-FR")} €
+                      </span>
+                    )}
+                  </div>
+                )}
               </div>
 
               {/* Courbe sur toute la largeur, comme au concept : rangée à

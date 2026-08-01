@@ -15,7 +15,8 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 import pytest
 
-from app.services.portfolio_history import courbe_portefeuille, twr_sur_fenetre, dietz_sur_fenetre
+from app.services.portfolio_history import (courbe_portefeuille, twr_sur_fenetre,
+    dietz_sur_fenetre, simuler_benchmark)
 
 
 def tx(ticker, qty, prix, jour, side="BUY", fees=0.0):
@@ -262,3 +263,43 @@ class TestRendementDeLEpargnant:
         # dernier jour, ne pèse rien dans la base — qui vaut donc 100 €.
         assert g["gain_eur"] == pytest.approx(10.0)
         assert g["gain_pct"] == pytest.approx(10.0)
+
+
+class TestSimulationBenchmark:
+    def test_rejoue_les_memes_versements(self):
+        """Les mêmes sommes, aux mêmes dates, sur l'indice."""
+        pts = [
+            {"date": "2026-01-01", "value": 100.0, "flow": 100.0, "ret": 0.0},
+            {"date": "2026-01-02", "value": 200.0, "flow": 100.0, "ret": 0.0},
+        ]
+        # L'indice double entre les deux jours.
+        repere = {date(2026, 1, 1): 10.0, date(2026, 1, 2): 20.0}
+        r = simuler_benchmark(pts, repere, "2026-01-01")
+        # 100 € à 10 € → 10 parts ; 100 € à 20 € → 5 parts. 15 parts à 20 €.
+        assert r["value"] == pytest.approx(300.0)
+        assert r["gain_eur"] == pytest.approx(100.0)
+        assert r["gain_pct"] == pytest.approx(50.0)
+
+    def test_versement_tardif_ne_profite_pas_de_la_hausse(self):
+        """Un euro versé le dernier jour n'a rien gagné, sur l'indice non plus."""
+        pts = [
+            {"date": "2026-01-01", "value": 0.0, "flow": 0.0, "ret": 0.0},
+            {"date": "2026-01-02", "value": 100.0, "flow": 100.0, "ret": 0.0},
+        ]
+        repere = {date(2026, 1, 1): 10.0, date(2026, 1, 2): 20.0}
+        r = simuler_benchmark(pts, repere, "2026-01-01")
+        assert r["gain_eur"] == pytest.approx(0.0)
+
+    def test_cours_manquant_reprend_le_precedent(self):
+        """Paris et New York ne chôment pas les mêmes jours."""
+        pts = [{"date": "2026-01-02", "value": 100.0, "flow": 100.0, "ret": 0.0}]
+        repere = {date(2026, 1, 1): 10.0}          # rien au 2
+        r = simuler_benchmark(pts, repere, "2026-01-02")
+        assert r["value"] == pytest.approx(100.0)
+
+    def test_sans_versement(self):
+        pts = [{"date": "2026-01-01", "value": 0.0, "flow": 0.0, "ret": 0.0}]
+        assert simuler_benchmark(pts, {date(2026, 1, 1): 10.0}, "2026-01-01")["value"] is None
+
+    def test_fenetre_vide(self):
+        assert simuler_benchmark([], {}, "2026-01-01")["value"] is None

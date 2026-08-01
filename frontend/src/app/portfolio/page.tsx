@@ -357,6 +357,8 @@ function PortfolioPageInner() {
   const [repere, setRepere] = useState<number | null>(null);
   /** Ce que l'argent versé a rapporté sur la période : gain en euros et en %. */
   const [gain, setGain] = useState<{ eur: number; pct: number | null } | null>(null);
+  /** Les mêmes versements rejoués sur le S&P 500, aux mêmes dates. */
+  const [simRepere, setSimRepere] = useState<{ value: number; gain_eur: number; gain_pct: number } | null>(null);
   /** Date de la première transaction — l'origine du portefeuille. */
   const [origine, setOrigine] = useState<string | null>(null);
 
@@ -370,6 +372,7 @@ function PortfolioPageInner() {
       .then((d: {
         twr_pct?: number | null; benchmark_pct?: number | null; start?: string | null;
         gain_eur?: number | null; gain_pct?: number | null;
+        benchmark_sim?: { value: number | null; gain_eur: number | null; gain_pct: number | null };
       } | null) => {
         if (annule) return;
         setTwr(typeof d?.twr_pct === "number" ? d.twr_pct : null);
@@ -378,8 +381,13 @@ function PortfolioPageInner() {
         setGain(typeof d?.gain_eur === "number"
           ? { eur: d.gain_eur, pct: typeof d.gain_pct === "number" ? d.gain_pct : null }
           : null);
+        const sim = d?.benchmark_sim;
+        setSimRepere(sim && typeof sim.value === "number" && typeof sim.gain_eur === "number"
+          && typeof sim.gain_pct === "number"
+          ? { value: sim.value, gain_eur: sim.gain_eur, gain_pct: sim.gain_pct }
+          : null);
       })
-      .catch(() => { if (!annule) { setTwr(null); setRepere(null); setGain(null); } });
+      .catch(() => { if (!annule) { setTwr(null); setRepere(null); setGain(null); setSimRepere(null); } });
     return () => { annule = true; };
   }, [portfolio?.id, surTransactions, period, txRefreshKey]);
 
@@ -846,32 +854,52 @@ function PortfolioPageInner() {
         )}
       </div>
     )}
-    {/* Benchmark SPY */}
-    {reperePeriode != null && perfPeriode != null && (() => {
-      const diff    = perfPeriode - reperePeriode;
-      const diffCol = diff >= 0 ? "#4ade80" : "#f87171";
+    {/* Le repère, rejoué avec les mêmes versements aux mêmes dates.
+        Opposer deux pourcentages laissait ouvert ce que l'épargnant aurait
+        réellement eu ; en euros, la question ne se pose plus. */}
+    {simRepere != null && gain != null ? (() => {
+      const ecart = gain.eur - simRepere.gain_eur;
+      const col   = ecart >= 0 ? "#4ade80" : "#f87171";
       return (
         <div style={{ position: "relative", marginTop: 3 }}
           onMouseEnter={() => setActiveTooltip("spy")}
           onMouseLeave={() => setActiveTooltip(null)}>
           <div style={{ fontSize: 10, color: "rgba(255,255,255,0.40)", fontFamily: FONT, cursor: "default" }}>
             vs S&amp;P 500&nbsp;
-            <span style={{ color: diffCol, fontWeight: 700 }}>{diff >= 0 ? "+" : ""}{diff.toFixed(2)}%</span>
+            <span style={{ color: col, fontWeight: 700 }}>
+              {ecart >= 0 ? "+" : ""}{Math.round(ecart).toLocaleString("fr-FR")} €
+            </span>
           </div>
           {activeTooltip === "spy" && (
             <div style={{
-              position: "absolute", bottom: "calc(100% + 6px)", left: 0, zIndex: 50, width: 230,
+              position: "absolute", bottom: "calc(100% + 6px)", left: 0, zIndex: 50, width: 252,
               background: "rgba(4,17,36,0.97)", border: "1px solid rgba(255,255,255,0.10)",
-              borderRadius: 8, padding: "8px 10px", boxShadow: "0 8px 24px rgba(0,0,0,0.50)",
+              borderRadius: 8, padding: "9px 11px", boxShadow: "0 8px 24px rgba(0,0,0,0.50)",
               pointerEvents: "none",
             }}>
-              <span style={{ fontSize: 10, color: "rgba(255,255,255,0.62)", lineHeight: 1.55 }}>
-                Vos fonds&nbsp;
-                {diff >= 0 ? "font mieux que" : "font moins bien que"}&nbsp;
-                le S&amp;P 500 de {Math.abs(diff).toFixed(2)} points sur la même période.
+              <span style={{ fontSize: 10, color: "rgba(255,255,255,0.62)", lineHeight: 1.6 }}>
+                Vos versements, aux mêmes dates, placés sur le S&amp;P 500 vaudraient{" "}
+                <b style={{ color: "rgba(255,255,255,0.85)" }}>
+                  {Math.round(simRepere.value).toLocaleString("fr-FR")} €
+                </b>{" "}
+                — soit {simRepere.gain_eur >= 0 ? "+" : ""}
+                {Math.round(simRepere.gain_eur).toLocaleString("fr-FR")} € de gain.
+                Vous {ecart >= 0 ? "faites mieux" : "faites moins bien"} de{" "}
+                {Math.abs(Math.round(ecart)).toLocaleString("fr-FR")} €.
               </span>
             </div>
           )}
+        </div>
+      );
+    })() : reperePeriode != null && perfPeriode != null && (() => {
+      // Sans transactions, on ne peut pas rejouer de versements : on retombe
+      // sur l'écart de pourcentages.
+      const diff    = perfPeriode - reperePeriode;
+      const diffCol = diff >= 0 ? "#4ade80" : "#f87171";
+      return (
+        <div style={{ marginTop: 3, fontSize: 10, color: "rgba(255,255,255,0.40)", fontFamily: FONT }}>
+          vs S&amp;P 500&nbsp;
+          <span style={{ color: diffCol, fontWeight: 700 }}>{diff >= 0 ? "+" : ""}{diff.toFixed(2)}%</span>
         </div>
       );
     })()}
@@ -967,6 +995,10 @@ function PortfolioPageInner() {
                   updatedAt: priceUpdatedAt[a.ticker],
                   value:     a.value,
                   perfEur:   a.perfEur,
+                  pnlEur:    a.pnlEur,
+                  pnlPct:    a.invested && a.pnlEur != null ? (a.pnlEur / a.invested) * 100 : null,
+                  avgCost:   a.avgCost,
+                  quantity:  a.quantity,
                 }))}
                 onAssetClick={ticker => router.push(`/chart?ticker=${encodeURIComponent(ticker)}`)}
                 view={view}
