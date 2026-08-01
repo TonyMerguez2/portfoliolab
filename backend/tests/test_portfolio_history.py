@@ -316,3 +316,43 @@ class TestSimulationBenchmark:
 
     def test_fenetre_vide(self):
         assert simuler_benchmark([], {}, "2026-01-01")["value"] is None
+
+
+class TestCoursManquants:
+    def test_signale_un_titre_sans_cours(self):
+        """
+        Un titre détenu sans cours ne vaut pas zéro : il vaut une valeur qu'on
+        ignore.
+
+        L'omettre silencieusement de la somme donnait une courbe fausse et
+        muette — sur un téléchargement partiel, un portefeuille de 5 134 €
+        s'affichait à 1 568 €, soit une perte de 3 392 € inexistante.
+        """
+        d = jours(date(2026, 1, 1), 2)
+        cours = {"A": {j: 10.0 for j in d}}          # rien pour B
+        r = courbe_portefeuille(
+            [tx("A", 10, 10.0, d[0]), tx("B", 10, 10.0, d[0])], cours, d)
+        assert r["sans_cours"] == ["B"]
+
+    def test_aucun_signalement_quand_tout_est_connu(self):
+        d = jours(date(2026, 1, 1), 2)
+        cours = {"A": {j: 10.0 for j in d}, "B": {j: 10.0 for j in d}}
+        r = courbe_portefeuille(
+            [tx("A", 10, 10.0, d[0]), tx("B", 10, 10.0, d[0])], cours, d)
+        assert r["sans_cours"] == []
+
+    def test_un_trou_ponctuel_ne_compte_pas(self):
+        """Un jour férié se comble par report ; ce n'est pas un cours manquant."""
+        d = jours(date(2026, 1, 1), 3)
+        cours = {"A": {d[0]: 10.0, d[2]: 11.0}}      # d[1] absent
+        r = courbe_portefeuille([tx("A", 10, 10.0, d[0])], cours, d)
+        assert r["sans_cours"] == []
+
+    def test_position_soldee_sans_cours_ne_compte_pas(self):
+        """Un titre vendu en totalité n'est plus détenu : son cours est sans objet."""
+        d = jours(date(2026, 1, 1), 3)
+        cours = {"A": {j: 10.0 for j in d}}
+        r = courbe_portefeuille(
+            [tx("A", 10, 10.0, d[0]),
+             tx("B", 5, 10.0, d[0]), tx("B", 5, 10.0, d[0], side="SELL")], cours, d)
+        assert r["sans_cours"] == []

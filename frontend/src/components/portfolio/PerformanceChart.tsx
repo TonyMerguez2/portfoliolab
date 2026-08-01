@@ -124,6 +124,8 @@ export default function PerformanceChart({
   const [mode, setMode] = useState<"ligne" | "bougie">("ligne");
   /** Date de la première transaction, quand la courbe en vient. */
   const [origine, setOrigine] = useState<string | null>(null);
+  /** Titres détenus dont le cours n'a pas pu être établi. */
+  const [sansCours, setSansCours] = useState<string[]>([]);
 
   // ── Données ────────────────────────────────────────────────────────────────
   const key = assets.map(a => `${a.ticker}:${a.weight}`).join(",");
@@ -138,11 +140,15 @@ export default function PerformanceChart({
       : `${API}/api/v1/portfolio-history?tickers=${encodeURIComponent(tickers)}&weights=${encodeURIComponent(weights)}&period=${PERIOD_API[period]}`;
     fetch(url, { headers: enTetesAuth() })
       .then(r => r.json())
-      .then((d: { points?: HistoryPoint[]; start?: string | null }) => {
+      .then((d: { points?: HistoryPoint[]; start?: string | null; sans_cours?: string[] }) => {
         if (cancelled) return;
         const pts = Array.isArray(d.points) ? d.points : [];
         setPoints(pts);
         if (d.start) setOrigine(d.start);
+        // Le serveur refuse de tracer plutôt que d'omettre un titre dont le
+        // cours manque : il vaudrait alors zéro dans la somme, et la courbe
+        // montrerait une perte inexistante. On dit lequel.
+        setSansCours(Array.isArray(d.sans_cours) ? d.sans_cours : []);
         setState(pts.length ? "idle" : "error");
       })
       .catch(() => { if (!cancelled) { setPoints([]); setState("error"); } });
@@ -518,7 +524,11 @@ export default function PerformanceChart({
             position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center",
             fontFamily: FONT, fontSize: 12, color: "rgba(248,249,252,0.35)", pointerEvents: "none",
           }}>
-            {state === "error" ? "Historique indisponible pour cette période" : "Chargement…"}
+            {state !== "error"
+              ? "Chargement…"
+              : sansCours.length
+                ? `Cours indisponible pour ${sansCours.join(", ")} — courbe masquée pour ne pas afficher une valeur fausse`
+                : "Historique indisponible pour cette période"}
           </div>
         ) : null}
       </div>

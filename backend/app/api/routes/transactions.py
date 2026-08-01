@@ -459,6 +459,18 @@ async def get_history(
         {k: v for k, v in p.items() if k not in ("ret", "flow")}
         for p in points_complets if p["date"] >= depart.isoformat()
     ]
+    # Un titre détenu sans cours rend la courbe fausse, pas incomplète : sa
+    # valeur manque à chaque point. Mieux vaut refuser que montrer une perte
+    # qui n'existe pas — un téléchargement partiel affichait 1 568 € sur un
+    # portefeuille de 5 134 €.
+    if resultat.get("sans_cours"):
+        logger.warning("history: cours indisponibles pour %s", resultat["sans_cours"])
+        return {
+            "points": [], "start": resultat.get("start"),
+            "twr_pct": None, "pnl_eur": None, "gain_eur": None, "gain_pct": None,
+            "source": "incomplet", "sans_cours": resultat["sans_cours"],
+        }
+
     resultat["source"] = "transactions"
 
     # Le repère, rejoué avec les mêmes versements aux mêmes dates.

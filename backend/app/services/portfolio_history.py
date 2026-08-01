@@ -82,13 +82,14 @@ def courbe_portefeuille(
     le calendrier retenu, croissant.
     """
     if not transactions:
-        return {"points": [], "twr_pct": None, "pnl_eur": None, "start": None}
+        return {"points": [], "twr_pct": None, "pnl_eur": None, "start": None, "sans_cours": []}
 
     deltas, flux = _quantites_et_flux(transactions)
     debut = min(deltas)
     jours = [j for j in jours if j >= debut]
     if not jours:
-        return {"points": [], "twr_pct": None, "pnl_eur": None, "start": debut.isoformat()}
+        return {"points": [], "twr_pct": None, "pnl_eur": None,
+                "start": debut.isoformat(), "sans_cours": []}
 
     quantites: dict[str, float] = {}
     dernier: dict[str, float] = {}
@@ -96,6 +97,10 @@ def courbe_portefeuille(
     facteur = 1.0          # produit des (1 + rendement) de chaque sous-période
     valeur_veille: float | None = None
     points: list[dict] = []
+    # Titres détenus dont aucun cours n'a pu être établi. Leur absence rend la
+    # courbe fausse, pas seulement incomplète : l'appelant doit pouvoir le
+    # savoir plutôt que d'afficher une perte inventée.
+    sans_cours: set[str] = set()
 
     for jour in jours:
         # Les opérations du jour prennent effet avant la valorisation du soir.
@@ -110,6 +115,12 @@ def courbe_portefeuille(
                 continue
             p = _cours_du_jour(cours, ticker, jour, dernier)
             if p is None:
+                # Un titre détenu sans cours connu ne vaut pas zéro : il vaut
+                # une valeur qu'on ignore. L'omettre de la somme produisait une
+                # courbe muette et fausse — sur un téléchargement partiel, un
+                # portefeuille de 5 134 € s'affichait à 1 568 €, soit une perte
+                # de 3 392 € qui n'existait pas.
+                sans_cours.add(ticker)
                 continue
             valeur += q * p
 
@@ -137,11 +148,12 @@ def courbe_portefeuille(
 
     valeur_finale = points[-1]["value"]
     return {
-        "points":   points,
-        "start":    debut.isoformat(),
-        "twr_pct":  round((facteur - 1.0) * 100, 4),
-        "pnl_eur":  round(valeur_finale - investi, 4),
-        "invested": round(investi, 4),
+        "points":     points,
+        "start":      debut.isoformat(),
+        "twr_pct":    round((facteur - 1.0) * 100, 4),
+        "pnl_eur":    round(valeur_finale - investi, 4),
+        "invested":   round(investi, 4),
+        "sans_cours": sorted(sans_cours),
     }
 
 
