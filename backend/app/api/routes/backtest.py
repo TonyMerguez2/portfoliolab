@@ -151,11 +151,14 @@ async def search_assets(q: str = "") -> dict:
             data = resp.json()
         quotes = data.get("quotes", [])
         results = []
-        for q in quotes:
-            qtype = q.get("quoteType", "")
+        # La boucle nommait sa variable `q`, comme la requête : après le
+        # premier tour, `q` désignait un résultat et non plus ce qui était
+        # cherché.
+        for item in quotes:
+            qtype = item.get("quoteType", "")
             if qtype not in ("EQUITY", "ETF", "CRYPTOCURRENCY", "MUTUALFUND"):
                 continue
-            exchange = q.get("exchange", "")
+            exchange = item.get("exchange", "")
             ALLOWED = {"NMS","NYQ","NGM","PCX","PAR","GER","FRA","LSE","AMS","EBS","TOR","ASX","STO","MIL","BRU"}
             if qtype in ("ETF","EQUITY") and exchange not in ALLOWED:
                 continue
@@ -164,19 +167,38 @@ async def search_assets(q: str = "") -> dict:
             elif exchange in ("PAR", "GER", "FRA", "LSE", "AMS", "EBS"): score = 2
             elif exchange in ("TOR", "ASX", "STO", "MIL", "BRU"): score = 1
             results.append({
-                "ticker": q.get("symbol", ""),
-                "name": q.get("longname") or q.get("shortname", ""),
+                "ticker": item.get("symbol", ""),
+                "name": item.get("longname") or item.get("shortname", ""),
                 "type": qtype,
                 "exchange": exchange,
                 "score": score,
-                "logo": q.get("logoUrl", "") or f"https://financialmodelingprep.com/image-stock/{q.get('symbol','')}.png",
+                "logo": item.get("logoUrl", "") or f"https://financialmodelingprep.com/image-stock/{item.get('symbol','')}.png",
             })
         results.sort(key=lambda x: x["score"], reverse=True)
         for r in results: r.pop("score", None)
-        return {"results": results[:8]}
+        return {"results": _avec_pea(q, results)}
     except Exception as e:
         logger.error(f"Search error: {e}")
-        return {"results": []}
+        # Le catalogue local reste utile quand Yahoo est injoignable.
+        return {"results": _avec_pea(q, [])}
+
+
+def _avec_pea(requete: str, resultats: list[dict]) -> list[dict]:
+    """
+    Place en tête les ETF PEA correspondants, sans doublon.
+
+    Yahoo n'indexe pas l'indice suivi par ces fonds — il ne figure qu'entre
+    parenthèses dans leur nom commercial —, si bien qu'une recherche par indice
+    ne les trouvait pas du tout.
+    """
+    from app.data.pea_etfs import chercher
+
+    locaux = chercher(requete)
+    if not locaux:
+        return resultats[:8]
+
+    connus = {e["ticker"] for e in locaux}
+    return (locaux + [r for r in resultats if r["ticker"] not in connus])[:8]
 
 
 @router.get("/sector/{ticker}", tags=["Search"])
