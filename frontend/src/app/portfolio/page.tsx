@@ -353,6 +353,10 @@ function PortfolioPageInner() {
    * sur tout l'historique » à côté d'un « Total +175 € » exact.
    */
   const [twr, setTwr] = useState<number | null>(null);
+  /** Rendement du S&P 500 sur exactement la même fenêtre. */
+  const [repere, setRepere] = useState<number | null>(null);
+  /** Date de la première transaction — l'origine du portefeuille. */
+  const [origine, setOrigine] = useState<string | null>(null);
 
   useEffect(() => {
     const id = portfolio?.id;
@@ -361,10 +365,13 @@ function PortfolioPageInner() {
     fetch(`http://localhost:8000/api/v1/portfolios/${id}/history?period=${PERIOD_MAP[period]}`,
           { headers: enTetesAuth() })
       .then(r => (r.ok ? r.json() : null))
-      .then((d: { twr_pct?: number | null } | null) => {
-        if (!annule) setTwr(typeof d?.twr_pct === "number" ? d.twr_pct : null);
+      .then((d: { twr_pct?: number | null; benchmark_pct?: number | null; start?: string | null } | null) => {
+        if (annule) return;
+        setTwr(typeof d?.twr_pct === "number" ? d.twr_pct : null);
+        setRepere(typeof d?.benchmark_pct === "number" ? d.benchmark_pct : null);
+        setOrigine(d?.start ?? null);
       })
-      .catch(() => { if (!annule) setTwr(null); });
+      .catch(() => { if (!annule) { setTwr(null); setRepere(null); } });
     return () => { annule = true; };
   }, [portfolio?.id, surTransactions, period, txRefreshKey]);
 
@@ -493,6 +500,28 @@ function PortfolioPageInner() {
   const perfPeriode = surTransactions ? twr : weightedChange;
   const isUp       = (perfPeriode ?? 0) >= 0;
   const perfColor  = isUp ? "#4ade80" : "#f87171";
+
+  /**
+   * Repère de comparaison, mesuré sur la même fenêtre que le portefeuille.
+   *
+   * Il était relevé à part, sur la période nominale : « Max » donnait au S&P
+   * 500 ses trente ans d'historique face à six mois de détention, d'où un
+   * « vs S&P 500 −2 500 % » qui ne comparait rien.
+   */
+  const reperePeriode = surTransactions ? repere : spyChange;
+
+  /**
+   * Libellé de la période.
+   *
+   * « Sur tout l'historique » laissait entendre une profondeur que le
+   * portefeuille n'a pas : sur Max, la fenêtre commence à la première
+   * transaction. Autant la nommer.
+   */
+  const libellePeriode = period === "24h"
+    ? "Aujourd'hui"
+    : period === "Max" && origine
+      ? `Depuis le ${new Date(origine).toLocaleDateString("fr-FR", { day: "numeric", month: "long", year: "numeric" })}`
+      : `Sur ${PERIOD_LABEL[period]}`;
 
   const topPerformers    = [...enriched].filter(a => a.change !== null)
     .sort((a, b) => (b.change ?? 0) - (a.change ?? 0)).slice(0, 5);
@@ -684,7 +713,7 @@ function PortfolioPageInner() {
         un gain d'un an comme s'il datait du matin. */}
     {valeurTotale != null && perfPeriode != null && (
       <div style={{ fontSize: 11, fontFamily: FONT, color: perfPeriode >= 0 ? "#4ade80" : "#f87171", fontWeight: 600 }}>
-        {period === "24h" ? "Aujourd'hui" : `Sur ${PERIOD_LABEL[period]}`}&nbsp;
+        {libellePeriode}&nbsp;
         <span>
             {perfPeriode >= 0 ? "+" : ""}
             {Math.round(
@@ -761,8 +790,8 @@ function PortfolioPageInner() {
         <div style={{ minWidth: 120 }}>
           <p style={{ margin: "0 0 4px", fontSize: 11.5, fontWeight: 500, color: "rgba(255,255,255,0.55)" }}>Comparaison</p>
     {/* Benchmark SPY */}
-    {spyChange != null && weightedChange != null && (() => {
-      const diff    = weightedChange - spyChange;
+    {reperePeriode != null && perfPeriode != null && (() => {
+      const diff    = perfPeriode - reperePeriode;
       const diffCol = diff >= 0 ? "#4ade80" : "#f87171";
       return (
         <div style={{ position: "relative", marginTop: 3 }}

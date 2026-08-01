@@ -349,6 +349,9 @@ async def get_positions(
 
 # Fenêtres de téléchargement, généreuses : la courbe est ensuite coupée à la
 # première transaction, qui commande le vrai début.
+# Repère de comparaison : le S&P 500, via son ETF le plus liquide.
+_BENCHMARK = "SPY"
+
 _HISTO_JOURS = {
     "7d": 7, "1mo": 31, "3mo": 92, "6mo": 183,
     "1y": 366, "3y": 1096, "max": None,
@@ -393,9 +396,13 @@ async def get_history(
     depart = debut_reel if jours is None else max(debut_reel, date.today() - timedelta(days=jours))
 
     tickers = sorted({t.ticker for t in txs})
+    # Le repère est téléchargé avec le reste, sur la même fenêtre : le mesurer
+    # séparément revenait à comparer six mois de détention aux trente ans du
+    # S&P 500, soit « vs S&P 500 −2 500 % ».
+    a_charger = tickers + [_BENCHMARK]
     try:
         brut = yf.download(
-            tickers, start=debut_reel - timedelta(days=7),
+            a_charger, start=debut_reel - timedelta(days=7),
             progress=False, auto_adjust=True, threads=True,
         )["Close"]
     except Exception as exc:                                  # pragma: no cover
@@ -406,8 +413,8 @@ async def get_history(
         return {"points": [], "start": debut_reel.isoformat(), "twr_pct": None, "pnl_eur": None}
 
     # yfinance rend une Series pour un ticker unique, un DataFrame au-delà.
-    if len(tickers) == 1:
-        brut = brut.to_frame(tickers[0])
+    if len(a_charger) == 1:
+        brut = brut.to_frame(a_charger[0])
 
     cours: dict[str, dict] = {}
     for tk in tickers:
@@ -442,4 +449,17 @@ async def get_history(
         for p in resultat["points"] if p["date"] >= depart.isoformat()
     ]
     resultat["source"] = "transactions"
+
+    # Rendement du repère sur exactement la même fenêtre.
+    resultat["benchmark"] = _BENCHMARK
+    resultat["benchmark_pct"] = None
+    if _BENCHMARK in brut and resultat["points"]:
+        serie = brut[_BENCHMARK].dropna()
+        bornes = [
+            float(v) for i, v in serie.items()
+            if depart.isoformat() <= i.date().isoformat() <= resultat["points"][-1]["date"]
+        ]
+        if len(bornes) >= 2 and bornes[0] > 0:
+            resultat["benchmark_pct"] = round((bornes[-1] / bornes[0] - 1.0) * 100, 4)
+
     return resultat

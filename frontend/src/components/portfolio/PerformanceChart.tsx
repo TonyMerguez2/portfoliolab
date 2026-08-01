@@ -122,6 +122,8 @@ export default function PerformanceChart({
   const [state, setState] = useState<"idle" | "loading" | "error">("loading");
   const [survol, setSurvol] = useState<{ valeur: number; date: string } | null>(null);
   const [mode, setMode] = useState<"ligne" | "bougie">("ligne");
+  /** Date de la première transaction, quand la courbe en vient. */
+  const [origine, setOrigine] = useState<string | null>(null);
 
   // ── Données ────────────────────────────────────────────────────────────────
   const key = assets.map(a => `${a.ticker}:${a.weight}`).join(",");
@@ -136,10 +138,11 @@ export default function PerformanceChart({
       : `${API}/api/v1/portfolio-history?tickers=${encodeURIComponent(tickers)}&weights=${encodeURIComponent(weights)}&period=${PERIOD_API[period]}`;
     fetch(url, { headers: enTetesAuth() })
       .then(r => r.json())
-      .then((d: { points?: HistoryPoint[] }) => {
+      .then((d: { points?: HistoryPoint[]; start?: string | null }) => {
         if (cancelled) return;
         const pts = Array.isArray(d.points) ? d.points : [];
         setPoints(pts);
+        if (d.start) setOrigine(d.start);
         setState(pts.length ? "idle" : "error");
       })
       .catch(() => { if (!cancelled) { setPoints([]); setState("error"); } });
@@ -440,11 +443,20 @@ export default function PerformanceChart({
           {PERIODES.map(p => {
             const actif = p === period;
             const pct = rendements[p];
+            // Une fenêtre plus ancienne que le portefeuille se replie sur son
+            // origine et répète le chiffre de Max. Trois nombres identiques
+            // laissent croire à trois mesures : mieux vaut les éteindre.
+            const secs = PERIOD_SECS[p];
+            const anterieure = !!origine && secs != null
+              && Date.now() - secs * 1000 < new Date(origine).getTime();
             return (
-              <div key={p} onClick={() => onPeriodChange(p)}
-                style={{ position: "relative", paddingBottom: 4, textAlign: "center", width: 46, cursor: "pointer", flex: "none" }}>
+              <div key={p} onClick={() => { if (!anterieure) onPeriodChange(p); }}
+                title={anterieure ? `Le portefeuille n'existe que depuis le ${new Date(origine!).toLocaleDateString("fr-FR")}` : undefined}
+                style={{ position: "relative", paddingBottom: 4, textAlign: "center", width: 46,
+                         cursor: anterieure ? "default" : "pointer", flex: "none",
+                         opacity: anterieure ? 0.3 : 1 }}>
                 <div style={{ fontFamily: FONT, fontSize: 12, fontWeight: 600, color: actif ? encre : "#94a3b8" }}>{p}</div>
-                {pct != null && (
+                {pct != null && !anterieure && (
                   <div style={{
                     ...NUM, fontSize: 11, fontWeight: 700,
                     color: pct >= 0 ? "#10b981" : "#ef4444",
