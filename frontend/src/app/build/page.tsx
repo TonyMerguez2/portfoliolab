@@ -233,6 +233,8 @@ export default function BuildPage() {
     const [priceError, setPriceError] = useState<string[]>([]);
     const [savedPortId, setSavedPortId] = useState<string | null>(null);
     const [lignesEchouees, setLignesEchouees] = useState<DraftTx[]>([]);
+    /** Vrai quand l'enregistrement s'arrête faute de session valide. */
+    const [sessionExpiree, setSessionExpiree] = useState(false);
     const [presetHover, setPresetHover] = useState<Preset | null>(null);
     const [hoverPos, setHoverPos] = useState({
         x: 0,
@@ -508,10 +510,14 @@ export default function BuildPage() {
             setRepartition(false);
         }
     };
-    /** Envoie les écritures saisies. Renvoie celles qui ont échoué. */
+    /** Envoie les écritures saisies. Retient celles qui ont échoué. */
     const envoyerLignes = async (portfolioId: string, aEnvoyer: DraftTx[])=>{
         const token = typeof window !== "undefined" ? localStorage.getItem("novac_token") : null;
         const errors: { ticker: string; error: string }[] = [];
+        // Les échecs sont repérés par rang, pas par ticker : un même actif peut
+        // porter plusieurs écritures, et rejouer celles qui sont déjà passées
+        // les créerait en double.
+        const echouees: DraftTx[] = [];
         setSavePhase("progress");
         setTxProgress({
             done: 0,
@@ -542,14 +548,18 @@ export default function BuildPage() {
                     const err = await res.json().catch(()=>({}));
                     errors.push({
                         ticker: tx.ticker,
-                        error: err.detail || "Erreur"
+                        error: res.status === 401
+                            ? "Session expirée — reconnectez-vous"
+                            : err.detail || "Erreur ".concat(String(res.status))
                     });
+                    echouees.push(tx);
                 }
             } catch (e) {
                 errors.push({
                     ticker: tx.ticker,
                     error: "Erreur r\xe9seau"
                 });
+                echouees.push(tx);
             }
             setTxProgress((prev: any) =>prev ? {
                     ...prev,
@@ -559,7 +569,7 @@ export default function BuildPage() {
         setTxErrors(errors);
         if (errors.length > 0) {
             setSavePhase("tx_errors");
-            setLignesEchouees(aEnvoyer.filter((t)=>errors.some((e)=>e.ticker === t.ticker)));
+            setLignesEchouees(echouees);
         } else {
             setShowSave(false);
             setPortfolioName("");
@@ -577,8 +587,35 @@ export default function BuildPage() {
     const savePortfolio = async ()=>{
         if (!portfolioName.trim() || assets.length === 0) return;
         if (!isSimulation && lignes.length === 0) return;
+
+        // Vérifier la session avant de créer quoi que ce soit.
+        //
+        // La création d'un portefeuille ne demande pas de jeton, l'écriture des
+        // transactions si. Enchaîner les deux sans contrôle laissait un
+        // portefeuille vide derrière chaque échec d'authentification, et il
+        // fallait le découvrir au dernier écran.
+        if (!isSimulation) {
+            const token = typeof window !== "undefined" ? localStorage.getItem("novac_token") : null;
+            if (!token) {
+                setSessionExpiree(true);
+                return;
+            }
+            try {
+                const contr = await fetch("".concat(API_URL, "/api/v1/auth/me"), {
+                    headers: { Authorization: "Bearer ".concat(token) }
+                });
+                if (!contr.ok) {
+                    setSessionExpiree(true);
+                    return;
+                }
+            } catch (e) {
+                // Backend injoignable : on laisse la suite échouer et le dire.
+            }
+        }
+
         setSaving(true);
         setPriceError([]);
+        setSessionExpiree(false);
         try {
             // Le capital réellement engagé se lit sur les écritures, pas sur une
             // saisie séparée : les deux finiraient par diverger.
@@ -1699,10 +1736,9 @@ export default function BuildPage() {
                                                     color: "rgba(255,255,255,0.60)",
                                                     fontWeight: 600
                                                 }}>
-      {lignes.length - txErrors.length}
-       / 
-      {lignes.length}
-       transactions créées
+      {/* Interpolé plutôt que découpé en nœuds de texte : JSX rogne les
+          espaces de bord de ligne, ce qui donnait « 0/3transactions créées ». */}
+      {`${lignes.length - txErrors.length} / ${lignes.length} transactions créées`}
     </p>
     <p style={{
                                                     margin: "0 0 8px",
@@ -1711,15 +1747,14 @@ export default function BuildPage() {
                                                 }}>
       Échouées :
     </p>
-    {txErrors.map((e: any)=><div key={e.ticker} style={{
+    {/* Indexé : un même ticker peut échouer sur plusieurs écritures, et deux
+        clés identiques feraient disparaître des lignes de la liste. */}
+    {txErrors.map((e: any, i: number)=><div key={i} style={{
                                                         fontSize: "10px",
                                                         color: "#fca5a5",
                                                         marginBottom: "3px"
                                                     }}>
-  • 
-  {e.ticker}
-   — 
-  {e.error}
+  {`• ${e.ticker} — ${e.error}`}
 </div>)}
   </div>
   <div style={{
@@ -1771,6 +1806,18 @@ export default function BuildPage() {
     </button>
   </div>
 </div>}
+    {savePhase === "form" && sessionExpiree && <div style={{
+                                    marginBottom: "14px", padding: "12px 14px", borderRadius: "10px",
+                                    background: "rgba(251,191,36,0.09)", border: "1px solid rgba(251,191,36,0.28)"
+                                }}>
+      <p style={{ margin: "0 0 4px", fontSize: "12px", fontWeight: 600, color: "#fcd34d" }}>
+        Vous n&apos;êtes pas connecté
+      </p>
+      <p style={{ margin: 0, fontSize: "11px", color: "rgba(255,255,255,0.45)", lineHeight: 1.6 }}>
+        Les transactions sont rattachées à votre compte. Connectez-vous depuis le
+        menu de profil, puis relancez l&apos;enregistrement — vos {lignes.length} écriture{lignes.length > 1 ? "s" : ""} sont conservées.
+      </p>
+    </div>}
     {savePhase === "form" && <div style={{
                                     display: "flex",
                                     gap: "10px",
