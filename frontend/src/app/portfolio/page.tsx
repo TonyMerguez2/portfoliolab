@@ -14,6 +14,7 @@ import PortfolioTabs from "@/components/portfolio/PortfolioTabs";
 import { donutArcs } from "@/lib/donut";
 import { valoriser } from "@/lib/portfolio";
 import { enTetesAuth } from "@/lib/session";
+import { typesParOperation, COULEUR_OP, LIBELLE_OP, type Tx } from "@/lib/journal";
 import { FONT } from "@/lib/typography";
 import type { Period } from "@/lib/chart/portfolioCurve";
 
@@ -357,6 +358,36 @@ function PortfolioPageInner() {
   const [repere, setRepere] = useState<number | null>(null);
   /** Ce que l'argent versé a rapporté sur la période : gain en euros et en %. */
   const [gain, setGain] = useState<{ eur: number; pct: number | null } | null>(null);
+  /**
+   * Les écritures jalonnées sur la courbe, comme dans l'onglet Transactions.
+   *
+   * La même courbe sur deux onglets voisins doit porter les mêmes repères :
+   * sans eux, on ne distingue pas une hausse due au marché d'une hausse due à
+   * un versement.
+   */
+  const [reperesOperations, setReperesOperations] = useState<
+    { id: number; ticker: string; executed_at: string; type: string; couleur: string; libelle: string }[]
+  >([]);
+
+  useEffect(() => {
+    const id = portfolio?.id;
+    if (!id || !surTransactions) { setReperesOperations([]); return; }
+    let annule = false;
+    fetch(`http://localhost:8000/api/v1/portfolios/${id}/transactions`, { headers: enTetesAuth() })
+      .then(r => (r.ok ? r.json() : null))
+      .then((d) => {
+        if (annule) return;
+        const liste: Tx[] = Array.isArray(d) ? d : (d?.transactions ?? []);
+        const types = typesParOperation(liste);
+        setReperesOperations(liste.map(t => ({
+          id: t.id, ticker: t.ticker, executed_at: t.executed_at,
+          type: types[t.id], couleur: COULEUR_OP[types[t.id]], libelle: LIBELLE_OP[types[t.id]],
+        })));
+      })
+      .catch(() => { if (!annule) setReperesOperations([]); });
+    return () => { annule = true; };
+  }, [portfolio?.id, surTransactions, txRefreshKey]);
+
   /** Les mêmes versements rejoués sur le S&P 500, aux mêmes dates. */
   const [simRepere, setSimRepere] = useState<{ value: number; gain_eur: number; gain_pct: number } | null>(null);
   /** Date de la première transaction — l'origine du portefeuille. */
@@ -955,6 +986,7 @@ function PortfolioPageInner() {
               color={portfolio?.color || "#5B8DEF"}
               portfolioId={portfolio?.id}
               surTransactions={surTransactions}
+              operations={reperesOperations}
             />
             </div>
           </div>

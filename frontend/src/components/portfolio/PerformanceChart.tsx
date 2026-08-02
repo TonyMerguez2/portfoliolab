@@ -1,8 +1,9 @@
 "use client";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
-  createChart, AreaSeries, CandlestickSeries, ColorType, CrosshairMode, LineStyle,
-  type IChartApi, type ISeriesApi, type UTCTimestamp,
+  createChart, createSeriesMarkers, AreaSeries, CandlestickSeries, ColorType,
+  CrosshairMode, LineStyle,
+  type IChartApi, type ISeriesApi, type ISeriesMarkersPluginApi, type Time, type UTCTimestamp,
 } from "lightweight-charts";
 import type { HistoryPoint, Period } from "@/lib/chart/portfolioCurve";
 import { FONT, NUM } from "@/lib/typography";
@@ -89,7 +90,7 @@ const PERIOD_SECS: Record<Period, number | null> = {
 
 export default function PerformanceChart({
   assets, totalValue, period, onPeriodChange, color = "#5B8DEF", height,
-  portfolioId, surTransactions = false,
+  portfolioId, surTransactions = false, operations = [],
 }: {
   assets: { ticker: string; weight: number }[];
   totalValue: number | null;
@@ -109,6 +110,12 @@ export default function PerformanceChart({
    * l'historique ».
    */
   surTransactions?: boolean;
+  /**
+   * Opérations à jalonner sur la courbe. Une pastille par écriture, à sa date,
+   * de la couleur de son type — un versement ne se lit pas sur la courbe seule,
+   * qui monte aussi bien parce qu'on a versé que parce que le marché a monté.
+   */
+  operations?: { id: number; ticker: string; executed_at: string; type: string; couleur: string; libelle: string }[];
 }) {
   const boxRef = useRef<HTMLDivElement>(null);
   const plotRef = useRef<HTMLDivElement>(null);
@@ -116,6 +123,7 @@ export default function PerformanceChart({
   const chartRef = useRef<IChartApi | null>(null);
   const serieRef = useRef<ISeriesApi<"Area"> | null>(null);
   const bougieRef = useRef<ISeriesApi<"Candlestick"> | null>(null);
+  const reperesRef = useRef<ISeriesMarkersPluginApi<Time> | null>(null);
   const colorRef = useRef(color);
 
   const [points, setPoints] = useState<HistoryPoint[]>([]);
@@ -253,6 +261,7 @@ export default function PerformanceChart({
     chartRef.current = chart;
     serieRef.current = serie;
     bougieRef.current = bougies;
+    reperesRef.current = createSeriesMarkers(serie, []);
 
     // Halo de survol : la portion de courbe sous le curseur est repeinte en
     // flou coloré puis d'un trait blanc fin, découpée à une fenêtre autour du
@@ -377,6 +386,33 @@ export default function PerformanceChart({
     // agrégées, donc bien moins nombreuses que les points de la ligne. Régler
     // la fenêtre sur le compte de la ligne tassait soixante bougies dans le
     // premier vingtième du tracé.
+    // Repères des opérations, calés sur un horodatage réellement présent dans
+    // la série : lightweight-charts ignore silencieusement un repère posé sur
+    // une date absente, et une écriture d'un jour férié disparaîtrait.
+    if (reperesRef.current) {
+      const horodatages = (mode === "bougie" ? bougies : data).map(d => d.time);
+      const cale = (t: number): UTCTimestamp | null => {
+        for (const h of horodatages) if (h >= t) return h;
+        return null;
+      };
+      const marques = operations
+        .map(op => {
+          const t = Math.floor(new Date(op.executed_at).getTime() / 1000);
+          const h = cale(t);
+          return h == null ? null : {
+            time: h,
+            position: "belowBar" as const,
+            color: op.couleur,
+            shape: "circle" as const,
+            text: "",
+            id: String(op.id),
+          };
+        })
+        .filter((m): m is NonNullable<typeof m> => m !== null)
+        .sort((a, b) => (a.time as number) - (b.time as number));
+      reperesRef.current.setMarkers(marques);
+    }
+
     const nbBarres = mode === "bougie" ? bougies.length : data.length;
     // Cadrage sur les horodatages réels plutôt que `fitContent()`.
     //
@@ -411,7 +447,7 @@ export default function PerformanceChart({
       return () => cancelAnimationFrame(id);
     }
     chart.timeScale().fitContent();
-  }, [points, totalValue, mode]);
+  }, [points, totalValue, mode, operations]);
 
   // L'heure ne s'affiche que sur la journée. Sur une série journalière,
   // `timeVisible` intercalait des numéros de jour entre les noms de mois —

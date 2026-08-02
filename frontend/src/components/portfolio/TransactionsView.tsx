@@ -3,6 +3,8 @@ import { useEffect, useMemo, useState } from "react";
 import AssetLogo from "@/components/AssetLogo";
 import { FONT, NUM } from "@/lib/typography";
 import { enTetesAuth } from "@/lib/session";
+import PerformanceChart from "@/components/portfolio/PerformanceChart";
+import type { Period } from "@/lib/chart/portfolioCurve";
 import {
   resume, resultats, repartitionTypes, typesParOperation, montant, parDate,
   LIBELLE_OP, COULEUR_OP, type Tx, type TypeOp,
@@ -20,12 +22,6 @@ const API = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
  */
 
 type Position = { ticker: string; current_price: number | null; current_value: number | null };
-
-const PERIODES = ["7J", "1M", "3M", "6M", "1A", "Tout"] as const;
-type Periode = (typeof PERIODES)[number];
-const PERIODE_API: Record<Periode, string> = {
-  "7J": "7d", "1M": "1mo", "3M": "3mo", "6M": "6mo", "1A": "1y", "Tout": "max",
-};
 
 const eur = (v: number, dec = 2) =>
   v.toLocaleString("fr-FR", { minimumFractionDigits: dec, maximumFractionDigits: dec }) + " €";
@@ -74,8 +70,7 @@ export default function TransactionsView({
 }) {
   const [txs, setTxs] = useState<Tx[]>([]);
   const [positions, setPositions] = useState<Position[]>([]);
-  const [courbe, setCourbe] = useState<{ date: string; value: number }[]>([]);
-  const [periode, setPeriode] = useState<Periode>("Tout");
+  const [periode, setPeriode] = useState<Period>("Max");
   const [choisie, setChoisie] = useState<number | null>(null);
   const [chargement, setChargement] = useState(true);
   const [confirme, setConfirme] = useState<number | null>(null);
@@ -105,17 +100,6 @@ export default function TransactionsView({
     });
     return () => { annule = true; };
   }, [portfolioId, refreshKey]);
-
-  useEffect(() => {
-    if (!portfolioId) return;
-    let annule = false;
-    fetch(`${API}/api/v1/portfolios/${portfolioId}/history?period=${PERIODE_API[periode]}`,
-          { headers: enTetesAuth() })
-      .then(r => (r.ok ? r.json() : null))
-      .then(d => { if (!annule) setCourbe(Array.isArray(d?.points) ? d.points : []); })
-      .catch(() => { if (!annule) setCourbe([]); });
-    return () => { annule = true; };
-  }, [portfolioId, periode, refreshKey]);
 
   /**
    * Supprime une écriture.
@@ -156,6 +140,14 @@ export default function TransactionsView({
   const parId    = useMemo(
     () => Object.fromEntries(resultat.map(r => [r.tx.id, r])), [resultat]);
 
+  /** Les écritures telles que le graphique les attend. */
+  const reperes = useMemo(
+    () => txs.map(t => ({
+      id: t.id, ticker: t.ticker, executed_at: t.executed_at,
+      type: types[t.id], couleur: COULEUR_OP[types[t.id]], libelle: LIBELLE_OP[types[t.id]],
+    })),
+    [txs, types]);
+
   const recentes = useMemo(() => parDate(txs).reverse(), [txs]);
   const detail   = choisie != null ? parId[choisie] : null;
   const valeurTotale = positions.reduce((s, p) => s + (p.current_value ?? 0), 0);
@@ -188,30 +180,23 @@ export default function TransactionsView({
       {/* ── Colonne principale ───────────────────────────────────────────── */}
       <div style={{ display: "flex", flexDirection: "column", gap: 12, minWidth: 0 }}>
 
-        <Carte style={{ height: 300 }}>
-          <Titre action={
-            <div style={{ display: "flex", gap: 4 }}>
-              {PERIODES.map(p => (
-                <button key={p} onClick={() => setPeriode(p)} style={{
-                  padding: "3px 9px", borderRadius: 7, cursor: "pointer", fontFamily: FONT,
-                  fontSize: 11, fontWeight: p === periode ? 700 : 500,
-                  border: `1px solid ${p === periode ? "rgba(91,141,239,0.40)" : "transparent"}`,
-                  background: p === periode ? "rgba(91,141,239,0.16)" : "transparent",
-                  color: p === periode ? "#9BB9FF" : "rgba(255,255,255,0.40)",
-                }}>{p}</button>
-              ))}
-            </div>
-          }>Évolution du portefeuille et transactions</Titre>
-
-          <CourbeAvecReperes
-            points={courbe}
-            operations={parDate(txs)}
-            types={types}
-            choisie={choisie}
-            onChoisir={setChoisie}
-          />
-
-          <div style={{ display: "flex", gap: 14, marginTop: 8, flexShrink: 0 }}>
+        {/* Le même graphique que la vue générale, jalonné des opérations.
+            Deux courbes différentes pour le même portefeuille, sur deux
+            onglets voisins, ne pouvaient que semer le doute. */}
+        <Carte style={{ height: 340 }}>
+          <Titre>Évolution du portefeuille et transactions</Titre>
+          <div style={{ flex: 1, minHeight: 0 }}>
+            <PerformanceChart
+              assets={positions.map(p => ({ ticker: p.ticker, weight: 0 }))}
+              totalValue={valeurTotale || null}
+              period={periode}
+              onPeriodChange={setPeriode}
+              portfolioId={portfolioId}
+              surTransactions
+              operations={reperes}
+            />
+          </div>
+          <div style={{ display: "flex", gap: 14, marginTop: 6, flexShrink: 0 }}>
             {(Object.keys(LIBELLE_OP) as TypeOp[]).map(t => (
               <span key={t} style={{ display: "flex", alignItems: "center", gap: 5, fontFamily: FONT, fontSize: 10.5, color: "rgba(255,255,255,0.42)" }}>
                 <i style={{ width: 7, height: 7, borderRadius: "50%", background: COULEUR_OP[t] }} />
@@ -221,13 +206,17 @@ export default function TransactionsView({
           </div>
         </Carte>
 
-        <div style={{ display: "grid", gridTemplateColumns: "260px 1fr", gap: 12, minHeight: 300 }}>
+        {/* Hauteur fixe, et non minimale : sans plafond, la timeline grandit
+            avec ses écritures au lieu de défiler, et le panneau de détail —
+            étiré à la même hauteur par la grille — se creuse d'un vide que
+            rien ne remplit. */}
+        <div style={{ display: "grid", gridTemplateColumns: "260px 1fr", gap: 12, height: 360 }}>
 
           {/* Timeline */}
           <Carte>
             <Titre>Timeline</Titre>
             <div style={{ overflowY: "auto", minHeight: 0, flex: 1 }}>
-              {recentes.slice(0, 30).map(t => {
+              {recentes.map(t => {
                 const type = types[t.id];
                 const actif = t.id === choisie;
                 return (
@@ -488,88 +477,6 @@ export default function TransactionsView({
           ))}
         </Carte>
       </div>
-    </div>
-  );
-}
-
-/**
- * Courbe de valeur, jalonnée des opérations.
- *
- * Tracée en SVG plutôt qu'avec la bibliothèque de graphiques : il faut poser
- * un repère cliquable à la date de chaque écriture, ce que l'API de séries ne
- * permet pas sans contorsion.
- */
-function CourbeAvecReperes({
-  points, operations, types, choisie, onChoisir,
-}: {
-  points: { date: string; value: number }[];
-  operations: Tx[];
-  types: Record<number, TypeOp>;
-  choisie: number | null;
-  onChoisir: (id: number) => void;
-}) {
-  const L = 1000, H = 150, marge = 6;
-
-  if (points.length < 2) {
-    return (
-      <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center",
-        fontFamily: FONT, fontSize: 11.5, color: "rgba(255,255,255,0.25)" }}>
-        Pas assez d&apos;historique pour tracer la courbe.
-      </div>
-    );
-  }
-
-  const vals = points.map(p => p.value);
-  const min = Math.min(...vals), max = Math.max(...vals);
-  const etendue = max - min || 1;
-  const x = (i: number) => (i / (points.length - 1)) * L;
-  const y = (v: number) => marge + (1 - (v - min) / etendue) * (H - 2 * marge);
-
-  const d = points.map((p, i) => `${i ? "L" : "M"}${x(i).toFixed(1)},${y(p.value).toFixed(1)}`).join(" ");
-  const aire = `${d} L${L},${H} L0,${H} Z`;
-
-  // Chaque opération se pose sur le point de la courbe le plus proche de sa
-  // date. Les écritures antérieures à la fenêtre n'y figurent pas.
-  const index = new Map(points.map((p, i) => [p.date.slice(0, 10), i]));
-  const reperes = operations.flatMap(t => {
-    const jour = t.executed_at.slice(0, 10);
-    let i = index.get(jour);
-    if (i == null) {
-      const apres = points.findIndex(p => p.date.slice(0, 10) >= jour);
-      if (apres < 0) return [];
-      i = apres;
-    }
-    return [{ tx: t, i }];
-  });
-
-  return (
-    <div style={{ flex: 1, minHeight: 0, position: "relative" }}>
-      <svg viewBox={`0 0 ${L} ${H}`} preserveAspectRatio="none" style={{ width: "100%", height: "100%", display: "block" }}>
-        <defs>
-          <linearGradient id="jrn-aire" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor="#5B8DEF" stopOpacity="0.30" />
-            <stop offset="100%" stopColor="#5B8DEF" stopOpacity="0" />
-          </linearGradient>
-        </defs>
-        <path d={aire} fill="url(#jrn-aire)" />
-        <path d={d} fill="none" stroke="#5B8DEF" strokeWidth="1.6" vectorEffect="non-scaling-stroke" />
-      </svg>
-
-      {/* Repères en HTML : un cercle SVG s'écraserait avec preserveAspectRatio="none". */}
-      {reperes.map(({ tx, i }) => {
-        const actif = tx.id === choisie;
-        return (
-          <button key={tx.id} onClick={() => onChoisir(tx.id)}
-            title={`${LIBELLE_OP[types[tx.id]]} ${tx.ticker} — ${dateCourte(tx.executed_at)}`}
-            style={{
-              position: "absolute", left: `${(x(i) / L) * 100}%`, top: `${(y(points[i].value) / H) * 100}%`,
-              transform: "translate(-50%,-50%)", width: actif ? 12 : 9, height: actif ? 12 : 9,
-              borderRadius: "50%", background: COULEUR_OP[types[tx.id]],
-              border: `2px solid ${actif ? "#fff" : "rgba(4,17,36,0.9)"}`,
-              cursor: "pointer", padding: 0, zIndex: actif ? 3 : 2,
-            }} />
-        );
-      })}
     </div>
   );
 }
