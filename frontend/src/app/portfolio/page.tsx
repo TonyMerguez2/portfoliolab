@@ -5,7 +5,7 @@ import { useSearchParams, useRouter } from "next/navigation";
 import { useApp } from "@/lib/AppContext";
 import AssetLogo from "@/components/AssetLogo";
 import TransactionModal from "@/components/TransactionModal";
-import TransactionsList from "@/components/TransactionsList";
+import TransactionsView from "@/components/portfolio/TransactionsView";
 import PerformanceChart from "@/components/portfolio/PerformanceChart";
 import AssetGrid from "@/components/portfolio/AssetGrid";
 import AllocationDonut from "@/components/portfolio/AllocationDonut";
@@ -1393,7 +1393,7 @@ function PortfolioPageInner() {
       {/* ══ VUE TRANSACTIONS ════════════════════════════════════════════════════ */}
       <div style={{ display: dashView === "transactions" ? "flex" : "none", height: "100%", flexDirection: "column", overflow: "hidden" }}>
         {portfolio && (
-          <TransactionsList
+          <TransactionsView
             portfolioId={portfolio.id}
             refreshKey={txRefreshKey}
             onNewTransaction={() => setShowTxModal(true)}
