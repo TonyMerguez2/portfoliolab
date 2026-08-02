@@ -196,21 +196,13 @@ export default function TransactionsView({
               operations={reperes}
             />
           </div>
-          <div style={{ display: "flex", gap: 14, marginTop: 6, flexShrink: 0 }}>
-            {(Object.keys(LIBELLE_OP) as TypeOp[]).map(t => (
-              <span key={t} style={{ display: "flex", alignItems: "center", gap: 5, fontFamily: FONT, fontSize: 10.5, color: "rgba(255,255,255,0.42)" }}>
-                <i style={{ width: 7, height: 7, borderRadius: "50%", background: COULEUR_OP[t] }} />
-                {LIBELLE_OP[t]}
-              </span>
-            ))}
-          </div>
         </Carte>
 
         {/* Hauteur fixe, et non minimale : sans plafond, la timeline grandit
             avec ses écritures au lieu de défiler, et le panneau de détail —
             étiré à la même hauteur par la grille — se creuse d'un vide que
             rien ne remplit. */}
-        <div style={{ display: "grid", gridTemplateColumns: "260px 1fr", gap: 12, height: 360 }}>
+        <div style={{ display: "grid", gridTemplateColumns: "240px 1fr 1fr", gap: 12, height: 380 }}>
 
           {/* Timeline */}
           <Carte>
@@ -365,16 +357,17 @@ export default function TransactionsView({
               </div>
             )}
           </Carte>
-        </div>
 
-        {/* Tableau complet */}
-        <Carte style={{ minHeight: 240 }}>
-          <Titre>Toutes les transactions</Titre>
+          {/* Le tableau prend place à droite du détail, comme au concept :
+              en pleine largeur sous les deux autres, il obligeait à descendre
+              pour retrouver l'opération qu'on venait de sélectionner. */}
+          <Carte>
+            <Titre>Toutes les transactions</Titre>
           <div style={{ overflowY: "auto", minHeight: 0, flex: 1 }}>
             <table style={{ width: "100%", borderCollapse: "collapse", fontFamily: FONT }}>
               <thead>
                 <tr>
-                  {["Date", "Type", "Actif", "Quantité", "Prix unitaire", "Montant", "Résultat"].map((h, i) => (
+                  {["Date", "Type", "Actif", "Qté", "Montant", "Résultat"].map((h, i) => (
                     <th key={h} style={{
                       position: "sticky", top: 0, background: "rgba(9,27,52,0.96)",
                       textAlign: i >= 3 ? "right" : "left", padding: "6px 8px",
@@ -404,7 +397,6 @@ export default function TransactionsView({
                       <td style={{ ...NUM, padding: "7px 8px", textAlign: "right", fontSize: 11, color: "rgba(255,255,255,0.60)" }}>
                         {t.side === "SELL" ? "−" : "+"}{t.quantity.toLocaleString("fr-FR", { maximumFractionDigits: 6 })}
                       </td>
-                      <td style={{ ...NUM, padding: "7px 8px", textAlign: "right", fontSize: 11, color: "rgba(255,255,255,0.60)" }}>{eur(t.unit_price)}</td>
                       <td style={{ ...NUM, padding: "7px 8px", textAlign: "right", fontSize: 11, color: "rgba(255,255,255,0.75)" }}>{eur(montant(t))}</td>
                       <td style={{ ...NUM, padding: "7px 8px", textAlign: "right", fontSize: 11, fontWeight: 600,
                         color: r?.gain == null ? "rgba(255,255,255,0.25)" : r.gain >= 0 ? "#4ade80" : "#f87171" }}>
@@ -416,7 +408,8 @@ export default function TransactionsView({
               </tbody>
             </table>
           </div>
-        </Carte>
+          </Carte>
+        </div>
       </div>
 
       {/* ── Colonne de droite ────────────────────────────────────────────── */}

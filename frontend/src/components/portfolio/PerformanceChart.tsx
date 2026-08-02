@@ -1,9 +1,8 @@
 "use client";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
-  createChart, createSeriesMarkers, AreaSeries, CandlestickSeries, ColorType,
-  CrosshairMode, LineStyle,
-  type IChartApi, type ISeriesApi, type ISeriesMarkersPluginApi, type Time, type UTCTimestamp,
+  createChart, AreaSeries, CandlestickSeries, ColorType, CrosshairMode, LineStyle,
+  type IChartApi, type ISeriesApi, type UTCTimestamp,
 } from "lightweight-charts";
 import type { HistoryPoint, Period } from "@/lib/chart/portfolioCurve";
 import { FONT, NUM } from "@/lib/typography";
@@ -38,6 +37,13 @@ const API = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 
 /** Demi-largeur, en pixels, de la portion de courbe éclairée au survol. */
 const HALO = 22;
+
+/** Types d'opération jalonnés sur la courbe, dans l'ordre où on les lit. */
+const LEGENDE = [
+  { libelle: "Achat",         couleur: "#4ade80" },
+  { libelle: "Renforcement",  couleur: "#5B8DEF" },
+  { libelle: "Vente",         couleur: "#f87171" },
+];
 
 /**
  * Regroupe la série en bougies.
@@ -123,7 +129,6 @@ export default function PerformanceChart({
   const chartRef = useRef<IChartApi | null>(null);
   const serieRef = useRef<ISeriesApi<"Area"> | null>(null);
   const bougieRef = useRef<ISeriesApi<"Candlestick"> | null>(null);
-  const reperesRef = useRef<ISeriesMarkersPluginApi<Time> | null>(null);
   const colorRef = useRef(color);
 
   const [points, setPoints] = useState<HistoryPoint[]>([]);
@@ -134,6 +139,8 @@ export default function PerformanceChart({
   const [origine, setOrigine] = useState<string | null>(null);
   /** Titres détenus dont le cours n'a pas pu être établi. */
   const [sansCours, setSansCours] = useState<string[]>([]);
+  /** Position à l'écran de chaque repère d'opération, en pixels du cadre. */
+  const [pastilles, setPastilles] = useState<{ id: number; x: number; y: number; couleur: string; titre: string }[]>([]);
 
   // ── Données ────────────────────────────────────────────────────────────────
   const key = assets.map(a => `${a.ticker}:${a.weight}`).join(",");
@@ -203,6 +210,55 @@ export default function PerformanceChart({
     return () => { cancelled = true; };
   }, [key, portfolioId, surTransactions]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  /**
+   * Place les pastilles d'opération au-dessus de la courbe.
+   *
+   * Recalculé à chaque déplacement ou redimensionnement : les coordonnées sont
+   * des pixels, elles ne survivent pas à un changement de fenêtre. Une
+   * opération hors de la plage visible n'a pas de coordonnée — elle disparaît,
+   * ce qui est juste.
+   */
+  useEffect(() => {
+    const chart = chartRef.current, serie = serieRef.current, el = plotRef.current;
+    if (!chart || !serie || !el || !operations.length || !points.length) { setPastilles([]); return; }
+
+    const dernier = points[points.length - 1].value || 1;
+    const echelle = (totalValue ?? 0) > 0 ? totalValue! / dernier : 1;
+    const valeurAu = new Map(points.map(p => [p.date.slice(0, 10), p.value * echelle]));
+    const jours = points.map(p => p.date.slice(0, 10));
+
+    const calculer = () => {
+      const out: { id: number; x: number; y: number; couleur: string; titre: string }[] = [];
+      for (const op of operations) {
+        const jour = op.executed_at.slice(0, 10);
+        // Le premier jour coté à partir de la date de l'opération : une
+        // écriture passée un samedi n'a pas de point à elle.
+        const cible = valeurAu.has(jour) ? jour : jours.find(j => j >= jour);
+        if (!cible) continue;
+        const t = Math.floor(new Date(cible + "T00:00:00Z").getTime() / 1000) as UTCTimestamp;
+        const x = chart.timeScale().timeToCoordinate(t);
+        const v = valeurAu.get(cible);
+        const y = v == null ? null : serie.priceToCoordinate(v);
+        if (x == null || y == null) continue;
+        out.push({
+          id: op.id, x, y: y - 12, couleur: op.couleur,
+          titre: `${op.libelle} ${op.ticker} — ${new Date(op.executed_at).toLocaleDateString("fr-FR")}`,
+        });
+      }
+      setPastilles(out);
+    };
+
+    calculer();
+    const ts = chart.timeScale();
+    ts.subscribeVisibleLogicalRangeChange(calculer);
+    const ro = new ResizeObserver(calculer);
+    ro.observe(el);
+    return () => {
+      ts.unsubscribeVisibleLogicalRangeChange(calculer);
+      ro.disconnect();
+    };
+  }, [operations, points, totalValue, mode]);
+
   // ── Création du graphique ──────────────────────────────────────────────────
   useEffect(() => {
     const el = plotRef.current;
@@ -261,7 +317,6 @@ export default function PerformanceChart({
     chartRef.current = chart;
     serieRef.current = serie;
     bougieRef.current = bougies;
-    reperesRef.current = createSeriesMarkers(serie, []);
 
     // Halo de survol : la portion de courbe sous le curseur est repeinte en
     // flou coloré puis d'un trait blanc fin, découpée à une fenêtre autour du
@@ -386,33 +441,6 @@ export default function PerformanceChart({
     // agrégées, donc bien moins nombreuses que les points de la ligne. Régler
     // la fenêtre sur le compte de la ligne tassait soixante bougies dans le
     // premier vingtième du tracé.
-    // Repères des opérations, calés sur un horodatage réellement présent dans
-    // la série : lightweight-charts ignore silencieusement un repère posé sur
-    // une date absente, et une écriture d'un jour férié disparaîtrait.
-    if (reperesRef.current) {
-      const horodatages = (mode === "bougie" ? bougies : data).map(d => d.time);
-      const cale = (t: number): UTCTimestamp | null => {
-        for (const h of horodatages) if (h >= t) return h;
-        return null;
-      };
-      const marques = operations
-        .map(op => {
-          const t = Math.floor(new Date(op.executed_at).getTime() / 1000);
-          const h = cale(t);
-          return h == null ? null : {
-            time: h,
-            position: "belowBar" as const,
-            color: op.couleur,
-            shape: "circle" as const,
-            text: "",
-            id: String(op.id),
-          };
-        })
-        .filter((m): m is NonNullable<typeof m> => m !== null)
-        .sort((a, b) => (a.time as number) - (b.time as number));
-      reperesRef.current.setMarkers(marques);
-    }
-
     const nbBarres = mode === "bougie" ? bougies.length : data.length;
     // Cadrage sur les horodatages réels plutôt que `fitContent()`.
     //
@@ -438,13 +466,28 @@ export default function PerformanceChart({
       //
       // Différé d'une trame : appliqué dans la foulée de `setData`, le cadrage
       // est écrasé par la mise en page que la bibliothèque enchaîne.
-      const id = requestAnimationFrame(() => {
+      const cadrer = () => {
         try {
           chart.timeScale().applyOptions({ rightOffset: 0 });
           chart.timeScale().setVisibleLogicalRange({ from: 0.5, to: nbBarres - 1.5 });
         } catch { /* graphique démonté entre-temps */ }
-      });
-      return () => cancelAnimationFrame(id);
+      };
+      const id = requestAnimationFrame(cadrer);
+
+      // Recadrer quand le cadre prend enfin ses dimensions.
+      //
+      // L'onglet Transactions est monté masqué : le graphique s'y crée dans un
+      // conteneur de largeur nulle, et le cadrage calculé alors ne vaut rien —
+      // à l'affichage, la courbe se retrouvait tassée sur le cinquième droit.
+      const el = plotRef.current;
+      let largeur = el?.clientWidth ?? 0;
+      const ro = el ? new ResizeObserver(() => {
+        const w = el.clientWidth;
+        if (w > 0 && w !== largeur) { largeur = w; cadrer(); }
+      }) : null;
+      if (el && ro) ro.observe(el);
+
+      return () => { cancelAnimationFrame(id); ro?.disconnect(); };
     }
     chart.timeScale().fitContent();
   }, [points, totalValue, mode, operations]);
@@ -547,6 +590,20 @@ export default function PerformanceChart({
 
       <div style={{ position: "relative", flex: height ? undefined : 1, height, minHeight: 0 }}>
         <div ref={plotRef} style={{ position: "absolute", inset: 0 }} />
+        {/* Repères d'opération, en surcouche.
+            Le greffon de la bibliothèque les fait entrer dans l'échelle des
+            prix : sur un portefeuille parti de zéro, loger les pastilles sous
+            la courbe descendait l'axe à −1 000 €, une valeur que le
+            portefeuille n'a jamais eue. Positionnées ici à la main, elles
+            flottent au-dessus du tracé sans rien déformer. */}
+        {pastilles.map(p => (
+          <span key={p.id} title={p.titre} style={{
+            position: "absolute", left: p.x, top: p.y, transform: "translate(-50%,-50%)",
+            width: 7, height: 7, borderRadius: "50%", background: p.couleur,
+            border: "1.5px solid rgba(4,17,36,0.85)", zIndex: 6, pointerEvents: "none",
+            boxShadow: `0 0 6px ${p.couleur}80`,
+          }} />
+        ))}
         <canvas ref={glowRef} style={{
           position: "absolute", inset: 0, pointerEvents: "none",
           // Repris de la page graphique. Sans z-index, le canevas passait sous
@@ -555,6 +612,25 @@ export default function PerformanceChart({
           // au lieu de la recouvrir d'un trait opaque.
           zIndex: 5, mixBlendMode: "screen",
         }} />
+        {/* Légende des repères, dans le graphique : la porter à l'extérieur
+            obligeait chaque appelant à la répéter, et l'un des deux l'aurait
+            oubliée. */}
+        {operations.length > 0 && (
+          <div style={{
+            position: "absolute", left: 6, bottom: 4, zIndex: 6, display: "flex", gap: 12,
+            pointerEvents: "none",
+          }}>
+            {LEGENDE.map(l => (
+              <span key={l.libelle} style={{
+                display: "flex", alignItems: "center", gap: 5,
+                fontFamily: FONT, fontSize: 10, color: "rgba(255,255,255,0.45)",
+              }}>
+                <i style={{ width: 6, height: 6, borderRadius: "50%", background: l.couleur }} />
+                {l.libelle}
+              </span>
+            ))}
+          </div>
+        )}
         {(state === "loading" && !points.length) || state === "error" ? (
           <div style={{
             position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center",
