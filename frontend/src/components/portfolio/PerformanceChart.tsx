@@ -66,9 +66,12 @@ function Pictogramme({ type }: { type: string }) {
 
 /** Types d'opération jalonnés sur la courbe, dans l'ordre où on les lit. */
 const LEGENDE = [
-  { type: "achat",        libelle: "Achat",        couleur: "#4ade80" },
-  { type: "renforcement", libelle: "Renforcement", couleur: "#5B8DEF" },
-  { type: "vente",        libelle: "Vente",        couleur: "#f87171" },
+  // `largeur` est déclarée pour que chaque vignette démarre sur un pixel
+  // entier : une largeur laissée au texte est fractionnaire, et décale tout ce
+  // qui suit.
+  { type: "achat",        libelle: "Achat",        couleur: "#4ade80", largeur: 62 },
+  { type: "renforcement", libelle: "Renforcement", couleur: "#5B8DEF", largeur: 106 },
+  { type: "vente",        libelle: "Vente",        couleur: "#f87171", largeur: 62 },
 ];
 
 /**
@@ -713,10 +716,18 @@ export default function PerformanceChart({
       {/* Légende sous le cadre, et non dedans : posée en surcouche, elle
           recouvrait les libellés de l'axe des dates. */}
       {operations.length > 0 && (
-        <div style={{ display: "flex", gap: 14, paddingTop: 6, flexShrink: 0 }}>
+        // Hauteur de ligne fixée à celle de la vignette, et largeurs entières.
+        //
+        // Sans cela la ligne prend une hauteur impaire — le cercle de 14 px s'y
+        // centrait à 502,5 px — et chaque entrée démarre à l'abscisse fractionnaire
+        // laissée par la précédente. Le contour et le trait du signe se
+        // répartissaient alors sur deux rangées de pixels : le pictogramme
+        // paraissait décentré alors qu'il est à 2 px des quatre bords.
+        <div style={{ display: "flex", gap: 16, paddingTop: 6, flexShrink: 0, height: 14 }}>
           {LEGENDE.map(l => (
             <span key={l.libelle} style={{
               display: "flex", alignItems: "center", gap: 5,
+              width: l.largeur, height: 14, lineHeight: "14px",
               fontFamily: FONT, fontSize: 10, color: "rgba(255,255,255,0.45)",
             }}>
               {/* Même vignette que sur la courbe, en réduction : une puce ronde
