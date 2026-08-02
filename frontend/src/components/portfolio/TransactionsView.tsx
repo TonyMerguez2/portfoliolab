@@ -175,7 +175,8 @@ export default function TransactionsView({
   }
 
   return (
-    <div style={{ display: "grid", gridTemplateColumns: "1fr 320px", gap: 12, padding: "12px 14px", height: "100%", overflow: "auto" }}>
+    <div style={{ display: "grid", gridTemplateColumns: "minmax(0,1fr) 320px", gap: 12,
+                  padding: "12px 14px", height: "100%", overflow: "auto", alignItems: "start" }}>
 
       {/* ── Colonne principale ───────────────────────────────────────────── */}
       <div style={{ display: "flex", flexDirection: "column", gap: 12, minWidth: 0 }}>
@@ -202,7 +203,8 @@ export default function TransactionsView({
             avec ses écritures au lieu de défiler, et le panneau de détail —
             étiré à la même hauteur par la grille — se creuse d'un vide que
             rien ne remplit. */}
-        <div style={{ display: "grid", gridTemplateColumns: "240px 1fr 1fr", gap: 12, height: 380 }}>
+        <div style={{ display: "grid", gridTemplateColumns: "230px minmax(0,1fr) minmax(0,1.25fr)",
+                      gap: 12, height: 380 }}>
 
           {/* Timeline */}
           <Carte>
@@ -260,7 +262,7 @@ export default function TransactionsView({
                     </span>
                   </div>
 
-                  <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 8, marginBottom: 14 }}>
+                  <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: 8, marginBottom: 12 }}>
                     {[
                       ["Quantité", t.quantity.toLocaleString("fr-FR", { maximumFractionDigits: 8 })],
                       ["Prix unitaire", eur(t.unit_price)],
@@ -269,17 +271,17 @@ export default function TransactionsView({
                     ].map(([l, v]) => (
                       <div key={l} style={{ background: "rgba(255,255,255,0.04)", borderRadius: 10, padding: "8px 10px" }}>
                         <div style={{ fontFamily: FONT, fontSize: 9.5, color: "rgba(255,255,255,0.32)", marginBottom: 3 }}>{l}</div>
-                        <div style={{ ...NUM, fontSize: 12, fontWeight: 700, color: "rgba(255,255,255,0.92)" }}>{v}</div>
+                        <div style={{ ...NUM, fontSize: 12, fontWeight: 700, color: "rgba(255,255,255,0.92)", whiteSpace: "nowrap" }}>{v}</div>
                       </div>
                     ))}
                   </div>
 
-                  <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 8, marginBottom: 14 }}>
+                  <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 8, marginBottom: 12 }}>
                     <div>
                       <div style={{ fontFamily: FONT, fontSize: 9.5, color: "rgba(255,255,255,0.32)", marginBottom: 3 }}>
                         Poids dans le portefeuille
                       </div>
-                      <div style={{ ...NUM, fontSize: 12.5, fontWeight: 700, color: "rgba(255,255,255,0.92)" }}>
+                      <div style={{ ...NUM, fontSize: 12.5, fontWeight: 700, color: "rgba(255,255,255,0.92)", whiteSpace: "nowrap" }}>
                         {poids != null ? `${poids.toFixed(2)} %` : "—"}
                       </div>
                     </div>
@@ -287,7 +289,7 @@ export default function TransactionsView({
                       <div style={{ fontFamily: FONT, fontSize: 9.5, color: "rgba(255,255,255,0.32)", marginBottom: 3 }}>
                         Valeur actuelle
                       </div>
-                      <div style={{ ...NUM, fontSize: 12.5, fontWeight: 700, color: "rgba(255,255,255,0.92)" }}>
+                      <div style={{ ...NUM, fontSize: 12.5, fontWeight: 700, color: "rgba(255,255,255,0.92)", whiteSpace: "nowrap" }}>
                         {valeurLigne != null ? eur(valeurLigne) : "—"}
                       </div>
                     </div>
@@ -295,12 +297,12 @@ export default function TransactionsView({
                       <div style={{ fontFamily: FONT, fontSize: 9.5, color: "rgba(255,255,255,0.32)", marginBottom: 3 }}>
                         {detail.realise ? "Résultat réalisé" : "Plus-value latente"}
                       </div>
-                      <div style={{ ...NUM, fontSize: 12.5, fontWeight: 700,
+                      <div style={{ ...NUM, fontSize: 12.5, fontWeight: 700, whiteSpace: "nowrap",
                         color: detail.gain == null ? "rgba(255,255,255,0.40)" : detail.gain >= 0 ? "#4ade80" : "#f87171" }}>
                         {detail.gain == null ? "—" : `${detail.gain >= 0 ? "+" : ""}${eur(detail.gain)}`}
                         {detail.gainPct != null && (
-                          <span style={{ opacity: 0.6, marginLeft: 4, fontSize: 11 }}>
-                            ({detail.gainPct >= 0 ? "+" : ""}{detail.gainPct.toFixed(2)} %)
+                          <span style={{ display: "block", opacity: 0.6, fontSize: 10.5, fontWeight: 600 }}>
+                            {detail.gainPct >= 0 ? "+" : ""}{detail.gainPct.toFixed(2)} %
                           </span>
                         )}
                       </div>
@@ -364,14 +366,22 @@ export default function TransactionsView({
           <Carte>
             <Titre>Toutes les transactions</Titre>
           <div style={{ overflowY: "auto", minHeight: 0, flex: 1 }}>
-            <table style={{ width: "100%", borderCollapse: "collapse", fontFamily: FONT }}>
+            <table style={{ width: "100%", borderCollapse: "collapse", fontFamily: FONT, tableLayout: "fixed" }}>
+              <colgroup>
+                <col style={{ width: "21%" }} />
+                <col style={{ width: "24%" }} />
+                <col style={{ width: "17%" }} />
+                <col style={{ width: "11%" }} />
+                <col style={{ width: "15%" }} />
+                <col style={{ width: "12%" }} />
+              </colgroup>
               <thead>
                 <tr>
                   {["Date", "Type", "Actif", "Qté", "Montant", "Résultat"].map((h, i) => (
                     <th key={h} style={{
                       position: "sticky", top: 0, background: "rgba(9,27,52,0.96)",
-                      textAlign: i >= 3 ? "right" : "left", padding: "6px 8px",
-                      fontSize: 9.5, fontWeight: 700, letterSpacing: "0.08em",
+                      textAlign: i >= 3 ? "right" : "left", padding: "6px 6px",
+                      fontSize: 9, fontWeight: 700, letterSpacing: "0.08em",
                       color: "rgba(255,255,255,0.30)", textTransform: "uppercase",
                     }}>{h}</th>
                   ))}
@@ -386,19 +396,23 @@ export default function TransactionsView({
                       background: t.id === choisie ? "rgba(91,141,239,0.10)" : "transparent",
                       borderTop: "1px solid rgba(255,255,255,0.05)",
                     }}>
-                      <td style={{ padding: "7px 8px", fontSize: 11, color: "rgba(255,255,255,0.55)" }}>{dateCourte(t.executed_at)}</td>
-                      <td style={{ padding: "7px 8px", fontSize: 11 }}>
-                        <span style={{ display: "inline-flex", alignItems: "center", gap: 5, color: COULEUR_OP[types[t.id]] }}>
-                          <i style={{ width: 6, height: 6, borderRadius: "50%", background: COULEUR_OP[types[t.id]] }} />
+                      <td style={{ padding: "7px 6px", fontSize: 10.5, color: "rgba(255,255,255,0.55)", whiteSpace: "nowrap" }}>
+                        {new Date(t.executed_at).toLocaleDateString("fr-FR", { day: "2-digit", month: "2-digit", year: "2-digit" })}
+                      </td>
+                      <td style={{ padding: "7px 6px", fontSize: 10.5 }}>
+                        <span style={{ display: "inline-flex", alignItems: "center", gap: 5, color: COULEUR_OP[types[t.id]],
+                                       overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: "100%" }}>
+                          <i style={{ width: 6, height: 6, borderRadius: "50%", background: COULEUR_OP[types[t.id]], flexShrink: 0 }} />
                           {LIBELLE_OP[types[t.id]]}
                         </span>
                       </td>
-                      <td style={{ padding: "7px 8px", fontSize: 11.5, fontWeight: 600, color: "rgba(255,255,255,0.88)" }}>{t.ticker}</td>
-                      <td style={{ ...NUM, padding: "7px 8px", textAlign: "right", fontSize: 11, color: "rgba(255,255,255,0.60)" }}>
+                      <td style={{ padding: "7px 6px", fontSize: 11, fontWeight: 600, color: "rgba(255,255,255,0.88)",
+                                   overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{t.ticker}</td>
+                      <td style={{ ...NUM, padding: "7px 6px", textAlign: "right", fontSize: 10.5, whiteSpace: "nowrap", color: "rgba(255,255,255,0.60)" }}>
                         {t.side === "SELL" ? "−" : "+"}{t.quantity.toLocaleString("fr-FR", { maximumFractionDigits: 6 })}
                       </td>
-                      <td style={{ ...NUM, padding: "7px 8px", textAlign: "right", fontSize: 11, color: "rgba(255,255,255,0.75)" }}>{eur(montant(t))}</td>
-                      <td style={{ ...NUM, padding: "7px 8px", textAlign: "right", fontSize: 11, fontWeight: 600,
+                      <td style={{ ...NUM, padding: "7px 6px", textAlign: "right", fontSize: 10.5, whiteSpace: "nowrap", color: "rgba(255,255,255,0.75)" }}>{eur(montant(t))}</td>
+                      <td style={{ ...NUM, padding: "7px 6px", textAlign: "right", fontSize: 10.5, whiteSpace: "nowrap", fontWeight: 600,
                         color: r?.gain == null ? "rgba(255,255,255,0.25)" : r.gain >= 0 ? "#4ade80" : "#f87171" }}>
                         {r?.gain == null ? "—" : `${r.gain >= 0 ? "+" : ""}${Math.round(r.gain).toLocaleString("fr-FR")} €`}
                       </td>

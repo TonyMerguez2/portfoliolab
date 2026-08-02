@@ -612,25 +612,6 @@ export default function PerformanceChart({
           // au lieu de la recouvrir d'un trait opaque.
           zIndex: 5, mixBlendMode: "screen",
         }} />
-        {/* Légende des repères, dans le graphique : la porter à l'extérieur
-            obligeait chaque appelant à la répéter, et l'un des deux l'aurait
-            oubliée. */}
-        {operations.length > 0 && (
-          <div style={{
-            position: "absolute", left: 6, bottom: 4, zIndex: 6, display: "flex", gap: 12,
-            pointerEvents: "none",
-          }}>
-            {LEGENDE.map(l => (
-              <span key={l.libelle} style={{
-                display: "flex", alignItems: "center", gap: 5,
-                fontFamily: FONT, fontSize: 10, color: "rgba(255,255,255,0.45)",
-              }}>
-                <i style={{ width: 6, height: 6, borderRadius: "50%", background: l.couleur }} />
-                {l.libelle}
-              </span>
-            ))}
-          </div>
-        )}
         {(state === "loading" && !points.length) || state === "error" ? (
           <div style={{
             position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center",
@@ -644,6 +625,22 @@ export default function PerformanceChart({
           </div>
         ) : null}
       </div>
+
+      {/* Légende sous le cadre, et non dedans : posée en surcouche, elle
+          recouvrait les libellés de l'axe des dates. */}
+      {operations.length > 0 && (
+        <div style={{ display: "flex", gap: 14, paddingTop: 6, flexShrink: 0 }}>
+          {LEGENDE.map(l => (
+            <span key={l.libelle} style={{
+              display: "flex", alignItems: "center", gap: 5,
+              fontFamily: FONT, fontSize: 10, color: "rgba(255,255,255,0.45)",
+            }}>
+              <i style={{ width: 6, height: 6, borderRadius: "50%", background: l.couleur }} />
+              {l.libelle}
+            </span>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
