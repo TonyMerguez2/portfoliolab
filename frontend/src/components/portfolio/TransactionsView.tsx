@@ -179,24 +179,23 @@ export default function TransactionsView({
   return (
     // Même géométrie que la vue générale : marge de 10 px, gouttière de 8,
     // rayon de 30. Deux onglets voisins aux cadres décalés se voient.
+    // Même géométrie que la vue générale, jusqu'au rembourrage : la marge du
+    // bas vient du bas de page, commun aux onglets. L'écran tient dans la
+    // fenêtre et ne défile pas — les panneaux se partagent la hauteur au
+    // prorata, chacun défilant chez lui.
     <div style={{
-      display: "flex", gap: GOUTTIERE, padding: `8px ${MARGE}px ${MARGE}px`,
-      height: "100%", minHeight: 0,
-      // La page défile plutôt que d'écraser ses panneaux. Sur une fenêtre
-      // basse, le tableau tombait à 113 px — une ligne visible — et la
-      // répartition à 55, moins que son propre contenu. Un panneau illisible
-      // vaut moins qu'un panneau qu'on atteint en défilant.
-      overflowY: "auto", overflowX: "hidden",
+      display: "flex", gap: GOUTTIERE, padding: `8px ${MARGE}px 0`,
+      height: "100%", minHeight: 0, overflow: "hidden",
     }}>
 
       {/* ── Colonne principale ───────────────────────────────────────────── */}
       <div style={{ display: "flex", flexDirection: "column", gap: GOUTTIERE, flex: 1,
-                    minWidth: 0, minHeight: 620 }}>
+                    minWidth: 0, minHeight: 0 }}>
 
         {/* Le tableau prend la place du graphique : la courbe est déjà celle
             de la vue générale, la répéter d'un onglet à l'autre n'apprenait
             rien de plus. */}
-        <Carte style={{ flex: 1, minHeight: 280 }}>
+        <Carte style={{ flex: 1.15, minHeight: 0 }}>
           <Titre>Toutes les transactions</Titre>
           <div style={{ overflowY: "auto", minHeight: 0, flex: 1 }}>
             <TableauOperations
@@ -216,7 +215,7 @@ export default function TransactionsView({
         <div style={{
           display: "grid",
           gridTemplateColumns: "230px minmax(0,1fr)",
-          gap: GOUTTIERE, height: 330, flexShrink: 0,
+          gap: GOUTTIERE, flex: 1, minHeight: 0,
         }}>
 
           {/* Timeline */}
@@ -380,9 +379,9 @@ export default function TransactionsView({
       {/* Le dernier panneau s'étire pour occuper le bas : sans quoi la colonne
           s'arrêtait à mi-hauteur et laissait un vide que rien ne justifiait. */}
       <div style={{ display: "flex", flexDirection: "column", gap: GOUTTIERE,
-                    width: 320, flexShrink: 0, minHeight: 620 }}>
+                    width: 320, flexShrink: 0, minHeight: 0 }}>
 
-        <Carte>
+        <Carte style={{ flexShrink: 0 }}>
           <Titre action={
             <button onClick={onNewTransaction} style={{
               padding: "6px 11px", borderRadius: 9, border: "1px solid rgba(91,141,239,0.35)",
@@ -408,7 +407,7 @@ export default function TransactionsView({
         {/* Dividendes — le modèle ne connaît qu'achat et vente. Un panneau à
             zéro se lirait comme « vous n'avez rien touché » ; il dit plutôt
             que la saisie n'existe pas encore. */}
-        <Carte>
+        <Carte style={{ flexShrink: 0 }}>
           <Titre>Dividendes</Titre>
           <p style={{ fontFamily: FONT, fontSize: 11.5, color: "rgba(255,255,255,0.30)", margin: 0, lineHeight: 1.6 }}>
             Aucun dividende enregistré.<br />
@@ -417,7 +416,7 @@ export default function TransactionsView({
           </p>
         </Carte>
 
-        <Carte style={{ flex: 1, minHeight: 150, overflowY: "auto" }}>
+        <Carte style={{ flex: 1, minHeight: 0, overflowY: "auto" }}>
           <Titre>Répartition des opérations</Titre>
           <div style={{ display: "flex", height: 6, borderRadius: 3, overflow: "hidden", marginBottom: 12 }}>
             {parts.map(p => (
