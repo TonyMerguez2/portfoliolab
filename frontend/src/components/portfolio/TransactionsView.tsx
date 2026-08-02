@@ -1,16 +1,19 @@
 "use client";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import AssetLogo from "@/components/AssetLogo";
 import { FONT, NUM } from "@/lib/typography";
 import { enTetesAuth } from "@/lib/session";
-import PerformanceChart from "@/components/portfolio/PerformanceChart";
-import type { Period } from "@/lib/chart/portfolioCurve";
 import {
   resume, resultats, repartitionTypes, typesParOperation, montant, parDate,
   LIBELLE_OP, COULEUR_OP, type Tx, type TypeOp,
 } from "@/lib/journal";
 
 const API = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
+
+/** Géométrie reprise de la vue générale, pour que les deux onglets s'alignent. */
+const MARGE = 10;
+const GOUTTIERE = 8;
+const RAYON = 30;
 
 /**
  * Journal des transactions.
@@ -33,7 +36,7 @@ function Carte({ children, style }: { children: React.ReactNode; style?: React.C
   return (
     <div style={{
       background: "rgba(9,27,52,0.78)", border: "1px solid rgba(205,225,255,0.16)",
-      borderRadius: 18, padding: "14px 16px", display: "flex", flexDirection: "column",
+      borderRadius: RAYON, padding: "14px 18px", display: "flex", flexDirection: "column",
       minHeight: 0, ...style,
     }}>{children}</div>
   );
@@ -70,41 +73,11 @@ export default function TransactionsView({
 }) {
   const [txs, setTxs] = useState<Tx[]>([]);
   const [positions, setPositions] = useState<Position[]>([]);
-  const [periode, setPeriode] = useState<Period>("Max");
   const [choisie, setChoisie] = useState<number | null>(null);
   const [chargement, setChargement] = useState(true);
   const [confirme, setConfirme] = useState<number | null>(null);
   const [erreur, setErreur] = useState<string | null>(null);
   const [suppression, setSuppression] = useState(false);
-  /**
-   * Largeur disponible, pour choisir entre trois colonnes et deux.
-   *
-   * Sous 1 150 px, le tableau tombe à 250 px : ses en-têtes se coupent et la
-   * quantité colle au montant. Mesurée plutôt que devinée par un point de
-   * rupture d'écran — le panneau latéral se replie, la fenêtre disponible ne
-   * suit pas la taille de l'écran.
-   */
-  const [large, setLarge] = useState(true);
-  const observateur = useRef<ResizeObserver | null>(null);
-
-  /**
-   * Référence par fonction, et non par objet.
-   *
-   * Le composant rend d'abord « Chargement… », puis l'écran : un effet posé au
-   * montage trouvait une référence vide, n'installait aucun observateur, et ne
-   * se rejouait jamais. La mise en page restait donc sur sa valeur initiale —
-   * trois colonnes, même dans 1 000 px, où quatre en-têtes se coupaient.
-   */
-  const cadreRef = useCallback((el: HTMLDivElement | null) => {
-    observateur.current?.disconnect();
-    if (!el) return;
-    const mesurer = () => setLarge(el.clientWidth >= 1150);
-    mesurer();
-    observateur.current = new ResizeObserver(mesurer);
-    observateur.current.observe(el);
-  }, []);
-
-  useEffect(() => () => observateur.current?.disconnect(), []);
 
   // ── Données ────────────────────────────────────────────────────────────────
   useEffect(() => {
@@ -204,26 +177,31 @@ export default function TransactionsView({
   }
 
   return (
-    <div ref={cadreRef} style={{ display: "grid", gridTemplateColumns: "minmax(0,1fr) 320px", gap: 12,
-                  padding: "12px 14px", height: "100%", overflow: "auto", alignItems: "start" }}>
+    // Même géométrie que la vue générale : marge de 10 px, gouttière de 8,
+    // rayon de 30. Deux onglets voisins aux cadres décalés se voient.
+    <div style={{
+      display: "flex", gap: GOUTTIERE, padding: `8px ${MARGE}px ${MARGE}px`,
+      height: "100%", minHeight: 0,
+      // La page défile plutôt que d'écraser ses panneaux. Sur une fenêtre
+      // basse, le tableau tombait à 113 px — une ligne visible — et la
+      // répartition à 55, moins que son propre contenu. Un panneau illisible
+      // vaut moins qu'un panneau qu'on atteint en défilant.
+      overflowY: "auto", overflowX: "hidden",
+    }}>
 
       {/* ── Colonne principale ───────────────────────────────────────────── */}
-      <div style={{ display: "flex", flexDirection: "column", gap: 12, minWidth: 0 }}>
+      <div style={{ display: "flex", flexDirection: "column", gap: GOUTTIERE, flex: 1,
+                    minWidth: 0, minHeight: 620 }}>
 
-        {/* Le même graphique que la vue générale, jalonné des opérations.
-            Deux courbes différentes pour le même portefeuille, sur deux
-            onglets voisins, ne pouvaient que semer le doute. */}
-        <Carte style={{ height: 340 }}>
-          <Titre>Évolution du portefeuille et transactions</Titre>
-          <div style={{ flex: 1, minHeight: 0 }}>
-            <PerformanceChart
-              assets={positions.map(p => ({ ticker: p.ticker, weight: 0 }))}
-              totalValue={valeurTotale || null}
-              period={periode}
-              onPeriodChange={setPeriode}
-              portfolioId={portfolioId}
-              surTransactions
-              operations={reperes}
+        {/* Le tableau prend la place du graphique : la courbe est déjà celle
+            de la vue générale, la répéter d'un onglet à l'autre n'apprenait
+            rien de plus. */}
+        <Carte style={{ flex: 1, minHeight: 280 }}>
+          <Titre>Toutes les transactions</Titre>
+          <div style={{ overflowY: "auto", minHeight: 0, flex: 1 }}>
+            <TableauOperations
+              lignes={recentes} types={types} parId={parId}
+              choisie={choisie} onChoisir={setChoisie}
             />
           </div>
         </Carte>
@@ -232,12 +210,13 @@ export default function TransactionsView({
             avec ses écritures au lieu de défiler, et le panneau de détail —
             étiré à la même hauteur par la grille — se creuse d'un vide que
             rien ne remplit. */}
+        {/* Timeline et détail, hauteur fixe sous le tableau. Le tableau ayant
+            pris la place du graphique, la rangée n'a plus qu'à se poser
+            dessous — et le cadre ne défile pas, donc rien n'est coupé. */}
         <div style={{
           display: "grid",
-          gridTemplateColumns: large
-            ? "230px minmax(0,1fr) minmax(0,1.25fr)"
-            : "230px minmax(0,1fr)",
-          gap: 12, height: 380,
+          gridTemplateColumns: "230px minmax(0,1fr)",
+          gap: GOUTTIERE, height: 330, flexShrink: 0,
         }}>
 
           {/* Timeline */}
@@ -394,37 +373,14 @@ export default function TransactionsView({
             )}
           </Carte>
 
-          {/* Le tableau prend place à droite du détail, comme au concept :
-              en pleine largeur sous les deux autres, il obligeait à descendre
-              pour retrouver l'opération qu'on venait de sélectionner. Il n'y
-              descend que faute de place — six colonnes dans 250 px se coupent
-              les unes les autres. */}
-          {large && <Carte>
-            <Titre>Toutes les transactions</Titre>
-          <div style={{ overflowY: "auto", minHeight: 0, flex: 1 }}>
-              <TableauOperations
-                lignes={recentes} types={types} parId={parId}
-                choisie={choisie} onChoisir={setChoisie}
-              />
-          </div>
-          </Carte>}
         </div>
-
-        {!large && (
-          <Carte style={{ height: 320 }}>
-            <Titre>Toutes les transactions</Titre>
-            <div style={{ overflowY: "auto", minHeight: 0, flex: 1 }}>
-              <TableauOperations
-                lignes={recentes} types={types} parId={parId}
-                choisie={choisie} onChoisir={setChoisie}
-              />
-            </div>
-          </Carte>
-        )}
       </div>
 
       {/* ── Colonne de droite ────────────────────────────────────────────── */}
-      <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+      {/* Le dernier panneau s'étire pour occuper le bas : sans quoi la colonne
+          s'arrêtait à mi-hauteur et laissait un vide que rien ne justifiait. */}
+      <div style={{ display: "flex", flexDirection: "column", gap: GOUTTIERE,
+                    width: 320, flexShrink: 0, minHeight: 620 }}>
 
         <Carte>
           <Titre action={
@@ -461,7 +417,7 @@ export default function TransactionsView({
           </p>
         </Carte>
 
-        <Carte>
+        <Carte style={{ flex: 1, minHeight: 150, overflowY: "auto" }}>
           <Titre>Répartition des opérations</Titre>
           <div style={{ display: "flex", height: 6, borderRadius: 3, overflow: "hidden", marginBottom: 12 }}>
             {parts.map(p => (
