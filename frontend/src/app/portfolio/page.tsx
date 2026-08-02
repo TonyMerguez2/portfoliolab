@@ -368,6 +368,8 @@ function PortfolioPageInner() {
   const [reperesOperations, setReperesOperations] = useState<
     { id: number; ticker: string; executed_at: string; type: string; couleur: string; libelle: string }[]
   >([]);
+  /** Écriture désignée en cliquant un repère du graphique. */
+  const [operationVisee, setOperationVisee] = useState<number | null>(null);
 
   useEffect(() => {
     const id = portfolio?.id;
@@ -992,6 +994,7 @@ function PortfolioPageInner() {
               portfolioId={portfolio?.id}
               surTransactions={surTransactions}
               operations={reperesOperations}
+              onOperationClick={(id) => { setOperationVisee(id); setDashView("transactions"); }}
             />
             </div>
           </div>
@@ -1434,6 +1437,7 @@ function PortfolioPageInner() {
             portfolioId={portfolio.id}
             refreshKey={txRefreshKey}
             onNewTransaction={() => setShowTxModal(true)}
+            selectionDemandee={operationVisee}
           />
         )}
       </div>

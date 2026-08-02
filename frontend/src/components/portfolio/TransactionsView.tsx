@@ -65,11 +65,13 @@ function Ligne({ label, valeur, couleur }: { label: string; valeur: React.ReactN
 }
 
 export default function TransactionsView({
-  portfolioId, refreshKey, onNewTransaction,
+  portfolioId, refreshKey, onNewTransaction, selectionDemandee,
 }: {
   portfolioId: string;
   refreshKey: number;
   onNewTransaction: () => void;
+  /** Écriture à mettre en avant, désignée depuis le graphique de la vue générale. */
+  selectionDemandee?: number | null;
 }) {
   const [txs, setTxs] = useState<Tx[]>([]);
   const [positions, setPositions] = useState<Position[]>([]);
@@ -102,6 +104,15 @@ export default function TransactionsView({
     });
     return () => { annule = true; };
   }, [portfolioId, refreshKey]);
+
+  // Une opération désignée depuis le graphique prend la main sur la sélection
+  // par défaut, et la timeline défile jusqu'à elle.
+  useEffect(() => {
+    if (selectionDemandee == null) return;
+    setChoisie(selectionDemandee);
+    const el = document.getElementById(`op-${selectionDemandee}`);
+    el?.scrollIntoView({ block: "nearest" });
+  }, [selectionDemandee]);
 
   /**
    * Supprime une écriture.
@@ -226,7 +237,7 @@ export default function TransactionsView({
                 const type = types[t.id];
                 const actif = t.id === choisie;
                 return (
-                  <button key={t.id} onClick={() => setChoisie(t.id)} style={{
+                  <button key={t.id} id={`op-${t.id}`} onClick={() => setChoisie(t.id)} style={{
                     display: "flex", gap: 9, width: "100%", textAlign: "left", padding: "7px 8px",
                     borderRadius: 9, marginBottom: 2, cursor: "pointer", fontFamily: FONT,
                     background: actif ? "rgba(91,141,239,0.12)" : "transparent",

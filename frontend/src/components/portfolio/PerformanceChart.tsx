@@ -38,12 +38,6 @@ const API = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 /** Demi-largeur, en pixels, de la portion de courbe éclairée au survol. */
 const HALO = 22;
 
-/** Longueur de la tige entre la courbe et la pastille. */
-const TIGE = 12;
-
-/** Encombrement vertical d'un repère : pastille plus tige. */
-const HAUTEUR_REPERE = 16 + TIGE;
-
 /**
  * Pictogramme d'une opération.
  *
@@ -52,9 +46,12 @@ const HAUTEUR_REPERE = 16 + TIGE;
  */
 function Pictogramme({ type }: { type: string }) {
   const commun = {
-    width: 8, height: 8, viewBox: "0 0 10 10", fill: "none",
-    stroke: "currentColor", strokeWidth: 1.8,
+    width: 9, height: 9, viewBox: "0 0 10 10", fill: "none",
+    stroke: "currentColor", strokeWidth: 2,
     strokeLinecap: "round" as const, strokeLinejoin: "round" as const,
+    // Sans `display: block`, le SVG reste en ligne et s'aligne sur la ligne de
+    // base : il se posait deux pixels sous le centre du cercle.
+    style: { display: "block" },
   };
   if (type === "vente") {
     return <svg {...commun}><path d="M5 1.5v7M2 5.5l3 3 3-3" /></svg>;
@@ -123,7 +120,7 @@ const PERIOD_SECS: Record<Period, number | null> = {
 
 export default function PerformanceChart({
   assets, totalValue, period, onPeriodChange, color = "#5B8DEF", height,
-  portfolioId, surTransactions = false, operations = [],
+  portfolioId, surTransactions = false, operations = [], onOperationClick,
 }: {
   assets: { ticker: string; weight: number }[];
   totalValue: number | null;
@@ -149,6 +146,8 @@ export default function PerformanceChart({
    * qui monte aussi bien parce qu'on a versé que parce que le marché a monté.
    */
   operations?: { id: number; ticker: string; executed_at: string; type: string; couleur: string; libelle: string }[];
+  /** Appelé au clic sur un repère, avec l'identifiant de l'écriture. */
+  onOperationClick?: (id: number) => void;
 }) {
   const boxRef = useRef<HTMLDivElement>(null);
   const plotRef = useRef<HTMLDivElement>(null);
@@ -167,7 +166,7 @@ export default function PerformanceChart({
   /** Titres détenus dont le cours n'a pas pu être établi. */
   const [sansCours, setSansCours] = useState<string[]>([]);
   /** Position à l'écran de chaque repère d'opération, en pixels du cadre. */
-  const [pastilles, setPastilles] = useState<{ id: number; x: number; y: number; dessous: boolean; couleur: string; titre: string; nombre: number; type: string }[]>([]);
+  const [pastilles, setPastilles] = useState<{ id: number; x: number; y: number; couleur: string; titre: string; nombre: number; type: string }[]>([]);
 
   // ── Données ────────────────────────────────────────────────────────────────
   const key = assets.map(a => `${a.ticker}:${a.weight}`).join(",");
@@ -274,7 +273,7 @@ export default function PerformanceChart({
         else groupes.set(cle, { op, jour: cible, n: 1, tickers: new Set([op.ticker]) });
       }
 
-      const out: { id: number; x: number; y: number; dessous: boolean; couleur: string; titre: string; nombre: number; type: string }[] = [];
+      const out: { id: number; x: number; y: number; couleur: string; titre: string; nombre: number; type: string }[] = [];
       for (const g of Array.from(groupes.values())) {
         const t = Math.floor(new Date(g.jour + "T00:00:00Z").getTime() / 1000) as UTCTimestamp;
         const x = chart.timeScale().timeToCoordinate(t);
@@ -282,14 +281,8 @@ export default function PerformanceChart({
         const y = v == null ? null : serie.priceToCoordinate(v);
         if (x == null || y == null) continue;
         const quand = new Date(g.op.executed_at).toLocaleDateString("fr-FR");
-        // Une pastille près du sommet sortirait du cadre et se poserait sur
-        // les boutons de période. Dans ce cas la tige descend et la pastille
-        // se range sous la courbe — la liaison reste lisible, seul le sens
-        // change.
-        const dessous = y < HAUTEUR_REPERE + 4;
         out.push({
-          // `y` reste le point de la courbe : la tige part de là.
-          id: g.op.id, x, y, dessous, couleur: g.op.couleur, nombre: g.n, type: g.op.type,
+          id: g.op.id, x, y, couleur: g.op.couleur, nombre: g.n, type: g.op.type,
           titre: g.n === 1
             ? `${g.op.libelle} ${g.op.ticker} — ${quand}`
             : `${g.n} ${g.op.libelle.toLowerCase()}s (${Array.from(g.tickers).join(", ")}) — ${quand}`,
@@ -664,23 +657,27 @@ export default function PerformanceChart({
           // sortait. Détachée, elle flottait sans qu'on sache à quel point du
           // tracé elle se rapportait — sur une courbe en escalier, l'écart
           // d'un jour se lit.
-          <span key={p.id} title={p.titre} style={{
-            position: "absolute", left: p.x, top: p.y,
-            transform: p.dessous ? "translate(-50%,0)" : "translate(-50%,-100%)",
-            display: "flex", flexDirection: p.dessous ? "column-reverse" : "column",
-            alignItems: "center", zIndex: 6, pointerEvents: "none",
-          }}>
-            <span style={{
-              width: 16, height: 16, borderRadius: "50%",
-              background: "rgba(6,20,42,0.96)",
-              border: `1.5px solid ${p.couleur}`,
+          <button key={p.id} title={p.titre} type="button"
+            onClick={onOperationClick ? () => onOperationClick(p.id) : undefined}
+            style={{
+              // Centré sur le point de la courbe : le repère en sort au lieu
+              // de flotter au-dessus. Une tige le rattachait, mais douze pixels
+              // plus haut il semblait encore posé à côté.
+              position: "absolute", left: p.x, top: p.y,
+              transform: "translate(-50%,-50%)",
+              width: 18, height: 18, borderRadius: "50%", padding: 0,
+              // Plein, et non cerclé : sur un tracé de la même teinte, un
+              // cercle évidé se confondait avec la courbe qui le traverse.
+              background: p.couleur,
+              border: "2px solid rgba(6,20,42,0.96)",
               display: "flex", alignItems: "center", justifyContent: "center",
-              color: p.couleur, flexShrink: 0,
+              color: "rgba(6,20,42,0.96)", flexShrink: 0,
+              zIndex: 6,
+              cursor: onOperationClick ? "pointer" : "default",
+              pointerEvents: onOperationClick ? "auto" : "none",
             }}>
-              <Pictogramme type={p.type} />
-            </span>
-            <span style={{ width: 1.5, height: TIGE, background: p.couleur, opacity: 0.55 }} />
-          </span>
+            <Pictogramme type={p.type} />
+          </button>
         ))}
         <canvas ref={glowRef} style={{
           position: "absolute", inset: 0, pointerEvents: "none",
@@ -716,10 +713,10 @@ export default function PerformanceChart({
               {/* Même vignette que sur la courbe, en réduction : une puce ronde
                   n'annoncerait plus rien une fois les pictogrammes posés. */}
               <span style={{
-                width: 13, height: 13, borderRadius: "50%",
-                background: "rgba(6,20,42,0.96)", border: `1.2px solid ${l.couleur}`,
+                width: 14, height: 14, borderRadius: "50%",
+                background: l.couleur,
                 display: "flex", alignItems: "center", justifyContent: "center",
-                color: l.couleur, flexShrink: 0,
+                color: "rgba(6,20,42,0.96)", flexShrink: 0,
               }}>
                 <Pictogramme type={l.type} />
               </span>
