@@ -860,7 +860,13 @@ function PortfolioPageInner() {
         Opposer deux pourcentages laissait ouvert ce que l'épargnant aurait
         réellement eu ; en euros, la question ne se pose plus. */}
     {simRepere != null && gain != null ? (() => {
-      const ecart = gain.eur - simRepere.gain_eur;
+      // L'écart se calcule sur les montants *affichés*, arrondis, et non sur
+      // les valeurs exactes : sinon « 85 € » moins « 77 € » peut s'accompagner
+      // d'un « 9 € de mieux », et le lecteur qui refait la soustraction trouve
+      // huit.
+      const mien = Math.round(gain.eur);
+      const sien = Math.round(simRepere.gain_eur);
+      const ecart = mien - sien;
       const col   = ecart >= 0 ? "#4ade80" : "#f87171";
       return (
         <div style={{ position: "relative", marginTop: 3 }}
@@ -872,14 +878,13 @@ function PortfolioPageInner() {
           <div style={{ fontSize: 10, color: "rgba(255,255,255,0.40)", fontFamily: FONT, cursor: "default" }}>
             Sur S&amp;P 500&nbsp;
             <span style={{ color: "rgba(255,255,255,0.62)", fontWeight: 600 }}>
-              {simRepere.gain_eur >= 0 ? "+" : ""}
-              {Math.round(simRepere.gain_eur).toLocaleString("fr-FR")} €
+              {sien >= 0 ? "+" : ""}{sien.toLocaleString("fr-FR")} €
             </span>
           </div>
           <div style={{ fontSize: 10, color: "rgba(255,255,255,0.40)", fontFamily: FONT, cursor: "default", marginTop: 2 }}>
             Vous&nbsp;
             <span style={{ color: col, fontWeight: 700 }}>
-              {ecart >= 0 ? "+" : "−"}{Math.abs(Math.round(ecart)).toLocaleString("fr-FR")} €
+              {ecart >= 0 ? "+" : "−"}{Math.abs(ecart).toLocaleString("fr-FR")} €
             </span>
             <span style={{ marginLeft: 3, opacity: 0.8 }}>{ecart >= 0 ? "de mieux" : "de moins"}</span>
           </div>

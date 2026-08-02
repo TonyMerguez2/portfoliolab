@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import AssetLogo from "@/components/AssetLogo";
 import { FONT, NUM } from "@/lib/typography";
 import { enTetesAuth } from "@/lib/session";
@@ -76,6 +76,35 @@ export default function TransactionsView({
   const [confirme, setConfirme] = useState<number | null>(null);
   const [erreur, setErreur] = useState<string | null>(null);
   const [suppression, setSuppression] = useState(false);
+  /**
+   * Largeur disponible, pour choisir entre trois colonnes et deux.
+   *
+   * Sous 1 150 px, le tableau tombe à 250 px : ses en-têtes se coupent et la
+   * quantité colle au montant. Mesurée plutôt que devinée par un point de
+   * rupture d'écran — le panneau latéral se replie, la fenêtre disponible ne
+   * suit pas la taille de l'écran.
+   */
+  const [large, setLarge] = useState(true);
+  const observateur = useRef<ResizeObserver | null>(null);
+
+  /**
+   * Référence par fonction, et non par objet.
+   *
+   * Le composant rend d'abord « Chargement… », puis l'écran : un effet posé au
+   * montage trouvait une référence vide, n'installait aucun observateur, et ne
+   * se rejouait jamais. La mise en page restait donc sur sa valeur initiale —
+   * trois colonnes, même dans 1 000 px, où quatre en-têtes se coupaient.
+   */
+  const cadreRef = useCallback((el: HTMLDivElement | null) => {
+    observateur.current?.disconnect();
+    if (!el) return;
+    const mesurer = () => setLarge(el.clientWidth >= 1150);
+    mesurer();
+    observateur.current = new ResizeObserver(mesurer);
+    observateur.current.observe(el);
+  }, []);
+
+  useEffect(() => () => observateur.current?.disconnect(), []);
 
   // ── Données ────────────────────────────────────────────────────────────────
   useEffect(() => {
@@ -175,7 +204,7 @@ export default function TransactionsView({
   }
 
   return (
-    <div style={{ display: "grid", gridTemplateColumns: "minmax(0,1fr) 320px", gap: 12,
+    <div ref={cadreRef} style={{ display: "grid", gridTemplateColumns: "minmax(0,1fr) 320px", gap: 12,
                   padding: "12px 14px", height: "100%", overflow: "auto", alignItems: "start" }}>
 
       {/* ── Colonne principale ───────────────────────────────────────────── */}
@@ -203,8 +232,13 @@ export default function TransactionsView({
             avec ses écritures au lieu de défiler, et le panneau de détail —
             étiré à la même hauteur par la grille — se creuse d'un vide que
             rien ne remplit. */}
-        <div style={{ display: "grid", gridTemplateColumns: "230px minmax(0,1fr) minmax(0,1.25fr)",
-                      gap: 12, height: 380 }}>
+        <div style={{
+          display: "grid",
+          gridTemplateColumns: large
+            ? "230px minmax(0,1fr) minmax(0,1.25fr)"
+            : "230px minmax(0,1fr)",
+          gap: 12, height: 380,
+        }}>
 
           {/* Timeline */}
           <Carte>
@@ -362,68 +396,31 @@ export default function TransactionsView({
 
           {/* Le tableau prend place à droite du détail, comme au concept :
               en pleine largeur sous les deux autres, il obligeait à descendre
-              pour retrouver l'opération qu'on venait de sélectionner. */}
-          <Carte>
+              pour retrouver l'opération qu'on venait de sélectionner. Il n'y
+              descend que faute de place — six colonnes dans 250 px se coupent
+              les unes les autres. */}
+          {large && <Carte>
             <Titre>Toutes les transactions</Titre>
           <div style={{ overflowY: "auto", minHeight: 0, flex: 1 }}>
-            <table style={{ width: "100%", borderCollapse: "collapse", fontFamily: FONT, tableLayout: "fixed" }}>
-              <colgroup>
-                <col style={{ width: "21%" }} />
-                <col style={{ width: "24%" }} />
-                <col style={{ width: "17%" }} />
-                <col style={{ width: "11%" }} />
-                <col style={{ width: "15%" }} />
-                <col style={{ width: "12%" }} />
-              </colgroup>
-              <thead>
-                <tr>
-                  {["Date", "Type", "Actif", "Qté", "Montant", "Résultat"].map((h, i) => (
-                    <th key={h} style={{
-                      position: "sticky", top: 0, background: "rgba(9,27,52,0.96)",
-                      textAlign: i >= 3 ? "right" : "left", padding: "6px 6px",
-                      fontSize: 9, fontWeight: 700, letterSpacing: "0.08em",
-                      color: "rgba(255,255,255,0.30)", textTransform: "uppercase",
-                    }}>{h}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {recentes.map(t => {
-                  const r = parId[t.id];
-                  return (
-                    <tr key={t.id} onClick={() => setChoisie(t.id)} style={{
-                      cursor: "pointer",
-                      background: t.id === choisie ? "rgba(91,141,239,0.10)" : "transparent",
-                      borderTop: "1px solid rgba(255,255,255,0.05)",
-                    }}>
-                      <td style={{ padding: "7px 6px", fontSize: 10.5, color: "rgba(255,255,255,0.55)", whiteSpace: "nowrap" }}>
-                        {new Date(t.executed_at).toLocaleDateString("fr-FR", { day: "2-digit", month: "2-digit", year: "2-digit" })}
-                      </td>
-                      <td style={{ padding: "7px 6px", fontSize: 10.5 }}>
-                        <span style={{ display: "inline-flex", alignItems: "center", gap: 5, color: COULEUR_OP[types[t.id]],
-                                       overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: "100%" }}>
-                          <i style={{ width: 6, height: 6, borderRadius: "50%", background: COULEUR_OP[types[t.id]], flexShrink: 0 }} />
-                          {LIBELLE_OP[types[t.id]]}
-                        </span>
-                      </td>
-                      <td style={{ padding: "7px 6px", fontSize: 11, fontWeight: 600, color: "rgba(255,255,255,0.88)",
-                                   overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{t.ticker}</td>
-                      <td style={{ ...NUM, padding: "7px 6px", textAlign: "right", fontSize: 10.5, whiteSpace: "nowrap", color: "rgba(255,255,255,0.60)" }}>
-                        {t.side === "SELL" ? "−" : "+"}{t.quantity.toLocaleString("fr-FR", { maximumFractionDigits: 6 })}
-                      </td>
-                      <td style={{ ...NUM, padding: "7px 6px", textAlign: "right", fontSize: 10.5, whiteSpace: "nowrap", color: "rgba(255,255,255,0.75)" }}>{eur(montant(t))}</td>
-                      <td style={{ ...NUM, padding: "7px 6px", textAlign: "right", fontSize: 10.5, whiteSpace: "nowrap", fontWeight: 600,
-                        color: r?.gain == null ? "rgba(255,255,255,0.25)" : r.gain >= 0 ? "#4ade80" : "#f87171" }}>
-                        {r?.gain == null ? "—" : `${r.gain >= 0 ? "+" : ""}${Math.round(r.gain).toLocaleString("fr-FR")} €`}
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
+              <TableauOperations
+                lignes={recentes} types={types} parId={parId}
+                choisie={choisie} onChoisir={setChoisie}
+              />
           </div>
-          </Carte>
+          </Carte>}
         </div>
+
+        {!large && (
+          <Carte style={{ height: 320 }}>
+            <Titre>Toutes les transactions</Titre>
+            <div style={{ overflowY: "auto", minHeight: 0, flex: 1 }}>
+              <TableauOperations
+                lignes={recentes} types={types} parId={parId}
+                choisie={choisie} onChoisir={setChoisie}
+              />
+            </div>
+          </Carte>
+        )}
       </div>
 
       {/* ── Colonne de droite ────────────────────────────────────────────── */}
@@ -485,5 +482,83 @@ export default function TransactionsView({
         </Carte>
       </div>
     </div>
+  );
+}
+
+
+/**
+ * Le tableau des opérations.
+ *
+ * Extrait pour être posé à deux endroits : à droite du détail quand la largeur
+ * le permet, en pleine largeur dessous sinon. L'écrire deux fois aurait suffi
+ * à ce que les deux divergent.
+ */
+function TableauOperations({
+  lignes, types, parId, choisie, onChoisir,
+}: {
+  lignes: Tx[];
+  types: Record<number, TypeOp>;
+  parId: Record<number, { gain: number | null }>;
+  choisie: number | null;
+  onChoisir: (id: number) => void;
+}) {
+  return (
+      <table style={{ width: "100%", borderCollapse: "collapse", fontFamily: FONT, tableLayout: "fixed" }}>
+        <colgroup>
+          <col style={{ width: "18%" }} />
+          <col style={{ width: "20%" }} />
+          <col style={{ width: "16%" }} />
+          <col style={{ width: "10%" }} />
+          <col style={{ width: "18%" }} />
+          <col style={{ width: "18%" }} />
+        </colgroup>
+        <thead>
+          <tr>
+            {["Date", "Type", "Actif", "Qté", "Montant", "Résultat"].map((h, i) => (
+              <th key={h} style={{
+                position: "sticky", top: 0, background: "rgba(9,27,52,0.96)",
+                // Interlettrage et marges resserrés : « Résultat » réclamait
+                // 60 px dans une colonne qui en offrait 52.
+                textAlign: i >= 3 ? "right" : "left", padding: "6px 3px",
+                fontSize: 9, fontWeight: 700, letterSpacing: "0.02em",
+                color: "rgba(255,255,255,0.30)", textTransform: "uppercase",
+              }}>{h}</th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {lignes.map((t: Tx) => {
+            const r = parId[t.id];
+            return (
+              <tr key={t.id} onClick={() => onChoisir(t.id)} style={{
+                cursor: "pointer",
+                background: t.id === choisie ? "rgba(91,141,239,0.10)" : "transparent",
+                borderTop: "1px solid rgba(255,255,255,0.05)",
+              }}>
+                <td style={{ padding: "7px 6px", fontSize: 10.5, color: "rgba(255,255,255,0.55)", whiteSpace: "nowrap" }}>
+                  {new Date(t.executed_at).toLocaleDateString("fr-FR", { day: "2-digit", month: "2-digit", year: "2-digit" })}
+                </td>
+                <td style={{ padding: "7px 6px", fontSize: 10.5 }}>
+                  <span style={{ display: "inline-flex", alignItems: "center", gap: 5, color: COULEUR_OP[types[t.id]],
+                                 overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: "100%" }}>
+                    <i style={{ width: 6, height: 6, borderRadius: "50%", background: COULEUR_OP[types[t.id]], flexShrink: 0 }} />
+                    {LIBELLE_OP[types[t.id]]}
+                  </span>
+                </td>
+                <td style={{ padding: "7px 6px", fontSize: 11, fontWeight: 600, color: "rgba(255,255,255,0.88)",
+                             overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{t.ticker}</td>
+                <td style={{ ...NUM, padding: "7px 6px", textAlign: "right", fontSize: 10.5, whiteSpace: "nowrap", color: "rgba(255,255,255,0.60)" }}>
+                  {t.side === "SELL" ? "−" : "+"}{t.quantity.toLocaleString("fr-FR", { maximumFractionDigits: 6 })}
+                </td>
+                <td style={{ ...NUM, padding: "7px 6px", textAlign: "right", fontSize: 10.5, whiteSpace: "nowrap", color: "rgba(255,255,255,0.75)" }}>{eur(montant(t))}</td>
+                <td style={{ ...NUM, padding: "7px 6px", textAlign: "right", fontSize: 10.5, whiteSpace: "nowrap", fontWeight: 600,
+                  color: r?.gain == null ? "rgba(255,255,255,0.25)" : r.gain >= 0 ? "#4ade80" : "#f87171" }}>
+                  {r?.gain == null ? "—" : `${r.gain >= 0 ? "+" : ""}${Math.round(r.gain).toLocaleString("fr-FR")} €`}
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
   );
 }
