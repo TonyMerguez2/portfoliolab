@@ -140,7 +140,7 @@ export default function PerformanceChart({
   /** Titres détenus dont le cours n'a pas pu être établi. */
   const [sansCours, setSansCours] = useState<string[]>([]);
   /** Position à l'écran de chaque repère d'opération, en pixels du cadre. */
-  const [pastilles, setPastilles] = useState<{ id: number; x: number; y: number; couleur: string; titre: string }[]>([]);
+  const [pastilles, setPastilles] = useState<{ id: number; x: number; y: number; couleur: string; titre: string; nombre: number }[]>([]);
 
   // ── Données ────────────────────────────────────────────────────────────────
   const key = assets.map(a => `${a.ticker}:${a.weight}`).join(",");
@@ -228,21 +228,38 @@ export default function PerformanceChart({
     const jours = points.map(p => p.date.slice(0, 10));
 
     const calculer = () => {
-      const out: { id: number; x: number; y: number; couleur: string; titre: string }[] = [];
+      // Regroupement par jour et par type.
+      //
+      // Quatre renforcements le même jour partagent date et valeur : leurs
+      // pastilles se posaient exactement l'une sur l'autre, indiscernables
+      // d'une seule mais quatre fois plus opaques. Une pastille par groupe,
+      // qui dit combien d'opérations elle couvre.
+      const groupes = new Map<string, { op: typeof operations[number]; jour: string; n: number; tickers: Set<string> }>();
       for (const op of operations) {
         const jour = op.executed_at.slice(0, 10);
         // Le premier jour coté à partir de la date de l'opération : une
         // écriture passée un samedi n'a pas de point à elle.
         const cible = valeurAu.has(jour) ? jour : jours.find(j => j >= jour);
         if (!cible) continue;
-        const t = Math.floor(new Date(cible + "T00:00:00Z").getTime() / 1000) as UTCTimestamp;
+        const cle = `${cible}|${op.type}`;
+        const g = groupes.get(cle);
+        if (g) { g.n += 1; g.tickers.add(op.ticker); }
+        else groupes.set(cle, { op, jour: cible, n: 1, tickers: new Set([op.ticker]) });
+      }
+
+      const out: { id: number; x: number; y: number; couleur: string; titre: string; nombre: number }[] = [];
+      for (const g of Array.from(groupes.values())) {
+        const t = Math.floor(new Date(g.jour + "T00:00:00Z").getTime() / 1000) as UTCTimestamp;
         const x = chart.timeScale().timeToCoordinate(t);
-        const v = valeurAu.get(cible);
+        const v = valeurAu.get(g.jour);
         const y = v == null ? null : serie.priceToCoordinate(v);
         if (x == null || y == null) continue;
+        const quand = new Date(g.op.executed_at).toLocaleDateString("fr-FR");
         out.push({
-          id: op.id, x, y: y - 12, couleur: op.couleur,
-          titre: `${op.libelle} ${op.ticker} — ${new Date(op.executed_at).toLocaleDateString("fr-FR")}`,
+          id: g.op.id, x, y: y - 13, couleur: g.op.couleur, nombre: g.n,
+          titre: g.n === 1
+            ? `${g.op.libelle} ${g.op.ticker} — ${quand}`
+            : `${g.n} ${g.op.libelle.toLowerCase()}s (${Array.from(g.tickers).join(", ")}) — ${quand}`,
         });
       }
       setPastilles(out);
@@ -285,9 +302,14 @@ export default function PerformanceChart({
       // graphique : c'est là que lightweight-charts pose la pastille de
       // dernière valeur.
       rightPriceScale: { borderVisible: false, scaleMargins: { top: 0.12, bottom: 0.08 } },
-      // `fixLeftEdge` doit rester faux pour que `setVisibleRange` ne soit pas
-      // contraint au premier point — la page graphique porte la même remarque.
-      timeScale: { borderVisible: false, timeVisible: false, secondsVisible: false },
+      // Bords fixés : sans eux, la molette emmène la courbe dans le vide, des
+      // mois de blanc à droite ou à gauche de données qui n'existent pas.
+      // Compatible avec le cadrage en [0,5 ; n−1,5], qui reste à l'intérieur
+      // de la plage réelle.
+      timeScale: {
+        borderVisible: false, timeVisible: false, secondsVisible: false,
+        fixLeftEdge: true, fixRightEdge: true,
+      },
       handleScroll: { mouseWheel: true, pressedMouseMove: true, horzTouchDrag: true, vertTouchDrag: false },
       handleScale: { mouseWheel: true, pinch: true, axisPressedMouseMove: { time: true, price: true } },
     });
@@ -468,6 +490,14 @@ export default function PerformanceChart({
       // est écrasé par la mise en page que la bibliothèque enchaîne.
       const cadrer = () => {
         try {
+          // Zoom arrière borné à la vue d'ensemble : au-delà, on ne montre que
+          // du blanc. L'espacement minimal est celui qui fait tenir toute la
+          // série dans le cadre, recalculé à chaque changement de données ou
+          // de largeur.
+          const w = plotRef.current?.clientWidth ?? 0;
+          if (w > 0 && nbBarres > 1) {
+            chart.timeScale().applyOptions({ minBarSpacing: w / nbBarres });
+          }
           chart.timeScale().applyOptions({ rightOffset: 0 });
           chart.timeScale().setVisibleLogicalRange({ from: 0.5, to: nbBarres - 1.5 });
         } catch { /* graphique démonté entre-temps */ }
@@ -599,9 +629,16 @@ export default function PerformanceChart({
         {pastilles.map(p => (
           <span key={p.id} title={p.titre} style={{
             position: "absolute", left: p.x, top: p.y, transform: "translate(-50%,-50%)",
-            width: 7, height: 7, borderRadius: "50%", background: p.couleur,
-            border: "1.5px solid rgba(4,17,36,0.85)", zIndex: 6, pointerEvents: "none",
-            boxShadow: `0 0 6px ${p.couleur}80`,
+            // Un anneau net plutôt qu'un halo : le `box-shadow` diffus faisait
+            // baver la couleur sur la courbe et la pastille paraissait sale.
+            // Deux ombres portées superposées — un cerne sombre qui la détache
+            // du fond, un liseré coloré très léger qui la relie à sa série.
+            width: 6, height: 6, borderRadius: "50%", background: p.couleur,
+            boxShadow: `0 0 0 2px rgba(4,17,36,0.92), 0 0 0 3px ${p.couleur}38`,
+            zIndex: 6, pointerEvents: "none",
+            // Une pastille groupée est un peu plus grande, sans compteur : un
+            // chiffre à cette taille serait illisible, et l'infobulle le dit.
+            ...(p.nombre > 1 ? { width: 8, height: 8 } : null),
           }} />
         ))}
         <canvas ref={glowRef} style={{
