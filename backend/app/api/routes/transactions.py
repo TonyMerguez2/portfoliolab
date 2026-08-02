@@ -495,3 +495,148 @@ async def get_history(
             resultat["benchmark_pct"] = round((bornes[-1] / bornes[0] - 1.0) * 100, 4)
 
     return resultat
+
+
+# ── GET — analyse du portefeuille ─────────────────────────────────────────────
+
+# Détails par ticker : secteurs internes, devise, classes d'actifs, volume.
+# Un appel yfinance par titre coûte plusieurs secondes et le fournisseur limite
+# le débit ; le cache évite de les refaire à chaque ouverture de l'onglet.
+_CACHE_DETAILS: dict[str, tuple[float, dict]] = {}
+_TTL_DETAILS = 6 * 3600
+
+
+def _details_titre(ticker: str) -> dict:
+    """Ce que yfinance sait d'un titre, mis en cache six heures."""
+    import time
+
+    import yfinance as yf
+
+    frais = _CACHE_DETAILS.get(ticker)
+    if frais and time.time() - frais[0] < _TTL_DETAILS:
+        return frais[1]
+
+    d: dict = {}
+    try:
+        tk = yf.Ticker(ticker)
+        info = tk.info or {}
+        d["devise"] = info.get("currency")
+        d["secteur"] = info.get("sector")
+        d["volume"] = info.get("averageVolume")
+        d["nom"] = info.get("shortName") or info.get("longName")
+        if info.get("quoteType") == "ETF":
+            try:
+                fd = tk.funds_data
+                d["secteurs"] = dict(fd.sector_weightings or {})
+                d["classes"] = dict(fd.asset_classes or {})
+            except Exception:
+                pass
+        elif info.get("sector"):
+            # Une action est cent pour cent action : la classe est connue sans
+            # transparence.
+            d["classes"] = {"stockPosition": 1.0}
+    except Exception as exc:                                  # pragma: no cover
+        logger.warning("détails indisponibles pour %s : %s", ticker, exc)
+
+    _CACHE_DETAILS[ticker] = (time.time(), d)
+    return d
+
+
+@router.get("/{portfolio_id}/analysis")
+async def get_analysis(
+    portfolio_id: str,
+    db:           Session = Depends(get_db),
+    user:         User    = Depends(require_auth),
+):
+    """
+    Facteurs de risque, exposition et observations.
+
+    Rien n'y est estimé : un indicateur qui manque de données vaut `null` et le
+    dit. Un score inventé se lirait comme une mesure.
+    """
+    from datetime import timedelta
+
+    import pandas as pd
+    import yfinance as yf
+
+    from app.services.analyse import (
+        bande, exposition_secteurs, exposition_simple, facteurs_de_risque,
+        observations, score_global,
+    )
+
+    _get_portfolio_or_404(portfolio_id, db, user)
+
+    txs = (
+        db.query(Transaction)
+        .filter(Transaction.portfolio_id == portfolio_id)
+        .all()
+    )
+    if not txs:
+        return {"score": None, "bande": None, "facteurs": {}, "expositions": {},
+                "observations": [], "source": "aucune"}
+
+    from app.utils.positions import compute_positions
+
+    pos = compute_positions(txs)
+    tickers = sorted(pos.keys())
+    if not tickers:
+        return {"score": None, "bande": None, "facteurs": {}, "expositions": {},
+                "observations": [], "source": "aucune"}
+
+    prix = await fetch_current_prices(tickers)
+    valeurs = {t: pos[t]["quantity"] * prix[t] for t in tickers if prix.get(t)}
+    total = sum(valeurs.values())
+    poids = {t: v / total * 100 for t, v in valeurs.items()} if total > 0 else {}
+
+    # ── Historique, pour les facteurs de marché ──────────────────────────────
+    rendements = marche = None
+    try:
+        brut = yf.download(
+            tickers + [_BENCHMARK], period="1y",
+            progress=False, auto_adjust=True, threads=True,
+        )["Close"]
+        if len(tickers) == 0:
+            brut = None
+        if brut is not None and len(brut):
+            if isinstance(brut, pd.Series):
+                brut = brut.to_frame(tickers[0])
+            cols = [t for t in tickers if t in brut]
+            if cols:
+                rendements = brut[cols].pct_change().dropna(how="all")
+            if _BENCHMARK in brut:
+                marche = brut[_BENCHMARK].pct_change().dropna()
+    except Exception as exc:                                  # pragma: no cover
+        logger.warning("historique d'analyse indisponible : %s", exc)
+
+    details = {t: _details_titre(t) for t in tickers}
+
+    # ── Liquidité : séances nécessaires pour sortir des positions ────────────
+    jours = None
+    parts = []
+    for t in tickers:
+        vol = (details.get(t) or {}).get("volume")
+        p = prix.get(t)
+        if vol and p and vol > 0:
+            parts.append(pos[t]["quantity"] / vol)
+    if parts:
+        jours = max(parts)
+
+    facteurs = facteurs_de_risque(poids, rendements, marche, jours)
+    sc = score_global(facteurs)
+
+    expositions = {
+        "secteurs": exposition_secteurs(details, poids),
+        "devises":  exposition_simple(details, poids, "devise"),
+        "classes":  exposition_simple(details, poids, "classes"),
+    }
+
+    return {
+        "score": sc,
+        "bande": bande(sc),
+        "facteurs": facteurs,
+        "expositions": expositions,
+        "observations": observations(poids, facteurs, expositions),
+        "poids": [{"ticker": t, "part": round(w, 2)} for t, w in
+                  sorted(poids.items(), key=lambda kv: kv[1], reverse=True)],
+        "source": "transactions",
+    }

@@ -6,6 +6,7 @@ import { useApp } from "@/lib/AppContext";
 import AssetLogo from "@/components/AssetLogo";
 import TransactionModal from "@/components/TransactionModal";
 import TransactionsView from "@/components/portfolio/TransactionsView";
+import AnalyseView from "@/components/portfolio/AnalyseView";
 import PerformanceChart from "@/components/portfolio/PerformanceChart";
 import AssetGrid from "@/components/portfolio/AssetGrid";
 import AllocationDonut from "@/components/portfolio/AllocationDonut";
@@ -13,6 +14,7 @@ import RecentActivity from "@/components/portfolio/RecentActivity";
 import PortfolioTabs from "@/components/portfolio/PortfolioTabs";
 import { donutArcs } from "@/lib/donut";
 import { valoriser } from "@/lib/portfolio";
+import RadarChart from "@/components/charts/RadarChart";
 import { enTetesAuth } from "@/lib/session";
 import { typesParOperation, COULEUR_OP, LIBELLE_OP, type Tx } from "@/lib/journal";
 import { FONT } from "@/lib/typography";
@@ -177,37 +179,6 @@ function CircleScore({ score, size = 88, nu = false }: { score: number; size?: n
 }
 
 // ── Radar chart SVG ────────────────────────────────────────────────────────────
-function RadarChart({ metrics, size = 170 }: { metrics: { label: string; value: number }[]; size?: number }) {
-  const cx = size / 2, cy = size / 2, r = size / 2 - 26, n = metrics.length;
-  const pt = (i: number, v: number) => {
-    const a = (i / n) * 2 * Math.PI - Math.PI / 2;
-    const d = (v / 100) * r;
-    return { x: cx + Math.cos(a) * d, y: cy + Math.sin(a) * d };
-  };
-  const axis = (i: number, s = 1) => {
-    const a = (i / n) * 2 * Math.PI - Math.PI / 2;
-    return { x: cx + Math.cos(a) * r * s, y: cy + Math.sin(a) * r * s };
-  };
-  const poly = metrics.map((m, i) => { const p = pt(i, m.value); return `${p.x},${p.y}`; }).join(" ");
-  return (
-    <svg width={size} height={size}>
-      {[0.25, 0.5, 0.75, 1].map(s => (
-        <polygon key={s} points={metrics.map((_, i) => { const p = axis(i, s); return `${p.x},${p.y}`; }).join(" ")}
-          fill="none" stroke="rgba(255,255,255,0.07)" strokeWidth={1} />
-      ))}
-      {metrics.map((_, i) => { const p = axis(i); return <line key={i} x1={cx} y1={cy} x2={p.x} y2={p.y} stroke="rgba(255,255,255,0.07)" strokeWidth={1} />; })}
-      <polygon points={poly} fill="rgba(91,141,239,0.15)" stroke="#5B8DEF" strokeWidth={1.5} strokeLinejoin="round" />
-      {metrics.map((m, i) => {
-        const p = axis(i, 1.22);
-        return (
-          <text key={i} x={p.x} y={p.y} textAnchor="middle" dominantBaseline="middle"
-            fill="rgba(255,255,255,0.40)" fontSize={8.5} fontFamily={FONT}>{m.label}</text>
-        );
-      })}
-    </svg>
-  );
-}
-
 // ── Main page ──────────────────────────────────────────────────────────────────
 // Les périodes viennent du module partagé : la page et le graphique doivent
 // parler des mêmes fenêtres, et les libellés sont ceux de la page graphique.
@@ -1176,97 +1147,13 @@ function PortfolioPageInner() {
       </div>{/* fin Vue Résumé */}
 
       {/* ══ VUE ANALYSE ═════════════════════════════════════════════════════════ */}
-      <div style={{ display: dashView === "analyse" ? "flex" : "none", height: "100%", padding: "14px 14px 10px", gap: 12, overflow: "hidden" }}>
-        {/* Gauche : Radar de risque */}
-        <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: 10 }}>
-          <Card style={{ flex: 1, padding: "16px 18px", display: "flex", flexDirection: "column" }}>
-            <SectionLabel>RADAR DE RISQUE</SectionLabel>
-            <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 24 }}>
-              {novacScore && (
-                <RadarChart size={200} metrics={[
-                  { label: "Diversif.", value: novacScore.diversification },
-                  { label: "Momentum", value: novacScore.momentum },
-                  { label: "Qualité",  value: novacScore.qualite },
-                  { label: "Risque",   value: novacScore.risque },
-                  { label: "Exposition", value: Math.min(100, (exposition["Actions"] ?? 0) + (exposition["ETF"] ?? 0)) },
-                ]} />
-              )}
-              <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-                {novacScore && [
-                  { label: "Diversification", value: novacScore.diversification, color: "#5B8DEF" },
-                  { label: "Momentum",        value: novacScore.momentum,        color: novacScore.momentum >= 50 ? "#4ade80" : "#f87171" },
-                  { label: "Qualité",         value: novacScore.qualite,         color: "#a78bfa" },
-                  { label: "Risque",          value: novacScore.risque,          color: novacScore.risque >= 60 ? "#4ade80" : "#fbbf24" },
-                ].map(m => (
-                  <div key={m.label} style={{ minWidth: 140 }}>
-                    <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
-                      <span style={{ fontSize: 11, color: "rgba(255,255,255,0.55)" }}>{m.label}</span>
-                      <span style={{ fontSize: 11, fontWeight: 700, fontFamily: FONT, color: m.color }}>{m.value}</span>
-                    </div>
-                    <div style={{ height: 4, borderRadius: 2, background: "rgba(255,255,255,0.07)" }}>
-                      <div style={{ height: "100%", borderRadius: 2, background: m.color, width: `${m.value}%`, opacity: 0.8, transition: "width 600ms ease" }} />
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </Card>
-        </div>
-        {/* Droite : Scénarios + exposition */}
-        <div style={{ width: 280, display: "flex", flexDirection: "column", gap: 10 }}>
-          <Card style={{ padding: "14px 16px" }}>
-            <SectionLabel>SCÉNARIOS WHAT-IF</SectionLabel>
-            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-              {[
-                { label: "Nasdaq −10%", impact: -0.072, color: "#f87171" },
-                { label: "Inflation +2%", impact: -0.018, color: "#fbbf24" },
-                { label: "Bitcoin +20%", impact: 0.031, color: "#4ade80" },
-                { label: "Taux +1%", impact: -0.012, color: "#fbbf24" },
-              ].map(s => {
-                const eurImpact = valeurTotale ? valeurTotale * s.impact : null;
-                return (
-                  <div key={s.label} style={{ display: "flex", alignItems: "center", justifyContent: "space-between",
-                    padding: "8px 10px", borderRadius: 8, background: `${s.color}12`, border: `1px solid ${s.color}22` }}>
-                    <span style={{ fontSize: 11, color: "rgba(255,255,255,0.75)" }}>{s.label}</span>
-                    <div style={{ textAlign: "right" }}>
-                      <span style={{ fontSize: 12, fontWeight: 700, fontFamily: FONT, color: s.color }}>
-                        {s.impact >= 0 ? "+" : ""}{(s.impact * 100).toFixed(1)}%
-                      </span>
-                      {eurImpact != null && (
-                        <div style={{ fontSize: 10, color: s.color, opacity: 0.6 }}>
-                          {eurImpact >= 0 ? "+" : ""}{Math.round(eurImpact).toLocaleString("fr-FR")} €
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          </Card>
-          <Card style={{ flex: 1, padding: "14px 16px" }}>
-            <SectionLabel>EXPOSITION SECTORIELLE</SectionLabel>
-            <div style={{ display: "flex", flexDirection: "column", gap: 10, justifyContent: "center", flex: 1 }}>
-              {Object.entries(exposition).sort((a, b) => b[1] - a[1]).map(([k, v]) => (
-                <div key={k}>
-                  <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
-                    <div style={{ display: "flex", alignItems: "center", gap: 7 }}>
-                      <div style={{ width: 7, height: 7, borderRadius: "50%", background: EXPO_COLORS[k] ?? "#94a3b8" }} />
-                      <span style={{ fontSize: 12, color: "rgba(255,255,255,0.65)" }}>{k}</span>
-                    </div>
-                    <span style={{ fontSize: 12, fontWeight: 700, fontFamily: FONT, color: EXPO_COLORS[k] ?? "#94a3b8" }}>{v.toFixed(1)}%</span>
-                  </div>
-                  <div style={{ height: 5, borderRadius: 3, background: "rgba(255,255,255,0.07)" }}>
-                    <div style={{ height: "100%", borderRadius: 3, background: EXPO_COLORS[k] ?? "#94a3b8", width: `${v}%`, transition: "width 600ms ease" }} />
-                  </div>
-                </div>
-              ))}
-            </div>
-          </Card>
-        </div>
-      </div>{/* fin Vue Analyse */}
+      <div style={{ display: dashView === "analyse" ? "flex" : "none", height: "100%", flexDirection: "column", overflow: "hidden" }}>
+        {portfolio && (
+          <AnalyseView portfolioId={portfolio.id} refreshKey={txRefreshKey} />
+        )}
+      </div>
 
-      {/* ══ VUE ÉVÉNEMENTS ══════════════════════════════════════════════════════ */}
-      <div style={{ display: dashView === "evenements" ? "flex" : "none", height: "100%", padding: "14px 14px 10px", gap: 12, overflow: "hidden" }}>
+<div style={{ display: dashView === "evenements" ? "flex" : "none", height: "100%", padding: "14px 14px 10px", gap: 12, overflow: "hidden" }}>
         <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: 10 }}>
           <Card style={{ flex: 1, padding: "16px 18px" }}>
             <SectionLabel>INSIGHTS IA</SectionLabel>

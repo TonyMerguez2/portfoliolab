@@ -300,8 +300,24 @@ SECTEURS_FR = {
 }
 
 
+# Les classes d'actifs arrivent sous leur nom d'API.
+CLASSES_FR = {
+    "stockPosition":       "Actions",
+    "bondPosition":        "Obligations",
+    "cashPosition":        "Liquidités",
+    "preferredPosition":   "Actions préférentielles",
+    "convertiblePosition": "Convertibles",
+    "otherPosition":       "Autres",
+}
+
+
 def _joli_secteur(cle: str) -> str:
     return SECTEURS_FR.get(cle, cle.replace("_", " ").capitalize())
+
+
+def _joli(cle: str) -> str:
+    """Traduit une clé technique, ou la rend telle quelle si on ne la connaît pas."""
+    return CLASSES_FR.get(cle, SECTEURS_FR.get(cle, cle))
 
 
 def agreger_exposition(
@@ -359,7 +375,8 @@ def exposition_simple(details: dict[str, dict], poids: dict[str, float], champ: 
         valeur = d.get(champ)
         if isinstance(valeur, dict):
             for cle, part in valeur.items():
-                cumul[cle] = cumul.get(cle, 0.0) + w * part
+                nom = _joli(cle)
+                cumul[nom] = cumul.get(nom, 0.0) + w * part
         elif valeur:
             cumul[valeur] = cumul.get(valeur, 0.0) + w
     return agreger_exposition([{"libelle": k, "part": v} for k, v in cumul.items()])

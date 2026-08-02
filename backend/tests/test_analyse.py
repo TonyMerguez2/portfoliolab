@@ -236,4 +236,7 @@ class TestExposition:
     def test_classes_d_actifs_reparties(self):
         details = {"A": {"classes": {"stockPosition": 0.9, "bondPosition": 0.1}}}
         r = exposition_simple(details, {"A": 100}, "classes")
-        assert {x["libelle"]: x["part"] for x in r}["stockPosition"] == pytest.approx(90, abs=0.2)
+        # Le nom technique de l'API n'a rien à faire à l'écran.
+        parts = {x["libelle"]: x["part"] for x in r}
+        assert parts["Actions"] == pytest.approx(90, abs=0.2)
+        assert parts["Obligations"] == pytest.approx(10, abs=0.2)
