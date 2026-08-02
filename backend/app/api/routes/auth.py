@@ -5,7 +5,32 @@ from app.core.database import get_db
 from app.core.auth import hash_password, verify_password, create_token, require_auth
 from app.models.user import User
 from pydantic import BaseModel, EmailStr
+from sqlalchemy import func
 import uuid
+
+
+def _normaliser_email(email: str) -> str:
+    """
+    Une adresse se compare sans casse ni espaces.
+
+    La partie domaine est insensible à la casse par norme, et aucun service
+    grand public ne distingue « Sacha@ » de « sacha@ ». Or la recherche était
+    littérale : une majuscule mise par le clavier — ce que font les téléphones
+    sur le premier caractère — ne trouvait aucun compte, et l'utilisateur
+    lisait « mot de passe incorrect ».
+    """
+    return (email or "").strip().lower()
+
+
+def _tronquer(mot_de_passe: str) -> str:
+    """
+    bcrypt n'accepte que 72 octets et lève au-delà depuis la version 5.
+
+    Il tronquait silencieusement auparavant : refuser maintenant renverrait une
+    erreur 500 sur un mot de passe long qui fonctionnait la veille.
+    """
+    b = (mot_de_passe or "").encode("utf-8")
+    return b[:72].decode("utf-8", "ignore") if len(b) > 72 else mot_de_passe
 
 router = APIRouter(prefix="/api/v1/auth", tags=["Auth"])
 
@@ -24,12 +49,13 @@ class UpdateProfileInput(BaseModel):
 
 @router.post("/register")
 def register(data: RegisterInput, db: Session = Depends(get_db)):
-    if db.query(User).filter(User.email == data.email).first():
+    email = _normaliser_email(data.email)
+    if db.query(User).filter(func.lower(User.email) == email).first():
         raise HTTPException(status_code=400, detail="Email déjà utilisé")
     user = User(
         id=str(uuid.uuid4()),
-        email=data.email,
-        hashed_password=hash_password(data.password),
+        email=email,
+        hashed_password=hash_password(_tronquer(data.password)),
         username=data.username or data.email.split("@")[0],
     )
     db.add(user)
@@ -40,8 +66,8 @@ def register(data: RegisterInput, db: Session = Depends(get_db)):
 
 @router.post("/login")
 def login(data: LoginInput, db: Session = Depends(get_db)):
-    user = db.query(User).filter(User.email == data.email).first()
-    if not user or not verify_password(data.password, user.hashed_password):
+    user = db.query(User).filter(func.lower(User.email) == _normaliser_email(data.email)).first()
+    if not user or not verify_password(_tronquer(data.password), user.hashed_password):
         raise HTTPException(status_code=401, detail="Email ou mot de passe incorrect")
     token = create_token(user.id)
     return {"token": token, "user": {"id": user.id, "email": user.email, "username": user.username, "avatar_url": user.avatar_url}}

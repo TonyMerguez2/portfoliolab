@@ -291,3 +291,39 @@ def test_me_renvoie_le_compte(client):
     assert d["username"] == "Sacha"
     assert d["avatar_url"] == "/uploads/u1.jpg"
     assert "message" not in d
+
+
+# ── Connexion ─────────────────────────────────────────────────────────────────
+
+def test_email_insensible_a_la_casse_et_aux_espaces():
+    """
+    Une majuscule mise par le clavier ne doit pas empêcher la connexion.
+
+    La recherche était littérale : « Sacha@… » ne trouvait aucun compte, et le
+    message « Email ou mot de passe incorrect » faisait accuser le mot de passe.
+    """
+    from app.api.routes.auth import _normaliser_email
+
+    for saisie in ["Sacha@Exemple.com", " sacha@exemple.com ", "SACHA@EXEMPLE.COM"]:
+        assert _normaliser_email(saisie) == "sacha@exemple.com"
+
+
+def test_mot_de_passe_long_ne_leve_pas():
+    """
+    bcrypt refuse au-delà de 72 octets depuis la version 5.
+
+    Il tronquait silencieusement avant : lever renverrait une erreur 500 sur un
+    mot de passe qui fonctionnait la veille.
+    """
+    from app.api.routes.auth import _tronquer
+    from app.core.auth import hash_password, verify_password
+
+    long = "é" * 60          # 120 octets en UTF-8
+    coupe = _tronquer(long)
+    assert len(coupe.encode("utf-8")) <= 72
+    assert verify_password(coupe, hash_password(coupe))
+
+
+def test_tronquer_laisse_les_mots_de_passe_normaux():
+    from app.api.routes.auth import _tronquer
+    assert _tronquer("MonMotDePasse123!") == "MonMotDePasse123!"
