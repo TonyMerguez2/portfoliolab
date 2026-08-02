@@ -46,7 +46,9 @@ const HALO = 22;
  */
 function Pictogramme({ type }: { type: string }) {
   const commun = {
-    width: 9, height: 9, viewBox: "0 0 10 10", fill: "none",
+    // 10 unités rendues sur 10 pixels : un trait de 2 unités fait exactement
+    // 2 pixels, sans lissage. À 9 px, il en faisait 1,8 et bavait.
+    width: 10, height: 10, viewBox: "0 0 10 10", fill: "none",
     stroke: "currentColor", strokeWidth: 2,
     strokeLinecap: "round" as const, strokeLinejoin: "round" as const,
     // Sans `display: block`, le SVG reste en ligne et s'aligne sur la ligne de
@@ -282,7 +284,14 @@ export default function PerformanceChart({
         if (x == null || y == null) continue;
         const quand = new Date(g.op.executed_at).toLocaleDateString("fr-FR");
         out.push({
-          id: g.op.id, x, y, couleur: g.op.couleur, nombre: g.n, type: g.op.type,
+          // Coordonnées entières.
+          //
+          // La bibliothèque rend des positions fractionnaires — 462,443 px. Le
+          // contour de 2 px et le pictogramme se répartissaient alors sur deux
+          // rangées de pixels : le cerne paraissait plus épais d'un côté et le
+          // signe décentré, alors qu'il est géométriquement au milieu.
+          id: g.op.id, x: Math.round(x), y: Math.round(y),
+          couleur: g.op.couleur, nombre: g.n, type: g.op.type,
           titre: g.n === 1
             ? `${g.op.libelle} ${g.op.ticker} — ${quand}`
             : `${g.n} ${g.op.libelle.toLowerCase()}s (${Array.from(g.tickers).join(", ")}) — ${quand}`,
