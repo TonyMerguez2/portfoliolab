@@ -53,6 +53,8 @@ def facteurs_de_risque(
     rendements: pd.DataFrame | None,
     rendements_marche: pd.Series | None = None,
     jours_liquidation: float | None = None,
+    secteurs: list[dict] | None = None,
+    zones: list[dict] | None = None,
 ) -> dict[str, dict]:
     """
     Les six facteurs affichés, chacun avec sa valeur brute et son score.
@@ -96,15 +98,37 @@ def facteurs_de_risque(
         "score": round(_score_decroissant(corr, 0.0, 1.0), 0) if corr is not None else None,
     }
 
-    # ── Diversification : elle tient des deux précédents ─────────────────────
+    # ── Diversification, en transparence ─────────────────────────────────────
+    #
+    # Compter les lignes calomnie un portefeuille de fonds : trois ETF, c'est
+    # trois lignes mais des centaines de sociétés réparties sur onze secteurs
+    # et plusieurs continents. La diversification se mesure donc sur ce qui est
+    # réellement détenu — la ventilation sectorielle et géographique obtenue en
+    # transparence — et non sur le nombre d'enveloppes qui les portent.
+    #
+    # La concentration des lignes reste mesurée à part : détenir 80 % d'un seul
+    # produit est un risque en soi, quelle que soit sa composition interne.
+    composantes: list[float] = []
+    detail: list[str] = []
+
+    if secteurs:
+        n_sect = 1.0 / herfindahl([x["part"] for x in secteurs])
+        composantes.append(_score_decroissant(n_sect, 8.0, 1.0))
+        detail.append(f"{n_sect:.1f} secteurs")
+    if zones:
+        n_zones = 1.0 / herfindahl([x["part"] for x in zones])
+        composantes.append(_score_decroissant(n_zones, 4.0, 1.0))
+        detail.append(f"{n_zones:.1f} zones")   # abrégé : la colonne fait 134 px
     if corr is not None:
-        div = 0.5 * out["concentration"]["score"] + 0.5 * out["correlation"]["score"]
-    else:
-        div = out["concentration"]["score"]
+        composantes.append(out["correlation"]["score"])
+    if not composantes:
+        composantes.append(out["concentration"]["score"])
+        detail.append(f"{n} ligne{'s' if n > 1 else ''}")
+
     out["diversification"] = {
         "valeur": n,
-        "libelle": f"{n} ligne{'s' if n > 1 else ''}",
-        "score": round(div, 0),
+        "libelle": " · ".join(detail) if detail else f"{n} ligne{'s' if n > 1 else ''}",
+        "score": round(sum(composantes) / len(composantes), 0),
     }
 
     # ── Volatilité annualisée du portefeuille ────────────────────────────────
@@ -380,3 +404,123 @@ def exposition_simple(details: dict[str, dict], poids: dict[str, float], champ: 
         elif valeur:
             cumul[valeur] = cumul.get(valeur, 0.0) + w
     return agreger_exposition([{"libelle": k, "part": v} for k, v in cumul.items()])
+
+
+# ── Géographie ────────────────────────────────────────────────────────────────
+
+# Zone couverte, déduite de l'indice suivi.
+#
+# yfinance annonce `region: US` pour un ETF Stoxx Europe 600 comme pour un ETF
+# S&P 500 : c'est la place de cotation, pas l'exposition. L'afficher serait
+# faux. L'indice, lui, dit la zone sans ambiguïté — un fonds S&P 500 est
+# américain par mandat, ce n'est pas une estimation mais le contrat du fonds.
+#
+# L'ordre compte : les motifs les plus précis passent devant.
+ZONES = [
+    ("msci emerging latin", "Amérique latine"),
+    ("amerique latine",     "Amérique latine"),
+    ("emerging asia",       "Asie émergente"),
+    ("asie emergente",      "Asie émergente"),
+    ("asia pacific",        "Asie-Pacifique"),
+    ("asie pacifique",      "Asie-Pacifique"),
+    ("msci india",          "Inde"),
+    ("msci china",          "Chine"),
+    ("topix",               "Japon"),
+    ("japon",               "Japon"),
+    ("japan",               "Japon"),
+    ("emerging",            "Marchés émergents"),
+    ("emergent",            "Marchés émergents"),
+    ("stoxx europe",        "Europe"),
+    ("euro stoxx",          "Zone euro"),
+    ("msci europe",         "Europe"),
+    ("cac 40",              "France"),
+    ("msci world",          "Monde développé"),
+    ("pea monde",           "Monde développé"),
+    ("s&p 500",             "États-Unis"),
+    ("s&p500",              "États-Unis"),
+    ("nasdaq",              "États-Unis"),
+    ("msci usa",            "États-Unis"),
+    ("s&p us",              "États-Unis"),
+]
+
+
+def zone_du_fonds(nom: str | None) -> str | None:
+    """La zone géographique d'un fonds, d'après l'indice cité dans son nom."""
+    if not nom:
+        return None
+    n = nom.lower().replace("é", "e").replace("è", "e")
+    for motif, zone in ZONES:
+        if motif in n:
+            return zone
+    return None
+
+
+def exposition_zones(details: dict[str, dict], poids: dict[str, float]) -> list[dict]:
+    """
+    Ventilation géographique.
+
+    Le pays d'une action est une donnée ; la zone d'un fonds se lit dans son
+    mandat. Un fonds dont l'indice n'est pas reconnu est rangé sous « Non
+    déterminé » plutôt que réparti au hasard.
+    """
+    cumul: dict[str, float] = {}
+    for ticker, w in poids.items():
+        d = details.get(ticker) or {}
+        zone = d.get("pays") or zone_du_fonds(d.get("nom"))
+        cle = zone or "Non déterminé"
+        cumul[cle] = cumul.get(cle, 0.0) + w
+    return agreger_exposition([{"libelle": k, "part": v} for k, v in cumul.items()], seuil_autres=0.5)
+
+
+# ── Projection ────────────────────────────────────────────────────────────────
+
+def projection(
+    valeur: float,
+    rendement_quotidien: float,
+    volatilite_quotidienne: float,
+    jours: int = 252,
+    tirages: int = 2000,
+    graine: int = 12345,
+) -> dict:
+    """
+    Distribution de la valeur à un an, par tirages aléatoires.
+
+    Le portefeuille est projeté **tel qu'il est** : aucun versement futur n'est
+    supposé. En ajouter un ferait monter la courbe sans que le portefeuille y
+    soit pour rien, et le lecteur prendrait son propre effort d'épargne pour
+    une performance.
+    
+    Les tirages suivent un mouvement brownien géométrique calibré sur
+    l'historique récent. C'est un modèle : il suppose des rendements
+    indépendants et une volatilité constante, ce que les marchés ne respectent
+    ni l'un ni l'autre. Il donne un ordre de grandeur de dispersion, pas une
+    prévision.
+    """
+    if valeur <= 0 or volatilite_quotidienne <= 0:
+        return {"median": None, "p10": None, "p90": None, "trajectoire": []}
+
+    r = np.random.default_rng(graine)
+    # Correction d'Itô : sans le terme en −σ²/2, l'espérance de l'exponentielle
+    # dépasse le rendement visé et la projection dérive vers le haut.
+    derive = rendement_quotidien - 0.5 * volatilite_quotidienne ** 2
+    chocs = r.normal(derive, volatilite_quotidienne, (tirages, jours))
+    chemins = valeur * np.exp(np.cumsum(chocs, axis=1))
+
+    quantiles = np.percentile(chemins, [10, 50, 90], axis=0)
+    # Une trajectoire allégée : cinquante points suffisent à dessiner un cône.
+    pas = max(1, jours // 50)
+    idx = list(range(0, jours, pas)) + [jours - 1]
+    return {
+        "median": round(float(quantiles[1, -1]), 2),
+        "p10":    round(float(quantiles[0, -1]), 2),
+        "p90":    round(float(quantiles[2, -1]), 2),
+        "trajectoire": [
+            {
+                "jour": int(i) + 1,
+                "p10":  round(float(quantiles[0, i]), 2),
+                "median": round(float(quantiles[1, i]), 2),
+                "p90":  round(float(quantiles[2, i]), 2),
+            }
+            for i in idx
+        ],
+    }

@@ -19,6 +19,7 @@ import pytest
 from app.services.analyse import (
     herfindahl, facteurs_de_risque, score_global, bande, observations,
     agreger_exposition, exposition_secteurs, exposition_simple,
+    zone_du_fonds, exposition_zones, projection,
 )
 
 
@@ -130,9 +131,38 @@ class TestFacteurs:
         f = facteurs_de_risque({"A": 100}, None, jours_liquidation=6.0)
         assert f["liquidite"]["score"] == 0
 
-    def test_diversification_sans_correlation_suit_la_concentration(self):
+    def test_diversification_sans_transparence_suit_la_concentration(self):
         f = facteurs_de_risque({"A": 50, "B": 50}, None)
         assert f["diversification"]["score"] == f["concentration"]["score"]
+
+    def test_trois_etf_bien_repartis_sont_diversifies(self):
+        """
+        Compter les lignes calomnie un portefeuille de fonds.
+
+        Trois ETF, c'est trois lignes — mais des centaines de sociétés sur onze
+        secteurs et trois continents. La diversification doit le voir.
+        """
+        secteurs = [{"libelle": f"S{i}", "part": 100 / 9} for i in range(9)]
+        zones = [{"libelle": "États-Unis", "part": 50},
+                 {"libelle": "Europe", "part": 30},
+                 {"libelle": "Asie-Pacifique", "part": 20}]
+        f = facteurs_de_risque({"A": 80, "B": 17, "C": 3}, None,
+                               secteurs=secteurs, zones=zones)
+        # La concentration des lignes reste basse — 80 % sur un produit — mais
+        # la diversification, elle, est bonne.
+        assert f["concentration"]["score"] < 20
+        assert f["diversification"]["score"] > 60
+
+    def test_un_seul_secteur_reste_mal_diversifie(self):
+        secteurs = [{"libelle": "Technologie", "part": 100}]
+        zones = [{"libelle": "États-Unis", "part": 100}]
+        f = facteurs_de_risque({"A": 50, "B": 50}, None, secteurs=secteurs, zones=zones)
+        assert f["diversification"]["score"] == 0
+
+    def test_le_libelle_cite_la_mesure(self):
+        secteurs = [{"libelle": f"S{i}", "part": 25} for i in range(4)]
+        f = facteurs_de_risque({"A": 100}, None, secteurs=secteurs)
+        assert "secteurs" in f["diversification"]["libelle"]
 
 
 class TestScore:
@@ -240,3 +270,87 @@ class TestExposition:
         parts = {x["libelle"]: x["part"] for x in r}
         assert parts["Actions"] == pytest.approx(90, abs=0.2)
         assert parts["Obligations"] == pytest.approx(10, abs=0.2)
+
+
+class TestZones:
+    def test_indices_courants(self):
+        cas = {
+            "BNP Paribas Easy S&P 500 UCITS ETF EUR C": "États-Unis",
+            "BNP Paribas Easy Stoxx Europe 600 UCITS ETF": "Europe",
+            "Amundi PEA Asie Pacifique (MSCI AC Asia Pacific Ex Japan)": "Asie-Pacifique",
+            "Amundi PEA Japon (TOPIX) UCITS ETF": "Japon",
+            "Amundi PEA Monde (MSCI World) UCITS ETF": "Monde développé",
+            "Amundi PEA Inde (MSCI India) UCITS ETF": "Inde",
+            "Amundi PEA Nasdaq-100 UCITS ETF": "États-Unis",
+        }
+        for nom, attendu in cas.items():
+            assert zone_du_fonds(nom) == attendu, nom
+
+    def test_le_motif_precis_passe_devant(self):
+        """
+        « Asie émergente » ne doit pas être rangée sous « émergents ».
+
+        Les motifs se chevauchent : sans ordre, le plus vague gagnerait.
+        """
+        assert zone_du_fonds("Amundi PEA Asie Émergente (MSCI Emerging Asia)") == "Asie émergente"
+        assert zone_du_fonds("Amundi PEA Émergent (MSCI Emerging Markets)") == "Marchés émergents"
+
+    def test_fonds_inconnu(self):
+        assert zone_du_fonds("Un fonds sans indice reconnaissable") is None
+        assert zone_du_fonds(None) is None
+
+    def test_le_pays_d_une_action_prime(self):
+        details = {"AAPL": {"pays": "United States", "nom": "Apple Inc."}}
+        r = exposition_zones(details, {"AAPL": 100})
+        assert r[0]["libelle"] == "United States"
+
+    def test_fonds_non_reconnu_est_signale(self):
+        """Mieux vaut « non déterminé » qu'une zone inventée."""
+        r = exposition_zones({"X": {"nom": "Fonds obscur"}}, {"X": 100})
+        assert r[0]["libelle"] == "Non déterminé"
+
+    def test_repartition_reelle(self):
+        details = {
+            "ESE.PA":  {"nom": "BNP Paribas Easy S&P 500 UCITS ETF"},
+            "ETZ.PA":  {"nom": "BNP Paribas Easy Stoxx Europe 600 UCITS ETF"},
+            "PAEJ.PA": {"nom": "Amundi PEA Asie Pacifique (MSCI AC Asia Pacific Ex Japan)"},
+        }
+        r = exposition_zones(details, {"ESE.PA": 80, "ETZ.PA": 17, "PAEJ.PA": 3})
+        parts = {x["libelle"]: x["part"] for x in r}
+        assert parts["États-Unis"] == pytest.approx(80, abs=0.2)
+        assert parts["Europe"] == pytest.approx(17, abs=0.2)
+
+
+class TestProjection:
+    def test_les_quantiles_sont_ordonnes(self):
+        p = projection(10000, 0.0003, 0.01)
+        assert p["p10"] < p["median"] < p["p90"]
+
+    def test_sans_derive_la_mediane_reste_au_depart(self):
+        """
+        Sans la correction d'Itô, l'exponentielle dériverait vers le haut :
+        la médiane monterait alors qu'aucun rendement n'a été supposé.
+        """
+        p = projection(10000, 0.0, 0.01)
+        assert p["median"] == pytest.approx(10000, rel=0.05)
+
+    def test_une_volatilite_plus_forte_ecarte_les_bornes(self):
+        etroit = projection(10000, 0.0, 0.005)
+        large  = projection(10000, 0.0, 0.02)
+        assert (large["p90"] - large["p10"]) > (etroit["p90"] - etroit["p10"])
+
+    def test_trajectoire_bornee_et_croissante_en_temps(self):
+        p = projection(10000, 0.0002, 0.01)
+        t = p["trajectoire"]
+        assert 40 <= len(t) <= 60
+        assert t[0]["jour"] < t[-1]["jour"]
+        assert all(x["p10"] <= x["median"] <= x["p90"] for x in t)
+
+    def test_reproductible(self):
+        assert projection(10000, 0.0002, 0.01)["median"] == projection(10000, 0.0002, 0.01)["median"]
+
+    def test_portefeuille_vide(self):
+        assert projection(0, 0.0002, 0.01)["median"] is None
+
+    def test_sans_volatilite(self):
+        assert projection(10000, 0.0002, 0.0)["median"] is None

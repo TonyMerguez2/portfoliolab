@@ -522,6 +522,10 @@ def _details_titre(ticker: str) -> dict:
         info = tk.info or {}
         d["devise"] = info.get("currency")
         d["secteur"] = info.get("sector")
+        # `region` vaut « US » pour un ETF Stoxx Europe : c'est la place de
+        # cotation. Seul le pays d'une action est exploitable ; la zone d'un
+        # fonds se déduit de son mandat, plus loin.
+        d["pays"] = info.get("country")
         d["volume"] = info.get("averageVolume")
         d["nom"] = info.get("shortName") or info.get("longName")
         if info.get("quoteType") == "ETF":
@@ -560,8 +564,8 @@ async def get_analysis(
     import yfinance as yf
 
     from app.services.analyse import (
-        bande, exposition_secteurs, exposition_simple, facteurs_de_risque,
-        observations, score_global,
+        bande, exposition_secteurs, exposition_simple, exposition_zones,
+        facteurs_de_risque, observations, projection, score_global,
     )
 
     _get_portfolio_or_404(portfolio_id, db, user)
@@ -621,14 +625,31 @@ async def get_analysis(
     if parts:
         jours = max(parts)
 
-    facteurs = facteurs_de_risque(poids, rendements, marche, jours)
-    sc = score_global(facteurs)
-
     expositions = {
         "secteurs": exposition_secteurs(details, poids),
+        "zones":    exposition_zones(details, poids),
         "devises":  exposition_simple(details, poids, "devise"),
         "classes":  exposition_simple(details, poids, "classes"),
     }
+
+    # La diversification se mesure sur ce qui est réellement détenu : les
+    # ventilations lui sont donc passées.
+    facteurs = facteurs_de_risque(
+        poids, rendements, marche, jours,
+        secteurs=expositions["secteurs"], zones=expositions["zones"],
+    )
+    sc = score_global(facteurs)
+
+    # ── Projection à un an, sur le portefeuille tel qu'il est ────────────────
+    proj = {"median": None, "p10": None, "p90": None, "trajectoire": []}
+    if rendements is not None and total > 0 and len(rendements) >= 60:
+        import numpy as np
+
+        w = np.array([poids.get(c, 0.0) for c in rendements.columns], dtype=float)
+        if w.sum() > 0:
+            w = w / w.sum()
+            serie = (rendements * w).sum(axis=1)
+            proj = projection(total, float(serie.mean()), float(serie.std()))
 
     return {
         "score": sc,
@@ -636,6 +657,7 @@ async def get_analysis(
         "facteurs": facteurs,
         "expositions": expositions,
         "observations": observations(poids, facteurs, expositions),
+        "projection": proj,
         "poids": [{"ticker": t, "part": round(w, 2)} for t, w in
                   sorted(poids.items(), key=lambda kv: kv[1], reverse=True)],
         "source": "transactions",

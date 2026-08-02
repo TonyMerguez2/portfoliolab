@@ -25,6 +25,8 @@ const RAYON = 30;
 type Facteur = { valeur: number | null; libelle: string; score: number | null };
 type Part = { libelle: string; part: number };
 type Observation = { ton: string; titre: string; detail: string };
+type Trajet = { jour: number; p10: number; median: number; p90: number };
+type Projection = { median: number | null; p10: number | null; p90: number | null; trajectoire: Trajet[] };
 type Analyse = {
   score: number | null;
   bande: string | null;
@@ -32,6 +34,7 @@ type Analyse = {
   expositions: Record<string, Part[]>;
   observations: Observation[];
   poids: { ticker: string; part: number }[];
+  projection: Projection;
   source: string;
 };
 
@@ -107,7 +110,7 @@ function Titre({ children, action }: { children: React.ReactNode; action?: React
 export default function AnalyseView({ portfolioId, refreshKey }: { portfolioId: string; refreshKey: number }) {
   const [a, setA] = useState<Analyse | null>(null);
   const [etat, setEtat] = useState<"charge" | "prêt" | "vide">("charge");
-  const [ongletExpo, setOngletExpo] = useState<"secteurs" | "devises" | "classes">("secteurs");
+  const [ongletExpo, setOngletExpo] = useState<"secteurs" | "zones" | "devises" | "classes">("secteurs");
 
   useEffect(() => {
     if (!portfolioId) return;
@@ -242,10 +245,10 @@ export default function AnalyseView({ portfolioId, refreshKey }: { portfolioId: 
           <Titre action={
             <div style={{ display: "flex", gap: 3, background: "rgba(255,255,255,0.05)",
                           borderRadius: 8, padding: 2 }}>
-              {([["secteurs", "Secteurs"], ["devises", "Devises"], ["classes", "Classes"]] as const).map(([k, l]) => (
+              {([["secteurs", "Secteurs"], ["zones", "Zones"], ["devises", "Devises"], ["classes", "Classes"]] as const).map(([k, l]) => (
                 <button key={k} onClick={() => setOngletExpo(k)} style={{
-                  padding: "3px 9px", borderRadius: 6, border: "none", cursor: "pointer",
-                  fontFamily: FONT, fontSize: 10, fontWeight: ongletExpo === k ? 700 : 500,
+                  padding: "3px 7px", borderRadius: 6, border: "none", cursor: "pointer",
+                  fontFamily: FONT, fontSize: 9.5, fontWeight: ongletExpo === k ? 700 : 500,
                   background: ongletExpo === k ? "rgba(91,141,239,0.20)" : "transparent",
                   color: ongletExpo === k ? "#9BB9FF" : "rgba(255,255,255,0.40)",
                 }}>{l}</button>
@@ -272,11 +275,12 @@ export default function AnalyseView({ portfolioId, refreshKey }: { portfolioId: 
                   </div>
                 </div>
               ))}
-              {ongletExpo === "secteurs" && (
+              {(ongletExpo === "secteurs" || ongletExpo === "zones") && (
                 <p style={{ margin: "2px 0 0", fontFamily: FONT, fontSize: 9.5,
                             color: "rgba(255,255,255,0.26)", lineHeight: 1.5 }}>
-                  En transparence de vos fonds : la ventilation interne de chaque
-                  ETF est répartie au prorata de son poids.
+                  {ongletExpo === "secteurs"
+                    ? "En transparence de vos fonds : la ventilation interne de chaque ETF est répartie au prorata de son poids."
+                    : "Zone déduite de l'indice suivi par chaque fonds — un ETF S&P 500 est américain par mandat. La place de cotation, elle, ne dit rien de l'exposition."}
                 </p>
               )}
             </div>
@@ -289,7 +293,7 @@ export default function AnalyseView({ portfolioId, refreshKey }: { portfolioId: 
       </div>
 
       {/* ── Rangée basse ─────────────────────────────────────────────────── */}
-      <div style={{ display: "grid", gridTemplateColumns: "minmax(0,1.4fr) minmax(0,1fr)",
+      <div style={{ display: "grid", gridTemplateColumns: "minmax(0,1.25fr) minmax(0,1fr) minmax(0,0.75fr)",
                     gap: GOUTTIERE, flex: 1, minHeight: 0 }}>
 
         <Carte>
@@ -332,6 +336,11 @@ export default function AnalyseView({ portfolioId, refreshKey }: { portfolioId: 
             Observations calculées sur vos positions. Ce ne sont pas des conseils
             en investissement.
           </p>
+        </Carte>
+
+        <Carte>
+          <Titre>Projection à un an</Titre>
+          <Cone p={a.projection} />
         </Carte>
 
         <Carte>
@@ -394,6 +403,70 @@ function Jauge({ score, bande }: { score: number | null; bande: string | null })
           </span>
         )}
       </div>
+    </div>
+  );
+}
+
+/**
+ * Cône de projection à un an.
+ *
+ * Les trois quantiles dessinent une bande, non une courbe : une ligne unique
+ * se lirait comme une prévision alors que la dispersion est le seul
+ * enseignement du calcul.
+ */
+function Cone({ p }: { p: Projection }) {
+  const t = p.trajectoire ?? [];
+  if (!t.length || p.median == null) {
+    return (
+      <p style={{ fontFamily: FONT, fontSize: 11, color: "rgba(255,255,255,0.28)",
+                  margin: 0, lineHeight: 1.6 }}>
+        Historique trop court pour projeter. Il faut une soixantaine de séances
+        pour estimer une dispersion qui veuille dire quelque chose.
+      </p>
+    );
+  }
+
+  const L = 300, H = 120;
+  const bas = Math.min(...t.map(x => x.p10));
+  const haut = Math.max(...t.map(x => x.p90));
+  const etendue = haut - bas || 1;
+  const x = (i: number) => (i / (t.length - 1)) * L;
+  const y = (v: number) => H - ((v - bas) / etendue) * H;
+
+  const ligne = (cle: "p10" | "median" | "p90") =>
+    t.map((pt, i) => `${i ? "L" : "M"}${x(i).toFixed(1)},${y(pt[cle]).toFixed(1)}`).join(" ");
+  const bande = `${ligne("p90")} L${t.map((pt, i) => `${x(t.length - 1 - i).toFixed(1)},${y(t[t.length - 1 - i].p10).toFixed(1)}`).join(" L")} Z`;
+
+  const eur = (v: number) => Math.round(v).toLocaleString("fr-FR") + " €";
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", flex: 1, minHeight: 0 }}>
+      <div style={{ flex: 1, minHeight: 0 }}>
+        <svg viewBox={`0 0 ${L} ${H}`} preserveAspectRatio="none"
+             style={{ width: "100%", height: "100%", display: "block" }}>
+          <path d={bande} fill="rgba(91,141,239,0.16)" />
+          <path d={ligne("median")} fill="none" stroke="#5B8DEF" strokeWidth="1.6"
+                vectorEffect="non-scaling-stroke" />
+        </svg>
+      </div>
+      <div style={{ display: "flex", justifyContent: "space-between", marginTop: 8, flexShrink: 0 }}>
+        {([["Défavorable", p.p10, "#f87171"], ["Médiane", p.median, "#9BB9FF"],
+           ["Favorable", p.p90, "#4ade80"]] as const).map(([l, v, c]) => (
+          <span key={l} style={{ textAlign: "center" }}>
+            <span style={{ display: "block", fontFamily: FONT, fontSize: 9,
+                           color: "rgba(255,255,255,0.32)" }}>{l}</span>
+            <span style={{ ...NUM, display: "block", fontSize: 12, fontWeight: 700, color: c }}>
+              {v == null ? "—" : eur(v)}
+            </span>
+          </span>
+        ))}
+      </div>
+      <p style={{ margin: "8px 0 0", fontFamily: FONT, fontSize: 9,
+                  color: "rgba(255,255,255,0.26)", lineHeight: 1.45, flexShrink: 0 }}>
+        Portefeuille projeté tel qu&apos;il est, sans versement futur. Deux mille
+        tirages sur la volatilité observée — un ordre de grandeur de dispersion,
+        pas une prévision.
+      </p>
     </div>
   );
 }
