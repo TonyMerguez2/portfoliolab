@@ -742,15 +742,16 @@ function PortfolioPageInner() {
             : <span style={{ fontSize: 13, color: "rgba(255,255,255,0.25)" }}>Non défini</span>}
       </div>
     )}
-    {/* Perf sur la période choisie. Le libellé la suit : il disait
-        « Aujourd'hui » quelle que soit la période, et annonçait donc
-        un gain d'un an comme s'il datait du matin. */}
-    {/* Ce que l'argent a rapporté, et non ce que les fonds ont fait.
-        C'est la question qu'on se pose devant son relevé : « j'ai versé
-        4 960 €, j'ai 5 134 €, donc j'ai gagné 175 € ». La performance des
-        fonds, plus élevée quand les versements sont récents, figure à côté
-        sous son propre nom. */}
-    {gainAffiche != null && (
+    {/* Sous la valeur : le capital engagé et depuis quand.
+        Le gain figurait ici *et* dans « Gains / pertes », deux fois le même
+        nombre à quatre centimètres d'écart. Ce qui manquait, c'était ce
+        qu'on a mis pour arriver à cette valeur. */}
+    {surTransactions && prixDeRevient != null ? (
+      <div style={{ fontSize: 11, fontFamily: FONT, color: "rgba(255,255,255,0.38)" }}>
+        {masque ? "•••• €" : `${Math.round(prixDeRevient).toLocaleString("fr-FR")} €`} investis
+        {origine && ` ${libellePeriode.toLowerCase()}`}
+      </div>
+    ) : gainAffiche != null && (
       <div style={{ fontSize: 11, fontFamily: FONT, color: gainAffiche.eur >= 0 ? "#4ade80" : "#f87171", fontWeight: 600 }}>
         {libellePeriode}&nbsp;
         <span>
@@ -824,36 +825,6 @@ function PortfolioPageInner() {
         <div style={{ width: 1, alignSelf: "stretch", background: "rgba(255,255,255,0.07)" }} />
         <div style={{ minWidth: 120 }}>
           <p style={{ margin: "0 0 4px", fontSize: 11.5, fontWeight: 500, color: "rgba(255,255,255,0.55)" }}>Comparaison</p>
-    {/* Performance des fonds — distincte du gain de l'épargnant.
-        C'est elle qu'on oppose à l'indice : comparer un versement progressif
-        à un indice supposé investi d'un coup pénaliserait le premier sans
-        que ses choix d'actifs y soient pour rien. */}
-    {surTransactions && perfPeriode != null && (
-      <div style={{ position: "relative", marginTop: 3 }}
-        onMouseEnter={() => setActiveTooltip("fonds")}
-        onMouseLeave={() => setActiveTooltip(null)}>
-        <div style={{ fontSize: 10, color: "rgba(255,255,255,0.40)", fontFamily: FONT, cursor: "default" }}>
-          Fonds&nbsp;
-          <span style={{ color: perfPeriode >= 0 ? "#4ade80" : "#f87171", fontWeight: 700 }}>
-            {fmtChange(perfPeriode)}
-          </span>
-        </div>
-        {activeTooltip === "fonds" && (
-          <div style={{
-            position: "absolute", bottom: "calc(100% + 6px)", left: 0, zIndex: 50, width: 230,
-            background: "rgba(4,17,36,0.97)", border: "1px solid rgba(255,255,255,0.10)",
-            borderRadius: 8, padding: "8px 10px", boxShadow: "0 8px 24px rgba(0,0,0,0.50)",
-            pointerEvents: "none",
-          }}>
-            <span style={{ fontSize: 10, color: "rgba(255,255,255,0.62)", lineHeight: 1.55 }}>
-              Ce que vos fonds ont fait sur la période, indépendamment de la date
-              de vos versements. Votre gain est plus faible si vous avez investi
-              récemment : cet argent n&apos;a pas encore travaillé.
-            </span>
-          </div>
-        )}
-      </div>
-    )}
     {/* Le repère, rejoué avec les mêmes versements aux mêmes dates.
         Opposer deux pourcentages laissait ouvert ce que l'épargnant aurait
         réellement eu ; en euros, la question ne se pose plus. */}
@@ -864,11 +835,22 @@ function PortfolioPageInner() {
         <div style={{ position: "relative", marginTop: 3 }}
           onMouseEnter={() => setActiveTooltip("spy")}
           onMouseLeave={() => setActiveTooltip(null)}>
+          {/* Deux lignes plutôt qu'un écart seul : « +5 € » ne dit pas de quoi
+              il est l'écart. On montre ce que le même argent aurait donné sur
+              l'indice, puis la différence. */}
           <div style={{ fontSize: 10, color: "rgba(255,255,255,0.40)", fontFamily: FONT, cursor: "default" }}>
-            vs S&amp;P 500&nbsp;
-            <span style={{ color: col, fontWeight: 700 }}>
-              {ecart >= 0 ? "+" : ""}{Math.round(ecart).toLocaleString("fr-FR")} €
+            Sur S&amp;P 500&nbsp;
+            <span style={{ color: "rgba(255,255,255,0.62)", fontWeight: 600 }}>
+              {simRepere.gain_eur >= 0 ? "+" : ""}
+              {Math.round(simRepere.gain_eur).toLocaleString("fr-FR")} €
             </span>
+          </div>
+          <div style={{ fontSize: 10, color: "rgba(255,255,255,0.40)", fontFamily: FONT, cursor: "default", marginTop: 2 }}>
+            Vous&nbsp;
+            <span style={{ color: col, fontWeight: 700 }}>
+              {ecart >= 0 ? "+" : "−"}{Math.abs(Math.round(ecart)).toLocaleString("fr-FR")} €
+            </span>
+            <span style={{ marginLeft: 3, opacity: 0.8 }}>{ecart >= 0 ? "de mieux" : "de moins"}</span>
           </div>
           {activeTooltip === "spy" && (
             <div style={{
@@ -878,14 +860,17 @@ function PortfolioPageInner() {
               pointerEvents: "none",
             }}>
               <span style={{ fontSize: 10, color: "rgba(255,255,255,0.62)", lineHeight: 1.6 }}>
-                Vos versements, aux mêmes dates, placés sur le S&amp;P 500 vaudraient{" "}
+                Si vous aviez versé les mêmes sommes, aux mêmes dates, sur le
+                S&amp;P 500, vous auriez{" "}
                 <b style={{ color: "rgba(255,255,255,0.85)" }}>
                   {Math.round(simRepere.value).toLocaleString("fr-FR")} €
                 </b>{" "}
-                — soit {simRepere.gain_eur >= 0 ? "+" : ""}
-                {Math.round(simRepere.gain_eur).toLocaleString("fr-FR")} € de gain.
-                Vous {ecart >= 0 ? "faites mieux" : "faites moins bien"} de{" "}
-                {Math.abs(Math.round(ecart)).toLocaleString("fr-FR")} €.
+                au lieu de{" "}
+                <b style={{ color: "rgba(255,255,255,0.85)" }}>
+                  {valeurTotale != null ? Math.round(valeurTotale).toLocaleString("fr-FR") : "—"} €
+                </b>.
+                <br />
+                Le repère est libellé en dollars : le change n&apos;est pas neutralisé.
               </span>
             </div>
           )}
