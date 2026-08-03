@@ -787,7 +787,7 @@ export default function PerformanceChart({
         // laissée par la précédente. Le contour et le trait du signe se
         // répartissaient alors sur deux rangées de pixels : le pictogramme
         // paraissait décentré alors qu'il est à 2 px des quatre bords.
-        <div style={{ display: "flex", gap: 14, paddingTop: 6, paddingBottom: 2, flexShrink: 0, height: 14 }}>
+        <div style={{ display: "flex", gap: 14, paddingTop: 8, paddingBottom: 8, flexShrink: 0, height: 14, boxSizing: "content-box" }}>
           {LEGENDE.map(l => (
             <span key={l.libelle} style={{
               display: "flex", alignItems: "center", gap: 5,

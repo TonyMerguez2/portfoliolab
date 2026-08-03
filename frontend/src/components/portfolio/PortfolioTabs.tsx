@@ -43,7 +43,7 @@ export default function PortfolioTabs({
       display: "flex", alignItems: "stretch", gap: 4,
       // Le filet est porté par la barre, pas par chaque onglet : il reste
       // continu sous les intervalles, et le soulignement actif s'y pose.
-      borderBottom: `1px solid rgba(255,255,255,0.18)`,
+      borderBottom: `1px solid ${CLAIR.bord}`,
       padding: "0 4px", flexShrink: 0,
       // Retour à la ligne plutôt que défilement : `overflow-x: auto` fait
       // apparaître une barre dès que la largeur manque d'un pixel, et une
@@ -61,15 +61,18 @@ export default function PortfolioTabs({
               padding: "0 14px", height: 40, border: "none", background: "transparent",
               cursor: "pointer", whiteSpace: "nowrap", flexShrink: 0,
               fontFamily: FONT, fontSize: 12.5, fontWeight: actif ? 600 : 500,
-              color: actif ? CLAIR.surFond : CLAIR.surFondFaible,
+              // Mêmes deux crans que le sélecteur de période et que leur
+              // variante d'onglets « line » : `foreground-strong` au repos,
+              // `foreground-intense` une fois retenu.
+              color: actif ? CLAIR.texteIntense : CLAIR.texteFort,
               // Décalé d'un pixel pour couvrir le filet de la barre plutôt que
               // de s'empiler dessus, ce qui épaississait le trait.
-              boxShadow: actif ? `inset 0 -2px 0 0 ${CLAIR.surFond}` : "none",
+              boxShadow: actif ? `inset 0 -2px 0 0 ${CLAIR.texteIntense}` : "none",
               marginBottom: -1,
               transition: "color 160ms",
             }}
-            onMouseEnter={e => { if (!actif) e.currentTarget.style.color = CLAIR.surFondAttenue; }}
-            onMouseLeave={e => { if (!actif) e.currentTarget.style.color = CLAIR.surFondFaible; }}>
+            onMouseEnter={e => { if (!actif) e.currentTarget.style.color = CLAIR.texteIntense; }}
+            onMouseLeave={e => { if (!actif) e.currentTarget.style.color = CLAIR.texteFort; }}>
             <span style={{ display: "flex", flexShrink: 0, opacity: actif ? 1 : 0.75 }}>{t.icon}</span>
             {t.label}
           </button>
