@@ -123,6 +123,18 @@
      l'intérieur du cadre plus sombre que la page tout autour. */
   --nv-cadre-voile:       rgba(3,7,18,0.5);
 
+  /* L'encre et le fond en composantes, pour les pages écrites en
+     rgba(255,255,255,α) — le motif du thème sombre. Passer la base en variable
+     suffit à les faire suivre les deux thèmes sans toucher aux opacités, que
+     leurs auteurs ont réglées une à une. */
+  --nv-encre-rvb:         255, 255, 255;
+  --nv-fond-rvb:          3, 7, 18;
+  /* Les sémantiques en composantes, pour les voiles et les halos. */
+  --nv-accent-rvb:        80, 162, 255;
+  --nv-positif-rvb:       0, 212, 146;
+  --nv-negatif-rvb:       255, 100, 103;
+  --nv-attention-rvb:     255, 137, 4;
+
   --nv-texte-intense:     #FFFFFF;
   --nv-texte-fort:        #E5E7EB;
   --nv-texte:             #D1D5DC;
@@ -193,6 +205,13 @@
 
   --nv-bord:              #E5E7EB;
   --nv-bord-fort:         #D1D5DC;
+
+  --nv-encre-rvb:         15, 23, 42;
+  --nv-fond-rvb:          255, 255, 255;
+  --nv-accent-rvb:        33, 119, 209;
+  --nv-positif-rvb:       0, 136, 77;
+  --nv-negatif-rvb:       234, 11, 39;
+  --nv-attention-rvb:     214, 66, 0;
 
   --nv-texte-intense:     #101828;
   --nv-texte-fort:        #364153;

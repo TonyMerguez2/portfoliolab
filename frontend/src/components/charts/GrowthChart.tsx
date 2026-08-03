@@ -624,7 +624,7 @@ export default function GrowthChart({
     try {
       const blackDisplay = displayMode === "black";
       const bg  = dark ? "rgba(0,0,0,0)" : "#ffffff";
-      const txt = blackDisplay ? "rgba(255,255,255,0.58)" : dark ? "#94a3b8" : "#64748b";
+      const txt = blackDisplay ? "rgba(255,255,255,0.58)" : dark ? "var(--nv-texte-secondaire)" : "#64748b";
       const initGrid = resolveGridPreset(gridPreset, displayMode, dark);
       const initVisible = gridPreset !== "none";
 
@@ -643,14 +643,14 @@ export default function GrowthChart({
         crosshair: {
           mode: CrosshairMode.Normal,
           vertLine: {
-            color: blackDisplay ? "rgba(255,255,255,0.28)" : dark ? "rgba(255,255,255,0.2)" : "#94a3b8",
+            color: blackDisplay ? "rgba(255,255,255,0.28)" : dark ? "rgba(255,255,255,0.2)" : "var(--nv-texte-secondaire)",
             style: LineStyle.Solid,
             width: 1,
             labelBackgroundColor: blackDisplay ? "#202020" : dark ? "#334155" : "#1e293b",
             labelVisible: !hideControls,
           },
           horzLine: {
-            color: blackDisplay ? "rgba(255,255,255,0.28)" : dark ? "rgba(255,255,255,0.2)" : "#94a3b8",
+            color: blackDisplay ? "rgba(255,255,255,0.28)" : dark ? "rgba(255,255,255,0.2)" : "var(--nv-texte-secondaire)",
             style: LineStyle.Solid,
             width: 1,
             labelBackgroundColor: blackDisplay ? "#202020" : dark ? "#334155" : "#1e293b",
@@ -995,7 +995,7 @@ export default function GrowthChart({
   useEffect(() => {
     if (!chartRef.current) return;
     const bg  = dark ? "rgba(0,0,0,0)" : "#ffffff";
-    const txt = displayMode === "black" ? "rgba(255,255,255,0.58)" : dark ? "#94a3b8" : "#64748b";
+    const txt = displayMode === "black" ? "rgba(255,255,255,0.58)" : dark ? "var(--nv-texte-secondaire)" : "#64748b";
     chartRef.current.applyOptions({
       layout: { background: { type: ColorType.Solid, color: bg }, textColor: txt },
     });
@@ -1473,19 +1473,19 @@ export default function GrowthChart({
       position: "absolute", top: 8, left: 8, zIndex: 20, pointerEvents: "none",
       lineHeight: 1.6,
     }}>
-      <div style={{ fontSize: 11, color: dark ? "rgba(255,255,255,0.45)" : "#94a3b8", marginBottom: 2 }}>
+      <div style={{ fontSize: 11, color: dark ? "rgba(255,255,255,0.45)" : "var(--nv-texte-secondaire)", marginBottom: 2 }}>
         {fmtHoverDate(displayDate)}
       </div>
       {hoverOHLC ? (
         <div style={{ display: "flex", gap: 8, fontSize: 11, flexWrap: "wrap" }}>
           {([
-            { label: "O", val: hoverOHLC.open,  color: dark ? "#cbd5e1" : "#475569" },
-            { label: "H", val: hoverOHLC.high,  color: "#22c55e" },
+            { label: "O", val: hoverOHLC.open,  color: dark ? "var(--nv-texte)" : "#475569" },
+            { label: "H", val: hoverOHLC.high,  color: "var(--nv-positif)" },
             { label: "L", val: hoverOHLC.low,   color: "#ef4444" },
-            { label: "C", val: hoverOHLC.close, color: hoverOHLC.close >= hoverOHLC.open ? "#22c55e" : "#ef4444" },
+            { label: "C", val: hoverOHLC.close, color: hoverOHLC.close >= hoverOHLC.open ? "var(--nv-positif)" : "#ef4444" },
           ] as const).map(({ label, val, color }) => (
             <span key={label}>
-              <span style={{ color: dark ? "rgba(255,255,255,0.35)" : "#94a3b8" }}>{label} </span>
+              <span style={{ color: dark ? "rgba(255,255,255,0.35)" : "var(--nv-texte-secondaire)" }}>{label} </span>
               <span style={{ fontWeight: 600, fontFamily: "monospace", color }}>{fmtPrice(val)}</span>
             </span>
           ))}
@@ -1500,12 +1500,12 @@ export default function GrowthChart({
             {benchmarkTicker && (
               <span style={{ width: 9, height: 2, borderRadius: 1, background: portfolioColor, flexShrink: 0 }} />
             )}
-            <span style={{ color: dark ? "rgba(255,255,255,0.35)" : "#94a3b8" }}>{portfolioLabel}</span>
+            <span style={{ color: dark ? "rgba(255,255,255,0.35)" : "var(--nv-texte-secondaire)" }}>{portfolioLabel}</span>
             {!benchmarkTicker && (
               <span style={{ fontWeight: 600, fontFamily: "monospace", color: portfolioColor }}>{fmtPrice(displayPrice)}</span>
             )}
             {benchmarkTicker && displayPerfPct != null && (
-              <span style={{ fontWeight: 700, fontFamily: "monospace", color: displayPerfPct >= 0 ? "#22c55e" : "#ef4444" }}>
+              <span style={{ fontWeight: 700, fontFamily: "monospace", color: displayPerfPct >= 0 ? "var(--nv-positif)" : "#ef4444" }}>
                 {displayPerfPct >= 0 ? "+" : ""}{displayPerfPct.toFixed(2)}%
               </span>
             )}
@@ -1513,16 +1513,16 @@ export default function GrowthChart({
           {benchmarkTicker && (
             <span style={{ display: "inline-flex", alignItems: "center", gap: 5 }}>
               <span style={{ width: 9, height: 2, borderRadius: 1, background: benchmarkColor, flexShrink: 0 }} />
-              <span style={{ color: dark ? "rgba(255,255,255,0.35)" : "#94a3b8" }}>{benchmarkName}</span>
+              <span style={{ color: dark ? "rgba(255,255,255,0.35)" : "var(--nv-texte-secondaire)" }}>{benchmarkName}</span>
               {bmDisplayPerfPct != null && (
-                <span style={{ fontWeight: 700, fontFamily: "monospace", color: bmDisplayPerfPct >= 0 ? "#22c55e" : "#ef4444" }}>
+                <span style={{ fontWeight: 700, fontFamily: "monospace", color: bmDisplayPerfPct >= 0 ? "var(--nv-positif)" : "#ef4444" }}>
                   {bmDisplayPerfPct >= 0 ? "+" : ""}{bmDisplayPerfPct.toFixed(2)}%
                 </span>
               )}
             </span>
           )}
           {!benchmarkTicker && displayPerfPct != null && (
-            <span style={{ fontWeight: 700, color: displayPerfPct >= 0 ? "#22c55e" : "#ef4444" }}>
+            <span style={{ fontWeight: 700, color: displayPerfPct >= 0 ? "var(--nv-positif)" : "#ef4444" }}>
               {displayPerfPct >= 0 ? "+" : ""}{displayPerfPct.toFixed(2)}%
             </span>
           )}
@@ -1714,7 +1714,7 @@ export default function GrowthChart({
               fontSize: 10, fontWeight: comparisonMode === m ? 700 : 500,
               padding: "2px 10px", borderRadius: 5,
               border: comparisonMode === m ? `1px solid ${portfolioColor}66` : "1px solid transparent",
-              color: comparisonMode === m ? portfolioColor : (dark ? "rgba(255,255,255,0.45)" : "#94a3b8"),
+              color: comparisonMode === m ? portfolioColor : (dark ? "rgba(255,255,255,0.45)" : "var(--nv-texte-secondaire)"),
               background: comparisonMode === m ? `${portfolioColor}18` : "transparent",
               cursor: "pointer", transition: "all 0.15s",
             }}>
@@ -1763,11 +1763,12 @@ export default function GrowthChart({
               }}
               onClick={() => { if (!(intradayLocked && key === "24h")) handlePeriodChange(key); }}
             >
-              <div className="text-xs font-semibold" style={{ color: isActive ? portfolioColor : "#94a3b8" }}>
+              <div className="text-xs font-semibold" style={{ color: isActive ? portfolioColor : "var(--nv-texte-secondaire)" }}>
                 {key}
               </div>
               {pct !== null && (
-                <div className={`text-xs font-bold tabular-nums ${pct >= 0 ? "text-emerald-500" : "text-red-500"}`}>
+                <div className="text-xs font-bold tabular-nums"
+                  style={{ color: pct >= 0 ? "var(--nv-positif)" : "var(--nv-negatif)" }}>
                   {(() => { const s = pct >= 0 ? "+" : ""; const a = Math.abs(pct); return a >= 10000 ? `${s}${(pct/1000).toFixed(0)}k%` : a >= 1000 ? `${s}${pct.toFixed(0)}%` : `${s}${pct.toFixed(1)}%`; })()}
                 </div>
               )}
@@ -1805,10 +1806,10 @@ export default function GrowthChart({
                     ? `1px solid ${portfolioColor}66`
                     : "1px solid transparent",
                   color: !isAllowed
-                    ? (dark ? "rgba(255,255,255,0.15)" : "#cbd5e1")
+                    ? (dark ? "rgba(255,255,255,0.15)" : "var(--nv-texte)")
                     : isActive
                       ? portfolioColor
-                      : (dark ? "rgba(255,255,255,0.45)" : "#94a3b8"),
+                      : (dark ? "rgba(255,255,255,0.45)" : "var(--nv-texte-secondaire)"),
                   background: isActive
                     ? `${portfolioColor}18`
                     : "transparent",
@@ -1829,7 +1830,7 @@ export default function GrowthChart({
         <div style={{ height: 100, position: "relative", flexShrink: 0 }}>
           <span style={{
             position: "absolute", bottom: 20, left: "50%", transform: "translateX(-50%)",
-            fontSize: 10, color: "#94a3b8", zIndex: 10, pointerEvents: "none", letterSpacing: "0.05em",
+            fontSize: 10, color: "var(--nv-texte-secondaire)", zIndex: 10, pointerEvents: "none", letterSpacing: "0.05em",
           }}>
             DRAWDOWN
           </span>
@@ -1851,7 +1852,7 @@ export default function GrowthChart({
                   ? v.toFixed(1) + "%"
                   : new Intl.NumberFormat("fr-FR", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(v)
                 }
-                tick={{ fontSize: 10, fill: "#94a3b8" }}
+                tick={{ fontSize: 10, fill: "var(--nv-texte-secondaire)" }}
                 tickLine={false}
                 axisLine={false}
                 width={70}

@@ -14,7 +14,8 @@ import {
 const GrowthChart = dynamic(() => import("@/components/charts/GrowthChart"), { ssr: false });
 const SubChart    = dynamic(() => import("@/components/charts/SubChart"),    { ssr: false });
 import AssetLogo from "@/components/AssetLogo";
-import { pourFondSombre } from "@/lib/couleur";
+import { pourFond } from "@/lib/couleur";
+import { useModeTheme } from "@/lib/theme";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 
@@ -244,9 +245,9 @@ function formatNewsAge(timestamp: number): string {
 }
 
 const IMPACT_CONFIG: Record<NewsImpact, { label: string; color: string; bg: string; dot: string }> = {
-  high:   { label: "Impact élevé",  color: "#f87171", bg: "rgba(239,68,68,0.12)",   dot: "#ef4444" },
-  medium: { label: "Impact moyen",  color: "#fb923c", bg: "rgba(249,115,22,0.12)",  dot: "#f97316" },
-  low:    { label: "Impact faible", color: "#4ade80", bg: "rgba(34,197,94,0.12)",   dot: "#22c55e" },
+  high:   { label: "Impact élevé",  color: "#f87171", bg: "rgba(var(--nv-negatif-rvb), 0.12)",   dot: "var(--nv-negatif)" },
+  medium: { label: "Impact moyen",  color: "#fb923c", bg: "rgba(var(--nv-attention-rvb), 0.12)",  dot: "var(--nv-attention)" },
+  low:    { label: "Impact faible", color: "var(--nv-positif)", bg: "rgba(var(--nv-positif-rvb), 0.12)",   dot: "var(--nv-positif)" },
 };
 
 type TipIconKey = "shield"|"trending-up"|"zap"|"flame"|"mountain"|"alert"|"refresh"|"seedling"|"diamond"|"scale"|"x-circle"|"chart";
@@ -274,59 +275,59 @@ function generateTips(p: {
   const tips: Tip[] = [];
 
   if (p.vol1Y !== null) {
-    if (p.vol1Y < 15) tips.push({ iconKey:"shield", title:"Faible volatilité", accent:"#22c55e", signal:"positive",
+    if (p.vol1Y < 15) tips.push({ iconKey:"shield", title:"Faible volatilité", accent:"var(--nv-positif)", signal:"positive",
       metric:`${p.vol1Y.toFixed(0)}% vol`,
       body:`Volatilité annualisée de ${p.vol1Y.toFixed(0)}% — actif défensif, idéal pour une stratégie buy & hold longue durée.` });
-    else if (p.vol1Y < 35) tips.push({ iconKey:"chart", title:"Volatilité modérée", accent:"#60a5fa", signal:"neutral",
+    else if (p.vol1Y < 35) tips.push({ iconKey:"chart", title:"Volatilité modérée", accent:"var(--nv-accent)", signal:"neutral",
       metric:`${p.vol1Y.toFixed(0)}% vol`,
       body:`${p.vol1Y.toFixed(0)}% de volatilité annualisée — profil équilibré, convient à la plupart des stratégies.` });
-    else if (p.vol1Y < 70) tips.push({ iconKey:"zap", title:"Volatilité élevée", accent:"#f97316", signal:"warning",
+    else if (p.vol1Y < 70) tips.push({ iconKey:"zap", title:"Volatilité élevée", accent:"var(--nv-attention)", signal:"warning",
       metric:`${p.vol1Y.toFixed(0)}% vol`,
       body:`${p.vol1Y.toFixed(0)}% de volatilité — mouvements brusques possibles. Dimensionnez votre position avec soin.` });
-    else tips.push({ iconKey:"flame", title:"Très haute volatilité", accent:"#ef4444", signal:"negative",
+    else tips.push({ iconKey:"flame", title:"Très haute volatilité", accent:"var(--nv-negatif)", signal:"negative",
       metric:`${p.vol1Y.toFixed(0)}% vol`,
       body:`${p.vol1Y.toFixed(0)}% annualisé — actif spéculatif à forte convexité. Risque de perte en capital élevé sur court terme.` });
   }
 
   if (p.drawdown !== null) {
-    if (p.drawdown > -10) tips.push({ iconKey:"mountain", title:"Proche des sommets", accent:"#22c55e", signal:"positive",
+    if (p.drawdown > -10) tips.push({ iconKey:"mountain", title:"Proche des sommets", accent:"var(--nv-positif)", signal:"positive",
       metric:`${p.drawdown.toFixed(1)}% DD`,
       body:`Drawdown actuel de ${p.drawdown.toFixed(1)}% — l'actif se maintient en zone haute, proche de son plus haut historique.` });
-    else if (p.drawdown > -25) tips.push({ iconKey:"refresh", title:"Correction modérée", accent:"#f59e0b", signal:"warning",
+    else if (p.drawdown > -25) tips.push({ iconKey:"refresh", title:"Correction modérée", accent:"var(--nv-attention)", signal:"warning",
       metric:`${Math.abs(p.drawdown).toFixed(0)}% DD`,
       body:`Repli de ${Math.abs(p.drawdown).toFixed(0)}% depuis le pic. Zone potentielle d'accumulation si les fondamentaux restent solides.` });
-    else if (p.drawdown > -50) tips.push({ iconKey:"alert", title:"Drawdown significatif", accent:"#f97316", signal:"warning",
+    else if (p.drawdown > -50) tips.push({ iconKey:"alert", title:"Drawdown significatif", accent:"var(--nv-attention)", signal:"warning",
       metric:`${Math.abs(p.drawdown).toFixed(0)}% DD`,
       body:`Correction de ${Math.abs(p.drawdown).toFixed(0)}% depuis le plus haut. Tendance baissière — attendez une confirmation de retournement.` });
-    else tips.push({ iconKey:"x-circle", title:"Zone de capitulation", accent:"#ef4444", signal:"negative",
+    else tips.push({ iconKey:"x-circle", title:"Zone de capitulation", accent:"var(--nv-negatif)", signal:"negative",
       metric:`${Math.abs(p.drawdown).toFixed(0)}% DD`,
       body:`Drawdown sévère de ${Math.abs(p.drawdown).toFixed(0)}%. Stress extrême — haut risque, mais historiquement une zone d'opportunité longue durée.` });
   }
 
   if (p.perf1Y !== null && p.perf3M !== null) {
-    if (p.perf3M > 0 && p.perf1Y > 0) tips.push({ iconKey:"trending-up", title:"Momentum haussier", accent:"#22c55e", signal:"positive",
+    if (p.perf3M > 0 && p.perf1Y > 0) tips.push({ iconKey:"trending-up", title:"Momentum haussier", accent:"var(--nv-positif)", signal:"positive",
       metric:`+${p.perf1Y.toFixed(0)}% 1A`,
       body:`+${p.perf3M.toFixed(1)}% sur 3 mois, +${p.perf1Y.toFixed(1)}% sur 1 an — momentum positif aligné court et long terme.` });
-    else if (p.perf3M < 0 && p.perf1Y > 0) tips.push({ iconKey:"refresh", title:"Consolidation", accent:"#60a5fa", signal:"neutral",
+    else if (p.perf3M < 0 && p.perf1Y > 0) tips.push({ iconKey:"refresh", title:"Consolidation", accent:"var(--nv-accent)", signal:"neutral",
       metric:`+${p.perf1Y.toFixed(0)}% 1A`,
       body:`Repli de ${Math.abs(p.perf3M).toFixed(1)}% sur 3 mois après une bonne année (+${p.perf1Y.toFixed(1)}%). Phase de digestion, potentiel de reprise.` });
-    else if (p.perf3M > 0 && p.perf1Y < 0) tips.push({ iconKey:"seedling", title:"Rebond en cours", accent:"#f59e0b", signal:"warning",
+    else if (p.perf3M > 0 && p.perf1Y < 0) tips.push({ iconKey:"seedling", title:"Rebond en cours", accent:"var(--nv-attention)", signal:"warning",
       metric:`${p.perf1Y.toFixed(0)}% 1A`,
       body:`+${p.perf3M.toFixed(1)}% sur 3 mois après une année difficile (${p.perf1Y.toFixed(1)}%). Surveiller la confirmation du retournement.` });
-    else tips.push({ iconKey:"alert", title:"Pression baissière", accent:"#ef4444", signal:"negative",
+    else tips.push({ iconKey:"alert", title:"Pression baissière", accent:"var(--nv-negatif)", signal:"negative",
       metric:`${p.perf1Y.toFixed(0)}% 1A`,
       body:`Recul sur 3 mois (${p.perf3M.toFixed(1)}%) et sur 1 an (${p.perf1Y.toFixed(1)}%). Tendance baissière persistante.` });
   }
 
   if (p.vol1Y !== null && p.perf1Y !== null && p.vol1Y > 0) {
     const sharpe = p.perf1Y / p.vol1Y;
-    if (sharpe > 1) tips.push({ iconKey:"diamond", title:"Ratio rendement/risque excellent", accent:"#22c55e", signal:"positive",
+    if (sharpe > 1) tips.push({ iconKey:"diamond", title:"Ratio rendement/risque excellent", accent:"var(--nv-positif)", signal:"positive",
       metric:`Sharpe ${sharpe.toFixed(2)}`,
       body:`+${p.perf1Y.toFixed(1)}% pour ${p.vol1Y.toFixed(0)}% de volatilité — ratio Sharpe estimé à ${sharpe.toFixed(2)}. L'actif compense très bien le risque.` });
-    else if (sharpe > 0.3) tips.push({ iconKey:"scale", title:"Ratio rendement/risque correct", accent:"#60a5fa", signal:"neutral",
+    else if (sharpe > 0.3) tips.push({ iconKey:"scale", title:"Ratio rendement/risque correct", accent:"var(--nv-accent)", signal:"neutral",
       metric:`Sharpe ${sharpe.toFixed(2)}`,
       body:`+${p.perf1Y.toFixed(1)}% de performance pour ${p.vol1Y.toFixed(0)}% de volatilité. Ratio risque/rendement raisonnable.` });
-    else if (sharpe < 0) tips.push({ iconKey:"x-circle", title:"Ratio rendement/risque défavorable", accent:"#ef4444", signal:"negative",
+    else if (sharpe < 0) tips.push({ iconKey:"x-circle", title:"Ratio rendement/risque défavorable", accent:"var(--nv-negatif)", signal:"negative",
       metric:`Sharpe ${sharpe.toFixed(2)}`,
       body:`Rendement de ${p.perf1Y.toFixed(1)}% pour ${p.vol1Y.toFixed(0)}% de volatilité — le risque pris n'est pas compensé actuellement.` });
   }
@@ -351,24 +352,24 @@ const SUB_PERIOD_DAYS: Record<string, number | null> = {
 
 // ── Colour presets ──────────────────────────────────────────────────────────
 const COLOR_PRESETS = [
-  { label:"Default", line:"#5B8DEF", up:"#26a69a", down:"#ef5350" },
+  { label:"Default", line:"var(--nv-accent)", up:"#26a69a", down:"#ef5350" },
   { label:"Neon",    line:"#00d4ff", up:"#00e676", down:"#ff1744" },
   { label:"Violet",  line:"#a855f7", up:"#c084fc", down:"#f43f5e" },
-  { label:"Amber",   line:"#f59e0b", up:"#fbbf24", down:"#dc2626" },
+  { label:"Amber",   line:"var(--nv-attention)", up:"#fbbf24", down:"#dc2626" },
 ];
 
 function SwatchInput({ label, value, onChange }: { label: string; value: string; onChange: (v: string) => void }) {
   return (
     <label style={{ display:"flex", alignItems:"center", gap:10, cursor:"pointer" }}>
-      <span style={{ fontSize:9, letterSpacing:"0.08em", color:"rgba(255,255,255,0.35)", width:52, flexShrink:0 }}>{label}</span>
+      <span style={{ fontSize:9, letterSpacing:"0.08em", color:"rgba(var(--nv-encre-rvb), 0.35)", width:52, flexShrink:0 }}>{label}</span>
       <span style={{
-        width:22, height:22, borderRadius:5, border:"1px solid rgba(255,255,255,0.15)",
+        width:22, height:22, borderRadius:5, border:"1px solid rgba(var(--nv-encre-rvb), 0.15)",
         background:value, display:"block", flexShrink:0, position:"relative", overflow:"hidden",
       }}>
         <input type="color" value={value} onChange={e => onChange(e.target.value)}
           style={{ opacity:0, position:"absolute", inset:0, width:"100%", height:"100%", cursor:"pointer", border:"none", padding:0 }} />
       </span>
-      <span style={{ fontSize:10, color:"rgba(255,255,255,0.45)", fontFamily:"monospace", letterSpacing:"0.04em" }}>{value.toUpperCase()}</span>
+      <span style={{ fontSize:10, color:"rgba(var(--nv-encre-rvb), 0.45)", fontFamily:"monospace", letterSpacing:"0.04em" }}>{value.toUpperCase()}</span>
     </label>
   );
 }
@@ -381,12 +382,12 @@ function CustomPanel({ lineColor, candleUp, candleDown, defaultLineColor, onLine
   return (
     <div style={{
       position:"absolute", top:50, right:10, zIndex:30,
-      background:"rgba(4,12,28,0.97)", border:"1px solid rgba(155,185,255,0.16)",
+      background:"var(--nv-carte)", border:"1px solid rgba(var(--nv-accent-rvb), 0.16)",
       borderRadius:12, padding:"14px 16px", width:230,
       boxShadow:"0 8px 32px rgba(0,0,0,0.7)",
       backdropFilter:"blur(12px)",
     }}>
-      <div style={{ fontSize:9, letterSpacing:"0.12em", color:"rgba(255,255,255,0.25)", marginBottom:12 }}>COULEURS DU GRAPHIQUE</div>
+      <div style={{ fontSize:9, letterSpacing:"0.12em", color:"rgba(var(--nv-encre-rvb), 0.25)", marginBottom:12 }}>COULEURS DU GRAPHIQUE</div>
 
       <div style={{ display:"flex", flexDirection:"column", gap:10, marginBottom:14 }}>
         <SwatchInput label="COURBE" value={lineColor} onChange={v => onLineColor(v)} />
@@ -394,8 +395,8 @@ function CustomPanel({ lineColor, candleUp, candleDown, defaultLineColor, onLine
         <SwatchInput label="BAISSE" value={candleDown} onChange={onCandleDown} />
       </div>
 
-      <div style={{ borderTop:"1px solid rgba(255,255,255,0.06)", paddingTop:12 }}>
-        <div style={{ fontSize:9, letterSpacing:"0.08em", color:"rgba(255,255,255,0.22)", marginBottom:8 }}>PRESETS</div>
+      <div style={{ borderTop:"1px solid rgba(var(--nv-encre-rvb), 0.06)", paddingTop:12 }}>
+        <div style={{ fontSize:9, letterSpacing:"0.08em", color:"rgba(var(--nv-encre-rvb), 0.22)", marginBottom:8 }}>PRESETS</div>
         <div style={{ display:"flex", gap:6, flexWrap:"wrap" as const }}>
           {COLOR_PRESETS.map(p => (
             <button key={p.label}
@@ -404,7 +405,7 @@ function CustomPanel({ lineColor, candleUp, candleDown, defaultLineColor, onLine
               style={{
                 width:20, height:20, borderRadius:4, cursor:"pointer",
                 background:`linear-gradient(135deg, ${p.line} 50%, ${p.up} 50%)`,
-                border:"1px solid rgba(255,255,255,0.12)", padding:0,
+                border:"1px solid rgba(var(--nv-encre-rvb), 0.12)", padding:0,
                 transition:"transform 0.1s",
               }}
             />
@@ -414,8 +415,8 @@ function CustomPanel({ lineColor, candleUp, candleDown, defaultLineColor, onLine
             title="Réinitialiser"
             style={{
               width:20, height:20, borderRadius:4, cursor:"pointer",
-              background:"rgba(255,255,255,0.06)", border:"1px solid rgba(255,255,255,0.12)",
-              color:"rgba(255,255,255,0.35)", fontSize:11, display:"flex", alignItems:"center", justifyContent:"center", padding:0,
+              background:"rgba(var(--nv-encre-rvb), 0.06)", border:"1px solid rgba(var(--nv-encre-rvb), 0.12)",
+              color:"rgba(var(--nv-encre-rvb), 0.35)", fontSize:11, display:"flex", alignItems:"center", justifyContent:"center", padding:0,
             }}
           >↺</button>
         </div>
@@ -427,10 +428,10 @@ function CustomPanel({ lineColor, candleUp, candleDown, defaultLineColor, onLine
 function TipCard({ tip, compact = false }: { tip: Tip; compact?: boolean }) {
   const [hovered, setHovered] = useState(false);
   const signalColors: Record<TipSignal, { bg: string; border: string; glow: string }> = {
-    positive: { bg:"rgba(34,197,94,0.08)",  border:"rgba(34,197,94,0.25)",  glow:"rgba(34,197,94,0.20)" },
-    neutral:  { bg:"rgba(96,165,250,0.07)", border:"rgba(96,165,250,0.22)", glow:"rgba(96,165,250,0.18)" },
-    warning:  { bg:"rgba(249,115,22,0.08)", border:"rgba(249,115,22,0.25)", glow:"rgba(249,115,22,0.20)" },
-    negative: { bg:"rgba(239,68,68,0.08)",  border:"rgba(239,68,68,0.25)",  glow:"rgba(239,68,68,0.20)" },
+    positive: { bg:"rgba(var(--nv-positif-rvb), 0.08)",  border:"rgba(var(--nv-positif-rvb), 0.25)",  glow:"rgba(var(--nv-positif-rvb), 0.20)" },
+    neutral:  { bg:"rgba(var(--nv-accent-rvb), 0.07)", border:"rgba(var(--nv-accent-rvb), 0.22)", glow:"rgba(var(--nv-accent-rvb), 0.18)" },
+    warning:  { bg:"rgba(var(--nv-attention-rvb), 0.08)", border:"rgba(var(--nv-attention-rvb), 0.25)", glow:"rgba(var(--nv-attention-rvb), 0.20)" },
+    negative: { bg:"rgba(var(--nv-negatif-rvb), 0.08)",  border:"rgba(var(--nv-negatif-rvb), 0.25)",  glow:"rgba(var(--nv-negatif-rvb), 0.20)" },
   };
   const sc = signalColors[tip.signal];
   return (
@@ -453,8 +454,8 @@ function TipCard({ tip, compact = false }: { tip: Tip; compact?: boolean }) {
     >
       <div style={{
         width:32, height:32, borderRadius:8, flexShrink:0,
-        background:`rgba(255,255,255,0.06)`,
-        border:`1px solid rgba(255,255,255,0.10)`,
+        background:`rgba(var(--nv-encre-rvb), 0.06)`,
+        border:`1px solid rgba(var(--nv-encre-rvb), 0.10)`,
         display:"flex", alignItems:"center", justifyContent:"center",
         color: tip.accent,
         transition:"box-shadow 0.18s ease",
@@ -464,7 +465,7 @@ function TipCard({ tip, compact = false }: { tip: Tip; compact?: boolean }) {
       </div>
       <div style={{ flex:1, minWidth:0 }}>
         <div style={{ display:"flex", alignItems:"center", gap:6, marginBottom:4 }}>
-          <span style={{ fontSize:11, fontWeight:600, color:"rgba(255,255,255,0.88)", letterSpacing:"0.01em", flex:1, minWidth:0 }}>
+          <span style={{ fontSize:11, fontWeight:600, color:"rgba(var(--nv-encre-rvb), 0.88)", letterSpacing:"0.01em", flex:1, minWidth:0 }}>
             {tip.title}
           </span>
           <span style={{ fontSize:9, fontWeight:700, padding:"2px 6px", borderRadius:4,
@@ -473,7 +474,7 @@ function TipCard({ tip, compact = false }: { tip: Tip; compact?: boolean }) {
             {tip.metric}
           </span>
         </div>
-        <p style={{ fontSize:10, color:"rgba(255,255,255,0.42)", lineHeight:1.55, margin:0 }}>
+        <p style={{ fontSize:10, color:"rgba(var(--nv-encre-rvb), 0.42)", lineHeight:1.55, margin:0 }}>
           {tip.body}
         </p>
       </div>
@@ -567,6 +568,9 @@ function ChartContent() {
   const [showCustom,    setShowCustom]    = useState(false);
   // Surface style is global (header toggle), not page-local.
   const { displayMode: chartDisplayMode } = useApp();
+  // Le graphique porte déjà des branches claires : il suffit de lui dire le
+  // thème au lieu de lui affirmer qu'il fait nuit.
+  const sombre = useModeTheme() === "sombre";
   const [copied,        setCopied]        = useState(false);
   const [chartViewMode, setChartViewMode] = useState<"line" | "candle">("line");
   const [extractedColor, setExtractedColor] = useState<string | null>(null);
@@ -640,12 +644,17 @@ function ChartContent() {
   // couleur extraite d'un logo l'est plus souvent encore. La teinte est
   // conservée, seules la clarté et la saturation sont ramenées dans la plage
   // lisible.
+  // La normalisation lit les composantes de la couleur : elle ne peut pas
+  // recevoir un var(), qu'elle serait incapable de décomposer. Ses valeurs de
+  // repli restent donc des hexadécimaux, choisis dans la palette.
+  const ACCENT_BRUT = sombre ? "#50A2FF" : "#2177D1";
+  const ATTENTION_BRUT = sombre ? "#FF8904" : "#D64200";
   const color = isPortfolio
-    ? (activePortfolio?.color || "#5B8DEF")
-    : pourFondSombre(ticker ? (BRAND_COLORS[ticker] ?? extractedColor ?? "#5B8DEF") : "#5B8DEF");
+    ? (activePortfolio?.color || "var(--nv-accent)")
+    : pourFond(ticker ? (BRAND_COLORS[ticker] ?? extractedColor ?? ACCENT_BRUT) : ACCENT_BRUT, !sombre);
   const activeBmColor = customBmTicker
-    ? pourFondSombre(BRAND_COLORS[customBmTicker] ?? bmExtractedColor ?? "#f59e0b")
-    : "#f59e0b";
+    ? pourFond(BRAND_COLORS[customBmTicker] ?? bmExtractedColor ?? ATTENTION_BRUT, !sombre)
+    : "var(--nv-attention)";
   const tc = typeColor(assetInfo?.type);
   const shortLabel = ticker
     ? ticker.replace(/-USD$/,"").replace(/\.PA$/,"").replace(/\^/,"").slice(0,4)
@@ -1133,7 +1142,7 @@ function ChartContent() {
       background:chartDisplayMode === "black"
         ? "#171717"
         : "var(--novac-bg, #041124)",
-      color:"var(--novac-text-primary, #F8F9FC)", fontFamily:"-apple-system,BlinkMacSystemFont,sans-serif",
+      color:"var(--novac-text-primary, var(--nv-texte))", fontFamily:"-apple-system,BlinkMacSystemFont,sans-serif",
       display:"flex", flexDirection:"column", position:"relative", overflow:"hidden",
       transition:"background-color .2s ease",
     }}>
@@ -1180,19 +1189,19 @@ function ChartContent() {
                   and makes the server markup differ from the client render — a
                   hydration mismatch. Setting the HTML directly skips escaping. */}
               <style dangerouslySetInnerHTML={{ __html: `
-                @keyframes hdr-glow-up{0%,100%{box-shadow:0 0 6px rgba(34,197,94,.15)}50%{box-shadow:0 0 14px rgba(34,197,94,.35)}}
-                @keyframes hdr-glow-dn{0%,100%{box-shadow:0 0 6px rgba(239,68,68,.15)}50%{box-shadow:0 0 14px rgba(239,68,68,.35)}}
-                @keyframes price-flash-up{0%{color:#4ade80}80%{color:#4ade80}100%{color:#F8F9FC}}
-                @keyframes price-flash-dn{0%{color:#ef4444}80%{color:#ef4444}100%{color:#F8F9FC}}
-                @keyframes hdr-pulse{0%,100%{box-shadow:0 0 0 0 rgba(34,197,94,.7)}60%{box-shadow:0 0 0 5px rgba(34,197,94,0)}}
-                @keyframes hdr-pulse-live{0%,100%{box-shadow:0 0 0 0 rgba(34,197,94,.9)}50%{box-shadow:0 0 0 6px rgba(34,197,94,0)}}
+                @keyframes hdr-glow-up{0%,100%{box-shadow:0 0 6px rgba(var(--nv-positif-rvb), .15)}50%{box-shadow:0 0 14px rgba(var(--nv-positif-rvb), .35)}}
+                @keyframes hdr-glow-dn{0%,100%{box-shadow:0 0 6px rgba(var(--nv-negatif-rvb), .15)}50%{box-shadow:0 0 14px rgba(var(--nv-negatif-rvb), .35)}}
+                @keyframes price-flash-up{0%{color:var(--nv-positif)}80%{color:var(--nv-positif)}100%{color:var(--nv-texte)}}
+                @keyframes price-flash-dn{0%{color:var(--nv-negatif)}80%{color:var(--nv-negatif)}100%{color:var(--nv-texte)}}
+                @keyframes hdr-pulse{0%,100%{box-shadow:0 0 0 0 rgba(var(--nv-positif-rvb), .7)}60%{box-shadow:0 0 0 5px rgba(var(--nv-positif-rvb), 0)}}
+                @keyframes hdr-pulse-live{0%,100%{box-shadow:0 0 0 0 rgba(var(--nv-positif-rvb), .9)}50%{box-shadow:0 0 0 6px rgba(var(--nv-positif-rvb), 0)}}
                 .chart-action-btn{width:30px!important;height:30px!important;box-sizing:border-box!important;border-width:1px!important;border-style:solid!important;border-radius:9px!important;box-shadow:0 2px 7px rgba(0,0,0,.22)!important;transition:transform .16s ease,filter .16s ease,background .16s ease,border-color .16s ease!important}
                 .chart-action-btn:hover{transform:translateY(-1px);filter:brightness(1.12)}
                 .chart-action-btn:active{transform:translateY(0)!important;filter:brightness(.96);transition-duration:0.07s!important}
                 .news-card-link{transition:transform .16s ease,background .16s ease,border-color .16s ease,box-shadow .16s ease}
-                .news-card-link:hover{transform:translateY(-1px);background:rgba(255,255,255,.047)!important;border-color:rgba(147,177,235,.17)!important;box-shadow:0 8px 22px rgba(0,0,0,.13)}
+                .news-card-link:hover{transform:translateY(-1px);background:rgba(var(--nv-encre-rvb), .047)!important;border-color:rgba(147,177,235,.17)!important;box-shadow:0 8px 22px rgba(0,0,0,.13)}
                 .news-card-link:active{transform:translateY(0);transition-duration:.07s}
-                .news-card-link:focus-visible{outline:2px solid rgba(91,141,239,.56);outline-offset:2px}
+                .news-card-link:focus-visible{outline:2px solid rgba(var(--nv-accent-rvb), .56);outline-offset:2px}
                 .news-card-arrow{transition:transform .16s ease,opacity .16s ease}
                 .news-card-link:hover .news-card-arrow{transform:translateX(2px);opacity:1!important}
                 .chart-glass-container::before{display:none}
@@ -1201,24 +1210,24 @@ function ChartContent() {
 
                 .asset-hero-secondary-card{zoom:1}
                 .asset-hero-identity{display:flex;align-items:center;min-width:0;padding-right:18px}
-                .asset-hero-section{align-self:stretch;display:flex;flex-direction:column;justify-content:center;border-left:1px solid rgba(255,255,255,.11);padding:0 18px;min-width:0}
+                .asset-hero-section{align-self:stretch;display:flex;flex-direction:column;justify-content:center;border-left:1px solid rgba(var(--nv-encre-rvb), .11);padding:0 18px;min-width:0}
                 .asset-hero-status{padding-right:10px}
                 
                 .asset-hero-star{width:18px;height:22px;margin:-3px 0 -3px 5px;padding:0;border:0;background:transparent;display:flex;align-items:center;justify-content:center;cursor:pointer;border-radius:0;flex:0 0 auto;box-shadow:none;appearance:none;opacity:1;transform:none!important;translate:none!important;scale:1!important;transition:none!important}
                 .asset-hero-star:hover{background:transparent;border-color:transparent;opacity:1;transform:none!important;translate:none!important;scale:1!important}
                 .asset-hero-star.is-active{background:transparent;border-color:transparent;box-shadow:none}
                 .asset-hero-star:active{opacity:.58;transform:none!important;scale:1!important}
-                .asset-hero-star:focus-visible{outline:2px solid rgba(255,255,255,.38);outline-offset:2px}
+                .asset-hero-star:focus-visible{outline:2px solid rgba(var(--nv-encre-rvb), .38);outline-offset:2px}
                 .asset-hero-star svg,.asset-hero-star:hover svg{display:block;transform:none!important;translate:none!important;scale:1!important;transition:none!important}
-                .asset-meta-pill{display:inline-flex;align-items:center;min-height:17px;padding:2px 7px;border-radius:999px;border:1px solid rgba(255,255,255,.035);background:rgba(255,255,255,.055);font-size:9px;line-height:1;font-weight:600;white-space:nowrap}
+                .asset-meta-pill{display:inline-flex;align-items:center;min-height:17px;padding:2px 7px;border-radius:999px;border:1px solid rgba(var(--nv-encre-rvb), .035);background:rgba(var(--nv-encre-rvb), .055);font-size:9px;line-height:1;font-weight:600;white-space:nowrap}
                 .asset-hero-price{justify-content:space-between;padding-top:2px!important;padding-bottom:2px!important;box-sizing:border-box}
                 .asset-performance-pill{display:inline-flex;align-items:center;min-height:17px;padding:2px 7px;border-radius:999px;font-size:9px;line-height:1;font-weight:700;box-sizing:border-box}
                 .asset-exchange-flag{width:12px;height:12px;margin-left:3px;border:0;outline:0;border-radius:50%;flex:0 0 auto;object-fit:cover;display:inline-block;vertical-align:middle;box-shadow:none}
-                .asset-market-pill{display:inline-flex;align-items:center;align-self:flex-start;gap:5px;min-height:17px;padding:2px 7px;box-sizing:border-box;border-radius:9px;border:1px solid rgba(255,255,255,.028);background:rgba(255,255,255,.045);white-space:nowrap}
+                .asset-market-pill{display:inline-flex;align-items:center;align-self:flex-start;gap:5px;min-height:17px;padding:2px 7px;box-sizing:border-box;border-radius:9px;border:1px solid rgba(var(--nv-encre-rvb), .028);background:rgba(var(--nv-encre-rvb), .045);white-space:nowrap}
                 .similar-asset-card{transition:transform .16s ease,filter .16s ease,box-shadow .16s ease!important}
                 .similar-asset-card:hover{transform:translateY(-1px);filter:brightness(1.08);box-shadow:0 9px 24px rgba(0,0,0,.24)!important}
                 .similar-asset-card:active{transform:translateY(0);filter:brightness(.98)}
-                .similar-asset-card:focus-visible{outline:2px solid rgba(155,185,255,.65);outline-offset:2px}
+                .similar-asset-card:focus-visible{outline:2px solid rgba(var(--nv-accent-rvb), .65);outline-offset:2px}
                 @media(max-width:1180px){
                   .comparison-insights-grid{grid-template-columns:1fr 1fr!important}
                   .comparison-summary{grid-column:1 / -1}
@@ -1230,16 +1239,16 @@ function ChartContent() {
                 @media(max-width:820px){
                   .asset-hero-row{zoom:1}
                   .asset-hero-grid{grid-template-columns:minmax(0,1fr) minmax(180px,.75fr);height:auto;min-height:0;row-gap:18px}
-                  .asset-hero-status{grid-column:1 / 3;border-left:0!important;border-top:1px solid rgba(255,255,255,.1);padding:16px 0 0!important;flex-direction:row!important;align-items:center;justify-content:space-between!important}
+                  .asset-hero-status{grid-column:1 / 3;border-left:0!important;border-top:1px solid rgba(var(--nv-encre-rvb), .1);padding:16px 0 0!important;flex-direction:row!important;align-items:center;justify-content:space-between!important}
                 }
                 @media(max-width:620px){
                   .asset-hero-grid{display:flex;flex-wrap:wrap;min-height:0;gap:18px}
                   .asset-hero-identity{width:100%;padding:0}.asset-hero-section{flex:1 1 180px;border-left:0;padding:0}
-                  .asset-hero-price{border-top:1px solid rgba(255,255,255,.1);padding-top:16px!important}
+                  .asset-hero-price{border-top:1px solid rgba(var(--nv-encre-rvb), .1);padding-top:16px!important}
                   .asset-hero-status{flex:1 1 100%;order:3}
                 }
               ` }} />
-              <div style={{ display:"flex", flexDirection:"column", padding:"8px 20px 8px", borderTop:"1px solid rgba(255,255,255,0.06)", borderBottom:"none", flexShrink:0, gap:8, marginTop:6 }}>
+              <div style={{ display:"flex", flexDirection:"column", padding:"8px 20px 8px", borderTop:"1px solid rgba(var(--nv-encre-rvb), 0.06)", borderBottom:"none", flexShrink:0, gap:8, marginTop:6 }}>
 
                 {/* ── Row 1: back · [logo + compact identity+price] · NOVAC ── */}
                 <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", gap:16 }}>
@@ -1261,25 +1270,25 @@ function ChartContent() {
                             />
                             <div style={{ marginLeft:12, display:"flex", flexDirection:"column", justifyContent:"center", minWidth:0 }}>
                               <div style={{ display:"flex", alignItems:"center", minWidth:0 }}>
-                                <span style={{ fontSize:20, fontWeight:800, color:"#F8F9FC", letterSpacing:"-0.04em", lineHeight:.95 }}>{displayTicker}</span>
+                                <span style={{ fontSize:20, fontWeight:800, color:"var(--nv-texte)", letterSpacing:"-0.04em", lineHeight:.95 }}>{displayTicker}</span>
                                 <button onClick={toggleFavorite} className={`asset-hero-star${isFavorite ? " is-active" : ""}`} title={isFavorite ? "Retirer des favoris" : "Ajouter aux favoris"} aria-pressed={isFavorite}>
-                                  <svg width="13" height="13" viewBox="0 0 24 24" fill={isFavorite ? "#facc15" : "none"} stroke={isFavorite ? "#facc15" : "rgba(255,255,255,0.58)"} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                                  <svg width="13" height="13" viewBox="0 0 24 24" fill={isFavorite ? "#facc15" : "none"} stroke={isFavorite ? "#facc15" : "rgba(var(--nv-encre-rvb), 0.58)"} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
                                     <path d="M12 3.15c.35 0 .68.2.84.54l2.17 4.4 4.86.7c.38.06.69.32.81.69.12.36.02.76-.25 1.02l-3.52 3.43.83 4.84c.06.38-.09.76-.4.99-.31.22-.72.25-1.06.07L12 17.54l-4.35 2.29c-.34.18-.75.15-1.06-.07a1.02 1.02 0 0 1-.4-.99l.83-4.84-3.52-3.43a1.02 1.02 0 0 1-.25-1.02c.12-.37.43-.63.81-.69l4.86-.7 2.17-4.4c.16-.34.49-.54.84-.54Z"/>
                                   </svg>
                                 </button>
                               </div>
-                              <span style={{ marginTop:5, fontSize:11, fontWeight:550, color:"rgba(255,255,255,0.9)", lineHeight:1.1, whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>{assetInfo?.name || ticker}</span>
+                              <span style={{ marginTop:5, fontSize:11, fontWeight:550, color:"rgba(var(--nv-encre-rvb), 0.9)", lineHeight:1.1, whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>{assetInfo?.name || ticker}</span>
                               <div style={{ display:"flex", alignItems:"center", gap:7, marginTop:6, minWidth:0 }}>
                                 {assetInfo?.type && assetInfo.type !== "INDEX" && (
-                                  <span className="asset-meta-pill" style={{ color:"rgba(255,255,255,0.72)" }}>
+                                  <span className="asset-meta-pill" style={{ color:"rgba(var(--nv-encre-rvb), 0.72)" }}>
                                     {({"EQUITY":"Action","ETF":"ETF","CRYPTOCURRENCY":"Crypto"} as Record<string,string>)[assetInfo.type] ?? assetInfo.type}
                                   </span>
                                 )}
                                 {quote?.global_rank != null && (
-                                  <span className="asset-meta-pill" style={{ color:"rgba(255,255,255,0.72)" }}>#{quote.global_rank}</span>
+                                  <span className="asset-meta-pill" style={{ color:"rgba(var(--nv-encre-rvb), 0.72)" }}>#{quote.global_rank}</span>
                                 )}
                                 {assetInfo?.exchange && !isCrypto && (
-                                  <span className="asset-meta-pill" style={{ color:"rgba(255,255,255,0.58)", fontWeight:500, overflow:"hidden", textOverflow:"ellipsis" }}>
+                                  <span className="asset-meta-pill" style={{ color:"rgba(var(--nv-encre-rvb), 0.58)", fontWeight:500, overflow:"hidden", textOverflow:"ellipsis" }}>
                                     {_EXCH[assetInfo.exchange] ?? assetInfo.exchange}
                                     {_EXCH_FLAG[assetInfo.exchange] && <img className="asset-exchange-flag" src={`https://hatscripts.github.io/circle-flags/flags/${_EXCH_FLAG[assetInfo.exchange]}.svg`} alt="" aria-label="Pays de la place boursière" />}
                                   </span>
@@ -1290,17 +1299,17 @@ function ChartContent() {
 
                           <div className="asset-hero-section asset-hero-price">
                             <div style={{ display:"flex", alignItems:"baseline", gap:7, whiteSpace:"nowrap" }}>
-                              <span style={{ fontSize:34, fontWeight:650, color:"#F8F9FC", letterSpacing:"-0.055em", fontVariantNumeric:"tabular-nums", lineHeight:1, animation:priceFlash === "up" ? "price-flash-up 0.9s ease forwards" : priceFlash === "down" ? "price-flash-dn 0.9s ease forwards" : "none" }}>
+                              <span style={{ fontSize:34, fontWeight:650, color:"var(--nv-texte)", letterSpacing:"-0.055em", fontVariantNumeric:"tabular-nums", lineHeight:1, animation:priceFlash === "up" ? "price-flash-up 0.9s ease forwards" : priceFlash === "down" ? "price-flash-dn 0.9s ease forwards" : "none" }}>
                                 {currentPrice ? fmtNum(currentPrice.price) : "—"}
                               </span>
-                              {quote?.currency && <span style={{ fontSize:10, fontWeight:500, color:"rgba(255,255,255,0.5)", letterSpacing:"0.04em" }}>{quote.currency}</span>}
+                              {quote?.currency && <span style={{ fontSize:10, fontWeight:500, color:"rgba(var(--nv-encre-rvb), 0.5)", letterSpacing:"0.04em" }}>{quote.currency}</span>}
                             </div>
                             {currentPrice && (
                               <div style={{ display:"flex", alignItems:"center", gap:6, whiteSpace:"nowrap" }}>
-                                <span style={{ fontSize:14, lineHeight:"17px", fontWeight:600, color:up ? "#4ade80" : "#ef4444", fontVariantNumeric:"tabular-nums" }}>
+                                <span style={{ fontSize:14, lineHeight:"17px", fontWeight:600, color:up ? "var(--nv-positif)" : "var(--nv-negatif)", fontVariantNumeric:"tabular-nums" }}>
                                   {up ? "▲" : "▼"} {up ? "+" : "−"}{fmtNum(Math.abs(quote?.prev_close != null ? currentPrice.price - quote.prev_close : currentPrice.price * currentPrice.change / 100))}
                                 </span>
-                                <span className="asset-performance-pill" style={{ color:up ? "#4ade80" : "#ef4444", background:up ? "rgba(34,197,94,0.25)" : "rgba(239,68,68,0.25)", fontVariantNumeric:"tabular-nums" }}>
+                                <span className="asset-performance-pill" style={{ color:up ? "var(--nv-positif)" : "var(--nv-negatif)", background:up ? "rgba(var(--nv-positif-rvb), 0.25)" : "rgba(var(--nv-negatif-rvb), 0.25)", fontVariantNumeric:"tabular-nums" }}>
                                   {up ? "+" : "−"}{Math.abs(currentPrice.change).toFixed(2)}%
                                 </span>
                               </div>
@@ -1310,13 +1319,13 @@ function ChartContent() {
                           <div className="asset-hero-section asset-hero-status">
                             {!isCrypto ? (
                               <div className="asset-market-pill">
-                                <span style={{ width:5, height:5, borderRadius:"50%", background:isOpen ? "#22c55e" : "rgba(255,255,255,0.62)", flexShrink:0, animation:isOpen ? "hdr-pulse 2s ease-in-out infinite" : "none" }}/>
-                                <span style={{ fontSize:9, fontWeight:650, color:isOpen ? "#4ade80" : "rgba(255,255,255,0.76)" }}>{isOpen ? "Marché ouvert" : "Marché fermé"}</span>
+                                <span style={{ width:5, height:5, borderRadius:"50%", background:isOpen ? "var(--nv-positif)" : "rgba(var(--nv-encre-rvb), 0.62)", flexShrink:0, animation:isOpen ? "hdr-pulse 2s ease-in-out infinite" : "none" }}/>
+                                <span style={{ fontSize:9, fontWeight:650, color:isOpen ? "var(--nv-positif)" : "rgba(var(--nv-encre-rvb), 0.76)" }}>{isOpen ? "Marché ouvert" : "Marché fermé"}</span>
                               </div>
                             ) : (
-                              <div className="asset-market-pill" style={{ background:"rgba(34,197,94,0.065)" }}>
-                                <span style={{ width:5, height:5, borderRadius:"50%", background:"#22c55e", flexShrink:0, animation:"hdr-pulse-live 1.5s ease-in-out infinite" }}/>
-                                <span style={{ fontSize:9, fontWeight:650, color:"#4ade80" }}>LIVE 24/7</span>
+                              <div className="asset-market-pill" style={{ background:"rgba(var(--nv-positif-rvb), 0.065)" }}>
+                                <span style={{ width:5, height:5, borderRadius:"50%", background:"var(--nv-positif)", flexShrink:0, animation:"hdr-pulse-live 1.5s ease-in-out infinite" }}/>
+                                <span style={{ fontSize:9, fontWeight:650, color:"var(--nv-positif)" }}>LIVE 24/7</span>
                               </div>
                             )}
                             {!isOpen && !isCrypto && (() => {
@@ -1324,17 +1333,17 @@ function ChartContent() {
                               const d = latest ? new Date(`${latest}T12:00:00`) : now;
                               return (
                                 <div style={{ display:"flex", flexDirection:"column", gap:1, marginTop:5 }}>
-                                  <span style={{ fontSize:9, lineHeight:1.1, color:"rgba(255,255,255,0.5)" }}>Dernière clôture</span>
-                                  <span style={{ fontSize:10, lineHeight:1.15, fontWeight:500, color:"rgba(255,255,255,0.72)" }}>
+                                  <span style={{ fontSize:9, lineHeight:1.1, color:"rgba(var(--nv-encre-rvb), 0.5)" }}>Dernière clôture</span>
+                                  <span style={{ fontSize:10, lineHeight:1.15, fontWeight:500, color:"rgba(var(--nv-encre-rvb), 0.72)" }}>
                                     {d.toLocaleDateString("fr-FR",{day:"2-digit",month:"short",year:"numeric"})}
                                   </span>
                                 </div>
                               );
                             })()}
                             {isCrypto ? (
-                              <span style={{ marginTop:7, fontSize:9, color:"rgba(255,255,255,0.38)" }}>Cours en temps réel</span>
+                              <span style={{ marginTop:7, fontSize:9, color:"rgba(var(--nv-encre-rvb), 0.38)" }}>Cours en temps réel</span>
                             ) : isOpen ? (
-                              <span style={{ marginTop:7, fontSize:9, color:"rgba(255,255,255,0.38)" }}>Màj toutes les 60 s</span>
+                              <span style={{ marginTop:7, fontSize:9, color:"rgba(var(--nv-encre-rvb), 0.38)" }}>Màj toutes les 60 s</span>
                             ) : null}
                           </div>
                         </div>
@@ -1369,7 +1378,7 @@ function ChartContent() {
                             const bmM  = parseInt(bmParts.find(p=>p.type==="minute")?.value??"0");
                             const bmIsOpen = bmWd!=="Sat" && bmWd!=="Sun" && (bmH*60+bmM)>=bmExchH.o && (bmH*60+bmM)<bmExchH.c;
                             const bmUp = bmCurrentPrice ? bmCurrentPrice.change >= 0 : true;
-                            const bmColor = BRAND_COLORS[customBmTicker] ?? bmExtractedColor ?? "#5B8DEF";
+                            const bmColor = BRAND_COLORS[customBmTicker] ?? bmExtractedColor ?? "var(--nv-accent)";
                             const bmCurrency = bmQuote?.currency ?? (customBmTicker.endsWith(".PA") || customBmTicker === "^STOXX50E" ? "EUR" : customBmTicker.endsWith(".L") ? "GBX" : customBmTicker.endsWith(".TO") ? "CAD" : "USD");
                             const bmLatest = rawCustomBmData[rawCustomBmData.length - 1]?.date?.slice(0,10);
                             const bmCloseDate = bmLatest ? new Date(`${bmLatest}T12:00:00`) : now;
@@ -1382,28 +1391,28 @@ function ChartContent() {
                               <div className="asset-hero-grid">
                                 <div className="asset-hero-identity">
                                   <AssetLogo ticker={customBmTicker} type={customBmType} size={60} radius={13}
-                                    fallbackBg="rgba(255,255,255,0.07)" fallbackBorder="rgba(255,255,255,0.12)" fallbackTextColor="rgba(255,255,255,0.55)" bare
+                                    fallbackBg="rgba(var(--nv-encre-rvb), 0.07)" fallbackBorder="rgba(var(--nv-encre-rvb), 0.12)" fallbackTextColor="rgba(var(--nv-encre-rvb), 0.55)" bare
                                     onColorExtracted={c => { if (!BRAND_COLORS[customBmTicker]) setBmExtractedColor(c); }}/>
                                   <div style={{ marginLeft:12, display:"flex", flexDirection:"column", justifyContent:"center", minWidth:0 }}>
                                     <div style={{ display:"flex", alignItems:"center", minWidth:0 }}>
-                                      <span style={{ fontSize:20, fontWeight:800, color:"#F8F9FC", letterSpacing:"-0.04em", lineHeight:.95 }}>{bmDisplayTicker}</span>
+                                      <span style={{ fontSize:20, fontWeight:800, color:"var(--nv-texte)", letterSpacing:"-0.04em", lineHeight:.95 }}>{bmDisplayTicker}</span>
                                       <button onClick={e => { e.stopPropagation(); setCustomBmTicker(null); setCustomBmName(""); setRawCustomBmData([]); setBmCurrentPrice(null); setSyncView(false); }}
                                         className="asset-hero-star" title="Retirer la comparaison" aria-label="Retirer la comparaison">
                                         <svg width="11" height="11" viewBox="0 0 16 16" fill="none">
-                                          <path d="M5 5l6 6M11 5l-6 6" stroke="rgba(255,255,255,.58)" strokeWidth="1.5" strokeLinecap="round"/>
+                                          <path d="M5 5l6 6M11 5l-6 6" stroke="rgba(var(--nv-encre-rvb), .58)" strokeWidth="1.5" strokeLinecap="round"/>
                                         </svg>
                                       </button>
                                     </div>
-                                    <span style={{ marginTop:5, fontSize:11, fontWeight:550, color:"rgba(255,255,255,0.9)", lineHeight:1.1, whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>{customBmName}</span>
+                                    <span style={{ marginTop:5, fontSize:11, fontWeight:550, color:"rgba(var(--nv-encre-rvb), 0.9)", lineHeight:1.1, whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>{customBmName}</span>
                                     <div style={{ display:"flex", alignItems:"center", gap:7, marginTop:6, minWidth:0 }}>
-                                      <span className="asset-meta-pill" style={{ color:"rgba(255,255,255,0.72)" }}>
+                                      <span className="asset-meta-pill" style={{ color:"rgba(var(--nv-encre-rvb), 0.72)" }}>
                                         {({"EQUITY":"Action","ETF":"ETF","INDEX":"Indice","CRYPTOCURRENCY":"Crypto"} as Record<string,string>)[customBmType] ?? customBmType}
                                       </span>
                                       {bmQuote?.global_rank != null && (
-                                        <span className="asset-meta-pill" style={{ color:"rgba(255,255,255,0.72)" }}>#{bmQuote.global_rank}</span>
+                                        <span className="asset-meta-pill" style={{ color:"rgba(var(--nv-encre-rvb), 0.72)" }}>#{bmQuote.global_rank}</span>
                                       )}
                                       {bmInfo?.exchange && customBmType !== "CRYPTOCURRENCY" && (
-                                        <span className="asset-meta-pill" style={{ color:"rgba(255,255,255,0.58)", fontWeight:500 }}>
+                                        <span className="asset-meta-pill" style={{ color:"rgba(var(--nv-encre-rvb), 0.58)", fontWeight:500 }}>
                                           {_EXCH[bmInfo.exchange] ?? bmInfo.exchange}
                                           {_EXCH_FLAG[bmInfo.exchange] && <img className="asset-exchange-flag" src={`https://hatscripts.github.io/circle-flags/flags/${_EXCH_FLAG[bmInfo.exchange]}.svg`} alt="" aria-label="Pays de la place boursière" />}
                                         </span>
@@ -1414,17 +1423,17 @@ function ChartContent() {
 
                                 <div className="asset-hero-section asset-hero-price">
                                   <div style={{ display:"flex", alignItems:"baseline", gap:7, whiteSpace:"nowrap" }}>
-                                    <span style={{ fontSize:34, fontWeight:650, color:"#F8F9FC", letterSpacing:"-0.055em", fontVariantNumeric:"tabular-nums", lineHeight:1, animation:bmPriceFlash === "up" ? "price-flash-up 0.9s ease forwards" : bmPriceFlash === "down" ? "price-flash-dn 0.9s ease forwards" : "none" }}>
+                                    <span style={{ fontSize:34, fontWeight:650, color:"var(--nv-texte)", letterSpacing:"-0.055em", fontVariantNumeric:"tabular-nums", lineHeight:1, animation:bmPriceFlash === "up" ? "price-flash-up 0.9s ease forwards" : bmPriceFlash === "down" ? "price-flash-dn 0.9s ease forwards" : "none" }}>
                                       {bmCurrentPrice ? fmtNum(bmCurrentPrice.price) : "—"}
                                     </span>
-                                    <span style={{ fontSize:10, fontWeight:500, color:"rgba(255,255,255,0.5)", letterSpacing:"0.04em" }}>{bmCurrency}</span>
+                                    <span style={{ fontSize:10, fontWeight:500, color:"rgba(var(--nv-encre-rvb), 0.5)", letterSpacing:"0.04em" }}>{bmCurrency}</span>
                                   </div>
                                   {bmCurrentPrice && (
                                     <div style={{ display:"flex", alignItems:"center", gap:6, whiteSpace:"nowrap" }}>
-                                      <span style={{ fontSize:14, lineHeight:"17px", fontWeight:600, color:bmUp ? "#4ade80" : "#ef4444", fontVariantNumeric:"tabular-nums" }}>
+                                      <span style={{ fontSize:14, lineHeight:"17px", fontWeight:600, color:bmUp ? "var(--nv-positif)" : "var(--nv-negatif)", fontVariantNumeric:"tabular-nums" }}>
                                         {bmUp ? "▲" : "▼"} {bmUp ? "+" : "−"}{fmtNum(Math.abs(bmCurrentPrice.price * bmCurrentPrice.change / 100))}
                                       </span>
-                                      <span className="asset-performance-pill" style={{ color:bmUp ? "#4ade80" : "#ef4444", background:bmUp ? "rgba(34,197,94,0.25)" : "rgba(239,68,68,0.25)", fontVariantNumeric:"tabular-nums" }}>
+                                      <span className="asset-performance-pill" style={{ color:bmUp ? "var(--nv-positif)" : "var(--nv-negatif)", background:bmUp ? "rgba(var(--nv-positif-rvb), 0.25)" : "rgba(var(--nv-negatif-rvb), 0.25)", fontVariantNumeric:"tabular-nums" }}>
                                         {bmUp ? "+" : "−"}{Math.abs(bmCurrentPrice.change).toFixed(2)}%
                                       </span>
                                     </div>
@@ -1434,23 +1443,23 @@ function ChartContent() {
                                 <div className="asset-hero-section asset-hero-status">
                                   {customBmType !== "CRYPTOCURRENCY" ? (
                                     <div className="asset-market-pill">
-                                      <span style={{ width:5, height:5, borderRadius:"50%", background:bmIsOpen ? "#22c55e" : "rgba(255,255,255,0.62)", flexShrink:0 }}/>
-                                      <span style={{ fontSize:9, fontWeight:650, color:bmIsOpen ? "#4ade80" : "rgba(255,255,255,0.76)" }}>{bmIsOpen ? "Marché ouvert" : "Marché fermé"}</span>
+                                      <span style={{ width:5, height:5, borderRadius:"50%", background:bmIsOpen ? "var(--nv-positif)" : "rgba(var(--nv-encre-rvb), 0.62)", flexShrink:0 }}/>
+                                      <span style={{ fontSize:9, fontWeight:650, color:bmIsOpen ? "var(--nv-positif)" : "rgba(var(--nv-encre-rvb), 0.76)" }}>{bmIsOpen ? "Marché ouvert" : "Marché fermé"}</span>
                                     </div>
                                   ) : (
-                                    <div className="asset-market-pill" style={{ background:"rgba(34,197,94,0.065)" }}>
-                                      <span style={{ width:5, height:5, borderRadius:"50%", background:"#22c55e", flexShrink:0 }}/>
-                                      <span style={{ fontSize:9, fontWeight:650, color:"#4ade80" }}>LIVE 24/7</span>
+                                    <div className="asset-market-pill" style={{ background:"rgba(var(--nv-positif-rvb), 0.065)" }}>
+                                      <span style={{ width:5, height:5, borderRadius:"50%", background:"var(--nv-positif)", flexShrink:0 }}/>
+                                      <span style={{ fontSize:9, fontWeight:650, color:"var(--nv-positif)" }}>LIVE 24/7</span>
                                     </div>
                                   )}
                                   {isBmCrypto ? (
-                                    <span style={{ marginTop:7, fontSize:9, color:"rgba(255,255,255,0.38)" }}>Cours en temps réel</span>
+                                    <span style={{ marginTop:7, fontSize:9, color:"rgba(var(--nv-encre-rvb), 0.38)" }}>Cours en temps réel</span>
                                   ) : bmIsOpen ? (
-                                    <span style={{ marginTop:7, fontSize:9, color:"rgba(255,255,255,0.38)" }}>Màj toutes les 60 s</span>
+                                    <span style={{ marginTop:7, fontSize:9, color:"rgba(var(--nv-encre-rvb), 0.38)" }}>Màj toutes les 60 s</span>
                                   ) : (
                                     <div style={{ display:"flex", flexDirection:"column", gap:1, marginTop:5 }}>
-                                      <span style={{ fontSize:9, lineHeight:1.1, color:"rgba(255,255,255,0.5)" }}>Dernière clôture</span>
-                                      <span style={{ fontSize:10, lineHeight:1.15, fontWeight:500, color:"rgba(255,255,255,0.72)" }}>
+                                      <span style={{ fontSize:9, lineHeight:1.1, color:"rgba(var(--nv-encre-rvb), 0.5)" }}>Dernière clôture</span>
+                                      <span style={{ fontSize:10, lineHeight:1.15, fontWeight:500, color:"rgba(var(--nv-encre-rvb), 0.72)" }}>
                                         {bmCloseDate.toLocaleDateString("fr-FR",{day:"2-digit",month:"short",year:"numeric"})}
                                       </span>
                                     </div>
@@ -1463,20 +1472,20 @@ function ChartContent() {
                             /* Ghost tile */
                             <div onClick={() => setShowBmSearch(s => !s)} style={{
                               display:"flex", alignItems:"center", gap:9, padding:"8px 11px", borderRadius:14, flexShrink:0,
-                              border:"1px solid rgba(255,255,255,0.075)", cursor:"pointer",
-                              background:"linear-gradient(135deg,rgba(255,255,255,0.035),rgba(255,255,255,0.012))",
+                              border:"1px solid rgba(var(--nv-encre-rvb), 0.075)", cursor:"pointer",
+                              background:"linear-gradient(135deg,rgba(var(--nv-encre-rvb), 0.035),rgba(var(--nv-encre-rvb), 0.012))",
                               backdropFilter:"blur(18px) saturate(1.2)", WebkitBackdropFilter:"blur(18px) saturate(1.2)",
                               boxShadow:"0 8px 24px rgba(0,0,0,0.10)",
                               transition:"background .18s ease,border-color .18s ease,box-shadow .18s ease", height:"100%", boxSizing:"border-box",
                             }}
-                              onMouseEnter={e => { e.currentTarget.style.background="linear-gradient(135deg,rgba(255,255,255,0.052),rgba(255,255,255,0.020))"; e.currentTarget.style.borderColor="rgba(255,255,255,0.12)"; e.currentTarget.style.boxShadow="0 10px 28px rgba(0,0,0,0.14)"; }}
-                              onMouseLeave={e => { e.currentTarget.style.background="linear-gradient(135deg,rgba(255,255,255,0.035),rgba(255,255,255,0.012))"; e.currentTarget.style.borderColor="rgba(255,255,255,0.075)"; e.currentTarget.style.boxShadow="0 8px 24px rgba(0,0,0,0.10)"; }}>
-                              <div style={{ width:24, height:24, borderRadius:8, border:"1px solid rgba(255,255,255,0.085)", background:"rgba(255,255,255,0.025)", display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0 }}>
-                                <svg width="10" height="10" viewBox="0 0 11 11" fill="none"><path d="M5.5 1v9M1 5.5h9" stroke="rgba(255,255,255,0.46)" strokeWidth="1.35" strokeLinecap="round"/></svg>
+                              onMouseEnter={e => { e.currentTarget.style.background="linear-gradient(135deg,rgba(var(--nv-encre-rvb), 0.052),rgba(var(--nv-encre-rvb), 0.020))"; e.currentTarget.style.borderColor="rgba(var(--nv-encre-rvb), 0.12)"; e.currentTarget.style.boxShadow="0 10px 28px rgba(0,0,0,0.14)"; }}
+                              onMouseLeave={e => { e.currentTarget.style.background="linear-gradient(135deg,rgba(var(--nv-encre-rvb), 0.035),rgba(var(--nv-encre-rvb), 0.012))"; e.currentTarget.style.borderColor="rgba(var(--nv-encre-rvb), 0.075)"; e.currentTarget.style.boxShadow="0 8px 24px rgba(0,0,0,0.10)"; }}>
+                              <div style={{ width:24, height:24, borderRadius:8, border:"1px solid rgba(var(--nv-encre-rvb), 0.085)", background:"rgba(var(--nv-encre-rvb), 0.025)", display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0 }}>
+                                <svg width="10" height="10" viewBox="0 0 11 11" fill="none"><path d="M5.5 1v9M1 5.5h9" stroke="rgba(var(--nv-encre-rvb), 0.46)" strokeWidth="1.35" strokeLinecap="round"/></svg>
                               </div>
                               <div>
-                                <div style={{ fontSize:10, fontWeight:600, color:"rgba(255,255,255,0.58)", letterSpacing:"0.005em", lineHeight:1 }}>Comparer</div>
-                                <div style={{ fontSize:8.5, color:"rgba(255,255,255,0.30)", marginTop:3, lineHeight:1 }}>ajouter un actif</div>
+                                <div style={{ fontSize:10, fontWeight:600, color:"rgba(var(--nv-encre-rvb), 0.58)", letterSpacing:"0.005em", lineHeight:1 }}>Comparer</div>
+                                <div style={{ fontSize:8.5, color:"rgba(var(--nv-encre-rvb), 0.30)", marginTop:3, lineHeight:1 }}>ajouter un actif</div>
                               </div>
                             </div>
                           )}
@@ -1486,44 +1495,44 @@ function ChartContent() {
                             <>
                               <div style={{ position:"fixed", inset:0, zIndex:40 }} onClick={() => { setShowBmSearch(false); setBmQuery(""); }}/>
                               <div style={{ position:"absolute", top:"calc(100% + 8px)", left:0, zIndex:50,
-                                background:"rgba(5,12,30,0.97)", border:"1px solid rgba(255,255,255,0.10)",
+                                background:"rgba(5,12,30,0.97)", border:"1px solid rgba(var(--nv-encre-rvb), 0.10)",
                                 borderRadius:14, padding:"12px 10px", backdropFilter:"blur(24px)",
                                 boxShadow:"0 12px 40px rgba(0,0,0,0.6)", width:260 }}>
                                 {/* Search input */}
-                                <div style={{ display:"flex", alignItems:"center", gap:8, background:"rgba(255,255,255,0.06)", border:"1px solid rgba(255,255,255,0.10)", borderRadius:9, padding:"6px 10px", marginBottom:10 }}>
-                                  <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="rgba(255,255,255,0.35)" strokeWidth="2" strokeLinecap="round"><circle cx="6.5" cy="6.5" r="4.5"/><path d="M10.5 10.5l3 3"/></svg>
+                                <div style={{ display:"flex", alignItems:"center", gap:8, background:"rgba(var(--nv-encre-rvb), 0.06)", border:"1px solid rgba(var(--nv-encre-rvb), 0.10)", borderRadius:9, padding:"6px 10px", marginBottom:10 }}>
+                                  <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="rgba(var(--nv-encre-rvb), 0.35)" strokeWidth="2" strokeLinecap="round"><circle cx="6.5" cy="6.5" r="4.5"/><path d="M10.5 10.5l3 3"/></svg>
                                   <input
                                     autoFocus
                                     value={bmQuery}
                                     onChange={e => setBmQuery(e.target.value)}
                                     placeholder="Chercher un actif…"
-                                    style={{ flex:1, background:"none", border:"none", outline:"none", fontSize:11, color:"#F8F9FC", caretColor:"#5B8DEF" }}
+                                    style={{ flex:1, background:"none", border:"none", outline:"none", fontSize:11, color:"var(--nv-texte)", caretColor:"var(--nv-accent)" }}
                                     onKeyDown={e => e.key === "Escape" && (setShowBmSearch(false), setBmQuery(""))}
                                   />
-                                  {bmQuery && <button onClick={() => setBmQuery("")} style={{ background:"none", border:"none", cursor:"pointer", color:"rgba(255,255,255,0.30)", fontSize:14, padding:0, lineHeight:1 }}>×</button>}
+                                  {bmQuery && <button onClick={() => setBmQuery("")} style={{ background:"none", border:"none", cursor:"pointer", color:"rgba(var(--nv-encre-rvb), 0.30)", fontSize:14, padding:0, lineHeight:1 }}>×</button>}
                                 </div>
 
                                 {/* Presets — only when no query */}
                                 {!bmQuery.trim() && (
                                   <div style={{ marginBottom:8 }}>
-                                    <div style={{ fontSize:8.5, letterSpacing:"0.10em", color:"rgba(255,255,255,0.20)", marginBottom:6, paddingLeft:2 }}>INDICES & CRYPTO</div>
+                                    <div style={{ fontSize:8.5, letterSpacing:"0.10em", color:"rgba(var(--nv-encre-rvb), 0.20)", marginBottom:6, paddingLeft:2 }}>INDICES & CRYPTO</div>
                                     <div style={{ display:"flex", flexDirection:"column", gap:1 }}>
                                       {BM_PRESETS.map(bm => (
                                         <div key={bm.ticker} onClick={() => { setCustomBmTicker(bm.ticker); setCustomBmName(bm.name); setCustomBmType(bm.type); setShowBmSearch(false); setBmQuery(""); setSyncView(false); }}
                                           style={{ display:"flex", alignItems:"center", gap:8, padding:"6px 8px", borderRadius:8, cursor:"pointer", transition:"background 0.10s" }}
-                                          onMouseEnter={e => e.currentTarget.style.background="rgba(255,255,255,0.07)"}
+                                          onMouseEnter={e => e.currentTarget.style.background="rgba(var(--nv-encre-rvb), 0.07)"}
                                           onMouseLeave={e => e.currentTarget.style.background="transparent"}>
                                           <AssetLogo ticker={bm.ticker} type={bm.type} size={24} radius={6}
-                                            fallbackBg="rgba(255,255,255,0.08)" fallbackBorder="rgba(255,255,255,0.12)" fallbackTextColor="rgba(255,255,255,0.50)"/>
+                                            fallbackBg="rgba(var(--nv-encre-rvb), 0.08)" fallbackBorder="rgba(var(--nv-encre-rvb), 0.12)" fallbackTextColor="rgba(var(--nv-encre-rvb), 0.50)"/>
                                           <div>
-                                            <div style={{ fontSize:11, fontWeight:600, color:"rgba(255,255,255,0.85)" }}>{bm.name}</div>
-                                            <div style={{ fontSize:9, color:"rgba(255,255,255,0.30)" }}>{bm.ticker}</div>
+                                            <div style={{ fontSize:11, fontWeight:600, color:"rgba(var(--nv-encre-rvb), 0.85)" }}>{bm.name}</div>
+                                            <div style={{ fontSize:9, color:"rgba(var(--nv-encre-rvb), 0.30)" }}>{bm.ticker}</div>
                                           </div>
                                         </div>
                                       ))}
                                     </div>
-                                    <div style={{ margin:"8px 0", borderTop:"1px solid rgba(255,255,255,0.06)" }}/>
-                                    <div style={{ fontSize:8.5, letterSpacing:"0.10em", color:"rgba(255,255,255,0.20)", marginBottom:6, paddingLeft:2 }}>POPULAIRES</div>
+                                    <div style={{ margin:"8px 0", borderTop:"1px solid rgba(var(--nv-encre-rvb), 0.06)" }}/>
+                                    <div style={{ fontSize:8.5, letterSpacing:"0.10em", color:"rgba(var(--nv-encre-rvb), 0.20)", marginBottom:6, paddingLeft:2 }}>POPULAIRES</div>
                                   </div>
                                 )}
 
@@ -1532,13 +1541,13 @@ function ChartContent() {
                                   {bmResults.map(asset => (
                                     <div key={asset.ticker} onClick={() => { setCustomBmTicker(asset.ticker); setCustomBmName(asset.name); setCustomBmType(asset.type); setShowBmSearch(false); setBmQuery(""); setSyncView(false); }}
                                       style={{ display:"flex", alignItems:"center", gap:8, padding:"6px 8px", borderRadius:8, cursor:"pointer", transition:"background 0.10s" }}
-                                      onMouseEnter={e => e.currentTarget.style.background="rgba(255,255,255,0.07)"}
+                                      onMouseEnter={e => e.currentTarget.style.background="rgba(var(--nv-encre-rvb), 0.07)"}
                                       onMouseLeave={e => e.currentTarget.style.background="transparent"}>
                                       <AssetLogo ticker={asset.ticker} type={asset.type} size={24} radius={6}
-                                        fallbackBg="rgba(255,255,255,0.08)" fallbackBorder="rgba(255,255,255,0.12)" fallbackTextColor="rgba(255,255,255,0.50)"/>
+                                        fallbackBg="rgba(var(--nv-encre-rvb), 0.08)" fallbackBorder="rgba(var(--nv-encre-rvb), 0.12)" fallbackTextColor="rgba(var(--nv-encre-rvb), 0.50)"/>
                                       <div style={{ flex:1, minWidth:0 }}>
-                                        <div style={{ fontSize:11, fontWeight:600, color:"rgba(255,255,255,0.85)", whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>{asset.ticker}</div>
-                                        <div style={{ fontSize:9, color:"rgba(255,255,255,0.30)", whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>{asset.name}</div>
+                                        <div style={{ fontSize:11, fontWeight:600, color:"rgba(var(--nv-encre-rvb), 0.85)", whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>{asset.ticker}</div>
+                                        <div style={{ fontSize:9, color:"rgba(var(--nv-encre-rvb), 0.30)", whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>{asset.name}</div>
                                       </div>
                                     </div>
                                   ))}
@@ -1552,21 +1561,21 @@ function ChartContent() {
 
                     {isPortfolio && activePortfolio && (
                       <div style={{ display:"flex", alignItems:"center", gap:10 }}>
-                        <div style={{ width:36, height:36, borderRadius:9, display:"flex", alignItems:"center", justifyContent:"center", background:`${activePortfolio.color||"#5B8DEF"}22`, border:`1px solid ${activePortfolio.color||"#5B8DEF"}44`, flexShrink:0 }}>
-                          <span style={{ fontSize:"9px", fontWeight:800, color:activePortfolio.color||"#5B8DEF", letterSpacing:"-0.02em" }}>{shortLabel}</span>
+                        <div style={{ width:36, height:36, borderRadius:9, display:"flex", alignItems:"center", justifyContent:"center", background:`${activePortfolio.color||"var(--nv-accent)"}22`, border:`1px solid ${activePortfolio.color||"var(--nv-accent)"}44`, flexShrink:0 }}>
+                          <span style={{ fontSize:"9px", fontWeight:800, color:activePortfolio.color||"var(--nv-accent)", letterSpacing:"-0.02em" }}>{shortLabel}</span>
                         </div>
                         <div>
-                          <div style={{ fontSize:13, fontWeight:600, color:"#F8F9FC", lineHeight:1.2 }}>{activePortfolio.name}</div>
+                          <div style={{ fontSize:13, fontWeight:600, color:"var(--nv-texte)", lineHeight:1.2 }}>{activePortfolio.name}</div>
                           <div style={{ display:"flex", alignItems:"center", gap:8, marginTop:2, flexWrap:"wrap" }}>
-                            <span style={{ fontSize:10, color:"rgba(255,255,255,0.28)" }}>{activePortfolio.assets.length} actifs · vs S&P 500</span>
-                            <span style={{ color:"rgba(255,255,255,0.15)", fontSize:10 }}>·</span>
-                            <span style={{ fontSize:10, color:"rgba(255,255,255,0.4)" }}>Investi</span>
+                            <span style={{ fontSize:10, color:"rgba(var(--nv-encre-rvb), 0.28)" }}>{activePortfolio.assets.length} actifs · vs S&P 500</span>
+                            <span style={{ color:"rgba(var(--nv-encre-rvb), 0.15)", fontSize:10 }}>·</span>
+                            <span style={{ fontSize:10, color:"rgba(var(--nv-encre-rvb), 0.4)" }}>Investi</span>
                             <input type="number" min={1} value={investedAmount}
                               onChange={e => setInvestedAmount(Math.max(1, Number(e.target.value)))}
                               onClick={e => (e.target as HTMLInputElement).select()}
-                              style={{ background:"rgba(255,255,255,0.07)", border:"1px solid rgba(255,255,255,0.14)", borderRadius:6, color:"#F8F9FC", fontSize:11, padding:"2px 7px", width:76, textAlign:"right", outline:"none" }}
+                              style={{ background:"rgba(var(--nv-encre-rvb), 0.07)", border:"1px solid rgba(var(--nv-encre-rvb), 0.14)", borderRadius:6, color:"var(--nv-texte)", fontSize:11, padding:"2px 7px", width:76, textAlign:"right", outline:"none" }}
                             />
-                            <span style={{ fontSize:10, color:"rgba(255,255,255,0.4)" }}>€</span>
+                            <span style={{ fontSize:10, color:"rgba(var(--nv-encre-rvb), 0.4)" }}>€</span>
                           </div>
                         </div>
                       </div>
@@ -1584,14 +1593,14 @@ function ChartContent() {
         <div style={{ flex:1, minHeight:0, padding:"10px 20px 10px", display:"flex", flexDirection:"column", overflow:"hidden" }}>
           {loading && (
             <div style={{ flex:1, display:"flex", alignItems:"center", justifyContent:"center" }}>
-              <div style={{ color:"rgba(255,255,255,0.25)", fontSize:"12px", letterSpacing:"0.1em" }}>Chargement···</div>
+              <div style={{ color:"rgba(var(--nv-encre-rvb), 0.25)", fontSize:"12px", letterSpacing:"0.1em" }}>Chargement···</div>
             </div>
           )}
           {!loading && error && (
             <div style={{ flex:1, display:"flex", alignItems:"center", justifyContent:"center", flexDirection:"column", gap:"16px" }}>
-              <div style={{ color:"rgba(255,255,255,0.3)", fontSize:"12px", textAlign:"center", maxWidth:"300px", lineHeight:1.6 }}>{error}</div>
+              <div style={{ color:"rgba(var(--nv-encre-rvb), 0.3)", fontSize:"12px", textAlign:"center", maxWidth:"300px", lineHeight:1.6 }}>{error}</div>
               <button onClick={() => router.back()}
-                style={{ background:"rgba(91,141,239,0.12)", border:"1px solid rgba(91,141,239,0.25)", borderRadius:"8px", color:"#9BB9FF", fontSize:"11px", padding:"8px 18px", cursor:"pointer", letterSpacing:"0.05em" }}>
+                style={{ background:"rgba(var(--nv-accent-rvb), 0.12)", border:"1px solid rgba(var(--nv-accent-rvb), 0.25)", borderRadius:"8px", color:"var(--nv-accent)", fontSize:"11px", padding:"8px 18px", cursor:"pointer", letterSpacing:"0.05em" }}>
                 ← Retour
               </button>
             </div>
@@ -1603,14 +1612,14 @@ function ChartContent() {
               <div style={{ flex:1, minWidth:0, display:"flex", flexDirection:"column", minHeight:0 }}>
               {/* Main chart */}
               <div className={chartDisplayMode === "black" ? undefined : "chart-glass-container"} data-glass-edge="" style={{
-                border:chartDisplayMode === "black" ? "1px solid rgba(255,255,255,0.30)" : "1px solid rgba(205,225,255,0.16)", borderRadius:"30px", padding:"14px 18px 10px",
+                border:chartDisplayMode === "black" ? "1px solid rgba(var(--nv-encre-rvb), 0.30)" : "1px solid rgba(205,225,255,0.16)", borderRadius:"30px", padding:"14px 18px 10px",
                 flex:"1 1 0", minHeight:0, display:"flex", flexDirection:"column", position:"relative", overflow:"hidden",
-                background:chartDisplayMode === "black" ? "linear-gradient(180deg, #0b0b0b 0%, #070707 100%)" : "rgba(9,27,52,0.78)",
+                background:chartDisplayMode === "black" ? "linear-gradient(180deg, #0b0b0b 0%, #070707 100%)" : "var(--nv-carte)",
                 backdropFilter:chartDisplayMode === "black" ? "none" : "blur(28px) saturate(1.2)", WebkitBackdropFilter:chartDisplayMode === "black" ? "none" : "blur(28px) saturate(1.2)",
                 boxShadow:chartDisplayMode === "black" ? "0 16px 44px rgba(0,0,0,0.28)" : "0 12px 36px rgba(0,0,0,0.10)",
               }}>
                 {/* Radial glow derrière le graphique */}
-                <div style={{ position:"absolute", inset:chartDisplayMode === "black" ? 0 : -28, pointerEvents:"none", zIndex:0, filter:chartDisplayMode === "black" ? "none" : "blur(20px)", opacity:chartDisplayMode === "black" ? 1 : 0.78, background:chartDisplayMode === "black" ? "radial-gradient(ellipse 62% 38% at 12% 0%, rgba(255,255,255,0.018) 0%, transparent 72%)" : "radial-gradient(ellipse 90% 72% at -10% -10%, rgba(255,255,255,0.035) 0%, rgba(255,255,255,0.014) 42%, rgba(255,255,255,0) 82%), radial-gradient(ellipse 86% 75% at 110% 112%, rgba(60,113,184,0.045) 0%, rgba(60,113,184,0.018) 44%, rgba(60,113,184,0) 84%)" }}/>
+                <div style={{ position:"absolute", inset:chartDisplayMode === "black" ? 0 : -28, pointerEvents:"none", zIndex:0, filter:chartDisplayMode === "black" ? "none" : "blur(20px)", opacity:chartDisplayMode === "black" ? 1 : 0.78, background:chartDisplayMode === "black" ? "radial-gradient(ellipse 62% 38% at 12% 0%, rgba(var(--nv-encre-rvb), 0.018) 0%, transparent 72%)" : "radial-gradient(ellipse 90% 72% at -10% -10%, rgba(var(--nv-encre-rvb), 0.035) 0%, rgba(var(--nv-encre-rvb), 0.014) 42%, rgba(var(--nv-encre-rvb), 0) 82%), radial-gradient(ellipse 86% 75% at 110% 112%, rgba(60,113,184,0.045) 0%, rgba(60,113,184,0.018) 44%, rgba(60,113,184,0) 84%)" }}/>
                 <GrowthChart
                   portfolioData={scaledPortfolioData}
                   benchmarkData={syncView ? [] : activeBmData}
@@ -1640,7 +1649,7 @@ function ChartContent() {
                   chartMode={chartViewMode}
                   displayMode={chartDisplayMode}
                   onChartModeChange={setChartViewMode}
-                  dark={true}
+                  dark={sombre}
                   priceMode={!!ticker}
                   hideDrawdown={true}
                   dailyChangePct={currentPrice?.change ?? null}
@@ -1659,11 +1668,11 @@ function ChartContent() {
                   leftSlot={metaCards.length > 0 ? (
                     <div style={{ display:"flex", alignItems:"center", gap:0, overflow:"hidden" }}>
                       {metaCards.map((card, i) => (
-                        <div key={card.label} style={{ display:"flex", alignItems:"center", gap:5, padding: i === 0 ? "0 10px 0 0" : "0 10px", borderLeft: i > 0 ? "1px solid rgba(255,255,255,0.07)" : "none" }}>
-                          <span style={{ fontSize:9, color:"rgba(255,255,255,0.22)", letterSpacing:"0.08em", textTransform:"uppercase" as const, flexShrink:0 }}>
+                        <div key={card.label} style={{ display:"flex", alignItems:"center", gap:5, padding: i === 0 ? "0 10px 0 0" : "0 10px", borderLeft: i > 0 ? "1px solid rgba(var(--nv-encre-rvb), 0.07)" : "none" }}>
+                          <span style={{ fontSize:9, color:"rgba(var(--nv-encre-rvb), 0.22)", letterSpacing:"0.08em", textTransform:"uppercase" as const, flexShrink:0 }}>
                             {card.label}
                           </span>
-                          <span style={{ fontSize:11, fontWeight:600, color:"rgba(255,255,255,0.6)", fontVariantNumeric:"tabular-nums" as const }}>
+                          <span style={{ fontSize:11, fontWeight:600, color:"rgba(var(--nv-encre-rvb), 0.6)", fontVariantNumeric:"tabular-nums" as const }}>
                             {card.value}
                           </span>
                         </div>
@@ -1679,14 +1688,14 @@ function ChartContent() {
                           title={fullscreen ? "Quitter le plein écran" : "Plein écran"}
                           className="chart-action-btn"
                           style={{
-                            background: fullscreen ? "rgba(91,141,239,0.18)" : "rgba(255,255,255,0.06)",
+                            background: fullscreen ? "rgba(var(--nv-accent-rvb), 0.18)" : "rgba(var(--nv-encre-rvb), 0.06)",
                             backdropFilter:"blur(10px) saturate(1.5)",
                             WebkitBackdropFilter:"blur(10px) saturate(1.5)",
-                            border:`1px solid ${fullscreen ? "rgba(91,141,239,0.45)" : "rgba(255,255,255,0.12)"}`,
+                            border:`1px solid ${fullscreen ? "rgba(var(--nv-accent-rvb), 0.45)" : "rgba(var(--nv-encre-rvb), 0.12)"}`,
                             borderRadius:9, width:30, height:30, cursor:"pointer",
                             display:"flex", alignItems:"center", justifyContent:"center",
-                            color: fullscreen ? "#9BB9FF" : "rgba(255,255,255,0.50)",
-                            boxShadow: fullscreen ? "0 0 12px rgba(91,141,239,0.20), inset 0 1px 0 rgba(255,255,255,0.10)" : "0 1px 3px rgba(0,0,0,0.20), inset 0 1px 0 rgba(255,255,255,0.07)",
+                            color: fullscreen ? "var(--nv-accent)" : "rgba(var(--nv-encre-rvb), 0.50)",
+                            boxShadow: fullscreen ? "0 0 12px rgba(var(--nv-accent-rvb), 0.20), inset 0 1px 0 rgba(var(--nv-encre-rvb), 0.10)" : "0 1px 3px rgba(0,0,0,0.20), inset 0 1px 0 rgba(var(--nv-encre-rvb), 0.07)",
                           }}
                         >
                           {fullscreen ? (
@@ -1703,14 +1712,14 @@ function ChartContent() {
                           title={sidebarOpen ? "Fermer le panneau" : "Ouvrir le panneau (News, Similaires, IA)"}
                           className="chart-action-btn"
                           style={{
-                            background: sidebarOpen ? "rgba(91,141,239,0.18)" : "rgba(255,255,255,0.06)",
+                            background: sidebarOpen ? "rgba(var(--nv-accent-rvb), 0.18)" : "rgba(var(--nv-encre-rvb), 0.06)",
                             backdropFilter:"blur(10px) saturate(1.5)",
                             WebkitBackdropFilter:"blur(10px) saturate(1.5)",
-                            border:`1px solid ${sidebarOpen ? "rgba(91,141,239,0.45)" : "rgba(255,255,255,0.12)"}`,
+                            border:`1px solid ${sidebarOpen ? "rgba(var(--nv-accent-rvb), 0.45)" : "rgba(var(--nv-encre-rvb), 0.12)"}`,
                             borderRadius:9, width:30, height:30, cursor:"pointer",
                             display:"flex", alignItems:"center", justifyContent:"center",
-                            color: sidebarOpen ? "#9BB9FF" : "rgba(255,255,255,0.50)",
-                            boxShadow: sidebarOpen ? "0 0 12px rgba(91,141,239,0.20), inset 0 1px 0 rgba(255,255,255,0.10)" : "0 1px 3px rgba(0,0,0,0.20), inset 0 1px 0 rgba(255,255,255,0.07)",
+                            color: sidebarOpen ? "var(--nv-accent)" : "rgba(var(--nv-encre-rvb), 0.50)",
+                            boxShadow: sidebarOpen ? "0 0 12px rgba(var(--nv-accent-rvb), 0.20), inset 0 1px 0 rgba(var(--nv-encre-rvb), 0.10)" : "0 1px 3px rgba(0,0,0,0.20), inset 0 1px 0 rgba(var(--nv-encre-rvb), 0.07)",
                           }}
                         >
                           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><line x1="15" y1="3" x2="15" y2="21"/></svg>
@@ -1722,14 +1731,14 @@ function ChartContent() {
                         title="Copier le lien"
                         className="chart-action-btn"
                         style={{
-                          background: copied ? "rgba(34,197,94,0.16)" : "rgba(255,255,255,0.06)",
+                          background: copied ? "rgba(var(--nv-positif-rvb), 0.16)" : "rgba(var(--nv-encre-rvb), 0.06)",
                           backdropFilter:"blur(10px) saturate(1.5)",
                           WebkitBackdropFilter:"blur(10px) saturate(1.5)",
-                          border:`1px solid ${copied ? "rgba(34,197,94,0.40)" : "rgba(255,255,255,0.12)"}`,
+                          border:`1px solid ${copied ? "rgba(var(--nv-positif-rvb), 0.40)" : "rgba(var(--nv-encre-rvb), 0.12)"}`,
                           borderRadius:9, width:30, height:30, cursor:"pointer",
                           display:"flex", alignItems:"center", justifyContent:"center",
-                          color: copied ? "#4ade80" : "rgba(255,255,255,0.50)",
-                          boxShadow: copied ? "0 0 12px rgba(34,197,94,0.18), inset 0 1px 0 rgba(255,255,255,0.10)" : "0 1px 3px rgba(0,0,0,0.20), inset 0 1px 0 rgba(255,255,255,0.07)",
+                          color: copied ? "var(--nv-positif)" : "rgba(var(--nv-encre-rvb), 0.50)",
+                          boxShadow: copied ? "0 0 12px rgba(var(--nv-positif-rvb), 0.18), inset 0 1px 0 rgba(var(--nv-encre-rvb), 0.10)" : "0 1px 3px rgba(0,0,0,0.20), inset 0 1px 0 rgba(var(--nv-encre-rvb), 0.07)",
                         }}
                       >
                         {copied ? (
@@ -1750,14 +1759,14 @@ function ChartContent() {
                           title={chartViewMode === "line" ? "Passer en bougies" : "Passer en courbe"}
                           className="chart-action-btn"
                           style={{
-                            background: chartViewMode === "candle" ? "rgba(155,185,255,0.16)" : "rgba(255,255,255,0.06)",
+                            background: chartViewMode === "candle" ? "rgba(var(--nv-accent-rvb), 0.16)" : "rgba(var(--nv-encre-rvb), 0.06)",
                             backdropFilter:"blur(10px) saturate(1.5)",
                             WebkitBackdropFilter:"blur(10px) saturate(1.5)",
-                            border:`1px solid ${chartViewMode === "candle" ? "rgba(155,185,255,0.40)" : "rgba(255,255,255,0.12)"}`,
+                            border:`1px solid ${chartViewMode === "candle" ? "rgba(var(--nv-accent-rvb), 0.40)" : "rgba(var(--nv-encre-rvb), 0.12)"}`,
                             borderRadius:9, width:30, height:30, cursor:"pointer",
                             display:"flex", alignItems:"center", justifyContent:"center",
-                            color: chartViewMode === "candle" ? "#9BB9FF" : "rgba(255,255,255,0.50)",
-                            boxShadow: chartViewMode === "candle" ? "0 0 12px rgba(155,185,255,0.16), inset 0 1px 0 rgba(255,255,255,0.10)" : "0 1px 3px rgba(0,0,0,0.20), inset 0 1px 0 rgba(255,255,255,0.07)",
+                            color: chartViewMode === "candle" ? "var(--nv-accent)" : "rgba(var(--nv-encre-rvb), 0.50)",
+                            boxShadow: chartViewMode === "candle" ? "0 0 12px rgba(var(--nv-accent-rvb), 0.16), inset 0 1px 0 rgba(var(--nv-encre-rvb), 0.10)" : "0 1px 3px rgba(0,0,0,0.20), inset 0 1px 0 rgba(var(--nv-encre-rvb), 0.07)",
                           }}
                         >
                           {chartViewMode === "line" ? (
@@ -1784,7 +1793,7 @@ function ChartContent() {
                         <div style={{ display:"flex", alignItems:"center", gap:6, marginRight:2 }}>
                           {/* Superposé / séparé */}
                           <div style={{ display:"inline-flex", padding:2, borderRadius:9, gap:2,
-                            border:"1px solid rgba(255,255,255,0.12)", background:"rgba(255,255,255,0.05)" }}>
+                            border:"1px solid rgba(var(--nv-encre-rvb), 0.12)", background:"rgba(var(--nv-encre-rvb), 0.05)" }}>
                             {([["overlay","Superposé","Les deux actifs sur un même axe, ramenés à une base commune — pour voir lequel surperforme"],
                                ["split","Séparé","Un graphique par actif, chacun avec son axe de prix — pour lire les niveaux absolus"]] as const)
                               .map(([v,label,title]) => {
@@ -1793,8 +1802,8 @@ function ChartContent() {
                                   <button key={v} title={title} onClick={() => setSyncView(v === "split")}
                                     style={{ padding:"4px 9px", borderRadius:7, border:"none", cursor:"pointer",
                                       fontSize:10, fontWeight: active ? 650 : 500, letterSpacing:"0.02em",
-                                      color: active ? "#F8F9FC" : "rgba(255,255,255,0.52)",
-                                      background: active ? "rgba(155,185,255,0.22)" : "transparent" }}>
+                                      color: active ? "var(--nv-texte)" : "rgba(var(--nv-encre-rvb), 0.52)",
+                                      background: active ? "rgba(var(--nv-accent-rvb), 0.22)" : "transparent" }}>
                                     {label}
                                   </button>
                                 );
@@ -1806,8 +1815,8 @@ function ChartContent() {
                           {!syncView && (
                             <span title="Les deux courbes repartent de 0 % au début de la période choisie : l'écart lu à droite est la surperformance sur cette période. Le zoom est figé en comparaison pour que ce point de référence reste unique — utilise les boutons de période pour changer de fenêtre. La ligne horizontale marque le départ commun."
                               style={{ padding:"4px 9px", borderRadius:9, fontSize:10, fontWeight:600,
-                                letterSpacing:"0.02em", color:"rgba(255,255,255,0.62)", cursor:"help",
-                                border:"1px solid rgba(255,255,255,0.12)", background:"rgba(255,255,255,0.05)" }}>
+                                letterSpacing:"0.02em", color:"rgba(var(--nv-encre-rvb), 0.62)", cursor:"help",
+                                border:"1px solid rgba(var(--nv-encre-rvb), 0.12)", background:"rgba(var(--nv-encre-rvb), 0.05)" }}>
                               Écart en %
                             </span>
                           )}
@@ -1820,20 +1829,20 @@ function ChartContent() {
                         title="Personnaliser les couleurs"
                         className="chart-action-btn"
                         style={{
-                          background: showCustom ? "rgba(155,185,255,0.16)" : "rgba(255,255,255,0.06)",
+                          background: showCustom ? "rgba(var(--nv-accent-rvb), 0.16)" : "rgba(var(--nv-encre-rvb), 0.06)",
                           backdropFilter:"blur(10px) saturate(1.5)",
                           WebkitBackdropFilter:"blur(10px) saturate(1.5)",
-                          border:`1px solid ${showCustom ? "rgba(155,185,255,0.40)" : "rgba(255,255,255,0.12)"}`,
+                          border:`1px solid ${showCustom ? "rgba(var(--nv-accent-rvb), 0.40)" : "rgba(var(--nv-encre-rvb), 0.12)"}`,
                           borderRadius:9, width:30, height:30, cursor:"pointer",
                           display:"flex", alignItems:"center", justifyContent:"center",
-                          boxShadow: showCustom ? "0 0 12px rgba(155,185,255,0.16), inset 0 1px 0 rgba(255,255,255,0.10)" : "0 1px 3px rgba(0,0,0,0.20), inset 0 1px 0 rgba(255,255,255,0.07)",
+                          boxShadow: showCustom ? "0 0 12px rgba(var(--nv-accent-rvb), 0.16), inset 0 1px 0 rgba(var(--nv-encre-rvb), 0.10)" : "0 1px 3px rgba(0,0,0,0.20), inset 0 1px 0 rgba(var(--nv-encre-rvb), 0.07)",
                         }}
                       >
                         <svg width="13" height="13" viewBox="0 0 16 16" fill="none">
-                          <circle cx="4"  cy="4"  r="2.5" fill={showCustom ? "#9BB9FF" : "rgba(255,255,255,0.50)"}/>
-                          <circle cx="12" cy="4"  r="2.5" fill={showCustom ? "#9BB9FF" : "rgba(255,255,255,0.50)"}/>
-                          <circle cx="4"  cy="12" r="2.5" fill={showCustom ? "#9BB9FF" : "rgba(255,255,255,0.50)"}/>
-                          <circle cx="12" cy="12" r="2.5" fill={showCustom ? "#9BB9FF" : "rgba(255,255,255,0.50)"}/>
+                          <circle cx="4"  cy="4"  r="2.5" fill={showCustom ? "var(--nv-accent)" : "rgba(var(--nv-encre-rvb), 0.50)"}/>
+                          <circle cx="12" cy="4"  r="2.5" fill={showCustom ? "var(--nv-accent)" : "rgba(var(--nv-encre-rvb), 0.50)"}/>
+                          <circle cx="4"  cy="12" r="2.5" fill={showCustom ? "var(--nv-accent)" : "rgba(var(--nv-encre-rvb), 0.50)"}/>
+                          <circle cx="12" cy="12" r="2.5" fill={showCustom ? "var(--nv-accent)" : "rgba(var(--nv-encre-rvb), 0.50)"}/>
                         </svg>
                       </button>
                     </div>
@@ -1866,7 +1875,7 @@ function ChartContent() {
                     }}>
                       <div style={{ display:"grid", gridTemplateRows:"20px 18px 20px", alignItems:"center", paddingRight:8 }}>
                         <span style={{ fontSize:9, fontWeight:700, color:lineColor ?? color, letterSpacing:"0.04em", textAlign:"right" }}>{shortLabel}</span>
-                        <span style={{ fontSize:8, color:"rgba(255,255,255,0.22)", letterSpacing:"0.09em", textTransform:"uppercase", textAlign:"right" }}>Période</span>
+                        <span style={{ fontSize:8, color:"rgba(var(--nv-encre-rvb), 0.22)", letterSpacing:"0.09em", textTransform:"uppercase", textAlign:"right" }}>Période</span>
                         <span style={{ fontSize:9, fontWeight:700, color:activeBmColor, letterSpacing:"0.04em", textAlign:"right" }}>
                           {customBmTicker.replace(/-USD$/,"-").replace(/-$/," ").replace(/^\^/,"").replace(/\.[A-Z]+$/," ").trim()}
                         </span>
@@ -1876,14 +1885,14 @@ function ChartContent() {
                         const secondaryPerf = secondaryPeriodPerformances[period];
                         const active = activePeriod === period;
                         const perfColor = (value: number | null) => value === null
-                          ? "rgba(255,255,255,0.22)"
+                          ? "rgba(var(--nv-encre-rvb), 0.22)"
                           : value >= 0 ? "#34d399" : "#fb4f55";
                         return (
                           <button key={period} onClick={() => selectComparisonPeriod(period)} style={{
                             display:"grid", gridTemplateRows:"20px 18px 20px", alignItems:"center",
                             minWidth:0, padding:"0 3px", border:0, borderRadius:8, cursor:"pointer",
-                            background:active ? "rgba(255,255,255,0.052)" : "transparent",
-                            boxShadow:active ? `inset 0 0 0 1px rgba(255,255,255,0.07)` : "none",
+                            background:active ? "rgba(var(--nv-encre-rvb), 0.052)" : "transparent",
+                            boxShadow:active ? `inset 0 0 0 1px rgba(var(--nv-encre-rvb), 0.07)` : "none",
                             transition:"background .15s ease, box-shadow .15s ease",
                           }}>
                             <span style={{ fontSize:10, fontWeight:650, color:perfColor(primaryPerf), fontVariantNumeric:"tabular-nums", opacity:active ? 1 : .78 }}>
@@ -1892,7 +1901,7 @@ function ChartContent() {
                             <span style={{
                               alignSelf:"stretch", display:"flex", alignItems:"center", justifyContent:"center",
                               fontSize:9.5, fontWeight:active ? 720 : 600,
-                              color:active ? "rgba(255,255,255,0.92)" : "rgba(255,255,255,0.43)",
+                              color:active ? "rgba(var(--nv-encre-rvb), 0.92)" : "rgba(var(--nv-encre-rvb), 0.43)",
                               borderBottom:active ? `2px solid ${lineColor ?? color}` : "2px solid transparent",
                             }}>{period}</span>
                             <span style={{ fontSize:10, fontWeight:650, color:perfColor(secondaryPerf), fontVariantNumeric:"tabular-nums", opacity:active ? 1 : .78 }}>
@@ -1905,19 +1914,19 @@ function ChartContent() {
 
                     <div style={{
                       display:"flex", alignItems:"center", gap:2, padding:"2px 4px",
-                      borderRadius:8, background:"rgba(255,255,255,0.025)",
-                      border:"1px solid rgba(255,255,255,0.045)",
+                      borderRadius:8, background:"rgba(var(--nv-encre-rvb), 0.025)",
+                      border:"1px solid rgba(var(--nv-encre-rvb), 0.045)",
                     }}>
-                      <span style={{ fontSize:8, color:"rgba(255,255,255,0.25)", letterSpacing:"0.08em", textTransform:"uppercase", padding:"0 5px 0 3px" }}>Intervalle</span>
+                      <span style={{ fontSize:8, color:"rgba(var(--nv-encre-rvb), 0.25)", letterSpacing:"0.08em", textTransform:"uppercase", padding:"0 5px 0 3px" }}>Intervalle</span>
                       {COMPARISON_INTERVALS.map(interval => {
                         const allowed = (COMPARISON_ALLOWED_INTERVALS[activePeriod] ?? []).includes(interval);
                         const active = activeInterval === interval;
                         return (
                           <button key={interval} disabled={!allowed} onClick={() => allowed && setActiveInterval(interval)} style={{
                             minWidth:28, height:20, padding:"0 5px", borderRadius:5,
-                            border:active ? "1px solid rgba(155,185,255,0.26)" : "1px solid transparent",
-                            background:active ? "rgba(91,141,239,0.13)" : "transparent",
-                            color:!allowed ? "rgba(255,255,255,0.11)" : active ? "#9BB9FF" : "rgba(255,255,255,0.38)",
+                            border:active ? "1px solid rgba(var(--nv-accent-rvb), 0.26)" : "1px solid transparent",
+                            background:active ? "rgba(var(--nv-accent-rvb), 0.13)" : "transparent",
+                            color:!allowed ? "rgba(var(--nv-encre-rvb), 0.11)" : active ? "var(--nv-accent)" : "rgba(var(--nv-encre-rvb), 0.38)",
                             fontSize:9, fontWeight:active ? 700 : 550, cursor:allowed ? "pointer" : "default",
                           }}>{interval}</button>
                         );
@@ -1938,17 +1947,17 @@ function ChartContent() {
                     };
 
                     // Interprétations colorées — corr/beta/dir neutres, seul alpha sémantique
-                    const corrLabel = syncStats.corr >= 0.7 ? { t:`Forte corrélation`, c:"#9BB9FF" }
-                      : syncStats.corr >= 0.3 ? { t:`Corrélation modérée`, c:"#9BB9FF" }
-                      : { t:`Faible corrélation`, c:"rgba(255,255,255,0.45)" };
+                    const corrLabel = syncStats.corr >= 0.7 ? { t:`Forte corrélation`, c:"var(--nv-accent)" }
+                      : syncStats.corr >= 0.3 ? { t:`Corrélation modérée`, c:"var(--nv-accent)" }
+                      : { t:`Faible corrélation`, c:"rgba(var(--nv-encre-rvb), 0.45)" };
 
-                    const betaLabel = syncStats.beta < 0.7 ? { t:`${lB} varie moins que ${lA}`, c:"#9BB9FF" }
-                      : syncStats.beta <= 1.3 ? { t:`Volatilités similaires`, c:"rgba(255,255,255,0.45)" }
-                      : { t:`${lB} amplifie ${lA}`, c:"#9BB9FF" };
+                    const betaLabel = syncStats.beta < 0.7 ? { t:`${lB} varie moins que ${lA}`, c:"var(--nv-accent)" }
+                      : syncStats.beta <= 1.3 ? { t:`Volatilités similaires`, c:"rgba(var(--nv-encre-rvb), 0.45)" }
+                      : { t:`${lB} amplifie ${lA}`, c:"var(--nv-accent)" };
 
-                    const alphaLabel = syncStats.alpha > 5 ? { t:`${lA} surperforme`, c:"#4ade80" }
-                      : syncStats.alpha < -5 ? { t:`${lA} sous-performe`, c:"#ef4444" }
-                      : { t:`Neutre`, c:"rgba(255,255,255,0.45)" };
+                    const alphaLabel = syncStats.alpha > 5 ? { t:`${lA} surperforme`, c:"var(--nv-positif)" }
+                      : syncStats.alpha < -5 ? { t:`${lA} sous-performe`, c:"var(--nv-negatif)" }
+                      : { t:`Neutre`, c:"rgba(var(--nv-encre-rvb), 0.45)" };
 
                     // Explications sous la jauge — chaque carte décrit SA métrique
                     const corrExpl = syncStats.corr < 0.3
@@ -2010,8 +2019,8 @@ function ChartContent() {
 
                     const cardBase: React.CSSProperties = {
                       flex:"1 1 0", minWidth:0,
-                      background:"rgba(255,255,255,0.018)",
-                      border:"1px solid rgba(255,255,255,0.055)",
+                      background:"rgba(var(--nv-encre-rvb), 0.018)",
+                      border:"1px solid rgba(var(--nv-encre-rvb), 0.055)",
                       borderRadius:12, padding:"11px 12px 10px", display:"flex", flexDirection:"column",
                       position:"relative", transition:"background 0.16s ease, border-color 0.16s ease", cursor:"default",
                       overflow:"hidden",
@@ -2019,37 +2028,37 @@ function ChartContent() {
                     const groupBase: React.CSSProperties = {
                       minWidth:0, display:"flex", flexDirection:"column", gap:8,
                       padding:"10px 18px 12px", borderRadius:16,
-                      background:"rgba(255,255,255,0.02)",
-                      border:"1px solid rgba(255,255,255,0.06)",
+                      background:"rgba(var(--nv-encre-rvb), 0.02)",
+                      border:"1px solid rgba(var(--nv-encre-rvb), 0.06)",
                       overflow:"hidden",
                     };
                     const hov = (e: React.MouseEvent<HTMLDivElement>) => {
-                      e.currentTarget.style.background="linear-gradient(145deg, rgba(255,255,255,0.048) 0%, rgba(255,255,255,0.021) 100%)";
-                      e.currentTarget.style.borderColor="rgba(255,255,255,0.075)";
+                      e.currentTarget.style.background="linear-gradient(145deg, rgba(var(--nv-encre-rvb), 0.048) 0%, rgba(var(--nv-encre-rvb), 0.021) 100%)";
+                      e.currentTarget.style.borderColor="rgba(var(--nv-encre-rvb), 0.075)";
                     };
                     const unHov = (e: React.MouseEvent<HTMLDivElement>) => {
-                      e.currentTarget.style.background="rgba(255,255,255,0.018)";
-                      e.currentTarget.style.borderColor="rgba(255,255,255,0.055)";
+                      e.currentTarget.style.background="rgba(var(--nv-encre-rvb), 0.018)";
+                      e.currentTarget.style.borderColor="rgba(var(--nv-encre-rvb), 0.055)";
                     };
 
                     const Lbl = ({ k, txt }: { k:string; txt:string }) => (
                       <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:7 }}>
-                        <span style={{ fontSize:9, fontWeight:550, color:"rgba(255,255,255,0.38)", letterSpacing:"0.085em", textTransform:"uppercase" as const }}>{txt}</span>
+                        <span style={{ fontSize:9, fontWeight:550, color:"rgba(var(--nv-encre-rvb), 0.38)", letterSpacing:"0.085em", textTransform:"uppercase" as const }}>{txt}</span>
                         <span onMouseEnter={() => setStatsTooltip(k)} onMouseLeave={() => setStatsTooltip(null)}
-                          style={{ fontSize:11, color: statsTooltip===k ? "rgba(255,255,255,0.80)" : "rgba(255,255,255,0.28)", cursor:"help", transition:"color 0.15s", lineHeight:1 }}>ⓘ</span>
+                          style={{ fontSize:11, color: statsTooltip===k ? "rgba(var(--nv-encre-rvb), 0.80)" : "rgba(var(--nv-encre-rvb), 0.28)", cursor:"help", transition:"color 0.15s", lineHeight:1 }}>ⓘ</span>
                       </div>
                     );
                     const TT = ({ k }: { k:string }) => statsTooltip===k ? (
                       <div style={{ position:"absolute", bottom:"calc(100% + 6px)", left:0, right:0, zIndex:200,
-                        background:"#111827", border:"1px solid rgba(255,255,255,0.10)", borderRadius:8,
-                        padding:"8px 10px", fontSize:11, color:"rgba(255,255,255,0.68)", lineHeight:1.55,
+                        background:"#111827", border:"1px solid rgba(var(--nv-encre-rvb), 0.10)", borderRadius:8,
+                        padding:"8px 10px", fontSize:11, color:"rgba(var(--nv-encre-rvb), 0.68)", lineHeight:1.55,
                         pointerEvents:"none", boxShadow:"0 4px 24px rgba(0,0,0,0.55)" }}>
                         {tooltips[k]}
                       </div>
                     ) : null;
 
                     const Expl = ({ txt }: { txt:string }) => (
-                      <span style={{ fontSize:9.25, color:"rgba(255,255,255,0.43)", lineHeight:1.48, marginTop:6, display:"block" }}>{txt}</span>
+                      <span style={{ fontSize:9.25, color:"rgba(var(--nv-encre-rvb), 0.43)", lineHeight:1.48, marginTop:6, display:"block" }}>{txt}</span>
                     );
                     const comparisonPeriodLabel = ({
                       "24h":"24 h", "1S":"1 semaine", "1M":"1 mois", "3M":"3 mois",
@@ -2066,20 +2075,20 @@ function ChartContent() {
                         {/* Relation entre les actifs */}
                         <section style={groupBase}>
                           <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between" }}>
-                            <span style={{ fontSize:8.5, fontWeight:650, color:"rgba(255,255,255,0.46)", letterSpacing:"0.10em", textTransform:"uppercase" }}>Relation entre les actifs</span>
-                            <span style={{ fontSize:8.5, color:"rgba(255,255,255,0.28)" }}>Sur {comparisonPeriodLabel}</span>
+                            <span style={{ fontSize:8.5, fontWeight:650, color:"rgba(var(--nv-encre-rvb), 0.46)", letterSpacing:"0.10em", textTransform:"uppercase" }}>Relation entre les actifs</span>
+                            <span style={{ fontSize:8.5, color:"rgba(var(--nv-encre-rvb), 0.28)" }}>Sur {comparisonPeriodLabel}</span>
                           </div>
                           <div style={{ display:"flex", gap:8, flex:1, minHeight:0 }}>
                             <div style={cardBase} onMouseEnter={hov} onMouseLeave={unHov}>
                               <TT k="corr"/><Lbl k="corr" txt="Corrélation"/>
-                              <span style={{ fontSize:23, fontWeight:720, letterSpacing:"-0.025em", color:"#F8F9FC", fontVariantNumeric:"tabular-nums" as const, lineHeight:1, marginBottom:5 }}>{syncStats.corr.toFixed(2)}</span>
+                              <span style={{ fontSize:23, fontWeight:720, letterSpacing:"-0.025em", color:"var(--nv-texte)", fontVariantNumeric:"tabular-nums" as const, lineHeight:1, marginBottom:5 }}>{syncStats.corr.toFixed(2)}</span>
                               <span style={{ fontSize:10, fontWeight:620, color:corrLabel.c }}>{corrLabel.t}</span>
                               <Expl txt={corrExpl}/>
                             </div>
                             <div style={cardBase} onMouseEnter={hov} onMouseLeave={unHov}>
                               <TT k="dir"/><Lbl k="dir" txt="Même direction"/>
-                              <span style={{ fontSize:23, fontWeight:720, letterSpacing:"-0.025em", color:"#F8F9FC", fontVariantNumeric:"tabular-nums" as const, lineHeight:1, marginBottom:5 }}>{syncStats.sameDir}%</span>
-                              <span style={{ fontSize:10, fontWeight:620, color:"#9BB9FF" }}>{directionLabel}</span>
+                              <span style={{ fontSize:23, fontWeight:720, letterSpacing:"-0.025em", color:"var(--nv-texte)", fontVariantNumeric:"tabular-nums" as const, lineHeight:1, marginBottom:5 }}>{syncStats.sameDir}%</span>
+                              <span style={{ fontSize:10, fontWeight:620, color:"var(--nv-accent)" }}>{directionLabel}</span>
                               <Expl txt={`${syncStats.sameDirN} séances similaires sur ${syncStats.totalN} observées.`}/>
                             </div>
                           </div>
@@ -2088,19 +2097,19 @@ function ChartContent() {
                         {/* Risque & performance */}
                         <section style={groupBase}>
                           <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between" }}>
-                            <span style={{ fontSize:8.5, fontWeight:650, color:"rgba(255,255,255,0.46)", letterSpacing:"0.10em", textTransform:"uppercase" }}>Risque &amp; performance</span>
-                            <span style={{ fontSize:8.5, color:"rgba(255,255,255,0.28)" }}>Sur {comparisonPeriodLabel}</span>
+                            <span style={{ fontSize:8.5, fontWeight:650, color:"rgba(var(--nv-encre-rvb), 0.46)", letterSpacing:"0.10em", textTransform:"uppercase" }}>Risque &amp; performance</span>
+                            <span style={{ fontSize:8.5, color:"rgba(var(--nv-encre-rvb), 0.28)" }}>Sur {comparisonPeriodLabel}</span>
                           </div>
                           <div style={{ display:"flex", gap:8, flex:1, minHeight:0 }}>
                             <div style={cardBase} onMouseEnter={hov} onMouseLeave={unHov}>
                               <TT k="beta"/><Lbl k="beta" txt="Bêta"/>
-                              <span style={{ fontSize:23, fontWeight:720, letterSpacing:"-0.025em", color:"#F8F9FC", fontVariantNumeric:"tabular-nums" as const, lineHeight:1, marginBottom:5 }}>{syncStats.beta.toFixed(2)}×</span>
+                              <span style={{ fontSize:23, fontWeight:720, letterSpacing:"-0.025em", color:"var(--nv-texte)", fontVariantNumeric:"tabular-nums" as const, lineHeight:1, marginBottom:5 }}>{syncStats.beta.toFixed(2)}×</span>
                               <span style={{ fontSize:10, fontWeight:620, color:betaLabel.c }}>{betaLabel.t}</span>
                               <Expl txt={betaExpl}/>
                             </div>
                             <div style={cardBase} onMouseEnter={hov} onMouseLeave={unHov}>
                               <TT k="alpha"/><Lbl k="alpha" txt="Alpha"/>
-                              <span style={{ fontSize:23, fontWeight:720, letterSpacing:"-0.025em", color:syncStats.alpha > 5 ? "#4ade80" : syncStats.alpha < -5 ? "#ff5b5f" : "#F8F9FC", fontVariantNumeric:"tabular-nums" as const, lineHeight:1, marginBottom:5 }}>{syncStats.alpha > 0 ? "+" : ""}{syncStats.alpha.toFixed(1)}%</span>
+                              <span style={{ fontSize:23, fontWeight:720, letterSpacing:"-0.025em", color:syncStats.alpha > 5 ? "var(--nv-positif)" : syncStats.alpha < -5 ? "#ff5b5f" : "var(--nv-texte)", fontVariantNumeric:"tabular-nums" as const, lineHeight:1, marginBottom:5 }}>{syncStats.alpha > 0 ? "+" : ""}{syncStats.alpha.toFixed(1)}%</span>
                               <span style={{ fontSize:10, fontWeight:620, color:alphaLabel.c }}>{alphaLabel.t}</span>
                               <Expl txt={alphaExpl}/>
                             </div>
@@ -2108,16 +2117,16 @@ function ChartContent() {
                         </section>
 
                         {/* Lecture rapide */}
-                        <section className="comparison-summary" style={{ ...groupBase, position:"relative", overflow:"hidden", background:"linear-gradient(145deg, rgba(123,167,247,0.050) 0%, rgba(123,167,247,0.018) 52%, rgba(255,255,255,0.012) 100%)" }}>
+                        <section className="comparison-summary" style={{ ...groupBase, position:"relative", overflow:"hidden", background:"linear-gradient(145deg, rgba(123,167,247,0.050) 0%, rgba(123,167,247,0.018) 52%, rgba(var(--nv-encre-rvb), 0.012) 100%)" }}>
                           <div aria-hidden="true" style={{ position:"absolute", right:16, top:44, width:31, height:31, borderRadius:"50%", background:`${color}2E`, opacity:.55 }}/>
                           <div aria-hidden="true" style={{ position:"absolute", right:1, top:44, width:31, height:31, borderRadius:"50%", background:`${activeBmColor}32`, opacity:.55 }}/>
                           <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", position:"relative", zIndex:1 }}>
-                            <span style={{ fontSize:9.5, fontWeight:680, color:"rgba(255,255,255,0.82)", letterSpacing:"0.015em" }}>Lecture rapide</span>
-                            <span style={{ fontSize:8.5, color:"rgba(255,255,255,0.32)" }}>Sur {comparisonPeriodLabel}</span>
+                            <span style={{ fontSize:9.5, fontWeight:680, color:"rgba(var(--nv-encre-rvb), 0.82)", letterSpacing:"0.015em" }}>Lecture rapide</span>
+                            <span style={{ fontSize:8.5, color:"rgba(var(--nv-encre-rvb), 0.32)" }}>Sur {comparisonPeriodLabel}</span>
                           </div>
                           <div style={{ display:"flex", flexDirection:"column", gap:9, paddingTop:12, paddingRight:30, position:"relative", zIndex:1 }}>
-                            <p style={{ fontSize:10.5, fontWeight:620, color:"rgba(255,255,255,0.78)", lineHeight:1.5, margin:0 }}>{aiLines[0]}</p>
-                            <p style={{ fontSize:9.5, color:"rgba(255,255,255,0.48)", lineHeight:1.55, margin:0 }}>{aiLines[1]}</p>
+                            <p style={{ fontSize:10.5, fontWeight:620, color:"rgba(var(--nv-encre-rvb), 0.78)", lineHeight:1.5, margin:0 }}>{aiLines[0]}</p>
+                            <p style={{ fontSize:9.5, color:"rgba(var(--nv-encre-rvb), 0.48)", lineHeight:1.55, margin:0 }}>{aiLines[1]}</p>
                           </div>
                         </section>
                       </div>
@@ -2129,13 +2138,13 @@ function ChartContent() {
                     className={chartDisplayMode === "black" ? undefined : "chart-glass-container"}
                     data-glass-edge=""
                     style={{
-                      order:2, border:chartDisplayMode === "black" ? "1px solid rgba(255,255,255,0.30)" : "1px solid rgba(205,225,255,0.16)", borderRadius:"30px", padding:"14px 18px 10px",
+                      order:2, border:chartDisplayMode === "black" ? "1px solid rgba(var(--nv-encre-rvb), 0.30)" : "1px solid rgba(205,225,255,0.16)", borderRadius:"30px", padding:"14px 18px 10px",
                       flex:"1 1 0", minHeight:0, display:"flex", flexDirection:"column", position:"relative", overflow:"hidden", marginTop:6,
-                      background:chartDisplayMode === "black" ? "linear-gradient(180deg, #0b0b0b 0%, #070707 100%)" : "rgba(9,27,52,0.78)",
+                      background:chartDisplayMode === "black" ? "linear-gradient(180deg, #0b0b0b 0%, #070707 100%)" : "var(--nv-carte)",
                       backdropFilter:chartDisplayMode === "black" ? "none" : "blur(28px) saturate(1.2)", WebkitBackdropFilter:chartDisplayMode === "black" ? "none" : "blur(28px) saturate(1.2)",
                       boxShadow:chartDisplayMode === "black" ? "0 16px 44px rgba(0,0,0,0.28)" : "0 12px 36px rgba(0,0,0,0.10)",
                     }}>
-                    <div style={{ position:"absolute", inset:chartDisplayMode === "black" ? 0 : -28, pointerEvents:"none", zIndex:0, filter:chartDisplayMode === "black" ? "none" : "blur(20px)", opacity:chartDisplayMode === "black" ? 1 : 0.78, background:chartDisplayMode === "black" ? "radial-gradient(ellipse 62% 38% at 12% 0%, rgba(255,255,255,0.018) 0%, transparent 72%)" : "radial-gradient(ellipse 90% 72% at -10% -10%, rgba(255,255,255,0.035) 0%, rgba(255,255,255,0.014) 42%, rgba(255,255,255,0) 82%), radial-gradient(ellipse 86% 75% at 110% 112%, rgba(60,113,184,0.045) 0%, rgba(60,113,184,0.018) 44%, rgba(60,113,184,0) 84%)" }}/>
+                    <div style={{ position:"absolute", inset:chartDisplayMode === "black" ? 0 : -28, pointerEvents:"none", zIndex:0, filter:chartDisplayMode === "black" ? "none" : "blur(20px)", opacity:chartDisplayMode === "black" ? 1 : 0.78, background:chartDisplayMode === "black" ? "radial-gradient(ellipse 62% 38% at 12% 0%, rgba(var(--nv-encre-rvb), 0.018) 0%, transparent 72%)" : "radial-gradient(ellipse 90% 72% at -10% -10%, rgba(var(--nv-encre-rvb), 0.035) 0%, rgba(var(--nv-encre-rvb), 0.014) 42%, rgba(var(--nv-encre-rvb), 0) 82%), radial-gradient(ellipse 86% 75% at 110% 112%, rgba(60,113,184,0.045) 0%, rgba(60,113,184,0.018) 44%, rgba(60,113,184,0) 84%)" }}/>
                     <GrowthChart
                       ticker={customBmTicker}
                       portfolioData={rawCustomBmData}
@@ -2146,7 +2155,7 @@ function ChartContent() {
                       displayMode={chartDisplayMode}
                       livePrice={bmCurrentPrice?.price}
                       dailyChangePct={bmCurrentPrice?.change ?? null}
-                      dark={true}
+                      dark={sombre}
                       priceMode={true}
                       hideDrawdown={true}
                       isCrypto={isBmCrypto}
@@ -2158,11 +2167,11 @@ function ChartContent() {
                       leftSlot={bmMetaCards.length > 0 ? (
                         <div style={{ display:"flex", alignItems:"center", gap:0, overflow:"hidden" }}>
                           {bmMetaCards.map((card, i) => (
-                            <div key={card.label} style={{ display:"flex", alignItems:"center", gap:5, padding: i === 0 ? "0 10px 0 0" : "0 10px", borderLeft: i > 0 ? "1px solid rgba(255,255,255,0.07)" : "none" }}>
-                              <span style={{ fontSize:9, color:"rgba(255,255,255,0.22)", letterSpacing:"0.08em", textTransform:"uppercase" as const, flexShrink:0 }}>
+                            <div key={card.label} style={{ display:"flex", alignItems:"center", gap:5, padding: i === 0 ? "0 10px 0 0" : "0 10px", borderLeft: i > 0 ? "1px solid rgba(var(--nv-encre-rvb), 0.07)" : "none" }}>
+                              <span style={{ fontSize:9, color:"rgba(var(--nv-encre-rvb), 0.22)", letterSpacing:"0.08em", textTransform:"uppercase" as const, flexShrink:0 }}>
                                 {card.label}
                               </span>
-                              <span style={{ fontSize:11, fontWeight:600, color:"rgba(255,255,255,0.6)", fontVariantNumeric:"tabular-nums" as const }}>
+                              <span style={{ fontSize:11, fontWeight:600, color:"rgba(var(--nv-encre-rvb), 0.6)", fontVariantNumeric:"tabular-nums" as const }}>
                                 {card.value}
                               </span>
                             </div>
@@ -2176,40 +2185,40 @@ function ChartContent() {
 
               {/* Sub-panel — en dessous, hauteur fixe, pas de scroll */}
               {subOpen ? (
-                <div style={{ order:4, background:"rgba(255,255,255,0.02)", border:"1px solid rgba(255,255,255,0.06)", borderRadius:12, marginTop:4, flexShrink:0, display:"flex", flexDirection:"column" }}>
-                  <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", padding:"4px 12px 3px", borderBottom:"1px solid rgba(255,255,255,0.05)" }}>
+                <div style={{ order:4, background:"rgba(var(--nv-encre-rvb), 0.02)", border:"1px solid rgba(var(--nv-encre-rvb), 0.06)", borderRadius:12, marginTop:4, flexShrink:0, display:"flex", flexDirection:"column" }}>
+                  <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", padding:"4px 12px 3px", borderBottom:"1px solid rgba(var(--nv-encre-rvb), 0.05)" }}>
                     <div style={{ display:"flex", gap:4, overflowX:"auto", scrollbarWidth:"none" as const }}>
                       {SUB_TABS.map(({key, label: lbl}) => (
-                        <button key={key} onClick={() => setSubTab(key)} style={{ whiteSpace:"nowrap" as const, background: subTab===key ? "rgba(155,185,255,0.12)" : "transparent", border:`1px solid ${subTab===key ? "rgba(155,185,255,0.25)" : "transparent"}`, borderRadius:6, padding:"3px 10px", cursor:"pointer", fontSize:10, letterSpacing:"0.05em", color: subTab===key ? "#9BB9FF" : "rgba(255,255,255,0.3)" }}>
+                        <button key={key} onClick={() => setSubTab(key)} style={{ whiteSpace:"nowrap" as const, background: subTab===key ? "rgba(var(--nv-accent-rvb), 0.12)" : "transparent", border:`1px solid ${subTab===key ? "rgba(var(--nv-accent-rvb), 0.25)" : "transparent"}`, borderRadius:6, padding:"3px 10px", cursor:"pointer", fontSize:10, letterSpacing:"0.05em", color: subTab===key ? "var(--nv-accent)" : "rgba(var(--nv-encre-rvb), 0.3)" }}>
                           {lbl}
                         </button>
                       ))}
                     </div>
-                    <button onClick={() => setSubOpen(false)} style={{ background:"transparent", border:"none", cursor:"pointer", color:"rgba(255,255,255,0.25)", fontSize:16, padding:"0 4px", lineHeight:1, flexShrink:0 }}>×</button>
+                    <button onClick={() => setSubOpen(false)} style={{ background:"transparent", border:"none", cursor:"pointer", color:"rgba(var(--nv-encre-rvb), 0.25)", fontSize:16, padding:"0 4px", lineHeight:1, flexShrink:0 }}>×</button>
                   </div>
                   <div style={{ height:200 }}>
                     {subTab === "distribution" ? (
                       distData.length > 0 ? (
                         <ResponsiveContainer width="100%" height={200}>
                           <BarChart data={distData} margin={{ top:4, right:2, bottom:2, left:0 }} barCategoryGap="4%">
-                            <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" vertical={false}/>
+                            <CartesianGrid strokeDasharray="3 3" stroke="rgba(var(--nv-encre-rvb), 0.05)" vertical={false}/>
                             <XAxis dataKey="label" hide/>
-                            <YAxis tick={{ fill:"rgba(255,255,255,0.25)", fontSize:9 }} tickLine={false} axisLine={false} width={20}/>
+                            <YAxis tick={{ fill:"rgba(var(--nv-encre-rvb), 0.25)", fontSize:9 }} tickLine={false} axisLine={false} width={20}/>
                             <Tooltip
-                              contentStyle={{ background:"#0d1f35", border:"1px solid rgba(255,255,255,0.1)", borderRadius:8, color:"rgba(255,255,255,0.7)", fontSize:10 }}
-                              cursor={{ fill:"rgba(255,255,255,0.04)" }}
+                              contentStyle={{ background:"var(--nv-carte)", border:"1px solid rgba(var(--nv-encre-rvb), 0.1)", borderRadius:8, color:"rgba(var(--nv-encre-rvb), 0.7)", fontSize:10 }}
+                              cursor={{ fill:"rgba(var(--nv-encre-rvb), 0.04)" }}
                               formatter={(v: number) => [v+" j", "Fréquence"]}
                               labelFormatter={(l: string) => `Rendement: ${l}`}
                             />
                             <Bar dataKey="count" radius={[2,2,0,0]}>
                               {distData.map((entry, i) => (
-                                <Cell key={i} fill={entry.ret >= 0 ? "#22c55e" : "#ef4444"} fillOpacity={0.65}/>
+                                <Cell key={i} fill={entry.ret >= 0 ? "var(--nv-positif)" : "var(--nv-negatif)"} fillOpacity={0.65}/>
                               ))}
                             </Bar>
                           </BarChart>
                         </ResponsiveContainer>
                       ) : (
-                        <div style={{ height:200, display:"flex", alignItems:"center", justifyContent:"center", color:"rgba(255,255,255,0.2)", fontSize:11 }}>Données insuffisantes</div>
+                        <div style={{ height:200, display:"flex", alignItems:"center", justifyContent:"center", color:"rgba(var(--nv-encre-rvb), 0.2)", fontSize:11 }}>Données insuffisantes</div>
                       )
                     ) : subData.length > 0 ? (
                       <SubChart
@@ -2219,7 +2228,7 @@ function ChartContent() {
                         height={200}
                       />
                     ) : (
-                      <div style={{ height:200, display:"flex", alignItems:"center", justifyContent:"center", color:"rgba(255,255,255,0.2)", fontSize:11 }}>
+                      <div style={{ height:200, display:"flex", alignItems:"center", justifyContent:"center", color:"rgba(var(--nv-encre-rvb), 0.2)", fontSize:11 }}>
                         {subTab === "correlation" || subTab === "sharpe" ? "Données insuffisantes (min 90 jours)" : "Données insuffisantes"}
                       </div>
                     )}
@@ -2241,9 +2250,9 @@ function ChartContent() {
                     boxSizing:"border-box",
                     background:chartDisplayMode === "black"
                       ? "linear-gradient(180deg, #0b0b0b 0%, #070707 100%)"
-                      : "rgba(9,27,52,0.78)",
+                      : "var(--nv-carte)",
                     border:chartDisplayMode === "black"
-                      ? "1px solid rgba(255,255,255,0.30)"
+                      ? "1px solid rgba(var(--nv-encre-rvb), 0.30)"
                       : "1px solid rgba(205,225,255,0.16)",
                     borderRadius:30,
                     overflow:"hidden",
@@ -2255,21 +2264,21 @@ function ChartContent() {
                   }}
                 >
                   {/* Sidebar tabs + close button */}
-                  <div style={{ display:"flex", alignItems:"stretch", borderBottom:"1px solid rgba(255,255,255,0.06)", flexShrink:0 }}>
+                  <div style={{ display:"flex", alignItems:"stretch", borderBottom:"1px solid rgba(var(--nv-encre-rvb), 0.06)", flexShrink:0 }}>
                     {([["news","Actualités"],["similar","Similaires"],["ai","IA"]] as const).map(([tab, label]) => {
                       const active = sidebarTab === tab;
                       return (
                         <button key={tab} onClick={() => setSidebarTab(tab)}
-                          style={{ flex:1, padding:"12px 4px 10px", border:"none", background: active?"rgba(91,141,239,0.10)":"transparent", cursor:"pointer", fontSize:11, fontWeight:active?700:500, letterSpacing:"0.07em", color:active?"#C5D9FF":"rgba(255,255,255,0.30)", borderBottom: active?"2px solid #5B8DEF":"2px solid rgba(255,255,255,0.0)", transition:"all 0.13s" }}>
+                          style={{ flex:1, padding:"12px 4px 10px", border:"none", background: active?"rgba(var(--nv-accent-rvb), 0.10)":"transparent", cursor:"pointer", fontSize:11, fontWeight:active?700:500, letterSpacing:"0.07em", color:active?"var(--nv-accent)":"rgba(var(--nv-encre-rvb), 0.30)", borderBottom: active?"2px solid var(--nv-accent)":"2px solid rgba(var(--nv-encre-rvb), 0.0)", transition:"all 0.13s" }}>
                           {label}
                         </button>
                       );
                     })}
                     <button onClick={() => setSidebarOpen(false)}
                       title="Fermer"
-                      style={{ flexShrink:0, width:36, border:"none", background:"transparent", cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center", color:"rgba(255,255,255,0.20)", borderLeft:"1px solid rgba(255,255,255,0.05)", transition:"color 0.13s" }}
-                      onMouseEnter={e => (e.currentTarget.style.color="rgba(255,255,255,0.55)")}
-                      onMouseLeave={e => (e.currentTarget.style.color="rgba(255,255,255,0.20)")}>
+                      style={{ flexShrink:0, width:36, border:"none", background:"transparent", cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center", color:"rgba(var(--nv-encre-rvb), 0.20)", borderLeft:"1px solid rgba(var(--nv-encre-rvb), 0.05)", transition:"color 0.13s" }}
+                      onMouseEnter={e => (e.currentTarget.style.color="rgba(var(--nv-encre-rvb), 0.55)")}
+                      onMouseLeave={e => (e.currentTarget.style.color="rgba(var(--nv-encre-rvb), 0.20)")}>
                       <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
                     </button>
                   </div>
@@ -2282,7 +2291,7 @@ function ChartContent() {
                       newsLoading ? (
                         <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
                           {[1,2,3,4].map(i => (
-                            <div key={i} style={{ height:72, borderRadius:10, background:"rgba(255,255,255,0.04)", animation:"none" }} />
+                            <div key={i} style={{ height:72, borderRadius:10, background:"rgba(var(--nv-encre-rvb), 0.04)", animation:"none" }} />
                           ))}
                         </div>
                       ) : news.length > 0 ? (() => {
@@ -2313,20 +2322,20 @@ function ChartContent() {
                           <div style={{ display:"flex", flexDirection:"column", gap:0 }}>
                             {/* Sort bar */}
                             <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:10 }}>
-                              <span style={{ fontSize:9, letterSpacing:"0.08em", color:"rgba(255,255,255,0.25)", textTransform:"uppercase" as const }}>
+                              <span style={{ fontSize:9, letterSpacing:"0.08em", color:"rgba(var(--nv-encre-rvb), 0.25)", textTransform:"uppercase" as const }}>
                                 {sorted.length} actualité{sorted.length > 1 ? "s" : ""}
                               </span>
                               <div style={{ display:"flex", alignItems:"center", padding:2, borderRadius:8, gap:1,
-                                background:"rgba(255,255,255,0.035)", border:"1px solid rgba(255,255,255,0.07)" }}>
+                                background:"rgba(var(--nv-encre-rvb), 0.035)", border:"1px solid rgba(var(--nv-encre-rvb), 0.07)" }}>
                                 {(["recent","impact"] as const).map(s => (
                                   <button key={s} onClick={() => setNewsSortBy(s)}
                                     title={s === "impact" ? "Trier par impact estimé" : "Trier par date de publication"}
                                     style={{
                                     fontSize:9, fontWeight:600, letterSpacing:"0.045em", padding:"3px 9px", borderRadius:6, cursor:"pointer",
                                     border:"none",
-                                    background: newsSortBy===s ? "rgba(91,141,239,0.20)" : "transparent",
-                                    color: newsSortBy===s ? "#9BB9FF" : "rgba(255,255,255,0.35)",
-                                    boxShadow: newsSortBy===s ? "inset 0 0 0 1px rgba(155,185,255,0.30), 0 2px 6px rgba(0,0,0,0.14)" : "none",
+                                    background: newsSortBy===s ? "rgba(var(--nv-accent-rvb), 0.20)" : "transparent",
+                                    color: newsSortBy===s ? "var(--nv-accent)" : "rgba(var(--nv-encre-rvb), 0.35)",
+                                    boxShadow: newsSortBy===s ? "inset 0 0 0 1px rgba(var(--nv-accent-rvb), 0.30), 0 2px 6px rgba(0,0,0,0.14)" : "none",
                                     transition:"all 0.14s",
                                   }}>
                                     {s === "recent" ? "Récent" : "Impact"}
@@ -2344,11 +2353,11 @@ function ChartContent() {
                               return (
                                 <a key={n.link || `${n.title}-${i}`} href={n.link} target="_blank" rel="noopener noreferrer"
                                   className="news-card-link"
-                                  style={{ display:"flex", flexDirection:"column", gap:6, padding:"9px 10px", borderRadius:11, background:"rgba(255,255,255,0.023)", border:"1px solid rgba(255,255,255,0.058)", textDecoration:"none" }}>
+                                  style={{ display:"flex", flexDirection:"column", gap:6, padding:"9px 10px", borderRadius:11, background:"rgba(var(--nv-encre-rvb), 0.023)", border:"1px solid rgba(var(--nv-encre-rvb), 0.058)", textDecoration:"none" }}>
                                   {/* Top row: type + impact badge */}
                                   <div style={{ display:"flex", alignItems:"center", gap:5 }}>
                                     <span style={{ fontSize:8, fontWeight:650, letterSpacing:"0.075em", padding:"1.5px 6px", borderRadius:5,
-                                      background:"rgba(255,255,255,0.08)", color:"rgba(255,255,255,0.50)", textTransform:"uppercase" as const }}>
+                                      background:"rgba(var(--nv-encre-rvb), 0.08)", color:"rgba(var(--nv-encre-rvb), 0.50)", textTransform:"uppercase" as const }}>
                                       {n.type}
                                     </span>
                                     <span title="Impact estimé à partir du titre et du type d’événement" style={{ fontSize:8, fontWeight:650, letterSpacing:"0.045em", padding:"1.5px 6px", borderRadius:5,
@@ -2356,34 +2365,34 @@ function ChartContent() {
                                       <span style={{ width:4, height:4, borderRadius:"50%", background:imp.dot, display:"inline-block", flexShrink:0 }}/>
                                       {imp.label}
                                     </span>
-                                    <span style={{ marginLeft:"auto", fontSize:8.5, color:"rgba(255,255,255,0.27)", whiteSpace:"nowrap" }}>{timeAgo}{timeAgo ? " · " : ""}{n.readMin} min</span>
+                                    <span style={{ marginLeft:"auto", fontSize:8.5, color:"rgba(var(--nv-encre-rvb), 0.27)", whiteSpace:"nowrap" }}>{timeAgo}{timeAgo ? " · " : ""}{n.readMin} min</span>
                                   </div>
                                   {/* Content row */}
                                   <div style={{ display:"flex", gap:9, alignItems:"center" }}>
                                     {n.thumbnail ? (
                                       <img src={n.thumbnail} alt="" width={42} height={42}
-                                        style={{ borderRadius:7, objectFit:"cover" as const, flexShrink:0, background:"rgba(255,255,255,.04)" }}
+                                        style={{ borderRadius:7, objectFit:"cover" as const, flexShrink:0, background:"rgba(var(--nv-encre-rvb), .04)" }}
                                         onError={e => { (e.target as HTMLImageElement).style.display="none"; }} />
                                     ) : (
                                       <div style={{
                                         width:42, height:42, borderRadius:7, flexShrink:0,
-                                        background: ["rgba(91,141,239,0.18)","rgba(139,92,246,0.18)","rgba(34,197,94,0.14)","rgba(249,115,22,0.16)","rgba(236,72,153,0.16)"][
+                                        background: ["rgba(var(--nv-accent-rvb), 0.18)","rgba(139,92,246,0.18)","rgba(var(--nv-positif-rvb), 0.14)","rgba(var(--nv-attention-rvb), 0.16)","rgba(236,72,153,0.16)"][
                                           (n.publisher?.charCodeAt(0) ?? 65) % 5
                                         ],
                                         display:"flex", alignItems:"center", justifyContent:"center",
-                                        fontSize:17, fontWeight:700, color:"rgba(255,255,255,0.45)",
+                                        fontSize:17, fontWeight:700, color:"rgba(var(--nv-encre-rvb), 0.45)",
                                       }}>
                                         {n.publisher?.[0]?.toUpperCase() ?? "N"}
                                       </div>
                                     )}
                                     <div style={{ flex:1, minWidth:0 }}>
-                                      <div style={{ fontSize:10.5, fontWeight:560, color:"rgba(255,255,255,0.86)", lineHeight:1.38,
+                                      <div style={{ fontSize:10.5, fontWeight:560, color:"rgba(var(--nv-encre-rvb), 0.86)", lineHeight:1.38,
                                         display:"-webkit-box", WebkitLineClamp:2, WebkitBoxOrient:"vertical" as const, overflow:"hidden" }}>
                                         {n.title}
                                       </div>
                                       <div style={{ marginTop:3, display:"flex", alignItems:"center", gap:5 }}>
-                                        <span style={{ fontSize:8.8, color:"rgba(255,255,255,0.34)", fontWeight:500, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{n.publisher}</span>
-                                        <span className="news-card-arrow" style={{ marginLeft:"auto", fontSize:10, lineHeight:1, color:"rgba(91,141,239,0.62)", opacity:.75 }}>→</span>
+                                        <span style={{ fontSize:8.8, color:"rgba(var(--nv-encre-rvb), 0.34)", fontWeight:500, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{n.publisher}</span>
+                                        <span className="news-card-arrow" style={{ marginLeft:"auto", fontSize:10, lineHeight:1, color:"rgba(var(--nv-accent-rvb), 0.62)", opacity:.75 }}>→</span>
                                       </div>
                                     </div>
                                   </div>
@@ -2394,7 +2403,7 @@ function ChartContent() {
                           </div>
                         );
                       })() : (
-                        <div style={{ padding:"30px 0", textAlign:"center", fontSize:11, color:"rgba(255,255,255,0.20)" }}>
+                        <div style={{ padding:"30px 0", textAlign:"center", fontSize:11, color:"rgba(var(--nv-encre-rvb), 0.20)" }}>
                           Aucune actualité disponible.
                         </div>
                       )
@@ -2409,7 +2418,7 @@ function ChartContent() {
                             const active = similarBy === by;
                             return (
                               <button key={by} onClick={() => setSimilarBy(by)}
-                                style={{ padding:"3px 9px", borderRadius:5, border:`1px solid ${active?"rgba(91,141,239,0.50)":"rgba(255,255,255,0.10)"}`, background:active?"rgba(91,141,239,0.18)":"transparent", color:active?"#9BB9FF":"rgba(255,255,255,0.32)", fontSize:9, fontWeight:active?700:400, cursor:"pointer", letterSpacing:"0.06em", transition:"all 0.13s" }}>
+                                style={{ padding:"3px 9px", borderRadius:5, border:`1px solid ${active?"rgba(var(--nv-accent-rvb), 0.50)":"rgba(var(--nv-encre-rvb), 0.10)"}`, background:active?"rgba(var(--nv-accent-rvb), 0.18)":"transparent", color:active?"var(--nv-accent)":"rgba(var(--nv-encre-rvb), 0.32)", fontSize:9, fontWeight:active?700:400, cursor:"pointer", letterSpacing:"0.06em", transition:"all 0.13s" }}>
                                 {labels[by]}
                               </button>
                             );
@@ -2417,7 +2426,7 @@ function ChartContent() {
                         </div>
                         {similarLoading ? (
                           <div style={{ display:"flex", flexDirection:"column", gap:6 }}>
-                            {[1,2,3,4,5].map(i => <div key={i} style={{ height:44, borderRadius:7, background:"rgba(255,255,255,0.04)" }} />)}
+                            {[1,2,3,4,5].map(i => <div key={i} style={{ height:44, borderRadius:7, background:"rgba(var(--nv-encre-rvb), 0.04)" }} />)}
                           </div>
                         ) : similar.length > 0 ? (
                           <div style={{ display:"flex", flexDirection:"column", gap:7 }}>
@@ -2427,7 +2436,7 @@ function ChartContent() {
                               const assetType = info?.type ?? s.type ?? "EQUITY";
                               const assetTypeLabel = ({EQUITY:"Action",ETF:"ETF",INDEX:"Indice",CRYPTOCURRENCY:"Crypto"} as Record<string,string>)[assetType] ?? assetType;
                               const exchange = info?.exchange ? (_EXCH[info.exchange] ?? info.exchange) : "";
-                              const assetColor = BRAND_COLORS[s.ticker] ?? "#5B8DEF";
+                              const assetColor = BRAND_COLORS[s.ticker] ?? "var(--nv-accent)";
                               const currency = assetType === "CRYPTOCURRENCY" ? "USD" : ({
                                 PAR:"EUR", GER:"EUR", AMS:"EUR", MIL:"EUR", MCE:"EUR",
                                 LSE:"GBP", SWX:"CHF", TOR:"CAD", TSX:"CAD", HKG:"HKD",
@@ -2454,15 +2463,15 @@ function ChartContent() {
                                   }}>
                                   <div style={{ position:"relative", zIndex:1, display:"flex", alignItems:"center" }}>
                                     <AssetLogo ticker={s.ticker} type={assetType} size={42} radius={10}
-                                      fallbackBg="rgba(255,255,255,0.07)" fallbackBorder="rgba(255,255,255,0.10)" fallbackTextColor="rgba(255,255,255,0.52)" bare />
+                                      fallbackBg="rgba(var(--nv-encre-rvb), 0.07)" fallbackBorder="rgba(var(--nv-encre-rvb), 0.10)" fallbackTextColor="rgba(var(--nv-encre-rvb), 0.52)" bare />
                                   </div>
                                   <div style={{ position:"relative", zIndex:1, minWidth:0, alignSelf:"stretch", display:"flex", flexDirection:"column", justifyContent:"center" }}>
-                                    <span style={{ fontSize:12.5, lineHeight:1, fontWeight:760, letterSpacing:"-0.02em", color:"#F8F9FC", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{s.ticker}</span>
-                                    <span style={{ marginTop:4, fontSize:9, lineHeight:1, color:"rgba(255,255,255,0.52)", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{name}</span>
+                                    <span style={{ fontSize:12.5, lineHeight:1, fontWeight:760, letterSpacing:"-0.02em", color:"var(--nv-texte)", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{s.ticker}</span>
+                                    <span style={{ marginTop:4, fontSize:9, lineHeight:1, color:"rgba(var(--nv-encre-rvb), 0.52)", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{name}</span>
                                     <div style={{ display:"flex", alignItems:"center", gap:5, marginTop:6, minWidth:0 }}>
-                                      <span className="asset-meta-pill" style={{ minHeight:15, padding:"2px 6px", fontSize:8, color:"rgba(255,255,255,0.70)" }}>{assetTypeLabel}</span>
+                                      <span className="asset-meta-pill" style={{ minHeight:15, padding:"2px 6px", fontSize:8, color:"rgba(var(--nv-encre-rvb), 0.70)" }}>{assetTypeLabel}</span>
                                       {(similarBy === "marketcap" ? s.market_cap != null : (exchange || s.country)) && (
-                                        <span className="asset-meta-pill" style={{ minHeight:15, maxWidth:88, padding:"2px 6px", fontSize:8, color:"rgba(255,255,255,0.52)", fontWeight:500, overflow:"hidden", textOverflow:"ellipsis" }}>
+                                        <span className="asset-meta-pill" style={{ minHeight:15, maxWidth:88, padding:"2px 6px", fontSize:8, color:"rgba(var(--nv-encre-rvb), 0.52)", fontWeight:500, overflow:"hidden", textOverflow:"ellipsis" }}>
                                           <span style={{ overflow:"hidden", textOverflow:"ellipsis" }}>
                                             {similarBy === "marketcap" && s.market_cap != null ? `Cap ${_fmtC(s.market_cap)}` : (exchange || s.country)}
                                           </span>
@@ -2473,10 +2482,10 @@ function ChartContent() {
                                   </div>
                                   <div style={{ position:"relative", zIndex:1, minWidth:62, textAlign:"right", display:"flex", flexDirection:"column", alignItems:"flex-end", justifyContent:"center", gap:6 }}>
                                     <div style={{ display:"flex", alignItems:"baseline", justifyContent:"flex-end", gap:4, whiteSpace:"nowrap" }}>
-                                      <span style={{ fontSize:13, lineHeight:1, fontWeight:680, letterSpacing:"-0.025em", color:"rgba(255,255,255,0.92)", fontVariantNumeric:"tabular-nums" as const }}>{_fmtN(s.price)}</span>
-                                      <span style={{ fontSize:7.5, lineHeight:1, fontWeight:600, color:"rgba(255,255,255,0.38)", letterSpacing:"0.04em" }}>{currency}</span>
+                                      <span style={{ fontSize:13, lineHeight:1, fontWeight:680, letterSpacing:"-0.025em", color:"rgba(var(--nv-encre-rvb), 0.92)", fontVariantNumeric:"tabular-nums" as const }}>{_fmtN(s.price)}</span>
+                                      <span style={{ fontSize:7.5, lineHeight:1, fontWeight:600, color:"rgba(var(--nv-encre-rvb), 0.38)", letterSpacing:"0.04em" }}>{currency}</span>
                                     </div>
-                                    <span className="asset-performance-pill" style={{ minHeight:16, padding:"2px 7px", fontSize:8.5, color:pos?"#4ade80":"#ef4444", background:pos?"rgba(34,197,94,0.23)":"rgba(239,68,68,0.23)", fontVariantNumeric:"tabular-nums" as const }}>
+                                    <span className="asset-performance-pill" style={{ minHeight:16, padding:"2px 7px", fontSize:8.5, color:pos?"var(--nv-positif)":"var(--nv-negatif)", background:pos?"rgba(var(--nv-positif-rvb), 0.23)":"rgba(var(--nv-negatif-rvb), 0.23)", fontVariantNumeric:"tabular-nums" as const }}>
                                       {pos?"+":"−"}{Math.abs(s.change).toFixed(2)}%
                                     </span>
                                   </div>
@@ -2485,7 +2494,7 @@ function ChartContent() {
                             })}
                           </div>
                         ) : (
-                          <div style={{ padding:"30px 0", textAlign:"center", fontSize:11, color:"rgba(255,255,255,0.20)" }}>
+                          <div style={{ padding:"30px 0", textAlign:"center", fontSize:11, color:"rgba(var(--nv-encre-rvb), 0.20)" }}>
                             Aucun actif similaire trouvé.
                           </div>
                         )}
@@ -2497,13 +2506,13 @@ function ChartContent() {
                       tips.length > 0 ? (
                         <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
                           <div style={{ display:"flex", alignItems:"center", gap:6, marginBottom:4 }}>
-                            <span style={{ fontSize:9, color:"rgba(255,255,255,0.22)", letterSpacing:"0.12em", fontWeight:600 }}>ANALYSE IA</span>
+                            <span style={{ fontSize:9, color:"rgba(var(--nv-encre-rvb), 0.22)", letterSpacing:"0.12em", fontWeight:600 }}>ANALYSE IA</span>
                             <span style={{ fontSize:8, background:"rgba(139,92,246,0.18)", border:"1px solid rgba(139,92,246,0.3)", borderRadius:4, padding:"1px 5px", color:"#c4b5fd", fontWeight:600 }}>bêta</span>
                           </div>
                           {tips.map(tip => <TipCard key={tip.title} tip={tip} compact={true} />)}
                         </div>
                       ) : (
-                        <div style={{ padding:"30px 0", textAlign:"center", fontSize:11, color:"rgba(255,255,255,0.20)" }}>
+                        <div style={{ padding:"30px 0", textAlign:"center", fontSize:11, color:"rgba(var(--nv-encre-rvb), 0.20)" }}>
                           Chargement de l&apos;analyse…
                         </div>
                       )
@@ -2516,15 +2525,15 @@ function ChartContent() {
 
               {/* Fullscreen overlay */}
               {fullscreen && (
-                <div style={{ position:"fixed", inset:0, zIndex:100, background:"#040F22", display:"flex", flexDirection:"column", padding:20 }}>
+                <div style={{ position:"fixed", inset:0, zIndex:100, background:"var(--nv-fond)", display:"flex", flexDirection:"column", padding:20 }}>
                   <div style={{ display:"flex", justifyContent:"flex-end", marginBottom:10, flexShrink:0 }}>
                     <button onClick={() => setFullscreen(false)}
-                      style={{ background:"rgba(255,255,255,0.06)", border:"1px solid rgba(255,255,255,0.12)", borderRadius:8, color:"rgba(255,255,255,0.55)", fontSize:11, padding:"6px 14px", cursor:"pointer", letterSpacing:"0.07em", display:"flex", alignItems:"center", gap:6 }}>
+                      style={{ background:"rgba(var(--nv-encre-rvb), 0.06)", border:"1px solid rgba(var(--nv-encre-rvb), 0.12)", borderRadius:8, color:"rgba(var(--nv-encre-rvb), 0.55)", fontSize:11, padding:"6px 14px", cursor:"pointer", letterSpacing:"0.07em", display:"flex", alignItems:"center", gap:6 }}>
                       <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M8 3v3a2 2 0 01-2 2H3m18 0h-3a2 2 0 01-2-2V3m0 18v-3a2 2 0 012-2h3M3 16h3a2 2 0 012 2v3"/></svg>
                       Quitter le plein écran
                     </button>
                   </div>
-                  <div style={{ flex:1, border:"1px solid rgba(255,255,255,0.07)", borderRadius:16, overflow:"hidden", background:"rgba(255,255,255,0.02)" }}>
+                  <div style={{ flex:1, border:"1px solid rgba(var(--nv-encre-rvb), 0.07)", borderRadius:16, overflow:"hidden", background:"rgba(var(--nv-encre-rvb), 0.02)" }}>
                     <GrowthChart
                       portfolioData={scaledPortfolioData}
                       benchmarkData={activeBmData}
@@ -2541,7 +2550,7 @@ function ChartContent() {
                       candleDownColor={candleDown}
                       chartMode={chartViewMode}
                       onChartModeChange={setChartViewMode}
-                      dark={true}
+                      dark={sombre}
                       priceMode={!!ticker}
                       hideDrawdown={true}
                       dailyChangePct={currentPrice?.change ?? null}
@@ -2557,7 +2566,7 @@ function ChartContent() {
           )}
           {!loading && !error && portfolioData.length === 0 && (
             <div style={{ flex:1, display:"flex", alignItems:"center", justifyContent:"center" }}>
-              <div style={{ color:"rgba(255,255,255,0.2)", fontSize:"12px" }}>Aucune donnée disponible</div>
+              <div style={{ color:"rgba(var(--nv-encre-rvb), 0.2)", fontSize:"12px" }}>Aucune donnée disponible</div>
             </div>
           )}
         </div>
@@ -2569,7 +2578,7 @@ function ChartContent() {
 export default function ChartPage() {
   return (
     <Suspense fallback={
-      <div style={{ minHeight:"100vh", background:"#041124", display:"flex", alignItems:"center", justifyContent:"center", color:"rgba(255,255,255,0.25)", fontSize:"12px", letterSpacing:"0.1em" }}>
+      <div style={{ minHeight:"100vh", background:"var(--nv-fond)", display:"flex", alignItems:"center", justifyContent:"center", color:"rgba(var(--nv-encre-rvb), 0.25)", fontSize:"12px", letterSpacing:"0.1em" }}>
         Chargement···
       </div>
     }>

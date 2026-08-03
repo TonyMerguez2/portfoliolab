@@ -18,7 +18,7 @@ import type { AssetMetrics, MonthlyReturn, CorrelationMatrix } from "@/types";
 // ─── Allocation Pie ──────────────────────────────────────────
 
 const PIE_COLORS = [
-  "#4f46e5", "#06b6d4", "#10b981", "#f59e0b",
+  "#4f46e5", "#06b6d4", "var(--nv-positif)", "#f59e0b",
   "#ef4444", "#8b5cf6", "#ec4899", "#14b8a6",
   "#f97316", "#6366f1",
 ];
@@ -67,7 +67,7 @@ export function AllocationPie({ assets }: { assets: AssetMetrics[] }) {
 export function MonthlyReturnsChart({ data }: { data: MonthlyReturn[] }) {
   const formatted = data.map((d) => ({
     ...d,
-    fill: d.return_value >= 0 ? "#10b981" : "#ef4444",
+    fill: d.return_value >= 0 ? "var(--nv-positif)" : "#ef4444",
   }));
 
   const last24 = formatted.slice(-24);
@@ -79,14 +79,14 @@ export function MonthlyReturnsChart({ data }: { data: MonthlyReturn[] }) {
           <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
           <XAxis
             dataKey="period"
-            tick={{ fontSize: 10, fill: "#94a3b8" }}
+            tick={{ fontSize: 10, fill: "var(--nv-texte-secondaire)" }}
             tickLine={false}
             axisLine={false}
             interval={3}
           />
           <YAxis
             tickFormatter={(v) => `${v.toFixed(0)}%`}
-            tick={{ fontSize: 11, fill: "#94a3b8" }}
+            tick={{ fontSize: 11, fill: "var(--nv-texte-secondaire)" }}
             tickLine={false}
             axisLine={false}
             width={40}

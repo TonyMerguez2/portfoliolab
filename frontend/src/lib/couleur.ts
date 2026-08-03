@@ -84,6 +84,34 @@ export function pourFondSombre(hex: string): string {
 }
 
 /**
+ * Le pendant clair : ramène une couleur dans la plage lisible sur fond blanc.
+ *
+ * Même principe et même respect de la teinte, mais les bornes de clarté
+ * descendent au lieu de monter. Elles ne sont pas le miroir des précédentes :
+ * l'œil tolère moins bien une couleur claire sur blanc qu'une couleur sombre
+ * sur noir, et il faut descendre plus bas qu'on ne montait haut pour atteindre
+ * la même lisibilité.
+ */
+const CLARTE_MIN_CLAIR = 0.28;
+const CLARTE_MAX_CLAIR = 0.44;
+
+export function pourFondClair(hex: string): string {
+  const [h, s, l] = rvbVersTsl(hexVersRvb(hex));
+  const clarte = Math.max(CLARTE_MIN_CLAIR, Math.min(CLARTE_MAX_CLAIR, l));
+  if (s < 0.08) return rvbVersHex(tslVersRvb([h, s, clarte]));
+  return rvbVersHex(tslVersRvb([
+    h,
+    Math.max(SATURATION_MIN, Math.min(SATURATION_MAX, s)),
+    clarte,
+  ]));
+}
+
+/** Normalise selon le thème actif. */
+export function pourFond(hex: string, clair: boolean): string {
+  return clair ? pourFondClair(hex) : pourFondSombre(hex);
+}
+
+/**
  * Poids d'un groupe de pixels dans le choix de la couleur dominante.
  *
  * Compter les pixels seuls fait gagner les grandes plages ternes : le pelage
