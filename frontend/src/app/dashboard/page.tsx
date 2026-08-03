@@ -85,6 +85,10 @@ function DashboardContent() {
   useEffect(() => {
     if (dark) document.documentElement.classList.add("dark");
     else document.documentElement.classList.remove("dark");
+    // La classe vit sur <html>, hors de l'arbre de cette page : sans ce
+    // nettoyage elle survit à la navigation et impose ses variantes `dark:`
+    // au reste de l'application.
+    return () => document.documentElement.classList.remove("dark");
   }, [dark]);
 
   const totalWeight = assets.reduce((s,a) => s+(a.weight||0), 0);

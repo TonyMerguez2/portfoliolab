@@ -55,32 +55,35 @@
 
 /* Thème sombre.
  *
- * Rampe reprise des jetons d'Appica, convertie de OKLCH en hexadécimal. Deux
- * écarts avec ce que Novac avait, et ce sont eux qui font tout :
+ * Rampe reprise des jetons d'Appica, convertie de OKLCH en hexadécimal.
  *
- * — Le fond descend de L 0.170 à 0.130 et se désature de C 0.044 à 0.028 : du
- *   bleu marine vers le presque noir.
- * — Surtout, l'écart de luminance entre la page et les cartes passe de 0.03 à
- *   0.08. C'est ce qui fait lire les panneaux comme des panneaux ; à 0.03 ils
- *   se fondaient dans la page.
+ * La carte ne s'éclaircit pas : elle vaut exactement le fond de page. Ce qui la
+ * détache est son liseré, pas une marche de luminance. J'avais d'abord creusé
+ * l'écart page/carte de 0.03 à 0.08 en lisant leurs jetons ; le rendu réel de
+ * leurs cartes montre l'inverse — même valeur de part et d'autre, et un anneau
+ * net. C'est plus calme, et ça évite qu'un empilement de panneaux ressemble à
+ * un escalier de gris.
+ *
+ * `carte-creuse` reste au-dessus des deux : un creux dans une carte doit
+ * continuer de se voir, lui.
  *
  * L'encre n'est pas blanche non plus : #D1D5DC. Du blanc pur sur un fond aussi
  * sombre éblouit et fatigue à la lecture longue.
  */
 :root,
 [data-theme="sombre"] {
-  --nv-fond:              #030712;
-  --nv-fond-profond:      #010409;
-  --nv-carte:             #101828;
-  --nv-carte-creuse:      rgba(106,114,130,0.14);
+  --nv-fond:              #060A14;
+  --nv-fond-profond:      #03060D;
+  --nv-carte:             #060A14;
+  --nv-carte-creuse:      rgba(106,114,130,0.12);
 
-  --nv-bord:              #1E2939;
-  --nv-bord-fort:         #2C3A4E;
+  --nv-bord:              #1B2434;
+  --nv-bord-fort:         #2A3546;
 
   --nv-texte:             #D1D5DC;
   --nv-texte-secondaire:  #99A1AF;
   --nv-texte-attenue:     #6A7282;
-  --nv-texte-faible:      #4B5565;
+  --nv-texte-faible:      #5B6678;
 
   /* Texte posé à même le fond de page, hors carte. */
   --nv-sur-fond:          #D1D5DC;
@@ -98,12 +101,12 @@
   --nv-ombre:             0 1px 3px rgba(0,0,0,0.28), 0 12px 32px rgba(0,0,0,0.22);
 
   /* Les points du fond. Seul le thème sombre les montre. */
-  --nv-point:             rgba(255,255,255,0.10);
-  --nv-point-vif:         rgba(170,200,255,0.52);
+  --nv-point:             rgba(255,255,255,0.055);
+  --nv-point-vif:         rgba(165,195,255,0.26);
 
   /* La barre latérale. Elle est translucide et floute ce qui passe dessous :
      ses fonds ne peuvent donc pas être les jetons de carte, qui sont opaques. */
-  --nv-barre-fond:        rgba(3,7,18,0.72);
+  --nv-barre-fond:        rgba(6,10,20,0.72);
   --nv-barre-survol:      rgba(255,255,255,0.045);
   --nv-barre-actif:       rgba(255,255,255,0.11);
   --nv-barre-actif-bord:  rgba(255,255,255,0.10);
@@ -225,7 +228,7 @@
   z-index: -1;
   pointer-events: none;
   background-image: radial-gradient(circle at center, var(--nv-point) 1px, transparent 1px);
-  background-size: 22px 22px;
+  background-size: 26px 26px;
 }
 
 .nv-points::after {
@@ -233,33 +236,32 @@
   position: absolute;
   inset: 0;
   background-image: radial-gradient(circle at center, var(--nv-point-vif) 1px, transparent 1px);
-  background-size: 22px 22px;
+  background-size: 26px 26px;
   /* Hors écran tant que la souris n'a pas bougé : sans cela, la lueur
      apparaîtrait dans le coin haut-gauche au chargement. */
-  -webkit-mask-image: radial-gradient(200px circle at var(--nv-mx, -9999px) var(--nv-my, -9999px), #000 0%, rgba(0,0,0,0.35) 45%, transparent 72%);
-  mask-image: radial-gradient(200px circle at var(--nv-mx, -9999px) var(--nv-my, -9999px), #000 0%, rgba(0,0,0,0.35) 45%, transparent 72%);
+  -webkit-mask-image: radial-gradient(280px circle at var(--nv-mx, -9999px) var(--nv-my, -9999px), #000 0%, rgba(0,0,0,0.30) 50%, transparent 78%);
+  mask-image: radial-gradient(280px circle at var(--nv-mx, -9999px) var(--nv-my, -9999px), #000 0%, rgba(0,0,0,0.30) 50%, transparent 78%);
 }
 
 /* Le mode clair n'a pas de trame : ses points sont transparents, et la couche
    n'est de toute façon pas montée. Ceinture et bretelles. */
 [data-theme="clair"] .nv-points { display: none; }
 
-/* Dark mode (legacy class) */
-.dark {
-  --bg-primary: #0f1117;
-  --bg-secondary: #1a1d27;
-  --bg-card: #1e2130;
-  --border: #2a2d3e;
-  --text-primary: #e2e8f0;
-  --text-secondary: #94a3b8;
-  --text-muted: #64748b;
-  --accent: #6366f1;
-}
+/* Le bloc `.dark` qui vivait ici a été retiré.
 
-.dark body {
-  background-color: #0f1117;
-  color: #e2e8f0;
-}
+   C'était un second système de thème, complet et concurrent : ses propres
+   variables --bg-primary, --text-primary, --accent, et surtout une règle
+   `.dark body { background-color: #0f1117 }` qui l'emportait sur la couche
+   `base` de Tailwind où sont posés les jetons.
+
+   Aucune de ses variables n'avait d'appelant. Mais la règle sur body, elle,
+   repeignait le fond de toute l'application dès que la classe `dark`
+   apparaissait sur <html> — ce que fait la page /dashboard, sans jamais la
+   retirer. Il suffisait donc d'y passer une fois pour que le fond reste figé
+   sur #0f1117 partout ailleurs, jusqu'au rechargement complet.
+
+   La classe elle-même subsiste : /dashboard s'en sert pour ses variantes
+   Tailwind `dark:`. Elle est désormais nettoyée au démontage. */
 
 .recharts-wrapper svg,
 .recharts-surface {

@@ -5,7 +5,7 @@ import { useApp } from "@/lib/AppContext";
 import { enTetesAuth } from "@/lib/session";
 import { TRENDING } from "@/lib/assets";
 import AssetLogo from "@/components/AssetLogo";
-import { useTheme } from "@/lib/theme";
+import { JETONS, RAYONS } from "@/lib/palette";
 
 type Asset = { ticker: string; type: string; name: string; };
 type Price = { price: number; change: number; };
@@ -88,7 +88,6 @@ export default function GlobalHeader() {
   }, []);
   const searchRef = useRef<HTMLInputElement>(null);
   const [portfolios, setPortfolios] = useState<any[]>([]);
-  const t = useTheme();
   const [showTools, setShowTools] = useState(false);
   const [category, setCategory] = useState("all");
   const [displayCount, setDisplayCount] = useState(20);
@@ -242,7 +241,13 @@ export default function GlobalHeader() {
     el?.scrollIntoView({ block: "nearest" });
   }, [highlightIndex]);
 
-  const pillStyle: React.CSSProperties = { display:"flex", alignItems:"center", borderRadius:"999px", background:t.isDark ? "rgba(255,255,255,0.07)" : "rgba(16,24,40,0.05)", backdropFilter: t.isDark ? "blur(20px)" : "none", WebkitBackdropFilter: t.isDark ? "blur(20px)" : "none" as const, border:`1px solid ${t.border}`, cursor:"pointer", color:t.textPrimary, boxShadow: t.isDark ? "none" : t.shadow };
+  const pillStyle: React.CSSProperties = {
+    display: "flex", alignItems: "center", borderRadius: RAYONS.plein,
+    background: JETONS.carteCreuse,
+    backdropFilter: "blur(20px)", WebkitBackdropFilter: "blur(20px)",
+    border: `1px solid ${JETONS.bord}`, cursor: "pointer",
+    color: JETONS.texte, boxShadow: JETONS.ombre,
+  };
 
   const handleSelect = useCallback((a: Asset) => {
     setActiveAsset({ ticker: a.ticker, name: a.name });
@@ -268,7 +273,7 @@ export default function GlobalHeader() {
         position:"fixed", top:"11px", left:"calc(var(--novac-nav-w, 232px) + 20px)", zIndex:50,
         lineHeight:1.25, transition:"left 220ms cubic-bezier(0.4,0,0.2,1)",
       }}>
-        <p style={{ margin:0, fontSize:"15px", fontWeight:700, color:t.textPrimary, letterSpacing:"-0.01em", whiteSpace:"nowrap" }}>
+        <p style={{ margin:0, fontSize:"15px", fontWeight:700, color:JETONS.texte, letterSpacing:"-0.01em", whiteSpace:"nowrap" }}>
           {prenom ? `Bonjour ${prenom}` : "Bonjour"} <span aria-hidden="true">👋</span>
         </p>
         {pathname.startsWith("/portfolio") && (
@@ -406,12 +411,12 @@ export default function GlobalHeader() {
           display:"flex", alignItems:"center", gap:"8px", height:"36px", padding:"0 12px",
           borderRadius:"999px", boxSizing:"border-box",
           background: showSearch ? "rgba(255,255,255,0.10)" : "rgba(255,255,255,0.06)",
-          border:`1px solid ${showSearch ? "rgba(91,141,239,0.45)" : t.border}`,
+          border:`1px solid ${showSearch ? "rgba(91,141,239,0.45)" : JETONS.bord}`,
           backdropFilter:"blur(20px)", WebkitBackdropFilter:"blur(20px)",
           transition:"background 150ms, border-color 150ms",
         }}>
           <svg width="13" height="13" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}
-            style={{ opacity:0.4, flexShrink:0, color:t.textPrimary }}>
+            style={{ opacity:0.4, flexShrink:0, color:JETONS.texte }}>
             <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-4.35-4.35M17 11A6 6 0 1 1 5 11a6 6 0 0 1 12 0z"/>
           </svg>
           <input ref={searchRef} value={localSearch}
@@ -419,12 +424,12 @@ export default function GlobalHeader() {
             onFocus={() => setShowSearch(true)}
             onKeyDown={handleKeyDown}
             placeholder="Rechercher un actif, un ETF, un indice…"
-            style={{ background:"transparent", border:"none", outline:"none", color:t.textPrimary, fontSize:"12px", flex:1, minWidth:0 }}/>
+            style={{ background:"transparent", border:"none", outline:"none", color:JETONS.texte, fontSize:"12px", flex:1, minWidth:0 }}/>
           {localSearch
             ? <button onMouseDown={e => e.preventDefault()}
                 onClick={() => { setLocalSearch(""); setSearchResults([]); setHighlightIndex(-1); }}
-                style={{ background:"transparent", border:"none", cursor:"pointer", opacity:0.4, color:t.textPrimary, padding:0, fontSize:"12px" }}>✕</button>
-            : <span style={{ fontSize:"10px", opacity:0.32, color:t.textPrimary, flexShrink:0, letterSpacing:"0.04em" }}>⌘K</span>}
+                style={{ background:"transparent", border:"none", cursor:"pointer", opacity:0.4, color:JETONS.texte, padding:0, fontSize:"12px" }}>✕</button>
+            : <span style={{ fontSize:"10px", opacity:0.32, color:JETONS.texte, flexShrink:0, letterSpacing:"0.04em" }}>⌘K</span>}
         </div>
 
         {showSearch && (
@@ -468,7 +473,7 @@ export default function GlobalHeader() {
               width:36, height:36, borderRadius:"50%", flexShrink:0, cursor:"pointer",
               display:"flex", alignItems:"center", justifyContent:"center",
               background: showNotifs ? "rgba(255,255,255,0.10)" : "rgba(255,255,255,0.06)",
-              border:`1px solid ${t.border}`, color:t.textPrimary,
+              border:`1px solid ${JETONS.bord}`, color:JETONS.texte,
               backdropFilter:"blur(20px)", WebkitBackdropFilter:"blur(20px)",
             }}>
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor"
