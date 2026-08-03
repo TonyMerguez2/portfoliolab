@@ -67,26 +67,32 @@
  * `carte-creuse` reste au-dessus des deux : un creux dans une carte doit
  * continuer de se voir, lui.
  *
- * Fond et bordure sont les valeurs exactes d'Appica. La carte, elle, vaut leur
- * `background-subtle` — le gris #6A7282 posé à 8 % sur la page, soit #0B101B.
- * Elle se soulève donc légèrement au lieu de se confondre avec le fond : j'avais
- * compris l'inverse d'une remarque et rendu la carte strictement identique à la
- * page, ce qui la faisait disparaître dès que le liseré manquait.
+ * Le sens de l'écart page/carte vient de leur balisage, pas d'une lecture de
+ * capture : leur carte de démonstration porte `bg-background` — la valeur la
+ * plus sombre de la rampe — et c'est la page autour qui est plus claire. Je
+ * l'avais dans l'autre sens.
+ *
+ * Chez eux la page est éclaircie par une trame et un voile empilés, pas par un
+ * jeton distinct. Faute de reproduire cette pile, la page prend directement
+ * leur `background-muted`, ce qui donne le même ordre de valeurs : carte
+ * sombre, page plus claire, liseré au-dessus des deux.
  *
  * L'encre n'est pas blanche non plus : #D1D5DC. Du blanc pur sur un fond aussi
  * sombre éblouit et fatigue à la lecture longue.
  */
 :root,
 [data-theme="sombre"] {
-  --nv-fond:              #030712;
-  --nv-fond-profond:      #010409;
-  --nv-carte:             #0B101B;
+  --nv-fond:              #101828;
+  --nv-fond-profond:      #030712;
+  --nv-carte:             #030712;
   --nv-carte-creuse:      rgba(106,114,130,0.12);
 
   --nv-bord:              #1E2939;
   --nv-bord-fort:         #364153;
-  /* L'anneau extérieur du cadre : leur `border-muted`, un cran sous le liseré. */
-  --nv-cadre:             #101828;
+  /* L'anneau extérieur reprend leur `border-background` : il vaut la couleur
+     la plus sombre, et se lit donc comme un trait creusé dans la page — non
+     comme un liseré clair posé dessus. */
+  --nv-cadre:             #030712;
 
   --nv-texte:             #D1D5DC;
   --nv-texte-secondaire:  #99A1AF;
@@ -117,7 +123,7 @@
 
   /* La barre latérale. Elle est translucide et floute ce qui passe dessous :
      ses fonds ne peuvent donc pas être les jetons de carte, qui sont opaques. */
-  --nv-barre-fond:        rgba(3,7,18,0.72);
+  --nv-barre-fond:        rgba(16,24,40,0.72);
   --nv-barre-survol:      rgba(255,255,255,0.045);
   --nv-barre-actif:       rgba(255,255,255,0.11);
   --nv-barre-actif-bord:  rgba(255,255,255,0.10);
