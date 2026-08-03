@@ -19,6 +19,7 @@ import { enTetesAuth } from "@/lib/session";
 import { typesParOperation, COULEUR_OP, LIBELLE_OP, type Tx } from "@/lib/journal";
 import { FONT } from "@/lib/typography";
 import type { Period } from "@/lib/chart/portfolioCurve";
+import { CLAIR, RAYON, couleurMontant } from "@/lib/palette";
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 type PortfolioAsset = { ticker: string; weight: number };
@@ -70,7 +71,7 @@ function classifyExposition(assets: Enriched[]): Record<string, number> {
 }
 
 const EXPO_COLORS: Record<string, string> = {
-  Actions: "#5B8DEF", Crypto: "#fbbf24", ETF: "#a78bfa", Cash: "#34d399",
+  Actions: "#5B8DEF", Crypto: CLAIR.attention, ETF: "#a78bfa", Cash: "#34d399",
 };
 
 // ── Sparkline ──────────────────────────────────────────────────────────────────
@@ -112,12 +113,13 @@ function Sparkline({ pts, color, w = 48, h = 18, glow = false }: {
 function Card({ children, style }: { children: ReactNode; style?: React.CSSProperties }) {
   return (
     <div style={{
-      // Mêmes bord, fond et rayon que le conteneur du graphique : les cartes
-      // de la colonne de droite avaient un rayon de 12 px pour 30 à gauche, ce
-      // qui se voyait dès qu'on les regardait ensemble.
-      background: "rgba(9,27,52,0.78)",
-      border: "1px solid rgba(205,225,255,0.16)",
-      borderRadius: 30,
+      // Panneau blanc sur fond bleu. Même rayon que le conteneur du graphique :
+      // les cartes de droite avaient 12 px pour 30 à gauche, ce qui se voyait
+      // dès qu'on les regardait ensemble.
+      background: CLAIR.carte,
+      border: `1px solid ${CLAIR.bord}`,
+      borderRadius: RAYON,
+      boxShadow: CLAIR.ombre,
       ...style,
     }}>
       {children}
@@ -129,7 +131,7 @@ function SectionLabel({ children }: { children: ReactNode }) {
   return (
     <span style={{
       fontSize: 9, fontWeight: 700, letterSpacing: "0.12em",
-      color: "rgba(255,255,255,0.28)", fontFamily: FONT,
+      color: CLAIR.texteFaible, fontFamily: FONT,
       display: "block", marginBottom: 10,
     }}>
       {children}
@@ -138,7 +140,7 @@ function SectionLabel({ children }: { children: ReactNode }) {
 }
 
 // ── NOVAC Score circle gauge ───────────────────────────────────────────────────
-function scoreColor(s: number) { return s >= 60 ? "#4ade80" : s >= 40 ? "#fbbf24" : "#f87171"; }
+function scoreColor(s: number) { return s >= 60 ? CLAIR.positif : s >= 40 ? CLAIR.attention : CLAIR.negatif; }
 function scoreLabel(s: number) { return s >= 80 ? "Excellent" : s >= 60 ? "Bon" : s >= 40 ? "Moyen" : "À risque"; }
 
 function CircleScore({ score, size = 88, nu = false }: { score: number; size?: number; nu?: boolean }) {
@@ -153,7 +155,7 @@ function CircleScore({ score, size = 88, nu = false }: { score: number; size?: n
   const arcs = donutArcs(
     [
       { key: "atteint", value: atteint, color },
-      { key: "reste", value: 100 - atteint, color: "rgba(255,255,255,0.10)" },
+      { key: "reste", value: 100 - atteint, color: CLAIR.texteFaible },
     ],
     { cx: size / 2, cy: size / 2, r: size / 2, thickness: Math.max(7, size * 0.15), gap: 0 },
   );
@@ -168,8 +170,8 @@ function CircleScore({ score, size = 88, nu = false }: { score: number; size?: n
             position: "absolute", inset: 0, display: "flex", flexDirection: "column",
             alignItems: "center", justifyContent: "center", pointerEvents: "none",
           }}>
-            <span style={{ fontSize: size * 0.32, fontWeight: 800, fontFamily: FONT, color: "#fff", lineHeight: 1 }}>{score}</span>
-            <span style={{ fontSize: Math.max(8, size * 0.10), color: "rgba(255,255,255,0.30)", letterSpacing: "0.04em" }}>/100</span>
+            <span style={{ fontSize: size * 0.32, fontWeight: 800, fontFamily: FONT, color: CLAIR.texte, lineHeight: 1 }}>{score}</span>
+            <span style={{ fontSize: Math.max(8, size * 0.10), color: CLAIR.texteFaible, letterSpacing: "0.04em" }}>/100</span>
           </div>
         )}
       </div>
@@ -519,7 +521,7 @@ function PortfolioPageInner() {
    */
   const perfPeriode = surTransactions ? twr : weightedChange;
   const isUp       = (perfPeriode ?? 0) >= 0;
-  const perfColor  = isUp ? "#4ade80" : "#f87171";
+  const perfColor  = isUp ? CLAIR.positif : CLAIR.negatif;
 
   /**
    * Repère de comparaison, mesuré sur la même fenêtre que le portefeuille.
@@ -631,13 +633,13 @@ function PortfolioPageInner() {
   if (!portfolio && !loading) {
     return (
       <div style={{ display: "flex", alignItems: "center", justifyContent: "center",
-        height: "100vh", background: "var(--novac-bg, #040F22)", color: "rgba(255,255,255,0.5)",
+        height: "100vh", background: CLAIR.fond, color: CLAIR.surFondAttenue,
         fontSize: 14, flexDirection: "column", gap: 16 }}>
         <div>Aucun portefeuille sélectionné.</div>
         <button onClick={() => router.push("/build")}
           style={{ padding: "8px 20px", borderRadius: 8,
             border: "1px solid rgba(91,141,239,0.4)",
-            background: "rgba(91,141,239,0.1)", color: "#9BB9FF",
+            background: CLAIR.accentDoux, color: CLAIR.accent,
             cursor: "pointer", fontSize: 12 }}>
           Créer un portefeuille
         </button>
@@ -648,7 +650,7 @@ function PortfolioPageInner() {
   return (
     <div style={{
       height: "100vh", display: "flex", flexDirection: "column",
-      background: "var(--novac-bg, #040F22)", color: "var(--novac-text-primary, #F8F9FC)",
+      background: CLAIR.fond, color: CLAIR.texte,
       fontFamily: FONT, boxSizing: "border-box",
       paddingTop: 62, overflow: "hidden",
     }}>
@@ -679,21 +681,21 @@ function PortfolioPageInner() {
                   // Chevauchement vers la gauche, le premier logo devant : sans
                   // l'ordre inverse, chaque logo masquait le précédent.
                   marginLeft: i ? -10 : 0, zIndex: 4 - i,
-                  border: "2px solid var(--novac-bg, #040F22)",
-                  background: "rgba(255,255,255,0.06)", flexShrink: 0,
+                  border: `2px solid ${CLAIR.fond}`,
+                  background: CLAIR.carteCreuse, flexShrink: 0,
                   display: "flex", alignItems: "center", justifyContent: "center",
                 }}>
                   <AssetLogo ticker={a.ticker} type={a.type || "EQUITY"} size={26} radius={13}
-                    fallbackBg="rgba(255,255,255,0.10)" fallbackBorder="transparent"
-                    fallbackTextColor="#fff" bare />
+                    fallbackBg={CLAIR.carteCreuse} fallbackBorder="transparent"
+                    fallbackTextColor={CLAIR.texteSecondaire} bare />
                 </div>
               ))}
               {enriched.length > 4 && (
                 <div style={{
                   width: 30, height: 30, borderRadius: "50%", marginLeft: -10, zIndex: 0,
-                  border: "2px solid var(--novac-bg, #040F22)", background: "rgba(255,255,255,0.10)",
+                  border: `2px solid ${CLAIR.fond}`, background: CLAIR.carteCreuse,
                   display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0,
-                  fontSize: 10, fontWeight: 700, color: "rgba(255,255,255,0.70)", fontFamily: FONT,
+                  fontSize: 10, fontWeight: 700, color: CLAIR.texteSecondaire, fontFamily: FONT,
                 }}>
                   +{enriched.length - 4}
                 </div>
@@ -702,25 +704,25 @@ function PortfolioPageInner() {
             <div style={{ minWidth: 0 }}>
               <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
                 <span style={{ width: 7, height: 7, borderRadius: 2, background: portfolio.color || "#5B8DEF", flexShrink: 0 }} />
-                <span style={{ fontSize: 13, fontWeight: 700, color: "#fff", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                <span style={{ fontSize: 13, fontWeight: 700, color: CLAIR.texte, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
                   {portfolio.name}
                 </span>
               </div>
-              <span style={{ fontSize: 10.5, color: "rgba(255,255,255,0.35)" }}>
+              <span style={{ fontSize: 10.5, color: CLAIR.texteAttenue }}>
                 {enriched.length} actif{enriched.length > 1 ? "s" : ""}
               </span>
             </div>
           </div>
         )}
-        <div style={{ width: 1, alignSelf: "stretch", background: "rgba(255,255,255,0.07)" }} />
+        <div style={{ width: 1, alignSelf: "stretch", background: CLAIR.carteCreuse }} />
         <div style={{ minWidth: 200 }}>
     {/* VALEUR TOTALE + édition inline */}
     <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 2 }}>
       <span style={{ display: "flex", alignItems: "center", gap: 6 }}>
-        <p style={{ margin: 0, fontSize: 11.5, fontWeight: 500, color: "rgba(255,255,255,0.55)" }}>Valeur totale</p>
+        <p style={{ margin: 0, fontSize: 11.5, fontWeight: 500, color: CLAIR.texteSecondaire }}>Valeur totale</p>
         <button onClick={() => setMasque(v => !v)} title={masque ? "Afficher les montants" : "Masquer les montants"}
           aria-label={masque ? "Afficher les montants" : "Masquer les montants"}
-          style={{ background: "none", border: "none", cursor: "pointer", padding: 0, display: "flex", color: "rgba(255,255,255,0.32)" }}>
+          style={{ background: "none", border: "none", cursor: "pointer", padding: 0, display: "flex", color: CLAIR.texteFaible }}>
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round">
             {masque
               ? <><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19M1 1l22 22"/><path d="M9.9 9.9a3 3 0 1 0 4.2 4.2"/></>
@@ -734,16 +736,16 @@ function PortfolioPageInner() {
         <input autoFocus value={valueInput} onChange={e => setValueInput(e.target.value)}
           onKeyDown={e => { if (e.key === "Enter") saveTotalValue(); if (e.key === "Escape") setEditingValue(false); }}
           onBlur={saveTotalValue} placeholder="Ex: 10000" type="number"
-          style={{ width: 100, background: "rgba(255,255,255,0.07)", border: "1px solid rgba(91,141,239,0.40)", borderRadius: 6, padding: "3px 8px", color: "#fff", fontSize: 11, outline: "none", fontFamily: FONT }} />
-        <span style={{ fontSize: 11, color: "rgba(255,255,255,0.35)" }}>€</span>
+          style={{ width: 100, background: CLAIR.carteCreuse, border: "1px solid rgba(91,141,239,0.40)", borderRadius: 6, padding: "3px 8px", color: CLAIR.texte, fontSize: 11, outline: "none", fontFamily: FONT }} />
+        <span style={{ fontSize: 11, color: CLAIR.texteAttenue }}>€</span>
       </div>
     ) : (
-      <div style={{ fontSize: 32, fontWeight: 600, fontFamily: FONT, color: "#fff", letterSpacing: "-0.02em", lineHeight: 1, marginBottom: 5 }}>
+      <div style={{ fontSize: 32, fontWeight: 600, fontFamily: FONT, color: CLAIR.texte, letterSpacing: "-0.02em", lineHeight: 1, marginBottom: 5 }}>
         {masque
           ? "•••• €"
           : valeurTotale != null
             ? valeurTotale.toLocaleString("fr-FR", { maximumFractionDigits: 0 }) + " €"
-            : <span style={{ fontSize: 13, color: "rgba(255,255,255,0.25)" }}>Non défini</span>}
+            : <span style={{ fontSize: 13, color: CLAIR.texteFaible }}>Non défini</span>}
       </div>
     )}
     {/* Sous la valeur : le capital engagé et depuis quand.
@@ -751,12 +753,12 @@ function PortfolioPageInner() {
         nombre à quatre centimètres d'écart. Ce qui manquait, c'était ce
         qu'on a mis pour arriver à cette valeur. */}
     {surTransactions && prixDeRevient != null ? (
-      <div style={{ fontSize: 11, fontFamily: FONT, color: "rgba(255,255,255,0.38)" }}>
+      <div style={{ fontSize: 11, fontFamily: FONT, color: CLAIR.texteAttenue }}>
         {masque ? "•••• €" : `${Math.round(prixDeRevient).toLocaleString("fr-FR")} €`} investis
         {origine && ` ${libellePeriode.toLowerCase()}`}
       </div>
     ) : gainAffiche != null && (
-      <div style={{ fontSize: 11, fontFamily: FONT, color: gainAffiche.eur >= 0 ? "#4ade80" : "#f87171", fontWeight: 600 }}>
+      <div style={{ fontSize: 11, fontFamily: FONT, color: gainAffiche.eur >= 0 ? CLAIR.positif : CLAIR.negatif, fontWeight: 600 }}>
         {libellePeriode}&nbsp;
         <span>
           {gainAffiche.eur >= 0 ? "+" : ""}
@@ -768,9 +770,9 @@ function PortfolioPageInner() {
       </div>
     )}
         </div>
-        <div style={{ width: 1, alignSelf: "stretch", background: "rgba(255,255,255,0.07)" }} />
+        <div style={{ width: 1, alignSelf: "stretch", background: CLAIR.carteCreuse }} />
         <div style={{ minWidth: 150 }}>
-          <p style={{ margin: "0 0 4px", fontSize: 11.5, fontWeight: 500, color: "rgba(255,255,255,0.55)" }}>Gains / pertes</p>
+          <p style={{ margin: "0 0 4px", fontSize: 11.5, fontWeight: 500, color: CLAIR.texteSecondaire }}>Gains / pertes</p>
     {/* P&L total depuis achat */}
     {valeurTotale != null && (() => {
       const cb = prixDeRevient;
@@ -782,14 +784,14 @@ function PortfolioPageInner() {
                 <input autoFocus value={costInput} onChange={e => setCostInput(e.target.value)}
                   onKeyDown={e => { if (e.key === "Enter") saveCostBasis(); if (e.key === "Escape") setEditingCost(false); }}
                   onBlur={saveCostBasis} placeholder="Prix de revient" type="number"
-                  style={{ width: 110, background: "rgba(255,255,255,0.07)", border: "1px solid rgba(91,141,239,0.40)", borderRadius: 6, padding: "3px 8px", color: "#fff", fontSize: 10, outline: "none", fontFamily: FONT }} />
-                <span style={{ fontSize: 10, color: "rgba(255,255,255,0.35)" }}>€</span>
+                  style={{ width: 110, background: CLAIR.carteCreuse, border: "1px solid rgba(91,141,239,0.40)", borderRadius: 6, padding: "3px 8px", color: CLAIR.texte, fontSize: 10, outline: "none", fontFamily: FONT }} />
+                <span style={{ fontSize: 10, color: CLAIR.texteAttenue }}>€</span>
               </div>
             ) : (
               <button onClick={() => { setCostInput(""); setEditingCost(true); }}
-                style={{ background: "none", border: "none", cursor: "pointer", fontSize: 10, color: "rgba(255,255,255,0.22)", padding: 0, textDecoration: "underline dotted", fontFamily: FONT, transition: "color 150ms" }}
-                onMouseEnter={e => (e.currentTarget.style.color = "rgba(255,255,255,0.50)")}
-                onMouseLeave={e => (e.currentTarget.style.color = "rgba(255,255,255,0.22)")}>
+                style={{ background: "none", border: "none", cursor: "pointer", fontSize: 10, color: CLAIR.texteFaible, padding: 0, textDecoration: "underline dotted", fontFamily: FONT, transition: "color 150ms" }}
+                onMouseEnter={e => (e.currentTarget.style.color = CLAIR.texteSecondaire)}
+                onMouseLeave={e => (e.currentTarget.style.color = CLAIR.texteFaible)}>
                 + Définir prix de revient
               </button>
             )}
@@ -798,7 +800,7 @@ function PortfolioPageInner() {
       }
       const plEur = valeurTotale - cb;
       const plPct = (plEur / cb) * 100;
-      const plCol = plEur >= 0 ? "#4ade80" : "#f87171";
+      const plCol = plEur >= 0 ? CLAIR.positif : CLAIR.negatif;
       return (
         <div style={{ marginTop: 3, fontSize: 11, fontFamily: FONT, color: plCol, fontWeight: 600, display: "flex", alignItems: "center", gap: 6 }}>
           Total
@@ -809,26 +811,26 @@ function PortfolioPageInner() {
               le calcul repartant des transactions au rafraîchissement. */}
           {!surTransactions && (
             <button onClick={() => { setCostInput(cb.toString()); setEditingCost(true); }}
-              style={{ background: "none", border: "none", cursor: "pointer", fontSize: 9, color: "rgba(255,255,255,0.22)", padding: 0, transition: "color 150ms" }}
-              onMouseEnter={e => (e.currentTarget.style.color = "rgba(255,255,255,0.50)")}
-              onMouseLeave={e => (e.currentTarget.style.color = "rgba(255,255,255,0.22)")}>✏</button>
+              style={{ background: "none", border: "none", cursor: "pointer", fontSize: 9, color: CLAIR.texteFaible, padding: 0, transition: "color 150ms" }}
+              onMouseEnter={e => (e.currentTarget.style.color = CLAIR.texteSecondaire)}
+              onMouseLeave={e => (e.currentTarget.style.color = CLAIR.texteFaible)}>✏</button>
           )}
           {editingCost && !surTransactions && (
             <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
               <input autoFocus value={costInput} onChange={e => setCostInput(e.target.value)}
                 onKeyDown={e => { if (e.key === "Enter") saveCostBasis(); if (e.key === "Escape") setEditingCost(false); }}
                 onBlur={saveCostBasis} type="number"
-                style={{ width: 90, background: "rgba(255,255,255,0.07)", border: "1px solid rgba(91,141,239,0.40)", borderRadius: 6, padding: "2px 7px", color: "#fff", fontSize: 10, outline: "none", fontFamily: FONT }} />
-              <span style={{ fontSize: 10, color: "rgba(255,255,255,0.35)" }}>€</span>
+                style={{ width: 90, background: CLAIR.carteCreuse, border: "1px solid rgba(91,141,239,0.40)", borderRadius: 6, padding: "2px 7px", color: CLAIR.texte, fontSize: 10, outline: "none", fontFamily: FONT }} />
+              <span style={{ fontSize: 10, color: CLAIR.texteAttenue }}>€</span>
             </div>
           )}
         </div>
       );
     })()}
         </div>
-        <div style={{ width: 1, alignSelf: "stretch", background: "rgba(255,255,255,0.07)" }} />
+        <div style={{ width: 1, alignSelf: "stretch", background: CLAIR.carteCreuse }} />
         <div style={{ minWidth: 120 }}>
-          <p style={{ margin: "0 0 4px", fontSize: 11.5, fontWeight: 500, color: "rgba(255,255,255,0.55)" }}>Comparaison</p>
+          <p style={{ margin: "0 0 4px", fontSize: 11.5, fontWeight: 500, color: CLAIR.texteSecondaire }}>Comparaison</p>
     {/* Le repère, rejoué avec les mêmes versements aux mêmes dates.
         Opposer deux pourcentages laissait ouvert ce que l'épargnant aurait
         réellement eu ; en euros, la question ne se pose plus. */}
@@ -840,7 +842,7 @@ function PortfolioPageInner() {
       const mien = Math.round(gain.eur);
       const sien = Math.round(simRepere.gain_eur);
       const ecart = mien - sien;
-      const col   = ecart >= 0 ? "#4ade80" : "#f87171";
+      const col   = ecart >= 0 ? CLAIR.positif : CLAIR.negatif;
       return (
         <div style={{ position: "relative", marginTop: 3 }}
           onMouseEnter={() => setActiveTooltip("spy")}
@@ -848,13 +850,13 @@ function PortfolioPageInner() {
           {/* Deux lignes plutôt qu'un écart seul : « +5 € » ne dit pas de quoi
               il est l'écart. On montre ce que le même argent aurait donné sur
               l'indice, puis la différence. */}
-          <div style={{ fontSize: 10, color: "rgba(255,255,255,0.40)", fontFamily: FONT, cursor: "default" }}>
+          <div style={{ fontSize: 10, color: CLAIR.texteAttenue, fontFamily: FONT, cursor: "default" }}>
             Sur S&amp;P 500&nbsp;
-            <span style={{ color: "rgba(255,255,255,0.62)", fontWeight: 600 }}>
+            <span style={{ color: CLAIR.texteSecondaire, fontWeight: 600 }}>
               {sien >= 0 ? "+" : ""}{sien.toLocaleString("fr-FR")} €
             </span>
           </div>
-          <div style={{ fontSize: 10, color: "rgba(255,255,255,0.40)", fontFamily: FONT, cursor: "default", marginTop: 2 }}>
+          <div style={{ fontSize: 10, color: CLAIR.texteAttenue, fontFamily: FONT, cursor: "default", marginTop: 2 }}>
             Vous&nbsp;
             <span style={{ color: col, fontWeight: 700 }}>
               {ecart >= 0 ? "+" : "−"}{Math.abs(ecart).toLocaleString("fr-FR")} €
@@ -864,18 +866,18 @@ function PortfolioPageInner() {
           {activeTooltip === "spy" && (
             <div style={{
               position: "absolute", bottom: "calc(100% + 6px)", left: 0, zIndex: 50, width: 252,
-              background: "rgba(4,17,36,0.97)", border: "1px solid rgba(255,255,255,0.10)",
+              background: "rgba(4,17,36,0.97)", border: `1px solid ${CLAIR.bordFort}`,
               borderRadius: 8, padding: "9px 11px", boxShadow: "0 8px 24px rgba(0,0,0,0.50)",
               pointerEvents: "none",
             }}>
-              <span style={{ fontSize: 10, color: "rgba(255,255,255,0.62)", lineHeight: 1.6 }}>
+              <span style={{ fontSize: 10, color: CLAIR.texteSecondaire, lineHeight: 1.6 }}>
                 Si vous aviez versé les mêmes sommes, aux mêmes dates, sur le
                 S&amp;P 500, vous auriez{" "}
-                <b style={{ color: "rgba(255,255,255,0.85)" }}>
+                <b style={{ color: CLAIR.texte }}>
                   {Math.round(simRepere.value).toLocaleString("fr-FR")} €
                 </b>{" "}
                 au lieu de{" "}
-                <b style={{ color: "rgba(255,255,255,0.85)" }}>
+                <b style={{ color: CLAIR.texte }}>
                   {valeurTotale != null ? Math.round(valeurTotale).toLocaleString("fr-FR") : "—"} €
                 </b>.
                 <br />
@@ -889,9 +891,9 @@ function PortfolioPageInner() {
       // Sans transactions, on ne peut pas rejouer de versements : on retombe
       // sur l'écart de pourcentages.
       const diff    = perfPeriode - reperePeriode;
-      const diffCol = diff >= 0 ? "#4ade80" : "#f87171";
+      const diffCol = diff >= 0 ? CLAIR.positif : CLAIR.negatif;
       return (
-        <div style={{ marginTop: 3, fontSize: 10, color: "rgba(255,255,255,0.40)", fontFamily: FONT }}>
+        <div style={{ marginTop: 3, fontSize: 10, color: CLAIR.texteAttenue, fontFamily: FONT }}>
           vs S&amp;P 500&nbsp;
           <span style={{ color: diffCol, fontWeight: 700 }}>{diff >= 0 ? "+" : ""}{diff.toFixed(2)}%</span>
         </div>
@@ -899,16 +901,16 @@ function PortfolioPageInner() {
     })()}
         </div>
         {novacScore && <>
-          <div style={{ width: 1, alignSelf: "stretch", background: "rgba(255,255,255,0.07)" }} />
+          <div style={{ width: 1, alignSelf: "stretch", background: CLAIR.carteCreuse }} />
           {/* Santé du portefeuille : le titre chiffré passe en tête, la carte
               de droite ne garde que le détail par critère. */}
           <div style={{ display: "flex", alignItems: "center", gap: 12, minWidth: 170 }}>
             <CircleScore score={novacScore.global} size={54} nu />
             <div>
-              <p style={{ margin: "0 0 3px", fontSize: 11.5, fontWeight: 500, color: "rgba(255,255,255,0.55)" }}>Santé du portefeuille</p>
+              <p style={{ margin: "0 0 3px", fontSize: 11.5, fontWeight: 500, color: CLAIR.texteSecondaire }}>Santé du portefeuille</p>
               <div style={{ display: "flex", alignItems: "baseline", gap: 3 }}>
-                <span style={{ fontSize: 20, fontWeight: 800, fontFamily: FONT, color: "#fff", lineHeight: 1 }}>{novacScore.global}</span>
-                <span style={{ fontSize: 10, color: "rgba(255,255,255,0.32)" }}>/100</span>
+                <span style={{ fontSize: 20, fontWeight: 800, fontFamily: FONT, color: CLAIR.texte, lineHeight: 1 }}>{novacScore.global}</span>
+                <span style={{ fontSize: 10, color: CLAIR.texteFaible }}>/100</span>
               </div>
               <span style={{ fontSize: 11, fontWeight: 600, color: scoreColor(novacScore.global) }}>
                 {scoreLabel(novacScore.global)}
@@ -945,16 +947,15 @@ function PortfolioPageInner() {
               30 px, même bord, même fond, même rembourrage, et la même couche
               de halo interne. Un `Card` générique donnait un cadre visiblement
               différent pour le même objet. */}
-          <div className="chart-glass-container" data-glass-edge="" style={{
-            border: "1px solid rgba(205,225,255,0.16)", borderRadius: 30, padding: "14px 18px 10px",
+          {/* Panneau blanc comme les autres. La classe « verre » et sa couche
+              de halo appartenaient au fond sombre : sur blanc, le flou ne
+              produit qu'un voile gris. */}
+          <div style={{
+            border: `1px solid ${CLAIR.bord}`, borderRadius: RAYON, padding: "14px 18px 10px",
             flex: 1, minHeight: 150, display: "flex", flexDirection: "column",
-            position: "relative", overflow: "hidden", background: "rgba(9,27,52,0.78)",
+            position: "relative", overflow: "hidden", background: CLAIR.carte,
+            boxShadow: CLAIR.ombre,
           }}>
-            <div style={{
-              position: "absolute", inset: -28, pointerEvents: "none", zIndex: 0,
-              filter: "blur(20px)", opacity: 0.78,
-              background: "radial-gradient(ellipse 90% 72% at -10% -10%, rgba(255,255,255,0.035) 0%, rgba(255,255,255,0.014) 42%, rgba(255,255,255,0) 82%), radial-gradient(ellipse 86% 75% at 110% 112%, rgba(60,113,184,0.045) 0%, rgba(60,113,184,0.018) 44%, rgba(60,113,184,0) 84%)",
-            }} />
             <div style={{ position: "relative", zIndex: 1, display: "flex", flexDirection: "column", flex: 1, minHeight: 0 }}>
             <PerformanceChart
               assets={enriched.map(a => ({ ticker: a.ticker, weight: a.weight }))}
@@ -965,6 +966,7 @@ function PortfolioPageInner() {
               portfolioId={portfolio?.id}
               surTransactions={surTransactions}
               operations={reperesOperations}
+              clair
               onOperationClick={(id) => { setOperationVisee(id); setDashView("transactions"); }}
             />
             </div>
@@ -974,7 +976,7 @@ function PortfolioPageInner() {
               une infobulle de légende et un bouton d'ajout que le concept n'a
               pas. Tout est descendu dans la grille, sur une seule ligne. */}
           {loading ? (
-            <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", color: "rgba(255,255,255,0.20)", fontSize: 12 }}>
+            <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", color: CLAIR.texteFaible, fontSize: 12 }}>
               Chargement…
             </div>
           ) : (<>
@@ -1001,28 +1003,28 @@ function PortfolioPageInner() {
               />
             </div>
             {/* Liste — toujours monté */}
-            <div style={{ overflowY: "auto", flex: 1, borderRadius: 10, border: "1px solid rgba(255,255,255,0.06)", display: view === "liste" ? "block" : "none" }}>
+            <div style={{ overflowY: "auto", flex: 1, borderRadius: 10, border: `1px solid ${CLAIR.bord}`, display: view === "liste" ? "block" : "none" }}>
               <div style={{ display: "grid", gridTemplateColumns: "1fr 70px 100px 70px" }}>
                 {/* La dernière colonne suit la période, comme les libellés de
                     la bande de tête : figée sur « 24h », elle annonçait une
                     variation d'un an comme celle de la journée. */}
                 {["Actif", "Poids", "Prix", PERIOD_LABEL[period]].map(h => (
                   <div key={h} style={{ padding: "8px 14px", fontSize: 9, fontWeight: 700,
-                    color: "rgba(255,255,255,0.28)", letterSpacing: "0.10em",
-                    borderBottom: "1px solid rgba(255,255,255,0.05)" }}>{h}</div>
+                    color: CLAIR.texteFaible, letterSpacing: "0.10em",
+                    borderBottom: `1px solid ${CLAIR.bord}` }}>{h}</div>
                 ))}
                 {[...enriched].sort((a, b) => b.weight - a.weight).flatMap(a => [
-                  <div key={`${a.ticker}-n`} style={{ display: "flex", alignItems: "center", gap: 9, padding: "9px 14px", borderBottom: "1px solid rgba(255,255,255,0.04)" }}>
+                  <div key={`${a.ticker}-n`} style={{ display: "flex", alignItems: "center", gap: 9, padding: "9px 14px", borderBottom: `1px solid ${CLAIR.bord}` }}>
                     <AssetLogo ticker={a.ticker} type="EQUITY" size={22} radius={5}
-                      fallbackBg="rgba(255,255,255,0.08)" fallbackBorder="rgba(255,255,255,0.14)" fallbackTextColor="#fff"
+                      fallbackBg={CLAIR.carteCreuse} fallbackBorder={CLAIR.bord} fallbackTextColor={CLAIR.texteSecondaire}
                       bare/>
                     <span style={{ fontSize: 12, fontWeight: 500 }}>{a.ticker.replace(/-USD$/, "")}</span>
                   </div>,
-                  <div key={`${a.ticker}-w`} style={{ padding: "9px 14px", fontSize: 11, color: "rgba(255,255,255,0.55)", borderBottom: "1px solid rgba(255,255,255,0.04)", display: "flex", alignItems: "center" }}>{a.weight.toFixed(1)}%</div>,
-                  <div key={`${a.ticker}-p`} style={{ padding: "9px 14px", fontSize: 11, color: "rgba(255,255,255,0.55)", borderBottom: "1px solid rgba(255,255,255,0.04)", display: "flex", alignItems: "center", fontFamily: FONT }}>
+                  <div key={`${a.ticker}-w`} style={{ padding: "9px 14px", fontSize: 11, color: CLAIR.texteSecondaire, borderBottom: `1px solid ${CLAIR.bord}`, display: "flex", alignItems: "center" }}>{a.weight.toFixed(1)}%</div>,
+                  <div key={`${a.ticker}-p`} style={{ padding: "9px 14px", fontSize: 11, color: CLAIR.texteSecondaire, borderBottom: `1px solid ${CLAIR.bord}`, display: "flex", alignItems: "center", fontFamily: FONT }}>
                     {a.price !== null ? `${a.price.toLocaleString("fr-FR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €` : "—"}
                   </div>,
-                  <div key={`${a.ticker}-c`} style={{ padding: "9px 14px", fontSize: 11, fontWeight: 700, borderBottom: "1px solid rgba(255,255,255,0.04)", display: "flex", alignItems: "center", fontFamily: FONT, color: a.change === null ? "rgba(255,255,255,0.25)" : a.change >= 0 ? "#4ade80" : "#f87171" }}>
+                  <div key={`${a.ticker}-c`} style={{ padding: "9px 14px", fontSize: 11, fontWeight: 700, borderBottom: `1px solid ${CLAIR.bord}`, display: "flex", alignItems: "center", fontFamily: FONT, color: a.change === null ? CLAIR.texteFaible : a.change >= 0 ? CLAIR.positif : CLAIR.negatif }}>
                     {fmtChange(a.change)}
                   </div>,
                 ])}
@@ -1062,9 +1064,9 @@ function PortfolioPageInner() {
               return (
                 <>
                   <div style={{ display: "flex", alignItems: "center", gap: 5, marginBottom: 10 }}>
-                    <p style={{ margin: 0, fontSize: 12.5, fontWeight: 600, color: "rgba(255,255,255,0.88)" }}>Détail du score</p>
+                    <p style={{ margin: 0, fontSize: 12.5, fontWeight: 600, color: CLAIR.texte }}>Détail du score</p>
                     <span title="Quatre critères pondérés : diversification, concentration, tendance et part d'actifs en hausse."
-                      style={{ display: "flex", color: "rgba(255,255,255,0.28)", cursor: "help" }}>
+                      style={{ display: "flex", color: CLAIR.texteFaible, cursor: "help" }}>
                       <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
                         <circle cx="12" cy="12" r="10" /><path d="M12 16v-4M12 8h.01" strokeLinecap="round" />
                       </svg>
@@ -1075,23 +1077,23 @@ function PortfolioPageInner() {
                           const col = scoreColor(m.value);
                           return (
                             <div key={m.key} style={{ position: "relative", borderRadius: 6, padding: "2px 4px", transition: "background 150ms" }}
-                              onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = "rgba(255,255,255,0.04)"; setActiveTooltip(m.key); }}
+                              onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = CLAIR.carteCreuse; setActiveTooltip(m.key); }}
                               onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = "transparent"; setActiveTooltip(null); }}>
                               <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 3, cursor: "default" }}>
-                                <span style={{ fontSize: 10, color: activeTooltip === m.key ? "rgba(255,255,255,0.75)" : "rgba(255,255,255,0.42)", transition: "color 120ms" }}>{m.label}</span>
+                                <span style={{ fontSize: 10, color: activeTooltip === m.key ? CLAIR.texte : CLAIR.texteAttenue, transition: "color 120ms" }}>{m.label}</span>
                                 <span style={{ fontSize: 10, fontWeight: 700, fontFamily: FONT, color: col }}>{m.value}</span>
                               </div>
-                              <div style={{ height: 5, borderRadius: 3, background: "rgba(255,255,255,0.07)" }}>
+                              <div style={{ height: 5, borderRadius: 3, background: CLAIR.carteCreuse }}>
                                 <div style={{ height: "100%", borderRadius: 3, background: col, width: `${m.value}%`, opacity: 0.85, transition: "width 800ms ease" }} />
                               </div>
                               {activeTooltip === m.key && (
                                 <div style={{
                                   position: "absolute", bottom: "calc(100% + 8px)", right: 0, left: 0, zIndex: 50,
-                                  background: "rgba(4,17,36,0.97)", border: "1px solid rgba(255,255,255,0.10)",
+                                  background: "rgba(4,17,36,0.97)", border: `1px solid ${CLAIR.bordFort}`,
                                   borderRadius: 8, padding: "8px 10px", boxShadow: "0 8px 24px rgba(0,0,0,0.50)",
                                   pointerEvents: "none",
                                 }}>
-                                  <span style={{ fontSize: 10, color: "rgba(255,255,255,0.62)", lineHeight: 1.5 }}>{m.tip(m.value)}</span>
+                                  <span style={{ fontSize: 10, color: CLAIR.texteSecondaire, lineHeight: 1.5 }}>{m.tip(m.value)}</span>
                                 </div>
                               )}
                             </div>
@@ -1102,7 +1104,7 @@ function PortfolioPageInner() {
                     style={{
                       display: "flex", alignItems: "center", gap: 5, marginTop: 10,
                       background: "none", border: "none", cursor: "pointer", padding: 0,
-                      fontFamily: FONT, fontSize: 11, fontWeight: 500, color: "rgba(129,168,255,0.85)",
+                      fontFamily: FONT, fontSize: 11, fontWeight: 500, color: CLAIR.accent,
                     }}>
                     Voir le détail du score
                     <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor"
@@ -1167,8 +1169,8 @@ function PortfolioPageInner() {
                   background: "rgba(91,141,239,0.07)", border: "1px solid rgba(91,141,239,0.15)" }}>
                   <div style={{ width: 24, height: 24, borderRadius: 6, background: "rgba(91,141,239,0.20)",
                     display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0,
-                    fontSize: 10, fontWeight: 800, color: "#9BB9FF" }}>AI</div>
-                  <span style={{ fontSize: 12, color: "rgba(255,255,255,0.70)", lineHeight: 1.6 }}>{insight}</span>
+                    fontSize: 10, fontWeight: 800, color: CLAIR.accent }}>AI</div>
+                  <span style={{ fontSize: 12, color: CLAIR.texteSecondaire, lineHeight: 1.6 }}>{insight}</span>
                 </div>
               ))}
             </div>
@@ -1180,15 +1182,15 @@ function PortfolioPageInner() {
             <div style={{ display: "flex", flexDirection: "column", gap: 0 }}>
               {enriched.slice(0, 6).map((a, i) => (
                 <div key={a.ticker} style={{ display: "flex", alignItems: "center", gap: 10,
-                  padding: "10px 0", borderBottom: i < 5 ? "1px solid rgba(255,255,255,0.05)" : "none" }}>
+                  padding: "10px 0", borderBottom: i < 5 ? `1px solid ${CLAIR.bord}` : "none" }}>
                   <AssetLogo ticker={a.ticker} type={a.type} size={28} radius={7}
-                    fallbackBg="rgba(255,255,255,0.07)" fallbackBorder="rgba(255,255,255,0.12)" fallbackTextColor="#fff"
+                    fallbackBg={CLAIR.carteCreuse} fallbackBorder={CLAIR.bord} fallbackTextColor={CLAIR.texteSecondaire}
                     bare />
                   <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ fontSize: 12, fontWeight: 600, color: "rgba(255,255,255,0.85)" }}>{a.ticker.replace(/-USD$/,"")}</div>
-                    <div style={{ fontSize: 10, color: "rgba(255,255,255,0.30)" }}>Résultats trimestriels</div>
+                    <div style={{ fontSize: 12, fontWeight: 600, color: CLAIR.texte }}>{a.ticker.replace(/-USD$/,"")}</div>
+                    <div style={{ fontSize: 10, color: CLAIR.texteFaible }}>Résultats trimestriels</div>
                   </div>
-                  <span style={{ fontSize: 10, fontWeight: 600, color: "#fbbf24",
+                  <span style={{ fontSize: 10, fontWeight: 600, color: CLAIR.attention,
                     background: "rgba(251,191,36,0.12)", borderRadius: 5, padding: "2px 7px" }}>
                     J+{(i + 1) * 3}
                   </span>
@@ -1208,19 +1210,19 @@ function PortfolioPageInner() {
             {[
               { label: "Retraite 2035",         current: valeurTotale ?? 0, target: 400000, color: "#5B8DEF" },
               { label: "Achat immobilier",       current: (valeurTotale ?? 0) * 0.42, target: 100000, color: "#a78bfa" },
-              { label: "Indépendance financière", current: (valeurTotale ?? 0) * 0.28, target: 500000, color: "#4ade80" },
+              { label: "Indépendance financière", current: (valeurTotale ?? 0) * 0.28, target: 500000, color: CLAIR.positif },
             ].map(g => {
               const pct = Math.min(100, g.target > 0 ? (g.current / g.target) * 100 : 0);
               return (
                 <div key={g.label}>
                   <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
-                    <span style={{ fontSize: 12, fontWeight: 600, color: "rgba(255,255,255,0.78)" }}>{g.label}</span>
+                    <span style={{ fontSize: 12, fontWeight: 600, color: CLAIR.texteSecondaire }}>{g.label}</span>
                     <span style={{ fontSize: 12, fontWeight: 700, fontFamily: FONT, color: g.color }}>{pct.toFixed(0)}%</span>
                   </div>
-                  <div style={{ height: 5, borderRadius: 3, background: "rgba(255,255,255,0.07)" }}>
+                  <div style={{ height: 5, borderRadius: 3, background: CLAIR.carteCreuse }}>
                     <div style={{ height: "100%", borderRadius: 3, background: g.color, width: `${pct}%`, transition: "width 600ms ease" }} />
                   </div>
-                  <div style={{ marginTop: 4, fontSize: 10, color: "rgba(255,255,255,0.25)", fontFamily: FONT }}>
+                  <div style={{ marginTop: 4, fontSize: 10, color: CLAIR.texteFaible, fontFamily: FONT }}>
                     {Math.round(g.current).toLocaleString("fr-FR")} € / {g.target.toLocaleString("fr-FR")} €
                   </div>
                 </div>
@@ -1228,16 +1230,16 @@ function PortfolioPageInner() {
             })}
           </div>
           {novacScore && <>
-            <div style={{ width: 1, alignSelf: "stretch", background: "rgba(255,255,255,0.07)" }} />
+            <div style={{ width: 1, alignSelf: "stretch", background: CLAIR.carteCreuse }} />
             {/* Santé du portefeuille : le titre chiffré passe en tête, la carte
                 de droite ne garde que le détail par critère. */}
             <div style={{ display: "flex", alignItems: "center", gap: 12, minWidth: 170 }}>
               <CircleScore score={novacScore.global} size={54} nu />
               <div>
-                <p style={{ margin: "0 0 3px", fontSize: 11.5, fontWeight: 500, color: "rgba(255,255,255,0.55)" }}>Santé du portefeuille</p>
+                <p style={{ margin: "0 0 3px", fontSize: 11.5, fontWeight: 500, color: CLAIR.texteSecondaire }}>Santé du portefeuille</p>
                 <div style={{ display: "flex", alignItems: "baseline", gap: 3 }}>
-                  <span style={{ fontSize: 20, fontWeight: 800, fontFamily: FONT, color: "#fff", lineHeight: 1 }}>{novacScore.global}</span>
-                  <span style={{ fontSize: 10, color: "rgba(255,255,255,0.32)" }}>/100</span>
+                  <span style={{ fontSize: 20, fontWeight: 800, fontFamily: FONT, color: CLAIR.texte, lineHeight: 1 }}>{novacScore.global}</span>
+                  <span style={{ fontSize: 10, color: CLAIR.texteFaible }}>/100</span>
                 </div>
                 <span style={{ fontSize: 11, fontWeight: 600, color: scoreColor(novacScore.global) }}>
                   {scoreLabel(novacScore.global)}
@@ -1252,31 +1254,31 @@ function PortfolioPageInner() {
             {[...enriched].filter(a => a.perfEur != null).sort((a, b) => Math.abs(b.perfEur!) - Math.abs(a.perfEur!))
               .slice(0, 6).map((a, i) => (
               <div key={a.ticker} style={{ display: "flex", alignItems: "center", gap: 10,
-                padding: "10px 0", borderBottom: i < 5 ? "1px solid rgba(255,255,255,0.05)" : "none" }}>
+                padding: "10px 0", borderBottom: i < 5 ? `1px solid ${CLAIR.bord}` : "none" }}>
                 <AssetLogo ticker={a.ticker} type={a.type} size={26} radius={6}
-                  fallbackBg="rgba(255,255,255,0.07)" fallbackBorder="rgba(255,255,255,0.12)" fallbackTextColor="#fff"
+                  fallbackBg={CLAIR.carteCreuse} fallbackBorder={CLAIR.bord} fallbackTextColor={CLAIR.texteSecondaire}
                   bare />
-                <span style={{ fontSize: 12, fontWeight: 600, flex: 1, color: "rgba(255,255,255,0.78)" }}>{a.ticker.replace(/-USD$/,"")}</span>
+                <span style={{ fontSize: 12, fontWeight: 600, flex: 1, color: CLAIR.texteSecondaire }}>{a.ticker.replace(/-USD$/,"")}</span>
                 <div style={{ textAlign: "right" }}>
-                  <div style={{ fontSize: 12, fontWeight: 700, fontFamily: FONT, color: (a.perfEur ?? 0) >= 0 ? "#4ade80" : "#f87171" }}>
+                  <div style={{ fontSize: 12, fontWeight: 700, fontFamily: FONT, color: (a.perfEur ?? 0) >= 0 ? CLAIR.positif : CLAIR.negatif }}>
                     {(a.perfEur ?? 0) >= 0 ? "+" : ""}{Math.round(a.perfEur!).toLocaleString("fr-FR")} €
                   </div>
-                  <div style={{ fontSize: 10, color: "rgba(255,255,255,0.30)", fontFamily: FONT }}>{fmtChange(a.change)}</div>
+                  <div style={{ fontSize: 10, color: CLAIR.texteFaible, fontFamily: FONT }}>{fmtChange(a.change)}</div>
                 </div>
               </div>
             ))}
           </div>
           {novacScore && <>
-            <div style={{ width: 1, alignSelf: "stretch", background: "rgba(255,255,255,0.07)" }} />
+            <div style={{ width: 1, alignSelf: "stretch", background: CLAIR.carteCreuse }} />
             {/* Santé du portefeuille : le titre chiffré passe en tête, la carte
                 de droite ne garde que le détail par critère. */}
             <div style={{ display: "flex", alignItems: "center", gap: 12, minWidth: 170 }}>
               <CircleScore score={novacScore.global} size={54} nu />
               <div>
-                <p style={{ margin: "0 0 3px", fontSize: 11.5, fontWeight: 500, color: "rgba(255,255,255,0.55)" }}>Santé du portefeuille</p>
+                <p style={{ margin: "0 0 3px", fontSize: 11.5, fontWeight: 500, color: CLAIR.texteSecondaire }}>Santé du portefeuille</p>
                 <div style={{ display: "flex", alignItems: "baseline", gap: 3 }}>
-                  <span style={{ fontSize: 20, fontWeight: 800, fontFamily: FONT, color: "#fff", lineHeight: 1 }}>{novacScore.global}</span>
-                  <span style={{ fontSize: 10, color: "rgba(255,255,255,0.32)" }}>/100</span>
+                  <span style={{ fontSize: 20, fontWeight: 800, fontFamily: FONT, color: CLAIR.texte, lineHeight: 1 }}>{novacScore.global}</span>
+                  <span style={{ fontSize: 10, color: CLAIR.texteFaible }}>/100</span>
                 </div>
                 <span style={{ fontSize: 11, fontWeight: 600, color: scoreColor(novacScore.global) }}>
                   {scoreLabel(novacScore.global)}
@@ -1291,22 +1293,22 @@ function PortfolioPageInner() {
             {Object.entries(exposition).sort((a, b) => b[1] - a[1]).map(([k, v]) => (
               <div key={k} style={{ display: "flex", alignItems: "center", gap: 10 }}>
                 <div style={{ width: 8, height: 8, borderRadius: "50%", background: EXPO_COLORS[k] ?? "#94a3b8", flexShrink: 0 }} />
-                <span style={{ fontSize: 12, color: "rgba(255,255,255,0.60)", flex: 1 }}>{k}</span>
+                <span style={{ fontSize: 12, color: CLAIR.texteSecondaire, flex: 1 }}>{k}</span>
                 <span style={{ fontSize: 14, fontWeight: 700, fontFamily: FONT, color: EXPO_COLORS[k] ?? "#94a3b8" }}>{v.toFixed(1)}%</span>
               </div>
             ))}
           </div>
           {novacScore && <>
-            <div style={{ width: 1, alignSelf: "stretch", background: "rgba(255,255,255,0.07)" }} />
+            <div style={{ width: 1, alignSelf: "stretch", background: CLAIR.carteCreuse }} />
             {/* Santé du portefeuille : le titre chiffré passe en tête, la carte
                 de droite ne garde que le détail par critère. */}
             <div style={{ display: "flex", alignItems: "center", gap: 12, minWidth: 170 }}>
               <CircleScore score={novacScore.global} size={54} nu />
               <div>
-                <p style={{ margin: "0 0 3px", fontSize: 11.5, fontWeight: 500, color: "rgba(255,255,255,0.55)" }}>Santé du portefeuille</p>
+                <p style={{ margin: "0 0 3px", fontSize: 11.5, fontWeight: 500, color: CLAIR.texteSecondaire }}>Santé du portefeuille</p>
                 <div style={{ display: "flex", alignItems: "baseline", gap: 3 }}>
-                  <span style={{ fontSize: 20, fontWeight: 800, fontFamily: FONT, color: "#fff", lineHeight: 1 }}>{novacScore.global}</span>
-                  <span style={{ fontSize: 10, color: "rgba(255,255,255,0.32)" }}>/100</span>
+                  <span style={{ fontSize: 20, fontWeight: 800, fontFamily: FONT, color: CLAIR.texte, lineHeight: 1 }}>{novacScore.global}</span>
+                  <span style={{ fontSize: 10, color: CLAIR.texteFaible }}>/100</span>
                 </div>
                 <span style={{ fontSize: 11, fontWeight: 600, color: scoreColor(novacScore.global) }}>
                   {scoreLabel(novacScore.global)}
@@ -1351,7 +1353,7 @@ export default function PortfolioPage() {
     <Suspense fallback={
       <div style={{ display: "flex", alignItems: "center", justifyContent: "center",
         height: "100vh", background: "var(--novac-bg, #040F22)",
-        color: "rgba(255,255,255,0.25)", fontSize: 12 }}>
+        color: CLAIR.texteFaible, fontSize: 12 }}>
         Chargement…
       </div>
     }>

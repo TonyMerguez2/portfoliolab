@@ -1,6 +1,6 @@
 "use client";
 import { ReactNode, CSSProperties } from "react";
-import { tileData, tileSurface, trackSpecular, releaseSpecular } from "@/lib/tileStyle";
+import { tileData, tileSurface, tileSurfaceClaire, trackSpecular, releaseSpecular } from "@/lib/tileStyle";
 
 interface Props {
   ticker: string;
@@ -13,9 +13,16 @@ interface Props {
   glowStrength?: number;
   /** Overrides the brand colour — for pages that extract one from the logo. */
   colorHex?: string;
+  /**
+   * Surface claire, pour les pages posées sur fond blanc.
+   *
+   * La surface sombre empile des lavis sur une base presque noire : au milieu
+   * de panneaux blancs, elle produit une tuile noire.
+   */
+  clair?: boolean;
 }
 
-export default function TileCard({ ticker, children, className, radius = 12, style, containerStyle, onClick, glowStrength = 1, colorHex }: Props) {
+export default function TileCard({ ticker, children, className, radius = 12, style, containerStyle, onClick, glowStrength = 1, colorHex, clair = false }: Props) {
   const { rgb, b1cx, b1cy, b2cx, b2cy } = tileData(ticker);
   const [r, g, b] = rgb;
   const id = `tc-${ticker.replace(/[^a-z0-9]/gi, "")}`;
@@ -27,13 +34,13 @@ export default function TileCard({ ticker, children, className, radius = 12, sty
       onPointerMove={trackSpecular}
       onPointerLeave={releaseSpecular}
       style={{
-        ...tileSurface(ticker, radius, colorHex),
+        ...(clair ? tileSurfaceClaire(ticker, radius, colorHex) : tileSurface(ticker, radius, colorHex)),
         position: "relative",
         cursor: onClick ? "pointer" : undefined,
         flexShrink: 0,
         ...containerStyle,
       }}>
-      <svg
+      {!clair && <svg
         viewBox="0 0 100 100"
         preserveAspectRatio="none"
         style={{ position:"absolute", inset:0, width:"100%", height:"100%", pointerEvents:"none" }}
@@ -52,7 +59,7 @@ export default function TileCard({ ticker, children, className, radius = 12, sty
         <circle cx="50" cy="50" r="70" fill={`rgba(${r},${g},${b},${0.38 * glowStrength})`} filter={`url(#ga-${id})`}/>
         <circle cx={b1cx} cy={b1cy} r="42" fill={`rgba(${r},${g},${b},${0.22 * glowStrength})`} filter={`url(#gb-${id})`}/>
         <circle cx={b2cx} cy={b2cy} r="34" fill={`rgba(${r},${g},${b},${0.14 * glowStrength})`} filter={`url(#gb2-${id})`}/>
-      </svg>
+      </svg>}
       {/* style spread here so layout props + font-smoothing apply to the text layer, above the blobs */}
       <div style={{
         position: "relative",

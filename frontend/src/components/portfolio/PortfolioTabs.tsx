@@ -1,5 +1,6 @@
 "use client";
 import { FONT } from "@/lib/typography";
+import { CLAIR } from "@/lib/palette";
 
 /**
  * Barre d'onglets du portefeuille.
@@ -42,7 +43,7 @@ export default function PortfolioTabs({
       display: "flex", alignItems: "stretch", gap: 4,
       // Le filet est porté par la barre, pas par chaque onglet : il reste
       // continu sous les intervalles, et le soulignement actif s'y pose.
-      borderBottom: "1px solid rgba(255,255,255,0.07)",
+      borderBottom: `1px solid rgba(255,255,255,0.18)`,
       padding: "0 4px", flexShrink: 0,
       // Retour à la ligne plutôt que défilement : `overflow-x: auto` fait
       // apparaître une barre dès que la largeur manque d'un pixel, et une
@@ -60,15 +61,15 @@ export default function PortfolioTabs({
               padding: "0 14px", height: 40, border: "none", background: "transparent",
               cursor: "pointer", whiteSpace: "nowrap", flexShrink: 0,
               fontFamily: FONT, fontSize: 12.5, fontWeight: actif ? 600 : 500,
-              color: actif ? "#9BB9FF" : "rgba(255,255,255,0.42)",
+              color: actif ? CLAIR.surFond : CLAIR.surFondFaible,
               // Décalé d'un pixel pour couvrir le filet de la barre plutôt que
               // de s'empiler dessus, ce qui épaississait le trait.
-              boxShadow: actif ? "inset 0 -2px 0 0 #5B8DEF" : "none",
+              boxShadow: actif ? `inset 0 -2px 0 0 ${CLAIR.surFond}` : "none",
               marginBottom: -1,
               transition: "color 160ms",
             }}
-            onMouseEnter={e => { if (!actif) e.currentTarget.style.color = "rgba(255,255,255,0.70)"; }}
-            onMouseLeave={e => { if (!actif) e.currentTarget.style.color = "rgba(255,255,255,0.42)"; }}>
+            onMouseEnter={e => { if (!actif) e.currentTarget.style.color = CLAIR.surFondAttenue; }}
+            onMouseLeave={e => { if (!actif) e.currentTarget.style.color = CLAIR.surFondFaible; }}>
             <span style={{ display: "flex", flexShrink: 0, opacity: actif ? 1 : 0.75 }}>{t.icon}</span>
             {t.label}
           </button>

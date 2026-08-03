@@ -7,6 +7,7 @@ import {
 import type { HistoryPoint, Period } from "@/lib/chart/portfolioCurve";
 import { FONT, NUM } from "@/lib/typography";
 import { enTetesAuth } from "@/lib/session";
+import { COULEUR_OP, COULEUR_OP_CLAIR } from "@/lib/journal";
 
 export type { HistoryPoint, Period };
 
@@ -69,10 +70,16 @@ const LEGENDE = [
   // `largeur` est déclarée pour que chaque vignette démarre sur un pixel
   // entier : une largeur laissée au texte est fractionnaire, et décale tout ce
   // qui suit.
-  { type: "achat",        libelle: "Achat",        couleur: "#4ade80", largeur: 62 },
-  { type: "renforcement", libelle: "Renforcement", couleur: "#5B8DEF", largeur: 106 },
-  { type: "vente",        libelle: "Vente",        couleur: "#f87171", largeur: 62 },
+  { type: "achat",        libelle: "Achat",        largeur: 62 },
+  { type: "renforcement", libelle: "Renforcement", largeur: 106 },
+  { type: "vente",        libelle: "Vente",        largeur: 62 },
 ];
+
+/** La couleur d'un type d'opération, selon le thème. */
+function couleurOp(type: string, clair: boolean): string {
+  const t = type as keyof typeof COULEUR_OP;
+  return (clair ? COULEUR_OP_CLAIR : COULEUR_OP)[t] ?? (clair ? "#0B63E7" : "#5B8DEF");
+}
 
 /**
  * Regroupe la série en bougies.
@@ -125,7 +132,7 @@ const PERIOD_SECS: Record<Period, number | null> = {
 
 export default function PerformanceChart({
   assets, totalValue, period, onPeriodChange, color = "#5B8DEF", height,
-  portfolioId, surTransactions = false, operations = [], onOperationClick,
+  portfolioId, surTransactions = false, operations = [], onOperationClick, clair = false,
 }: {
   assets: { ticker: string; weight: number }[];
   totalValue: number | null;
@@ -153,6 +160,13 @@ export default function PerformanceChart({
   operations?: { id: number; ticker: string; executed_at: string; type: string; couleur: string; libelle: string }[];
   /** Appelé au clic sur un repère, avec l'identifiant de l'écriture. */
   onOperationClick?: (id: number) => void;
+  /**
+   * Rendu sur panneau blanc.
+   *
+   * Les graduations et le réticule sont blancs translucides par défaut : sur un
+   * fond clair, ils disparaissent purement et simplement.
+   */
+  clair?: boolean;
 }) {
   const boxRef = useRef<HTMLDivElement>(null);
   const plotRef = useRef<HTMLDivElement>(null);
@@ -161,6 +175,7 @@ export default function PerformanceChart({
   const serieRef = useRef<ISeriesApi<"Area"> | null>(null);
   const bougieRef = useRef<ISeriesApi<"Candlestick"> | null>(null);
   const colorRef = useRef(color);
+  const clairRef = useRef(clair);
 
   const [points, setPoints] = useState<HistoryPoint[]>([]);
   const [state, setState] = useState<"idle" | "loading" | "error">("loading");
@@ -171,7 +186,9 @@ export default function PerformanceChart({
   /** Titres détenus dont le cours n'a pas pu être établi. */
   const [sansCours, setSansCours] = useState<string[]>([]);
   /** Position à l'écran de chaque repère d'opération, en pixels du cadre. */
-  const [pastilles, setPastilles] = useState<{ id: number; x: number; y: number; couleur: string; titre: string; nombre: number; type: string }[]>([]);
+  useEffect(() => { clairRef.current = clair; }, [clair]);
+
+  const [pastilles, setPastilles] = useState<{ id: number; x: number; y: number; titre: string; nombre: number; type: string }[]>([]);
 
   // ── Données ────────────────────────────────────────────────────────────────
   const key = assets.map(a => `${a.ticker}:${a.weight}`).join(",");
@@ -278,7 +295,7 @@ export default function PerformanceChart({
         else groupes.set(cle, { op, jour: cible, n: 1, tickers: new Set([op.ticker]) });
       }
 
-      const out: { id: number; x: number; y: number; couleur: string; titre: string; nombre: number; type: string }[] = [];
+      const out: { id: number; x: number; y: number; titre: string; nombre: number; type: string }[] = [];
       for (const g of Array.from(groupes.values())) {
         const t = Math.floor(new Date(g.jour + "T00:00:00Z").getTime() / 1000) as UTCTimestamp;
         const x = chart.timeScale().timeToCoordinate(t);
@@ -294,7 +311,7 @@ export default function PerformanceChart({
           // rangées de pixels : le cerne paraissait plus épais d'un côté et le
           // signe décentré, alors qu'il est géométriquement au milieu.
           id: g.op.id, x: Math.round(x), y: Math.round(y),
-          couleur: g.op.couleur, nombre: g.n, type: g.op.type,
+          nombre: g.n, type: g.op.type,
           titre: g.n === 1
             ? `${g.op.libelle} ${g.op.ticker} — ${quand}`
             : `${g.n} ${g.op.libelle.toLowerCase()}s (${Array.from(g.tickers).join(", ")}) — ${quand}`,
@@ -324,17 +341,24 @@ export default function PerformanceChart({
       layout: {
         attributionLogo: false,
         background: { type: ColorType.Solid, color: "transparent" },
-        textColor: "rgba(248,249,252,0.42)",
+        textColor: clairRef.current ? "rgba(15,23,42,0.48)" : "rgba(248,249,252,0.42)",
         fontSize: 11,
       },
       grid: {
         vertLines: { visible: false },
-        horzLines: { color: "rgba(255,255,255,0.045)", style: LineStyle.Solid, visible: true },
+        horzLines: {
+          color: clairRef.current ? "rgba(15,23,42,0.07)" : "rgba(255,255,255,0.045)",
+          style: LineStyle.Solid, visible: true,
+        },
       },
       crosshair: {
         mode: CrosshairMode.Normal,
-        vertLine: { color: "rgba(255,255,255,0.2)", style: LineStyle.Solid, width: 1, labelBackgroundColor: "#334155" },
-        horzLine: { color: "rgba(255,255,255,0.2)", style: LineStyle.Solid, width: 1, labelBackgroundColor: "#334155" },
+        vertLine: { color: clairRef.current ? "rgba(15,23,42,0.25)" : "rgba(255,255,255,0.2)",
+                    style: LineStyle.Solid, width: 1,
+                    labelBackgroundColor: clairRef.current ? "#0F172A" : "#334155" },
+        horzLine: { color: clairRef.current ? "rgba(15,23,42,0.25)" : "rgba(255,255,255,0.2)",
+                    style: LineStyle.Solid, width: 1,
+                    labelBackgroundColor: clairRef.current ? "#0F172A" : "#334155" },
       },
       // Échelle à droite, sans bordure et avec les mêmes marges que la page
       // graphique : c'est là que lightweight-charts pose la pastille de
@@ -436,7 +460,7 @@ export default function PerformanceChart({
       ctx.restore();
 
       trace();
-      ctx.strokeStyle = "rgba(255,255,255,0.9)";
+      ctx.strokeStyle = clairRef.current ? "rgba(15,23,42,0.75)" : "rgba(255,255,255,0.9)";
       ctx.lineWidth = 1.5; ctx.lineCap = "round"; ctx.lineJoin = "round";
       ctx.stroke();
       ctx.restore();
@@ -608,11 +632,15 @@ export default function PerformanceChart({
                 style={{ position: "relative", paddingBottom: 4, textAlign: "center", width: 46,
                          cursor: anterieure ? "default" : "pointer", flex: "none",
                          opacity: anterieure ? 0.3 : 1 }}>
-                <div style={{ fontFamily: FONT, fontSize: 12, fontWeight: 600, color: actif ? encre : "#94a3b8" }}>{p}</div>
+                <div style={{ fontFamily: FONT, fontSize: 12, fontWeight: 600, color: actif ? encre : (clair ? "rgba(15,23,42,0.45)" : "#94a3b8") }}>{p}</div>
                 {pct != null && !anterieure && (
                   <div style={{
                     ...NUM, fontSize: 11, fontWeight: 700,
-                    color: pct >= 0 ? "#10b981" : "#ef4444",
+                    // Sur blanc, #10b981 ne donne que 2,5:1 : il faut un vert
+                    // plus sombre pour rester lisible.
+                    color: pct >= 0
+                      ? (clair ? "#0F7B3D" : "#10b981")
+                      : (clair ? "#C81E1E" : "#ef4444"),
                   }}>
                     {fmtPct(pct)}
                   </div>
@@ -629,15 +657,22 @@ export default function PerformanceChart({
         <button type="button" onClick={() => setMode(m => (m === "ligne" ? "bougie" : "ligne"))}
           title={mode === "ligne" ? "Passer en bougies" : "Passer en courbe"}
           style={{
-            background: mode === "bougie" ? "rgba(155,185,255,0.16)" : "rgba(255,255,255,0.06)",
-            backdropFilter: "blur(10px) saturate(1.5)", WebkitBackdropFilter: "blur(10px) saturate(1.5)",
-            border: `1px solid ${mode === "bougie" ? "rgba(155,185,255,0.40)" : "rgba(255,255,255,0.12)"}`,
+            background: clair
+              ? (mode === "bougie" ? "rgba(11,99,231,0.10)" : "#F4F7FB")
+              : (mode === "bougie" ? "rgba(155,185,255,0.16)" : "rgba(255,255,255,0.06)"),
+            backdropFilter: clair ? "none" : "blur(10px) saturate(1.5)",
+            WebkitBackdropFilter: clair ? "none" : "blur(10px) saturate(1.5)",
+            border: `1px solid ${clair
+              ? (mode === "bougie" ? "rgba(11,99,231,0.28)" : "rgba(15,23,42,0.10)")
+              : (mode === "bougie" ? "rgba(155,185,255,0.40)" : "rgba(255,255,255,0.12)")}`,
             borderRadius: 9, width: 30, height: 30, cursor: "pointer", flexShrink: 0,
             display: "flex", alignItems: "center", justifyContent: "center",
-            color: mode === "bougie" ? "#9BB9FF" : "rgba(255,255,255,0.50)",
-            boxShadow: mode === "bougie"
+            color: clair
+              ? (mode === "bougie" ? "#0B63E7" : "rgba(15,23,42,0.55)")
+              : (mode === "bougie" ? "#9BB9FF" : "rgba(255,255,255,0.50)"),
+            boxShadow: clair ? "none" : (mode === "bougie"
               ? "0 0 12px rgba(155,185,255,0.16), inset 0 1px 0 rgba(255,255,255,0.10)"
-              : "0 1px 3px rgba(0,0,0,0.20), inset 0 1px 0 rgba(255,255,255,0.07)",
+              : "0 1px 3px rgba(0,0,0,0.20), inset 0 1px 0 rgba(255,255,255,0.07)"),
           }}>
           {mode === "ligne" ? (
             <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
@@ -680,10 +715,10 @@ export default function PerformanceChart({
               width: 18, height: 18, borderRadius: "50%", padding: 0,
               // Plein, et non cerclé : sur un tracé de la même teinte, un
               // cercle évidé se confondait avec la courbe qui le traverse.
-              background: p.couleur,
-              border: "2px solid rgba(6,20,42,0.96)",
+              background: couleurOp(p.type, clair),
+              border: `2px solid ${clair ? "#FFFFFF" : "rgba(6,20,42,0.96)"}`,
               display: "flex", alignItems: "center", justifyContent: "center",
-              color: "rgba(6,20,42,0.96)", flexShrink: 0,
+              color: clair ? "#FFFFFF" : "rgba(6,20,42,0.96)", flexShrink: 0,
               zIndex: 6,
               cursor: onOperationClick ? "pointer" : "default",
               pointerEvents: onOperationClick ? "auto" : "none",
@@ -702,7 +737,7 @@ export default function PerformanceChart({
         {(state === "loading" && !points.length) || state === "error" ? (
           <div style={{
             position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center",
-            fontFamily: FONT, fontSize: 12, color: "rgba(248,249,252,0.35)", pointerEvents: "none",
+            fontFamily: FONT, fontSize: 12, color: clair ? "rgba(15,23,42,0.42)" : "rgba(248,249,252,0.35)", pointerEvents: "none",
           }}>
             {state !== "error"
               ? "Chargement…"
@@ -728,15 +763,15 @@ export default function PerformanceChart({
             <span key={l.libelle} style={{
               display: "flex", alignItems: "center", gap: 5,
               width: l.largeur, height: 14, lineHeight: "14px",
-              fontFamily: FONT, fontSize: 10, color: "rgba(255,255,255,0.45)",
+              fontFamily: FONT, fontSize: 10, color: clair ? "rgba(15,23,42,0.55)" : "rgba(255,255,255,0.45)",
             }}>
               {/* Même vignette que sur la courbe, en réduction : une puce ronde
                   n'annoncerait plus rien une fois les pictogrammes posés. */}
               <span style={{
                 width: 14, height: 14, borderRadius: "50%",
-                background: l.couleur,
+                background: couleurOp(l.type, clair),
                 display: "flex", alignItems: "center", justifyContent: "center",
-                color: "rgba(6,20,42,0.96)", flexShrink: 0,
+                color: clair ? "#FFFFFF" : "rgba(6,20,42,0.96)", flexShrink: 0,
               }}>
                 <Pictogramme type={l.type} />
               </span>

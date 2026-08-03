@@ -40,6 +40,20 @@ export const COULEUR_OP: Record<TypeOp, string> = {
   vente: "#f87171",
 };
 
+/**
+ * Les mêmes types, sur fond clair.
+ *
+ * Les teintes du thème sombre sont choisies pour briller sur du noir : posées
+ * sur blanc, `#4ade80` tombe à 1,6:1. La pastille devient un halo, et le
+ * pictogramme blanc qu'elle porte disparaît tout à fait. Celles-ci sont
+ * assombries jusqu'à porter du blanc.
+ */
+export const COULEUR_OP_CLAIR: Record<TypeOp, string> = {
+  achat: "#0F7B3D",
+  renforcement: "#0B63E7",
+  vente: "#C81E1E",
+};
+
 /** Les écritures, classées de la plus ancienne à la plus récente. */
 export function parDate(txs: Tx[]): Tx[] {
   return [...txs].sort((a, b) => a.executed_at.localeCompare(b.executed_at));

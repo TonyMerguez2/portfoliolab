@@ -81,6 +81,33 @@ export function brandHex(ticker: string): string {
  * rendent exactement la même surface, et un réglage qui les distingue ne peut
  * que les faire diverger de nouveau. Seuls le contenu et la taille changent.
  */
+/**
+ * Surface d'une tuile sur fond clair.
+ *
+ * La version sombre empile des lavis de pleine amplitude sur une base presque
+ * noire ; posée sur blanc, elle produit une tuile noire au milieu de panneaux
+ * blancs. Celle-ci garde le principe — la couleur de marque donne son identité
+ * à la tuile — mais en teinte légère sur fond blanc.
+ */
+export function tileSurfaceClaire(ticker: string, radius = 18, colorHex?: string): {
+  borderRadius: number;
+  background: string;
+  border: string;
+  boxShadow: string;
+  overflow: "hidden";
+  boxSizing: "border-box";
+} {
+  const [r, g, b] = hexToRgb(colorHex ?? brandHex(ticker));
+  return {
+    borderRadius: radius,
+    background: `linear-gradient(155deg, rgba(${r},${g},${b},0.13) 0%, rgba(${r},${g},${b},0.05) 46%, rgba(255,255,255,0.95) 100%), #FFFFFF`,
+    border: `1px solid rgba(${r},${g},${b},0.22)`,
+    boxShadow: "0 1px 2px rgba(11,32,74,0.05), 0 6px 18px rgba(11,32,74,0.07)",
+    overflow: "hidden",
+    boxSizing: "border-box",
+  };
+}
+
 export function tileSurface(ticker: string, radius = 18, colorHex?: string): {
   borderRadius: number;
   background: string;

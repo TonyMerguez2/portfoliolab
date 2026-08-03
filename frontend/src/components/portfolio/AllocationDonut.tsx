@@ -4,6 +4,7 @@ import { donutArcs, type Slice } from "@/lib/donut";
 import { brandHex } from "@/lib/tileStyle";
 import { assetClass, type GridAsset } from "@/lib/portfolio";
 import { FONT, NUM } from "@/lib/typography";
+import { CLAIR } from "@/lib/palette";
 
 /**
  * Répartition du portefeuille, en anneau.
@@ -64,23 +65,23 @@ export default function AllocationDonut({
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 10, minHeight: 0 }}>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-        <span style={{ display: "flex", alignItems: "center", gap: 5, fontFamily: FONT, fontSize: 12.5, fontWeight: 600, color: "rgba(255,255,255,0.88)" }}>
+        <span style={{ display: "flex", alignItems: "center", gap: 5, fontFamily: FONT, fontSize: 12.5, fontWeight: 600, color: CLAIR.texte }}>
           Répartition
           <span title="Part de chaque ligne dans la valeur totale du portefeuille."
-            style={{ display: "flex", color: "rgba(255,255,255,0.28)", cursor: "help" }}>
+            style={{ display: "flex", color: CLAIR.texteFaible, cursor: "help" }}>
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
               <circle cx="12" cy="12" r="10" /><path d="M12 16v-4M12 8h.01" strokeLinecap="round" />
             </svg>
           </span>
         </span>
-        <div style={{ display: "flex", gap: 2, background: "rgba(255,255,255,0.05)", borderRadius: 7, padding: 2 }}>
+        <div style={{ display: "flex", gap: 2, background: CLAIR.carteCreuse, borderRadius: 7, padding: 2 }}>
           {(["actif", "classe"] as const).map(m => (
             <button key={m} type="button" onClick={() => setMode(m)}
               style={{
                 padding: "0 8px", height: 21, borderRadius: 5, border: "none", cursor: "pointer",
                 fontFamily: FONT, fontSize: 10.5, fontWeight: m === mode ? 600 : 500,
-                background: m === mode ? "rgba(255,255,255,0.11)" : "transparent",
-                color: m === mode ? "#F8F9FC" : "rgba(248,249,252,0.42)",
+                background: m === mode ? CLAIR.accentDoux : "transparent",
+                color: m === mode ? CLAIR.accent : CLAIR.texteAttenue,
               }}>{m === "actif" ? "Actif" : "Classe"}</button>
           ))}
         </div>
@@ -118,9 +119,9 @@ export default function AllocationDonut({
               onMouseEnter={() => setHover(a.key)} onMouseLeave={() => setHover(null)}
               style={{ display: "flex", alignItems: "center", gap: 7, opacity: hover && hover !== a.key ? 0.45 : 1, transition: "opacity 140ms" }}>
               <span style={{ width: 7, height: 7, borderRadius: "50%", background: a.color, flexShrink: 0 }} />
-              <span style={{ fontFamily: FONT, fontSize: 11, color: "rgba(255,255,255,0.62)", flex: 1,
+              <span style={{ fontFamily: FONT, fontSize: 11, color: CLAIR.texteSecondaire, flex: 1,
                 overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{a.key}</span>
-              <span style={{ ...NUM, fontSize: 11, fontWeight: 600, color: "rgba(255,255,255,0.82)", flexShrink: 0 }}>
+              <span style={{ ...NUM, fontSize: 11, fontWeight: 600, color: CLAIR.texteSecondaire, flexShrink: 0 }}>
                 {(a.share * 100).toFixed(1)} %
               </span>
             </div>
@@ -130,11 +131,11 @@ export default function AllocationDonut({
               détail complet. */}
           {arcs.length > MAX_LEGENDE && (
             <div style={{ display: "flex", alignItems: "center", gap: 7, marginTop: 1 }}>
-              <span style={{ width: 7, height: 7, borderRadius: "50%", background: "rgba(255,255,255,0.22)", flexShrink: 0 }} />
-              <span style={{ fontFamily: FONT, fontSize: 11, color: "rgba(255,255,255,0.42)", flex: 1 }}>
+              <span style={{ width: 7, height: 7, borderRadius: "50%", background: CLAIR.carteCreuse, flexShrink: 0 }} />
+              <span style={{ fontFamily: FONT, fontSize: 11, color: CLAIR.texteAttenue, flex: 1 }}>
                 {arcs.length - MAX_LEGENDE} autres
               </span>
-              <span style={{ ...NUM, fontSize: 11, fontWeight: 600, color: "rgba(255,255,255,0.55)", flexShrink: 0 }}>
+              <span style={{ ...NUM, fontSize: 11, fontWeight: 600, color: CLAIR.texteSecondaire, flexShrink: 0 }}>
                 {(arcs.slice(MAX_LEGENDE).reduce((t, a) => t + a.share, 0) * 100).toFixed(1)} %
               </span>
             </div>
@@ -147,7 +148,7 @@ export default function AllocationDonut({
           style={{
             display: "flex", alignItems: "center", gap: 5, alignSelf: "flex-start",
             background: "none", border: "none", cursor: "pointer", padding: 0, flexShrink: 0,
-            fontFamily: FONT, fontSize: 11, fontWeight: 500, color: "rgba(129,168,255,0.85)",
+            fontFamily: FONT, fontSize: 11, fontWeight: 500, color: CLAIR.accent,
           }}>
           Voir la répartition détaillée
           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor"
