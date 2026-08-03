@@ -152,7 +152,7 @@ export default function MonteCarloPanel({ assets, period, locale }: Props) {
         <div>
           <label className="block text-xs font-medium text-slate-500 mb-1.5">Capital initial</label>
           <select value={initialInvestment} onChange={e => setInitialInvestment(Number(e.target.value))}
-            className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500">
+            className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm bg-white focus:outline-hidden focus:ring-2 focus:ring-indigo-500">
             {[1000,5000,10000,25000,50000,100000].map(v => <option key={v} value={v}>€{v.toLocaleString("fr-FR")}</option>)}
           </select>
         </div>
@@ -160,7 +160,7 @@ export default function MonteCarloPanel({ assets, period, locale }: Props) {
           <label className="block text-xs font-medium text-slate-500 mb-1.5">Objectif financier (optionnel)</label>
           <input type="number" placeholder="ex: 100000" value={targetInput}
             onChange={e => { setTargetInput(e.target.value); setTargetValue(e.target.value ? Number(e.target.value) : undefined); }}
-            className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"/>
+            className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-hidden focus:ring-2 focus:ring-indigo-500"/>
         </div>
         <div className="flex items-end">
           <button onClick={handleRun} disabled={isLoading || assets.length === 0}
@@ -226,7 +226,7 @@ export default function MonteCarloPanel({ assets, period, locale }: Props) {
                 { color: "#ef4444", dash: true, label: "Pessimiste (P5)" },
               ].map(item => (
                 <div key={item.label} className="flex items-center gap-1.5">
-                  <div className="w-5 h-0.5 flex-shrink-0" style={{ backgroundColor: item.color, opacity: item.dash ? 0.7 : 1 }}/>
+                  <div className="w-5 h-0.5 shrink-0" style={{ backgroundColor: item.color, opacity: item.dash ? 0.7 : 1 }}/>
                   <span>{item.label}</span>
                 </div>
               ))}

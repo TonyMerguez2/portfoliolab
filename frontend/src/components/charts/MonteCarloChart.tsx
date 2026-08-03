@@ -50,7 +50,7 @@ export default function MonteCarloChart({ data, horizonYears }: Props) {
           return (
             <div key={entry.dataKey} className="flex items-center justify-between gap-4 mb-1">
               <div className="flex items-center gap-1.5">
-                <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: entry.color }}/>
+                <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: entry.color }}/>
                 <span className="text-slate-500 text-xs">{lineInfo?.label}</span>
               </div>
               <span className="font-semibold tabular-nums text-xs">€{(entry.value as number).toLocaleString("fr-FR")}</span>

@@ -34,7 +34,7 @@ export default function CommentaryPanel({ commentary }: Props) {
           key={key}
           className="flex gap-3 p-4 rounded-xl bg-slate-50 border border-slate-100"
         >
-          <span className="text-lg flex-shrink-0 mt-0.5" aria-hidden>
+          <span className="text-lg shrink-0 mt-0.5" aria-hidden>
             {COMMENTARY_ICONS[key]}
           </span>
           <div>

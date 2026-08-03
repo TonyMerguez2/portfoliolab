@@ -42,7 +42,7 @@ export default function Segments<T extends string>({
   ariaLabel?: string;
 }) {
   const petit = taille === "sm";
-  // Leur échelle nommée : rounded-sm vaut 12 px, rounded-md 14.
+  // Leur échelle nommée, déjà en v4 : rounded-sm vaut 12 px, rounded-md 14.
   const rayon = petit ? 12 : RAYONS.md;
 
   return (

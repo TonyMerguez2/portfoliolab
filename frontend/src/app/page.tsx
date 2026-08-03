@@ -387,7 +387,7 @@ export default function Home() {
           </p>
           {user && (
             <button onClick={() => setShowProfile(true)}
-              className="w-8 h-8 flex items-center justify-center rounded-full overflow-hidden flex-shrink-0"
+              className="w-8 h-8 flex items-center justify-center rounded-full overflow-hidden shrink-0"
               style={{
                 border: dark ? "1px solid rgba(255,255,255,0.18)" : "1px solid rgba(4,17,36,0.14)",
                 backgroundColor: dark ? "rgba(255,255,255,0.07)" : "rgba(4,17,36,0.05)",

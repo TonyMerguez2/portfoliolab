@@ -46,7 +46,7 @@ export default function ScoreCard({ score, locale }: Props) {
   const profileName = locale === "fr" ? score.profile : score.profile_en;
 
   return (
-    <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+    <div className="bg-white rounded-2xl border border-slate-200 shadow-xs overflow-hidden">
       {/* Header */}
       <div className="p-5 border-b border-slate-100">
         <div className="flex items-center justify-between mb-4">

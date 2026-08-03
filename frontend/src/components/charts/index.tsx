@@ -29,7 +29,7 @@ export function AllocationPie({ assets }: { assets: AssetMetrics[] }) {
   const CustomTooltip = ({ active, payload }: any) => {
     if (!active || !payload?.length) return null;
     return (
-      <div className="bg-white border border-slate-200 rounded-lg shadow p-2 text-sm">
+      <div className="bg-white border border-slate-200 rounded-lg shadow-sm p-2 text-sm">
         <span className="font-semibold">{payload[0].name}</span>
         <span className="ml-2 text-slate-500">{payload[0].value.toFixed(1)}%</span>
       </div>
@@ -161,7 +161,7 @@ export function CorrelationHeatmap({ data }: { data: CorrelationMatrix }) {
               {matrix[i].map((val, j) => (
                 <td
                   key={j}
-                  className="text-center font-mono rounded-sm p-1.5"
+                  className="text-center font-mono rounded-xs p-1.5"
                   style={{
                     backgroundColor: cellColor(val),
                     color: textColor(val),

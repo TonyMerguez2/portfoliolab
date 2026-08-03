@@ -130,7 +130,7 @@ function DashboardContent() {
     <div className={`min-h-screen ${bg} transition-colors duration-300`}>
       {/* Nav */}
       <header className={`${bgCard} border-b sticky top-0 z-20 transition-colors duration-300`}>
-        <div className="max-w-screen-2xl mx-auto px-4 h-13 flex items-center justify-between">
+        <div className="max-w-(--breakpoint-2xl) mx-auto px-4 h-13 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <button onClick={() => router.push("/build")} className="flex items-center gap-2 hover:opacity-80">
               <img src={dark ? "/logob.png" : "/logoa.png"} alt="NOVAC" className="w-10 h-10 object-contain"/>
@@ -144,7 +144,7 @@ function DashboardContent() {
               ← Modifier
             </button>
             <select value={locale} onChange={e => setLocale(e.target.value as Locale)}
-              className={`text-xs border rounded-lg px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-indigo-500 ${dark ? "bg-slate-800 border-slate-600 text-slate-300" : "bg-white border-slate-200"}`}>
+              className={`text-xs border rounded-lg px-2 py-1.5 focus:outline-hidden focus:ring-2 focus:ring-indigo-500 ${dark ? "bg-slate-800 border-slate-600 text-slate-300" : "bg-white border-slate-200"}`}>
               {(Object.entries(LOCALE_LABELS) as [Locale,string][]).map(([v,l]) => (
                 <option key={v} value={v}>{l}</option>
               ))}
@@ -165,12 +165,12 @@ function DashboardContent() {
       </header>
       {showAuth && <AuthModal dark={dark} onClose={() => setShowAuth(false)} onAuth={(u) => setUser(u)}/>}
 
-      <div className="max-w-screen-2xl mx-auto px-4 py-6">
+      <div className="max-w-(--breakpoint-2xl) mx-auto px-4 py-6">
         <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
 
           {/* LEFT — Builder compact */}
           <aside className="lg:col-span-1 space-y-4">
-            <div className={`${bgCard} border rounded-2xl p-4 shadow-sm`}>
+            <div className={`${bgCard} border rounded-2xl p-4 shadow-xs`}>
               <div className="flex items-center justify-between mb-3">
                 <h2 className={`text-sm font-semibold ${textPrimary}`}>{searchParams.get("name") ? decodeURIComponent(searchParams.get("name")!) : "Portefeuille"}</h2>
                 <button onClick={() => router.push("/build")} className="text-xs text-indigo-500 hover:text-indigo-400">Modifier</button>
@@ -181,7 +181,7 @@ function DashboardContent() {
                   <div className="space-y-2 mb-3">
                     {assets.map((asset,i) => (
                       <div key={i} className={`flex items-center gap-2 p-2 rounded-xl border ${dark ? "border-slate-700 bg-slate-700/50" : "border-slate-100 bg-slate-50"}`}>
-                        <div className="w-1.5 h-8 rounded-full flex-shrink-0" style={{backgroundColor: COLORS[i % COLORS.length]}}/>
+                        <div className="w-1.5 h-8 rounded-full shrink-0" style={{backgroundColor: COLORS[i % COLORS.length]}}/>
                         <div className="flex-1 min-w-0">
                           <p className={`text-xs font-mono font-bold ${dark ? "text-slate-200" : "text-slate-800"}`}>{asset.ticker}</p>
                         </div>
@@ -221,7 +221,7 @@ function DashboardContent() {
                         const m = e.target.value;
                         if (m) { const d = `${y}-${String(m).padStart(2,"0")}-01`; setCustomStartDate(d); setPeriod("custom"); }
                       }}
-                      className={`flex-1 border rounded-lg px-2 py-1 text-xs focus:outline-none transition-colors appearance-none cursor-pointer ${period === "custom" ? "bg-indigo-600 text-white border-indigo-600" : dark ? "bg-slate-700 border-slate-600 text-slate-300" : "bg-white border-slate-200 text-slate-600 hover:border-indigo-400"}`}>
+                      className={`flex-1 border rounded-lg px-2 py-1 text-xs focus:outline-hidden transition-colors appearance-none cursor-pointer ${period === "custom" ? "bg-indigo-600 text-white border-indigo-600" : dark ? "bg-slate-700 border-slate-600 text-slate-300" : "bg-white border-slate-200 text-slate-600 hover:border-indigo-400"}`}>
                       <option value="">Mois</option>
                       {["Jan","Fév","Mar","Avr","Mai","Jun","Jul","Aoû","Sep","Oct","Nov","Déc"].map((m,i) => (
                         <option key={i} value={i+1}>{m}</option>
@@ -234,7 +234,7 @@ function DashboardContent() {
                         const y = e.target.value;
                         if (y) { const d = `${y}-${String(m).padStart(2,"0")}-01`; setCustomStartDate(d); setPeriod("custom"); }
                       }}
-                      className={`flex-1 border rounded-lg px-2 py-1 text-xs focus:outline-none transition-colors appearance-none cursor-pointer ${period === "custom" ? "bg-indigo-600 text-white border-indigo-600" : dark ? "bg-slate-700 border-slate-600 text-slate-300" : "bg-white border-slate-200 text-slate-600 hover:border-indigo-400"}`}>
+                      className={`flex-1 border rounded-lg px-2 py-1 text-xs focus:outline-hidden transition-colors appearance-none cursor-pointer ${period === "custom" ? "bg-indigo-600 text-white border-indigo-600" : dark ? "bg-slate-700 border-slate-600 text-slate-300" : "bg-white border-slate-200 text-slate-600 hover:border-indigo-400"}`}>
                       <option value="">Année</option>
                       {Array.from({length: new Date().getFullYear() - 1990 + 1}, (_,i) => new Date().getFullYear() - i).map(y => (
                         <option key={y} value={y}>{y}</option>
@@ -262,7 +262,7 @@ function DashboardContent() {
 
             {/* Score compact */}
             {data?.score && (
-              <div className={`${bgCard} border rounded-2xl p-4 shadow-sm`}>
+              <div className={`${bgCard} border rounded-2xl p-4 shadow-xs`}>
                 <div className="flex items-center justify-between mb-3">
                   <div>
                     <p className={`text-xs font-semibold uppercase tracking-widest ${textSecondary}`}>Score Global</p>
@@ -299,7 +299,7 @@ function DashboardContent() {
             )}
 
             {data && (
-              <div className={`${bgCard} border rounded-2xl p-4 shadow-sm text-xs ${textSecondary}`}>
+              <div className={`${bgCard} border rounded-2xl p-4 shadow-xs text-xs ${textSecondary}`}>
                 <div className="flex justify-between mb-1"><span>Période</span><span className={`font-medium ${textPrimary}`}>{data.actual_period_years.toFixed(1)} ans</span></div>
                 <div className="flex justify-between mb-1"><span>Du</span><span className={`font-medium ${textPrimary}`}>{fmtDate(data.period_start)}</span></div>
                 <div className="flex justify-between"><span>Au</span><span className={`font-medium ${textPrimary}`}>{fmtDate(data.period_end)}</span></div>
@@ -312,7 +312,7 @@ function DashboardContent() {
             {error && <div className="bg-red-50 border border-red-200 rounded-2xl p-4 text-red-700 text-sm"><strong>Erreur : </strong>{error}</div>}
 
             {isLoading && !data && (
-              <div className={`${bgCard} border rounded-2xl p-16 flex flex-col items-center justify-center shadow-sm text-center`}>
+              <div className={`${bgCard} border rounded-2xl p-16 flex flex-col items-center justify-center shadow-xs text-center`}>
                 <div className="w-10 h-10 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin mb-4"/>
                 <p className={`font-medium ${textPrimary}`}>Analyse en cours...</p>
                 <p className={`text-sm mt-1 ${textSecondary}`}>Récupération des données et calculs quantitatifs</p>
@@ -320,7 +320,7 @@ function DashboardContent() {
             )}
 
             {!isLoading && !data && !error && (
-              <div className={`${bgCard} border rounded-2xl p-16 flex flex-col items-center justify-center shadow-sm text-center`}>
+              <div className={`${bgCard} border rounded-2xl p-16 flex flex-col items-center justify-center shadow-xs text-center`}>
                 <div className={`w-16 h-16 rounded-2xl flex items-center justify-center mb-4 ${dark ? "bg-slate-700" : "bg-indigo-50"}`}>
                   <svg className="w-8 h-8 text-indigo-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/>
@@ -334,7 +334,7 @@ function DashboardContent() {
             {data && (
               <>
                 {/* Graphique central */}
-                <div className={`${bgCard} border rounded-2xl shadow-sm overflow-hidden`}>
+                <div className={`${bgCard} border rounded-2xl shadow-xs overflow-hidden`}>
                   {/* Switcher */}
                   <div className={`flex gap-1 p-3 border-b overflow-x-auto ${borderColor}`}>
                     {CHART_VIEWS.map(({key, label}) => (
@@ -390,7 +390,7 @@ function DashboardContent() {
                               if (!payload?.length) return null;
                               const d = payload[0]?.payload;
                               return (
-                                <div className={`border rounded-lg p-2 text-xs shadow ${dark ? "bg-slate-800 border-slate-600 text-slate-200" : "bg-white border-slate-200"}`}>
+                                <div className={`border rounded-lg p-2 text-xs shadow-sm ${dark ? "bg-slate-800 border-slate-600 text-slate-200" : "bg-white border-slate-200"}`}>
                                   <p>Vol: <strong>{d.x}%</strong></p>
                                   <p>Rdt: <strong>{d.y}%</strong></p>
                                   {d.sharpe && <p>Sharpe: <strong>{d.sharpe?.toFixed(2)}</strong></p>}
@@ -412,7 +412,7 @@ function DashboardContent() {
                 {/* Analyse détaillée — Accordéons */}
                 <div className="space-y-2">
                   {/* Performance */}
-                  <div className={`${bgCard} border rounded-2xl overflow-hidden shadow-sm`}>
+                  <div className={`${bgCard} border rounded-2xl overflow-hidden shadow-xs`}>
                     <button onClick={() => toggleSection("performance")}
                       className={`w-full flex items-center justify-between px-5 py-4 text-left transition-colors ${dark ? "hover:bg-slate-700" : "hover:bg-slate-50"}`}>
                       <div className="flex items-center gap-3">
@@ -448,7 +448,7 @@ function DashboardContent() {
                   </div>
 
                   {/* Risque */}
-                  <div className={`${bgCard} border rounded-2xl overflow-hidden shadow-sm`}>
+                  <div className={`${bgCard} border rounded-2xl overflow-hidden shadow-xs`}>
                     <button onClick={() => toggleSection("risk")}
                       className={`w-full flex items-center justify-between px-5 py-4 text-left transition-colors ${dark ? "hover:bg-slate-700" : "hover:bg-slate-50"}`}>
                       <div className="flex items-center gap-3">
@@ -485,7 +485,7 @@ function DashboardContent() {
 
                   {/* Contribution au risque */}
                   {data.risk_contribution && (
-                    <div className={`${bgCard} border rounded-2xl overflow-hidden shadow-sm`}>
+                    <div className={`${bgCard} border rounded-2xl overflow-hidden shadow-xs`}>
                       <button onClick={() => toggleSection("riskcontrib")}
                         className={`w-full flex items-center justify-between px-5 py-4 text-left transition-colors ${dark ? "hover:bg-slate-700" : "hover:bg-slate-50"}`}>
                         <div className="flex items-center gap-3">
@@ -534,7 +534,7 @@ function DashboardContent() {
 
                   {/* Markowitz */}
                   {data.markowitz && (
-                    <div className={`${bgCard} border rounded-2xl overflow-hidden shadow-sm`}>
+                    <div className={`${bgCard} border rounded-2xl overflow-hidden shadow-xs`}>
                       <button onClick={() => toggleSection("markowitz")}
                         className={`w-full flex items-center justify-between px-5 py-4 text-left transition-colors ${dark ? "hover:bg-slate-700" : "hover:bg-slate-50"}`}>
                         <div className="flex items-center gap-3">
@@ -607,7 +607,7 @@ function DashboardContent() {
                   )}
 
                   {/* Commentaires */}
-                  <div className={`${bgCard} border rounded-2xl overflow-hidden shadow-sm`}>
+                  <div className={`${bgCard} border rounded-2xl overflow-hidden shadow-xs`}>
                     <button onClick={() => toggleSection("commentary")}
                       className={`w-full flex items-center justify-between px-5 py-4 text-left transition-colors ${dark ? "hover:bg-slate-700" : "hover:bg-slate-50"}`}>
                       <div className="flex items-center gap-3">
@@ -642,7 +642,7 @@ function DashboardContent() {
                   </div>
 
                   {/* Projections Monte Carlo */}
-                  <div className={`${bgCard} border rounded-2xl overflow-hidden shadow-sm`}>
+                  <div className={`${bgCard} border rounded-2xl overflow-hidden shadow-xs`}>
                     <button onClick={() => toggleSection("montecarlo")}
                       className={`w-full flex items-center justify-between px-5 py-4 text-left transition-colors ${dark ? "hover:bg-slate-700" : "hover:bg-slate-50"}`}>
                       <div className="flex items-center gap-3">
@@ -670,7 +670,7 @@ function DashboardContent() {
                   </div>
 
                   {/* Actifs détaillés */}
-                  <div className={`${bgCard} border rounded-2xl overflow-hidden shadow-sm`}>
+                  <div className={`${bgCard} border rounded-2xl overflow-hidden shadow-xs`}>
                     <button onClick={() => toggleSection("assets")}
                       className={`w-full flex items-center justify-between px-5 py-4 text-left transition-colors ${dark ? "hover:bg-slate-700" : "hover:bg-slate-50"}`}>
                       <div className="flex items-center gap-3">

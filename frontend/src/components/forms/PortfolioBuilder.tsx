@@ -64,7 +64,7 @@ export default function PortfolioBuilder({ onSubmit, isLoading }: Props) {
   };
 
   return (
-    <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
+    <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-xs">
       {/* Header */}
       <div className="flex items-center justify-between mb-6">
         <div>
@@ -93,7 +93,7 @@ export default function PortfolioBuilder({ onSubmit, isLoading }: Props) {
           <div key={i} className="grid grid-cols-12 gap-2 items-center">
             <input
               className="col-span-5 border border-slate-200 rounded-lg px-3 py-2 text-sm font-mono
-                         focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent
+                         focus:outline-hidden focus:ring-2 focus:ring-indigo-500 focus:border-transparent
                          placeholder:text-slate-300 uppercase"
               placeholder="AAPL"
               value={asset.ticker}
@@ -105,7 +105,7 @@ export default function PortfolioBuilder({ onSubmit, isLoading }: Props) {
               max={100}
               step={0.1}
               className="col-span-5 border border-slate-200 rounded-lg px-3 py-2 text-sm
-                         focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                         focus:outline-hidden focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
               value={asset.weight}
               onChange={(e) => updateAsset(i, "weight", e.target.value)}
             />
@@ -174,7 +174,7 @@ export default function PortfolioBuilder({ onSubmit, isLoading }: Props) {
             value={period}
             onChange={(e) => setPeriod(e.target.value as Period)}
             className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm
-                       focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white"
+                       focus:outline-hidden focus:ring-2 focus:ring-indigo-500 bg-white"
           >
             {(Object.entries(PERIOD_LABELS) as [Period, string][]).map(([v, l]) => (
               <option key={v} value={v}>{l}</option>
@@ -191,7 +191,7 @@ export default function PortfolioBuilder({ onSubmit, isLoading }: Props) {
             value={benchmark}
             onChange={(e) => setBenchmark(e.target.value as Benchmark)}
             className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm
-                       focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white"
+                       focus:outline-hidden focus:ring-2 focus:ring-indigo-500 bg-white"
           >
             {(Object.entries(BENCHMARK_LABELS) as [Benchmark, string][]).map(([v, l]) => (
               <option key={v} value={v}>{l}</option>

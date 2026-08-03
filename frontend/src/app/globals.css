@@ -1,10 +1,35 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+@import 'tailwindcss';
 
-@keyframes pulse {
-  0%, 100% { opacity: 1; transform: scale(1); }
-  50% { opacity: 0.4; transform: scale(0.85); }
+/*
+  The default border color has changed to `currentcolor` in Tailwind CSS v4,
+  so we've added these compatibility styles to make sure everything still
+  looks the same as it did with Tailwind CSS v3.
+
+  If we ever want to remove these styles, we need to add an explicit border
+  color utility to any element that depends on these defaults.
+*/
+@layer base {
+  *,
+  ::after,
+  ::before,
+  ::backdrop,
+  ::file-selector-button {
+    border-color: var(--color-gray-200, currentcolor);
+  }
+}
+
+@layer utilities {
+  @keyframes pulse {
+    0%,
+    100% {
+      opacity: 1;
+      transform: scale(1);
+    }
+    50% {
+      opacity: 0.4;
+      transform: scale(0.85);
+    }
+  }
 }
 
 @layer base {
@@ -406,7 +431,7 @@ canvas + div {
    pseudo-élément masqué, pas une bordure. Il suit currentColor, donc
    l'appelant fixe `color` sur la couleur de marque de l'actif.
 
-   Global, et non dans le <style> d'une page, parce que la carte de
+   Global, et non dans le \3c style> d'une page, parce que la carte de
    portefeuille et les cartes d'actif doivent rendre la même tuile. Les
    avoir laissées locales à la page graphique est précisément ce qui les
    avait fait diverger.

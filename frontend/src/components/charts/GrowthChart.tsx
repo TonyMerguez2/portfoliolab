@@ -1542,10 +1542,10 @@ export default function GrowthChart({
       }
     >
       {/* Header */}
-      <div className="flex items-center justify-between px-2 py-1 flex-shrink-0 gap-2">
+      <div className="flex items-center justify-between px-2 py-1 shrink-0 gap-2">
         <div className="flex items-center min-w-0">{leftSlot ?? null}</div>
 
-        <div className="flex items-center gap-1 flex-shrink-0">
+        <div className="flex items-center gap-1 shrink-0">
           {rightSlot}
 
           {/* Grid picker — dark mode only */}
@@ -1708,7 +1708,7 @@ export default function GrowthChart({
 
       {/* Comparison mode toggle */}
       {hasComparison && (
-        <div className="flex justify-center gap-2 pb-1 flex-shrink-0">
+        <div className="flex justify-center gap-2 pb-1 shrink-0">
           {(["perf", "raw"] as const).map(m => (
             <button key={m} onClick={() => setComparisonMode(m)} style={{
               fontSize: 10, fontWeight: comparisonMode === m ? 700 : 500,
@@ -1725,7 +1725,7 @@ export default function GrowthChart({
       )}
 
       {/* Period buttons */}
-      {!hideControls && <div className="flex justify-center gap-4 py-2 flex-wrap flex-shrink-0">
+      {!hideControls && <div className="flex justify-center gap-4 py-2 flex-wrap shrink-0">
         {(["24h","1S","1M","3M","6M","1A","3A","Max"] as const).map(key => {
           const isActive = periodFilter === key;
           let pct: number | null = null;
@@ -1773,7 +1773,7 @@ export default function GrowthChart({
                 </div>
               )}
               {isActive && (
-                <div className="absolute bottom-0 left-0 right-0 h-0.5 rounded" style={{ background: portfolioColor }}/>
+                <div className="absolute bottom-0 left-0 right-0 h-0.5 rounded-sm" style={{ background: portfolioColor }}/>
               )}
             </div>
           );
@@ -1782,7 +1782,7 @@ export default function GrowthChart({
 
       {/* Interval selector — uniquement en mode ticker */}
       {!hideControls && ticker && (
-        <div className="flex justify-center gap-2 pb-2 flex-shrink-0">
+        <div className="flex justify-center gap-2 pb-2 shrink-0">
           {(["1m","5m","15m","1h","1d","1W"] as const).map(iv => {
             const allowed = PERIOD_ALLOWED_INTERVALS[periodFilter] ?? [];
             const blockedByComparison = intradayLocked && ["1m","5m","15m","1h"].includes(iv);
