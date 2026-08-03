@@ -633,7 +633,7 @@ function PortfolioPageInner() {
   if (!portfolio && !loading) {
     return (
       <div style={{ display: "flex", alignItems: "center", justifyContent: "center",
-        height: "100vh", background: CLAIR.fond, color: CLAIR.surFondAttenue,
+        height: "100vh", background: "transparent", color: CLAIR.surFondAttenue,
         fontSize: 14, flexDirection: "column", gap: 16 }}>
         <div>Aucun portefeuille sélectionné.</div>
         <button onClick={() => router.push("/build")}
@@ -650,7 +650,7 @@ function PortfolioPageInner() {
   return (
     <div style={{
       height: "100vh", display: "flex", flexDirection: "column",
-      background: CLAIR.fond, color: CLAIR.texte,
+      background: "transparent", color: CLAIR.texte,
       fontFamily: FONT, boxSizing: "border-box",
       paddingTop: 62, overflow: "hidden",
     }}>

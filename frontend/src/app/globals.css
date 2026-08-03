@@ -53,26 +53,39 @@
    Nommage en français, comme le reste du code métier.
    ─────────────────────────────────────────────────────────────────────────── */
 
-/* Thème sombre — celui par défaut, hérité du reste de l'application. */
+/* Thème sombre.
+ *
+ * Rampe reprise des jetons d'Appica, convertie de OKLCH en hexadécimal. Deux
+ * écarts avec ce que Novac avait, et ce sont eux qui font tout :
+ *
+ * — Le fond descend de L 0.170 à 0.130 et se désature de C 0.044 à 0.028 : du
+ *   bleu marine vers le presque noir.
+ * — Surtout, l'écart de luminance entre la page et les cartes passe de 0.03 à
+ *   0.08. C'est ce qui fait lire les panneaux comme des panneaux ; à 0.03 ils
+ *   se fondaient dans la page.
+ *
+ * L'encre n'est pas blanche non plus : #D1D5DC. Du blanc pur sur un fond aussi
+ * sombre éblouit et fatigue à la lecture longue.
+ */
 :root,
 [data-theme="sombre"] {
-  --nv-fond:              #040F22;
-  --nv-fond-profond:      #020A18;
-  --nv-carte:             #0A1628;
-  --nv-carte-creuse:      rgba(255,255,255,0.04);
+  --nv-fond:              #030712;
+  --nv-fond-profond:      #010409;
+  --nv-carte:             #101828;
+  --nv-carte-creuse:      rgba(106,114,130,0.14);
 
-  --nv-bord:              rgba(255,255,255,0.08);
-  --nv-bord-fort:         rgba(255,255,255,0.14);
+  --nv-bord:              #1E2939;
+  --nv-bord-fort:         #2C3A4E;
 
-  --nv-texte:             #F8F9FC;
-  --nv-texte-secondaire:  rgba(248,249,252,0.65);
-  --nv-texte-attenue:     rgba(248,249,252,0.42);
-  --nv-texte-faible:      rgba(248,249,252,0.28);
+  --nv-texte:             #D1D5DC;
+  --nv-texte-secondaire:  #99A1AF;
+  --nv-texte-attenue:     #6A7282;
+  --nv-texte-faible:      #4B5565;
 
   /* Texte posé à même le fond de page, hors carte. */
-  --nv-sur-fond:          #F8F9FC;
-  --nv-sur-fond-attenue:  rgba(248,249,252,0.62);
-  --nv-sur-fond-faible:   rgba(248,249,252,0.40);
+  --nv-sur-fond:          #D1D5DC;
+  --nv-sur-fond-attenue:  #99A1AF;
+  --nv-sur-fond-faible:   #6A7282;
 
   --nv-positif:           #4ade80;
   --nv-negatif:           #f87171;
@@ -85,12 +98,12 @@
   --nv-ombre:             0 1px 3px rgba(0,0,0,0.28), 0 12px 32px rgba(0,0,0,0.22);
 
   /* Les points du fond. Seul le thème sombre les montre. */
-  --nv-point:             rgba(255,255,255,0.055);
-  --nv-point-vif:         rgba(150,190,255,0.34);
+  --nv-point:             rgba(255,255,255,0.10);
+  --nv-point-vif:         rgba(170,200,255,0.52);
 
   /* La barre latérale. Elle est translucide et floute ce qui passe dessous :
      ses fonds ne peuvent donc pas être les jetons de carte, qui sont opaques. */
-  --nv-barre-fond:        rgba(4,15,34,0.72);
+  --nv-barre-fond:        rgba(3,7,18,0.72);
   --nv-barre-survol:      rgba(255,255,255,0.045);
   --nv-barre-actif:       rgba(255,255,255,0.11);
   --nv-barre-actif-bord:  rgba(255,255,255,0.10);
