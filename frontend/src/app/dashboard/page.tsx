@@ -133,7 +133,16 @@ function DashboardContent() {
         <div className="max-w-(--breakpoint-2xl) mx-auto px-4 h-13 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <button onClick={() => router.push("/build")} className="flex items-center gap-2 hover:opacity-80">
-              <img src={dark ? "/logob.png" : "/logoa.png"} alt="NOVAC" className="w-10 h-10 object-contain"/>
+              <span role="img" aria-label="NOVAC" className="w-10 h-10 block" style={{
+            // Masque plutôt qu'image : un seul fichier au lieu d'une variante
+            // par thème, et la couleur suit l'encre.
+            backgroundColor: "var(--nv-texte)",
+            maskImage: "url(/logo-novac.png)",
+            WebkitMaskImage: "url(/logo-novac.png)",
+            maskSize: "contain", WebkitMaskSize: "contain",
+            maskRepeat: "no-repeat", WebkitMaskRepeat: "no-repeat",
+            maskPosition: "center", WebkitMaskPosition: "center",
+          }}/>
               <span className={`font-bold text-base tracking-tight ${textPrimary}`}>NOVAC</span>
             </button>
             <span className={`text-xs px-2 py-0.5 rounded-full border ${dark ? "border-slate-600 text-slate-400" : "border-slate-200 text-slate-400"}`}>Analyse</span>

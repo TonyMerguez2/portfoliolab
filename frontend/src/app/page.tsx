@@ -290,13 +290,23 @@ export default function Home() {
   const text = dark ? "#F8F9FC" : "#0B1A33";
   const btnBg = dark ? "#F8F9FC" : "#041124";
   const btnText = dark ? "#041124" : "#F8F9FC";
-  const suffix = dark ? "white" : "light";
 
+  /**
+   * Les quatre pièces qui convergent à l'ouverture.
+   *
+   * Elles ne sont plus quatre images mais quatre quartiers du même fichier,
+   * découpés en CSS depuis le centre. Le logo étant une étoile à quatre
+   * branches, chaque quartier en contient une.
+   *
+   * Ce que ça remplace : douze fichiers — quatre pièces en trois teintes — pour
+   * vingt-cinq mégaoctets, là où le masque tient en trente-cinq kilo-octets et
+   * prend la couleur du thème sans variantes à préparer.
+   */
   const blocks = [
-    { src: `/logo-top-${suffix}.png`, from: "translateY(-150px)", label: "top", delay: 0, px: -0.6, py: -1.0 },
-    { src: `/logo-right-${suffix}.png`, from: "translateX(150px)", label: "right", delay: 120, px: 1.0, py: -0.6 },
-    { src: `/logo-bottom-${suffix}.png`, from: "translateY(150px)", label: "bottom", delay: 240, px: 0.6, py: 1.0 },
-    { src: `/logo-left-${suffix}.png`, from: "translateX(-150px)", label: "left", delay: 360, px: -1.0, py: 0.6 },
+    { label: "top",    from: "translateY(-150px)", delay: 0,   px: -0.6, py: -1.0, coin: "polygon(50% 50%, 0 0, 100% 0)" },
+    { label: "right",  from: "translateX(150px)",  delay: 120, px: 1.0,  py: -0.6, coin: "polygon(50% 50%, 100% 0, 100% 100%)" },
+    { label: "bottom", from: "translateY(150px)",  delay: 240, px: 0.6,  py: 1.0,  coin: "polygon(50% 50%, 100% 100%, 0 100%)" },
+    { label: "left",   from: "translateX(-150px)", delay: 360, px: -1.0, py: 0.6,  coin: "polygon(50% 50%, 0 100%, 0 0)" },
   ];
 
   return (
@@ -347,10 +357,19 @@ export default function Home() {
                   opacity: phase === "assembling" ? 0 : 1,
                   transition: `transform 0.9s cubic-bezier(0.16,1,0.3,1) ${b.delay}ms, opacity 0.6s ease ${b.delay}ms`,
                 }}>
-                <img src={b.src} alt="" className="absolute inset-0 w-full h-full object-contain"
+                <div className="absolute inset-0"
                   style={{
+                    backgroundColor: text,
+                    maskImage: "url(/logo-novac.png)",
+                    WebkitMaskImage: "url(/logo-novac.png)",
+                    maskSize: "contain", WebkitMaskSize: "contain",
+                    maskRepeat: "no-repeat", WebkitMaskRepeat: "no-repeat",
+                    maskPosition: "center", WebkitMaskPosition: "center",
+                    clipPath: b.coin,
                     transform: phase !== "assembling" ? `translate(${mousePos.x * b.px}px, ${mousePos.y * b.py}px)` : "translate(0,0)",
-                    transition: phase !== "assembling" ? "transform 0.15s ease-out" : "none",
+                    transition: phase !== "assembling"
+                      ? "transform 0.15s ease-out, background-color 0.4s ease"
+                      : "background-color 0.4s ease",
                   }}
                 />
               </div>

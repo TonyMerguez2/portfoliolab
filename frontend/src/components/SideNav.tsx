@@ -142,6 +142,19 @@ export default function SideNav() {
     >
       {/* Marque + bouton de repli */}
       <div style={{ display: "flex", alignItems: "center", gap: 10, height: 60, padding: "0 16px", flexShrink: 0 }}>
+        <span aria-hidden="true" style={{
+          width: 20, height: 20, flexShrink: 0,
+          backgroundColor: "var(--nv-texte)",
+          maskImage: "url(/logo-novac.png)",
+          WebkitMaskImage: "url(/logo-novac.png)",
+          maskSize: "contain", WebkitMaskSize: "contain",
+          maskRepeat: "no-repeat", WebkitMaskRepeat: "no-repeat",
+          maskPosition: "center", WebkitMaskPosition: "center",
+          // Il reste quand la barre se replie : c'est le seul repère de marque
+          // qui tienne dans 68 px, là où le mot ne tient pas.
+          marginRight: collapsed ? 0 : 2,
+          transition: "margin 160ms",
+        }} />
         <Link href="/" aria-label="Accueil Novac" style={{
           textDecoration: "none", color: "var(--nv-texte)", fontSize: 13, fontWeight: 700,
           letterSpacing: "0.22em", whiteSpace: "nowrap",

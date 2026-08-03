@@ -56,7 +56,16 @@ export default function AuthModal({ onClose, onAuth, dark = false }: Props) {
       }}>
         {/* Logo */}
         <div className="flex justify-center mb-6">
-          <img src={dark ? "/logob.png" : "/logoa.png"} alt="NOVAC" className="w-10 h-10 object-contain"/>
+          <span role="img" aria-label="NOVAC" className="w-10 h-10 block" style={{
+            // Masque plutôt qu'image : un seul fichier au lieu d'une variante
+            // par thème, et la couleur suit l'encre.
+            backgroundColor: "var(--nv-texte)",
+            maskImage: "url(/logo-novac.png)",
+            WebkitMaskImage: "url(/logo-novac.png)",
+            maskSize: "contain", WebkitMaskSize: "contain",
+            maskRepeat: "no-repeat", WebkitMaskRepeat: "no-repeat",
+            maskPosition: "center", WebkitMaskPosition: "center",
+          }}/>
         </div>
 
         <h2 style={{ color: text, fontSize: "16px", fontWeight: 700, letterSpacing: "0.1em", textAlign: "center", marginBottom: "24px" }}>
