@@ -35,9 +35,9 @@ export const LIBELLE_OP: Record<TypeOp, string> = {
 };
 
 export const COULEUR_OP: Record<TypeOp, string> = {
-  achat: "#4ade80",
-  renforcement: "#5B8DEF",
-  vente: "#f87171",
+  achat: "#00D492",
+  renforcement: "#50A2FF",
+  vente: "#FF6467",
 };
 
 /**
@@ -49,9 +49,9 @@ export const COULEUR_OP: Record<TypeOp, string> = {
  * assombries jusqu'à porter du blanc.
  */
 export const COULEUR_OP_CLAIR: Record<TypeOp, string> = {
-  achat: "#0F7B3D",
-  renforcement: "#0B63E7",
-  vente: "#C81E1E",
+  achat: "#00884D",
+  renforcement: "#2177D1",
+  vente: "#EA0B27",
 };
 
 /** Les écritures, classées de la plus ancienne à la plus récente. */

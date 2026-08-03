@@ -8,7 +8,7 @@ import type { HistoryPoint, Period } from "@/lib/chart/portfolioCurve";
 import { FONT, NUM } from "@/lib/typography";
 import { enTetesAuth } from "@/lib/session";
 import { COULEUR_OP, COULEUR_OP_CLAIR } from "@/lib/journal";
-import { useModeTheme } from "@/lib/theme";
+import { useModeTheme, resoudreJeton } from "@/lib/theme";
 import { RAYONS } from "@/lib/palette";
 
 export type { HistoryPoint, Period };
@@ -115,7 +115,7 @@ function habillage(clair: boolean) {
 /** La couleur d'un type d'opération, selon le thème. */
 function couleurOp(type: string, clair: boolean): string {
   const t = type as keyof typeof COULEUR_OP;
-  return (clair ? COULEUR_OP_CLAIR : COULEUR_OP)[t] ?? (clair ? "#0B63E7" : "#5B8DEF");
+  return (clair ? COULEUR_OP_CLAIR : COULEUR_OP)[t] ?? (clair ? "#0B63E7" : "var(--nv-accent)");
 }
 
 /**
@@ -168,7 +168,7 @@ const PERIOD_SECS: Record<Period, number | null> = {
 };
 
 export default function PerformanceChart({
-  assets, totalValue, period, onPeriodChange, color = "#5B8DEF", height,
+  assets, totalValue, period, onPeriodChange, color = "var(--nv-accent)", height,
   portfolioId, surTransactions = false, operations = [], onOperationClick,
 }: {
   assets: { ticker: string; weight: number }[];
@@ -409,9 +409,13 @@ export default function PerformanceChart({
     // ainsi à échanger des données, pas à détruire et recréer une série — ce
     // qui emporterait le cadrage avec elle.
     const bougies = chart.addSeries(CandlestickSeries, {
-      upColor: "#10b981", downColor: "#ef4444",
-      borderUpColor: "#10b981", borderDownColor: "#ef4444",
-      wickUpColor: "#10b981", wickDownColor: "#ef4444",
+      // Le canevas ne résout pas var() : on lui passe la valeur calculée.
+      upColor: resoudreJeton("--nv-positif", "#00D492"),
+      downColor: resoudreJeton("--nv-negatif", "#FF6467"),
+      borderUpColor: resoudreJeton("--nv-positif", "#00D492"),
+      borderDownColor: resoudreJeton("--nv-negatif", "#FF6467"),
+      wickUpColor: resoudreJeton("--nv-positif", "#00D492"),
+      wickDownColor: resoudreJeton("--nv-negatif", "#FF6467"),
       lastValueVisible: true, priceLineVisible: false,
       priceFormat: { type: "price", precision: 0, minMove: 1 },
     });
@@ -654,11 +658,11 @@ export default function PerformanceChart({
                 {pct != null && !anterieure && (
                   <div style={{
                     ...NUM, fontSize: 11, fontWeight: 700,
-                    // Sur blanc, #10b981 ne donne que 2,5:1 : il faut un vert
+                    // Sur blanc, var(--nv-positif) ne donne que 2,5:1 : il faut un vert
                     // plus sombre pour rester lisible.
                     color: pct >= 0
-                      ? (clair ? "#0F7B3D" : "#10b981")
-                      : (clair ? "#C81E1E" : "#ef4444"),
+                      ? (clair ? "#0F7B3D" : "var(--nv-positif)")
+                      : (clair ? "#C81E1E" : "var(--nv-negatif)"),
                   }}>
                     {fmtPct(pct)}
                   </div>

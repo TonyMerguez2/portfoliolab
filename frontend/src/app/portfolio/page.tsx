@@ -71,7 +71,7 @@ function classifyExposition(assets: Enriched[]): Record<string, number> {
 }
 
 const EXPO_COLORS: Record<string, string> = {
-  Actions: "#5B8DEF", Crypto: CLAIR.attention, ETF: "#a78bfa", Cash: "#34d399",
+  Actions: "var(--nv-accent)", Crypto: CLAIR.attention, ETF: "#a78bfa", Cash: "#34d399",
 };
 
 // ── Sparkline ──────────────────────────────────────────────────────────────────
@@ -293,7 +293,7 @@ function PortfolioPageInner() {
       id,
       name:   activePortfolio.name,
       assets: (activePortfolio.assets || []) as PortfolioAsset[],
-      color:  activePortfolio.color || "#5B8DEF",
+      color:  activePortfolio.color || "var(--nv-accent)",
     });
 
     let cancelled = false;
@@ -721,7 +721,7 @@ function PortfolioPageInner() {
             </div>
             <div style={{ minWidth: 0 }}>
               <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                <span style={{ width: 7, height: 7, borderRadius: RAYONS.plein, background: portfolio.color || "#5B8DEF", flexShrink: 0 }} />
+                <span style={{ width: 7, height: 7, borderRadius: RAYONS.plein, background: portfolio.color || "var(--nv-accent)", flexShrink: 0 }} />
                 <span style={{ fontSize: 13, fontWeight: 700, color: CLAIR.texte, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
                   {portfolio.name}
                 </span>
@@ -981,7 +981,7 @@ function PortfolioPageInner() {
               totalValue={valeurTotale}
               period={period}
               onPeriodChange={setPeriod}
-              color={portfolio?.color || "#5B8DEF"}
+              color={portfolio?.color || "var(--nv-accent)"}
               portfolioId={portfolio?.id}
               surTransactions={surTransactions}
               operations={reperesOperations}
@@ -1227,7 +1227,7 @@ function PortfolioPageInner() {
           <SectionLabel>OBJECTIFS</SectionLabel>
           <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
             {[
-              { label: "Retraite 2035",         current: valeurTotale ?? 0, target: 400000, color: "#5B8DEF" },
+              { label: "Retraite 2035",         current: valeurTotale ?? 0, target: 400000, color: "var(--nv-accent)" },
               { label: "Achat immobilier",       current: (valeurTotale ?? 0) * 0.42, target: 100000, color: "#a78bfa" },
               { label: "Indépendance financière", current: (valeurTotale ?? 0) * 0.28, target: 500000, color: CLAIR.positif },
             ].map(g => {

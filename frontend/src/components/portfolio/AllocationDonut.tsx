@@ -16,7 +16,7 @@ import Segments from "@/components/ui/Segments";
  * donc lui par défaut, l'autre restant à un clic.
  */
 
-const CLASS_COLOR: Record<string, string> = { Actions: "#5B8DEF", ETF: "#a78bfa", Crypto: "#fbbf24" };
+const CLASS_COLOR: Record<string, string> = { Actions: "var(--nv-accent)", ETF: "#a78bfa", Crypto: "var(--nv-attention)" };
 
 // Anneau et légende côte à côte, comme au concept. La colonne de droite a été
 // élargie à 296 px, ce qui laisse la place d'un anneau de 108 px sans rogner

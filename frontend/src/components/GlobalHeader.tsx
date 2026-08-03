@@ -302,7 +302,7 @@ export default function GlobalHeader() {
               style={{ ...pillStyle, gap:"6px", padding:"0 10px 0 8px", height:"36px", boxSizing:"border-box" }}>
               {mode === "portfolio" && activePortfolio ? (
                 <>
-                  <div style={{ width:8, height:8, borderRadius:2, background:activePortfolio.color||"#5B8DEF", flexShrink:0 }}/>
+                  <div style={{ width:8, height:8, borderRadius:2, background:activePortfolio.color||"#50A2FF", flexShrink:0 }}/>
                   <span style={{ fontSize:"12px", fontWeight:500, letterSpacing:"0.04em" }}>{activePortfolio.name}</span>
                 </>
               ) : isChartPage ? (
@@ -335,15 +335,15 @@ export default function GlobalHeader() {
                     <div style={{ padding:"10px 14px 6px", color:"rgba(255,255,255,0.30)", fontSize:"9px", letterSpacing:"0.14em", fontWeight:700 }}>MES PORTEFEUILLES</div>
                     {portfolios.map((p: any) => (
                       <div key={p.id}
-                        onClick={() => { setActivePortfolio({ id:p.id, name:p.name, assets:p.assets||[], color:p.color||"#5B8DEF" }); setMode("portfolio"); setShowDropdown(false); }}
+                        onClick={() => { setActivePortfolio({ id:p.id, name:p.name, assets:p.assets||[], color:p.color||"#50A2FF" }); setMode("portfolio"); setShowDropdown(false); }}
                         style={{ display:"flex", alignItems:"center", gap:"10px", padding:"9px 14px", cursor:"pointer", transition:"background 0.12s" }}
                         onMouseEnter={e => e.currentTarget.style.background="rgba(255,255,255,0.04)"}
                         onMouseLeave={e => e.currentTarget.style.background="transparent"}>
-                        <div style={{ width:"8px", height:"8px", borderRadius:"2px", background:p.color||"#5B8DEF", flexShrink:0 }}/>
+                        <div style={{ width:"8px", height:"8px", borderRadius:"2px", background:p.color||"#50A2FF", flexShrink:0 }}/>
                         <span style={{ color:"#F8F9FC", fontSize:"12px", flex:1, fontWeight:500 }}>{p.name}</span>
                         {p.is_simulation && <span style={{ fontSize:"8px", padding:"1px 5px", borderRadius:"4px", background:"rgba(99,102,241,0.14)", border:"1px solid rgba(99,102,241,0.28)", color:"#a5b4fc", letterSpacing:"0.08em", flexShrink:0 }}>SIM</span>}
                         <span style={{ color:"rgba(255,255,255,0.25)", fontSize:"10px" }}>{Array.isArray(p.assets)?p.assets.length:0} actifs</span>
-                        {activePortfolio?.id === p.id && <span style={{ color:"#5B8DEF", fontSize:"10px" }}>●</span>}
+                        {activePortfolio?.id === p.id && <span style={{ color:"#50A2FF", fontSize:"10px" }}>●</span>}
                       </div>
                     ))}
                     {portfolios.length === 0 && (
@@ -387,15 +387,15 @@ export default function GlobalHeader() {
                         <div style={{ padding:"7px 12px 4px", color:"rgba(255,255,255,0.22)", fontSize:"9px", letterSpacing:"0.14em" }}>MES PORTEFEUILLES</div>
                         {portfolios.map((p: any) => (
                           <div key={p.id}
-                            onClick={() => { setActivePortfolio({ id:p.id, name:p.name, assets:p.assets||[], color:p.color||"#5B8DEF" }); setMode("portfolio"); setShowDropdown(false); }}
+                            onClick={() => { setActivePortfolio({ id:p.id, name:p.name, assets:p.assets||[], color:p.color||"#50A2FF" }); setMode("portfolio"); setShowDropdown(false); }}
                             style={{ display:"flex", alignItems:"center", gap:"10px", padding:"8px 12px", cursor:"pointer", transition:"background 0.12s" }}
                             onMouseEnter={e => e.currentTarget.style.background="rgba(255,255,255,0.04)"}
                             onMouseLeave={e => e.currentTarget.style.background="transparent"}>
-                            <div style={{ width:"7px", height:"7px", borderRadius:"2px", background:p.color||"#5B8DEF", flexShrink:0 }}/>
+                            <div style={{ width:"7px", height:"7px", borderRadius:"2px", background:p.color||"#50A2FF", flexShrink:0 }}/>
                             <span style={{ color:"#F8F9FC", fontSize:"11px", flex:1 }}>{p.name}</span>
                             {p.is_simulation && <span style={{ fontSize:"8px", padding:"1px 5px", borderRadius:"4px", background:"rgba(99,102,241,0.14)", border:"1px solid rgba(99,102,241,0.28)", color:"#a5b4fc", letterSpacing:"0.08em", flexShrink:0 }}>SIM</span>}
                             <span style={{ color:"rgba(255,255,255,0.25)", fontSize:"10px" }}>{Array.isArray(p.assets)?p.assets.length:0} actifs</span>
-                            {activePortfolio?.id === p.id && <span style={{ color:"#5B8DEF", fontSize:"10px" }}>●</span>}
+                            {activePortfolio?.id === p.id && <span style={{ color:"#50A2FF", fontSize:"10px" }}>●</span>}
                           </div>
                         ))}
                       </div>

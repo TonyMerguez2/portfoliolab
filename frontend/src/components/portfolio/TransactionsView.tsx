@@ -321,7 +321,7 @@ export default function TransactionsView({
                         {detail.realise ? "Résultat réalisé" : "Plus-value latente"}
                       </div>
                       <div style={{ ...NUM, fontSize: 12.5, fontWeight: 700, whiteSpace: "nowrap",
-                        color: detail.gain == null ? "rgba(255,255,255,0.40)" : detail.gain >= 0 ? "#4ade80" : "#f87171" }}>
+                        color: detail.gain == null ? "rgba(255,255,255,0.40)" : detail.gain >= 0 ? "#00D492" : "#FF6467" }}>
                         {detail.gain == null ? "—" : `${detail.gain >= 0 ? "+" : ""}${eur(detail.gain)}`}
                         {detail.gainPct != null && (
                           <span style={{ display: "block", opacity: 0.6, fontSize: 10.5, fontWeight: 600 }}>
@@ -359,7 +359,7 @@ export default function TransactionsView({
                           fontSize: 10.5, cursor: "pointer", fontFamily: FONT }}>Annuler</button>
                         <button onClick={() => supprimer(t.id)} disabled={suppression} style={{
                           padding: "5px 10px", borderRadius: 8, border: "1px solid rgba(248,113,113,0.35)",
-                          background: "rgba(248,113,113,0.14)", color: "#f87171", fontWeight: 600,
+                          background: "rgba(248,113,113,0.14)", color: "#FF6467", fontWeight: 600,
                           fontSize: 10.5, cursor: suppression ? "default" : "pointer", fontFamily: FONT,
                           opacity: suppression ? 0.5 : 1 }}>
                           {suppression ? "Suppression…" : "Confirmer la suppression"}
@@ -404,13 +404,13 @@ export default function TransactionsView({
           <Ligne label="Capital investi" valeur={eur(recap.capitalInvesti, 0)} />
           <Ligne label="Gain latent"
             valeur={recap.gainLatent == null ? "—" : `${recap.gainLatent >= 0 ? "+" : ""}${eur(recap.gainLatent, 0)}`}
-            couleur={recap.gainLatent == null ? undefined : recap.gainLatent >= 0 ? "#4ade80" : "#f87171"} />
+            couleur={recap.gainLatent == null ? undefined : recap.gainLatent >= 0 ? "#00D492" : "#FF6467"} />
           <Ligne label="Meilleure opération"
             valeur={recap.meilleure?.gain == null ? "—" : `${recap.meilleure.gain >= 0 ? "+" : ""}${eur(recap.meilleure.gain, 0)}`}
-            couleur="#4ade80" />
+            couleur="#00D492" />
           <Ligne label="Pire opération"
             valeur={recap.pire?.gain == null ? "—" : `${recap.pire.gain >= 0 ? "+" : ""}${eur(recap.pire.gain, 0)}`}
-            couleur={recap.pire?.gain != null && recap.pire.gain >= 0 ? "#4ade80" : "#f87171"} />
+            couleur={recap.pire?.gain != null && recap.pire.gain >= 0 ? "#00D492" : "#FF6467"} />
           <Ligne label="Durée moyenne de détention"
             valeur={recap.dureeMoyenneJours == null ? "—" : `${recap.dureeMoyenneJours} jours`} />
         </Carte>
@@ -518,7 +518,7 @@ function TableauOperations({
                 </td>
                 <td style={{ ...NUM, padding: "7px 6px", textAlign: "right", fontSize: 10.5, whiteSpace: "nowrap", color: "rgba(255,255,255,0.75)" }}>{eur(montant(t))}</td>
                 <td style={{ ...NUM, padding: "7px 6px", textAlign: "right", fontSize: 10.5, whiteSpace: "nowrap", fontWeight: 600,
-                  color: r?.gain == null ? "rgba(255,255,255,0.25)" : r.gain >= 0 ? "#4ade80" : "#f87171" }}>
+                  color: r?.gain == null ? "rgba(255,255,255,0.25)" : r.gain >= 0 ? "#00D492" : "#FF6467" }}>
                   {r?.gain == null ? "—" : `${r.gain >= 0 ? "+" : ""}${Math.round(r.gain).toLocaleString("fr-FR")} €`}
                 </td>
               </tr>

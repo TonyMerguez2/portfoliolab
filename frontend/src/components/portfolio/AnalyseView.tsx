@@ -66,24 +66,24 @@ const ABREGE: Record<string, string> = {
 const ORDRE = ["diversification", "concentration", "volatilite", "liquidite", "correlation", "sensibilite_marche"];
 
 const BANDES: { min: number; nom: string; couleur: string }[] = [
-  { min: 80, nom: "Très bon",    couleur: "#4ade80" },
-  { min: 60, nom: "Bon",         couleur: "#22c55e" },
-  { min: 40, nom: "Moyen",       couleur: "#fbbf24" },
+  { min: 80, nom: "Très bon",    couleur: "#00D492" },
+  { min: 60, nom: "Bon",         couleur: "#00D492" },
+  { min: 40, nom: "Moyen",       couleur: "#FF8904" },
   { min: 20, nom: "Faible",      couleur: "#fb923c" },
-  { min: 0,  nom: "Très faible", couleur: "#f87171" },
+  { min: 0,  nom: "Très faible", couleur: "#FF6467" },
 ];
 
 const couleurScore = (s: number | null) =>
   s == null ? "rgba(255,255,255,0.30)" : (BANDES.find(b => s >= b.min) ?? BANDES[4]).couleur;
 
 const TON: Record<string, { couleur: string; signe: string }> = {
-  alerte:    { couleur: "#f87171", signe: "!" },
-  attention: { couleur: "#fbbf24", signe: "!" },
-  favorable: { couleur: "#4ade80", signe: "✓" },
-  info:      { couleur: "#5B8DEF", signe: "i" },
+  alerte:    { couleur: "#FF6467", signe: "!" },
+  attention: { couleur: "#FF8904", signe: "!" },
+  favorable: { couleur: "#00D492", signe: "✓" },
+  info:      { couleur: "#50A2FF", signe: "i" },
 };
 
-const COULEURS_PART = ["#5B8DEF", "#a78bfa", "#fbbf24", "#4ade80", "#f87171", "#22d3ee", "#94a3b8"];
+const COULEURS_PART = ["#50A2FF", "#a78bfa", "#FF8904", "#00D492", "#FF6467", "#22d3ee", "#94a3b8"];
 
 function Carte({ children, style }: { children: React.ReactNode; style?: React.CSSProperties }) {
   return (
@@ -445,13 +445,13 @@ function Cone({ p }: { p: Projection }) {
         <svg viewBox={`0 0 ${L} ${H}`} preserveAspectRatio="none"
              style={{ width: "100%", height: "100%", display: "block" }}>
           <path d={bande} fill="rgba(91,141,239,0.16)" />
-          <path d={ligne("median")} fill="none" stroke="#5B8DEF" strokeWidth="1.6"
+          <path d={ligne("median")} fill="none" stroke="#50A2FF" strokeWidth="1.6"
                 vectorEffect="non-scaling-stroke" />
         </svg>
       </div>
       <div style={{ display: "flex", justifyContent: "space-between", marginTop: 8, flexShrink: 0 }}>
-        {([["Défavorable", p.p10, "#f87171"], ["Médiane", p.median, "#9BB9FF"],
-           ["Favorable", p.p90, "#4ade80"]] as const).map(([l, v, c]) => (
+        {([["Défavorable", p.p10, "#FF6467"], ["Médiane", p.median, "#9BB9FF"],
+           ["Favorable", p.p90, "#00D492"]] as const).map(([l, v, c]) => (
           <span key={l} style={{ textAlign: "center" }}>
             <span style={{ display: "block", fontFamily: FONT, fontSize: 9,
                            color: "rgba(255,255,255,0.32)" }}>{l}</span>

@@ -194,7 +194,7 @@ export default function AssetGrid({
       }}>
         {shown.map(a => {
           const up = (a.change ?? 0) >= 0;
-          const chg = up ? "#4ade80" : "#f87171";
+          const chg = up ? "var(--nv-positif)" : "var(--nv-negatif)";
           const name = assetName(a.ticker);
           return (
             <TileCard key={a.ticker} ticker={a.ticker} radius={12}
@@ -238,7 +238,7 @@ export default function AssetGrid({
                     est inconnu — portefeuilles sans transactions. */}
                 {a.pnlEur != null ? (() => {
                   const gagne = a.pnlEur >= 0;
-                  const col = gagne ? "#4ade80" : "#f87171";
+                  const col = gagne ? "var(--nv-positif)" : "var(--nv-negatif)";
                   return (
                     <div style={{ ...NUM, fontSize: 12.5, fontWeight: 600, color: col, marginTop: 3 }}>
                       {gagne ? "+" : ""}{Math.round(a.pnlEur).toLocaleString("fr-FR")} €
