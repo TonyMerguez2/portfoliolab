@@ -67,32 +67,36 @@
  * `carte-creuse` reste au-dessus des deux : un creux dans une carte doit
  * continuer de se voir, lui.
  *
- * Trois crans distincts de leur rampe, du plus sombre au plus clair : la page
- * en `background`, la carte en `background-muted`, le liseré en `border`. La
- * carte est ainsi quatre fois plus lumineuse que la page, et le liseré passe
- * encore au-dessus.
+ * L'étagement : la page est la surface la plus claire, la carte la plus
+ * sombre, et le liseré reste dans la famille de la carte plutôt que de la
+ * cerner d'un trait lumineux. Le panneau se lit donc comme un creux dans la
+ * page, non comme une plaque posée dessus.
  *
- * J'ai un temps donné la même valeur aux deux, en lisant le balisage de leur
- * vitrine de documentation : là, une carte de démonstration porte bien
- * `bg-background` sur une page de même couleur, la séparation venant d'une
- * pile décorative — trame et voile — propre à cette vitrine. C'est une mise en
- * scène de composant, pas une page d'application, et transposer ses valeurs
- * telles quelles rendait les panneaux indiscernables.
+ * La page vaut leur `background-subtle` composé — le gris #6A7282 à 8 % sur
+ * #030712, soit #0B101B. Leur `background-muted` #101828 a été essayé et jugé
+ * trop clair à l'écran ; ce cran-ci tient le milieu et garde la page dans le
+ * presque-noir.
+ *
+ * J'ai longtemps cherché cet ordre dans le balisage de leur vitrine de
+ * documentation, où page et carte partagent la même valeur, la séparation
+ * venant d'une pile décorative propre à cette vitrine. C'est une mise en scène
+ * de composant, pas une page d'application.
  *
  * L'encre n'est pas blanche non plus : #D1D5DC. Du blanc pur sur un fond aussi
  * sombre éblouit et fatigue à la lecture longue.
  */
 :root,
 [data-theme="sombre"] {
-  --nv-fond:              #030712;
-  --nv-fond-profond:      #010409;
-  --nv-carte:             #101828;
+  --nv-fond:              #0B101B;
+  --nv-fond-profond:      #060A12;
+  --nv-carte:             #030712;
   --nv-carte-creuse:      rgba(106,114,130,0.12);
 
-  --nv-bord:              #1E2939;
-  --nv-bord-fort:         #364153;
-  /* L'anneau extérieur vaut la carte : il annonce le panneau sans concurrencer
-     le liseré intérieur, qui reste le trait le plus marqué. */
+  --nv-bord:              #101828;
+  --nv-bord-fort:         #1E2939;
+  /* Les deux anneaux du cadre restent sombres, dans la famille de la carte :
+     un liseré clair poserait un trait lumineux autour d'un panneau sombre,
+     exactement l'inverse de l'effet cherché. */
   --nv-cadre:             #101828;
 
   --nv-texte:             #D1D5DC;
@@ -150,14 +154,14 @@
    noire, et la couleur rendue rare. Le bleu #0B63E7 ne peint donc plus la page :
    il est réservé aux accents, où il porte justement parce qu'il est rare. */
 [data-theme="clair"] {
-  --nv-cadre:             #E5E7EB;
-  --nv-fond:              #F3F4F6;
-  --nv-fond-profond:      #E5E7EB;
+  --nv-cadre:             #F3F4F6;
+  --nv-fond:              #E5E7EB;
+  --nv-fond-profond:      #D1D5DC;
   --nv-carte:             #FFFFFF;
   --nv-carte-creuse:      #F9FAFB;
 
-  --nv-bord:              #E5E7EB;
-  --nv-bord-fort:         #D1D5DC;
+  --nv-bord:              #F3F4F6;
+  --nv-bord-fort:         #E5E7EB;
 
   --nv-texte:             #101828;
   --nv-texte-secondaire:  #364153;
