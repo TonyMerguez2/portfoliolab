@@ -1289,7 +1289,7 @@ function ChartContent() {
                                 {assetInfo?.exchange && !isCrypto && (
                                   <span className="asset-meta-pill" style={{ color:"rgba(var(--nv-encre-rvb), 0.58)", fontWeight:500, overflow:"hidden", textOverflow:"ellipsis" }}>
                                     {_EXCH[assetInfo.exchange] ?? assetInfo.exchange}
-                                    {_EXCH_FLAG[assetInfo.exchange] && <img className="asset-exchange-flag" src={`https://hatscripts.github.io/circle-flags/flags/${_EXCH_FLAG[assetInfo.exchange]}.svg`} alt="" aria-label="Pays de la place boursière" />}
+                                    {_EXCH_FLAG[assetInfo.exchange] && <img className="asset-exchange-flag" src={`/drapeaux/${_EXCH_FLAG[assetInfo.exchange]}.svg`} alt="" aria-label="Pays de la place boursière" />}
                                   </span>
                                 )}
                               </div>
@@ -1413,7 +1413,7 @@ function ChartContent() {
                                       {bmInfo?.exchange && customBmType !== "CRYPTOCURRENCY" && (
                                         <span className="asset-meta-pill" style={{ color:"rgba(var(--nv-encre-rvb), 0.58)", fontWeight:500 }}>
                                           {_EXCH[bmInfo.exchange] ?? bmInfo.exchange}
-                                          {_EXCH_FLAG[bmInfo.exchange] && <img className="asset-exchange-flag" src={`https://hatscripts.github.io/circle-flags/flags/${_EXCH_FLAG[bmInfo.exchange]}.svg`} alt="" aria-label="Pays de la place boursière" />}
+                                          {_EXCH_FLAG[bmInfo.exchange] && <img className="asset-exchange-flag" src={`/drapeaux/${_EXCH_FLAG[bmInfo.exchange]}.svg`} alt="" aria-label="Pays de la place boursière" />}
                                         </span>
                                       )}
                                     </div>
@@ -2475,7 +2475,7 @@ function ChartContent() {
                                           <span style={{ overflow:"hidden", textOverflow:"ellipsis" }}>
                                             {similarBy === "marketcap" && s.market_cap != null ? `Cap ${_fmtC(s.market_cap)}` : (exchange || s.country)}
                                           </span>
-                                          {similarBy !== "marketcap" && info?.exchange && _EXCH_FLAG[info.exchange] && <img className="asset-exchange-flag" style={{ width:10, height:10 }} src={`https://hatscripts.github.io/circle-flags/flags/${_EXCH_FLAG[info.exchange]}.svg`} alt="" />}
+                                          {similarBy !== "marketcap" && info?.exchange && _EXCH_FLAG[info.exchange] && <img className="asset-exchange-flag" style={{ width:10, height:10 }} src={`/drapeaux/${_EXCH_FLAG[info.exchange]}.svg`} alt="" />}
                                         </span>
                                       )}
                                     </div>

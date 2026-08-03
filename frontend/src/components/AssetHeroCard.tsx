@@ -269,7 +269,7 @@ export default function AssetHeroCard({
                     <span className="shared-asset-meta-pill" style={{ color: "rgba(255,255,255,0.58)", fontWeight: 500 }}>
                       {EXCHANGE_LABELS[exchange] ?? exchange}
                       {EXCHANGE_FLAGS[exchange] && (
-                        <img className="shared-asset-exchange-flag" src={`https://hatscripts.github.io/circle-flags/flags/${EXCHANGE_FLAGS[exchange]}.svg`} alt="" />
+                        <img className="shared-asset-exchange-flag" src={`/drapeaux/${EXCHANGE_FLAGS[exchange]}.svg`} alt="" />
                       )}
                     </span>
                   )}

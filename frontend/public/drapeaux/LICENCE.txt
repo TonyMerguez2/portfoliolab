@@ -1,0 +1,13 @@
+Drapeaux circulaires — circle-flags
+https://github.com/HatScripts/circle-flags
+
+Licence MIT, © HatScripts et contributeurs.
+
+Ces douze fichiers sont une copie locale du jeu amont, limitée aux places
+boursières que Novac affiche. Ils étaient auparavant chargés depuis
+hatscripts.github.io à chaque affichage : une page GitHub n'offre aucune
+garantie de service, ne fonctionne pas hors ligne, et faisait connaître
+l'adresse de chaque visiteur à un tiers sans raison.
+
+Pour ajouter une place, récupérer le fichier du même nom dans le dépôt amont
+plutôt que de le redessiner.
