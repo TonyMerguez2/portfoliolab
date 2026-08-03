@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState } from "react";
 import AssetLogo from "@/components/AssetLogo";
 import { FONT, NUM } from "@/lib/typography";
 import { enTetesAuth } from "@/lib/session";
+import Cadre from "@/components/ui/Cadre";
 import {
   resume, resultats, repartitionTypes, typesParOperation, montant, parDate,
   LIBELLE_OP, COULEUR_OP, type Tx, type TypeOp,
@@ -13,7 +14,6 @@ const API = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 /** Géométrie reprise de la vue générale, pour que les deux onglets s'alignent. */
 const MARGE = 10;
 const GOUTTIERE = 8;
-const RAYON = 30;
 
 /**
  * Journal des transactions.
@@ -34,11 +34,9 @@ const dateCourte = (iso: string) =>
 
 function Carte({ children, style }: { children: React.ReactNode; style?: React.CSSProperties }) {
   return (
-    <div style={{
-      background: "rgba(9,27,52,0.78)", border: "1px solid rgba(205,225,255,0.16)",
-      borderRadius: RAYON, padding: "14px 18px", display: "flex", flexDirection: "column",
-      minHeight: 0, ...style,
-    }}>{children}</div>
+    <Cadre style={{ padding: "14px 18px", display: "flex", flexDirection: "column", minHeight: 0, ...style }}>
+      {children}
+    </Cadre>
   );
 }
 

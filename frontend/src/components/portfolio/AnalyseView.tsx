@@ -4,6 +4,7 @@ import RadarChart from "@/components/charts/RadarChart";
 import { FONT, NUM } from "@/lib/typography";
 import { enTetesAuth } from "@/lib/session";
 import { donutArcs } from "@/lib/donut";
+import Cadre from "@/components/ui/Cadre";
 
 const API = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 
@@ -20,7 +21,6 @@ const API = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 
 const MARGE = 10;
 const GOUTTIERE = 8;
-const RAYON = 30;
 
 type Facteur = { valeur: number | null; libelle: string; score: number | null };
 type Part = { libelle: string; part: number };
@@ -106,11 +106,9 @@ const COULEURS_PART = ["#50A2FF", "#a78bfa", "#FF8904", "#00D492", "#FF6467", "#
 
 function Carte({ children, style }: { children: React.ReactNode; style?: React.CSSProperties }) {
   return (
-    <div style={{
-      background: "rgba(9,27,52,0.78)", border: "1px solid rgba(205,225,255,0.16)",
-      borderRadius: RAYON, padding: "14px 18px", display: "flex", flexDirection: "column",
-      minHeight: 0, ...style,
-    }}>{children}</div>
+    <Cadre style={{ padding: "14px 18px", display: "flex", flexDirection: "column", minHeight: 0, ...style }}>
+      {children}
+    </Cadre>
   );
 }
 

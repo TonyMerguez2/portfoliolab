@@ -22,6 +22,7 @@ import type { Period } from "@/lib/chart/portfolioCurve";
 import { CLAIR, RAYON, couleurMontant, RAYONS, styleCadreExterieur, styleCarteInterieure } from "@/lib/palette";
 import { hexVersRvb, rvbVersHex, rvbVersTsl, tslVersRvb } from "@/lib/couleur";
 import { resoudreJeton } from "@/lib/theme";
+import Cadre from "@/components/ui/Cadre";
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 type PortfolioAsset = { ticker: string; weight: number };
@@ -121,32 +122,6 @@ function Sparkline({ pts, color, w = 48, h = 18, glow = false }: {
  * cadre, et une clé de contenu appliquée à l'extérieure repousserait la carte
  * au lieu du texte.
  */
-const CLES_DE_PLACEMENT = new Set([
-  "flex", "flexShrink", "flexGrow", "flexBasis", "minHeight", "maxHeight",
-  "minWidth", "maxWidth", "width", "height", "alignSelf", "order", "gridArea",
-  "marginTop", "marginBottom", "marginLeft", "marginRight", "margin",
-]);
-
-function repartir(style?: React.CSSProperties) {
-  const cadre: React.CSSProperties = {};
-  const carte: React.CSSProperties = {};
-  for (const [cle, valeur] of Object.entries(style ?? {})) {
-    (CLES_DE_PLACEMENT.has(cle) ? cadre : carte)[cle as never] = valeur as never;
-  }
-  return { cadre, carte };
-}
-
-function Card({ children, style }: { children: ReactNode; style?: React.CSSProperties }) {
-  const { cadre, carte } = repartir(style);
-  return (
-    <div style={{ ...styleCadreExterieur(), ...cadre }}>
-      <div style={{ ...styleCarteInterieure(), ...carte }}>
-        {children}
-      </div>
-    </div>
-  );
-}
-
 function SectionLabel({ children }: { children: ReactNode }) {
   return (
     <span style={{
@@ -722,7 +697,7 @@ function PortfolioPageInner() {
           remontée au niveau de la page, la bande avait perdu le retrait de la
           vue Résumé et touchait les deux bords. */}
       <div style={{ padding: `0 ${MARGE}px`, flexShrink: 0 }}>
-      <Card style={{ padding: "13px 18px", flexShrink: 0, display: "flex", alignItems: "center", gap: 22, flexWrap: "wrap" }}>
+      <Cadre style={{ padding: "13px 18px", flexShrink: 0, display: "flex", alignItems: "center", gap: 22, flexWrap: "wrap" }}>
         {/* Identité du portefeuille. La maquette met ici une illustration
             décorative ; elle ne dit rien qu'on ne sache déjà. Ces pixels
             répondent plutôt à une question que la mise en page a fait
@@ -975,7 +950,7 @@ function PortfolioPageInner() {
             </div>
           </div>
         </>}
-      </Card>
+      </Cadre>
       </div>
 
       {/* Navigation des sections, sous la bande de valeur : on lit d'abord
@@ -1002,7 +977,7 @@ function PortfolioPageInner() {
               plutôt que deux réglages qui se contredisent. */}
           {/* Conteneur repris à l'identique de la page graphique : même rayon de
               30 px, même bord, même fond, même rembourrage, et la même couche
-              de halo interne. Un `Card` générique donnait un cadre visiblement
+              de halo interne. Un `Cadre` générique donnait un cadre visiblement
               différent pour le même objet. */}
           {/* Panneau blanc comme les autres. La classe « verre » et sa couche
               de halo appartenaient au fond sombre : sur blanc, le flou ne
@@ -1107,7 +1082,7 @@ function PortfolioPageInner() {
           {/* Santé du portefeuille. La valeur totale est remontée dans la
               bande de tête : elle y est le premier chiffre qu'on cherche, et
               son départ rend une centaine de pixels à cette colonne. */}
-          <Card style={{ padding: "14px 16px", flexShrink: 0 }}>
+          <Cadre style={{ padding: "14px 16px", flexShrink: 0 }}>
             {novacScore && (() => {
               const subScores = [
                 { key: "diversification", label: "Diversification", value: novacScore.diversification,
@@ -1173,7 +1148,7 @@ function PortfolioPageInner() {
                 </>
               );
             })()}
-          </Card>
+          </Cadre>
 
           {/* « Mouvements » vivait ici : les trois plus fortes hausses et
               baisses en contribution. Retiré — chaque carte d'actif affiche
@@ -1182,7 +1157,7 @@ function PortfolioPageInner() {
               place revient à l'allocation, dont la légende était rognée. */}
           {/* Allocation. Remplace l'exposition sectorielle, qui rangeait
               tout un portefeuille d'actions dans une barre unique à 100 %. */}
-          <Card style={{ padding: "13px 15px", flexShrink: 0, display: "flex", flexDirection: "column", overflow: "hidden" }}>
+          <Cadre style={{ padding: "13px 15px", flexShrink: 0, display: "flex", flexDirection: "column", overflow: "hidden" }}>
             <AllocationDonut
               assets={enriched.map(a => ({
                 ticker: a.ticker, weight: a.weight, price: a.price,
@@ -1191,17 +1166,17 @@ function PortfolioPageInner() {
               totalValue={valeurTotale}
               onSeeAll={() => setDashView("analyse")}
             />
-          </Card>
+          </Cadre>
           {/* Activité récente. Le « Voir toute l'activité → » de la maquette
               n'avait aucune destination ; il mène à l'onglet Transactions,
               qui porte déjà le tableau complet. */}
-          <Card style={{ padding: "13px 15px", flex: 1, minHeight: 128, display: "flex", flexDirection: "column", overflow: "hidden" }}>
+          <Cadre style={{ padding: "13px 15px", flex: 1, minHeight: 128, display: "flex", flexDirection: "column", overflow: "hidden" }}>
             <RecentActivity
               portfolioId={portfolio?.id}
               refreshKey={txRefreshKey}
               onSeeAll={() => setDashView("transactions")}
             />
-          </Card>
+          </Cadre>
         </div>
         </div>
       </div>{/* fin Vue Résumé */}
@@ -1215,7 +1190,7 @@ function PortfolioPageInner() {
 
 <div style={{ display: dashView === "evenements" ? "flex" : "none", height: "100%", padding: "14px 14px 10px", gap: 12, overflow: "hidden" }}>
         <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: 10 }}>
-          <Card style={{ flex: 1, padding: "16px 18px" }}>
+          <Cadre style={{ flex: 1, padding: "16px 18px" }}>
             <SectionLabel>INSIGHTS IA</SectionLabel>
             <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
               {[
@@ -1232,10 +1207,10 @@ function PortfolioPageInner() {
                 </div>
               ))}
             </div>
-          </Card>
+          </Cadre>
         </div>
         <div style={{ width: 300, display: "flex", flexDirection: "column", gap: 10 }}>
-          <Card style={{ flex: 1, padding: "16px 18px" }}>
+          <Cadre style={{ flex: 1, padding: "16px 18px" }}>
             <SectionLabel>ÉVÉNEMENTS À VENIR</SectionLabel>
             <div style={{ display: "flex", flexDirection: "column", gap: 0 }}>
               {enriched.slice(0, 6).map((a, i) => (
@@ -1255,14 +1230,14 @@ function PortfolioPageInner() {
                 </div>
               ))}
             </div>
-          </Card>
+          </Cadre>
         </div>
       </div>{/* fin Vue Événements */}
 
       {/* ══ VUE OBJECTIFS ═══════════════════════════════════════════════════════ */}
       <div style={{ display: dashView === "objectifs" ? "grid" : "none", height: "100%", padding: "14px 14px 10px",
         gridTemplateColumns: "1fr 1fr 1fr", gap: 12, overflow: "hidden" }}>
-        <Card style={{ padding: "16px 18px", display: "flex", flexDirection: "column", gap: 12 }}>
+        <Cadre style={{ padding: "16px 18px", display: "flex", flexDirection: "column", gap: 12 }}>
           <SectionLabel>OBJECTIFS</SectionLabel>
           <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
             {[
@@ -1305,8 +1280,8 @@ function PortfolioPageInner() {
               </div>
             </div>
           </>}
-        </Card>
-        <Card style={{ padding: "16px 18px", display: "flex", flexDirection: "column" }}>
+        </Cadre>
+        <Cadre style={{ padding: "16px 18px", display: "flex", flexDirection: "column" }}>
           <SectionLabel>MEILLEURS CONTRIBUTEURS</SectionLabel>
           <div style={{ display: "flex", flexDirection: "column", gap: 0 }}>
             {[...enriched].filter(a => a.perfEur != null).sort((a, b) => Math.abs(b.perfEur!) - Math.abs(a.perfEur!))
@@ -1344,8 +1319,8 @@ function PortfolioPageInner() {
               </div>
             </div>
           </>}
-        </Card>
-        <Card style={{ padding: "16px 18px", display: "flex", flexDirection: "column" }}>
+        </Cadre>
+        <Cadre style={{ padding: "16px 18px", display: "flex", flexDirection: "column" }}>
           <SectionLabel>RÉPARTITION PAR CLASSE</SectionLabel>
           <div style={{ display: "flex", flexDirection: "column", gap: 10, flex: 1, justifyContent: "center" }}>
             {Object.entries(exposition).sort((a, b) => b[1] - a[1]).map(([k, v]) => (
@@ -1374,7 +1349,7 @@ function PortfolioPageInner() {
               </div>
             </div>
           </>}
-        </Card>
+        </Cadre>
       </div>{/* fin Vue Objectifs */}
 
       {/* ══ VUE TRANSACTIONS ════════════════════════════════════════════════════ */}
