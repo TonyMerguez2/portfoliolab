@@ -104,14 +104,18 @@
   --nv-carte:             #030712;
   --nv-carte-creuse:      rgba(106,114,130,0.12);
 
-  --nv-bord:              #101828;
-  --nv-bord-fort:         #1E2939;
-  /* L'anneau extérieur doit rester visible sur la page.
-     Il a été mis un temps à `border-background` #030712, en copiant leur
-     vitrine où la page est plus claire ; sur une page assombrie à #070B16 il
-     s'est confondu avec elle et le cadre a disparu. Il reprend donc leur
-     `border-muted`, franchement plus clair que la page. */
-  --nv-cadre:             #101828;
+  /* Le liseré de la carte prend leur `border` #1E2939 et non `border-muted`.
+     Ce dernier vaut #101828, exactement la bande claire du dégradé : le trait
+     s'y confondait, et la carte n'avait plus de bord du tout. #1E2939 passe
+     au-dessus de la bande comme de la carte, et reste le seul trait clair. */
+  --nv-bord:              #1E2939;
+  --nv-bord-fort:         #364153;
+  /* L'anneau extérieur va dans l'autre sens : leur `border-background`
+     #030712, plus sombre que la bande de page. Il se creuse là où le liseré de
+     la carte éclaire, et c'est ce contraste de sens qui donne sa profondeur au
+     cadre. Il est lisible maintenant que la page est un dégradé qui s'éclaircit
+     précisément à l'endroit où vivent les cartes. */
+  --nv-cadre:             #030712;
   /* L'intervalle du cadre, à 50 % comme leur `bg-background/50`. */
   --nv-cadre-voile:       rgba(3,7,18,0.5);
 
@@ -180,8 +184,8 @@
   --nv-carte:             #FFFFFF;
   --nv-carte-creuse:      #F9FAFB;
 
-  --nv-bord:              #F3F4F6;
-  --nv-bord-fort:         #E5E7EB;
+  --nv-bord:              #D1D5DC;
+  --nv-bord-fort:         #99A1AF;
 
   --nv-texte:             #101828;
   --nv-texte-secondaire:  #364153;
