@@ -85,9 +85,9 @@ export const CLAIR = JETONS;
  * ne distingue un rayon de 6 d'un rayon de 7 sinon l'inattention, mais les
  * deux côte à côte se voient.
  *
- * Cinq échelons suffisent, calés sur la base de 14 px — leur `--radius`, lu
- * dans leur CSS compilé — déclinée en septièmes : 4, 6, 8, 10, 14, 18, 22, 28.
- * L'échelon `lg` valait 20, qui n'y figure pas : elle passe de 18 à 22.
+ * Cinq échelons, pris sur leur échelle nommée résolue depuis leur styles.css :
+ * 4xs 4, 3xs 6, 2xs 8, xs 10, sm 12, md 14, lg 16, xl 18, 2xl 24, 3xl 32,
+ * 4xl 40 — la base `--radius` valant 0.875rem, soit 14 px.
  * `plein` sert aux barres et aux pastilles rondes, où l'arrondi doit valoir la
  * moitié de la hauteur quelle qu'elle soit.
  */
@@ -96,24 +96,30 @@ export const RAYONS = {
   sm: 10,
   md: 14,
   lg: 18,
-  xl: 28,
+  xl: 24,
   plein: 999,
 } as const;
 
 /**
- * Le rayon des grandes cartes.
+ * Le rayon des grandes cartes : leur `rounded-2xl`.
  *
- * Descendu de 30 à 28 pour rejoindre l'échelon `xl`. L'écart de deux pixels ne
- * se voit pas ; c'est d'être sur l'échelle qui compte, puisque ces cartes
- * voisinent des panneaux qui, eux, s'y calent.
+ * L'anneau intérieur en découle — 24 moins les 6 px d'intervalle font 18, soit
+ * exactement leur `rounded-xl`. Les deux rayons du concept tombent donc juste
+ * sans être écrits séparément.
  */
-export const RAYON = RAYONS.xl;
+export const RAYON = 24;
 export const RAYON_PETIT = RAYONS.md;
 export const MARGE = 10;
 export const GOUTTIERE = 8;
 
-/** Largeur de l'intervalle entre les deux anneaux du cadre. */
-export const CADRE = 5;
+/**
+ * Largeur de l'intervalle entre les deux anneaux.
+ *
+ * Six pixels, parce que leur cadre est en `rounded-2xl` (24 px) et leur carte
+ * en `rounded-xl` (18 px) : la différence des deux rayons donne l'intervalle,
+ * et les anneaux restent concentriques.
+ */
+export const CADRE = 6;
 
 /**
  * Le cadre double du concept : un anneau extérieur, un intervalle qui laisse

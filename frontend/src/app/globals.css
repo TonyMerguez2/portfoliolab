@@ -67,28 +67,28 @@
  * `carte-creuse` reste au-dessus des deux : un creux dans une carte doit
  * continuer de se voir, lui.
  *
- * Le sens de l'écart page/carte vient de leur balisage, pas d'une lecture de
- * capture : leur carte de démonstration porte `bg-background` — la valeur la
- * plus sombre de la rampe — et c'est la page autour qui est plus claire. Je
- * l'avais dans l'autre sens.
+ * Page et carte valent toutes deux `--background`. Ce qui les sépare n'est pas
+ * une marche de valeur mais la trame : elle couvre la page et s'arrête aux
+ * cartes, qui sont opaques. La carte se lit donc comme une surface nette au
+ * milieu d'une surface texturée.
  *
- * Chez eux la page est éclaircie par une trame et un voile empilés, pas par un
- * jeton distinct. Faute de reproduire cette pile, la page prend directement
- * leur `background-muted`, ce qui donne le même ordre de valeurs : carte
- * sombre, page plus claire, liseré au-dessus des deux.
+ * J'ai d'abord éclairci la carte, puis la page, avant de comprendre qu'aucune
+ * des deux ne bouge chez eux. Le liseré vaut leur `border-muted` et l'anneau
+ * extérieur leur `border-background` — c'est-à-dire la couleur du fond, donc
+ * un trait creusé plutôt qu'un filet posé.
  *
  * L'encre n'est pas blanche non plus : #D1D5DC. Du blanc pur sur un fond aussi
  * sombre éblouit et fatigue à la lecture longue.
  */
 :root,
 [data-theme="sombre"] {
-  --nv-fond:              #101828;
-  --nv-fond-profond:      #030712;
+  --nv-fond:              #030712;
+  --nv-fond-profond:      #010409;
   --nv-carte:             #030712;
   --nv-carte-creuse:      rgba(106,114,130,0.12);
 
-  --nv-bord:              #1E2939;
-  --nv-bord-fort:         #364153;
+  --nv-bord:              #101828;
+  --nv-bord-fort:         #1E2939;
   /* L'anneau extérieur reprend leur `border-background` : il vaut la couleur
      la plus sombre, et se lit donc comme un trait creusé dans la page — non
      comme un liseré clair posé dessus. */
@@ -115,15 +115,15 @@
   --nv-accent-doux:       rgba(91,141,239,0.16);
   --nv-accent-bord:       rgba(91,141,239,0.38);
 
-  --nv-ombre:             0 1px 3px rgba(106,114,130,0.18), 0 12px 32px rgba(3,7,18,0.45);
+  --nv-ombre:             0 8px 16px -4px rgba(0,0,0,0.8);
 
   /* Les points du fond. Seul le thème sombre les montre. */
-  --nv-point:             rgba(255,255,255,0.055);
-  --nv-point-vif:         rgba(165,195,255,0.26);
+  --nv-point:             rgba(106,114,130,0.12);
+  --nv-point-vif:         rgba(106,114,130,0.34);
 
   /* La barre latérale. Elle est translucide et floute ce qui passe dessous :
      ses fonds ne peuvent donc pas être les jetons de carte, qui sont opaques. */
-  --nv-barre-fond:        rgba(16,24,40,0.72);
+  --nv-barre-fond:        rgba(3,7,18,0.72);
   --nv-barre-survol:      rgba(255,255,255,0.045);
   --nv-barre-actif:       rgba(255,255,255,0.11);
   --nv-barre-actif-bord:  rgba(255,255,255,0.10);
@@ -149,14 +149,14 @@
    noire, et la couleur rendue rare. Le bleu #0B63E7 ne peint donc plus la page :
    il est réservé aux accents, où il porte justement parce qu'il est rare. */
 [data-theme="clair"] {
-  --nv-cadre:             #F3F4F6;
+  --nv-cadre:             #FFFFFF;
   --nv-fond:              #F9FAFB;
   --nv-fond-profond:      #F3F4F6;
   --nv-carte:             #FFFFFF;
   --nv-carte-creuse:      #F3F4F6;
 
-  --nv-bord:              #E5E7EB;
-  --nv-bord-fort:         #D1D5DC;
+  --nv-bord:              #F3F4F6;
+  --nv-bord-fort:         #E5E7EB;
 
   --nv-texte:             #101828;
   --nv-texte-secondaire:  #364153;
@@ -180,12 +180,12 @@
   --nv-accent-doux:       rgba(11,99,231,0.10);
   --nv-accent-bord:       rgba(11,99,231,0.28);
 
-  --nv-ombre:             0 1px 2px rgba(106,114,130,0.18), 0 8px 24px rgba(106,114,130,0.12);
+  --nv-ombre:             0 8px 16px -4px rgba(106,114,130,0.18);
 
   /* La trame existe aussi en clair : mêmes points, en négatif. Le gris de leur
      rampe plutôt qu'un noir pur, qui piquerait sur du blanc. */
-  --nv-point:             rgba(106,114,130,0.16);
-  --nv-point-vif:         rgba(106,114,130,0.42);
+  --nv-point:             rgba(106,114,130,0.12);
+  --nv-point-vif:         rgba(106,114,130,0.34);
 
   /* La barre suit la page. L'état actif quitte le blanc translucide pour
      l'accent : sur fond clair, un voile blanc sur blanc ne marque rien. */
@@ -263,8 +263,8 @@
   background-size: 26px 26px;
   /* Hors écran tant que la souris n'a pas bougé : sans cela, la lueur
      apparaîtrait dans le coin haut-gauche au chargement. */
-  -webkit-mask-image: radial-gradient(280px circle at var(--nv-mx, -9999px) var(--nv-my, -9999px), #000 0%, rgba(0,0,0,0.30) 50%, transparent 78%);
-  mask-image: radial-gradient(280px circle at var(--nv-mx, -9999px) var(--nv-my, -9999px), #000 0%, rgba(0,0,0,0.30) 50%, transparent 78%);
+  -webkit-mask-image: radial-gradient(200px circle at var(--nv-mx, -9999px) var(--nv-my, -9999px), #000 0%, rgba(0,0,0,0.30) 50%, transparent 78%);
+  mask-image: radial-gradient(200px circle at var(--nv-mx, -9999px) var(--nv-my, -9999px), #000 0%, rgba(0,0,0,0.30) 50%, transparent 78%);
 }
 
 /* La trame vaut pour les deux thèmes ; seules ses couleurs changent. */
