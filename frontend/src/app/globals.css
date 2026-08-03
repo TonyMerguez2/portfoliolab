@@ -123,6 +123,8 @@
      l'intérieur du cadre plus sombre que la page tout autour. */
   --nv-cadre-voile:       rgba(3,7,18,0.5);
 
+  --nv-texte-intense:     #FFFFFF;
+  --nv-texte-fort:        #E5E7EB;
   --nv-texte:             #D1D5DC;
   --nv-texte-secondaire:  #99A1AF;
   --nv-texte-attenue:     #6A7282;
@@ -192,6 +194,8 @@
   --nv-bord:              #E5E7EB;
   --nv-bord-fort:         #D1D5DC;
 
+  --nv-texte-intense:     #101828;
+  --nv-texte-fort:        #364153;
   --nv-texte:             #101828;
   --nv-texte-secondaire:  #364153;
   --nv-texte-attenue:     #6A7282;

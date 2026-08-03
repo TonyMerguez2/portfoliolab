@@ -40,6 +40,9 @@ export const JETONS = {
   /** Voile de l'intervalle entre les deux anneaux. */
   cadreVoile: "var(--nv-cadre-voile)",
 
+  /** Les deux crans que leurs onglets utilisent : actif et inactif. */
+  texteIntense: "var(--nv-texte-intense)",
+  texteFort: "var(--nv-texte-fort)",
   texte: "var(--nv-texte)",
   texteSecondaire: "var(--nv-texte-secondaire)",
   texteAttenue: "var(--nv-texte-attenue)",

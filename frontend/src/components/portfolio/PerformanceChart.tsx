@@ -9,7 +9,7 @@ import { FONT, NUM } from "@/lib/typography";
 import { enTetesAuth } from "@/lib/session";
 import { COULEUR_OP, COULEUR_OP_CLAIR } from "@/lib/journal";
 import { useModeTheme, resoudreJeton } from "@/lib/theme";
-import { RAYONS } from "@/lib/palette";
+import { RAYONS, JETONS } from "@/lib/palette";
 
 export type { HistoryPoint, Period };
 
@@ -638,7 +638,7 @@ export default function PerformanceChart({
           plutôt que d'un appel par période : sinon un même intervalle pourrait
           annoncer un chiffre une fois sélectionné et un autre au repos. */}
       <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 10, marginBottom: 4 }}>
-        <div style={{ display: "flex", gap: 14, flexWrap: "wrap" }}>
+        <div style={{ display: "flex", gap: 20, flexWrap: "wrap" }}>
           {PERIODES.map(p => {
             const actif = p === period;
             const pct = rendements[p];
@@ -654,21 +654,27 @@ export default function PerformanceChart({
                 style={{ position: "relative", paddingBottom: 4, textAlign: "center", width: 46,
                          cursor: anterieure ? "default" : "pointer", flex: "none",
                          opacity: anterieure ? 0.3 : 1 }}>
-                <div style={{ fontFamily: FONT, fontSize: 12, fontWeight: 600, color: actif ? encre : (clair ? "rgba(15,23,42,0.45)" : "#94a3b8") }}>{p}</div>
+                <div style={{
+                  fontFamily: FONT, fontSize: 12, fontWeight: 500,
+                  // Leur variante d'onglets « line » : l'actif passe à
+                  // `foreground-intense`, l'inactif reste à `foreground-strong`
+                  // — bien plus lumineux que le gris que j'avais.
+                  color: actif ? JETONS.texteIntense : JETONS.texteFort,
+                  transition: "color 250ms",
+                }}>{p}</div>
                 {pct != null && !anterieure && (
                   <div style={{
                     ...NUM, fontSize: 11, fontWeight: 700,
-                    // Sur blanc, var(--nv-positif) ne donne que 2,5:1 : il faut un vert
-                    // plus sombre pour rester lisible.
-                    color: pct >= 0
-                      ? (clair ? "#0F7B3D" : "var(--nv-positif)")
-                      : (clair ? "#C81E1E" : "var(--nv-negatif)"),
+                    color: pct >= 0 ? JETONS.positif : JETONS.negatif,
                   }}>
                     {fmtPct(pct)}
                   </div>
                 )}
                 {actif && (
-                  <div style={{ position: "absolute", bottom: 0, left: 0, right: 0, height: 2, borderRadius: RAYONS.plein, background: encre }} />
+                  // Indicateur blanc, comme leur `bg-foreground-intense`, et non
+                  // teinté à l'accent : la couleur y désignait le graphique, pas
+                  // l'onglet retenu.
+                  <div style={{ position: "absolute", bottom: 0, left: 0, right: 0, height: 2, borderRadius: RAYONS.plein, background: JETONS.texteIntense }} />
                 )}
               </div>
             );
@@ -679,22 +685,16 @@ export default function PerformanceChart({
         <button type="button" onClick={() => setMode(m => (m === "ligne" ? "bougie" : "ligne"))}
           title={mode === "ligne" ? "Passer en bougies" : "Passer en courbe"}
           style={{
-            background: clair
-              ? (mode === "bougie" ? "rgba(11,99,231,0.10)" : "#F4F7FB")
-              : (mode === "bougie" ? "rgba(155,185,255,0.16)" : "rgba(255,255,255,0.06)"),
-            backdropFilter: clair ? "none" : "blur(10px) saturate(1.5)",
-            WebkitBackdropFilter: clair ? "none" : "blur(10px) saturate(1.5)",
-            border: `1px solid ${clair
-              ? (mode === "bougie" ? "rgba(11,99,231,0.28)" : "rgba(15,23,42,0.10)")
-              : (mode === "bougie" ? "rgba(155,185,255,0.40)" : "rgba(255,255,255,0.12)")}`,
+            // Même langue que les segments de la page : un creux, un liseré,
+            // et l'état retenu en pastille claire. Les six ternaires sur le
+            // thème ont disparu — les jetons s'en chargent.
+            background: mode === "bougie" ? JETONS.segmentActif : JETONS.segmentPiste,
+            border: `1px solid ${mode === "bougie" ? JETONS.segmentActif : JETONS.bord}`,
             borderRadius: RAYONS.sm, width: 30, height: 30, cursor: "pointer", flexShrink: 0,
             display: "flex", alignItems: "center", justifyContent: "center",
-            color: clair
-              ? (mode === "bougie" ? "#0B63E7" : "rgba(15,23,42,0.55)")
-              : (mode === "bougie" ? "#9BB9FF" : "rgba(255,255,255,0.50)"),
-            boxShadow: clair ? "none" : (mode === "bougie"
-              ? "0 0 12px rgba(155,185,255,0.16), inset 0 1px 0 rgba(255,255,255,0.10)"
-              : "0 1px 3px rgba(0,0,0,0.20), inset 0 1px 0 rgba(255,255,255,0.07)"),
+            color: mode === "bougie" ? JETONS.segmentEncre : JETONS.texteFort,
+            boxShadow: mode === "bougie" ? JETONS.segmentOmbre : "none",
+            transition: "background 250ms, color 250ms",
           }}>
           {mode === "ligne" ? (
             <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
