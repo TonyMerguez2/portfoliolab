@@ -60,21 +60,47 @@ export const JETONS = {
   accentBord: "var(--nv-accent-bord)",
 
   ombre: "var(--nv-ombre)",
+
+  /* Segments — voir le composant ui/Segments. */
+  segmentPiste: "var(--nv-segment-piste)",
+  segmentActif: "var(--nv-segment-actif)",
+  segmentEncre: "var(--nv-segment-encre)",
+  segmentOmbre: "var(--nv-segment-ombre)",
 } as const;
 
 /** Nom historique, le temps que les appelants migrent. */
 export const CLAIR = JETONS;
 
 /**
- * Rayons.
+ * L'échelle des rayons.
  *
- * `RAYON` reste à 30 : c'est la géométrie actuelle des grandes cartes, et la
- * reprofiler est une décision de forme, pas de couleur — elle n'a pas sa place
- * dans un changement de thème. L'échelle en dessous suit la base de 14 px
- * relevée chez Appica, pour les éléments qui n'ont pas encore de rayon fixé.
+ * Un relevé sur la page en avait trouvé onze différents — 2, 5, 6, 7, 8, 9,
+ * 10, 12, 13, 30 et 50 % — chacun choisi séparément au fil de l'écriture. Rien
+ * ne distingue un rayon de 6 d'un rayon de 7 sinon l'inattention, mais les
+ * deux côte à côte se voient.
+ *
+ * Cinq échelons suffisent, calés sur la base de 14 px relevée chez Appica.
+ * `plein` sert aux barres et aux pastilles rondes, où l'arrondi doit valoir la
+ * moitié de la hauteur quelle qu'elle soit.
  */
-export const RAYON = 30;
-export const RAYON_PETIT = 14;
+export const RAYONS = {
+  xs: 6,
+  sm: 10,
+  md: 14,
+  lg: 20,
+  xl: 28,
+  plein: 999,
+} as const;
+
+/**
+ * Le rayon des grandes cartes.
+ *
+ * Descendu de 30 à 28 pour rejoindre l'échelon `xl`. L'écart de deux pixels ne
+ * se voit pas ; c'est d'être sur l'échelle qui compte, puisque ces cartes
+ * voisinent des panneaux qui, eux, s'y calent.
+ */
+export const RAYON = RAYONS.xl;
+export const RAYON_PETIT = RAYONS.md;
 export const MARGE = 10;
 export const GOUTTIERE = 8;
 

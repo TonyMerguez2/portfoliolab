@@ -9,6 +9,7 @@ import { FONT, NUM } from "@/lib/typography";
 import { enTetesAuth } from "@/lib/session";
 import { COULEUR_OP, COULEUR_OP_CLAIR } from "@/lib/journal";
 import { useModeTheme } from "@/lib/theme";
+import { RAYONS } from "@/lib/palette";
 
 export type { HistoryPoint, Period };
 
@@ -663,7 +664,7 @@ export default function PerformanceChart({
                   </div>
                 )}
                 {actif && (
-                  <div style={{ position: "absolute", bottom: 0, left: 0, right: 0, height: 2, borderRadius: 2, background: encre }} />
+                  <div style={{ position: "absolute", bottom: 0, left: 0, right: 0, height: 2, borderRadius: RAYONS.plein, background: encre }} />
                 )}
               </div>
             );
@@ -682,7 +683,7 @@ export default function PerformanceChart({
             border: `1px solid ${clair
               ? (mode === "bougie" ? "rgba(11,99,231,0.28)" : "rgba(15,23,42,0.10)")
               : (mode === "bougie" ? "rgba(155,185,255,0.40)" : "rgba(255,255,255,0.12)")}`,
-            borderRadius: 9, width: 30, height: 30, cursor: "pointer", flexShrink: 0,
+            borderRadius: RAYONS.sm, width: 30, height: 30, cursor: "pointer", flexShrink: 0,
             display: "flex", alignItems: "center", justifyContent: "center",
             color: clair
               ? (mode === "bougie" ? "#0B63E7" : "rgba(15,23,42,0.55)")

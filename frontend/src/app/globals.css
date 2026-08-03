@@ -107,6 +107,15 @@
   --nv-barre-survol:      rgba(255,255,255,0.045);
   --nv-barre-actif:       rgba(255,255,255,0.11);
   --nv-barre-actif-bord:  rgba(255,255,255,0.10);
+
+  /* Segments — les pastilles de choix exclusif.
+     L'élément actif est une pastille pleine et claire, et non un voile teinté :
+     c'est ce qui le fait lire comme un objet posé sur la piste plutôt que
+     comme une case cochée. */
+  --nv-segment-piste:     rgba(106,114,130,0.16);
+  --nv-segment-actif:     #E5E7EB;
+  --nv-segment-encre:     #101828;
+  --nv-segment-ombre:     0 1px 2px rgba(0,0,0,0.35);
 }
 
 /* Thème clair.
@@ -157,6 +166,13 @@
   --nv-barre-survol:      rgba(15,23,42,0.04);
   --nv-barre-actif:       rgba(11,99,231,0.10);
   --nv-barre-actif-bord:  rgba(11,99,231,0.22);
+
+  /* En clair, la piste s'assombrit un peu et la pastille reste blanche :
+     c'est le creux qui recule, pas la pastille qui avance. */
+  --nv-segment-piste:     #EEF1F6;
+  --nv-segment-actif:     #FFFFFF;
+  --nv-segment-encre:     #0F172A;
+  --nv-segment-ombre:     0 1px 2px rgba(11,32,74,0.12), 0 0 0 1px rgba(15,23,42,0.05);
 }
 
 /* Rayons. Base 14 px, l'échelle d'Appica (0.875rem), déclinée en proportions

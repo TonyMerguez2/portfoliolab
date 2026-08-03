@@ -19,7 +19,7 @@ import { enTetesAuth } from "@/lib/session";
 import { typesParOperation, COULEUR_OP, LIBELLE_OP, type Tx } from "@/lib/journal";
 import { FONT } from "@/lib/typography";
 import type { Period } from "@/lib/chart/portfolioCurve";
-import { CLAIR, RAYON, couleurMontant } from "@/lib/palette";
+import { CLAIR, RAYON, couleurMontant, RAYONS } from "@/lib/palette";
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 type PortfolioAsset = { ticker: string; weight: number };
@@ -637,7 +637,7 @@ function PortfolioPageInner() {
         fontSize: 14, flexDirection: "column", gap: 16 }}>
         <div>Aucun portefeuille sélectionné.</div>
         <button onClick={() => router.push("/build")}
-          style={{ padding: "8px 20px", borderRadius: 8,
+          style={{ padding: "8px 20px", borderRadius: RAYONS.sm,
             border: "1px solid rgba(91,141,239,0.4)",
             background: CLAIR.accentDoux, color: CLAIR.accent,
             cursor: "pointer", fontSize: 12 }}>
@@ -703,7 +703,7 @@ function PortfolioPageInner() {
             </div>
             <div style={{ minWidth: 0 }}>
               <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                <span style={{ width: 7, height: 7, borderRadius: 2, background: portfolio.color || "#5B8DEF", flexShrink: 0 }} />
+                <span style={{ width: 7, height: 7, borderRadius: RAYONS.plein, background: portfolio.color || "#5B8DEF", flexShrink: 0 }} />
                 <span style={{ fontSize: 13, fontWeight: 700, color: CLAIR.texte, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
                   {portfolio.name}
                 </span>
@@ -736,7 +736,7 @@ function PortfolioPageInner() {
         <input autoFocus value={valueInput} onChange={e => setValueInput(e.target.value)}
           onKeyDown={e => { if (e.key === "Enter") saveTotalValue(); if (e.key === "Escape") setEditingValue(false); }}
           onBlur={saveTotalValue} placeholder="Ex: 10000" type="number"
-          style={{ width: 100, background: CLAIR.carteCreuse, border: "1px solid rgba(91,141,239,0.40)", borderRadius: 6, padding: "3px 8px", color: CLAIR.texte, fontSize: 11, outline: "none", fontFamily: FONT }} />
+          style={{ width: 100, background: CLAIR.carteCreuse, border: "1px solid rgba(91,141,239,0.40)", borderRadius: RAYONS.xs, padding: "3px 8px", color: CLAIR.texte, fontSize: 11, outline: "none", fontFamily: FONT }} />
         <span style={{ fontSize: 11, color: CLAIR.texteAttenue }}>€</span>
       </div>
     ) : (
@@ -784,7 +784,7 @@ function PortfolioPageInner() {
                 <input autoFocus value={costInput} onChange={e => setCostInput(e.target.value)}
                   onKeyDown={e => { if (e.key === "Enter") saveCostBasis(); if (e.key === "Escape") setEditingCost(false); }}
                   onBlur={saveCostBasis} placeholder="Prix de revient" type="number"
-                  style={{ width: 110, background: CLAIR.carteCreuse, border: "1px solid rgba(91,141,239,0.40)", borderRadius: 6, padding: "3px 8px", color: CLAIR.texte, fontSize: 10, outline: "none", fontFamily: FONT }} />
+                  style={{ width: 110, background: CLAIR.carteCreuse, border: "1px solid rgba(91,141,239,0.40)", borderRadius: RAYONS.xs, padding: "3px 8px", color: CLAIR.texte, fontSize: 10, outline: "none", fontFamily: FONT }} />
                 <span style={{ fontSize: 10, color: CLAIR.texteAttenue }}>€</span>
               </div>
             ) : (
@@ -820,7 +820,7 @@ function PortfolioPageInner() {
               <input autoFocus value={costInput} onChange={e => setCostInput(e.target.value)}
                 onKeyDown={e => { if (e.key === "Enter") saveCostBasis(); if (e.key === "Escape") setEditingCost(false); }}
                 onBlur={saveCostBasis} type="number"
-                style={{ width: 90, background: CLAIR.carteCreuse, border: "1px solid rgba(91,141,239,0.40)", borderRadius: 6, padding: "2px 7px", color: CLAIR.texte, fontSize: 10, outline: "none", fontFamily: FONT }} />
+                style={{ width: 90, background: CLAIR.carteCreuse, border: "1px solid rgba(91,141,239,0.40)", borderRadius: RAYONS.xs, padding: "2px 7px", color: CLAIR.texte, fontSize: 10, outline: "none", fontFamily: FONT }} />
               <span style={{ fontSize: 10, color: CLAIR.texteAttenue }}>€</span>
             </div>
           )}
@@ -867,7 +867,7 @@ function PortfolioPageInner() {
             <div style={{
               position: "absolute", bottom: "calc(100% + 6px)", left: 0, zIndex: 50, width: 252,
               background: "rgba(4,17,36,0.97)", border: `1px solid ${CLAIR.bordFort}`,
-              borderRadius: 8, padding: "9px 11px", boxShadow: "0 8px 24px rgba(0,0,0,0.50)",
+              borderRadius: RAYONS.sm, padding: "9px 11px", boxShadow: "0 8px 24px rgba(0,0,0,0.50)",
               pointerEvents: "none",
             }}>
               <span style={{ fontSize: 10, color: CLAIR.texteSecondaire, lineHeight: 1.6 }}>
@@ -1002,7 +1002,7 @@ function PortfolioPageInner() {
               />
             </div>
             {/* Liste — toujours monté */}
-            <div style={{ overflowY: "auto", flex: 1, borderRadius: 10, border: `1px solid ${CLAIR.bord}`, display: view === "liste" ? "block" : "none" }}>
+            <div style={{ overflowY: "auto", flex: 1, borderRadius: RAYONS.sm, border: `1px solid ${CLAIR.bord}`, display: view === "liste" ? "block" : "none" }}>
               <div style={{ display: "grid", gridTemplateColumns: "1fr 70px 100px 70px" }}>
                 {/* La dernière colonne suit la période, comme les libellés de
                     la bande de tête : figée sur « 24h », elle annonçait une
@@ -1075,21 +1075,21 @@ function PortfolioPageInner() {
                         {subScores.map(m => {
                           const col = scoreColor(m.value);
                           return (
-                            <div key={m.key} style={{ position: "relative", borderRadius: 6, padding: "2px 4px", transition: "background 150ms" }}
+                            <div key={m.key} style={{ position: "relative", borderRadius: RAYONS.xs, padding: "2px 4px", transition: "background 150ms" }}
                               onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = CLAIR.carteCreuse; setActiveTooltip(m.key); }}
                               onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = "transparent"; setActiveTooltip(null); }}>
                               <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 3, cursor: "default" }}>
                                 <span style={{ fontSize: 10, color: activeTooltip === m.key ? CLAIR.texte : CLAIR.texteAttenue, transition: "color 120ms" }}>{m.label}</span>
                                 <span style={{ fontSize: 10, fontWeight: 700, fontFamily: FONT, color: col }}>{m.value}</span>
                               </div>
-                              <div style={{ height: 5, borderRadius: 3, background: CLAIR.carteCreuse }}>
-                                <div style={{ height: "100%", borderRadius: 3, background: col, width: `${m.value}%`, opacity: 0.85, transition: "width 800ms ease" }} />
+                              <div style={{ height: 5, borderRadius: RAYONS.plein, background: CLAIR.carteCreuse }}>
+                                <div style={{ height: "100%", borderRadius: RAYONS.plein, background: col, width: `${m.value}%`, opacity: 0.85, transition: "width 800ms ease" }} />
                               </div>
                               {activeTooltip === m.key && (
                                 <div style={{
                                   position: "absolute", bottom: "calc(100% + 8px)", right: 0, left: 0, zIndex: 50,
                                   background: "rgba(4,17,36,0.97)", border: `1px solid ${CLAIR.bordFort}`,
-                                  borderRadius: 8, padding: "8px 10px", boxShadow: "0 8px 24px rgba(0,0,0,0.50)",
+                                  borderRadius: RAYONS.sm, padding: "8px 10px", boxShadow: "0 8px 24px rgba(0,0,0,0.50)",
                                   pointerEvents: "none",
                                 }}>
                                   <span style={{ fontSize: 10, color: CLAIR.texteSecondaire, lineHeight: 1.5 }}>{m.tip(m.value)}</span>
@@ -1164,9 +1164,9 @@ function PortfolioPageInner() {
                 `Concentration élevée : vos 3 premiers actifs représentent ${top3Conc.toFixed(0)}% du portefeuille. ${top3Conc > 60 ? "Diversification recommandée." : "Niveau acceptable."}`,
                 `${gainCount} actifs en hausse contre ${lossCount} en baisse — momentum ${weightedChange >= 0 ? "positif" : "négatif"} sur ${PERIOD_LABEL[period]}.`,
               ].map((insight, i) => (
-                <div key={i} style={{ display: "flex", gap: 12, padding: "12px 14px", borderRadius: 10,
+                <div key={i} style={{ display: "flex", gap: 12, padding: "12px 14px", borderRadius: RAYONS.sm,
                   background: "rgba(91,141,239,0.07)", border: "1px solid rgba(91,141,239,0.15)" }}>
-                  <div style={{ width: 24, height: 24, borderRadius: 6, background: "rgba(91,141,239,0.20)",
+                  <div style={{ width: 24, height: 24, borderRadius: RAYONS.xs, background: "rgba(91,141,239,0.20)",
                     display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0,
                     fontSize: 10, fontWeight: 800, color: CLAIR.accent }}>AI</div>
                   <span style={{ fontSize: 12, color: CLAIR.texteSecondaire, lineHeight: 1.6 }}>{insight}</span>
@@ -1190,7 +1190,7 @@ function PortfolioPageInner() {
                     <div style={{ fontSize: 10, color: CLAIR.texteFaible }}>Résultats trimestriels</div>
                   </div>
                   <span style={{ fontSize: 10, fontWeight: 600, color: CLAIR.attention,
-                    background: "rgba(251,191,36,0.12)", borderRadius: 5, padding: "2px 7px" }}>
+                    background: "rgba(251,191,36,0.12)", borderRadius: RAYONS.xs, padding: "2px 7px" }}>
                     J+{(i + 1) * 3}
                   </span>
                 </div>
@@ -1218,8 +1218,8 @@ function PortfolioPageInner() {
                     <span style={{ fontSize: 12, fontWeight: 600, color: CLAIR.texteSecondaire }}>{g.label}</span>
                     <span style={{ fontSize: 12, fontWeight: 700, fontFamily: FONT, color: g.color }}>{pct.toFixed(0)}%</span>
                   </div>
-                  <div style={{ height: 5, borderRadius: 3, background: CLAIR.carteCreuse }}>
-                    <div style={{ height: "100%", borderRadius: 3, background: g.color, width: `${pct}%`, transition: "width 600ms ease" }} />
+                  <div style={{ height: 5, borderRadius: RAYONS.plein, background: CLAIR.carteCreuse }}>
+                    <div style={{ height: "100%", borderRadius: RAYONS.plein, background: g.color, width: `${pct}%`, transition: "width 600ms ease" }} />
                   </div>
                   <div style={{ marginTop: 4, fontSize: 10, color: CLAIR.texteFaible, fontFamily: FONT }}>
                     {Math.round(g.current).toLocaleString("fr-FR")} € / {g.target.toLocaleString("fr-FR")} €

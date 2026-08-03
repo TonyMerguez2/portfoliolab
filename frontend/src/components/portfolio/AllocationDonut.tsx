@@ -5,6 +5,7 @@ import { brandHex } from "@/lib/tileStyle";
 import { assetClass, type GridAsset } from "@/lib/portfolio";
 import { FONT, NUM } from "@/lib/typography";
 import { CLAIR } from "@/lib/palette";
+import Segments from "@/components/ui/Segments";
 
 /**
  * Répartition du portefeuille, en anneau.
@@ -74,17 +75,12 @@ export default function AllocationDonut({
             </svg>
           </span>
         </span>
-        <div style={{ display: "flex", gap: 2, background: CLAIR.carteCreuse, borderRadius: 7, padding: 2 }}>
-          {(["actif", "classe"] as const).map(m => (
-            <button key={m} type="button" onClick={() => setMode(m)}
-              style={{
-                padding: "0 8px", height: 21, borderRadius: 5, border: "none", cursor: "pointer",
-                fontFamily: FONT, fontSize: 10.5, fontWeight: m === mode ? 600 : 500,
-                background: m === mode ? CLAIR.accentDoux : "transparent",
-                color: m === mode ? CLAIR.accent : CLAIR.texteAttenue,
-              }}>{m === "actif" ? "Actif" : "Classe"}</button>
-          ))}
-        </div>
+        <Segments taille="sm" ariaLabel="Répartition par"
+          valeur={mode} onChange={setMode}
+          options={[
+            { valeur: "actif",  libelle: "Actif" },
+            { valeur: "classe", libelle: "Classe" },
+          ]} />
       </div>
 
       <div style={{

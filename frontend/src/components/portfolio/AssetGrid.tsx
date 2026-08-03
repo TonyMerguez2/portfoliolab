@@ -7,7 +7,8 @@ import { brandHex } from "@/lib/tileStyle";
 import { assetName } from "@/lib/assets";
 import { arrange, assetClass, type GridAsset, type SortKey } from "@/lib/portfolio";
 import { FONT, NUM } from "@/lib/typography";
-import { CLAIR } from "@/lib/palette";
+import { CLAIR, RAYONS } from "@/lib/palette";
+import Segments from "@/components/ui/Segments";
 
 export type { GridAsset, SortKey };
 
@@ -116,18 +117,9 @@ export default function AssetGrid({
           <span style={{ fontFamily: FONT, fontSize: 12.5, fontWeight: 600, color: CLAIR.surFond, whiteSpace: "nowrap" }}>
             Vos actifs
           </span>
-        <div style={{ display: "flex", gap: 4 }}>
-          {classes.map(c => (
-            <button key={c} type="button" onClick={() => setFilter(c)}
-              style={{
-                padding: "0 11px", height: 26, borderRadius: 7, border: "none", cursor: "pointer",
-                fontFamily: FONT, fontSize: 11.5, fontWeight: c === filter ? 600 : 500,
-                background: c === filter ? "rgba(255,255,255,0.20)" : "transparent",
-                color: c === filter ? CLAIR.surFond : CLAIR.surFondFaible,
-                transition: "background 140ms, color 140ms",
-              }}>{c}</button>
-          ))}
-        </div>
+        <Segments taille="sm" ariaLabel="Filtrer par classe d'actif"
+          valeur={filter} onChange={setFilter}
+          options={classes.map(c => ({ valeur: c, libelle: c }))} />
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 6, position: "relative", flexShrink: 0 }}>
           <span style={{ fontFamily: FONT, fontSize: 11, color: CLAIR.surFondAttenue, whiteSpace: "nowrap" }}>
@@ -137,7 +129,7 @@ export default function AssetGrid({
             aria-haspopup="listbox" aria-expanded={menuTri}
             style={{
               display: "flex", alignItems: "center", gap: 6, height: 26, padding: "0 10px",
-              borderRadius: 7, cursor: "pointer", border: "none",
+              borderRadius: RAYONS.sm, cursor: "pointer", border: "none",
               background: menuTri ? CLAIR.carteCreuse : CLAIR.carte,
               color: CLAIR.texte, fontFamily: FONT, fontSize: 11.5, fontWeight: 500,
               transition: "background 140ms",
@@ -155,14 +147,14 @@ export default function AssetGrid({
               <div role="listbox" style={{
                 position: "absolute", top: "calc(100% + 5px)", right: 0, zIndex: 41, minWidth: 132,
                 background: CLAIR.carte, border: `1px solid ${CLAIR.bordFort}`,
-                borderRadius: 9, padding: 4, boxShadow: CLAIR.ombre,
+                borderRadius: RAYONS.md, padding: 4, boxShadow: CLAIR.ombre,
               }}>
                 {(Object.keys(TRIS) as SortKey[]).map(k => (
                   <button key={k} type="button" role="option" aria-selected={k === sort}
                     onClick={() => { setSort(k); setMenuTri(false); }}
                     style={{
                       display: "flex", alignItems: "center", justifyContent: "space-between", width: "100%",
-                      height: 28, padding: "0 9px", borderRadius: 6, border: "none", cursor: "pointer",
+                      height: 28, padding: "0 9px", borderRadius: RAYONS.xs, border: "none", cursor: "pointer",
                       background: k === sort ? CLAIR.accentDoux : "transparent",
                       color: k === sort ? CLAIR.texte : CLAIR.texteSecondaire,
                       fontFamily: FONT, fontSize: 11.5, fontWeight: k === sort ? 600 : 500, textAlign: "left",
