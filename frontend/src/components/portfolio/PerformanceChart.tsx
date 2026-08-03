@@ -1,5 +1,6 @@
 "use client";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import {
   createChart, AreaSeries, CandlestickSeries, ColorType, CrosshairMode, LineStyle,
   type IChartApi, type ISeriesApi, type UTCTimestamp,
@@ -10,6 +11,7 @@ import { enTetesAuth } from "@/lib/session";
 import { COULEUR_OP, COULEUR_OP_CLAIR } from "@/lib/journal";
 import { useModeTheme, resoudreJeton } from "@/lib/theme";
 import { RAYONS, JETONS } from "@/lib/palette";
+import Segments from "@/components/ui/Segments";
 
 export type { HistoryPoint, Period };
 
@@ -85,7 +87,12 @@ const LEGENDE = [
  * servent deux fois — à la création du graphique, et à chaque changement de
  * thème, le graphique n'étant créé qu'une seule fois.
  */
-function habillage(clair: boolean) {
+export type DensiteGrille = "aucune" | "discrete" | "marquee";
+
+/** Clé de rangement des réglages d'apparence du graphique. */
+const CLE_REGLAGES = "novac-graphique-reglages";
+
+function habillage(clair: boolean, grille: DensiteGrille = "discrete") {
   return {
     layout: {
       attributionLogo: false,
@@ -97,9 +104,13 @@ function habillage(clair: boolean) {
       vertLines: { visible: false },
       horzLines: {
         // Le même liseré que les conteneurs : le quadrillage cesse d'être un
-        // gris étranger à la page.
-        color: resoudreJeton("--nv-bord", clair ? "#E5E7EB" : "#101828"),
-        style: LineStyle.Solid, visible: true,
+        // gris étranger à la page. « Marquée » monte d'un cran sur la rampe
+        // plutôt que d'éclaircir arbitrairement.
+        color: resoudreJeton(
+          grille === "marquee" ? "--nv-bord-fort" : "--nv-bord",
+          clair ? "#E5E7EB" : "#101828"),
+        style: LineStyle.Solid,
+        visible: grille !== "aucune",
       },
     },
     crosshair: {
@@ -112,6 +123,102 @@ function habillage(clair: boolean) {
                   labelBackgroundColor: resoudreJeton("--nv-texte-intense", clair ? "#101828" : "#FFFFFF") },
     },
   };
+}
+
+/**
+ * Réglages d'apparence du graphique : couleur de la courbe, densité de grille.
+ *
+ * La page d'un actif a déjà un panneau équivalent, mais il vit dans son
+ * fichier et traite aussi les bougies. Celui-ci est volontairement réduit aux
+ * deux réglages qui ont un sens sur un portefeuille, et il parle la langue de
+ * la nouvelle page : piste creuse, pastille claire, jetons partout.
+ *
+ * Les teintes proposées viennent de la palette du concept plutôt que d'une
+ * roue chromatique libre : un nuancier ouvert produit vite une courbe qui ne
+ * s'accorde avec rien d'autre à l'écran.
+ */
+const TEINTES: { nom: string; valeur: string }[] = [
+  { nom: "Bleu",    valeur: "#50A2FF" },
+  { nom: "Menthe",  valeur: "#00D492" },
+  { nom: "Ambre",   valeur: "#FF8904" },
+  { nom: "Corail",  valeur: "#FF6467" },
+  { nom: "Cyan",    valeur: "#00BCFF" },
+  { nom: "Ardoise", valeur: "#99A1AF" },
+];
+
+function PanneauReglages({
+  couleur, surCouleur, grille, surGrille, fermer, ancre,
+}: {
+  couleur: string;
+  surCouleur: (v: string | null) => void;
+  grille: DensiteGrille;
+  surGrille: (v: DensiteGrille) => void;
+  fermer: () => void;
+  /** Coin haut-droit du panneau, en coordonnées de fenêtre. */
+  ancre: { droite: number; haut: number };
+}) {
+  // Rendu dans le corps du document, et non sur place.
+  //
+  // Le cadre du graphique porte un `backdrop-filter`, ce qui en fait le bloc
+  // conteneur de ses descendants en position fixe : le panneau s'y ancrait,
+  // et ses coordonnées de fenêtre le projetaient hors de l'écran. Le même
+  // piège que la modale de profil, dont la barre latérale porte la note.
+  if (typeof document === "undefined") return null;
+  return createPortal(
+    <>
+      {/* Voile de fermeture : un clic hors du panneau le referme, sans qu'on
+          ait à écouter le document et à démêler les clics du panneau lui-même. */}
+      <div style={{ position: "fixed", inset: 0, zIndex: 40 }} onClick={fermer} />
+      {/* Position fixe et non absolue : la carte du graphique rogne son
+          débordement — la courbe en a besoin — et un panneau posé dedans s'y
+          faisait couper. Il s'ancre donc sur le bouton, en coordonnées de
+          fenêtre. */}
+      <div role="dialog" aria-label="Apparence du graphique" style={{
+        position: "fixed", top: ancre.haut, right: ancre.droite, zIndex: 41, width: 208,
+        background: JETONS.carte, border: `1px solid ${JETONS.bordFort}`,
+        borderRadius: RAYONS.md, padding: 12, boxShadow: JETONS.ombre,
+      }}>
+        <div style={{ fontFamily: FONT, fontSize: 10, fontWeight: 600, letterSpacing: "0.08em",
+                      color: JETONS.texteAttenue, marginBottom: 8 }}>COURBE</div>
+        <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 12 }}>
+          {TEINTES.map(t => {
+            const actif = couleur.toLowerCase() === t.valeur.toLowerCase();
+            return (
+              <button key={t.valeur} type="button" title={t.nom}
+                aria-pressed={actif} onClick={() => surCouleur(t.valeur)}
+                style={{
+                  width: 22, height: 22, borderRadius: RAYONS.xs, cursor: "pointer",
+                  background: t.valeur, padding: 0,
+                  // Le liseré du choix retenu est clair et détaché de la
+                  // pastille : un contour de sa propre teinte serait invisible.
+                  border: `2px solid ${actif ? JETONS.texteIntense : "transparent"}`,
+                  boxShadow: actif ? JETONS.segmentOmbre : "none",
+                }} />
+            );
+          })}
+          <button type="button" title="Rendre la couleur du portefeuille"
+            onClick={() => surCouleur(null)}
+            style={{
+              width: 22, height: 22, borderRadius: RAYONS.xs, cursor: "pointer", padding: 0,
+              background: JETONS.segmentPiste, border: `1px solid ${JETONS.bord}`,
+              color: JETONS.texteFort, fontFamily: FONT, fontSize: 12, lineHeight: 1,
+              display: "flex", alignItems: "center", justifyContent: "center",
+            }}>↺</button>
+        </div>
+
+        <div style={{ fontFamily: FONT, fontSize: 10, fontWeight: 600, letterSpacing: "0.08em",
+                      color: JETONS.texteAttenue, marginBottom: 8 }}>GRILLE</div>
+        <Segments taille="sm" ariaLabel="Densité de la grille"
+          valeur={grille} onChange={surGrille}
+          options={[
+            { valeur: "aucune",   libelle: "Aucune" },
+            { valeur: "discrete", libelle: "Discrète" },
+            { valeur: "marquee",  libelle: "Marquée" },
+          ]} />
+      </div>
+    </>,
+    document.body,
+  );
 }
 
 /** La couleur d'un type d'opération, selon le thème. */
@@ -217,6 +324,34 @@ export default function PerformanceChart({
   const [state, setState] = useState<"idle" | "loading" | "error">("loading");
   const [survol, setSurvol] = useState<{ valeur: number; date: string } | null>(null);
   const [mode, setMode] = useState<"ligne" | "bougie">("ligne");
+
+  /**
+   * Réglages d'apparence, retenus d'une visite à l'autre.
+   *
+   * `null` pour la courbe signifie « la couleur du portefeuille », et non une
+   * absence de choix : c'est ce qui permet au bouton de réinitialisation de
+   * rendre la main au portefeuille plutôt que de figer sa teinte du jour.
+   */
+  const [reglagesOuverts, setReglagesOuverts] = useState(false);
+  const [ancreReglages, setAncreReglages] = useState<{ droite: number; haut: number } | null>(null);
+  const [couleurChoisie, setCouleurChoisie] = useState<string | null>(null);
+  const [grille, setGrille] = useState<DensiteGrille>("discrete");
+
+  useEffect(() => {
+    try {
+      const brut = localStorage.getItem(CLE_REGLAGES);
+      if (!brut) return;
+      const r = JSON.parse(brut) as { couleur?: string | null; grille?: DensiteGrille };
+      if (r.couleur !== undefined) setCouleurChoisie(r.couleur);
+      if (r.grille) setGrille(r.grille);
+    } catch { /* réglages illisibles : on garde les valeurs par défaut. */ }
+  }, []);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(CLE_REGLAGES, JSON.stringify({ couleur: couleurChoisie, grille }));
+    } catch { /* stockage indisponible : le réglage vaut pour la session. */ }
+  }, [couleurChoisie, grille]);
   /** Date de la première transaction, quand la courbe en vient. */
   const [origine, setOrigine] = useState<string | null>(null);
   /** Titres détenus dont le cours n'a pas pu être établi. */
@@ -225,9 +360,10 @@ export default function PerformanceChart({
   useEffect(() => {
     clairRef.current = clair;
     // Le graphique n'est créé qu'une fois : sans cette réapplication, la
-    // grille et le réticule resteraient dans les couleurs du thème de départ.
-    chartRef.current?.applyOptions(habillage(clair));
-  }, [clair]);
+    // grille et le réticule resteraient dans les couleurs du thème de départ,
+    // et la densité choisie ne prendrait effet qu'au prochain montage.
+    chartRef.current?.applyOptions(habillage(clair, grille));
+  }, [clair, grille]);
 
   const [pastilles, setPastilles] = useState<{ id: number; x: number; y: number; titre: string; nombre: number; type: string }[]>([]);
 
@@ -620,9 +756,10 @@ export default function PerformanceChart({
   // Le canevas ne résout pas var() : une couleur de portefeuille est un
   // hexadécimal, mais le repli est un jeton. On le résout ici, à chaque rendu
   // — donc aussi au changement de thème, qui en provoque un.
-  const encre = color.startsWith("var(")
-    ? resoudreJeton(color.slice(4, -1).trim(), "#50A2FF")
-    : color;
+  const teinte = couleurChoisie ?? color;
+  const encre = teinte.startsWith("var(")
+    ? resoudreJeton(teinte.slice(4, -1).trim(), "#50A2FF")
+    : teinte;
   // Le halo de survol lit la couleur dans une référence, mise à jour ici :
   // la déclaration de `colorRef` précède celle de l'état de teinte.
   colorRef.current = encre;
@@ -688,6 +825,40 @@ export default function PerformanceChart({
           })}
         </div>
 
+        <div style={{ display: "flex", gap: 6, flexShrink: 0, position: "relative" }}>
+        <button type="button"
+          onClick={e => {
+            const r = e.currentTarget.getBoundingClientRect();
+            setAncreReglages({ droite: window.innerWidth - r.right, haut: r.bottom + 6 });
+            setReglagesOuverts(v => !v);
+          }}
+          title="Couleur de la courbe et grille"
+          style={{
+            background: reglagesOuverts ? JETONS.segmentActif : JETONS.segmentPiste,
+            border: `1px solid ${reglagesOuverts ? JETONS.segmentActif : JETONS.bord}`,
+            borderRadius: RAYONS.sm, width: 30, height: 30, cursor: "pointer", flexShrink: 0,
+            display: "flex", alignItems: "center", justifyContent: "center",
+            color: reglagesOuverts ? JETONS.segmentEncre : JETONS.texteFort,
+            boxShadow: reglagesOuverts ? JETONS.segmentOmbre : "none",
+            transition: "background 250ms, color 250ms",
+          }}>
+          <svg width="13" height="13" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
+            <circle cx="4" cy="4" r="2.4" /><circle cx="12" cy="4" r="2.4" />
+            <circle cx="4" cy="12" r="2.4" /><circle cx="12" cy="12" r="2.4" />
+          </svg>
+        </button>
+
+        {reglagesOuverts && ancreReglages && (
+          <PanneauReglages
+            couleur={encre}
+            surCouleur={setCouleurChoisie}
+            grille={grille}
+            surGrille={setGrille}
+            fermer={() => setReglagesOuverts(false)}
+            ancre={ancreReglages}
+          />
+        )}
+
         {/* Courbe / bougies, même bouton que la page graphique. */}
         <button type="button" onClick={() => setMode(m => (m === "ligne" ? "bougie" : "ligne"))}
           title={mode === "ligne" ? "Passer en bougies" : "Passer en courbe"}
@@ -718,6 +889,7 @@ export default function PerformanceChart({
             </svg>
           )}
         </button>
+        </div>
       </div>
 
       <div style={{ position: "relative", flex: height ? undefined : 1, height, minHeight: 0 }}>
