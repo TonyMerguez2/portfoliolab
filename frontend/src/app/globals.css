@@ -72,11 +72,15 @@
  * cerner d'un trait lumineux. Le panneau se lit donc comme un creux dans la
  * page, non comme une plaque posée dessus.
  *
- * La page est leur gris #6A7282 composé sur #030712, mais à 4 % et non aux 8 %
- * de leur `background-subtle`. Deux valeurs plus claires ont été essayées à
- * cette place — #101828 puis #0B101B — et jugées trop claires à l'écran. À 4 %
- * la page reste 1,6 fois plus lumineuse que la carte, ce qui suffit à l'en
- * détacher, et l'ensemble retrouve le presque-noir du concept.
+ * Page et carte valent toutes deux #030712 — relevé sur leur page rendue, pas
+ * déduit : leurs quatre cartes de maquette portent `bg-background`, exactement
+ * comme le corps du document.
+ *
+ * Trois choses les détachent, et aucune n'est une différence de fond :
+ *   — le liseré #101828 de la carte, seul trait clair ;
+ *   — une ombre portée noire et franche, qui assombrit la page tout autour et
+ *     fait paraître la carte plus claire qu'elle n'est ;
+ *   — la trame, qui couvre la page et s'arrête aux cartes, opaques.
  *
  * J'ai longtemps cherché cet ordre dans le balisage de leur vitrine de
  * documentation, où page et carte partagent la même valeur, la séparation
@@ -88,8 +92,8 @@
  */
 :root,
 [data-theme="sombre"] {
-  --nv-fond:              #070B16;
-  --nv-fond-profond:      #040810;
+  --nv-fond:              #030712;
+  --nv-fond-profond:      #010409;
   --nv-carte:             #030712;
   --nv-carte-creuse:      rgba(106,114,130,0.12);
 
@@ -101,6 +105,8 @@
      s'est confondu avec elle et le cadre a disparu. Il reprend donc leur
      `border-muted`, franchement plus clair que la page. */
   --nv-cadre:             #101828;
+  /* L'intervalle du cadre, à 50 % comme leur `bg-background/50`. */
+  --nv-cadre-voile:       rgba(3,7,18,0.5);
 
   --nv-texte:             #D1D5DC;
   --nv-texte-secondaire:  #99A1AF;
@@ -131,7 +137,7 @@
 
   /* La barre latérale. Elle est translucide et floute ce qui passe dessous :
      ses fonds ne peuvent donc pas être les jetons de carte, qui sont opaques. */
-  --nv-barre-fond:        rgba(4,8,16,0.80);
+  --nv-barre-fond:        rgba(3,7,18,0.80);
   --nv-barre-survol:      rgba(255,255,255,0.045);
   --nv-barre-actif:       rgba(255,255,255,0.11);
   --nv-barre-actif-bord:  rgba(255,255,255,0.10);
