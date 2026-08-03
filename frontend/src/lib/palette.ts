@@ -1,3 +1,5 @@
+import type { CSSProperties } from "react";
+
 /**
  * Les jetons de couleur, vus depuis le JavaScript.
  *
@@ -33,6 +35,8 @@ export const JETONS = {
 
   bord: "var(--nv-bord)",
   bordFort: "var(--nv-bord-fort)",
+  /** Anneau extérieur du cadre, voir le composant Card. */
+  cadre: "var(--nv-cadre)",
 
   texte: "var(--nv-texte)",
   texteSecondaire: "var(--nv-texte-secondaire)",
@@ -103,6 +107,41 @@ export const RAYON = RAYONS.xl;
 export const RAYON_PETIT = RAYONS.md;
 export const MARGE = 10;
 export const GOUTTIERE = 8;
+
+/** Largeur de l'intervalle entre les deux anneaux du cadre. */
+export const CADRE = 5;
+
+/**
+ * Le cadre double du concept : un anneau extérieur, un intervalle qui laisse
+ * voir la page, puis l'anneau de la carte.
+ *
+ * Tout est peint en ombres internes plutôt qu'avec un élément imbriqué. Un
+ * conteneur supplémentaire aurait obligé à répartir les styles des appelants —
+ * `flex` et `minHeight` dehors, `padding` et `overflow` dedans — et la moindre
+ * erreur de tri aurait cassé la contrainte de page sans défilement. Ici la
+ * boîte garde exactement sa taille, et l'appelant n'a pas à savoir que le cadre
+ * existe.
+ *
+ * L'ordre des ombres compte : la première se peint au-dessus de la seconde.
+ * L'intervalle couvre donc l'anneau intérieur sur ses cinq premiers pixels, ce
+ * qui laisse voir exactement un pixel de liseré.
+ *
+ * Cette fonction existe parce que la carte et le conteneur du graphique se
+ * dessinaient séparément. Les avoir laissés indépendants est précisément ce qui
+ * les avait fait diverger — l'un à 12 px de rayon, l'autre à 30.
+ */
+export function styleCadre(rayon: number = RAYON): CSSProperties {
+  return {
+    background: JETONS.carte,
+    border: `1px solid ${JETONS.cadre}`,
+    borderRadius: rayon,
+    boxShadow: [
+      `inset 0 0 0 ${CADRE}px ${JETONS.fond}`,
+      `inset 0 0 0 ${CADRE + 1}px ${JETONS.bord}`,
+      JETONS.ombre,
+    ].join(", "),
+  };
+}
 
 /** La couleur d'un montant, selon son signe. */
 export function couleurMontant(v: number | null | undefined): string {

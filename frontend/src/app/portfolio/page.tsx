@@ -19,7 +19,7 @@ import { enTetesAuth } from "@/lib/session";
 import { typesParOperation, COULEUR_OP, LIBELLE_OP, type Tx } from "@/lib/journal";
 import { FONT } from "@/lib/typography";
 import type { Period } from "@/lib/chart/portfolioCurve";
-import { CLAIR, RAYON, couleurMontant, RAYONS } from "@/lib/palette";
+import { CLAIR, RAYON, couleurMontant, RAYONS, styleCadre } from "@/lib/palette";
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 type PortfolioAsset = { ticker: string; weight: number };
@@ -112,16 +112,7 @@ function Sparkline({ pts, color, w = 48, h = 18, glow = false }: {
 // ── Surface card ───────────────────────────────────────────────────────────────
 function Card({ children, style }: { children: ReactNode; style?: React.CSSProperties }) {
   return (
-    <div style={{
-      // Panneau blanc sur fond bleu. Même rayon que le conteneur du graphique :
-      // les cartes de droite avaient 12 px pour 30 à gauche, ce qui se voyait
-      // dès qu'on les regardait ensemble.
-      background: CLAIR.carte,
-      border: `1px solid ${CLAIR.bord}`,
-      borderRadius: RAYON,
-      boxShadow: CLAIR.ombre,
-      ...style,
-    }}>
+    <div style={{ ...styleCadre(), ...style }}>
       {children}
     </div>
   );
@@ -951,10 +942,10 @@ function PortfolioPageInner() {
               de halo appartenaient au fond sombre : sur blanc, le flou ne
               produit qu'un voile gris. */}
           <div style={{
-            border: `1px solid ${CLAIR.bord}`, borderRadius: RAYON, padding: "14px 18px 10px",
+            ...styleCadre(),
+            padding: "14px 18px 10px",
             flex: 1, minHeight: 150, display: "flex", flexDirection: "column",
-            position: "relative", overflow: "hidden", background: CLAIR.carte,
-            boxShadow: CLAIR.ombre,
+            position: "relative", overflow: "hidden",
           }}>
             <div style={{ position: "relative", zIndex: 1, display: "flex", flexDirection: "column", flex: 1, minHeight: 0 }}>
             <PerformanceChart

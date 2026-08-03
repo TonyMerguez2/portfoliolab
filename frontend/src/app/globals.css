@@ -67,11 +67,11 @@
  * `carte-creuse` reste au-dessus des deux : un creux dans une carte doit
  * continuer de se voir, lui.
  *
- * Fond et bordure sont les valeurs exactes d'Appica. Une première approximation
- * avait un fond plus clair (L 0.146 contre 0.130) et une bordure plus sombre
- * (0.260 contre 0.278) : l'écart entre les deux tombait de 0.149 à 0.114, et
- * l'anneau qui détache les cartes ressortait un tiers moins. Quand tout repose
- * sur le liseré, ce tiers se voit.
+ * Fond et bordure sont les valeurs exactes d'Appica. La carte, elle, vaut leur
+ * `background-subtle` — le gris #6A7282 posé à 8 % sur la page, soit #0B101B.
+ * Elle se soulève donc légèrement au lieu de se confondre avec le fond : j'avais
+ * compris l'inverse d'une remarque et rendu la carte strictement identique à la
+ * page, ce qui la faisait disparaître dès que le liseré manquait.
  *
  * L'encre n'est pas blanche non plus : #D1D5DC. Du blanc pur sur un fond aussi
  * sombre éblouit et fatigue à la lecture longue.
@@ -80,11 +80,13 @@
 [data-theme="sombre"] {
   --nv-fond:              #030712;
   --nv-fond-profond:      #010409;
-  --nv-carte:             #030712;
+  --nv-carte:             #0B101B;
   --nv-carte-creuse:      rgba(106,114,130,0.12);
 
   --nv-bord:              #1E2939;
   --nv-bord-fort:         #2E3D52;
+  /* L'anneau extérieur du cadre, un cran plus discret que celui de la carte. */
+  --nv-cadre:             #141C29;
 
   --nv-texte:             #D1D5DC;
   --nv-texte-secondaire:  #99A1AF;
@@ -135,6 +137,7 @@
    noire, et la couleur rendue rare. Le bleu #0B63E7 ne peint donc plus la page :
    il est réservé aux accents, où il porte justement parce qu'il est rare. */
 [data-theme="clair"] {
+  --nv-cadre:             rgba(15,23,42,0.05);
   --nv-fond:              #FAFBFC;
   --nv-fond-profond:      #F1F4F8;
   --nv-carte:             #FFFFFF;
