@@ -122,34 +122,47 @@ export const GOUTTIERE = 8;
 export const CADRE = 6;
 
 /**
- * Le cadre double du concept : un anneau extérieur, un intervalle qui laisse
- * voir la page, puis l'anneau de la carte.
+ * L'anneau extérieur du cadre.
  *
- * Tout est peint en ombres internes plutôt qu'avec un élément imbriqué. Un
- * conteneur supplémentaire aurait obligé à répartir les styles des appelants —
- * `flex` et `minHeight` dehors, `padding` et `overflow` dedans — et la moindre
- * erreur de tri aurait cassé la contrainte de page sans défilement. Ici la
- * boîte garde exactement sa taille, et l'appelant n'a pas à savoir que le cadre
- * existe.
+ * Il ne peint rien : son fond reste transparent et son rembourrage laisse voir
+ * la page — donc la trame de points — entre les deux anneaux. C'est le
+ * mécanisme du concept, dont la couche extérieure est à 50 % d'opacité avec
+ * flou d'arrière-plan.
  *
- * L'ordre des ombres compte : la première se peint au-dessus de la seconde.
- * L'intervalle couvre donc l'anneau intérieur sur ses cinq premiers pixels, ce
- * qui laisse voir exactement un pixel de liseré.
- *
- * Cette fonction existe parce que la carte et le conteneur du graphique se
- * dessinaient séparément. Les avoir laissés indépendants est précisément ce qui
- * les avait fait diverger — l'un à 12 px de rayon, l'autre à 30.
+ * La version précédente peignait cet intervalle avec une ombre interne. Le
+ * résultat avait la bonne géométrie et la bonne couleur, mais restait une
+ * bande opaque : la trame s'arrêtait au bord du cadre au lieu de le traverser,
+ * et les deux conteneurs ne se ressemblaient pas pour cette seule raison.
  */
-export function styleCadre(rayon: number = RAYON): CSSProperties {
+export function styleCadreExterieur(rayon: number = RAYON): CSSProperties {
   return {
-    background: JETONS.carte,
+    background: "transparent",
     border: `1px solid ${JETONS.cadre}`,
     borderRadius: rayon,
-    boxShadow: [
-      `inset 0 0 0 ${CADRE}px ${JETONS.fond}`,
-      `inset 0 0 0 ${CADRE + 1}px ${JETONS.bord}`,
-      JETONS.ombre,
-    ].join(", "),
+    padding: CADRE,
+    // La carte intérieure occupe toute la place laissée.
+    display: "flex",
+    flexDirection: "column",
+    boxSizing: "border-box",
+  };
+}
+
+/**
+ * La carte, à l'intérieur du cadre.
+ *
+ * Son rayon découle de celui du cadre moins l'intervalle, ce qui garde les deux
+ * anneaux concentriques : 24 − 6 = 18, soit exactement la paire du concept
+ * (`rounded-2xl` dehors, `rounded-xl` dedans).
+ */
+export function styleCarteInterieure(rayon: number = RAYON): CSSProperties {
+  return {
+    background: JETONS.carte,
+    border: `1px solid ${JETONS.bord}`,
+    borderRadius: rayon - CADRE,
+    boxShadow: JETONS.ombre,
+    flex: 1,
+    minHeight: 0,
+    boxSizing: "border-box",
   };
 }
 

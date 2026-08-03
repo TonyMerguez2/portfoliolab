@@ -19,7 +19,7 @@ import { enTetesAuth } from "@/lib/session";
 import { typesParOperation, COULEUR_OP, LIBELLE_OP, type Tx } from "@/lib/journal";
 import { FONT } from "@/lib/typography";
 import type { Period } from "@/lib/chart/portfolioCurve";
-import { CLAIR, RAYON, couleurMontant, RAYONS, styleCadre } from "@/lib/palette";
+import { CLAIR, RAYON, couleurMontant, RAYONS, styleCadreExterieur, styleCarteInterieure } from "@/lib/palette";
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 type PortfolioAsset = { ticker: string; weight: number };
@@ -110,10 +110,37 @@ function Sparkline({ pts, color, w = 48, h = 18, glow = false }: {
 }
 
 // ── Surface card ───────────────────────────────────────────────────────────────
+/**
+ * Répartit le style d'un appelant entre les deux couches du cadre.
+ *
+ * Ce qui place la carte dans sa grille va sur le cadre ; ce qui habille son
+ * contenu va sur la carte. Le tri est explicite plutôt que déduit : une clé
+ * de mise en page appliquée à la couche intérieure la décrocherait de son
+ * cadre, et une clé de contenu appliquée à l'extérieure repousserait la carte
+ * au lieu du texte.
+ */
+const CLES_DE_PLACEMENT = new Set([
+  "flex", "flexShrink", "flexGrow", "flexBasis", "minHeight", "maxHeight",
+  "minWidth", "maxWidth", "width", "height", "alignSelf", "order", "gridArea",
+  "marginTop", "marginBottom", "marginLeft", "marginRight", "margin",
+]);
+
+function repartir(style?: React.CSSProperties) {
+  const cadre: React.CSSProperties = {};
+  const carte: React.CSSProperties = {};
+  for (const [cle, valeur] of Object.entries(style ?? {})) {
+    (CLES_DE_PLACEMENT.has(cle) ? cadre : carte)[cle as never] = valeur as never;
+  }
+  return { cadre, carte };
+}
+
 function Card({ children, style }: { children: ReactNode; style?: React.CSSProperties }) {
+  const { cadre, carte } = repartir(style);
   return (
-    <div style={{ ...styleCadre(), ...style }}>
-      {children}
+    <div style={{ ...styleCadreExterieur(), ...cadre }}>
+      <div style={{ ...styleCarteInterieure(), ...carte }}>
+        {children}
+      </div>
     </div>
   );
 }
@@ -941,10 +968,11 @@ function PortfolioPageInner() {
           {/* Panneau blanc comme les autres. La classe « verre » et sa couche
               de halo appartenaient au fond sombre : sur blanc, le flou ne
               produit qu'un voile gris. */}
+          <div style={{ ...styleCadreExterieur(), flex: 1, minHeight: 150 }}>
           <div style={{
-            ...styleCadre(),
-            padding: "14px 18px 10px",
-            flex: 1, minHeight: 150, display: "flex", flexDirection: "column",
+            ...styleCarteInterieure(),
+            padding: "8px 12px 6px",
+            display: "flex", flexDirection: "column",
             position: "relative", overflow: "hidden",
           }}>
             <div style={{ position: "relative", zIndex: 1, display: "flex", flexDirection: "column", flex: 1, minHeight: 0 }}>
@@ -960,6 +988,7 @@ function PortfolioPageInner() {
               onOperationClick={(id) => { setOperationVisee(id); setDashView("transactions"); }}
             />
             </div>
+          </div>
           </div>
 
           {/* Le titre, les filtres et le tri tenaient sur deux lignes, avec
