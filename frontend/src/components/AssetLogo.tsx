@@ -1,6 +1,7 @@
 "use client";
 import { useState, useEffect, useRef, CSSProperties, memo } from "react";
 import { BRAND_COLORS } from "@/lib/assets";
+import { poidsGroupe, pourFondSombre, rvbVersHex } from "@/lib/couleur";
 
 const _idxCache  = new Map<string, number>();
 type LogoMeta = { hasBg: boolean; isDark: boolean };
@@ -131,10 +132,19 @@ function extractColor(src: string, cb: (hex: string) => void): void {
         else { ex.count++; if (sat > ex.sat) { ex.r=r; ex.g=g; ex.b=b; ex.sat=sat; } }
       }
       if (!buckets.size) return;
+      // Le groupe retenu n'est plus le plus nombreux mais le plus marquant :
+      // compter les pixels seuls faisait gagner les grandes plages ternes — le
+      // pelage brun d'un logo animalier l'emportait sur la couleur vive que
+      // l'œil retient.
       let best: Bucket = { count:0, r:91, g:141, b:239, sat:0 };
-      buckets.forEach(v => { if (v.count > best.count) best = v; });
-      const h = (n: number) => n.toString(16).padStart(2, "0");
-      cb(`#${h(best.r)}${h(best.g)}${h(best.b)}`);
+      let meilleur = -1;
+      buckets.forEach(v => {
+        const p = poidsGroupe(v.count, v.sat);
+        if (p > meilleur) { meilleur = p; best = v; }
+      });
+      // Ramenée dans la plage lisible sur fond sombre, teinte inchangée : un
+      // brun de pelage reste un brun mais cesse de se confondre avec le fond.
+      cb(pourFondSombre(rvbVersHex([best.r, best.g, best.b])));
     } catch { /* CORS */ }
   };
   img.src = src;

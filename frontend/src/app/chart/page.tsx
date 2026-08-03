@@ -14,6 +14,7 @@ import {
 const GrowthChart = dynamic(() => import("@/components/charts/GrowthChart"), { ssr: false });
 const SubChart    = dynamic(() => import("@/components/charts/SubChart"),    { ssr: false });
 import AssetLogo from "@/components/AssetLogo";
+import { pourFondSombre } from "@/lib/couleur";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 
@@ -634,11 +635,16 @@ function ChartContent() {
   const label = isPortfolio
     ? (activePortfolio?.name || "Portefeuille")
     : (assetInfo?.name || ticker || "Actif");
+  // Toute couleur d'actif passe par la mise au net avant de servir de tracé :
+  // certaines teintes de marque sont trop sombres pour un fond noir, et une
+  // couleur extraite d'un logo l'est plus souvent encore. La teinte est
+  // conservée, seules la clarté et la saturation sont ramenées dans la plage
+  // lisible.
   const color = isPortfolio
     ? (activePortfolio?.color || "#5B8DEF")
-    : (ticker ? (BRAND_COLORS[ticker] ?? extractedColor ?? "#5B8DEF") : "#5B8DEF");
+    : pourFondSombre(ticker ? (BRAND_COLORS[ticker] ?? extractedColor ?? "#5B8DEF") : "#5B8DEF");
   const activeBmColor = customBmTicker
-    ? (BRAND_COLORS[customBmTicker] ?? bmExtractedColor ?? "#f59e0b")
+    ? pourFondSombre(BRAND_COLORS[customBmTicker] ?? bmExtractedColor ?? "#f59e0b")
     : "#f59e0b";
   const tc = typeColor(assetInfo?.type);
   const shortLabel = ticker

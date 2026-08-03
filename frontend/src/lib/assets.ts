@@ -173,6 +173,7 @@ export const TRENDING: AssetItem[] = [
  * All values are chosen to be legible on the dark terminal background (#041124).
  */
 export const BRAND_COLORS: Record<string, string> = {
+
   // ── US Large Cap ──────────────────────────────────────────────────────────
   AAPL:  "#A8B2C0", MSFT:  "#00A4EF", NVDA:  "#76B900", TSLA:  "#E31937",
   AMZN:  "#FF9900", META:  "#1877F2", GOOGL: "#4285F4", GOOG:  "#4285F4",
@@ -214,6 +215,15 @@ export const BRAND_COLORS: Record<string, string> = {
   FXI:  "#1A8FD1", EWG:  "#1A8FD1", EWU:  "#1A8FD1", ACWI: "#1A8FD1",
   AGG:  "#3A7BC8", TLT:  "#1A72C0", HYG:  "#1A8FD1", VNQ:  "#8B2244",
   // ── Crypto ────────────────────────────────────────────────────────────────
+  //
+  // Sans entrée ici, la teinte est extraite du logo — ce qui convient à une
+  // marque mais mal à une illustration : le pelage du chien de WIF donnait un
+  // brun sombre, illisible sur fond noir et sans rapport avec l'identité du
+  // jeton.
+  "KAS-USD":      "#70C7BA", "WIF-USD":      "#D96F3E", "SHIB-USD":     "#FFA409",
+  "PEPE-USD":     "#3D8130", "TON-USD":      "#0098EA", "APT-USD":      "#06B6D4",
+  "ICP-USD":      "#29ABE2", "FIL-USD":      "#0090FF", "TRX-USD":      "#EF0027",
+  "BCH-USD":      "#8DC351", "MATIC-USD":    "#8247E5",
   "BTC-USD":      "#F7931A", "ETH-USD":      "#627EEA", "SOL-USD":      "#9945FF",
   "BNB-USD":      "#F3BA2F", "XRP-USD":      "#00AAE4", "DOGE-USD":     "#C2A633",
   "ADA-USD":      "#0E70FF", "AVAX-USD":     "#E84142", "DOT-USD":      "#E6007A",

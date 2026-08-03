@@ -1,4 +1,5 @@
 import { BRAND_COLORS } from "@/lib/assets";
+import { pourFondSombre } from "@/lib/couleur";
 
 export type RGB = [number, number, number];
 
@@ -8,8 +9,11 @@ export function hexToRgb(hex: string): RGB {
 }
 
 export function brandRgb(ticker: string): RGB {
+  // La table passe par la même mise au net que les couleurs extraites d'un
+  // logo : quelques teintes de marque sont trop sombres pour un fond noir, et
+  // rien ne justifie de les traiter autrement.
   const hex = BRAND_COLORS[ticker];
-  if (hex) return hexToRgb(hex);
+  if (hex) return hexToRgb(pourFondSombre(hex));
   let h = 2166136261;
   for (let i = 0; i < ticker.length; i++) { h ^= ticker.charCodeAt(i); h = Math.imul(h, 16777619); }
   h = h >>> 0;
