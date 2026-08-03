@@ -94,10 +94,13 @@
 
   --nv-bord:              #101828;
   --nv-bord-fort:         #1E2939;
-  /* Les deux anneaux du cadre restent sombres, dans la famille de la carte :
-     un liseré clair poserait un trait lumineux autour d'un panneau sombre,
-     exactement l'inverse de l'effet cherché. */
-  --nv-cadre:             #101828;
+  /* Les deux anneaux du cadre n'ont pas la même valeur, et c'est voulu :
+     l'extérieur prend leur `border-background`, soit la couleur la plus sombre
+     de la rampe, donc *plus sombre que la page*. Il se lit comme un trait
+     creusé. L'intérieur prend leur `border-muted`, plus clair que la carte, et
+     reste le seul liseré éclairant. Les avoir mis à la même valeur donnait deux
+     traits clairs concentriques, ce que le concept ne fait pas. */
+  --nv-cadre:             #030712;
 
   --nv-texte:             #D1D5DC;
   --nv-texte-secondaire:  #99A1AF;
@@ -154,7 +157,7 @@
    noire, et la couleur rendue rare. Le bleu #0B63E7 ne peint donc plus la page :
    il est réservé aux accents, où il porte justement parce qu'il est rare. */
 [data-theme="clair"] {
-  --nv-cadre:             #F3F4F6;
+  --nv-cadre:             #FFFFFF;
   --nv-fond:              #E5E7EB;
   --nv-fond-profond:      #D1D5DC;
   --nv-carte:             #FFFFFF;
