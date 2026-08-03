@@ -104,12 +104,13 @@
   --nv-carte:             #030712;
   --nv-carte-creuse:      rgba(106,114,130,0.12);
 
-  /* Le liseré de la carte prend leur `border` #1E2939 et non `border-muted`.
-     Ce dernier vaut #101828, exactement la bande claire du dégradé : le trait
-     s'y confondait, et la carte n'avait plus de bord du tout. #1E2939 passe
-     au-dessus de la bande comme de la carte, et reste le seul trait clair. */
-  --nv-bord:              #1E2939;
-  --nv-bord-fort:         #364153;
+  /* Le liseré de la carte : leur `border-muted` #101828, la valeur exacte du
+     concept. Elle avait été écartée un temps parce qu'elle égale la bande
+     claire du dégradé ; depuis que l'intervalle du cadre porte un voile, le
+     liseré ne touche plus cette bande mais le voile, plus sombre, et il s'y
+     détache. #1E2939 y avait été essayé et jugé trop clair. */
+  --nv-bord:              #101828;
+  --nv-bord-fort:         #1E2939;
   /* L'anneau extérieur va dans l'autre sens : leur `border-background`
      #030712, plus sombre que la bande de page. Il se creuse là où le liseré de
      la carte éclaire, et c'est ce contraste de sens qui donne sa profondeur au
@@ -188,8 +189,8 @@
   --nv-carte:             #FFFFFF;
   --nv-carte-creuse:      #F9FAFB;
 
-  --nv-bord:              #D1D5DC;
-  --nv-bord-fort:         #99A1AF;
+  --nv-bord:              #E5E7EB;
+  --nv-bord-fort:         #D1D5DC;
 
   --nv-texte:             #101828;
   --nv-texte-secondaire:  #364153;
