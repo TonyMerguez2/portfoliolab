@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useState, useMemo, useRef, Suspense } from "react";
+import { useEffect, useState, useMemo, useRef, useId, Suspense } from "react";
 import type { ReactNode } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { useApp } from "@/lib/AppContext";
@@ -20,6 +20,8 @@ import { typesParOperation, COULEUR_OP, LIBELLE_OP, type Tx } from "@/lib/journa
 import { FONT } from "@/lib/typography";
 import type { Period } from "@/lib/chart/portfolioCurve";
 import { CLAIR, RAYON, couleurMontant, RAYONS, styleCadreExterieur, styleCarteInterieure } from "@/lib/palette";
+import { hexVersRvb, rvbVersHex, rvbVersTsl, tslVersRvb } from "@/lib/couleur";
+import { resoudreJeton } from "@/lib/theme";
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 type PortfolioAsset = { ticker: string; weight: number };
@@ -161,34 +163,71 @@ function SectionLabel({ children }: { children: ReactNode }) {
 function scoreColor(s: number) { return s >= 60 ? CLAIR.positif : s >= 40 ? CLAIR.attention : CLAIR.negatif; }
 function scoreLabel(s: number) { return s >= 80 ? "Excellent" : s >= 60 ? "Bon" : s >= 40 ? "Moyen" : "À risque"; }
 
+/**
+ * Deux teintes pour le dégradé de l'anneau, dérivées de la couleur du score.
+ *
+ * La couleur vient d'un jeton, donc d'un `var()` que rien ne sait décomposer :
+ * il faut la résoudre pour en tirer une seconde nuance. Seule la clarté bouge
+ * — la teinte porte le sens, un score vert doit rester vert d'un bout à
+ * l'autre de l'arc.
+ */
+function degradeDuScore(score: number): [string, string] {
+  const jeton = score >= 60 ? "--nv-positif" : score >= 40 ? "--nv-attention" : "--nv-negatif";
+  const secours = score >= 60 ? "#00D492" : score >= 40 ? "#FF8904" : "#FF6467";
+  const hex = resoudreJeton(jeton, secours);
+  if (!/^#[0-9a-f]{6}$/i.test(hex)) return [hex, hex];
+  const [h, sat, l] = rvbVersTsl(hexVersRvb(hex));
+  return [
+    rvbVersHex(tslVersRvb([h, sat, Math.min(0.78, l + 0.12)])),
+    rvbVersHex(tslVersRvb([h, sat, Math.max(0.30, l - 0.10)])),
+  ];
+}
+
 function CircleScore({ score, size = 88, nu = false }: { score: number; size?: number; nu?: boolean }) {
   const color = scoreColor(score);
   const atteint = Math.max(0, Math.min(100, score));
-  // Même traitement que la répartition : couleurs pleines, aucun écart, aucun
-  // arrondi, aucun liseré. Le verre — liseré blanc, halo flouté, angles
-  // émoussés — a été retiré des deux au même titre.
+  const idDegrade = useId();
+  const [clair, sombre] = degradeDuScore(score);
+
+  // Un tracé et non des secteurs pleins.
   //
-  // Un anneau et non un disque, en revanche : le score s'y lit comme une jauge
-  // remplie, et le centre porte le chiffre partout sauf dans la bande de tête.
-  const arcs = donutArcs(
-    [
-      { key: "atteint", value: atteint, color },
-      { key: "reste", value: 100 - atteint, color: CLAIR.texteFaible },
-    ],
-    { cx: size / 2, cy: size / 2, r: size / 2, thickness: Math.max(7, size * 0.15), gap: 0 },
-  );
+  // Les secteurs donnaient des extrémités coupées net ; un trait accepte
+  // `stroke-linecap: round`, qui arrondit les deux bouts de l'arc. C'est ce
+  // détail, avec le dégradé, qui fait la différence d'aspect — la géométrie
+  // est la même.
+  const epaisseur = Math.max(8, size * 0.16);
+  const rayon = (size - epaisseur) / 2;
+  const perimetre = 2 * Math.PI * rayon;
+  // Les bouts arrondis débordent de la longueur du trait, d'une demi-épaisseur
+  // de chaque côté. Sans cette retenue, un score de 100 se recouvre lui-même et
+  // un score de 0 laisse une pastille là où il ne devrait rien y avoir.
+  const rempli = atteint === 0 ? 0 : Math.max(epaisseur, (atteint / 100) * perimetre - epaisseur);
+
   return (
     <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 4 }}>
       <div style={{ position: "relative", width: size, height: size, flexShrink: 0 }}>
-        <svg width={size} height={size} style={{ display: "block" }}>
-          {arcs.map(a => <path key={a.key} d={a.path} fill={a.color} />)}
+        <svg width={size} height={size} style={{ display: "block", transform: "rotate(-90deg)" }}>
+          <defs>
+            <linearGradient id={idDegrade} x1="0%" y1="0%" x2="100%" y2="100%">
+              <stop offset="0%" stopColor={clair} />
+              <stop offset="100%" stopColor={sombre} />
+            </linearGradient>
+          </defs>
+          <circle cx={size / 2} cy={size / 2} r={rayon} fill="none"
+            stroke={CLAIR.bordFort} strokeWidth={epaisseur} />
+          {atteint > 0 && (
+            <circle cx={size / 2} cy={size / 2} r={rayon} fill="none"
+              stroke={`url(#${idDegrade})`} strokeWidth={epaisseur} strokeLinecap="round"
+              strokeDasharray={`${rempli} ${perimetre}`}
+              style={{ transition: "stroke-dasharray 700ms cubic-bezier(0.4, 0, 0.2, 1)" }} />
+          )}
         </svg>
         {!nu && (
           <div style={{
             position: "absolute", inset: 0, display: "flex", flexDirection: "column",
             alignItems: "center", justifyContent: "center", pointerEvents: "none",
           }}>
-            <span style={{ fontSize: size * 0.32, fontWeight: 800, fontFamily: FONT, color: CLAIR.texte, lineHeight: 1 }}>{score}</span>
+            <span style={{ fontSize: size * 0.30, fontWeight: 800, fontFamily: FONT, color: CLAIR.texte, lineHeight: 1 }}>{score}</span>
             <span style={{ fontSize: Math.max(8, size * 0.10), color: CLAIR.texteFaible, letterSpacing: "0.04em" }}>/100</span>
           </div>
         )}
@@ -923,7 +962,7 @@ function PortfolioPageInner() {
           {/* Santé du portefeuille : le titre chiffré passe en tête, la carte
               de droite ne garde que le détail par critère. */}
           <div style={{ display: "flex", alignItems: "center", gap: 12, minWidth: 170 }}>
-            <CircleScore score={novacScore.global} size={54} nu />
+            <CircleScore score={novacScore.global} size={64} nu />
             <div>
               <p style={{ margin: "0 0 3px", fontSize: 11.5, fontWeight: 500, color: CLAIR.texteSecondaire }}>Santé du portefeuille</p>
               <div style={{ display: "flex", alignItems: "baseline", gap: 3 }}>
@@ -1253,7 +1292,7 @@ function PortfolioPageInner() {
             {/* Santé du portefeuille : le titre chiffré passe en tête, la carte
                 de droite ne garde que le détail par critère. */}
             <div style={{ display: "flex", alignItems: "center", gap: 12, minWidth: 170 }}>
-              <CircleScore score={novacScore.global} size={54} nu />
+              <CircleScore score={novacScore.global} size={64} nu />
               <div>
                 <p style={{ margin: "0 0 3px", fontSize: 11.5, fontWeight: 500, color: CLAIR.texteSecondaire }}>Santé du portefeuille</p>
                 <div style={{ display: "flex", alignItems: "baseline", gap: 3 }}>
@@ -1292,7 +1331,7 @@ function PortfolioPageInner() {
             {/* Santé du portefeuille : le titre chiffré passe en tête, la carte
                 de droite ne garde que le détail par critère. */}
             <div style={{ display: "flex", alignItems: "center", gap: 12, minWidth: 170 }}>
-              <CircleScore score={novacScore.global} size={54} nu />
+              <CircleScore score={novacScore.global} size={64} nu />
               <div>
                 <p style={{ margin: "0 0 3px", fontSize: 11.5, fontWeight: 500, color: CLAIR.texteSecondaire }}>Santé du portefeuille</p>
                 <div style={{ display: "flex", alignItems: "baseline", gap: 3 }}>
@@ -1322,7 +1361,7 @@ function PortfolioPageInner() {
             {/* Santé du portefeuille : le titre chiffré passe en tête, la carte
                 de droite ne garde que le détail par critère. */}
             <div style={{ display: "flex", alignItems: "center", gap: 12, minWidth: 170 }}>
-              <CircleScore score={novacScore.global} size={54} nu />
+              <CircleScore score={novacScore.global} size={64} nu />
               <div>
                 <p style={{ margin: "0 0 3px", fontSize: 11.5, fontWeight: 500, color: CLAIR.texteSecondaire }}>Santé du portefeuille</p>
                 <div style={{ display: "flex", alignItems: "baseline", gap: 3 }}>
