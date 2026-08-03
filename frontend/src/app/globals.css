@@ -289,16 +289,20 @@
      retrouvé sous la trame. */
   z-index: -1;
   pointer-events: none;
-  background-image: radial-gradient(circle at center, var(--nv-point) 1px, transparent 1px);
-  background-size: 26px 26px;
+  /* Géométrie relevée sur leur couche de trame : un masque
+     `radial-gradient(circle at 1px 1px, #000 1px, transparent 1.5px)` répété
+     tous les 14 px. Le point fait donc 1 px de plein et s'éteint à 1,5, ce qui
+     lui donne un bord adouci plutôt qu'un carré d'un pixel. */
+  background-image: radial-gradient(circle at 1px 1px, var(--nv-point) 1px, transparent 1.5px);
+  background-size: 14px 14px;
 }
 
 .nv-points::after {
   content: "";
   position: absolute;
   inset: 0;
-  background-image: radial-gradient(circle at center, var(--nv-point-vif) 1px, transparent 1px);
-  background-size: 26px 26px;
+  background-image: radial-gradient(circle at 1px 1px, var(--nv-point-vif) 1px, transparent 1.5px);
+  background-size: 14px 14px;
   /* Hors écran tant que la souris n'a pas bougé : sans cela, la lueur
      apparaîtrait dans le coin haut-gauche au chargement. */
   -webkit-mask-image: radial-gradient(200px circle at var(--nv-mx, -9999px) var(--nv-my, -9999px), #000 0%, rgba(0,0,0,0.30) 50%, transparent 78%);
