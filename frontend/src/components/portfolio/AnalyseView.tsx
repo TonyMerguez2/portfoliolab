@@ -83,6 +83,25 @@ const TON: Record<string, { couleur: string; signe: string }> = {
   info:      { couleur: "#50A2FF", signe: "i" },
 };
 
+/**
+ * Le drapeau d'une zone d'exposition, quand il en existe un.
+ *
+ * La table est incomplète à dessein. « Asie-Pacifique », « Marchés émergents »
+ * et « Monde développé » sont des agrégats de pays : aucun pavillon ne les
+ * représente, et leur prêter celui du pays dominant laisserait lire une
+ * exposition qui n'est pas celle des chiffres. Ces lignes n'ont donc pas de
+ * drapeau, et c'est la bonne réponse.
+ */
+const DRAPEAU_ZONE: Record<string, string> = {
+  "États-Unis": "us",
+  "Europe": "eu",
+  "Zone euro": "eu",
+  "France": "fr",
+  "Japon": "jp",
+  "Chine": "cn",
+  "Inde": "in",
+};
+
 const COULEURS_PART = ["#50A2FF", "#a78bfa", "#FF8904", "#00D492", "#FF6467", "#22d3ee", "#94a3b8"];
 
 function Carte({ children, style }: { children: React.ReactNode; style?: React.CSSProperties }) {
@@ -261,9 +280,16 @@ export default function AnalyseView({ portfolioId, refreshKey }: { portfolioId: 
               {expo.map((e, i) => (
                 <div key={e.libelle}>
                   <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 3 }}>
-                    <span style={{ fontFamily: FONT, fontSize: 11, color: "rgba(255,255,255,0.68)",
-                                   overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                      {e.libelle}
+                    <span style={{ display: "flex", alignItems: "center", gap: 6, minWidth: 0,
+                                   fontFamily: FONT, fontSize: 11, color: "rgba(255,255,255,0.68)" }}>
+                      {ongletExpo === "zones" && DRAPEAU_ZONE[e.libelle] && (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img src={`/drapeaux/${DRAPEAU_ZONE[e.libelle]}.svg`} alt="" aria-hidden="true"
+                          style={{ width: 13, height: 13, borderRadius: "50%", flexShrink: 0, display: "block" }} />
+                      )}
+                      <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                        {e.libelle}
+                      </span>
                     </span>
                     <span style={{ ...NUM, fontSize: 11, fontWeight: 700, color: "rgba(255,255,255,0.88)" }}>
                       {e.part.toFixed(1)} %
