@@ -121,13 +121,16 @@
   --nv-sur-fond-attenue:  #99A1AF;
   --nv-sur-fond-faible:   #6A7282;
 
-  --nv-positif:           #4ade80;
-  --nv-negatif:           #f87171;
-  --nv-attention:         #fbbf24;
+  /* Sémantiques relevées sur leur page rendue. Rien à voir avec les miennes :
+     leur vert est un menthe froid #00D492, pas un vert jaune ; leur alerte est
+     un orange franc, pas un ambre ; et leur bleu d'appui est plus lumineux. */
+  --nv-positif:           #00D492;
+  --nv-negatif:           #FF6467;
+  --nv-attention:         #FF8904;
 
-  --nv-accent:            #5B8DEF;
-  --nv-accent-doux:       rgba(91,141,239,0.16);
-  --nv-accent-bord:       rgba(91,141,239,0.38);
+  --nv-accent:            #50A2FF;
+  --nv-accent-doux:       rgba(80,162,255,0.16);
+  --nv-accent-bord:       rgba(80,162,255,0.38);
 
   --nv-ombre:             0 8px 16px -4px rgba(0,0,0,0.8);
 
@@ -186,13 +189,17 @@
   --nv-sur-fond-attenue:  #364153;
   --nv-sur-fond-faible:   #6A7282;
 
-  --nv-positif:           #0F7B3D;
-  --nv-negatif:           #C81E1E;
-  --nv-attention:         #B45309;
+  /* Mêmes teintes qu'en sombre, assombries jusqu'à 4,5:1 sur blanc. Leurs
+     propres valeurs claires servent de fond de pastille — #5EE9B5 ne donne que
+     1,5:1 — et ne peuvent pas porter du texte. La teinte est conservée au
+     degré près, seule la luminosité descend. */
+  --nv-positif:           #00884D;
+  --nv-negatif:           #EA0B27;
+  --nv-attention:         #D64200;
 
-  --nv-accent:            #0B63E7;
-  --nv-accent-doux:       rgba(11,99,231,0.10);
-  --nv-accent-bord:       rgba(11,99,231,0.28);
+  --nv-accent:            #2177D1;
+  --nv-accent-doux:       rgba(33,119,209,0.10);
+  --nv-accent-bord:       rgba(33,119,209,0.28);
 
   --nv-ombre:             0 8px 16px -4px rgba(106,114,130,0.18);
 
