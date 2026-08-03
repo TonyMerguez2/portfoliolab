@@ -67,18 +67,24 @@
  * `carte-creuse` reste au-dessus des deux : un creux dans une carte doit
  * continuer de se voir, lui.
  *
+ * Fond et bordure sont les valeurs exactes d'Appica. Une première approximation
+ * avait un fond plus clair (L 0.146 contre 0.130) et une bordure plus sombre
+ * (0.260 contre 0.278) : l'écart entre les deux tombait de 0.149 à 0.114, et
+ * l'anneau qui détache les cartes ressortait un tiers moins. Quand tout repose
+ * sur le liseré, ce tiers se voit.
+ *
  * L'encre n'est pas blanche non plus : #D1D5DC. Du blanc pur sur un fond aussi
  * sombre éblouit et fatigue à la lecture longue.
  */
 :root,
 [data-theme="sombre"] {
-  --nv-fond:              #060A14;
-  --nv-fond-profond:      #03060D;
-  --nv-carte:             #060A14;
+  --nv-fond:              #030712;
+  --nv-fond-profond:      #010409;
+  --nv-carte:             #030712;
   --nv-carte-creuse:      rgba(106,114,130,0.12);
 
-  --nv-bord:              #1B2434;
-  --nv-bord-fort:         #2A3546;
+  --nv-bord:              #1E2939;
+  --nv-bord-fort:         #2E3D52;
 
   --nv-texte:             #D1D5DC;
   --nv-texte-secondaire:  #99A1AF;
@@ -106,7 +112,7 @@
 
   /* La barre latérale. Elle est translucide et floute ce qui passe dessous :
      ses fonds ne peuvent donc pas être les jetons de carte, qui sont opaques. */
-  --nv-barre-fond:        rgba(6,10,20,0.72);
+  --nv-barre-fond:        rgba(3,7,18,0.72);
   --nv-barre-survol:      rgba(255,255,255,0.045);
   --nv-barre-actif:       rgba(255,255,255,0.11);
   --nv-barre-actif-bord:  rgba(255,255,255,0.10);
