@@ -1,13 +1,20 @@
-Drapeaux circulaires — circle-flags
-https://github.com/HatScripts/circle-flags
+Drapeaux — Appica Country Flags
+https://www.npmjs.com/package/@appica/country-flags-react
 
-Licence MIT, © HatScripts et contributeurs.
+Licence MIT, © 2026 Appica. Texte intégral dans LICENCE-appica.txt.
 
-Ces douze fichiers sont une copie locale du jeu amont, limitée aux places
-boursières que Novac affiche. Ils étaient auparavant chargés depuis
-hatscripts.github.io à chaque affichage : une page GitHub n'offre aucune
-garantie de service, ne fonctionne pas hors ligne, et faisait connaître
-l'adresse de chaque visiteur à un tiers sans raison.
+Forme « rounded » du jeu, extraite du paquet npm et reconstituée en fichiers
+SVG autonomes plutôt qu'installée en dépendance : le paquet exige React 19 et
+Novac est en 18.2, alors que ces drapeaux ne sont affichés qu'en <img>. Une
+montée de version majeure pour douze images ne se justifiait pas, et le tri
+automatique des composants ne sert à rien quand on ne s'en sert pas.
 
-Pour ajouter une place, récupérer le fichier du même nom dans le dépôt amont
-plutôt que de le redessiner.
+Douze places boursières, celles de la table des changes. Pour en ajouter une,
+extraire le fichier du même nom depuis dist/flags/rounded du paquet — le tracé
+y est le second argument de createCountryFlag, à envelopper dans un
+<svg viewBox="0 0 40 40">.
+
+Le jeu amont en compte 261, en deux formes, ronde et arrondie.
+
+Ils remplacent circle-flags (MIT, © HatScripts), qui était auparavant chargé
+en lien direct depuis hatscripts.github.io.
