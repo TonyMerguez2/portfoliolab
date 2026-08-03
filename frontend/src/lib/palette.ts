@@ -37,6 +37,8 @@ export const JETONS = {
   bordFort: "var(--nv-bord-fort)",
   /** Anneau extérieur du cadre, voir le composant Card. */
   cadre: "var(--nv-cadre)",
+  /** Voile de l'intervalle entre les deux anneaux. */
+  cadreVoile: "var(--nv-cadre-voile)",
 
   texte: "var(--nv-texte)",
   texteSecondaire: "var(--nv-texte-secondaire)",
@@ -124,19 +126,25 @@ export const CADRE = 6;
 /**
  * L'anneau extérieur du cadre.
  *
- * Il ne peint rien : son fond reste transparent et son rembourrage laisse voir
- * la page — donc la trame de points — entre les deux anneaux. C'est le
- * mécanisme du concept, dont la couche extérieure est à 50 % d'opacité avec
- * flou d'arrière-plan.
+ * Son rembourrage laisse voir la page entre les deux anneaux, mais à travers un
+ * voile sombre à demi opacité — leur `bg-background/50` avec `backdrop-blur-xs`.
+ * L'intérieur du cadre est donc plus sombre que la page tout autour, et la
+ * trame de points reste perceptible au travers, à moitié.
  *
- * La version précédente peignait cet intervalle avec une ombre interne. Le
- * résultat avait la bonne géométrie et la bonne couleur, mais restait une
- * bande opaque : la trame s'arrêtait au bord du cadre au lieu de le traverser,
- * et les deux conteneurs ne se ressemblaient pas pour cette seule raison.
+ * Deux versions ont précédé celle-ci. La première peignait l'intervalle d'une
+ * ombre interne opaque : la trame s'arrêtait au bord du cadre au lieu de le
+ * traverser. La seconde le laissait complètement transparent : la bande claire
+ * du dégradé de page passait alors en entier, et l'intérieur du cadre était
+ * aussi clair que l'extérieur.
  */
 export function styleCadreExterieur(rayon: number = RAYON): CSSProperties {
   return {
-    background: "transparent",
+    // Un voile à demi opacité, et non du transparent : il assombrit la bande de
+    // page qu'il recouvre, ce qui creuse l'intérieur du cadre. Le flou reprend
+    // leur `backdrop-blur-xs`. La trame reste visible au travers, à moitié.
+    background: JETONS.cadreVoile,
+    backdropFilter: "blur(4px)",
+    WebkitBackdropFilter: "blur(4px)",
     border: `1px solid ${JETONS.cadre}`,
     borderRadius: rayon,
     padding: CADRE,

@@ -116,7 +116,10 @@
      cadre. Il est lisible maintenant que la page est un dégradé qui s'éclaircit
      précisément à l'endroit où vivent les cartes. */
   --nv-cadre:             #030712;
-  /* L'intervalle du cadre, à 50 % comme leur `bg-background/50`. */
+  /* L'intervalle entre les deux anneaux : leur `bg-background/50`, soit la
+     couleur la plus sombre à demi opacité. Il assombrit donc la bande de page
+     qu'il recouvre, au lieu de la laisser passer en entier. C'est ce qui rend
+     l'intérieur du cadre plus sombre que la page tout autour. */
   --nv-cadre-voile:       rgba(3,7,18,0.5);
 
   --nv-texte:             #D1D5DC;
@@ -178,6 +181,7 @@
    il est réservé aux accents, où il porte justement parce qu'il est rare. */
 [data-theme="clair"] {
   --nv-cadre:             #FFFFFF;
+  --nv-cadre-voile:       rgba(255,255,255,0.5);
   --nv-fond:              #FFFFFF;
   --nv-fond-profond:      #F3F4F6;
   --nv-fond-degrade:      linear-gradient(to bottom, #FFFFFF, #F3F4F6 55%, #F3F4F6 83%, #FFFFFF);
