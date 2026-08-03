@@ -197,10 +197,11 @@ export default function AssetGrid({
           const chg = up ? "var(--nv-positif)" : "var(--nv-negatif)";
           const name = assetName(a.ticker);
           return (
-            <TileCard key={a.ticker} ticker={a.ticker} radius={12}
+            <TileCard key={a.ticker} ticker={a.ticker} radius={18} glowStrength={0}
+              className="novac-tile"
               colorHex={brandHex(a.ticker)}
               onClick={onAssetClick ? () => onAssetClick(a.ticker) : undefined}
-              containerStyle={{ height: 196, width: 248, flexShrink: 0 }}
+              containerStyle={{ height: 196, width: 248, flexShrink: 0, color: brandHex(a.ticker) }}
               style={{ height: "100%", display: "flex", flexDirection: "column", padding: "14px 15px" }}>
 
               {/* Identité */}
