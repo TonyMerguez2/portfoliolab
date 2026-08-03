@@ -90,24 +90,26 @@ function habillage(clair: boolean) {
     layout: {
       attributionLogo: false,
       background: { type: ColorType.Solid, color: "transparent" },
-      textColor: clair ? "rgba(15,23,42,0.48)" : "rgba(248,249,252,0.42)",
+      textColor: resoudreJeton("--nv-texte-secondaire", clair ? "#364153" : "#99A1AF"),
       fontSize: 11,
     },
     grid: {
       vertLines: { visible: false },
       horzLines: {
-        color: clair ? "rgba(15,23,42,0.07)" : "rgba(255,255,255,0.045)",
+        // Le même liseré que les conteneurs : le quadrillage cesse d'être un
+        // gris étranger à la page.
+        color: resoudreJeton("--nv-bord", clair ? "#E5E7EB" : "#101828"),
         style: LineStyle.Solid, visible: true,
       },
     },
     crosshair: {
       mode: CrosshairMode.Normal,
-      vertLine: { color: clair ? "rgba(15,23,42,0.25)" : "rgba(255,255,255,0.2)",
+      vertLine: { color: resoudreJeton("--nv-bord-fort", clair ? "#D1D5DC" : "#1E2939"),
                   style: LineStyle.Solid, width: 1 as const,
-                  labelBackgroundColor: clair ? "#0F172A" : "#334155" },
-      horzLine: { color: clair ? "rgba(15,23,42,0.25)" : "rgba(255,255,255,0.2)",
+                  labelBackgroundColor: resoudreJeton("--nv-texte-intense", clair ? "#101828" : "#FFFFFF") },
+      horzLine: { color: resoudreJeton("--nv-bord-fort", clair ? "#D1D5DC" : "#1E2939"),
                   style: LineStyle.Solid, width: 1 as const,
-                  labelBackgroundColor: clair ? "#0F172A" : "#334155" },
+                  labelBackgroundColor: resoudreJeton("--nv-texte-intense", clair ? "#101828" : "#FFFFFF") },
     },
   };
 }
@@ -615,7 +617,12 @@ export default function PerformanceChart({
 
   // Couleur et mode s'appliquent à la série existante. En mode ligne, le
   // dégradé est simplement rendu transparent.
-  const encre = color;
+  // Le canevas ne résout pas var() : une couleur de portefeuille est un
+  // hexadécimal, mais le repli est un jeton. On le résout ici, à chaque rendu
+  // — donc aussi au changement de thème, qui en provoque un.
+  const encre = color.startsWith("var(")
+    ? resoudreJeton(color.slice(4, -1).trim(), "#50A2FF")
+    : color;
   // Le halo de survol lit la couleur dans une référence, mise à jour ici :
   // la déclaration de `colorRef` précède celle de l'état de teinte.
   colorRef.current = encre;
@@ -638,7 +645,7 @@ export default function PerformanceChart({
           plutôt que d'un appel par période : sinon un même intervalle pourrait
           annoncer un chiffre une fois sélectionné et un autre au repos. */}
       <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 10, marginBottom: 4 }}>
-        <div style={{ display: "flex", gap: 20, flexWrap: "wrap" }}>
+        <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
           {PERIODES.map(p => {
             const actif = p === period;
             const pct = rendements[p];
@@ -651,7 +658,7 @@ export default function PerformanceChart({
             return (
               <div key={p} onClick={() => { if (!anterieure) onPeriodChange(p); }}
                 title={anterieure ? `Le portefeuille n'existe que depuis le ${new Date(origine!).toLocaleDateString("fr-FR")}` : undefined}
-                style={{ position: "relative", paddingBottom: 4, textAlign: "center", width: 46,
+                style={{ position: "relative", paddingBottom: 4, textAlign: "center", width: 45,
                          cursor: anterieure ? "default" : "pointer", flex: "none",
                          opacity: anterieure ? 0.3 : 1 }}>
                 <div style={{
@@ -780,12 +787,12 @@ export default function PerformanceChart({
         // laissée par la précédente. Le contour et le trait du signe se
         // répartissaient alors sur deux rangées de pixels : le pictogramme
         // paraissait décentré alors qu'il est à 2 px des quatre bords.
-        <div style={{ display: "flex", gap: 16, paddingTop: 6, flexShrink: 0, height: 14 }}>
+        <div style={{ display: "flex", gap: 14, paddingTop: 6, paddingBottom: 2, flexShrink: 0, height: 14 }}>
           {LEGENDE.map(l => (
             <span key={l.libelle} style={{
               display: "flex", alignItems: "center", gap: 5,
               width: l.largeur, height: 14, lineHeight: "14px",
-              fontFamily: FONT, fontSize: 10, color: clair ? "rgba(15,23,42,0.55)" : "rgba(255,255,255,0.45)",
+              fontFamily: FONT, fontSize: 10, color: JETONS.texteSecondaire,
             }}>
               {/* Même vignette que sur la courbe, en réduction : une puce ronde
                   n'annoncerait plus rien une fois les pictogrammes posés. */}
