@@ -212,7 +212,7 @@ export default function BuildPage() {
     const [presetToConfirm, setPresetToConfirm] = useState<Preset | null>(null);
     const [prices, setPrices] = useState<Record<string, { price: number; change: number }>>({});
     const [displayCount, setDisplayCount] = useState(20);
-    const debounceRef = useRef();
+    const debounceRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
     const canvasRef = useRef<HTMLCanvasElement | null>(null);
     const listRef = useRef<any>(null);
     const [showToast, setShowToast] = useState(false);

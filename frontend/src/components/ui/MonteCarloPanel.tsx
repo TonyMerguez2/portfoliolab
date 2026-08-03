@@ -52,7 +52,7 @@ function GoalPanel({ goal, horizon }: { goal: NonNullable<ReturnType<typeof useM
         <p className="text-xs font-semibold text-slate-500 uppercase tracking-widest">Objectif : {fmt(goal.target_value)}</p>
         <span className={`text-2xl font-bold tabular-nums ${color}`}>{pct.toFixed(0)}%</span>
       </div>
-      <p className="text-xs text-slate-600">de probabilité d'atteindre cet objectif dans {horizon} ans</p>
+      <p className="text-xs text-slate-600">de probabilité d’atteindre cet objectif dans {horizon} ans</p>
       <div className="grid grid-cols-3 gap-2 text-xs">
         {[
           { label: "Pessimiste", reached: goal.reached_by_p5, years: goal.years_to_reach_pessimistic },
@@ -90,7 +90,7 @@ function ProbabilityTable({ p50, p5, p95, initial }: { p50: number; p5: number; 
 
   return (
     <div>
-      <p className="text-sm font-semibold text-slate-700 mb-3">Probabilité d'atteindre différents seuils</p>
+      <p className="text-sm font-semibold text-slate-700 mb-3">Probabilité d’atteindre différents seuils</p>
       <div className="overflow-x-auto">
         <table className="w-full text-sm">
           <thead>
@@ -125,7 +125,7 @@ function ProbabilityTable({ p50, p5, p95, initial }: { p50: number; p5: number; 
           </tbody>
         </table>
       </div>
-      <p className="text-xs text-slate-400 mt-2">Basé sur les scénarios P5 (pessimiste), P50 (médian) et P95 (optimiste) à l'horizon choisi.</p>
+      <p className="text-xs text-slate-400 mt-2">Basé sur les scénarios P5 (pessimiste), P50 (médian) et P95 (optimiste) à l’horizon choisi.</p>
     </div>
   );
 }
@@ -248,7 +248,7 @@ export default function MonteCarloPanel({ assets, period, locale }: Props) {
             </p>
             {data.goal_analysis && (
               <p className="text-sm text-slate-700 leading-relaxed">
-                L'objectif de <strong>{fmt(data.goal_analysis.target_value)}</strong> a <strong className={data.goal_analysis.probability_of_reaching >= 0.5 ? "text-emerald-600" : "text-amber-500"}>{fmtPct(data.goal_analysis.probability_of_reaching)} de chances</strong> d'être atteint dans {horizon} ans.
+                L’objectif de <strong>{fmt(data.goal_analysis.target_value)}</strong> a <strong className={data.goal_analysis.probability_of_reaching >= 0.5 ? "text-emerald-600" : "text-amber-500"}>{fmtPct(data.goal_analysis.probability_of_reaching)} de chances</strong> d’être atteint dans {horizon} ans.
                 {data.goal_analysis.years_to_reach_median && ` Le scénario médian l'atteindrait en ${data.goal_analysis.years_to_reach_median} ans.`}
               </p>
             )}

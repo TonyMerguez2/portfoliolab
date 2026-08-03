@@ -327,7 +327,7 @@ function DashboardContent() {
                   </svg>
                 </div>
                 <h2 className={`font-semibold text-lg mb-2 ${textPrimary}`}>Configurez votre portefeuille</h2>
-                <p className={`text-sm max-w-xs leading-relaxed ${textSecondary}`}>Ajustez les actifs et les poids à gauche puis lancez l'analyse</p>
+                <p className={`text-sm max-w-xs leading-relaxed ${textSecondary}`}>Ajustez les actifs et les poids à gauche puis lancez l’analyse</p>
               </div>
             )}
 
@@ -653,7 +653,7 @@ function DashboardContent() {
                         </div>
                         <div>
                           <p className={`text-sm font-semibold ${textPrimary}`}>Projections Monte Carlo</p>
-                          <p className={`text-xs ${textSecondary}`}>500 simulations — probabilité d'atteindre vos objectifs</p>
+                          <p className={`text-xs ${textSecondary}`}>500 simulations — probabilité d’atteindre vos objectifs</p>
                         </div>
                       </div>
                       <svg className={`w-4 h-4 ${textSecondary} transition-transform ${openSection==="montecarlo" ? "rotate-180" : ""}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">

@@ -9,7 +9,7 @@ export default function Header({ dark, setDark, hideToggle, showLogo }: { dark: 
   const [localSearch, setLocalSearch] = useState("");
   const [localResults, setLocalResults] = useState<any[]>([]);
   const [showLocalResults, setShowLocalResults] = useState(false);
-  const localDebounce = useRef<NodeJS.Timeout>();
+  const localDebounce = useRef<NodeJS.Timeout | undefined>(undefined);
 
   const handleLocalSearch = (q: string) => {
     setLocalSearch(q);

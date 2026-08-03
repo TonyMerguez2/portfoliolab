@@ -20,7 +20,7 @@ const COLLAPSED = 68;
 const STORAGE_KEY = "novac_nav_collapsed";
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 
-type Item = { label: string; href: string; icon: JSX.Element };
+type Item = { label: string; href: string; icon: React.JSX.Element };
 
 const icon = (d: string) => (
   <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor"

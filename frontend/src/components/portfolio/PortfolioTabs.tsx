@@ -25,7 +25,7 @@ const icone = (d: string) => (
   </svg>
 );
 
-const TABS: { id: TabId; label: string; icon: JSX.Element }[] = [
+const TABS: { id: TabId; label: string; icon: React.JSX.Element }[] = [
   { id: "resume",       label: "Vue générale",  icon: icone("M3 10.5 12 4l9 6.5V20a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z") },
   { id: "transactions", label: "Transactions",  icon: icone("M4 7h13m0 0-3-3m3 3-3 3M20 17H7m0 0 3 3m-3-3 3-3") },
   { id: "analyse",      label: "Analyse",       icon: icone("M12 3a9 9 0 1 0 9 9h-9zM13 3.5A8.5 8.5 0 0 1 20.5 11H13z") },

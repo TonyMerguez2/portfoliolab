@@ -106,7 +106,7 @@ export default function TransactionModal({
   const [focusedField,   setFocusedField]   = useState<string | null>(null);
   const [cardVisible,    setCardVisible]    = useState(false);
 
-  const debounceRef   = useRef<NodeJS.Timeout>();
+  const debounceRef   = useRef<NodeJS.Timeout | undefined>(undefined);
   const searchInputRef = useRef<HTMLInputElement>(null);
   /**
    * Vrai dès que le prix a été saisi à la main. Le cours proposé ne doit plus

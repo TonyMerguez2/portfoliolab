@@ -98,7 +98,7 @@ export default function GlobalHeader() {
   const [isSearching, setIsSearching] = useState(false);
   const [highlightIndex, setHighlightIndex] = useState(-1);
   const [hoveredPortfolioId, setHoveredPortfolioId] = useState<string|null>(null);
-  const debounce = useRef<NodeJS.Timeout>();
+  const debounce = useRef<NodeJS.Timeout | undefined>(undefined);
   const listRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const isLanding = pathname === "/";
