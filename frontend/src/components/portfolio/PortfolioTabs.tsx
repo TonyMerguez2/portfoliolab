@@ -1,6 +1,7 @@
 "use client";
 import { FONT } from "@/lib/typography";
-import { CLAIR } from "@/lib/palette";
+import { useState } from "react";
+import { CLAIR, RAYONS } from "@/lib/palette";
 
 /**
  * Barre d'onglets du portefeuille.
@@ -32,12 +33,17 @@ const TABS: { id: TabId; label: string; icon: JSX.Element }[] = [
   { id: "objectifs",    label: "Objectifs",     icon: icone("M12 12m-9 0a9 9 0 1 0 18 0a9 9 0 1 0-18 0M12 12m-4 0a4 4 0 1 0 8 0a4 4 0 1 0-8 0M12 12h.01") },
 ];
 
+/** Rembourrage horizontal d'un onglet, dont le trait doit se retirer. */
+const RETRAIT = 14;
+
 export default function PortfolioTabs({
   active, onChange,
 }: {
   active: TabId;
   onChange: (id: TabId) => void;
 }) {
+  const [survole, setSurvole] = useState<TabId | null>(null);
+
   return (
     <nav aria-label="Sections du portefeuille" style={{
       display: "flex", alignItems: "stretch", gap: 4,
@@ -67,14 +73,36 @@ export default function PortfolioTabs({
               color: actif ? CLAIR.texteIntense : CLAIR.texteFort,
               // Décalé d'un pixel pour couvrir le filet de la barre plutôt que
               // de s'empiler dessus, ce qui épaississait le trait.
-              boxShadow: actif ? `inset 0 -2px 0 0 ${CLAIR.texteIntense}` : "none",
               marginBottom: -1,
+              position: "relative",
               transition: "color 160ms",
             }}
-            onMouseEnter={e => { if (!actif) e.currentTarget.style.color = CLAIR.texteIntense; }}
-            onMouseLeave={e => { if (!actif) e.currentTarget.style.color = CLAIR.texteFort; }}>
+            onMouseEnter={e => {
+              setSurvole(t.id);
+              if (!actif) e.currentTarget.style.color = CLAIR.texteIntense;
+            }}
+            onMouseLeave={e => {
+              setSurvole(null);
+              if (!actif) e.currentTarget.style.color = CLAIR.texteFort;
+            }}>
             <span style={{ display: "flex", flexShrink: 0, opacity: actif ? 1 : 0.75 }}>{t.icon}</span>
             {t.label}
+            {/* Le trait, en élément plutôt qu'en ombre interne.
+                Une ombre interne court sur toute la boîte, rembourrage compris :
+                le trait dépassait donc de l'icône et du libellé de quatorze
+                pixels de chaque côté. Posé ici, il se retire d'autant et fait
+                exactement la largeur du contenu.
+                Il est toujours présent et n'a qu'une échelle nulle au repos :
+                c'est ce qui permet de l'animer. Une apparition par l'opacité
+                aurait fondu sur place au lieu de balayer. */}
+            <span aria-hidden="true" style={{
+              position: "absolute", left: RETRAIT, right: RETRAIT, bottom: 0, height: 2,
+              borderRadius: RAYONS.plein, background: CLAIR.texteIntense,
+              transform: `scaleX(${actif || survole === t.id ? 1 : 0})`,
+              transformOrigin: "left",
+              transition: "transform 240ms cubic-bezier(0.4, 0, 0.2, 1)",
+              pointerEvents: "none",
+            }} />
           </button>
         );
       })}
