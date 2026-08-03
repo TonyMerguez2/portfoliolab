@@ -20,6 +20,7 @@ import {
 // The two comparison curves are built entirely here — grid, anchor, indexing —
 // so the effect below only has to write the result. See comparison.test.ts.
 import { buildComparison, previousSessionClose } from "@/lib/chart/comparison";
+import { couleurGrille, LIBELLE_GRILLE, STYLES_GRILLE, type StyleGrille } from "@/lib/grille";
 
 // Fetch config par intervalle — charge tout le disponible Yahoo en un seul fetch
 const INTERVAL_FETCH_CONFIG: Record<string, { apiPeriod: string; apiInterval: string }> = {
@@ -239,14 +240,14 @@ function hexToRgba(hex: string, alpha: number): string {
 }
 
 // ─── Grid presets ─────────────────────────────────────────────────────────────
-type GridPreset = "none" | "minimal" | "standard" | "solid";
+type GridPreset = StyleGrille;
 
-const GRID_PRESETS: Record<GridPreset, { color: string; style: LineStyle; label: string }> = {
-  none:     { color: "rgba(255,255,255,0)",     style: LineStyle.Solid, label: "Aucune"   },
-  minimal:  { color: "rgba(255,255,255,0.040)", style: LineStyle.Solid, label: "Minimal"  },
-  standard: { color: "rgba(255,255,255,0.075)", style: LineStyle.Solid, label: "Standard" },
-  solid:    { color: "rgba(255,255,255,0.110)", style: LineStyle.Solid,  label: "Solide"   },
-};
+const GRID_PRESETS: Record<GridPreset, { color: string; style: LineStyle; label: string }> =
+  Object.fromEntries(STYLES_GRILLE.map(v => [v, {
+    color: couleurGrille(v, false) ?? "rgba(255,255,255,0)",
+    style: LineStyle.Solid,
+    label: LIBELLE_GRILLE[v],
+  }])) as Record<GridPreset, { color: string; style: LineStyle; label: string }>;
 
 function resolveGridPreset(
   preset: GridPreset,

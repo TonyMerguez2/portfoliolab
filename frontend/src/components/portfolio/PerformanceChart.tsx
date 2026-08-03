@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import { couleurGrille, ecrireStyleGrille, lireStyleGrille, LIBELLE_GRILLE, STYLES_GRILLE, type StyleGrille } from "@/lib/grille";
 import {
   createChart, AreaSeries, CandlestickSeries, ColorType, CrosshairMode, LineStyle,
   type IChartApi, type ISeriesApi, type UTCTimestamp,
@@ -86,25 +87,10 @@ const LEGENDE = [
  * servent deux fois — à la création du graphique, et à chaque changement de
  * thème, le graphique n'étant créé qu'une seule fois.
  */
-export type DensiteGrille = "aucune" | "discrete" | "marquee";
+/** Clé de rangement de la couleur de courbe, propre à ce graphique. */
+const CLE_COULEUR = "novac-graphique-couleur";
 
-/** L'ordre dans lequel le bouton de grille fait défiler les densités. */
-const SUITE_GRILLE: Record<DensiteGrille, DensiteGrille> = {
-  discrete: "marquee",
-  marquee: "aucune",
-  aucune: "discrete",
-};
-
-const LIBELLE_GRILLE: Record<DensiteGrille, string> = {
-  discrete: "Discrète",
-  marquee: "Marquée",
-  aucune: "Masquée",
-};
-
-/** Clé de rangement des réglages d'apparence du graphique. */
-const CLE_REGLAGES = "novac-graphique-reglages";
-
-function habillage(clair: boolean, grille: DensiteGrille = "discrete") {
+function habillage(clair: boolean, grille: StyleGrille = "standard") {
   return {
     layout: {
       attributionLogo: false,
@@ -115,14 +101,9 @@ function habillage(clair: boolean, grille: DensiteGrille = "discrete") {
     grid: {
       vertLines: { visible: false },
       horzLines: {
-        // Le même liseré que les conteneurs : le quadrillage cesse d'être un
-        // gris étranger à la page. « Marquée » monte d'un cran sur la rampe
-        // plutôt que d'éclaircir arbitrairement.
-        color: resoudreJeton(
-          grille === "marquee" ? "--nv-bord-fort" : "--nv-bord",
-          clair ? "#E5E7EB" : "#101828"),
+        color: couleurGrille(grille, clair) ?? "rgba(0,0,0,0)",
         style: LineStyle.Solid,
-        visible: grille !== "aucune",
+        visible: grille !== "none",
       },
     },
     crosshair: {
@@ -216,6 +197,67 @@ function PanneauReglages({
             }}>↺</button>
         </div>
 
+      </div>
+    </>,
+    document.body,
+  );
+}
+
+/**
+ * Choix du style de grille — les quatre mêmes que sur la page d'un actif.
+ *
+ * Chaque option montre un aperçu plutôt que son seul nom : « Minimal » et
+ * « Standard » ne se distinguent qu'à l'œil, et un libellé seul obligerait à
+ * essayer les quatre pour comprendre.
+ */
+function PanneauGrille({
+  style, surStyle, fermer, ancre,
+}: {
+  style: StyleGrille;
+  surStyle: (v: StyleGrille) => void;
+  fermer: () => void;
+  ancre: { droite: number; haut: number };
+}) {
+  if (typeof document === "undefined") return null;
+  return createPortal(
+    <>
+      <div style={{ position: "fixed", inset: 0, zIndex: 40 }} onClick={fermer} />
+      <div role="dialog" aria-label="Style de la grille" style={{
+        position: "fixed", top: ancre.haut, right: ancre.droite, zIndex: 41, width: 196,
+        background: JETONS.carte, border: `1px solid ${JETONS.bordFort}`,
+        borderRadius: RAYONS.md, padding: 12, boxShadow: JETONS.ombre,
+      }}>
+        <div style={{ fontFamily: FONT, fontSize: 10, fontWeight: 600, letterSpacing: "0.08em",
+                      color: JETONS.texteAttenue, marginBottom: 8 }}>STYLE DE GRILLE</div>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0,1fr))", gap: 6 }}>
+          {STYLES_GRILLE.map(v => {
+            const actif = v === style;
+            const filet = couleurGrille(v, false);
+            return (
+              <button key={v} type="button" aria-pressed={actif} onClick={() => surStyle(v)}
+                style={{
+                  display: "flex", flexDirection: "column", alignItems: "center", gap: 5,
+                  padding: "7px 4px 6px", cursor: "pointer", borderRadius: RAYONS.xs,
+                  background: actif ? JETONS.segmentActif : JETONS.segmentPiste,
+                  border: `1px solid ${actif ? JETONS.segmentActif : JETONS.bord}`,
+                  color: actif ? JETONS.segmentEncre : JETONS.texteFort,
+                  fontFamily: FONT, fontSize: 10.5, fontWeight: 500,
+                  transition: "background 250ms, color 250ms",
+                }}>
+                {/* Aperçu : les filets tels qu'ils se peindront, sur un fond de
+                    carte. Ils sont dessinés en clair pour rester lisibles sur la
+                    pastille blanche de l'option retenue. */}
+                <svg width="30" height="20" viewBox="0 0 30 20" style={{ flexShrink: 0 }} aria-hidden="true">
+                  <rect width="30" height="20" rx="2" fill={JETONS.fond} />
+                  {filet && [5, 10, 15].map(y => (
+                    <line key={y} x1="0" y1={y} x2="30" y2={y} stroke={filet} strokeWidth="1" />
+                  ))}
+                </svg>
+                {LIBELLE_GRILLE[v]}
+              </button>
+            );
+          })}
+        </div>
       </div>
     </>,
     document.body,
@@ -336,23 +378,24 @@ export default function PerformanceChart({
   const [reglagesOuverts, setReglagesOuverts] = useState(false);
   const [ancreReglages, setAncreReglages] = useState<{ droite: number; haut: number } | null>(null);
   const [couleurChoisie, setCouleurChoisie] = useState<string | null>(null);
-  const [grille, setGrille] = useState<DensiteGrille>("discrete");
+  const [grille, setGrille] = useState<StyleGrille>("standard");
+  const [grilleOuverte, setGrilleOuverte] = useState(false);
+  const [ancreGrille, setAncreGrille] = useState<{ droite: number; haut: number } | null>(null);
 
+  // Les deux préférences ne partagent pas leur rangement : le style de grille
+  // est commun à tous les graphiques — c'est la clé de la page d'un actif —
+  // alors que la couleur de courbe n'a de sens que sur un portefeuille.
   useEffect(() => {
+    setGrille(lireStyleGrille());
     try {
-      const brut = localStorage.getItem(CLE_REGLAGES);
-      if (!brut) return;
-      const r = JSON.parse(brut) as { couleur?: string | null; grille?: DensiteGrille };
-      if (r.couleur !== undefined) setCouleurChoisie(r.couleur);
-      if (r.grille) setGrille(r.grille);
-    } catch { /* réglages illisibles : on garde les valeurs par défaut. */ }
+      const c = localStorage.getItem(CLE_COULEUR);
+      if (c) setCouleurChoisie(c === "null" ? null : c);
+    } catch { /* préférence illisible : on garde la couleur du portefeuille. */ }
   }, []);
 
   useEffect(() => {
-    try {
-      localStorage.setItem(CLE_REGLAGES, JSON.stringify({ couleur: couleurChoisie, grille }));
-    } catch { /* stockage indisponible : le réglage vaut pour la session. */ }
-  }, [couleurChoisie, grille]);
+    try { localStorage.setItem(CLE_COULEUR, couleurChoisie ?? "null"); } catch { /* sans effet */ }
+  }, [couleurChoisie]);
   /** Date de la première transaction, quand la courbe en vient. */
   const [origine, setOrigine] = useState<string | null>(null);
   /** Titres détenus dont le cours n'a pas pu être établi. */
@@ -828,27 +871,38 @@ export default function PerformanceChart({
 
         <div style={{ display: "flex", gap: 6, flexShrink: 0, position: "relative" }}>
         <button type="button"
-          onClick={() => setGrille(g => SUITE_GRILLE[g])}
-          title={`Grille : ${LIBELLE_GRILLE[grille]} — cliquer pour ${LIBELLE_GRILLE[SUITE_GRILLE[grille]].toLowerCase()}`}
-          aria-label={`Grille ${LIBELLE_GRILLE[grille]}`}
+          onClick={e => {
+            const r = e.currentTarget.getBoundingClientRect();
+            setAncreGrille({ droite: window.innerWidth - r.right, haut: r.bottom + 6 });
+            setGrilleOuverte(v => !v);
+          }}
+          title="Personnaliser la grille"
           style={{
-            background: grille !== "discrete" ? JETONS.segmentActif : JETONS.segmentPiste,
-            border: `1px solid ${grille !== "discrete" ? JETONS.segmentActif : JETONS.bord}`,
+            background: grilleOuverte ? JETONS.segmentActif : JETONS.segmentPiste,
+            border: `1px solid ${grilleOuverte ? JETONS.segmentActif : JETONS.bord}`,
             borderRadius: RAYONS.sm, width: 30, height: 30, cursor: "pointer", flexShrink: 0,
             display: "flex", alignItems: "center", justifyContent: "center",
-            color: grille !== "discrete" ? JETONS.segmentEncre : JETONS.texteFort,
-            boxShadow: grille !== "discrete" ? JETONS.segmentOmbre : "none",
+            color: grilleOuverte ? JETONS.segmentEncre : JETONS.texteFort,
+            boxShadow: grilleOuverte ? JETONS.segmentOmbre : "none",
             transition: "background 250ms, color 250ms",
           }}>
-          {/* Trois filets horizontaux, dont le nombre visible dit la densité :
-              l'icône montre l'état plutôt que de le seul nommer en infobulle. */}
-          <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor"
-            strokeWidth="1.4" strokeLinecap="round" aria-hidden="true">
-            <line x1="2" y1="4.5" x2="14" y2="4.5" opacity={grille === "aucune" ? 0.2 : 1} />
-            <line x1="2" y1="8"   x2="14" y2="8"   opacity={grille === "marquee" ? 1 : grille === "aucune" ? 0.2 : 0.55} />
-            <line x1="2" y1="11.5" x2="14" y2="11.5" opacity={grille === "aucune" ? 0.2 : 1} />
+          {/* Le croisillon de la page d'un actif, au trait près. */}
+          <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth={1.5} aria-hidden="true">
+            <line x1="0" y1="4.7" x2="14" y2="4.7" />
+            <line x1="0" y1="9.3" x2="14" y2="9.3" />
+            <line x1="4.7" y1="0" x2="4.7" y2="14" />
+            <line x1="9.3" y1="0" x2="9.3" y2="14" />
           </svg>
         </button>
+
+        {grilleOuverte && ancreGrille && (
+          <PanneauGrille
+            style={grille}
+            surStyle={v => { setGrille(v); ecrireStyleGrille(v); }}
+            fermer={() => setGrilleOuverte(false)}
+            ancre={ancreGrille}
+          />
+        )}
 
         <button type="button"
           onClick={e => {
