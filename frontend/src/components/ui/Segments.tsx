@@ -15,9 +15,18 @@ import { JETONS, RAYONS } from "@/lib/palette";
  * rayons. C'est d'ailleurs de là que venait une bonne part des onze rayons
  * distincts relevés sur la page.
  *
- * L'option active n'est pas teintée à l'accent mais franchement claire : un
- * voile d'accent à 10 % ne se distingue pas d'un survol, et il perdait le sens
- * de « celle-ci est choisie ».
+ * Les valeurs viennent de leur composant Tabs, variante « pill », et non de
+ * mes déductions sur captures. Trois choses m'avaient échappé :
+ *
+ * — La pastille active est **blanche et son texte noir dans les deux thèmes**.
+ *   Ce n'est pas la couleur d'encre du thème : c'est un objet posé sur la
+ *   piste, et il garde la même valeur qu'on soit en clair ou en sombre.
+ * — Le texte inactif est leur `foreground-strong`, bien plus lumineux que le
+ *   gris atténué que j'avais choisi.
+ * — La pastille garde **le rayon de la piste** (`rounded-[inherit]`) au lieu de
+ *   le réduire du rembourrage. J'appliquais la règle des arrondis
+ *   concentriques ; eux ne le font pas, et à 2 px de rembourrage l'écart ne se
+ *   voit pas.
  */
 
 export type Segment<T extends string> = { valeur: T; libelle: string };
@@ -33,14 +42,15 @@ export default function Segments<T extends string>({
   ariaLabel?: string;
 }) {
   const petit = taille === "sm";
-  const hauteur = petit ? 24 : 30;
-  const rayonPiste = petit ? RAYONS.sm : RAYONS.md;
+  // Leur échelle nommée : rounded-sm vaut 12 px, rounded-md 14.
+  const rayon = petit ? 12 : RAYONS.md;
 
   return (
     <div role="tablist" aria-label={ariaLabel} style={{
-      display: "inline-flex", gap: 2, padding: 3,
+      // gap-0.5 et p-0.5 chez eux, soit 2 px de part et d'autre.
+      display: "inline-flex", gap: 2, padding: 2,
       background: JETONS.segmentPiste,
-      borderRadius: rayonPiste,
+      borderRadius: rayon,
       // La piste ne doit pas s'étirer si elle vit dans un conteneur en flex :
       // elle vaut la largeur de ses options, pas davantage.
       flexShrink: 0, boxSizing: "border-box",
@@ -51,22 +61,19 @@ export default function Segments<T extends string>({
           <button key={o.valeur} type="button" role="tab" aria-selected={actif}
             onClick={() => onChange(o.valeur)}
             style={{
-              padding: petit ? "0 9px" : "0 12px",
-              height: hauteur - 6,
-              // Le rayon de la pastille suit celui de la piste, moins le
-              // rembourrage : sans quoi la pastille paraît plus carrée que le
-              // creux qui la contient.
-              borderRadius: rayonPiste - 3,
+              padding: petit ? "0 10px" : "0 13px",
+              height: petit ? 22 : 26,
+              borderRadius: rayon,
               border: "none", cursor: "pointer", whiteSpace: "nowrap",
-              fontFamily: FONT, fontSize: petit ? 10.5 : 11.5,
-              fontWeight: actif ? 600 : 500,
+              fontFamily: FONT, fontSize: petit ? 11 : 12,
+              fontWeight: 500,
               background: actif ? JETONS.segmentActif : "transparent",
-              color: actif ? JETONS.segmentEncre : JETONS.texteAttenue,
+              color: actif ? JETONS.segmentEncre : JETONS.segmentInactif,
               boxShadow: actif ? JETONS.segmentOmbre : "none",
-              transition: "background 140ms, color 140ms",
+              transition: "background 250ms, color 250ms",
             }}
-            onMouseEnter={e => { if (!actif) e.currentTarget.style.color = JETONS.texteSecondaire; }}
-            onMouseLeave={e => { if (!actif) e.currentTarget.style.color = JETONS.texteAttenue; }}>
+            onMouseEnter={e => { if (!actif) e.currentTarget.style.background = JETONS.segmentSurvol; }}
+            onMouseLeave={e => { if (!actif) e.currentTarget.style.background = "transparent"; }}>
             {o.libelle}
           </button>
         );

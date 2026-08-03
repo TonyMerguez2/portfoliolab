@@ -69,6 +69,8 @@ export const JETONS = {
   segmentPiste: "var(--nv-segment-piste)",
   segmentActif: "var(--nv-segment-actif)",
   segmentEncre: "var(--nv-segment-encre)",
+  segmentInactif: "var(--nv-segment-inactif)",
+  segmentSurvol: "var(--nv-segment-survol)",
   segmentOmbre: "var(--nv-segment-ombre)",
 } as const;
 
