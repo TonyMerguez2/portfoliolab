@@ -8,6 +8,7 @@ import type { HistoryPoint, Period } from "@/lib/chart/portfolioCurve";
 import { FONT, NUM } from "@/lib/typography";
 import { enTetesAuth } from "@/lib/session";
 import { COULEUR_OP, COULEUR_OP_CLAIR } from "@/lib/journal";
+import { useModeTheme } from "@/lib/theme";
 
 export type { HistoryPoint, Period };
 
@@ -75,6 +76,41 @@ const LEGENDE = [
   { type: "vente",        libelle: "Vente",        largeur: 62 },
 ];
 
+/**
+ * L'habillage du canevas : texte, grille, réticule.
+ *
+ * lightweight-charts peint sur un canevas et ne sait pas résoudre `var(...)`.
+ * Ces couleurs sont donc écrites en clair, et regroupées ici parce qu'elles
+ * servent deux fois — à la création du graphique, et à chaque changement de
+ * thème, le graphique n'étant créé qu'une seule fois.
+ */
+function habillage(clair: boolean) {
+  return {
+    layout: {
+      attributionLogo: false,
+      background: { type: ColorType.Solid, color: "transparent" },
+      textColor: clair ? "rgba(15,23,42,0.48)" : "rgba(248,249,252,0.42)",
+      fontSize: 11,
+    },
+    grid: {
+      vertLines: { visible: false },
+      horzLines: {
+        color: clair ? "rgba(15,23,42,0.07)" : "rgba(255,255,255,0.045)",
+        style: LineStyle.Solid, visible: true,
+      },
+    },
+    crosshair: {
+      mode: CrosshairMode.Normal,
+      vertLine: { color: clair ? "rgba(15,23,42,0.25)" : "rgba(255,255,255,0.2)",
+                  style: LineStyle.Solid, width: 1 as const,
+                  labelBackgroundColor: clair ? "#0F172A" : "#334155" },
+      horzLine: { color: clair ? "rgba(15,23,42,0.25)" : "rgba(255,255,255,0.2)",
+                  style: LineStyle.Solid, width: 1 as const,
+                  labelBackgroundColor: clair ? "#0F172A" : "#334155" },
+    },
+  };
+}
+
 /** La couleur d'un type d'opération, selon le thème. */
 function couleurOp(type: string, clair: boolean): string {
   const t = type as keyof typeof COULEUR_OP;
@@ -132,7 +168,7 @@ const PERIOD_SECS: Record<Period, number | null> = {
 
 export default function PerformanceChart({
   assets, totalValue, period, onPeriodChange, color = "#5B8DEF", height,
-  portfolioId, surTransactions = false, operations = [], onOperationClick, clair = false,
+  portfolioId, surTransactions = false, operations = [], onOperationClick,
 }: {
   assets: { ticker: string; weight: number }[];
   totalValue: number | null;
@@ -160,14 +196,11 @@ export default function PerformanceChart({
   operations?: { id: number; ticker: string; executed_at: string; type: string; couleur: string; libelle: string }[];
   /** Appelé au clic sur un repère, avec l'identifiant de l'écriture. */
   onOperationClick?: (id: number) => void;
-  /**
-   * Rendu sur panneau blanc.
-   *
-   * Les graduations et le réticule sont blancs translucides par défaut : sur un
-   * fond clair, ils disparaissent purement et simplement.
-   */
-  clair?: boolean;
 }) {
+  // Le thème se lit à la source plutôt que de descendre en props : le
+  // graphique est utilisé par la vue générale et par l'onglet Transactions, et
+  // les deux n'avaient aucune raison de le lui rappeler.
+  const clair = useModeTheme() === "clair";
   const boxRef = useRef<HTMLDivElement>(null);
   const plotRef = useRef<HTMLDivElement>(null);
   const glowRef = useRef<HTMLCanvasElement>(null);
@@ -186,7 +219,12 @@ export default function PerformanceChart({
   /** Titres détenus dont le cours n'a pas pu être établi. */
   const [sansCours, setSansCours] = useState<string[]>([]);
   /** Position à l'écran de chaque repère d'opération, en pixels du cadre. */
-  useEffect(() => { clairRef.current = clair; }, [clair]);
+  useEffect(() => {
+    clairRef.current = clair;
+    // Le graphique n'est créé qu'une fois : sans cette réapplication, la
+    // grille et le réticule resteraient dans les couleurs du thème de départ.
+    chartRef.current?.applyOptions(habillage(clair));
+  }, [clair]);
 
   const [pastilles, setPastilles] = useState<{ id: number; x: number; y: number; titre: string; nombre: number; type: string }[]>([]);
 
@@ -338,28 +376,7 @@ export default function PerformanceChart({
 
     const chart = createChart(el, {
       autoSize: true,
-      layout: {
-        attributionLogo: false,
-        background: { type: ColorType.Solid, color: "transparent" },
-        textColor: clairRef.current ? "rgba(15,23,42,0.48)" : "rgba(248,249,252,0.42)",
-        fontSize: 11,
-      },
-      grid: {
-        vertLines: { visible: false },
-        horzLines: {
-          color: clairRef.current ? "rgba(15,23,42,0.07)" : "rgba(255,255,255,0.045)",
-          style: LineStyle.Solid, visible: true,
-        },
-      },
-      crosshair: {
-        mode: CrosshairMode.Normal,
-        vertLine: { color: clairRef.current ? "rgba(15,23,42,0.25)" : "rgba(255,255,255,0.2)",
-                    style: LineStyle.Solid, width: 1,
-                    labelBackgroundColor: clairRef.current ? "#0F172A" : "#334155" },
-        horzLine: { color: clairRef.current ? "rgba(15,23,42,0.25)" : "rgba(255,255,255,0.2)",
-                    style: LineStyle.Solid, width: 1,
-                    labelBackgroundColor: clairRef.current ? "#0F172A" : "#334155" },
-      },
+      ...habillage(clairRef.current),
       // Échelle à droite, sans bordure et avec les mêmes marges que la page
       // graphique : c'est là que lightweight-charts pose la pastille de
       // dernière valeur.

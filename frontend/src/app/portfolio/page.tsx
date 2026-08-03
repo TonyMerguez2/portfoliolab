@@ -966,7 +966,6 @@ function PortfolioPageInner() {
               portfolioId={portfolio?.id}
               surTransactions={surTransactions}
               operations={reperesOperations}
-              clair
               onOperationClick={(id) => { setOperationVisee(id); setDashView("transactions"); }}
             />
             </div>

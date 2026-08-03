@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import { useApp } from "@/lib/AppContext";
 import ProfileModal from "@/components/ProfileModal";
 import AuthModal from "@/components/AuthModal";
+import { basculerMode, useModeTheme } from "@/lib/theme";
 
 /**
  * Navigation principale, en panneau latéral repliable.
@@ -42,6 +43,7 @@ const ICONS = {
 export default function SideNav() {
   const pathname = usePathname();
   const { mode, activeAsset, displayMode, toggleDisplayMode } = useApp();
+  const modeTheme = useModeTheme();
 
   // Replié par défaut nulle part : on lit la préférence après hydratation, pour
   // que le rendu serveur et le premier rendu client concordent.
@@ -283,6 +285,24 @@ export default function SideNav() {
             </span>
           </button>
         )}
+        <button
+          onClick={() => basculerMode()}
+          title={modeTheme === "clair" ? "Passer au thème sombre" : "Passer au thème clair"}
+          style={{
+            display: "flex", alignItems: "center", gap: 12, width: "100%",
+            height: 40, padding: "0 12px", borderRadius: 10,
+            background: "transparent", border: "none", cursor: "pointer",
+            color: "var(--nv-texte-secondaire)", fontSize: 13, fontWeight: 500,
+            whiteSpace: "nowrap", textAlign: "left",
+          }}
+        >
+          <span style={{ flexShrink: 0, display: "flex" }}>
+            {icon(modeTheme === "clair" ? ICONS.moon : ICONS.sun)}
+          </span>
+          <span style={{ opacity: collapsed ? 0 : 1, transition: "opacity 160ms" }}>
+            {modeTheme === "clair" ? "Thème sombre" : "Thème clair"}
+          </span>
+        </button>
         <button
           onClick={toggleDisplayMode}
           title={displayMode === "black" ? "Revenir au thème verre" : "Passer au thème noir"}

@@ -40,54 +40,166 @@
   border-radius: 3px;
 }
 
-/* ── Novac design tokens ──────────────────────────────────────── */
+/* ── Jetons Novac ──────────────────────────────────────────────────────────
+   Deux thèmes, une seule source de vérité.
+
+   Ils vivent en variables CSS et non en constantes JavaScript parce que les
+   pages sont écrites en styles en ligne : `color: var(--nv-texte)` fonctionne
+   tel quel dans un style={{}}, et la bascule d'un thème à l'autre ne provoque
+   alors aucun rendu React. La version précédente passait un booléen `clair` en
+   props ; il aurait fallu le propager dans chaque composant, et chaque bascule
+   aurait repeint l'arbre entier.
+
+   Nommage en français, comme le reste du code métier.
+   ─────────────────────────────────────────────────────────────────────────── */
+
+/* Thème sombre — celui par défaut, hérité du reste de l'application. */
+:root,
+[data-theme="sombre"] {
+  --nv-fond:              #040F22;
+  --nv-fond-profond:      #020A18;
+  --nv-carte:             #0A1628;
+  --nv-carte-creuse:      rgba(255,255,255,0.04);
+
+  --nv-bord:              rgba(255,255,255,0.08);
+  --nv-bord-fort:         rgba(255,255,255,0.14);
+
+  --nv-texte:             #F8F9FC;
+  --nv-texte-secondaire:  rgba(248,249,252,0.65);
+  --nv-texte-attenue:     rgba(248,249,252,0.42);
+  --nv-texte-faible:      rgba(248,249,252,0.28);
+
+  /* Texte posé à même le fond de page, hors carte. */
+  --nv-sur-fond:          #F8F9FC;
+  --nv-sur-fond-attenue:  rgba(248,249,252,0.62);
+  --nv-sur-fond-faible:   rgba(248,249,252,0.40);
+
+  --nv-positif:           #4ade80;
+  --nv-negatif:           #f87171;
+  --nv-attention:         #fbbf24;
+
+  --nv-accent:            #5B8DEF;
+  --nv-accent-doux:       rgba(91,141,239,0.16);
+  --nv-accent-bord:       rgba(91,141,239,0.38);
+
+  --nv-ombre:             0 1px 3px rgba(0,0,0,0.28), 0 12px 32px rgba(0,0,0,0.22);
+
+  /* Les points du fond. Seul le thème sombre les montre. */
+  --nv-point:             rgba(255,255,255,0.055);
+  --nv-point-vif:         rgba(150,190,255,0.34);
+}
+
+/* Thème clair.
+
+   Rampe quasi neutre, dans l'esprit relevé sur les jetons d'Appica : leur
+   `primary` mesure L 0.210 / C 0.034 en OKLCH, leur bordure C 0.006. Toute la
+   sensation « premium » vient de là — un champ presque blanc, une encre presque
+   noire, et la couleur rendue rare. Le bleu #0B63E7 ne peint donc plus la page :
+   il est réservé aux accents, où il porte justement parce qu'il est rare. */
+[data-theme="clair"] {
+  --nv-fond:              #FAFBFC;
+  --nv-fond-profond:      #F1F4F8;
+  --nv-carte:             #FFFFFF;
+  --nv-carte-creuse:      #F4F7FB;
+
+  --nv-bord:              rgba(15,23,42,0.08);
+  --nv-bord-fort:         rgba(15,23,42,0.16);
+
+  --nv-texte:             #0F172A;
+  --nv-texte-secondaire:  rgba(15,23,42,0.62);
+  --nv-texte-attenue:     rgba(15,23,42,0.45);
+  --nv-texte-faible:      rgba(15,23,42,0.32);
+
+  /* Le fond n'est plus bleu : « sur le fond » et « dans une carte » se
+     confondent, et ces trois jetons pointent vers l'encre normale. Ils
+     subsistent pour que les composants n'aient pas à savoir quel thème est
+     actif. */
+  --nv-sur-fond:          #0F172A;
+  --nv-sur-fond-attenue:  rgba(15,23,42,0.62);
+  --nv-sur-fond-faible:   rgba(15,23,42,0.45);
+
+  --nv-positif:           #0F7B3D;
+  --nv-negatif:           #C81E1E;
+  --nv-attention:         #B45309;
+
+  --nv-accent:            #0B63E7;
+  --nv-accent-doux:       rgba(11,99,231,0.10);
+  --nv-accent-bord:       rgba(11,99,231,0.28);
+
+  --nv-ombre:             0 1px 2px rgba(11,32,74,0.06), 0 8px 24px rgba(11,32,74,0.08);
+
+  --nv-point:             transparent;
+  --nv-point-vif:         transparent;
+}
+
+/* Rayons. Base 14 px, l'échelle d'Appica (0.875rem), déclinée en proportions
+   simples plutôt qu'en valeurs arbitraires semées dans le code. */
 :root {
-  --novac-bg:             #040F22;
-  --novac-surface:        rgba(255,255,255,0.02);
-  --novac-surface-solid:  #0a1628;
-  --novac-border:         rgba(255,255,255,0.06);
-  --novac-border-strong:  rgba(255,255,255,0.12);
-  --novac-text-primary:   #F8F9FC;
-  --novac-text-secondary: rgba(248,249,252,0.65);
-  --novac-text-muted:     rgba(248,249,252,0.40);
-  --novac-positive:       #4ade80;
-  --novac-negative:       #ef4444;
-  --novac-shadow:         0 1px 3px rgba(0,0,0,0.28);
-  --novac-pill-bg:        rgba(255,255,255,0.07);
-  --novac-pill-border:    rgba(255,255,255,0.06);
+  --nv-rayon-xs:  4px;
+  --nv-rayon-sm:  8px;
+  --nv-rayon:    14px;
+  --nv-rayon-lg: 20px;
+  --nv-rayon-xl: 28px;
 }
 
-[data-theme="light"] {
-  --novac-bg:             #F5F7FA;
-  --novac-surface:        #FFFFFF;
-  --novac-surface-solid:  #FFFFFF;
-  --novac-border:         rgba(16,24,40,0.08);
-  --novac-border-strong:  rgba(16,24,40,0.14);
-  --novac-text-primary:   #1A2233;
-  --novac-text-secondary: #5A6577;
-  --novac-text-muted:     #8B94A3;
-  --novac-positive:       #16A34A;
-  --novac-negative:       #DC2626;
-  --novac-shadow:         0 1px 3px rgba(16,24,40,0.06);
-  --novac-pill-bg:        rgba(16,24,40,0.05);
-  --novac-pill-border:    rgba(16,24,40,0.08);
+/* Les anciens jetons deviennent des alias : les cinq fichiers qui les
+   utilisent encore suivent les deux thèmes sans être touchés. */
+:root {
+  --novac-bg:             var(--nv-fond);
+  --novac-surface:        var(--nv-carte-creuse);
+  --novac-surface-solid:  var(--nv-carte);
+  --novac-border:         var(--nv-bord);
+  --novac-border-strong:  var(--nv-bord-fort);
+  --novac-text-primary:   var(--nv-texte);
+  --novac-text-secondary: var(--nv-texte-secondaire);
+  --novac-text-muted:     var(--nv-texte-attenue);
+  --novac-positive:       var(--nv-positif);
+  --novac-negative:       var(--nv-negatif);
+  --novac-shadow:         var(--nv-ombre);
+  --novac-pill-bg:        var(--nv-carte-creuse);
+  --novac-pill-border:    var(--nv-bord);
 }
 
-[data-theme="light"] body {
-  background-color: #F5F7FA;
-  color: #1A2233;
+[data-theme="clair"] ::-webkit-scrollbar-thumb {
+  background: rgba(15,23,42,0.18);
 }
 
-/* Page-level background override */
-[data-theme="light"] [data-novac-page] {
-  background: #F5F7FA !important;
-  color: #1A2233 !important;
+/* ── Fond à points ─────────────────────────────────────────────────────────
+   Deux trames identiques superposées : l'une terne, visible partout, l'autre
+   vive mais masquée sauf autour du curseur. Le masque est un dégradé radial
+   centré sur --nv-mx / --nv-my, que PointsFond met à jour au pointermove.
+
+   Aucun état React : écrire une propriété CSS personnalisée ne déclenche pas
+   de rendu, alors qu'un pointermove en produirait des dizaines par seconde.
+   Même procédé que trackSpecular() sur les tuiles.
+   ─────────────────────────────────────────────────────────────────────────── */
+.nv-points {
+  position: fixed;
+  inset: 0;
+  /* Derrière tout le contenu, mais devant le fond du <body>. Un z-index de 0
+     l'aurait fait passer au-dessus du contenu non positionné, qui se serait
+     retrouvé sous la trame. */
+  z-index: -1;
+  pointer-events: none;
+  background-image: radial-gradient(circle at center, var(--nv-point) 1px, transparent 1px);
+  background-size: 22px 22px;
 }
 
-/* Scrollbar en mode clair */
-[data-theme="light"] ::-webkit-scrollbar-thumb {
-  background: rgba(16,24,40,0.15);
+.nv-points::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background-image: radial-gradient(circle at center, var(--nv-point-vif) 1px, transparent 1px);
+  background-size: 22px 22px;
+  /* Hors écran tant que la souris n'a pas bougé : sans cela, la lueur
+     apparaîtrait dans le coin haut-gauche au chargement. */
+  -webkit-mask-image: radial-gradient(200px circle at var(--nv-mx, -9999px) var(--nv-my, -9999px), #000 0%, rgba(0,0,0,0.35) 45%, transparent 72%);
+  mask-image: radial-gradient(200px circle at var(--nv-mx, -9999px) var(--nv-my, -9999px), #000 0%, rgba(0,0,0,0.35) 45%, transparent 72%);
 }
+
+/* Le mode clair n'a pas de trame : ses points sont transparents, et la couche
+   n'est de toute façon pas montée. Ceinture et bretelles. */
+[data-theme="clair"] .nv-points { display: none; }
 
 /* Dark mode (legacy class) */
 .dark {

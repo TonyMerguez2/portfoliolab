@@ -4,6 +4,7 @@ import { Inter } from "next/font/google";
 import "./globals.css";
 import GlobalHeader from "@/components/GlobalHeader";
 import SideNav from "@/components/SideNav";
+import PointsFond from "@/components/PointsFond";
 
 const inter = Inter({ subsets: ["latin"] });
 
@@ -12,10 +13,37 @@ export const metadata: Metadata = {
   description: "Construisez, analysez et comprenez votre portefeuille d'investissement.",
 };
 
+/**
+ * Pose le thème avant la première peinture.
+ *
+ * Le serveur ne sait pas quel thème l'utilisateur a choisi : le rendu part donc
+ * du sombre par défaut. Si le choix retenu est le clair, l'appliquer depuis un
+ * effet React arriverait après la première peinture, et l'on verrait la page
+ * noircir puis blanchir — le scintillement classique.
+ *
+ * D'où ce script exécuté avant le corps du document. Il est bloquant, mais il
+ * ne fait que lire une clé et écrire un attribut.
+ */
+const SCRIPT_THEME = `(function(){try{
+  var m = localStorage.getItem('novac-theme');
+  if (m !== 'clair' && m !== 'sombre') {
+    m = matchMedia('(prefers-color-scheme: light)').matches ? 'clair' : 'sombre';
+  }
+  document.documentElement.setAttribute('data-theme', m);
+}catch(e){
+  document.documentElement.setAttribute('data-theme','sombre');
+}})();`;
+
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="fr">
+    // Le script écrit data-theme avant l'hydratation : React constaterait
+    // sinon un écart entre son rendu serveur et le DOM reçu.
+    <html lang="fr" data-theme="sombre" suppressHydrationWarning>
+      <head>
+        <script dangerouslySetInnerHTML={{ __html: SCRIPT_THEME }} />
+      </head>
       <body className={inter.className}>
+        <PointsFond />
         <AppProvider>
           <SideNav/>
           <div className="novac-shell">
