@@ -84,14 +84,17 @@
   --nv-carte-creuse:      rgba(106,114,130,0.12);
 
   --nv-bord:              #1E2939;
-  --nv-bord-fort:         #2E3D52;
-  /* L'anneau extérieur du cadre, un cran plus discret que celui de la carte. */
-  --nv-cadre:             #141C29;
+  --nv-bord-fort:         #364153;
+  /* L'anneau extérieur du cadre : leur `border-muted`, un cran sous le liseré. */
+  --nv-cadre:             #101828;
 
   --nv-texte:             #D1D5DC;
   --nv-texte-secondaire:  #99A1AF;
   --nv-texte-attenue:     #6A7282;
-  --nv-texte-faible:      #5B6678;
+  /* Leur rampe n'a pas de cran de texte sous #6A7282 : le suivant, #4A5565,
+     tombe à 2,7:1 sur cette page. « Atténué » et « faible » se confondent donc
+     ici, ce qui vaut mieux qu'un libellé illisible. */
+  --nv-texte-faible:      #6A7282;
 
   /* Texte posé à même le fond de page, hors carte. */
   --nv-sur-fond:          #D1D5DC;
@@ -106,7 +109,7 @@
   --nv-accent-doux:       rgba(91,141,239,0.16);
   --nv-accent-bord:       rgba(91,141,239,0.38);
 
-  --nv-ombre:             0 1px 3px rgba(0,0,0,0.28), 0 12px 32px rgba(0,0,0,0.22);
+  --nv-ombre:             0 1px 3px rgba(106,114,130,0.18), 0 12px 32px rgba(3,7,18,0.45);
 
   /* Les points du fond. Seul le thème sombre les montre. */
   --nv-point:             rgba(255,255,255,0.055);
@@ -137,27 +140,28 @@
    noire, et la couleur rendue rare. Le bleu #0B63E7 ne peint donc plus la page :
    il est réservé aux accents, où il porte justement parce qu'il est rare. */
 [data-theme="clair"] {
-  --nv-cadre:             rgba(15,23,42,0.05);
-  --nv-fond:              #FAFBFC;
-  --nv-fond-profond:      #F1F4F8;
+  --nv-cadre:             #F3F4F6;
+  --nv-fond:              #F9FAFB;
+  --nv-fond-profond:      #F3F4F6;
   --nv-carte:             #FFFFFF;
-  --nv-carte-creuse:      #F4F7FB;
+  --nv-carte-creuse:      #F3F4F6;
 
-  --nv-bord:              rgba(15,23,42,0.08);
-  --nv-bord-fort:         rgba(15,23,42,0.16);
+  --nv-bord:              #E5E7EB;
+  --nv-bord-fort:         #D1D5DC;
 
-  --nv-texte:             #0F172A;
-  --nv-texte-secondaire:  rgba(15,23,42,0.62);
-  --nv-texte-attenue:     rgba(15,23,42,0.45);
-  --nv-texte-faible:      rgba(15,23,42,0.32);
+  --nv-texte:             #101828;
+  --nv-texte-secondaire:  #364153;
+  --nv-texte-attenue:     #6A7282;
+  /* Même repli qu'en sombre : #99A1AF ne donne que 2,6:1 sur blanc. */
+  --nv-texte-faible:      #6A7282;
 
   /* Le fond n'est plus bleu : « sur le fond » et « dans une carte » se
      confondent, et ces trois jetons pointent vers l'encre normale. Ils
      subsistent pour que les composants n'aient pas à savoir quel thème est
      actif. */
-  --nv-sur-fond:          #0F172A;
-  --nv-sur-fond-attenue:  rgba(15,23,42,0.62);
-  --nv-sur-fond-faible:   rgba(15,23,42,0.45);
+  --nv-sur-fond:          #101828;
+  --nv-sur-fond-attenue:  #364153;
+  --nv-sur-fond-faible:   #6A7282;
 
   --nv-positif:           #0F7B3D;
   --nv-negatif:           #C81E1E;
@@ -167,7 +171,7 @@
   --nv-accent-doux:       rgba(11,99,231,0.10);
   --nv-accent-bord:       rgba(11,99,231,0.28);
 
-  --nv-ombre:             0 1px 2px rgba(11,32,74,0.06), 0 8px 24px rgba(11,32,74,0.08);
+  --nv-ombre:             0 1px 2px rgba(106,114,130,0.18), 0 8px 24px rgba(106,114,130,0.12);
 
   --nv-point:             transparent;
   --nv-point-vif:         transparent;

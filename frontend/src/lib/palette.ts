@@ -83,7 +83,9 @@ export const CLAIR = JETONS;
  * ne distingue un rayon de 6 d'un rayon de 7 sinon l'inattention, mais les
  * deux côte à côte se voient.
  *
- * Cinq échelons suffisent, calés sur la base de 14 px relevée chez Appica.
+ * Cinq échelons suffisent, calés sur la base de 14 px — leur `--radius`, lu
+ * dans leur CSS compilé — déclinée en septièmes : 4, 6, 8, 10, 14, 18, 22, 28.
+ * L'échelon `lg` valait 20, qui n'y figure pas : elle passe de 18 à 22.
  * `plein` sert aux barres et aux pastilles rondes, où l'arrondi doit valoir la
  * moitié de la hauteur quelle qu'elle soit.
  */
@@ -91,7 +93,7 @@ export const RAYONS = {
   xs: 6,
   sm: 10,
   md: 14,
-  lg: 20,
+  lg: 18,
   xl: 28,
   plein: 999,
 } as const;
