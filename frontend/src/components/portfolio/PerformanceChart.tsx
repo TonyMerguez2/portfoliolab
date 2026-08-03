@@ -11,7 +11,6 @@ import { enTetesAuth } from "@/lib/session";
 import { COULEUR_OP, COULEUR_OP_CLAIR } from "@/lib/journal";
 import { useModeTheme, resoudreJeton } from "@/lib/theme";
 import { RAYONS, JETONS } from "@/lib/palette";
-import Segments from "@/components/ui/Segments";
 
 export type { HistoryPoint, Period };
 
@@ -89,6 +88,19 @@ const LEGENDE = [
  */
 export type DensiteGrille = "aucune" | "discrete" | "marquee";
 
+/** L'ordre dans lequel le bouton de grille fait défiler les densités. */
+const SUITE_GRILLE: Record<DensiteGrille, DensiteGrille> = {
+  discrete: "marquee",
+  marquee: "aucune",
+  aucune: "discrete",
+};
+
+const LIBELLE_GRILLE: Record<DensiteGrille, string> = {
+  discrete: "Discrète",
+  marquee: "Marquée",
+  aucune: "Masquée",
+};
+
 /** Clé de rangement des réglages d'apparence du graphique. */
 const CLE_REGLAGES = "novac-graphique-reglages";
 
@@ -147,12 +159,10 @@ const TEINTES: { nom: string; valeur: string }[] = [
 ];
 
 function PanneauReglages({
-  couleur, surCouleur, grille, surGrille, fermer, ancre,
+  couleur, surCouleur, fermer, ancre,
 }: {
   couleur: string;
   surCouleur: (v: string | null) => void;
-  grille: DensiteGrille;
-  surGrille: (v: DensiteGrille) => void;
   fermer: () => void;
   /** Coin haut-droit du panneau, en coordonnées de fenêtre. */
   ancre: { droite: number; haut: number };
@@ -179,7 +189,7 @@ function PanneauReglages({
         borderRadius: RAYONS.md, padding: 12, boxShadow: JETONS.ombre,
       }}>
         <div style={{ fontFamily: FONT, fontSize: 10, fontWeight: 600, letterSpacing: "0.08em",
-                      color: JETONS.texteAttenue, marginBottom: 8 }}>COURBE</div>
+                      color: JETONS.texteAttenue, marginBottom: 8 }}>COULEUR DE LA COURBE</div>
         <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 12 }}>
           {TEINTES.map(t => {
             const actif = couleur.toLowerCase() === t.valeur.toLowerCase();
@@ -206,15 +216,6 @@ function PanneauReglages({
             }}>↺</button>
         </div>
 
-        <div style={{ fontFamily: FONT, fontSize: 10, fontWeight: 600, letterSpacing: "0.08em",
-                      color: JETONS.texteAttenue, marginBottom: 8 }}>GRILLE</div>
-        <Segments taille="sm" ariaLabel="Densité de la grille"
-          valeur={grille} onChange={surGrille}
-          options={[
-            { valeur: "aucune",   libelle: "Aucune" },
-            { valeur: "discrete", libelle: "Discrète" },
-            { valeur: "marquee",  libelle: "Marquée" },
-          ]} />
       </div>
     </>,
     document.body,
@@ -827,12 +828,35 @@ export default function PerformanceChart({
 
         <div style={{ display: "flex", gap: 6, flexShrink: 0, position: "relative" }}>
         <button type="button"
+          onClick={() => setGrille(g => SUITE_GRILLE[g])}
+          title={`Grille : ${LIBELLE_GRILLE[grille]} — cliquer pour ${LIBELLE_GRILLE[SUITE_GRILLE[grille]].toLowerCase()}`}
+          aria-label={`Grille ${LIBELLE_GRILLE[grille]}`}
+          style={{
+            background: grille !== "discrete" ? JETONS.segmentActif : JETONS.segmentPiste,
+            border: `1px solid ${grille !== "discrete" ? JETONS.segmentActif : JETONS.bord}`,
+            borderRadius: RAYONS.sm, width: 30, height: 30, cursor: "pointer", flexShrink: 0,
+            display: "flex", alignItems: "center", justifyContent: "center",
+            color: grille !== "discrete" ? JETONS.segmentEncre : JETONS.texteFort,
+            boxShadow: grille !== "discrete" ? JETONS.segmentOmbre : "none",
+            transition: "background 250ms, color 250ms",
+          }}>
+          {/* Trois filets horizontaux, dont le nombre visible dit la densité :
+              l'icône montre l'état plutôt que de le seul nommer en infobulle. */}
+          <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor"
+            strokeWidth="1.4" strokeLinecap="round" aria-hidden="true">
+            <line x1="2" y1="4.5" x2="14" y2="4.5" opacity={grille === "aucune" ? 0.2 : 1} />
+            <line x1="2" y1="8"   x2="14" y2="8"   opacity={grille === "marquee" ? 1 : grille === "aucune" ? 0.2 : 0.55} />
+            <line x1="2" y1="11.5" x2="14" y2="11.5" opacity={grille === "aucune" ? 0.2 : 1} />
+          </svg>
+        </button>
+
+        <button type="button"
           onClick={e => {
             const r = e.currentTarget.getBoundingClientRect();
             setAncreReglages({ droite: window.innerWidth - r.right, haut: r.bottom + 6 });
             setReglagesOuverts(v => !v);
           }}
-          title="Couleur de la courbe et grille"
+          title="Couleur de la courbe"
           style={{
             background: reglagesOuverts ? JETONS.segmentActif : JETONS.segmentPiste,
             border: `1px solid ${reglagesOuverts ? JETONS.segmentActif : JETONS.bord}`,
@@ -852,8 +876,6 @@ export default function PerformanceChart({
           <PanneauReglages
             couleur={encre}
             surCouleur={setCouleurChoisie}
-            grille={grille}
-            surGrille={setGrille}
             fermer={() => setReglagesOuverts(false)}
             ancre={ancreReglages}
           />
