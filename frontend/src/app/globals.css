@@ -87,6 +87,13 @@
   /* Les points du fond. Seul le thème sombre les montre. */
   --nv-point:             rgba(255,255,255,0.055);
   --nv-point-vif:         rgba(150,190,255,0.34);
+
+  /* La barre latérale. Elle est translucide et floute ce qui passe dessous :
+     ses fonds ne peuvent donc pas être les jetons de carte, qui sont opaques. */
+  --nv-barre-fond:        rgba(4,15,34,0.72);
+  --nv-barre-survol:      rgba(255,255,255,0.045);
+  --nv-barre-actif:       rgba(255,255,255,0.11);
+  --nv-barre-actif-bord:  rgba(255,255,255,0.10);
 }
 
 /* Thème clair.
@@ -130,6 +137,13 @@
 
   --nv-point:             transparent;
   --nv-point-vif:         transparent;
+
+  /* La barre suit la page. L'état actif quitte le blanc translucide pour
+     l'accent : sur fond clair, un voile blanc sur blanc ne marque rien. */
+  --nv-barre-fond:        rgba(255,255,255,0.82);
+  --nv-barre-survol:      rgba(15,23,42,0.04);
+  --nv-barre-actif:       rgba(11,99,231,0.10);
+  --nv-barre-actif-bord:  rgba(11,99,231,0.22);
 }
 
 /* Rayons. Base 14 px, l'échelle d'Appica (0.875rem), déclinée en proportions

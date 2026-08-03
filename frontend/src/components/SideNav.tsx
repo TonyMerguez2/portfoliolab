@@ -130,10 +130,10 @@ export default function SideNav() {
       style={{
         position: "fixed", left: 0, top: 0, bottom: 0, width, zIndex: 60,
         display: "flex", flexDirection: "column",
-        background: "rgba(4,15,34,0.72)",
+        background: "var(--nv-barre-fond)",
         backdropFilter: "blur(24px) saturate(1.4)",
         WebkitBackdropFilter: "blur(24px) saturate(1.4)",
-        borderRight: "1px solid rgba(255,255,255,0.06)",
+        borderRight: "1px solid var(--nv-bord)",
         // Pas de transition avant hydratation : sinon le panneau s'anime depuis
         // sa largeur par défaut vers la préférence enregistrée, à chaque visite.
         transition: ready ? "width 220ms cubic-bezier(0.4,0,0.2,1)" : "none",
@@ -143,7 +143,7 @@ export default function SideNav() {
       {/* Marque + bouton de repli */}
       <div style={{ display: "flex", alignItems: "center", gap: 10, height: 60, padding: "0 16px", flexShrink: 0 }}>
         <Link href="/" aria-label="Accueil Novac" style={{
-          textDecoration: "none", color: "#F8F9FC", fontSize: 13, fontWeight: 700,
+          textDecoration: "none", color: "var(--nv-texte)", fontSize: 13, fontWeight: 700,
           letterSpacing: "0.22em", whiteSpace: "nowrap",
           // Effacé sans être démonté : le retirer du flux ferait sauter le
           // bouton de repli d'un côté à l'autre pendant l'animation.
@@ -167,7 +167,7 @@ export default function SideNav() {
             marginLeft: collapsed ? 0 : "auto", width: 32, height: 32, flexShrink: 0,
             display: "flex", alignItems: "center", justifyContent: "center",
             background: "transparent", border: "none", borderRadius: 8,
-            color: "rgba(255,255,255,0.5)", cursor: "pointer", padding: 0,
+            color: "var(--nv-texte-attenue)", cursor: "pointer", padding: 0,
           }}
         >
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round">
@@ -190,13 +190,13 @@ export default function SideNav() {
                 display: "flex", alignItems: "center", gap: 12,
                 height: 40, padding: "0 12px", borderRadius: 10,
                 textDecoration: "none", whiteSpace: "nowrap",
-                color: active ? "#F8F9FC" : "rgba(255,255,255,0.55)",
-                background: active ? "rgba(255,255,255,0.11)" : "transparent",
-                boxShadow: active ? "inset 0 0 0 1px rgba(255,255,255,0.10)" : "none",
+                color: active ? "var(--nv-texte)" : "var(--nv-texte-secondaire)",
+                background: active ? "var(--nv-barre-actif)" : "transparent",
+                boxShadow: active ? "inset 0 0 0 1px var(--nv-barre-actif-bord)" : "none",
                 fontSize: 13, fontWeight: active ? 600 : 500,
                 transition: "background 160ms, color 160ms",
               }}
-              onMouseEnter={e => { if (!active) e.currentTarget.style.background = "rgba(255,255,255,0.035)"; }}
+              onMouseEnter={e => { if (!active) e.currentTarget.style.background = "var(--nv-barre-survol)"; }}
               onMouseLeave={e => { if (!active) e.currentTarget.style.background = "transparent"; }}
             >
               <span style={{ flexShrink: 0, display: "flex" }}>{item.icon}</span>
@@ -209,7 +209,7 @@ export default function SideNav() {
       {/* Bas de panneau : compte puis thème.
           Tout ce qui touche au compte est réuni ici — il était auparavant
           coupé en deux, avatar dans le bandeau et thème dans le panneau. */}
-      <div style={{ padding: "10px", borderTop: "1px solid rgba(255,255,255,0.06)", flexShrink: 0 }}>
+      <div style={{ padding: "10px", borderTop: "1px solid var(--nv-bord)", flexShrink: 0 }}>
         {user && (
           <button
             type="button"
@@ -219,16 +219,16 @@ export default function SideNav() {
               display: "flex", alignItems: "center", gap: 12, width: "100%",
               height: 44, padding: "0 8px", borderRadius: 10, marginBottom: 4,
               background: "transparent", border: "none", cursor: "pointer",
-              color: "rgba(255,255,255,0.88)", fontSize: 13, fontWeight: 500,
+              color: "var(--nv-texte)", fontSize: 13, fontWeight: 500,
               whiteSpace: "nowrap", textAlign: "left",
             }}
-            onMouseEnter={e => { e.currentTarget.style.background = "rgba(255,255,255,0.045)"; }}
+            onMouseEnter={e => { e.currentTarget.style.background = "var(--nv-barre-survol)"; }}
             onMouseLeave={e => { e.currentTarget.style.background = "transparent"; }}
           >
             <span style={{
               width: 28, height: 28, borderRadius: "50%", flexShrink: 0, overflow: "hidden",
               display: "flex", alignItems: "center", justifyContent: "center",
-              border: "1px solid rgba(255,255,255,0.15)", background: "rgba(255,255,255,0.1)",
+              border: "1px solid var(--nv-bord-fort)", background: "var(--nv-carte-creuse)",
             }}>
               {user.avatar_url ? (
                 // eslint-disable-next-line @next/next/no-img-element
@@ -239,7 +239,7 @@ export default function SideNav() {
                   onError={e => { (e.target as HTMLImageElement).style.display = "none"; }}
                 />
               ) : (
-                <span style={{ fontSize: 11, fontWeight: 700, color: "#F8F9FC", userSelect: "none" }}>
+                <span style={{ fontSize: 11, fontWeight: 700, color: "var(--nv-texte)", userSelect: "none" }}>
                   {(user.username || user.email || "?")[0].toUpperCase()}
                 </span>
               )}
@@ -265,17 +265,17 @@ export default function SideNav() {
               display: "flex", alignItems: "center", gap: 12, width: "100%",
               height: 44, padding: "0 8px", borderRadius: 10, marginBottom: 4,
               background: "transparent", border: "none", cursor: "pointer",
-              color: "rgba(255,255,255,0.88)", fontSize: 13, fontWeight: 500,
+              color: "var(--nv-texte)", fontSize: 13, fontWeight: 500,
               whiteSpace: "nowrap", textAlign: "left",
             }}
-            onMouseEnter={e => { e.currentTarget.style.background = "rgba(255,255,255,0.045)"; }}
+            onMouseEnter={e => { e.currentTarget.style.background = "var(--nv-barre-survol)"; }}
             onMouseLeave={e => { e.currentTarget.style.background = "transparent"; }}
           >
             <span style={{
               width: 28, height: 28, borderRadius: "50%", flexShrink: 0,
               display: "flex", alignItems: "center", justifyContent: "center",
-              border: "1px solid rgba(91,141,239,0.35)", background: "rgba(91,141,239,0.16)",
-              color: "#9BB9FF", fontSize: 13, lineHeight: 1,
+              border: "1px solid var(--nv-accent-bord)", background: "var(--nv-accent-doux)",
+              color: "var(--nv-accent)", fontSize: 13, lineHeight: 1,
             }}>↪</span>
             <span style={{
               opacity: collapsed ? 0 : 1, transition: "opacity 160ms",
@@ -310,7 +310,7 @@ export default function SideNav() {
             display: "flex", alignItems: "center", gap: 12, width: "100%",
             height: 40, padding: "0 12px", borderRadius: 10,
             background: "transparent", border: "none", cursor: "pointer",
-            color: "rgba(255,255,255,0.55)", fontSize: 13, fontWeight: 500,
+            color: "var(--nv-texte-secondaire)", fontSize: 13, fontWeight: 500,
             whiteSpace: "nowrap", textAlign: "left",
           }}
         >
