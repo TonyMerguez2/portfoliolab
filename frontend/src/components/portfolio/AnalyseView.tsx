@@ -285,7 +285,14 @@ export default function AnalyseView({ portfolioId, refreshKey }: { portfolioId: 
                       {ongletExpo === "zones" && DRAPEAU_ZONE[e.libelle] && (
                         // eslint-disable-next-line @next/next/no-img-element
                         <img src={`/drapeaux/${DRAPEAU_ZONE[e.libelle]}.svg`} alt="" aria-hidden="true"
-                          style={{ width: 13, height: 13, borderRadius: "50%", flexShrink: 0, display: "block" }} />
+                          style={{
+                            width: 14, height: 14, flexShrink: 0, display: "block",
+                            // La préflight de Tailwind pose `max-width: 100%` sur les
+                            // images. Dans un conteneur en flex dont la largeur de
+                            // contenu vaut zéro, cela réduit l'image à néant : elle
+                            // mesurait 0 de large pour 14 de haut.
+                            maxWidth: "none",
+                          }} />
                       )}
                       <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                         {e.libelle}

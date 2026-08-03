@@ -1221,7 +1221,7 @@ function ChartContent() {
                 .asset-meta-pill{display:inline-flex;align-items:center;min-height:17px;padding:2px 7px;border-radius:999px;border:1px solid rgba(var(--nv-encre-rvb), .035);background:rgba(var(--nv-encre-rvb), .055);font-size:9px;line-height:1;font-weight:600;white-space:nowrap}
                 .asset-hero-price{justify-content:space-between;padding-top:2px!important;padding-bottom:2px!important;box-sizing:border-box}
                 .asset-performance-pill{display:inline-flex;align-items:center;min-height:17px;padding:2px 7px;border-radius:999px;font-size:9px;line-height:1;font-weight:700;box-sizing:border-box}
-                .asset-exchange-flag{width:12px;height:12px;margin-left:3px;border:0;outline:0;border-radius:50%;flex:0 0 auto;object-fit:cover;display:inline-block;vertical-align:middle;box-shadow:none}
+                .asset-exchange-flag{width:13px;height:13px;max-width:none;margin-left:3px;border:0;outline:0;flex:0 0 auto;display:inline-block;vertical-align:middle;box-shadow:none}
                 .asset-market-pill{display:inline-flex;align-items:center;align-self:flex-start;gap:5px;min-height:17px;padding:2px 7px;box-sizing:border-box;border-radius:9px;border:1px solid rgba(var(--nv-encre-rvb), .028);background:rgba(var(--nv-encre-rvb), .045);white-space:nowrap}
                 .similar-asset-card{transition:transform .16s ease,filter .16s ease,box-shadow .16s ease!important}
                 .similar-asset-card:hover{transform:translateY(-1px);filter:brightness(1.08);box-shadow:0 9px 24px rgba(0,0,0,.24)!important}

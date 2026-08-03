@@ -198,7 +198,7 @@ export default function AssetHeroCard({
         .shared-asset-meta-pill,.shared-asset-performance-pill{display:inline-flex;align-items:center;min-height:17px;padding:2px 7px;border-radius:999px;font-size:9px;line-height:1;font-weight:600;white-space:nowrap;box-sizing:border-box}
         .shared-asset-meta-pill{border:1px solid rgba(255,255,255,.035);background:rgba(255,255,255,.055)}
         .shared-asset-performance-pill{font-weight:700}
-        .shared-asset-exchange-flag{width:12px;height:12px;margin-left:3px;border:0;outline:0;border-radius:50%;flex:0 0 auto;object-fit:cover;display:inline-block;vertical-align:middle;box-shadow:none}
+        .shared-asset-exchange-flag{width:13px;height:13px;max-width:none;margin-left:3px;border:0;outline:0;flex:0 0 auto;display:inline-block;vertical-align:middle;box-shadow:none}
         .shared-asset-market-pill{display:inline-flex;align-items:center;align-self:flex-start;gap:5px;min-height:17px;padding:2px 7px;box-sizing:border-box;border-radius:9px;border:1px solid rgba(255,255,255,.028);background:rgba(255,255,255,.045);white-space:nowrap}
         @media(max-width:820px){.shared-asset-hero-row{zoom:1}.shared-asset-hero-grid{grid-template-columns:minmax(0,1fr) minmax(180px,.75fr);height:auto;row-gap:18px}.shared-asset-hero-status{grid-column:1 / 3;border-left:0!important;border-top:1px solid rgba(255,255,255,.1);padding:16px 0 0!important;flex-direction:row!important;align-items:center;justify-content:space-between!important}}
       ` }} />
