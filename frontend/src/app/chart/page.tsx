@@ -16,6 +16,7 @@ const SubChart    = dynamic(() => import("@/components/charts/SubChart"),    { s
 import AssetLogo from "@/components/AssetLogo";
 import { pourFond } from "@/lib/couleur";
 import { useModeTheme } from "@/lib/theme";
+import { styleCadreExterieur, styleCarteInterieure } from "@/lib/palette";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 
@@ -1139,9 +1140,7 @@ function ChartContent() {
   return (
     <div data-novac-page style={{
       height:"100vh",
-      background:chartDisplayMode === "black"
-        ? "#171717"
-        : "var(--novac-bg, #041124)",
+      background:chartDisplayMode === "black" ? "#171717" : "transparent",
       color:"var(--novac-text-primary, var(--nv-texte))", fontFamily:"-apple-system,BlinkMacSystemFont,sans-serif",
       display:"flex", flexDirection:"column", position:"relative", overflow:"hidden",
       transition:"background-color .2s ease",
@@ -1611,9 +1610,11 @@ function ChartContent() {
               {/* Chart column */}
               <div style={{ flex:1, minWidth:0, display:"flex", flexDirection:"column", minHeight:0 }}>
               {/* Main chart */}
+              <div style={{ ...styleCadreExterieur(), flex:"1 1 0", minHeight:0 }}>
               <div className={chartDisplayMode === "black" ? undefined : "chart-glass-container"} data-glass-edge="" style={{
-                border:chartDisplayMode === "black" ? "1px solid rgba(var(--nv-encre-rvb), 0.30)" : "1px solid rgba(205,225,255,0.16)", borderRadius:"30px", padding:"14px 18px 10px",
-                flex:"1 1 0", minHeight:0, display:"flex", flexDirection:"column", position:"relative", overflow:"hidden",
+                ...styleCarteInterieure(),
+                padding:"14px 18px 10px",
+                display:"flex", flexDirection:"column", position:"relative", overflow:"hidden",
                 background:chartDisplayMode === "black" ? "linear-gradient(180deg, #0b0b0b 0%, #070707 100%)" : "var(--nv-carte)",
                 backdropFilter:chartDisplayMode === "black" ? "none" : "blur(28px) saturate(1.2)", WebkitBackdropFilter:chartDisplayMode === "black" ? "none" : "blur(28px) saturate(1.2)",
                 boxShadow:chartDisplayMode === "black" ? "0 16px 44px rgba(0,0,0,0.28)" : "0 12px 36px rgba(0,0,0,0.10)",
@@ -1859,6 +1860,7 @@ function ChartContent() {
                   onCandleUp={setCandleUp}
                   onCandleDown={setCandleDown}
                 />}
+              </div>
               </div>
 
               {/* ── Vue synchronisée : stats + second chart ── */}
@@ -2240,7 +2242,8 @@ function ChartContent() {
 
               {/* Sidebar */}
               {ticker && sidebarOpen && (
-                <div
+                <div style={{ ...styleCadreExterieur(), display:"flex", flexDirection:"column", minHeight:0 }}>
+                  <div
                   className={chartDisplayMode === "black" ? undefined : "chart-glass-container"}
                   style={{
                     width:336,
@@ -2251,10 +2254,7 @@ function ChartContent() {
                     background:chartDisplayMode === "black"
                       ? "linear-gradient(180deg, #0b0b0b 0%, #070707 100%)"
                       : "var(--nv-carte)",
-                    border:chartDisplayMode === "black"
-                      ? "1px solid rgba(var(--nv-encre-rvb), 0.30)"
-                      : "1px solid rgba(205,225,255,0.16)",
-                    borderRadius:30,
+                    ...styleCarteInterieure(),
                     overflow:"hidden",
                     backdropFilter:chartDisplayMode === "black" ? "none" : "blur(28px) saturate(1.2)",
                     WebkitBackdropFilter:chartDisplayMode === "black" ? "none" : "blur(28px) saturate(1.2)",
@@ -2520,6 +2520,7 @@ function ChartContent() {
 
                   </div>
                 </div>
+                  </div>
               )}
               </div>{/* end flex-row */}
 
