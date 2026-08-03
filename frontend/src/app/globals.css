@@ -95,13 +95,12 @@
 
   --nv-bord:              #101828;
   --nv-bord-fort:         #1E2939;
-  /* Les deux anneaux du cadre n'ont pas la même valeur, et c'est voulu :
-     l'extérieur prend leur `border-background`, soit la couleur la plus sombre
-     de la rampe, donc *plus sombre que la page*. Il se lit comme un trait
-     creusé. L'intérieur prend leur `border-muted`, plus clair que la carte, et
-     reste le seul liseré éclairant. Les avoir mis à la même valeur donnait deux
-     traits clairs concentriques, ce que le concept ne fait pas. */
-  --nv-cadre:             #030712;
+  /* L'anneau extérieur doit rester visible sur la page.
+     Il a été mis un temps à `border-background` #030712, en copiant leur
+     vitrine où la page est plus claire ; sur une page assombrie à #070B16 il
+     s'est confondu avec elle et le cadre a disparu. Il reprend donc leur
+     `border-muted`, franchement plus clair que la page. */
+  --nv-cadre:             #101828;
 
   --nv-texte:             #D1D5DC;
   --nv-texte-secondaire:  #99A1AF;
