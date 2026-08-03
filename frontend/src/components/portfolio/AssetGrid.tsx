@@ -96,8 +96,8 @@ export default function AssetGrid({
         [sens < 0 ? "left" : "right"]: 2, zIndex: 3,
         width: 28, height: 28, borderRadius: "50%", cursor: "pointer",
         display: "flex", alignItems: "center", justifyContent: "center",
-        background: CLAIR.carte, border: `1px solid ${CLAIR.bordFort}`,
-        color: CLAIR.texteSecondaire, backdropFilter: "blur(8px)",
+        background: "rgba(8,20,42,0.88)", border: "1px solid rgba(255,255,255,0.14)",
+        color: "rgba(255,255,255,0.75)", backdropFilter: "blur(8px)",
       }}>
       <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor"
         strokeWidth={2.2} strokeLinecap="round" strokeLinejoin="round">
@@ -202,10 +202,10 @@ export default function AssetGrid({
       }}>
         {shown.map(a => {
           const up = (a.change ?? 0) >= 0;
-          const chg = up ? CLAIR.positif : CLAIR.negatif;
+          const chg = up ? "#4ade80" : "#f87171";
           const name = assetName(a.ticker);
           return (
-            <TileCard key={a.ticker} ticker={a.ticker} radius={12} clair
+            <TileCard key={a.ticker} ticker={a.ticker} radius={12}
               colorHex={brandHex(a.ticker)}
               onClick={onAssetClick ? () => onAssetClick(a.ticker) : undefined}
               containerStyle={{ height: 196, width: 248, flexShrink: 0 }}
@@ -214,28 +214,28 @@ export default function AssetGrid({
               {/* Identité */}
               <div style={{ display: "flex", alignItems: "center", gap: 9 }}>
                 <AssetLogo ticker={a.ticker} type={a.type || "EQUITY"} size={32} radius={8}
-                  fallbackBg={CLAIR.carteCreuse} fallbackBorder={CLAIR.bord}
-                  fallbackTextColor={CLAIR.texteSecondaire} bare />
+                  fallbackBg="rgba(255,255,255,0.10)" fallbackBorder="rgba(255,255,255,0.16)"
+                  fallbackTextColor="#fff" bare />
                 <div style={{ minWidth: 0, flex: 1 }}>
-                  <div style={{ fontFamily: FONT, fontSize: 15, fontWeight: 700, color: CLAIR.texte,
+                  <div style={{ fontFamily: FONT, fontSize: 15, fontWeight: 700, color: "rgba(255,255,255,0.94)",
                     lineHeight: 1.15, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                     {a.ticker.replace(/-USD$/, "")}
                   </div>
                   {name && (
-                    <div style={{ fontFamily: FONT, fontSize: 11.5, fontWeight: 550, color: CLAIR.texteAttenue,
+                    <div style={{ fontFamily: FONT, fontSize: 11.5, fontWeight: 550, color: "rgba(255,255,255,0.45)",
                       lineHeight: 1.2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                       {name}
                     </div>
                   )}
                 </div>
-                <span style={{ ...NUM, fontSize: 11, fontWeight: 700, color: CLAIR.texteAttenue, flexShrink: 0 }}>
+                <span style={{ ...NUM, fontSize: 11, fontWeight: 700, color: "rgba(255,255,255,0.50)", flexShrink: 0 }}>
                   {a.weight.toFixed(a.weight < 10 ? 1 : 0)}%
                 </span>
               </div>
 
               {/* Cours et variation */}
               <div style={{ marginTop: 10 }}>
-                <div style={{ ...NUM, fontSize: 20, fontWeight: 700, color: CLAIR.texte, lineHeight: 1.1 }}>
+                <div style={{ ...NUM, fontSize: 20, fontWeight: 700, color: "rgba(255,255,255,0.94)", lineHeight: 1.1 }}>
                   {a.price != null ? eur(a.price) : "—"}
                 </div>
                 {/* Ce que la ligne a rapporté depuis son achat, et non la
@@ -246,7 +246,7 @@ export default function AssetGrid({
                     est inconnu — portefeuilles sans transactions. */}
                 {a.pnlEur != null ? (() => {
                   const gagne = a.pnlEur >= 0;
-                  const col = gagne ? CLAIR.positif : CLAIR.negatif;
+                  const col = gagne ? "#4ade80" : "#f87171";
                   return (
                     <div style={{ ...NUM, fontSize: 12.5, fontWeight: 600, color: col, marginTop: 3 }}>
                       {gagne ? "+" : ""}{Math.round(a.pnlEur).toLocaleString("fr-FR")} €
@@ -289,10 +289,10 @@ export default function AssetGrid({
               {a.value != null && (
                 <div style={{
                   display: "flex", alignItems: "baseline", justifyContent: "space-between",
-                  marginTop: 8, paddingTop: 7, borderTop: `1px solid ${CLAIR.bord}`,
+                  marginTop: 8, paddingTop: 7, borderTop: "1px solid rgba(255,255,255,0.07)",
                 }}>
-                  <span style={{ fontFamily: FONT, fontSize: 10, color: CLAIR.texteAttenue }}>Valeur</span>
-                  <span style={{ ...NUM, fontSize: 12, fontWeight: 700, color: CLAIR.texte }}>
+                  <span style={{ fontFamily: FONT, fontSize: 10, color: "rgba(255,255,255,0.38)" }}>Valeur</span>
+                  <span style={{ ...NUM, fontSize: 12, fontWeight: 700, color: "rgba(255,255,255,0.88)" }}>
                     {eur(a.value, 0)}
                   </span>
                 </div>
