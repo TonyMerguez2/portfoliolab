@@ -15,7 +15,8 @@
     @apply antialiased text-slate-900;
     margin: 0;
     min-height: 100vh;
-    background: var(--novac-bg);
+    background: var(--nv-fond-degrade, var(--novac-bg));
+    background-attachment: fixed;
     color: var(--novac-text-primary);
     font-family: Inter, -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", sans-serif;
   }
@@ -94,6 +95,12 @@
 [data-theme="sombre"] {
   --nv-fond:              #030712;
   --nv-fond-profond:      #010409;
+  /* Le fond de page n'est pas uni : un dégradé vertical qui s'éclaircit au
+     milieu, relevé sur leur page rendue. C'est lui qui fait apparaître les
+     cartes comme des creux sombres, sans qu'aucune de leurs couleurs ne
+     change. Sans ce dégradé, page et cartes valant toutes deux #030712,
+     l'écran est parfaitement plat — c'est ce que j'avais. */
+  --nv-fond-degrade:      linear-gradient(to bottom, #030712, #101828 55%, #101828 83%, #030712);
   --nv-carte:             #030712;
   --nv-carte-creuse:      rgba(106,114,130,0.12);
 
@@ -167,8 +174,9 @@
    il est réservé aux accents, où il porte justement parce qu'il est rare. */
 [data-theme="clair"] {
   --nv-cadre:             #FFFFFF;
-  --nv-fond:              #E5E7EB;
-  --nv-fond-profond:      #D1D5DC;
+  --nv-fond:              #FFFFFF;
+  --nv-fond-profond:      #F3F4F6;
+  --nv-fond-degrade:      linear-gradient(to bottom, #FFFFFF, #F3F4F6 55%, #F3F4F6 83%, #FFFFFF);
   --nv-carte:             #FFFFFF;
   --nv-carte-creuse:      #F9FAFB;
 
