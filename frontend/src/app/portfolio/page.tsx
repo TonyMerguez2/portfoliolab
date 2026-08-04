@@ -23,10 +23,11 @@ import { JETONS, CLAIR, RAYON, couleurMontant, RAYONS, styleCadreExterieur, styl
 import { hexVersRvb, rvbVersHex, rvbVersTsl, tslVersRvb } from "@/lib/couleur";
 import { resoudreJeton } from "@/lib/theme";
 import Cadre from "@/components/ui/Cadre";
+import ImagePortefeuille from "@/components/portfolio/ImagePortefeuille";
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 type PortfolioAsset = { ticker: string; weight: number };
-type PortfolioData  = { id: string; name: string; assets: PortfolioAsset[]; color: string; total_value?: number | null; cost_basis?: number | null };
+type PortfolioData  = { id: string; name: string; assets: PortfolioAsset[]; color: string; total_value?: number | null; cost_basis?: number | null; image_url?: string | null };
 type PriceData      = { symbol: string; price: number; change: number; series?: number[] };
 type Enriched       = PortfolioAsset & {
   price: number | null; change: number | null; type?: string;
@@ -710,6 +711,11 @@ function PortfolioPageInner() {
             Les logos empilés montrent en plus ce qu'il contient. */}
         {portfolio && (
           <div style={{ display: "flex", alignItems: "center", gap: 11, minWidth: 0, flexShrink: 0 }}>
+            {/* L'image de profil prend la place des logos empilés lorsqu'elle
+                existe, et les laisse voir sinon. Elle nomme le portefeuille,
+                eux montrent son contenu : quand les deux sont possibles,
+                l'identité passe devant. */}
+            <ImagePortefeuille portefeuille={portfolio} onChange={setPortfolio}>
             <div style={{ display: "flex", alignItems: "center" }}>
               {enriched.slice(0, 4).map((a, i) => (
                 <div key={a.ticker} title={a.ticker} style={{
@@ -737,6 +743,7 @@ function PortfolioPageInner() {
                 </div>
               )}
             </div>
+            </ImagePortefeuille>
             <div style={{ minWidth: 0 }}>
               <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
                 <span style={{ width: 7, height: 7, borderRadius: RAYONS.plein, background: portfolio.color || "var(--nv-accent)", flexShrink: 0 }} />

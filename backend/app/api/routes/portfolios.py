@@ -1,11 +1,14 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
 from sqlalchemy.orm import Session
 from app.core.database import get_db, Portfolio
 from app.core.auth import require_auth, get_current_user
 from app.models.user import User
+from app.utils.images import ImageRefusee, TAILLE_MAX, enregistrer, supprimer
 from pydantic import BaseModel
 from typing import List
 import uuid
+
+DOSSIER_IMAGES = "uploads"
 
 router = APIRouter(prefix="/api/v1/portfolios", tags=["Portfolios"])
 
@@ -105,12 +108,55 @@ def update_portfolio(
     db.refresh(p)
     return p
 
+@router.post("/{portfolio_id}/image")
+async def upload_portfolio_image(
+    portfolio_id: str, file: UploadFile = File(...),
+    db: Session = Depends(get_db), user: User = Depends(require_auth),
+):
+    """
+    Reçoit l'image de profil d'un portefeuille.
+
+    Le portefeuille est d'abord résolu contre le compte : c'est ce qui empêche
+    d'écrire dans le dossier d'un portefeuille qui n'est pas le sien, et c'est
+    aussi ce qui garantit que le nom du fichier vient d'un identifiant interne.
+
+    La lecture est bornée avant l'écriture. `UploadFile` n'impose aucune limite
+    de son côté : sans ce garde-fou, la taille du fichier écrit serait celle que
+    l'appelant décide.
+    """
+    p = _portefeuille_du_compte(portfolio_id, user, db)
+    donnees = await file.read(TAILLE_MAX + 1)
+    try:
+        p.image_url = enregistrer(donnees, DOSSIER_IMAGES, p.id)
+    except ImageRefusee as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    db.commit()
+    db.refresh(p)
+    return p
+
+
+@router.delete("/{portfolio_id}/image")
+def delete_portfolio_image(
+    portfolio_id: str,
+    db: Session = Depends(get_db), user: User = Depends(require_auth),
+):
+    p = _portefeuille_du_compte(portfolio_id, user, db)
+    supprimer(DOSSIER_IMAGES, p.id)
+    p.image_url = None
+    db.commit()
+    db.refresh(p)
+    return p
+
+
 @router.delete("/{portfolio_id}")
 def delete_portfolio(
     portfolio_id: str,
     db: Session = Depends(get_db), user: User = Depends(require_auth),
 ):
     p = _portefeuille_du_compte(portfolio_id, user, db)
+    # Le fichier n'est pas dans la base : la cascade des clés étrangères ne le
+    # verrait pas passer, et il resterait indéfiniment dans `uploads/`.
+    supprimer(DOSSIER_IMAGES, p.id)
     db.delete(p)
     db.commit()
     return {"ok": True}

@@ -24,6 +24,10 @@ class Portfolio(Base):
     name = Column(String, nullable=False)
     assets = Column(JSON, nullable=False)  # [{ticker, weight}]
     color = Column(String, default="#6366f1")
+    # Image de profil du portefeuille. On stocke le chemin public, pas les
+    # octets : le dossier `uploads/` est déjà servi en statique, et une base
+    # SQLite grossit mal quand on y met des fichiers.
+    image_url = Column(String, nullable=True)
     total_value = Column(Float, nullable=True, default=None)
     # cost_basis : prix de revient total (montant investi à l'origine), saisi par l'utilisateur
     cost_basis     = Column(Float,   nullable=True, default=None)
@@ -56,6 +60,7 @@ for table, col, typedef in [
     ("portfolios",   "cost_basis",    "REAL"),
     ("portfolios",   "is_simulation", "INTEGER"),
     ("portfolios",   "user_id",       "TEXT"),
+    ("portfolios",   "image_url",     "TEXT"),
     ("transactions", "note",          "TEXT"),
 ]:
     try:

@@ -33,6 +33,15 @@ out/
 *.db-journal
 *.db-wal
 
+# Fichiers téléversés
+#
+# Même raisonnement que la base, et même dépendance : ces images n'existent
+# que parce qu'une ligne de `portfoliolab.db` les désigne. Suivre les unes
+# sans l'autre donne un clone où les fichiers sont là et où plus rien ne les
+# réclame — c'était le cas d'un avatar resté seul dans le dépôt.
+backend/uploads/*
+!backend/uploads/.gitkeep
+
 # General
 .DS_Store
 *.log

@@ -153,6 +153,21 @@ export const RAYONS = {
 } as const;
 
 /**
+ * Le rayon d'une vignette carrée — logo d'actif, image de portefeuille.
+ *
+ * Proportionnel, et non fixe : c'est la forme qui doit se répéter, pas la
+ * valeur. Un rayon de 13 sur une vignette de 60 donne un carré adouci ; le
+ * même 13 sur une vignette de 30 donnerait presque un cercle.
+ *
+ * Le rapport vient de la carte d'actif de la page graphique — 13 pour 60 —
+ * qui est la vignette la plus visible de l'application, donc celle à laquelle
+ * les autres doivent ressembler. Cette fonction existe pour que la
+ * ressemblance survive au prochain réglage : ce dépôt a déjà compté onze
+ * rayons distincts, tous choisis séparément.
+ */
+export const rayonVignette = (taille: number) => Math.round(taille * 13 / 60);
+
+/**
  * Le rayon des grandes cartes : leur `rounded-2xl`.
  *
  * L'anneau intérieur en découle — 24 moins les 6 px d'intervalle font 18, soit
