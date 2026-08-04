@@ -384,9 +384,18 @@ export default function GlobalHeader() {
                 Sept dents larges plutôt que huit étroites : à cette taille,
                 des dents fines redeviennent une frange indistincte. Les
                 jointures rondes suffisent à adoucir les angles — les courber
-                une à une n'ajouterait rien de lisible à dix-huit pixels. */}
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-              strokeWidth={1.7} strokeLinejoin="round" strokeLinecap="round" aria-hidden="true">
+                une à une n'ajouterait rien de lisible.
+
+                Treize pixels, et non seize comme la loupe : les deux tracés
+                n'occupent pas la même part de leur boîte. La loupe tient dans
+                16 unités sur 24, la roue s'étale sur 20,4 — à largeur égale
+                elle rendait 15,3 px d'encre contre 10,7, soit 43 % de plus.
+                C'est l'encre qui se voit, pas la boîte : 13 px la ramènent à
+                11,0. Le trait s'épaissit d'autant, sans quoi la roue
+                maigrirait en rapetissant et paraîtrait plus pâle que sa
+                voisine. */}
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+              strokeWidth={2.2} strokeLinejoin="round" strokeLinecap="round" aria-hidden="true">
               <path d="M19.34 10.03 L21.85 9.36 L21.85 14.64 L19.34 13.97 L18.11 16.51 L20.21 18.06 L16.08 21.35 L15.04 18.97 L12.28 19.59 L12.38 22.19 L7.23 21.02 L8.45 18.72 L6.24 16.96 L4.27 18.65 L1.98 13.90 L4.53 13.41 L4.53 10.59 L1.98 10.10 L4.27 5.35 L6.24 7.04 L8.45 5.28 L7.23 2.98 L12.38 1.81 L12.28 4.41 L15.04 5.03 L16.08 2.65 L20.21 5.94 L18.11 7.49 Z" />
               <circle cx="12" cy="12" r="3.4" />
             </svg>
