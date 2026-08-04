@@ -4,6 +4,7 @@ import AssetLogo from "@/components/AssetLogo";
 import { FONT, NUM } from "@/lib/typography";
 import { enTetesAuth } from "@/lib/session";
 import Cadre from "@/components/ui/Cadre";
+import { JETONS } from "@/lib/palette";
 import {
   resume, resultats, repartitionTypes, typesParOperation, montant, parDate,
   LIBELLE_OP, COULEUR_OP, type Tx, type TypeOp,
@@ -43,7 +44,7 @@ function Carte({ children, style }: { children: React.ReactNode; style?: React.C
 function Titre({ children, action }: { children: React.ReactNode; action?: React.ReactNode }) {
   return (
     <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12, flexShrink: 0 }}>
-      <span style={{ fontFamily: FONT, fontSize: 13, fontWeight: 600, color: "rgba(255,255,255,0.88)" }}>
+      <span style={{ fontFamily: FONT, fontSize: 13, fontWeight: 600, color: "rgba(var(--nv-encre-rvb), 0.88)" }}>
         {children}
       </span>
       {action}
@@ -54,8 +55,8 @@ function Titre({ children, action }: { children: React.ReactNode; action?: React
 function Ligne({ label, valeur, couleur }: { label: string; valeur: React.ReactNode; couleur?: string }) {
   return (
     <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", padding: "5px 0" }}>
-      <span style={{ fontFamily: FONT, fontSize: 11.5, color: "rgba(255,255,255,0.45)" }}>{label}</span>
-      <span style={{ ...NUM, fontSize: 12.5, fontWeight: 600, color: couleur ?? "rgba(255,255,255,0.90)" }}>
+      <span style={{ fontFamily: FONT, fontSize: 11.5, color: "rgba(var(--nv-encre-rvb), 0.45)" }}>{label}</span>
+      <span style={{ ...NUM, fontSize: 12.5, fontWeight: 600, color: couleur ?? "rgba(var(--nv-encre-rvb), 0.90)" }}>
         {valeur}
       </span>
     </div>
@@ -164,21 +165,21 @@ export default function TransactionsView({
   const valeurTotale = positions.reduce((s, p) => s + (p.current_value ?? 0), 0);
 
   if (chargement) {
-    return <div style={{ padding: 40, textAlign: "center", fontFamily: FONT, fontSize: 12, color: "rgba(255,255,255,0.30)" }}>Chargement…</div>;
+    return <div style={{ padding: 40, textAlign: "center", fontFamily: FONT, fontSize: 12, color: "rgba(var(--nv-encre-rvb), 0.30)" }}>Chargement…</div>;
   }
 
   if (!txs.length) {
     return (
       <Carte style={{ margin: 14, alignItems: "center", justifyContent: "center", padding: 48 }}>
-        <p style={{ fontFamily: FONT, fontSize: 13, color: "rgba(255,255,255,0.55)", margin: "0 0 6px" }}>
+        <p style={{ fontFamily: FONT, fontSize: 13, color: "rgba(var(--nv-encre-rvb), 0.55)", margin: "0 0 6px" }}>
           Aucune transaction
         </p>
-        <p style={{ fontFamily: FONT, fontSize: 11.5, color: "rgba(255,255,255,0.30)", margin: "0 0 16px", textAlign: "center", lineHeight: 1.6 }}>
+        <p style={{ fontFamily: FONT, fontSize: 11.5, color: "rgba(var(--nv-encre-rvb), 0.30)", margin: "0 0 16px", textAlign: "center", lineHeight: 1.6 }}>
           Le portefeuille se compose de vos écritures. Ajoutez la première.
         </p>
         <button onClick={onNewTransaction} style={{
-          padding: "9px 16px", borderRadius: 10, border: "1px solid rgba(91,141,239,0.35)",
-          background: "rgba(91,141,239,0.16)", color: "#9BB9FF", fontSize: 12,
+          padding: "9px 16px", borderRadius: 10, border: `1px solid ${JETONS.accentBord}`,
+          background: JETONS.accentDoux, color: JETONS.accent, fontSize: 12,
           fontWeight: 600, cursor: "pointer", fontFamily: FONT,
         }}>+ Nouvelle transaction</button>
       </Carte>
@@ -238,18 +239,18 @@ export default function TransactionsView({
                   <button key={t.id} id={`op-${t.id}`} onClick={() => setChoisie(t.id)} style={{
                     display: "flex", gap: 9, width: "100%", textAlign: "left", padding: "7px 8px",
                     borderRadius: 9, marginBottom: 2, cursor: "pointer", fontFamily: FONT,
-                    background: actif ? "rgba(91,141,239,0.12)" : "transparent",
-                    border: `1px solid ${actif ? "rgba(91,141,239,0.28)" : "transparent"}`,
+                    background: actif ? JETONS.accentVoile : "transparent",
+                    border: `1px solid ${actif ? JETONS.accentBord : "transparent"}`,
                   }}>
                     <i style={{ width: 7, height: 7, borderRadius: "50%", background: COULEUR_OP[type], marginTop: 5, flexShrink: 0 }} />
                     <span style={{ minWidth: 0, flex: 1 }}>
-                      <span style={{ display: "block", fontSize: 10, color: "rgba(255,255,255,0.32)" }}>
+                      <span style={{ display: "block", fontSize: 10, color: "rgba(var(--nv-encre-rvb), 0.32)" }}>
                         {dateCourte(t.executed_at)}
                       </span>
-                      <span style={{ display: "block", fontSize: 12, fontWeight: 600, color: "rgba(255,255,255,0.88)" }}>
+                      <span style={{ display: "block", fontSize: 12, fontWeight: 600, color: "rgba(var(--nv-encre-rvb), 0.88)" }}>
                         {LIBELLE_OP[type]} {t.ticker}
                       </span>
-                      <span style={{ ...NUM, display: "block", fontSize: 10.5, color: "rgba(255,255,255,0.40)" }}>
+                      <span style={{ ...NUM, display: "block", fontSize: 10.5, color: "rgba(var(--nv-encre-rvb), 0.40)" }}>
                         {t.quantity.toLocaleString("fr-FR", { maximumFractionDigits: 6 })} × {eur(t.unit_price)}
                       </span>
                     </span>
@@ -271,13 +272,13 @@ export default function TransactionsView({
                 <div style={{ overflowY: "auto", minHeight: 0 }}>
                   <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 14 }}>
                     <AssetLogo ticker={t.ticker} type={t.asset_type} size={30} radius={8}
-                      fallbackBg="rgba(91,141,239,0.16)" fallbackBorder="rgba(91,141,239,0.35)"
-                      fallbackTextColor="#9BB9FF" />
+                      fallbackBg={JETONS.accentDoux} fallbackBorder={JETONS.accentBord}
+                      fallbackTextColor={JETONS.accent} />
                     <span>
                       <span style={{ display: "block", fontFamily: FONT, fontSize: 13, fontWeight: 700, color: COULEUR_OP[detail.type] }}>
                         {LIBELLE_OP[detail.type]} {t.ticker}
                       </span>
-                      <span style={{ display: "block", fontFamily: FONT, fontSize: 10.5, color: "rgba(255,255,255,0.35)" }}>
+                      <span style={{ display: "block", fontFamily: FONT, fontSize: 10.5, color: "rgba(var(--nv-encre-rvb), 0.35)" }}>
                         {new Date(t.executed_at).toLocaleDateString("fr-FR", { day: "numeric", month: "long", year: "numeric" })}
                       </span>
                     </span>
@@ -290,36 +291,36 @@ export default function TransactionsView({
                       ["Montant", eur(montant(t))],
                       ["Frais", eur(t.fees ?? 0)],
                     ].map(([l, v]) => (
-                      <div key={l} style={{ background: "rgba(255,255,255,0.04)", borderRadius: 10, padding: "8px 10px" }}>
-                        <div style={{ fontFamily: FONT, fontSize: 9.5, color: "rgba(255,255,255,0.32)", marginBottom: 3 }}>{l}</div>
-                        <div style={{ ...NUM, fontSize: 12, fontWeight: 700, color: "rgba(255,255,255,0.92)", whiteSpace: "nowrap" }}>{v}</div>
+                      <div key={l} style={{ background: "rgba(var(--nv-encre-rvb), 0.04)", borderRadius: 10, padding: "8px 10px" }}>
+                        <div style={{ fontFamily: FONT, fontSize: 9.5, color: "rgba(var(--nv-encre-rvb), 0.32)", marginBottom: 3 }}>{l}</div>
+                        <div style={{ ...NUM, fontSize: 12, fontWeight: 700, color: "rgba(var(--nv-encre-rvb), 0.92)", whiteSpace: "nowrap" }}>{v}</div>
                       </div>
                     ))}
                   </div>
 
                   <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 8, marginBottom: 12 }}>
                     <div>
-                      <div style={{ fontFamily: FONT, fontSize: 9.5, color: "rgba(255,255,255,0.32)", marginBottom: 3 }}>
+                      <div style={{ fontFamily: FONT, fontSize: 9.5, color: "rgba(var(--nv-encre-rvb), 0.32)", marginBottom: 3 }}>
                         Poids dans le portefeuille
                       </div>
-                      <div style={{ ...NUM, fontSize: 12.5, fontWeight: 700, color: "rgba(255,255,255,0.92)", whiteSpace: "nowrap" }}>
+                      <div style={{ ...NUM, fontSize: 12.5, fontWeight: 700, color: "rgba(var(--nv-encre-rvb), 0.92)", whiteSpace: "nowrap" }}>
                         {poids != null ? `${poids.toFixed(2)} %` : "—"}
                       </div>
                     </div>
                     <div>
-                      <div style={{ fontFamily: FONT, fontSize: 9.5, color: "rgba(255,255,255,0.32)", marginBottom: 3 }}>
+                      <div style={{ fontFamily: FONT, fontSize: 9.5, color: "rgba(var(--nv-encre-rvb), 0.32)", marginBottom: 3 }}>
                         Valeur actuelle
                       </div>
-                      <div style={{ ...NUM, fontSize: 12.5, fontWeight: 700, color: "rgba(255,255,255,0.92)", whiteSpace: "nowrap" }}>
+                      <div style={{ ...NUM, fontSize: 12.5, fontWeight: 700, color: "rgba(var(--nv-encre-rvb), 0.92)", whiteSpace: "nowrap" }}>
                         {valeurLigne != null ? eur(valeurLigne) : "—"}
                       </div>
                     </div>
                     <div>
-                      <div style={{ fontFamily: FONT, fontSize: 9.5, color: "rgba(255,255,255,0.32)", marginBottom: 3 }}>
+                      <div style={{ fontFamily: FONT, fontSize: 9.5, color: "rgba(var(--nv-encre-rvb), 0.32)", marginBottom: 3 }}>
                         {detail.realise ? "Résultat réalisé" : "Plus-value latente"}
                       </div>
                       <div style={{ ...NUM, fontSize: 12.5, fontWeight: 700, whiteSpace: "nowrap",
-                        color: detail.gain == null ? "rgba(255,255,255,0.40)" : detail.gain >= 0 ? "#00D492" : "#FF6467" }}>
+                        color: detail.gain == null ? "rgba(var(--nv-encre-rvb), 0.40)" : detail.gain >= 0 ? JETONS.positif : JETONS.negatif }}>
                         {detail.gain == null ? "—" : `${detail.gain >= 0 ? "+" : ""}${eur(detail.gain)}`}
                         {detail.gainPct != null && (
                           <span style={{ display: "block", opacity: 0.6, fontSize: 10.5, fontWeight: 600 }}>
@@ -330,20 +331,20 @@ export default function TransactionsView({
                     </div>
                   </div>
 
-                  <div style={{ borderTop: "1px solid rgba(255,255,255,0.07)", paddingTop: 10 }}>
-                    <div style={{ fontFamily: FONT, fontSize: 9.5, color: "rgba(255,255,255,0.32)", marginBottom: 4 }}>
+                  <div style={{ borderTop: "1px solid rgba(var(--nv-encre-rvb), 0.07)", paddingTop: 10 }}>
+                    <div style={{ fontFamily: FONT, fontSize: 9.5, color: "rgba(var(--nv-encre-rvb), 0.32)", marginBottom: 4 }}>
                       Note personnelle
                     </div>
                     <div style={{ fontFamily: FONT, fontSize: 11.5, lineHeight: 1.6,
-                      color: t.note ? "rgba(255,255,255,0.65)" : "rgba(255,255,255,0.25)" }}>
+                      color: t.note ? "rgba(var(--nv-encre-rvb), 0.65)" : "rgba(var(--nv-encre-rvb), 0.25)" }}>
                       {t.note || "Aucune note sur cette opération."}
                     </div>
                   </div>
 
                   {erreur && (
                     <div style={{ marginTop: 10, padding: "7px 10px", borderRadius: 8,
-                      background: "rgba(248,113,113,0.10)", border: "1px solid rgba(248,113,113,0.25)",
-                      fontFamily: FONT, fontSize: 10.5, color: "#fca5a5", lineHeight: 1.5 }}>
+                      background: JETONS.negatifVoile, border: `1px solid ${JETONS.negatifDoux}`,
+                      fontFamily: FONT, fontSize: 10.5, color: JETONS.negatif, lineHeight: 1.5 }}>
                       {erreur}
                     </div>
                   )}
@@ -352,12 +353,12 @@ export default function TransactionsView({
                     {confirme === t.id ? (
                       <>
                         <button onClick={() => setConfirme(null)} style={{
-                          padding: "5px 10px", borderRadius: 8, border: "1px solid rgba(255,255,255,0.10)",
-                          background: "transparent", color: "rgba(255,255,255,0.45)",
+                          padding: "5px 10px", borderRadius: 8, border: "1px solid rgba(var(--nv-encre-rvb), 0.10)",
+                          background: "transparent", color: "rgba(var(--nv-encre-rvb), 0.45)",
                           fontSize: 10.5, cursor: "pointer", fontFamily: FONT }}>Annuler</button>
                         <button onClick={() => supprimer(t.id)} disabled={suppression} style={{
-                          padding: "5px 10px", borderRadius: 8, border: "1px solid rgba(248,113,113,0.35)",
-                          background: "rgba(248,113,113,0.14)", color: "#FF6467", fontWeight: 600,
+                          padding: "5px 10px", borderRadius: 8, border: `1px solid ${JETONS.negatifDoux}`,
+                          background: JETONS.negatifDoux, color: JETONS.negatif, fontWeight: 600,
                           fontSize: 10.5, cursor: suppression ? "default" : "pointer", fontFamily: FONT,
                           opacity: suppression ? 0.5 : 1 }}>
                           {suppression ? "Suppression…" : "Confirmer la suppression"}
@@ -365,8 +366,8 @@ export default function TransactionsView({
                       </>
                     ) : (
                       <button onClick={() => { setConfirme(t.id); setErreur(null); }} style={{
-                        padding: "5px 10px", borderRadius: 8, border: "1px solid rgba(255,255,255,0.10)",
-                        background: "transparent", color: "rgba(255,255,255,0.35)",
+                        padding: "5px 10px", borderRadius: 8, border: "1px solid rgba(var(--nv-encre-rvb), 0.10)",
+                        background: "transparent", color: "rgba(var(--nv-encre-rvb), 0.35)",
                         fontSize: 10.5, cursor: "pointer", fontFamily: FONT }}>
                         Supprimer cette opération
                       </button>
@@ -375,7 +376,7 @@ export default function TransactionsView({
                 </div>
               );
             })() : (
-              <div style={{ fontFamily: FONT, fontSize: 11.5, color: "rgba(255,255,255,0.28)" }}>
+              <div style={{ fontFamily: FONT, fontSize: 11.5, color: "rgba(var(--nv-encre-rvb), 0.28)" }}>
                 Choisissez une opération dans la timeline.
               </div>
             )}
@@ -393,8 +394,8 @@ export default function TransactionsView({
         <Carte style={{ flexShrink: 0 }}>
           <Titre action={
             <button onClick={onNewTransaction} style={{
-              padding: "6px 11px", borderRadius: 9, border: "1px solid rgba(91,141,239,0.35)",
-              background: "rgba(91,141,239,0.16)", color: "#9BB9FF", fontSize: 11,
+              padding: "6px 11px", borderRadius: 9, border: `1px solid ${JETONS.accentBord}`,
+              background: JETONS.accentDoux, color: JETONS.accent, fontSize: 11,
               fontWeight: 600, cursor: "pointer", fontFamily: FONT, whiteSpace: "nowrap",
             }}>+ Nouvelle</button>
           }>Résumé</Titre>
@@ -402,13 +403,13 @@ export default function TransactionsView({
           <Ligne label="Capital investi" valeur={eur(recap.capitalInvesti, 0)} />
           <Ligne label="Gain latent"
             valeur={recap.gainLatent == null ? "—" : `${recap.gainLatent >= 0 ? "+" : ""}${eur(recap.gainLatent, 0)}`}
-            couleur={recap.gainLatent == null ? undefined : recap.gainLatent >= 0 ? "#00D492" : "#FF6467"} />
+            couleur={recap.gainLatent == null ? undefined : recap.gainLatent >= 0 ? JETONS.positif : JETONS.negatif} />
           <Ligne label="Meilleure opération"
             valeur={recap.meilleure?.gain == null ? "—" : `${recap.meilleure.gain >= 0 ? "+" : ""}${eur(recap.meilleure.gain, 0)}`}
-            couleur="#00D492" />
+            couleur={JETONS.positif} />
           <Ligne label="Pire opération"
             valeur={recap.pire?.gain == null ? "—" : `${recap.pire.gain >= 0 ? "+" : ""}${eur(recap.pire.gain, 0)}`}
-            couleur={recap.pire?.gain != null && recap.pire.gain >= 0 ? "#00D492" : "#FF6467"} />
+            couleur={recap.pire?.gain != null && recap.pire.gain >= 0 ? JETONS.positif : JETONS.negatif} />
           <Ligne label="Durée moyenne de détention"
             valeur={recap.dureeMoyenneJours == null ? "—" : `${recap.dureeMoyenneJours} jours`} />
         </Carte>
@@ -418,7 +419,7 @@ export default function TransactionsView({
             que la saisie n'existe pas encore. */}
         <Carte style={{ flexShrink: 0 }}>
           <Titre>Dividendes</Titre>
-          <p style={{ fontFamily: FONT, fontSize: 11.5, color: "rgba(255,255,255,0.30)", margin: 0, lineHeight: 1.6 }}>
+          <p style={{ fontFamily: FONT, fontSize: 11.5, color: "rgba(var(--nv-encre-rvb), 0.30)", margin: 0, lineHeight: 1.6 }}>
             Aucun dividende enregistré.<br />
             La saisie des dividendes n&apos;est pas encore disponible : une
             transaction ne peut être qu&apos;un achat ou une vente.
@@ -434,11 +435,11 @@ export default function TransactionsView({
           </div>
           {parts.map(p => (
             <div key={p.type} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "4px 0" }}>
-              <span style={{ display: "flex", alignItems: "center", gap: 7, fontFamily: FONT, fontSize: 11.5, color: "rgba(255,255,255,0.55)" }}>
+              <span style={{ display: "flex", alignItems: "center", gap: 7, fontFamily: FONT, fontSize: 11.5, color: "rgba(var(--nv-encre-rvb), 0.55)" }}>
                 <i style={{ width: 7, height: 7, borderRadius: "50%", background: COULEUR_OP[p.type] }} />
                 {LIBELLE_OP[p.type]}
               </span>
-              <span style={{ ...NUM, fontSize: 12, fontWeight: 600, color: "rgba(255,255,255,0.85)" }}>
+              <span style={{ ...NUM, fontSize: 12, fontWeight: 600, color: "rgba(var(--nv-encre-rvb), 0.85)" }}>
                 {p.part.toFixed(0)} %
               </span>
             </div>
@@ -480,12 +481,15 @@ function TableauOperations({
           <tr>
             {["Date", "Type", "Actif", "Qté", "Montant", "Résultat"].map((h, i) => (
               <th key={h} style={{
-                position: "sticky", top: 0, background: "rgba(9,27,52,0.96)",
+                // L'en-tête est collant : son fond doit être opaque, sinon les
+                // lignes défilent au travers. D'où le jeton de carte et non un
+                // voile — c'est ce qui interdit ici l'encre translucide.
+                position: "sticky", top: 0, background: JETONS.carte,
                 // Interlettrage et marges resserrés : « Résultat » réclamait
                 // 60 px dans une colonne qui en offrait 52.
                 textAlign: i >= 3 ? "right" : "left", padding: "6px 3px",
                 fontSize: 9, fontWeight: 700, letterSpacing: "0.02em",
-                color: "rgba(255,255,255,0.30)", textTransform: "uppercase",
+                color: JETONS.texteAttenue, textTransform: "uppercase",
               }}>{h}</th>
             ))}
           </tr>
@@ -496,10 +500,10 @@ function TableauOperations({
             return (
               <tr key={t.id} onClick={() => onChoisir(t.id)} style={{
                 cursor: "pointer",
-                background: t.id === choisie ? "rgba(91,141,239,0.10)" : "transparent",
-                borderTop: "1px solid rgba(255,255,255,0.05)",
+                background: t.id === choisie ? JETONS.accentVoile : "transparent",
+                borderTop: "1px solid rgba(var(--nv-encre-rvb), 0.05)",
               }}>
-                <td style={{ padding: "7px 6px", fontSize: 10.5, color: "rgba(255,255,255,0.55)", whiteSpace: "nowrap" }}>
+                <td style={{ padding: "7px 6px", fontSize: 10.5, color: "rgba(var(--nv-encre-rvb), 0.55)", whiteSpace: "nowrap" }}>
                   {new Date(t.executed_at).toLocaleDateString("fr-FR", { day: "2-digit", month: "2-digit", year: "2-digit" })}
                 </td>
                 <td style={{ padding: "7px 6px", fontSize: 10.5 }}>
@@ -509,14 +513,14 @@ function TableauOperations({
                     {LIBELLE_OP[types[t.id]]}
                   </span>
                 </td>
-                <td style={{ padding: "7px 6px", fontSize: 11, fontWeight: 600, color: "rgba(255,255,255,0.88)",
+                <td style={{ padding: "7px 6px", fontSize: 11, fontWeight: 600, color: "rgba(var(--nv-encre-rvb), 0.88)",
                              overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{t.ticker}</td>
-                <td style={{ ...NUM, padding: "7px 6px", textAlign: "right", fontSize: 10.5, whiteSpace: "nowrap", color: "rgba(255,255,255,0.60)" }}>
+                <td style={{ ...NUM, padding: "7px 6px", textAlign: "right", fontSize: 10.5, whiteSpace: "nowrap", color: "rgba(var(--nv-encre-rvb), 0.60)" }}>
                   {t.side === "SELL" ? "−" : "+"}{t.quantity.toLocaleString("fr-FR", { maximumFractionDigits: 6 })}
                 </td>
-                <td style={{ ...NUM, padding: "7px 6px", textAlign: "right", fontSize: 10.5, whiteSpace: "nowrap", color: "rgba(255,255,255,0.75)" }}>{eur(montant(t))}</td>
+                <td style={{ ...NUM, padding: "7px 6px", textAlign: "right", fontSize: 10.5, whiteSpace: "nowrap", color: "rgba(var(--nv-encre-rvb), 0.75)" }}>{eur(montant(t))}</td>
                 <td style={{ ...NUM, padding: "7px 6px", textAlign: "right", fontSize: 10.5, whiteSpace: "nowrap", fontWeight: 600,
-                  color: r?.gain == null ? "rgba(255,255,255,0.25)" : r.gain >= 0 ? "#00D492" : "#FF6467" }}>
+                  color: r?.gain == null ? "rgba(var(--nv-encre-rvb), 0.25)" : r.gain >= 0 ? JETONS.positif : JETONS.negatif }}>
                   {r?.gain == null ? "—" : `${r.gain >= 0 ? "+" : ""}${Math.round(r.gain).toLocaleString("fr-FR")} €`}
                 </td>
               </tr>

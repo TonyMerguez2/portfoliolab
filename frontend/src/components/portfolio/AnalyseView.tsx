@@ -5,6 +5,7 @@ import { FONT, NUM } from "@/lib/typography";
 import { enTetesAuth } from "@/lib/session";
 import { donutArcs } from "@/lib/donut";
 import Cadre from "@/components/ui/Cadre";
+import { JETONS } from "@/lib/palette";
 
 const API = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 
@@ -65,22 +66,39 @@ const ABREGE: Record<string, string> = {
 /** Ordre d'affichage, celui du radar comme celui de la liste. */
 const ORDRE = ["diversification", "concentration", "volatilite", "liquidite", "correlation", "sensibilite_marche"];
 
+/**
+ * Les cinq bandes du score.
+ *
+ * Elles servent d'encre — sur le chiffre, sur la pastille de légende — donc
+ * elles se prennent au cran `fort`, seul cran garanti au-dessus de 4,5:1 dans
+ * les deux thèmes. « Faible » était un orange Tailwind (#fb923c) sans rapport
+ * avec la rampe ; les deux premières bandes partageaient la même valeur, ce
+ * qui rendait « Très bon » et « Bon » indiscernables.
+ */
 const BANDES: { min: number; nom: string; couleur: string }[] = [
-  { min: 80, nom: "Très bon",    couleur: "#00D492" },
-  { min: 60, nom: "Bon",         couleur: "#00D492" },
-  { min: 40, nom: "Moyen",       couleur: "#FF8904" },
-  { min: 20, nom: "Faible",      couleur: "#fb923c" },
-  { min: 0,  nom: "Très faible", couleur: "#FF6467" },
+  { min: 80, nom: "Très bon",    couleur: JETONS.positifFort },
+  { min: 60, nom: "Bon",         couleur: JETONS.positif },
+  { min: 40, nom: "Moyen",       couleur: JETONS.attentionFort },
+  { min: 20, nom: "Faible",      couleur: JETONS.attentionIntense },
+  { min: 0,  nom: "Très faible", couleur: JETONS.negatifFort },
 ];
 
 const couleurScore = (s: number | null) =>
-  s == null ? "rgba(255,255,255,0.30)" : (BANDES.find(b => s >= b.min) ?? BANDES[4]).couleur;
+  s == null ? "rgba(var(--nv-encre-rvb), 0.30)" : (BANDES.find(b => s >= b.min) ?? BANDES[4]).couleur;
 
-const TON: Record<string, { couleur: string; signe: string }> = {
-  alerte:    { couleur: "#FF6467", signe: "!" },
-  attention: { couleur: "#FF8904", signe: "!" },
-  favorable: { couleur: "#00D492", signe: "✓" },
-  info:      { couleur: "#50A2FF", signe: "i" },
+/**
+ * Le ton d'une observation, en fond et en encre.
+ *
+ * Trois de ces quatre couleurs étaient des hexadécimaux relevés sur le thème
+ * sombre : la pastille gardait donc son vert vif et son glyphe sombre en thème
+ * clair, où le glyphe disparaissait. Le motif de l'échelle règle les deux d'un
+ * coup — un fond `voile` et une encre `fort`, qui se retournent ensemble.
+ */
+const TON: Record<string, { fond: string; encre: string; signe: string }> = {
+  alerte:    { fond: JETONS.negatifVoile,    encre: JETONS.negatifFort,    signe: "!" },
+  attention: { fond: JETONS.attentionVoile,  encre: JETONS.attentionFort,  signe: "!" },
+  favorable: { fond: JETONS.positifVoile,    encre: JETONS.positifFort,    signe: "✓" },
+  info:      { fond: JETONS.accentVoile,     encre: JETONS.accentFort,     signe: "i" },
 };
 
 /**
@@ -102,7 +120,7 @@ const DRAPEAU_ZONE: Record<string, string> = {
   "Inde": "in",
 };
 
-const COULEURS_PART = ["#50A2FF", "#a78bfa", "#FF8904", "#00D492", "#FF6467", "#22d3ee", "#94a3b8"];
+const COULEURS_PART = ["#50A2FF", "#a78bfa", "#FF8904", "#00D492", JETONS.negatif, "#22d3ee", "#94a3b8"];
 
 function Carte({ children, style }: { children: React.ReactNode; style?: React.CSSProperties }) {
   return (
@@ -116,7 +134,7 @@ function Titre({ children, action }: { children: React.ReactNode; action?: React
   return (
     <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between",
                   marginBottom: 12, flexShrink: 0 }}>
-      <span style={{ fontFamily: FONT, fontSize: 13, fontWeight: 600, color: "rgba(255,255,255,0.88)" }}>
+      <span style={{ fontFamily: FONT, fontSize: 13, fontWeight: 600, color: "rgba(var(--nv-encre-rvb), 0.88)" }}>
         {children}
       </span>
       {action}
@@ -152,16 +170,16 @@ export default function AnalyseView({ portfolioId, refreshKey }: { portfolioId: 
 
   if (etat === "charge") {
     return <div style={{ padding: 40, textAlign: "center", fontFamily: FONT, fontSize: 12,
-                         color: "rgba(255,255,255,0.30)" }}>Analyse en cours…</div>;
+                         color: "rgba(var(--nv-encre-rvb), 0.30)" }}>Analyse en cours…</div>;
   }
   if (etat === "vide" || !a) {
     return (
       <div style={{ padding: `8px ${MARGE}px 0`, height: "100%" }}>
         <Carte style={{ alignItems: "center", justifyContent: "center", padding: 48 }}>
-          <p style={{ fontFamily: FONT, fontSize: 13, color: "rgba(255,255,255,0.55)", margin: "0 0 6px" }}>
+          <p style={{ fontFamily: FONT, fontSize: 13, color: "rgba(var(--nv-encre-rvb), 0.55)", margin: "0 0 6px" }}>
             Rien à analyser pour l&apos;instant
           </p>
-          <p style={{ fontFamily: FONT, fontSize: 11.5, color: "rgba(255,255,255,0.30)",
+          <p style={{ fontFamily: FONT, fontSize: 11.5, color: "rgba(var(--nv-encre-rvb), 0.30)",
                       margin: 0, textAlign: "center", lineHeight: 1.6 }}>
             L&apos;analyse porte sur les positions réelles. Ajoutez des transactions
             pour que le portefeuille ait quelque chose à mesurer.
@@ -197,7 +215,7 @@ export default function AnalyseView({ portfolioId, refreshKey }: { portfolioId: 
                 return (
                   <div key={b.nom} style={{ display: "flex", alignItems: "center", gap: 7,
                                             fontFamily: FONT, fontSize: 10,
-                                            color: actif ? "rgba(255,255,255,0.88)" : "rgba(255,255,255,0.38)",
+                                            color: actif ? "rgba(var(--nv-encre-rvb), 0.88)" : "rgba(var(--nv-encre-rvb), 0.38)",
                                             fontWeight: actif ? 600 : 400 }}>
                     <i style={{ width: 6, height: 6, borderRadius: "50%", background: b.couleur, flexShrink: 0 }} />
                     <span style={{ flex: 1 }}>{b.nom}</span>
@@ -210,7 +228,7 @@ export default function AnalyseView({ portfolioId, refreshKey }: { portfolioId: 
             </div>
           </div>
           <p style={{ margin: "8px 0 0", fontFamily: FONT, fontSize: 9.5,
-                      color: "rgba(255,255,255,0.28)", lineHeight: 1.45, flexShrink: 0 }}>
+                      color: "rgba(var(--nv-encre-rvb), 0.28)", lineHeight: 1.45, flexShrink: 0 }}>
             Moyenne des facteurs mesurables : ceux qui manquent d&apos;historique
             sont écartés plutôt que comptés à zéro.
           </p>
@@ -236,12 +254,12 @@ export default function AnalyseView({ portfolioId, refreshKey }: { portfolioId: 
                   <div key={k} style={{ display: "flex", alignItems: "center", gap: 8 }}>
                     <span style={{ flex: 1, minWidth: 0 }}>
                       <span style={{ display: "block", fontFamily: FONT, fontSize: 11,
-                                     color: "rgba(255,255,255,0.68)", overflow: "hidden",
+                                     color: "rgba(var(--nv-encre-rvb), 0.68)", overflow: "hidden",
                                      textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                         {LIBELLE_FACTEUR[k]}
                       </span>
                       <span style={{ display: "block", fontFamily: FONT, fontSize: 9.5,
-                                     color: "rgba(255,255,255,0.32)", overflow: "hidden",
+                                     color: "rgba(var(--nv-encre-rvb), 0.32)", overflow: "hidden",
                                      textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                         {f.libelle}
                       </span>
@@ -260,14 +278,14 @@ export default function AnalyseView({ portfolioId, refreshKey }: { portfolioId: 
         {/* Exposition */}
         <Carte>
           <Titre action={
-            <div style={{ display: "flex", gap: 3, background: "rgba(255,255,255,0.05)",
+            <div style={{ display: "flex", gap: 3, background: "rgba(var(--nv-encre-rvb), 0.05)",
                           borderRadius: 8, padding: 2 }}>
               {([["secteurs", "Secteurs"], ["zones", "Zones"], ["devises", "Devises"], ["classes", "Classes"]] as const).map(([k, l]) => (
                 <button key={k} onClick={() => setOngletExpo(k)} style={{
                   padding: "3px 7px", borderRadius: 6, border: "none", cursor: "pointer",
                   fontFamily: FONT, fontSize: 9.5, fontWeight: ongletExpo === k ? 700 : 500,
-                  background: ongletExpo === k ? "rgba(91,141,239,0.20)" : "transparent",
-                  color: ongletExpo === k ? "#9BB9FF" : "rgba(255,255,255,0.40)",
+                  background: ongletExpo === k ? JETONS.accentDoux : "transparent",
+                  color: ongletExpo === k ? JETONS.accent : "rgba(var(--nv-encre-rvb), 0.40)",
                 }}>{l}</button>
               ))}
             </div>
@@ -279,7 +297,7 @@ export default function AnalyseView({ portfolioId, refreshKey }: { portfolioId: 
                 <div key={e.libelle}>
                   <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 3 }}>
                     <span style={{ display: "flex", alignItems: "center", gap: 6, minWidth: 0,
-                                   fontFamily: FONT, fontSize: 11, color: "rgba(255,255,255,0.68)" }}>
+                                   fontFamily: FONT, fontSize: 11, color: "rgba(var(--nv-encre-rvb), 0.68)" }}>
                       {ongletExpo === "zones" && DRAPEAU_ZONE[e.libelle] && (
                         // eslint-disable-next-line @next/next/no-img-element
                         <img src={`/drapeaux/${DRAPEAU_ZONE[e.libelle]}.svg`} alt="" aria-hidden="true"
@@ -296,11 +314,11 @@ export default function AnalyseView({ portfolioId, refreshKey }: { portfolioId: 
                         {e.libelle}
                       </span>
                     </span>
-                    <span style={{ ...NUM, fontSize: 11, fontWeight: 700, color: "rgba(255,255,255,0.88)" }}>
+                    <span style={{ ...NUM, fontSize: 11, fontWeight: 700, color: "rgba(var(--nv-encre-rvb), 0.88)" }}>
                       {e.part.toFixed(1)} %
                     </span>
                   </div>
-                  <div style={{ height: 4, borderRadius: 2, background: "rgba(255,255,255,0.06)" }}>
+                  <div style={{ height: 4, borderRadius: 2, background: "rgba(var(--nv-encre-rvb), 0.06)" }}>
                     <div style={{ width: `${Math.min(100, e.part)}%`, height: "100%", borderRadius: 2,
                                   background: COULEURS_PART[i % COULEURS_PART.length] }} />
                   </div>
@@ -308,7 +326,7 @@ export default function AnalyseView({ portfolioId, refreshKey }: { portfolioId: 
               ))}
               {(ongletExpo === "secteurs" || ongletExpo === "zones") && (
                 <p style={{ margin: "2px 0 0", fontFamily: FONT, fontSize: 9.5,
-                            color: "rgba(255,255,255,0.26)", lineHeight: 1.5 }}>
+                            color: "rgba(var(--nv-encre-rvb), 0.26)", lineHeight: 1.5 }}>
                   {ongletExpo === "secteurs"
                     ? "En transparence de vos fonds : la ventilation interne de chaque ETF est répartie au prorata de son poids."
                     : "Zone déduite de l'indice suivi par chaque fonds — un ETF S&P 500 est américain par mandat. La place de cotation, elle, ne dit rien de l'exposition."}
@@ -316,7 +334,7 @@ export default function AnalyseView({ portfolioId, refreshKey }: { portfolioId: 
               )}
             </div>
           ) : (
-            <p style={{ fontFamily: FONT, fontSize: 11, color: "rgba(255,255,255,0.28)", margin: 0 }}>
+            <p style={{ fontFamily: FONT, fontSize: 11, color: "rgba(var(--nv-encre-rvb), 0.28)", margin: 0 }}>
               Ventilation indisponible pour ces titres.
             </p>
           )}
@@ -334,28 +352,28 @@ export default function AnalyseView({ portfolioId, refreshKey }: { portfolioId: 
               const t = TON[o.ton] ?? TON.info;
               return (
                 <div key={i} style={{ display: "flex", gap: 10, padding: "9px 11px", borderRadius: 12,
-                                      background: "rgba(255,255,255,0.035)",
-                                      border: "1px solid rgba(255,255,255,0.06)" }}>
+                                      background: "rgba(var(--nv-encre-rvb), 0.035)",
+                                      border: "1px solid rgba(var(--nv-encre-rvb), 0.06)" }}>
                   <span style={{ width: 18, height: 18, borderRadius: "50%", flexShrink: 0,
-                                 background: t.couleur, color: "rgba(6,20,42,0.96)",
+                                 background: t.fond, color: t.encre,
                                  display: "flex", alignItems: "center", justifyContent: "center",
                                  fontFamily: FONT, fontSize: 11, fontWeight: 800 }}>
                     {t.signe}
                   </span>
                   <span style={{ minWidth: 0 }}>
                     <span style={{ display: "block", fontFamily: FONT, fontSize: 11.5, fontWeight: 600,
-                                   color: "rgba(255,255,255,0.88)", marginBottom: 2 }}>
+                                   color: "rgba(var(--nv-encre-rvb), 0.88)", marginBottom: 2 }}>
                       {o.titre}
                     </span>
                     <span style={{ display: "block", fontFamily: FONT, fontSize: 10.5,
-                                   color: "rgba(255,255,255,0.45)", lineHeight: 1.55 }}>
+                                   color: "rgba(var(--nv-encre-rvb), 0.45)", lineHeight: 1.55 }}>
                       {o.detail}
                     </span>
                   </span>
                 </div>
               );
             }) : (
-              <p style={{ fontFamily: FONT, fontSize: 11, color: "rgba(255,255,255,0.30)",
+              <p style={{ fontFamily: FONT, fontSize: 11, color: "rgba(var(--nv-encre-rvb), 0.30)",
                           margin: 0, lineHeight: 1.6 }}>
                 Rien de saillant : aucune ligne ne domine, les corrélations et la
                 volatilité restent dans des bornes ordinaires.
@@ -363,7 +381,7 @@ export default function AnalyseView({ portfolioId, refreshKey }: { portfolioId: 
             )}
           </div>
           <p style={{ margin: "10px 0 0", fontFamily: FONT, fontSize: 9.5,
-                      color: "rgba(255,255,255,0.24)", lineHeight: 1.5, flexShrink: 0 }}>
+                      color: "rgba(var(--nv-encre-rvb), 0.24)", lineHeight: 1.5, flexShrink: 0 }}>
             Observations calculées sur vos positions. Ce ne sont pas des conseils
             en investissement.
           </p>
@@ -381,12 +399,12 @@ export default function AnalyseView({ portfolioId, refreshKey }: { portfolioId: 
               <div key={p.ticker}>
                 <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 3 }}>
                   <span style={{ fontFamily: FONT, fontSize: 11, fontWeight: 600,
-                                 color: "rgba(255,255,255,0.80)" }}>{p.ticker}</span>
-                  <span style={{ ...NUM, fontSize: 11, fontWeight: 700, color: "rgba(255,255,255,0.88)" }}>
+                                 color: "rgba(var(--nv-encre-rvb), 0.80)" }}>{p.ticker}</span>
+                  <span style={{ ...NUM, fontSize: 11, fontWeight: 700, color: "rgba(var(--nv-encre-rvb), 0.88)" }}>
                     {p.part.toFixed(1)} %
                   </span>
                 </div>
-                <div style={{ height: 4, borderRadius: 2, background: "rgba(255,255,255,0.06)" }}>
+                <div style={{ height: 4, borderRadius: 2, background: "rgba(var(--nv-encre-rvb), 0.06)" }}>
                   <div style={{ width: `${Math.min(100, p.part)}%`, height: "100%", borderRadius: 2,
                                 background: COULEURS_PART[i % COULEURS_PART.length] }} />
                 </div>
@@ -413,7 +431,7 @@ function Jauge({ score, bande }: { score: number | null; bande: string | null })
   const arcs = donutArcs(
     [
       { key: "atteint", value: atteint, color: couleur },
-      { key: "reste",   value: 100 - atteint, color: "rgba(255,255,255,0.10)" },
+      { key: "reste",   value: 100 - atteint, color: "rgba(var(--nv-encre-rvb), 0.10)" },
     ],
     { cx: T / 2, cy: T / 2, r: T / 2, thickness: 11, gap: 0 },
   );
@@ -424,10 +442,10 @@ function Jauge({ score, bande }: { score: number | null; bande: string | null })
       </svg>
       <div style={{ position: "absolute", inset: 0, display: "flex", flexDirection: "column",
                     alignItems: "center", justifyContent: "center" }}>
-        <span style={{ ...NUM, fontSize: 30, fontWeight: 700, color: "#fff", lineHeight: 1 }}>
+        <span style={{ ...NUM, fontSize: 30, fontWeight: 700, color: JETONS.texteIntense, lineHeight: 1 }}>
           {score ?? "—"}
         </span>
-        <span style={{ fontFamily: FONT, fontSize: 10, color: "rgba(255,255,255,0.35)" }}>/100</span>
+        <span style={{ fontFamily: FONT, fontSize: 10, color: "rgba(var(--nv-encre-rvb), 0.35)" }}>/100</span>
         {bande && (
           <span style={{ fontFamily: FONT, fontSize: 11, fontWeight: 700, color: couleur, marginTop: 3 }}>
             {bande}
@@ -449,7 +467,7 @@ function Cone({ p }: { p: Projection }) {
   const t = p.trajectoire ?? [];
   if (!t.length || p.median == null) {
     return (
-      <p style={{ fontFamily: FONT, fontSize: 11, color: "rgba(255,255,255,0.28)",
+      <p style={{ fontFamily: FONT, fontSize: 11, color: "rgba(var(--nv-encre-rvb), 0.28)",
                   margin: 0, lineHeight: 1.6 }}>
         Historique trop court pour projeter. Il faut une soixantaine de séances
         pour estimer une dispersion qui veuille dire quelque chose.
@@ -475,17 +493,17 @@ function Cone({ p }: { p: Projection }) {
       <div style={{ flex: 1, minHeight: 0 }}>
         <svg viewBox={`0 0 ${L} ${H}`} preserveAspectRatio="none"
              style={{ width: "100%", height: "100%", display: "block" }}>
-          <path d={bande} fill="rgba(91,141,239,0.16)" />
-          <path d={ligne("median")} fill="none" stroke="#50A2FF" strokeWidth="1.6"
+          <path d={bande} fill={JETONS.accentDoux} />
+          <path d={ligne("median")} fill="none" stroke={JETONS.accent} strokeWidth="1.6"
                 vectorEffect="non-scaling-stroke" />
         </svg>
       </div>
       <div style={{ display: "flex", justifyContent: "space-between", marginTop: 8, flexShrink: 0 }}>
-        {([["Défavorable", p.p10, "#FF6467"], ["Médiane", p.median, "#9BB9FF"],
-           ["Favorable", p.p90, "#00D492"]] as const).map(([l, v, c]) => (
+        {([["Défavorable", p.p10, JETONS.negatif], ["Médiane", p.median, JETONS.accent],
+           ["Favorable", p.p90, JETONS.positif]] as const).map(([l, v, c]) => (
           <span key={l} style={{ textAlign: "center" }}>
             <span style={{ display: "block", fontFamily: FONT, fontSize: 9,
-                           color: "rgba(255,255,255,0.32)" }}>{l}</span>
+                           color: "rgba(var(--nv-encre-rvb), 0.32)" }}>{l}</span>
             <span style={{ ...NUM, display: "block", fontSize: 12, fontWeight: 700, color: c }}>
               {v == null ? "—" : eur(v)}
             </span>
@@ -493,7 +511,7 @@ function Cone({ p }: { p: Projection }) {
         ))}
       </div>
       <p style={{ margin: "8px 0 0", fontFamily: FONT, fontSize: 9,
-                  color: "rgba(255,255,255,0.26)", lineHeight: 1.45, flexShrink: 0 }}>
+                  color: "rgba(var(--nv-encre-rvb), 0.26)", lineHeight: 1.45, flexShrink: 0 }}>
         Portefeuille projeté tel qu&apos;il est, sans versement futur. Deux mille
         tirages sur la volatilité observée — un ordre de grandeur de dispersion,
         pas une prévision.

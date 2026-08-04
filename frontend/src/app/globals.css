@@ -177,14 +177,73 @@
 
   /* Sémantiques relevées sur leur page rendue. Rien à voir avec les miennes :
      leur vert est un menthe froid #00D492, pas un vert jaune ; leur alerte est
-     un orange franc, pas un ambre ; et leur bleu d'appui est plus lumineux. */
+     un orange franc, pas un ambre ; et leur bleu d'appui est plus lumineux.
+
+     ── L'échelle à sept crans ──
+
+     Chaque rôle se décline, du plus effacé au plus dense :
+
+       voile → doux → atténué → base → fort → emphase → intense
+
+     Les deux premiers sont translucides : ce sont des **fonds**. Les cinq
+     autres sont opaques : ce sont des **encres et des liserés**.
+
+     La pastille de statut, c'est un fond `voile` et une encre **`fort`** —
+     pas `base`. La nuance a l'air gratuite et ne l'est pas : le voile teinte
+     le fond de sa propre couleur, donc poser `base` dessus revient à écrire
+     une couleur sur une version délavée d'elle-même. En sombre le fond est
+     assez noir pour que ça passe (9,2:1), en clair le blanc remonte le voile
+     et l'écart tombe à 3,9:1. Avec `fort` : 5,0:1 au pire dans les deux
+     thèmes, et aucune branche à écrire dans les composants.
+
+     Le piège, quand on lit cette échelle chez eux, est de croire que le cran
+     le plus haut est le plus lisible. Il ne l'est pas : c'est le plus
+     **saturé**. En thème sombre, un vert pleinement saturé est plus foncé
+     qu'un vert délavé, donc `intense` y contraste *moins* que `atténué`. Les
+     crans qui portent du texte sont `base` et `fort`, tenus au-dessus de
+     4,5:1 dans les deux thèmes — c'est la seule garantie que je donne. Cette
+     confusion m'avait déjà coûté un jeton : leur `success` clair #5EE9B5 ne
+     mesure que 1,5:1, parce que c'est un fond, pas une encre.
+
+     Les deux crans translucides ne sont écrits qu'ici : ils dérivent des
+     jetons `-rvb`, et une variable CSS qui en appelle une autre est résolue
+     au moment de l'usage, pas de la déclaration. Le thème clair redéfinit les
+     composantes, et ces deux lignes suivent toutes seules. */
   --nv-positif:           #00D492;
+  --nv-positif-attenue:   #4CF6B1;
+  --nv-positif-fort:      #0DBE83;
+  --nv-positif-emphase:   #04A974;
+  --nv-positif-intense:   #009465;
+
   --nv-negatif:           #FF6467;
+  --nv-negatif-attenue:   #FEA19E;
+  --nv-negatif-fort:      #E95055;
+  --nv-negatif-emphase:   #D43B44;
+  --nv-negatif-intense:   #BE2333;
+
   --nv-attention:         #FF8904;
+  --nv-attention-attenue: #FFBC8C;
+  --nv-attention-fort:    #E47A05;
+  --nv-attention-emphase: #CA6C06;
+  --nv-attention-intense: #B15D00;
 
   --nv-accent:            #50A2FF;
-  --nv-accent-doux:       rgba(80,162,255,0.16);
-  --nv-accent-bord:       rgba(80,162,255,0.38);
+  --nv-accent-attenue:    #92C3FD;
+  --nv-accent-fort:       #3C8FEA;
+  --nv-accent-emphase:    #277CD6;
+  --nv-accent-intense:    #0B6AC2;
+
+  /* Les fonds, communs aux deux thèmes par construction. */
+  --nv-positif-voile:     rgba(var(--nv-positif-rvb), 0.10);
+  --nv-positif-doux:      rgba(var(--nv-positif-rvb), 0.20);
+  --nv-negatif-voile:     rgba(var(--nv-negatif-rvb), 0.10);
+  --nv-negatif-doux:      rgba(var(--nv-negatif-rvb), 0.20);
+  --nv-attention-voile:   rgba(var(--nv-attention-rvb), 0.10);
+  --nv-attention-doux:    rgba(var(--nv-attention-rvb), 0.20);
+  --nv-accent-voile:      rgba(var(--nv-accent-rvb), 0.10);
+  --nv-accent-doux:       rgba(var(--nv-accent-rvb), 0.20);
+  /* Le liseré d'une pastille : le même fond, deux fois plus dense. */
+  --nv-accent-bord:       rgba(var(--nv-accent-rvb), 0.38);
 
   --nv-ombre:             0 8px 16px -4px rgba(0,0,0,0.8);
 
@@ -263,14 +322,36 @@
   /* Mêmes teintes qu'en sombre, assombries jusqu'à 4,5:1 sur blanc. Leurs
      propres valeurs claires servent de fond de pastille — #5EE9B5 ne donne que
      1,5:1 — et ne peuvent pas porter du texte. La teinte est conservée au
-     degré près, seule la luminosité descend. */
+     degré près, seule la luminosité descend.
+
+     L'échelle repart de ces bases. Elle s'ordonne ici dans l'autre sens : sur
+     blanc, saturer c'est assombrir, donc `intense` est aussi le plus lisible
+     et `atténué` le plus faible — l'inverse exact du thème sombre. Le sens de
+     lecture change, les rôles ne changent pas. `atténué` reste un liseré,
+     `base` et `fort` restent les seuls crans à texte. */
   --nv-positif:           #00884D;
+  --nv-positif-attenue:   #44B173;
+  --nv-positif-fort:      #017441;
+  --nv-positif-emphase:   #016035;
+  --nv-positif-intense:   #014D2A;
+
   --nv-negatif:           #EA0B27;
+  --nv-negatif-attenue:   #FF746C;
+  --nv-negatif-fort:      #CC001F;
+  --nv-negatif-emphase:   #AE0018;
+  --nv-negatif-intense:   #910012;
+
   --nv-attention:         #D64200;
+  --nv-attention-attenue: #FE7449;
+  --nv-attention-fort:    #BA3700;
+  --nv-attention-emphase: #9E2E00;
+  --nv-attention-intense: #832300;
 
   --nv-accent:            #2177D1;
-  --nv-accent-doux:       rgba(33,119,209,0.10);
-  --nv-accent-bord:       rgba(33,119,209,0.28);
+  --nv-accent-attenue:    #4EA0FD;
+  --nv-accent-fort:       #0065BD;
+  --nv-accent-emphase:    #0054A0;
+  --nv-accent-intense:    #004484;
 
   --nv-ombre:             0 8px 16px -4px rgba(106,114,130,0.18);
 

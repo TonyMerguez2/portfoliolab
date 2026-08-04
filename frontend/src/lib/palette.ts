@@ -60,12 +60,59 @@ export const JETONS = {
   surFondAttenue: "var(--nv-sur-fond-attenue)",
   surFondFaible: "var(--nv-sur-fond-faible)",
 
+  /**
+   * Les quatre rôles sémantiques, chacun sur sept crans.
+   *
+   * `voile` et `doux` sont translucides : ce sont des fonds. Les cinq autres
+   * sont opaques : ce sont des encres et des liserés.
+   *
+   * Une pastille de statut, c'est `positifVoile` en fond et **`positifFort`**
+   * en texte — pas `positif`. Le voile teinte le fond de sa propre couleur :
+   * y poser `base`, c'est écrire une couleur sur une version délavée
+   * d'elle-même. En sombre le fond très noir sauve la mise (9,2:1) ; en clair
+   * le blanc remonte le voile et l'écart tombe à 3,9:1. `fort` tient 5,0:1 au
+   * pire dans les deux thèmes, sans que le composant ait à savoir lequel est
+   * actif.
+   *
+   * Seuls `base` et `fort` sont garantis lisibles — au-dessus de 4,5:1 dans
+   * les deux thèmes. Les crans au-delà sont plus **saturés**, pas plus
+   * lisibles, et en thème sombre saturer revient à foncer : `positifIntense`
+   * y contraste moins que `positifAttenue`. Prendre le cran le plus haut pour
+   * du texte est l'erreur naturelle ; c'est celle qui avait fait retenir un
+   * vert à 1,5:1.
+   */
+  positifVoile: "var(--nv-positif-voile)",
+  positifDoux: "var(--nv-positif-doux)",
+  positifAttenue: "var(--nv-positif-attenue)",
   positif: "var(--nv-positif)",
-  negatif: "var(--nv-negatif)",
-  attention: "var(--nv-attention)",
+  positifFort: "var(--nv-positif-fort)",
+  positifEmphase: "var(--nv-positif-emphase)",
+  positifIntense: "var(--nv-positif-intense)",
 
-  accent: "var(--nv-accent)",
+  negatifVoile: "var(--nv-negatif-voile)",
+  negatifDoux: "var(--nv-negatif-doux)",
+  negatifAttenue: "var(--nv-negatif-attenue)",
+  negatif: "var(--nv-negatif)",
+  negatifFort: "var(--nv-negatif-fort)",
+  negatifEmphase: "var(--nv-negatif-emphase)",
+  negatifIntense: "var(--nv-negatif-intense)",
+
+  attentionVoile: "var(--nv-attention-voile)",
+  attentionDoux: "var(--nv-attention-doux)",
+  attentionAttenue: "var(--nv-attention-attenue)",
+  attention: "var(--nv-attention)",
+  attentionFort: "var(--nv-attention-fort)",
+  attentionEmphase: "var(--nv-attention-emphase)",
+  attentionIntense: "var(--nv-attention-intense)",
+
+  accentVoile: "var(--nv-accent-voile)",
   accentDoux: "var(--nv-accent-doux)",
+  accentAttenue: "var(--nv-accent-attenue)",
+  accent: "var(--nv-accent)",
+  accentFort: "var(--nv-accent-fort)",
+  accentEmphase: "var(--nv-accent-emphase)",
+  accentIntense: "var(--nv-accent-intense)",
+  /** Liseré de pastille : le fond `doux`, deux fois plus dense. */
   accentBord: "var(--nv-accent-bord)",
 
   ombre: "var(--nv-ombre)",

@@ -19,7 +19,7 @@ import { enTetesAuth } from "@/lib/session";
 import { typesParOperation, COULEUR_OP, LIBELLE_OP, type Tx } from "@/lib/journal";
 import { FONT } from "@/lib/typography";
 import type { Period } from "@/lib/chart/portfolioCurve";
-import { CLAIR, RAYON, couleurMontant, RAYONS, styleCadreExterieur, styleCarteInterieure } from "@/lib/palette";
+import { JETONS, CLAIR, RAYON, couleurMontant, RAYONS, styleCadreExterieur, styleCarteInterieure } from "@/lib/palette";
 import { hexVersRvb, rvbVersHex, rvbVersTsl, tslVersRvb } from "@/lib/couleur";
 import { resoudreJeton } from "@/lib/theme";
 import Cadre from "@/components/ui/Cadre";
@@ -148,6 +148,10 @@ function scoreLabel(s: number) { return s >= 80 ? "Excellent" : s >= 60 ? "Bon" 
  */
 function degradeDuScore(score: number): [string, string] {
   const jeton = score >= 60 ? "--nv-positif" : score >= 40 ? "--nv-attention" : "--nv-negatif";
+  // Le secours doit rester un hexadécimal littéral : c'est la valeur employée
+  // quand la feuille de style n'est pas encore lue, et la ligne suivante la
+  // décompose en TSL. Y mettre `JETONS.negatif` glisserait un `var()` que le
+  // test de format rejette, et l'anneau perdrait son dégradé.
   const secours = score >= 60 ? "#00D492" : score >= 40 ? "#FF8904" : "#FF6467";
   const hex = resoudreJeton(jeton, secours);
   if (!/^#[0-9a-f]{6}$/i.test(hex)) return [hex, hex];
@@ -670,7 +674,7 @@ function PortfolioPageInner() {
         <div>Aucun portefeuille sélectionné.</div>
         <button onClick={() => router.push("/build")}
           style={{ padding: "8px 20px", borderRadius: RAYONS.sm,
-            border: "1px solid rgba(91,141,239,0.4)",
+            border: `1px solid ${JETONS.accentBord}`,
             background: CLAIR.accentDoux, color: CLAIR.accent,
             cursor: "pointer", fontSize: 12 }}>
           Créer un portefeuille
@@ -768,7 +772,7 @@ function PortfolioPageInner() {
         <input autoFocus value={valueInput} onChange={e => setValueInput(e.target.value)}
           onKeyDown={e => { if (e.key === "Enter") saveTotalValue(); if (e.key === "Escape") setEditingValue(false); }}
           onBlur={saveTotalValue} placeholder="Ex: 10000" type="number"
-          style={{ width: 100, background: CLAIR.carteCreuse, border: "1px solid rgba(91,141,239,0.40)", borderRadius: RAYONS.xs, padding: "3px 8px", color: CLAIR.texte, fontSize: 11, outline: "none", fontFamily: FONT }} />
+          style={{ width: 100, background: CLAIR.carteCreuse, border: `1px solid ${JETONS.accentBord}`, borderRadius: RAYONS.xs, padding: "3px 8px", color: CLAIR.texte, fontSize: 11, outline: "none", fontFamily: FONT }} />
         <span style={{ fontSize: 11, color: CLAIR.texteAttenue }}>€</span>
       </div>
     ) : (
@@ -816,7 +820,7 @@ function PortfolioPageInner() {
                 <input autoFocus value={costInput} onChange={e => setCostInput(e.target.value)}
                   onKeyDown={e => { if (e.key === "Enter") saveCostBasis(); if (e.key === "Escape") setEditingCost(false); }}
                   onBlur={saveCostBasis} placeholder="Prix de revient" type="number"
-                  style={{ width: 110, background: CLAIR.carteCreuse, border: "1px solid rgba(91,141,239,0.40)", borderRadius: RAYONS.xs, padding: "3px 8px", color: CLAIR.texte, fontSize: 10, outline: "none", fontFamily: FONT }} />
+                  style={{ width: 110, background: CLAIR.carteCreuse, border: `1px solid ${JETONS.accentBord}`, borderRadius: RAYONS.xs, padding: "3px 8px", color: CLAIR.texte, fontSize: 10, outline: "none", fontFamily: FONT }} />
                 <span style={{ fontSize: 10, color: CLAIR.texteAttenue }}>€</span>
               </div>
             ) : (
@@ -852,7 +856,7 @@ function PortfolioPageInner() {
               <input autoFocus value={costInput} onChange={e => setCostInput(e.target.value)}
                 onKeyDown={e => { if (e.key === "Enter") saveCostBasis(); if (e.key === "Escape") setEditingCost(false); }}
                 onBlur={saveCostBasis} type="number"
-                style={{ width: 90, background: CLAIR.carteCreuse, border: "1px solid rgba(91,141,239,0.40)", borderRadius: RAYONS.xs, padding: "2px 7px", color: CLAIR.texte, fontSize: 10, outline: "none", fontFamily: FONT }} />
+                style={{ width: 90, background: CLAIR.carteCreuse, border: `1px solid ${JETONS.accentBord}`, borderRadius: RAYONS.xs, padding: "2px 7px", color: CLAIR.texte, fontSize: 10, outline: "none", fontFamily: FONT }} />
               <span style={{ fontSize: 10, color: CLAIR.texteAttenue }}>€</span>
             </div>
           )}
@@ -1199,8 +1203,8 @@ function PortfolioPageInner() {
                 `${gainCount} actifs en hausse contre ${lossCount} en baisse — momentum ${weightedChange >= 0 ? "positif" : "négatif"} sur ${PERIOD_LABEL[period]}.`,
               ].map((insight, i) => (
                 <div key={i} style={{ display: "flex", gap: 12, padding: "12px 14px", borderRadius: RAYONS.sm,
-                  background: "rgba(91,141,239,0.07)", border: "1px solid rgba(91,141,239,0.15)" }}>
-                  <div style={{ width: 24, height: 24, borderRadius: RAYONS.xs, background: "rgba(91,141,239,0.20)",
+                  background: JETONS.accentVoile, border: `1px solid ${JETONS.accentDoux}` }}>
+                  <div style={{ width: 24, height: 24, borderRadius: RAYONS.xs, background: JETONS.accentDoux,
                     display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0,
                     fontSize: 10, fontWeight: 800, color: CLAIR.accent }}>AI</div>
                   <span style={{ fontSize: 12, color: CLAIR.texteSecondaire, lineHeight: 1.6 }}>{insight}</span>
@@ -1224,7 +1228,7 @@ function PortfolioPageInner() {
                     <div style={{ fontSize: 10, color: CLAIR.texteFaible }}>Résultats trimestriels</div>
                   </div>
                   <span style={{ fontSize: 10, fontWeight: 600, color: CLAIR.attention,
-                    background: "rgba(251,191,36,0.12)", borderRadius: RAYONS.xs, padding: "2px 7px" }}>
+                    background: JETONS.attentionVoile, borderRadius: RAYONS.xs, padding: "2px 7px" }}>
                     J+{(i + 1) * 3}
                   </span>
                 </div>
