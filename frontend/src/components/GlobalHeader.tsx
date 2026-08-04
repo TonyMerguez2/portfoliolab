@@ -299,7 +299,7 @@ export default function GlobalHeader() {
           outline: showSearch ? `1px solid ${JETONS.accentBord}` : "none",
           transition:"outline-color 150ms",
         }}>
-          <svg width="18" height="18" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.2}
+          <svg width="20" height="20" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.2}
             style={{ flexShrink:0, color:JETONS.texteIntense }}>
             <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-4.35-4.35M17 11A6 6 0 1 1 5 11a6 6 0 0 1 12 0z"/>
           </svg>
@@ -383,34 +383,32 @@ export default function GlobalHeader() {
             {/* Une roue dentée : crête plate, flanc presque radial, congés.
                 Chaque dent est un arc du cercle extérieur — c'est ce plat qui
                 dit « engrenage ». Le creux est un arc du cercle intérieur, et
-                les deux se raccordent par une cubique courte.
+                les deux se raccordent par une cubique courte. L'arrondi vient
+                des congés, pas de la forme des dents : une version antérieure
+                courbait les dents elles-mêmes et la roue devenait une fleur.
 
-                L'arrondi vient des congés, pas de la forme des dents. Une
-                première version courbait les dents elles-mêmes, tangentes
-                perpendiculaires au rayon aux deux bouts de chaque flanc : les
-                flancs bombaient sur les côtés et la roue devenait une fleur.
+                Les bras de contrôle tiennent à 30 % du creux, pas davantage.
+                Au-delà, la courbe part dans le sens de la circonférence, doit
+                virer d'un quart de tour pour redescendre, et dépasse : le
+                flanc se referme en crochet. À 45 % le tracé bouclait sur
+                lui-même — invisible sous le trait épais, flagrant en fil de
+                fer.
 
-                D'où la longueur des bras de contrôle, à 30 % du creux et pas
-                davantage. Au-delà, la courbe part dans le sens de la
-                circonférence, doit virer d'un quart de tour pour redescendre,
-                et dépasse : le flanc se referme en crochet. À 45 % le tracé
-                bouclait sur lui-même, ce que le trait épais dissimulait à
-                l'œil mais que le fil de fer montrait sans ambiguïté.
+                Huit dents courtes sur un corps large, et non six longues sur
+                un corps mince. C'est ce qui change tout dans l'allure, et
+                c'est aussi ce qui a imposé la taille : rendues au pixel près,
+                huit dents ne se séparent pas à 14 px — l'entre-dent y vaut un
+                pixel et demi, que le trait remplit. Il en faut seize.
 
-                Six dents et non sept. Rendues à leur taille réelle puis
-                agrandies au pixel, les sept dents se brouillent : à 14 px
-                l'entre-dent ne vaut que deux pixels, dont un est déjà pris
-                par le trait.
-
-                Quatorze pixels, et non dix-huit comme la loupe. Les deux
-                tracés n'occupent pas la même part de leur boîte : la loupe
-                tient dans 16 unités sur 24, la roue s'étale sur 20,40 —
-                mesuré, pas supposé. C'est l'encre qui se voit, pas la boîte :
-                11,9 px ici, contre 12,0 pour la loupe. */}
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-              strokeWidth={2.0} strokeLinejoin="round" strokeLinecap="round" aria-hidden="true">
-              <path d="M22.04 10.19 A10.2 10.2 0 0 1 22.04 13.81 C21.84 14.93 18.41 13.10 18.02 14.17 A6.4 6.4 0 0 1 16.89 16.13 C16.15 17.00 19.45 19.05 18.58 19.79 A10.2 10.2 0 0 1 15.46 21.60 C14.38 21.98 14.26 18.10 13.13 18.30 A6.4 6.4 0 0 1 10.87 18.30 C9.74 18.10 9.62 21.98 8.54 21.60 A10.2 10.2 0 0 1 5.42 19.79 C4.55 19.05 7.85 17.00 7.11 16.13 A6.4 6.4 0 0 1 5.98 14.17 C5.59 13.10 2.16 14.93 1.96 13.81 A10.2 10.2 0 0 1 1.96 10.19 C2.16 9.07 5.59 10.90 5.98 9.83 A6.4 6.4 0 0 1 7.11 7.87 C7.85 7.00 4.55 4.95 5.42 4.21 A10.2 10.2 0 0 1 8.54 2.40 C9.62 2.02 9.74 5.90 10.87 5.70 A6.4 6.4 0 0 1 13.13 5.70 C14.26 5.90 14.38 2.02 15.46 2.40 A10.2 10.2 0 0 1 18.58 4.21 C19.45 4.95 16.15 7.00 16.89 7.87 A6.4 6.4 0 0 1 18.02 9.83 C18.41 10.90 21.84 9.07 22.04 10.19Z" />
-              <circle cx="12" cy="12" r="3.4" />
+                D'où la loupe à 20 px. Les deux tracés n'occupent pas la même
+                part de leur boîte — la loupe 16 unités sur 24, la roue 20,4,
+                mesuré et non supposé. À 16 et 20 px, les encres valent
+                respectivement 13,6 et 13,3 px : la parité tient, et
+                l'engrenage a enfin de quoi se lire. */}
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+              strokeWidth={1.9} strokeLinejoin="round" strokeLinecap="round" aria-hidden="true">
+              <path d="M22.07 10.40 A10.2 10.2 0 0 1 22.07 13.60 C21.94 14.43 19.39 12.91 19.20 13.73 A7.4 7.4 0 0 1 18.31 15.87 C17.87 16.58 20.75 17.32 20.25 18.00 A10.2 10.2 0 0 1 18.00 20.25 C17.32 20.75 16.58 17.87 15.87 18.31 A7.4 7.4 0 0 1 13.73 19.20 C12.91 19.39 14.43 21.94 13.60 22.07 A10.2 10.2 0 0 1 10.40 22.07 C9.57 21.94 11.09 19.39 10.27 19.20 A7.4 7.4 0 0 1 8.13 18.31 C7.42 17.87 6.68 20.75 6.00 20.25 A10.2 10.2 0 0 1 3.75 18.00 C3.25 17.32 6.13 16.58 5.69 15.87 A7.4 7.4 0 0 1 4.80 13.73 C4.61 12.91 2.06 14.43 1.93 13.60 A10.2 10.2 0 0 1 1.93 10.40 C2.06 9.57 4.61 11.09 4.80 10.27 A7.4 7.4 0 0 1 5.69 8.13 C6.13 7.42 3.25 6.68 3.75 6.00 A10.2 10.2 0 0 1 6.00 3.75 C6.68 3.25 7.42 6.13 8.13 5.69 A7.4 7.4 0 0 1 10.27 4.80 C11.09 4.61 9.57 2.06 10.40 1.93 A10.2 10.2 0 0 1 13.60 1.93 C14.43 2.06 12.91 4.61 13.73 4.80 A7.4 7.4 0 0 1 15.87 5.69 C16.58 6.13 17.32 3.25 18.00 3.75 A10.2 10.2 0 0 1 20.25 6.00 C20.75 6.68 17.87 7.42 18.31 8.13 A7.4 7.4 0 0 1 19.20 10.27 C19.39 11.09 21.94 9.57 22.07 10.40Z" />
+              <circle cx="12" cy="12" r="3.3" />
             </svg>
           </button>
           {showNotifs && (
