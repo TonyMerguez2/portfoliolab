@@ -299,9 +299,22 @@ export default function GlobalHeader() {
           outline: showSearch ? `1px solid ${JETONS.accentBord}` : "none",
           transition:"outline-color 150ms",
         }}>
-          <svg width="20" height="20" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.2}
+          {/* La loupe du concept, comme la roue à côté.
+              Les deux tracés occupent 18 unités sur 24, à partir de (3,3) —
+              mesuré, pas supposé. C'est leur grille : tous leurs pictogrammes
+              tiennent dans le même carré. Deux boîtes égales suffisent donc à
+              les apparier, et les calculs d'emprise que j'ai refaits trois
+              fois pour accorder un dessin maison à un autre n'ont plus lieu
+              d'être. Régler ce genre de chose une icône à la fois était le
+              symptôme ; la cause était de dessiner hors de leur grille.
+
+              Trait de 2,0, non de 1,5 : leur valeur suppose un rendu à 24 px,
+              où elle donne 1,5 px. Sur une boîte de 18 il faut 2,0 pour
+              retrouver ce poids. */}
+          <svg width="18" height="18" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.0}
+            strokeLinecap="round" strokeLinejoin="round"
             style={{ flexShrink:0, color:JETONS.texteIntense }}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-4.35-4.35M17 11A6 6 0 1 1 5 11a6 6 0 0 1 12 0z"/>
+            <path d="m21 21-6-6M3 10a7 7 0 1 0 14 0 7 7 0 0 0-14 0"/>
           </svg>
           <input ref={searchRef} value={localSearch}
             onChange={e => { setLocalSearch(e.target.value); setHighlightIndex(-1); setShowSearch(true); }}
@@ -389,16 +402,9 @@ export default function GlobalHeader() {
                 courbées qui donnaient une fleur, puis un engrenage à huit
                 dents. Aucune ne valait le tracé d'origine.
 
-                Dix-huit pixels. Le tracé occupe 18 unités sur 24 — mesuré, il
-                est exactement centré — quand la loupe n'en occupe que 16.
-                C'est l'encre qui se voit et non la boîte : 13,5 px ici,
-                contre 13,3 pour la loupe à 20 px.
-
-                Et un trait de 2,0, non de 1,5 comme dans leur source. Leur
-                valeur vaut pour un rendu à 24 px, où elle donne 1,5 px à
-                l'écran. Recopiée telle quelle sur une boîte de 18, elle n'en
-                donnerait plus que 1,13 : plus maigre que ce qu'ils ont
-                dessiné. 2,0 × 18/24 rétablit leur poids exact. */}
+                Même boîte et même trait que la loupe : voir le commentaire
+                là-bas. Les deux tracés occupent 18 unités sur 24 à partir de
+                (3,3), donc deux boîtes égales suffisent à les accorder. */}
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
               strokeWidth={2.0} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
               <path d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 0 0 2.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 0 0 1.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 0 0-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 0 0-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.723 1.723 0 0 0-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 0 0-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 0 0 1.066-2.573c-.94-1.543.826-3.31 2.37-2.37 1 .608 2.296.07 2.572-1.065M9 12a3 3 0 1 0 6 0 3 3 0 0 0-6 0" />
