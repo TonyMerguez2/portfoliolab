@@ -299,7 +299,7 @@ export default function GlobalHeader() {
           outline: showSearch ? `1px solid ${JETONS.accentBord}` : "none",
           transition:"outline-color 150ms",
         }}>
-          <svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.2}
+          <svg width="18" height="18" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.2}
             style={{ flexShrink:0, color:JETONS.texteIntense }}>
             <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-4.35-4.35M17 11A6 6 0 1 1 5 11a6 6 0 0 1 12 0z"/>
           </svg>
@@ -380,24 +380,30 @@ export default function GlobalHeader() {
               transition:"opacity 150ms",
               opacity: showNotifs ? 0.86 : 1,
             }}>
-            {/* Une roue en trait, jointures arrondies.
-                Sept dents larges plutôt que huit étroites : à cette taille,
-                des dents fines redeviennent une frange indistincte. Les
-                jointures rondes suffisent à adoucir les angles — les courber
-                une à une n'ajouterait rien de lisible.
+            {/* Une roue en trait, à crénelure courbe.
+                Chaque flanc est une cubique dont les tangentes sont
+                perpendiculaires au rayon à ses deux bouts : la dent arrive à
+                plat sur sa crête et repart à plat dans le creux. Le tracé
+                précédent était un polygone à angles vifs, seulement émoussé
+                par des jointures rondes — ce qui adoucit un angle mais ne
+                courbe pas une dent.
 
-                Treize pixels, et non seize comme la loupe : les deux tracés
-                n'occupent pas la même part de leur boîte. La loupe tient dans
-                16 unités sur 24, la roue s'étale sur 20,4 — à largeur égale
-                elle rendait 15,3 px d'encre contre 10,7, soit 43 % de plus.
-                C'est l'encre qui se voit, pas la boîte : 13 px la ramènent à
-                11,0. Le trait s'épaissit d'autant, sans quoi la roue
-                maigrirait en rapetissant et paraîtrait plus pâle que sa
-                voisine. */}
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-              strokeWidth={2.2} strokeLinejoin="round" strokeLinecap="round" aria-hidden="true">
-              <path d="M19.34 10.03 L21.85 9.36 L21.85 14.64 L19.34 13.97 L18.11 16.51 L20.21 18.06 L16.08 21.35 L15.04 18.97 L12.28 19.59 L12.38 22.19 L7.23 21.02 L8.45 18.72 L6.24 16.96 L4.27 18.65 L1.98 13.90 L4.53 13.41 L4.53 10.59 L1.98 10.10 L4.27 5.35 L6.24 7.04 L8.45 5.28 L7.23 2.98 L12.38 1.81 L12.28 4.41 L15.04 5.03 L16.08 2.65 L20.21 5.94 L18.11 7.49 Z" />
-              <circle cx="12" cy="12" r="3.4" />
+                Six dents et non sept. Rendue à sa taille réelle puis
+                agrandie au pixel, la version à sept dents se brouillait quel
+                que soit le creux : à 14 px, l'entre-dent ne vaut que deux
+                pixels pour un trait qui en occupe déjà plus d'un. Arrondir
+                les dents coûte de la place, et il a fallu la prendre quelque
+                part.
+
+                Quatorze pixels, et non dix-huit comme la loupe. Les deux
+                tracés n'occupent pas la même part de leur boîte : la loupe
+                tient dans 16 unités sur 24, la roue s'étale sur 20,4. C'est
+                l'encre qui se voit, pas la boîte — 14 px rendent 11,9 px
+                d'encre, contre 12,0 pour la loupe. */}
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+              strokeWidth={2.0} strokeLinejoin="round" strokeLinecap="round" aria-hidden="true">
+              <path d="M22.20 12.00 C22.20 14.94 18.06 13.50 17.20 15.00 C16.33 16.50 19.64 19.36 17.10 20.83 C14.56 22.30 13.73 18.00 12.00 18.00 C10.27 18.00 9.44 22.30 6.90 20.83 C4.36 19.36 7.67 16.50 6.80 15.00 C5.94 13.50 1.80 14.94 1.80 12.00 C1.80 9.06 5.94 10.50 6.80 9.00 C7.67 7.50 4.36 4.64 6.90 3.17 C9.44 1.70 10.27 6.00 12.00 6.00 C13.73 6.00 14.56 1.70 17.10 3.17 C19.64 4.64 16.33 7.50 17.20 9.00 C18.06 10.50 22.20 9.06 22.20 12.00Z" />
+              <circle cx="12" cy="12" r="3.3" />
             </svg>
           </button>
           {showNotifs && (
