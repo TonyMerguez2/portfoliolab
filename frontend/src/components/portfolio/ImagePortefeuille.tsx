@@ -118,11 +118,36 @@ export default function ImagePortefeuille<T extends PortefeuilleImage>({
             position: "absolute", inset: 0, borderRadius: rayon,
             display: "flex", alignItems: "center", justifyContent: "center",
             background: "rgba(0,0,0,0.55)", color: "#FFFFFF",
+            // Les logos empilés sont des éléments flex, et `z-index` s'applique
+            // aux éléments flex sans qu'ils aient besoin d'être positionnés.
+            // Ils montent jusqu'à 4 ; un voile laissé à `auto` se peignait
+            // dessous, présent dans le DOM et invisible à l'écran.
+            zIndex: 10,
           }}>
             <Appareil />
           </span>
         )}
       </button>
+
+      {/* Tant qu'aucune image n'est posée, la pastille reste visible en
+          permanence. Un survol seul ne se découvre pas : rien, au repos,
+          n'aurait dit qu'on peut cliquer ici — c'est bien ce qui s'est
+          produit. Une fois l'image en place, elle se supprime : l'image se
+          désigne elle-même, et le survol suffit à proposer de la changer. */}
+      {!image && !envoi && (
+        <span aria-hidden="true" style={{
+          position: "absolute", right: -4, bottom: -4, zIndex: 11,
+          width: 17, height: 17, borderRadius: RAYONS.plein,
+          display: "flex", alignItems: "center", justifyContent: "center",
+          background: JETONS.segmentActif, color: JETONS.segmentEncre,
+          boxShadow: JETONS.segmentOmbre, pointerEvents: "none",
+        }}>
+          <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+            strokeWidth={3} strokeLinecap="round">
+            <path d="M12 5v14M5 12h14" />
+          </svg>
+        </span>
+      )}
 
       {image && survol && !envoi && (
         <button type="button" onClick={() => appeler("DELETE")}
