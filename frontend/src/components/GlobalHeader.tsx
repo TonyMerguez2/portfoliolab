@@ -380,30 +380,37 @@ export default function GlobalHeader() {
               transition:"opacity 150ms",
               opacity: showNotifs ? 0.86 : 1,
             }}>
-            {/* Une roue en trait, à crénelure courbe.
-                Chaque flanc est une cubique dont les tangentes sont
-                perpendiculaires au rayon à ses deux bouts : la dent arrive à
-                plat sur sa crête et repart à plat dans le creux. Le tracé
-                précédent était un polygone à angles vifs, seulement émoussé
-                par des jointures rondes — ce qui adoucit un angle mais ne
-                courbe pas une dent.
+            {/* Une roue dentée : crête plate, flanc presque radial, congés.
+                Chaque dent est un arc du cercle extérieur — c'est ce plat qui
+                dit « engrenage ». Le creux est un arc du cercle intérieur, et
+                les deux se raccordent par une cubique courte.
 
-                Six dents et non sept. Rendue à sa taille réelle puis
-                agrandie au pixel, la version à sept dents se brouillait quel
-                que soit le creux : à 14 px, l'entre-dent ne vaut que deux
-                pixels pour un trait qui en occupe déjà plus d'un. Arrondir
-                les dents coûte de la place, et il a fallu la prendre quelque
-                part.
+                L'arrondi vient des congés, pas de la forme des dents. Une
+                première version courbait les dents elles-mêmes, tangentes
+                perpendiculaires au rayon aux deux bouts de chaque flanc : les
+                flancs bombaient sur les côtés et la roue devenait une fleur.
+
+                D'où la longueur des bras de contrôle, à 30 % du creux et pas
+                davantage. Au-delà, la courbe part dans le sens de la
+                circonférence, doit virer d'un quart de tour pour redescendre,
+                et dépasse : le flanc se referme en crochet. À 45 % le tracé
+                bouclait sur lui-même, ce que le trait épais dissimulait à
+                l'œil mais que le fil de fer montrait sans ambiguïté.
+
+                Six dents et non sept. Rendues à leur taille réelle puis
+                agrandies au pixel, les sept dents se brouillent : à 14 px
+                l'entre-dent ne vaut que deux pixels, dont un est déjà pris
+                par le trait.
 
                 Quatorze pixels, et non dix-huit comme la loupe. Les deux
                 tracés n'occupent pas la même part de leur boîte : la loupe
-                tient dans 16 unités sur 24, la roue s'étale sur 20,4. C'est
-                l'encre qui se voit, pas la boîte — 14 px rendent 11,9 px
-                d'encre, contre 12,0 pour la loupe. */}
+                tient dans 16 unités sur 24, la roue s'étale sur 20,40 —
+                mesuré, pas supposé. C'est l'encre qui se voit, pas la boîte :
+                11,9 px ici, contre 12,0 pour la loupe. */}
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
               strokeWidth={2.0} strokeLinejoin="round" strokeLinecap="round" aria-hidden="true">
-              <path d="M22.20 12.00 C22.20 14.94 18.06 13.50 17.20 15.00 C16.33 16.50 19.64 19.36 17.10 20.83 C14.56 22.30 13.73 18.00 12.00 18.00 C10.27 18.00 9.44 22.30 6.90 20.83 C4.36 19.36 7.67 16.50 6.80 15.00 C5.94 13.50 1.80 14.94 1.80 12.00 C1.80 9.06 5.94 10.50 6.80 9.00 C7.67 7.50 4.36 4.64 6.90 3.17 C9.44 1.70 10.27 6.00 12.00 6.00 C13.73 6.00 14.56 1.70 17.10 3.17 C19.64 4.64 16.33 7.50 17.20 9.00 C18.06 10.50 22.20 9.06 22.20 12.00Z" />
-              <circle cx="12" cy="12" r="3.3" />
+              <path d="M22.04 10.19 A10.2 10.2 0 0 1 22.04 13.81 C21.84 14.93 18.41 13.10 18.02 14.17 A6.4 6.4 0 0 1 16.89 16.13 C16.15 17.00 19.45 19.05 18.58 19.79 A10.2 10.2 0 0 1 15.46 21.60 C14.38 21.98 14.26 18.10 13.13 18.30 A6.4 6.4 0 0 1 10.87 18.30 C9.74 18.10 9.62 21.98 8.54 21.60 A10.2 10.2 0 0 1 5.42 19.79 C4.55 19.05 7.85 17.00 7.11 16.13 A6.4 6.4 0 0 1 5.98 14.17 C5.59 13.10 2.16 14.93 1.96 13.81 A10.2 10.2 0 0 1 1.96 10.19 C2.16 9.07 5.59 10.90 5.98 9.83 A6.4 6.4 0 0 1 7.11 7.87 C7.85 7.00 4.55 4.95 5.42 4.21 A10.2 10.2 0 0 1 8.54 2.40 C9.62 2.02 9.74 5.90 10.87 5.70 A6.4 6.4 0 0 1 13.13 5.70 C14.26 5.90 14.38 2.02 15.46 2.40 A10.2 10.2 0 0 1 18.58 4.21 C19.45 4.95 16.15 7.00 16.89 7.87 A6.4 6.4 0 0 1 18.02 9.83 C18.41 10.90 21.84 9.07 22.04 10.19Z" />
+              <circle cx="12" cy="12" r="3.4" />
             </svg>
           </button>
           {showNotifs && (
