@@ -280,117 +280,12 @@ export default function GlobalHeader() {
           page portefeuille ce menu ne montre que les portefeuilles : il n'y
           avait donc aucun moyen de chercher un actif depuis cette page. */}
       <div style={{ position:"fixed", top:"12px", right:"20px", zIndex:50, display:"flex", alignItems:"flex-start", gap:"8px" }}>
-        {/* Sélecteur de portefeuille ou d'actif, désormais dans le groupe de
-            droite : c'est un choix de contexte, il appartient aux contrôles,
-            pas au titre de la page. */}
-          <div style={{ position:"relative" }}>
-            <button onClick={() => { setShowDropdown(v => !v); setShowPortfolioMenu(false); }}
-              style={{ ...pillStyle, gap:"6px", padding:"0 10px 0 8px", height:"36px", boxSizing:"border-box" }}>
-              {mode === "portfolio" && activePortfolio ? (
-                <>
-                  <div style={{ width:8, height:8, borderRadius:2, background:activePortfolio.color||"#50A2FF", flexShrink:0 }}/>
-                  <span style={{ fontSize:"12px", fontWeight:500, letterSpacing:"0.04em" }}>{activePortfolio.name}</span>
-                </>
-              ) : isChartPage ? (
-                // Sur la page chart : juste une icône recherche — la carte actif gère l'affichage
-                <>
-                  <svg width="13" height="13" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} style={{ opacity:0.5, flexShrink:0 }}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-4.35-4.35M17 11A6 6 0 1 1 5 11a6 6 0 0 1 12 0z"/>
-                  </svg>
-                  <span style={{ fontSize:"12px", fontWeight:500, letterSpacing:"0.04em", opacity:0.6 }}>Actifs</span>
-                </>
-              ) : (
-                <>
-                  {activeAsset && (() => {
-                    const t = TRENDING.find(a => a.ticker === activeAsset.ticker)?.type || "EQUITY";
-                    const tc = typeColor(t);
-                    return <AssetLogo ticker={activeAsset.ticker} type={t} size={22} radius={5} fallbackBg={tc.bg} fallbackBorder={tc.border} fallbackTextColor={tc.text}/>;
-                  })()}
-                  <span style={{ fontSize:"12px", fontWeight:500, letterSpacing:"0.04em" }}>{activeAsset ? activeAsset.ticker : "Sélectionner..."}</span>
-                </>
-              )}
-              <span style={{ fontSize:"9px", opacity:0.45 }}>▾</span>
-            </button>
-            {showDropdown && (
-              <div style={{ position:"absolute", top:"calc(100% + 6px)", left:0, width: pathname.startsWith("/portfolio") ? "280px" : "420px", background:"rgba(4,17,36,0.97)", border:"1px solid rgba(255,255,255,0.1)", borderRadius:"12px", overflow:"hidden", boxShadow:"0 16px 48px rgba(0,0,0,0.5)", zIndex:60 }}
-                onMouseDown={e => e.preventDefault()}>
+        {/* Le sélecteur de portefeuille vivait ici. Retiré à la demande : il
+            encombrait le bandeau à gauche de la recherche.
+            Conséquence à connaître — c'était le seul moyen de passer d'un
+            portefeuille à l'autre. La page prend désormais celui du contexte,
+            ou le premier de la liste à défaut. */}
 
-                {/* Sur la page portfolio : uniquement la liste des portefeuilles */}
-                {pathname.startsWith("/portfolio") ? (
-                  <div>
-                    <div style={{ padding:"10px 14px 6px", color:"rgba(255,255,255,0.30)", fontSize:"9px", letterSpacing:"0.14em", fontWeight:700 }}>MES PORTEFEUILLES</div>
-                    {portfolios.map((p: any) => (
-                      <div key={p.id}
-                        onClick={() => { setActivePortfolio({ id:p.id, name:p.name, assets:p.assets||[], color:p.color||"#50A2FF" }); setMode("portfolio"); setShowDropdown(false); }}
-                        style={{ display:"flex", alignItems:"center", gap:"10px", padding:"9px 14px", cursor:"pointer", transition:"background 0.12s" }}
-                        onMouseEnter={e => e.currentTarget.style.background="rgba(255,255,255,0.04)"}
-                        onMouseLeave={e => e.currentTarget.style.background="transparent"}>
-                        <div style={{ width:"8px", height:"8px", borderRadius:"2px", background:p.color||"#50A2FF", flexShrink:0 }}/>
-                        <span style={{ color:"#F8F9FC", fontSize:"12px", flex:1, fontWeight:500 }}>{p.name}</span>
-                        {p.is_simulation && <span style={{ fontSize:"8px", padding:"1px 5px", borderRadius:"4px", background:"rgba(99,102,241,0.14)", border:"1px solid rgba(99,102,241,0.28)", color:"#a5b4fc", letterSpacing:"0.08em", flexShrink:0 }}>SIM</span>}
-                        <span style={{ color:"rgba(255,255,255,0.25)", fontSize:"10px" }}>{Array.isArray(p.assets)?p.assets.length:0} actifs</span>
-                        {activePortfolio?.id === p.id && <span style={{ color:"#50A2FF", fontSize:"10px" }}>●</span>}
-                      </div>
-                    ))}
-                    {portfolios.length === 0 && (
-                      <div style={{ padding:"16px 14px", color:"rgba(255,255,255,0.25)", fontSize:"11px" }}>Aucun portefeuille</div>
-                    )}
-                  </div>
-                ) : (
-                  /* Ailleurs : recherche d'actifs + portefeuilles */
-                  <>
-                    <div style={{ display:"flex", alignItems:"center", gap:"8px", padding:"10px 12px", borderBottom:"1px solid rgba(255,255,255,0.06)" }}>
-                      <svg width="12" height="12" fill="none" viewBox="0 0 24 24" stroke="#F8F9FC" strokeWidth={2} style={{ opacity:0.3, flexShrink:0 }}>
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-4.35-4.35M17 11A6 6 0 1 1 5 11a6 6 0 0 1 12 0z"/>
-                      </svg>
-                      <input ref={inputRef} value={localSearch} onChange={e => { setLocalSearch(e.target.value); setHighlightIndex(-1); }}
-                        onKeyDown={handleKeyDown}
-                        placeholder="Rechercher un actif..."
-                        style={{ background:"transparent", border:"none", outline:"none", color:"#F8F9FC", fontSize:"12px", flex:1 }}
-                        autoFocus
-                      />
-                      {localSearch && <button onMouseDown={e => e.preventDefault()} onClick={() => { setLocalSearch(""); setSearchResults([]); setHighlightIndex(-1); }} style={{ background:"transparent", border:"none", cursor:"pointer", opacity:0.4, color:"#F8F9FC", padding:0 }}>✕</button>}
-                    </div>
-                    <div style={{ display:"flex", gap:"2px", padding:"6px 8px", borderBottom:"1px solid rgba(255,255,255,0.06)" }}>
-                      {[{id:"all",label:"Tous"},{id:"EQUITY",label:"Actions"},{id:"ETF",label:"Fonds"},{id:"INDEX",label:"Indices"},{id:"CRYPTOCURRENCY",label:"Crypto"}].map(cat => (
-                        <button key={cat.id} onClick={() => { setCategory(cat.id); setDisplayCount(20); }} style={{ padding:"3px 10px", borderRadius:"6px", border:"none", fontSize:"10px", background:category===cat.id?"rgba(91,141,239,0.2)":"transparent", color:category===cat.id?"#9BB9FF":"rgba(255,255,255,0.4)", cursor:"pointer", fontWeight:category===cat.id?600:400, letterSpacing:"0.04em" }}>
-                          {cat.label}
-                        </button>
-                      ))}
-                    </div>
-                    <div style={{ position:"relative" }}>
-                      <div ref={listRef} onScroll={handleScroll} style={{ maxHeight:"260px", overflowY:"auto" }}>
-                        {!localSearch && <div style={{ padding:"3px 12px 2px", color:"rgba(255,255,255,0.2)", fontSize:"9px", letterSpacing:"0.12em" }}>POPULAIRES</div>}
-                        {displayAssets.map((a, i) => <AssetRow key={a.ticker} a={a} highlighted={i===0 && !!localSearch} focused={i===highlightIndex} idx={i} price={prices[a.ticker]} onSelect={handleSelect} onChart={handleChart}/>)}
-                        {!localSearch && displayCount < filteredAssets.length && (
-                          <div style={{ padding:"10px", textAlign:"center", color:"rgba(255,255,255,0.2)", fontSize:"10px" }}>Scroll pour charger plus...</div>
-                        )}
-                      </div>
-                      <div style={{ position:"absolute", bottom:0, left:0, right:0, height:"40px", background:"linear-gradient(to bottom, transparent, rgba(4,17,36,0.95))", pointerEvents:"none" }}/>
-                    </div>
-                    {portfolios.length > 0 && !localSearch && (
-                      <div style={{ borderTop:"1px solid rgba(255,255,255,0.06)" }}>
-                        <div style={{ padding:"7px 12px 4px", color:"rgba(255,255,255,0.22)", fontSize:"9px", letterSpacing:"0.14em" }}>MES PORTEFEUILLES</div>
-                        {portfolios.map((p: any) => (
-                          <div key={p.id}
-                            onClick={() => { setActivePortfolio({ id:p.id, name:p.name, assets:p.assets||[], color:p.color||"#50A2FF" }); setMode("portfolio"); setShowDropdown(false); }}
-                            style={{ display:"flex", alignItems:"center", gap:"10px", padding:"8px 12px", cursor:"pointer", transition:"background 0.12s" }}
-                            onMouseEnter={e => e.currentTarget.style.background="rgba(255,255,255,0.04)"}
-                            onMouseLeave={e => e.currentTarget.style.background="transparent"}>
-                            <div style={{ width:"7px", height:"7px", borderRadius:"2px", background:p.color||"#50A2FF", flexShrink:0 }}/>
-                            <span style={{ color:"#F8F9FC", fontSize:"11px", flex:1 }}>{p.name}</span>
-                            {p.is_simulation && <span style={{ fontSize:"8px", padding:"1px 5px", borderRadius:"4px", background:"rgba(99,102,241,0.14)", border:"1px solid rgba(99,102,241,0.28)", color:"#a5b4fc", letterSpacing:"0.08em", flexShrink:0 }}>SIM</span>}
-                            <span style={{ color:"rgba(255,255,255,0.25)", fontSize:"10px" }}>{Array.isArray(p.assets)?p.assets.length:0} actifs</span>
-                            {activePortfolio?.id === p.id && <span style={{ color:"#50A2FF", fontSize:"10px" }}>●</span>}
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </>
-                )}
-              </div>
-            )}
-          </div>
 
         <div style={{ position:"relative", width:"320px" }}>
         <div style={{
@@ -405,7 +300,7 @@ export default function GlobalHeader() {
           transition:"outline-color 150ms",
         }}>
           <svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.2}
-            style={{ flexShrink:0, color:JETONS.texteSecondaire }}>
+            style={{ flexShrink:0, color:JETONS.texteIntense }}>
             <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-4.35-4.35M17 11A6 6 0 1 1 5 11a6 6 0 0 1 12 0z"/>
           </svg>
           <input ref={searchRef} value={localSearch}
@@ -485,14 +380,15 @@ export default function GlobalHeader() {
               transition:"opacity 150ms",
               opacity: showNotifs ? 0.86 : 1,
             }}>
-            {/* Une roue crantée pleine, et non le tracé « réglages » filaire que
-                j'avais pris : à dix-sept pixels, ses courbes fines et son
-                contour touffu se brouillaient en une tache. Huit dents, un
-                corps annulaire et un trou au centre, en un seul tracé à règle
-                « evenodd » — empiler des formes les aurait fait se décaler
-                entre elles. */}
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-              <path fillRule="evenodd" clipRule="evenodd" d="M20.09 10.13 L22.72 9.53 L22.72 14.47 L20.09 13.87 L19.04 16.40 L21.33 17.83 L17.83 21.33 L16.40 19.04 L13.87 20.09 L14.47 22.72 L9.53 22.72 L10.13 20.09 L7.60 19.04 L6.17 21.33 L2.67 17.83 L4.96 16.40 L3.91 13.87 L1.28 14.47 L1.28 9.53 L3.91 10.13 L4.96 7.60 L2.67 6.17 L6.17 2.67 L7.60 4.96 L10.13 3.91 L9.53 1.28 L14.47 1.28 L13.87 3.91 L16.40 4.96 L17.83 2.67 L21.33 6.17 L19.04 7.60 Z M16.20 12 A4.2 4.2 0 1 0 7.80 12 A4.2 4.2 0 1 0 16.20 12 Z" />
+            {/* Une roue en trait, jointures arrondies.
+                Sept dents larges plutôt que huit étroites : à cette taille,
+                des dents fines redeviennent une frange indistincte. Les
+                jointures rondes suffisent à adoucir les angles — les courber
+                une à une n'ajouterait rien de lisible à dix-huit pixels. */}
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+              strokeWidth={1.7} strokeLinejoin="round" strokeLinecap="round" aria-hidden="true">
+              <path d="M19.34 10.03 L21.85 9.36 L21.85 14.64 L19.34 13.97 L18.11 16.51 L20.21 18.06 L16.08 21.35 L15.04 18.97 L12.28 19.59 L12.38 22.19 L7.23 21.02 L8.45 18.72 L6.24 16.96 L4.27 18.65 L1.98 13.90 L4.53 13.41 L4.53 10.59 L1.98 10.10 L4.27 5.35 L6.24 7.04 L8.45 5.28 L7.23 2.98 L12.38 1.81 L12.28 4.41 L15.04 5.03 L16.08 2.65 L20.21 5.94 L18.11 7.49 Z" />
+              <circle cx="12" cy="12" r="3.4" />
             </svg>
           </button>
           {showNotifs && (
