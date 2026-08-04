@@ -322,25 +322,14 @@ export default function GlobalHeader() {
             onKeyDown={handleKeyDown}
             placeholder="Rechercher un actif, un ETF, un indice…"
             style={{ background:"transparent", border:"none", outline:"none", color:JETONS.texte, fontSize:"12px", flex:1, minWidth:0 }}/>
-          {localSearch
-            ? <button onMouseDown={e => e.preventDefault()}
-                onClick={() => { setLocalSearch(""); setSearchResults([]); setHighlightIndex(-1); }}
-                style={{ background:"transparent", border:"none", cursor:"pointer", opacity:0.4, color:JETONS.texte, padding:0, fontSize:"12px" }}>✕</button>
-            : (
-              // Deux touches distinctes plutôt qu'un « ⌘K » en un seul mot :
-              // ce sont deux touches à presser, et le concept les montre
-              // comme telles, chacune sur son capuchon.
-              <span style={{ display:"flex", gap:4, flexShrink:0 }} aria-hidden="true">
-                {["⌘", "K"].map(t => (
-                  <kbd key={t} style={{
-                    display:"flex", alignItems:"center", justifyContent:"center",
-                    minWidth:20, height:20, padding:"0 5px", borderRadius:RAYONS.xs,
-                    background:JETONS.segmentPiste, color:JETONS.texteSecondaire,
-                    fontFamily:"inherit", fontSize:"11px", fontWeight:500, lineHeight:1,
-                  }}>{t}</kbd>
-                ))}
-              </span>
-            )}
+          {/* Le champ vide ne montre plus rien à droite : les deux capuchons
+              ⌘ et K ont été retirés. Le raccourci lui-même reste actif — il
+              est posé sur le document, pas sur ces touches dessinées. */}
+          {localSearch && (
+            <button onMouseDown={e => e.preventDefault()}
+              onClick={() => { setLocalSearch(""); setSearchResults([]); setHighlightIndex(-1); }}
+              style={{ background:"transparent", border:"none", cursor:"pointer", opacity:0.4, color:JETONS.texte, padding:0, fontSize:"12px" }}>✕</button>
+          )}
         </div>
 
         {showSearch && (
