@@ -74,18 +74,6 @@ export default function GlobalHeader() {
   const [showPortfolioMenu, setShowPortfolioMenu] = useState(false);
   const [showSearch, setShowSearch] = useState(false);
   const [showNotifs, setShowNotifs] = useState(false);
-  const [prenom, setPrenom] = useState<string | null>(null);
-
-  // Après montage : le lire pendant le rendu ferait diverger serveur et client.
-  useEffect(() => {
-    try {
-      const brut = localStorage.getItem("novac_user");
-      if (!brut) return;
-      const u = JSON.parse(brut);
-      const nom = (u?.username || u?.email || "").trim();
-      if (nom) setPrenom(nom.split(/[\s@]/)[0]);
-    } catch { /* stockage refusé ou contenu illisible */ }
-  }, []);
   const searchRef = useRef<HTMLInputElement>(null);
   const [portfolios, setPortfolios] = useState<any[]>([]);
   const [showTools, setShowTools] = useState(false);
@@ -266,22 +254,20 @@ export default function GlobalHeader() {
   return (
     <>
 
-      {/* Salut, au même niveau que la recherche. Il vivait dans un
-          sous-en-tête propre à la page portefeuille, donc décalé d'une ligne
-          sous le bandeau. */}
-      <div style={{
-        position:"fixed", top:"11px", left:"calc(var(--novac-nav-w, 232px) + 20px)", zIndex:50,
-        lineHeight:1.25, transition:"left 220ms cubic-bezier(0.4,0,0.2,1)",
-      }}>
-        <p style={{ margin:0, fontSize:"15px", fontWeight:700, color:JETONS.texte, letterSpacing:"-0.01em", whiteSpace:"nowrap" }}>
-          {prenom ? `Bonjour ${prenom}` : "Bonjour"} <span aria-hidden="true">👋</span>
-        </p>
-        {pathname.startsWith("/portfolio") && (
-          <p style={{ margin:"1px 0 0", fontSize:"11px", color:"rgba(248,249,252,0.38)", whiteSpace:"nowrap" }}>
+      {/* Le salut a été retiré : il occupait la moitié gauche du bandeau pour
+          répéter un prénom déjà lisible en bas de la barre latérale. Le
+          sous-titre reste sur la page portefeuille, lui seul disant quelque
+          chose de la page regardée. */}
+      {pathname.startsWith("/portfolio") && (
+        <div style={{
+          position:"fixed", top:"18px", left:"calc(var(--novac-nav-w, 232px) + 20px)", zIndex:50,
+          lineHeight:1.25, transition:"left 220ms cubic-bezier(0.4,0,0.2,1)",
+        }}>
+          <p style={{ margin:0, fontSize:"12px", color:JETONS.texteSecondaire, whiteSpace:"nowrap" }}>
             Voici la performance de votre portefeuille
           </p>
-        )}
-      </div>
+        </div>
+      )}
 
       {/* La navigation vit désormais dans SideNav, en panneau latéral. */}
 
@@ -409,7 +395,7 @@ export default function GlobalHeader() {
         <div style={{ position:"relative", width:"320px" }}>
         <div style={{
           display:"flex", alignItems:"center", gap:"8px", height:"36px", padding:"0 12px",
-          borderRadius:"999px", boxSizing:"border-box",
+          borderRadius:RAYONS.md, boxSizing:"border-box",
           background: showSearch ? "rgba(255,255,255,0.10)" : "rgba(255,255,255,0.06)",
           border:`1px solid ${showSearch ? "rgba(91,141,239,0.45)" : JETONS.bord}`,
           backdropFilter:"blur(20px)", WebkitBackdropFilter:"blur(20px)",
@@ -429,7 +415,21 @@ export default function GlobalHeader() {
             ? <button onMouseDown={e => e.preventDefault()}
                 onClick={() => { setLocalSearch(""); setSearchResults([]); setHighlightIndex(-1); }}
                 style={{ background:"transparent", border:"none", cursor:"pointer", opacity:0.4, color:JETONS.texte, padding:0, fontSize:"12px" }}>✕</button>
-            : <span style={{ fontSize:"10px", opacity:0.32, color:JETONS.texte, flexShrink:0, letterSpacing:"0.04em" }}>⌘K</span>}
+            : (
+              // Deux touches distinctes plutôt qu'un « ⌘K » en un seul mot :
+              // ce sont deux touches à presser, et le concept les montre
+              // comme telles, chacune sur son capuchon.
+              <span style={{ display:"flex", gap:4, flexShrink:0 }} aria-hidden="true">
+                {["⌘", "K"].map(t => (
+                  <kbd key={t} style={{
+                    display:"flex", alignItems:"center", justifyContent:"center",
+                    minWidth:20, height:20, padding:"0 5px", borderRadius:RAYONS.xs,
+                    background:JETONS.segmentPiste, color:JETONS.texteSecondaire,
+                    fontFamily:"inherit", fontSize:"11px", fontWeight:500, lineHeight:1,
+                  }}>{t}</kbd>
+                ))}
+              </span>
+            )}
         </div>
 
         {showSearch && (
@@ -472,12 +472,18 @@ export default function GlobalHeader() {
             style={{
               width:36, height:36, borderRadius:"50%", flexShrink:0, cursor:"pointer",
               display:"flex", alignItems:"center", justifyContent:"center",
-              background: showNotifs ? "rgba(255,255,255,0.10)" : "rgba(255,255,255,0.06)",
-              border:`1px solid ${JETONS.bord}`, color:JETONS.texte,
-              backdropFilter:"blur(20px)", WebkitBackdropFilter:"blur(20px)",
+              // Pastille claire à icône sombre, comme le bouton d'angle du
+              // concept — et comme les segments de la page, dont c'est déjà la
+              // langue. Le verre translucide qu'elle portait la faisait
+              // disparaître dans le bandeau.
+              background:JETONS.segmentActif,
+              border:"none", color:JETONS.segmentEncre,
+              boxShadow:JETONS.segmentOmbre,
+              transition:"opacity 150ms",
+              opacity: showNotifs ? 0.86 : 1,
             }}>
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-              strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" style={{ opacity:0.7 }}>
+              strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round">
               <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9M13.73 21a2 2 0 0 1-3.46 0"/>
             </svg>
           </button>
