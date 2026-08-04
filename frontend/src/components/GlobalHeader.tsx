@@ -404,8 +404,8 @@ export default function GlobalHeader() {
           outline: showSearch ? `1px solid ${JETONS.accentBord}` : "none",
           transition:"outline-color 150ms",
         }}>
-          <svg width="13" height="13" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}
-            style={{ opacity:0.4, flexShrink:0, color:JETONS.texte }}>
+          <svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.2}
+            style={{ flexShrink:0, color:JETONS.texteSecondaire }}>
             <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-4.35-4.35M17 11A6 6 0 1 1 5 11a6 6 0 0 1 12 0z"/>
           </svg>
           <input ref={searchRef} value={localSearch}
@@ -485,11 +485,14 @@ export default function GlobalHeader() {
               transition:"opacity 150ms",
               opacity: showNotifs ? 0.86 : 1,
             }}>
-            {/* Une roue de réglage, comme au concept, et non plus une cloche. */}
-            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-              strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round">
-              <circle cx="12" cy="12" r="3" />
-              <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
+            {/* Une roue crantée pleine, et non le tracé « réglages » filaire que
+                j'avais pris : à dix-sept pixels, ses courbes fines et son
+                contour touffu se brouillaient en une tache. Huit dents, un
+                corps annulaire et un trou au centre, en un seul tracé à règle
+                « evenodd » — empiler des formes les aurait fait se décaler
+                entre elles. */}
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+              <path fillRule="evenodd" clipRule="evenodd" d="M20.09 10.13 L22.72 9.53 L22.72 14.47 L20.09 13.87 L19.04 16.40 L21.33 17.83 L17.83 21.33 L16.40 19.04 L13.87 20.09 L14.47 22.72 L9.53 22.72 L10.13 20.09 L7.60 19.04 L6.17 21.33 L2.67 17.83 L4.96 16.40 L3.91 13.87 L1.28 14.47 L1.28 9.53 L3.91 10.13 L4.96 7.60 L2.67 6.17 L6.17 2.67 L7.60 4.96 L10.13 3.91 L9.53 1.28 L14.47 1.28 L13.87 3.91 L16.40 4.96 L17.83 2.67 L21.33 6.17 L19.04 7.60 Z M16.20 12 A4.2 4.2 0 1 0 7.80 12 A4.2 4.2 0 1 0 16.20 12 Z" />
             </svg>
           </button>
           {showNotifs && (
