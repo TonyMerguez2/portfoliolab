@@ -189,13 +189,14 @@
   --nv-ombre:             0 8px 16px -4px rgba(0,0,0,0.8);
 
   /* Les points du fond.
-     Leur trame est bien à 12 %, mais un voile `bg-current/64` est posé
-     par-dessus, que je n'avais pas reproduit : ce qui reste visible chez eux
-     vaut 12 % × (1 − 0,64), soit 4,3 %. Mes points étaient donc presque trois
-     fois trop appuyés. Plutôt que d'empiler un voile pour rien, la trame prend
-     directement son opacité perçue. */
-  --nv-point:             rgba(106,114,130,0.043);
-  --nv-point-vif:         rgba(106,114,130,0.13);
+     Leur trame brute est à 12 %, sous un voile qui l'assourdit. J'en avais
+     déduit 4,3 % — 12 % × (1 − 0,64) — mais ce calcul suppose que le voile
+     soit de la couleur du fond, ce que rien ne confirme : son `bg-current`
+     hérite d'une couleur que je n'ai pas su remonter. Le compte était donc
+     une hypothèse, pas une mesure, et il tirait trop bas.
+     Réglé à l'œil sur la référence : 6,5 %, entre les deux. */
+  --nv-point:             rgba(106,114,130,0.065);
+  --nv-point-vif:         rgba(106,114,130,0.19);
 
   /* La barre latérale. Elle est translucide et floute ce qui passe dessous :
      ses fonds ne peuvent donc pas être les jetons de carte, qui sont opaques. */
@@ -277,8 +278,8 @@
      rampe plutôt qu'un noir pur, qui piquerait sur du blanc. Un gris sombre sur
      blanc se voit un peu mieux qu'un gris clair sur noir, d'où une opacité
      légèrement moindre qu'en sombre. */
-  --nv-point:             rgba(106,114,130,0.038);
-  --nv-point-vif:         rgba(106,114,130,0.11);
+  --nv-point:             rgba(106,114,130,0.055);
+  --nv-point-vif:         rgba(106,114,130,0.16);
 
   /* La barre suit la page. L'état actif quitte le blanc translucide pour
      l'accent : sur fond clair, un voile blanc sur blanc ne marque rien. */
