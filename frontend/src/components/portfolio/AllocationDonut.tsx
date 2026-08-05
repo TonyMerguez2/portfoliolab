@@ -26,6 +26,25 @@ const SIZE = 108;
 /** Nombre de lignes montrées avant de renvoyer vers la vue détaillée. */
 const MAX_LEGENDE = 5;
 
+/**
+ * Rayon des coins, égal à la demi-largeur du trait qui les arrondit.
+ *
+ * Il était à 2,5 : `stroke-linejoin: round` enroulait alors le liseré autour
+ * d'un rayon de 2,5 px, et les pointes des parts devenaient des pâtés de
+ * couleur bien plus épais que le trait d'un pixel censé les border.
+ */
+const RAYON_COIN = 1.75;
+
+/**
+ * Épaisseur du liseré.
+ *
+ * Moins d'un pixel, là où la carte en fait un plein. Ce n'est pas un écart de
+ * réglage mais de proportion : le même trait borde ici un disque de 108 px et
+ * là-bas une carte de 248, où il pèse deux fois moins dans le regard. Rendu à
+ * 1 px, le camembert paraissait cerné quand la carte paraît ourlée.
+ */
+const LISERE = 0.6;
+
 export default function AllocationDonut({
   assets, totalValue, onSeeAll,
 }: {
@@ -63,8 +82,14 @@ export default function AllocationDonut({
   // Camembert plein, écart nul. L'épaisseur vaut le rayon, ce qui referme le
   // centre : il ne portait plus aucune information, un anneau y aurait laissé
   // un trou pour rien.
+  // L'écart rouvert : il séparait les parts avant que le camembert ne devienne
+  // plein, et redevient nécessaire dès lors qu'elles portent un liseré. C'est
+  // le vide qui entoure une carte sur la page, transposé.
   const arcs = useMemo(
-    () => donutArcs(slices, { cx: SIZE / 2, cy: SIZE / 2, r: SIZE / 2, thickness: SIZE / 2, gap: 0 }),
+    () => donutArcs(slices, {
+      cx: SIZE / 2, cy: SIZE / 2, r: SIZE / 2 - RAYON_COIN,
+      thickness: SIZE / 2, gap: 0.03,
+    }),
     [slices]);
 
   return (
@@ -123,11 +148,16 @@ export default function AllocationDonut({
                   ce qu'on lisait n'était pas la surface, c'était l'arête. */}
               {arcs.map(a => (
                 <linearGradient key={`b-${a.key}`} id={`bord-${idSvg}-${a.key}`}
-                  gradientUnits="userSpaceOnUse" x1={0} y1={0} x2={SIZE} y2={SIZE}>
+                  x1="0" y1="0" x2="1" y2="1">
                   <stop offset="0%"   stopColor={a.color} stopOpacity={0.44} />
                   <stop offset="24%"  stopColor={a.color} stopOpacity={0.36} />
                   <stop offset="44%"  stopColor={a.color} stopOpacity={0.17} />
-                  <stop offset="54%"  stopColor={a.color} stopOpacity={0.10} />
+                  {/* Zéro, et non un plancher : la carte écrit `transparent`
+                      ici. Son liseré s'éteint donc au milieu et ne brille qu'aux
+                      deux angles opposés. Avec un plancher, le camembert portait
+                      un anneau continu — 1 px comme la carte, mais partout, ce
+                      qui le faisait paraître bien plus épais qu'elle. */}
+                  <stop offset="54%"  stopColor={a.color} stopOpacity={0} />
                   <stop offset="68%"  stopColor={a.color} stopOpacity={0.15} />
                   <stop offset="100%" stopColor={a.color} stopOpacity={0.40} />
                 </linearGradient>
@@ -175,18 +205,25 @@ export default function AllocationDonut({
                 style={{ transition: "opacity 140ms", cursor: "default" }}
                 onMouseEnter={() => setHover(a.key)}
                 onMouseLeave={() => setHover(null)}>
-                {/* Le trait sombre sépare deux parts voisines — l'équivalent
-                    du vide qui entoure une carte sur la page. L'écart avait été
-                    supprimé quand le camembert est devenu plein ; il redevient
-                    nécessaire dès lors que les parts sont translucides, une
-                    frontière de teinte ne suffisant plus. */}
-                <path d={a.path} fill={`url(#part-${idSvg}-${a.key})`}
-                  stroke="var(--nv-carte)" strokeWidth={2} />
-                {/* Puis l'arête lumineuse, posée à l'intérieur du trait sombre
-                    pour qu'elle borde la part et non le vide. */}
+                {/* Deux traits superposés, et c'est ce qui donne à la fois
+                    les coins arrondis et le liseré d'un pixel.
+
+                    Le premier, large, est peint dans la couleur de l'arête ;
+                    `stroke-linejoin: round` en arrondit les angles, d'un rayon
+                    valant la moitié de sa largeur. Le second, plus étroit de
+                    deux pixels, recouvre le premier dans la couleur du
+                    remplissage. Ce qui dépasse fait exactement un pixel de
+                    bord — la largeur de `.novac-tile::before`.
+
+                    Arrondir le tracé lui-même aurait demandé de refaire la
+                    trigonométrie de `donutArcs` pour y insérer quatre congés
+                    par part. Le trait obtient le même dessin sans y toucher. */}
                 <path d={a.path} fill="none"
-                  stroke={`url(#bord-${idSvg}-${a.key})`} strokeWidth={1.1}
-                  pointerEvents="none" />
+                  stroke={`url(#bord-${idSvg}-${a.key})`}
+                  strokeWidth={RAYON_COIN * 2} strokeLinejoin="round" />
+                <path d={a.path} fill={`url(#part-${idSvg}-${a.key})`}
+                  stroke={`url(#part-${idSvg}-${a.key})`}
+                  strokeWidth={RAYON_COIN * 2 - LISERE * 2} strokeLinejoin="round" />
               </g>
             ))}
             {/* Par-dessus les parts, et sans capter la souris : il éclaire, il
