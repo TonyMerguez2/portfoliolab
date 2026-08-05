@@ -110,6 +110,17 @@ async def fetch_current_prices(tickers: list[str]) -> dict[str, float]:
     Récupère le dernier prix disponible pour chaque ticker via yfinance.
     Utilise fast_info pour minimiser les appels réseau.
     Silencieux en cas d'échec individuel (ticker inconnu, hors marché, etc.).
+
+    Les tickers sont interrogés de front. La version précédente ouvrait bien
+    quatre fils, mais ne leur soumettait qu'une seule tâche qui bouclait sur
+    les tickers : les trois autres ouvriers n'ont jamais rien fait, et chaque
+    aller-retour attendait le précédent. Mesuré à environ 300 ms par ticker en
+    série — le premier prix du lot avait donc vieilli d'autant quand le
+    dernier arrivait.
+
+    Le plafond de huit borne les requêtes simultanées : yfinance est une porte
+    non officielle, et la marteler fait bien plus de dégâts qu'un dixième de
+    seconde gagné.
     """
     if not tickers:
         return {}
@@ -118,18 +129,16 @@ async def fetch_current_prices(tickers: list[str]) -> dict[str, float]:
     from concurrent.futures import ThreadPoolExecutor
     import yfinance as yf
 
-    def _fetch() -> dict[str, float]:
-        prices: dict[str, float] = {}
-        for ticker in tickers:
-            try:
-                info  = yf.Ticker(ticker).fast_info
-                price = info.last_price
-                if price and price > 0:
-                    prices[ticker] = float(price)
-            except Exception:
-                pass
-        return prices
+    def _un(ticker: str) -> tuple[str, float] | None:
+        try:
+            price = yf.Ticker(ticker).fast_info.last_price
+            return (ticker, float(price)) if price and price > 0 else None
+        except Exception:
+            return None
 
     loop = asyncio.get_running_loop()
-    with ThreadPoolExecutor(max_workers=4) as pool:
-        return await loop.run_in_executor(pool, _fetch)
+    with ThreadPoolExecutor(max_workers=min(8, len(tickers))) as pool:
+        obtenus = await asyncio.gather(
+            *(loop.run_in_executor(pool, _un, t) for t in tickers)
+        )
+    return dict(p for p in obtenus if p)
