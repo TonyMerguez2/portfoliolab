@@ -345,11 +345,20 @@ function PortfolioPageInner() {
     if (!auth.Authorization) { setPositions(null); return; }   // hors session : repli sur les poids
 
     let cancelled = false;
-    fetch(`http://localhost:8000/api/v1/portfolios/${id}/positions`, { headers: auth })
-      .then(r => (r.ok ? r.json() : null))
-      .then((d: PositionsData | null) => { if (!cancelled) setPositions(d); })
-      .catch(() => { if (!cancelled) setPositions(null); });
-    return () => { cancelled = true; };
+    const relire = () =>
+      fetch(`http://localhost:8000/api/v1/portfolios/${id}/positions`, { headers: auth })
+        .then(r => (r.ok ? r.json() : null))
+        .then((d: PositionsData | null) => { if (!cancelled) setPositions(d); })
+        .catch(() => { if (!cancelled) setPositions(null); });
+
+    relire();
+    // Même cadence que les cours, et pour la même raison : la valeur totale est
+    // une valorisation aux cours du moment. Sans ce tour, elle restait celle du
+    // chargement de la page — les cartes d'actifs avançaient pendant que le
+    // grand chiffre au-dessus d'elles ne bougeait plus, et le clignotement
+    // ajouté pour le signaler n'avait jamais rien à signaler.
+    const battement = setInterval(relire, 15000);
+    return () => { cancelled = true; clearInterval(battement); };
   }, [portfolio?.id, txRefreshKey]);
 
   /** Vrai quand la page valorise sur les écritures plutôt que sur les poids. */
