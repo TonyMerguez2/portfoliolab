@@ -230,21 +230,6 @@ const PERIOD_MAP: Record<Period, string> = {
   "24h": "1d", "1S": "7d", "1M": "1mo", "3M": "3mo",
   "6M": "6mo", "1A": "1y", "3A": "3y", "Max": "max",
 };
-/**
- * Un montant coupé en deux : les euros, puis les centimes.
- *
- * Le découpage se fait après le formatage, et non avant : arrondir la partie
- * décimale à part donne « ,100 » dès qu'elle dépasse 99,5 centimes, la retenue
- * n'ayant nulle part où aller. En laissant `toLocaleString` arrondir le nombre
- * entier, la retenue remonte d'elle-même sur les euros.
- */
-function euroEtCentimes(v: number): [string, string] {
-  const [euros, centimes = "00"] = v
-    .toLocaleString("fr-FR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })
-    .split(",");
-  return [euros, centimes];
-}
-
 const PERIOD_LABEL: Record<Period, string> = {
   "24h": "24h", "1S": "1 semaine", "1M": "1 mois", "3M": "3 mois",
   "6M": "6 mois", "1A": "1 an", "3A": "3 ans", "Max": "tout l'historique",
@@ -789,21 +774,13 @@ function PortfolioPageInner() {
         {masque
           ? "•••• €"
           : valeurTotale != null
-            // Les centimes sont écrits plus petits : à taille égale, deux
-            // chiffres de plus noient les euros, qui sont ce qu'on lit. C'est
-            // la convention des relevés, et elle rend en outre le clignotement
-            // utile — arrondie à l'euro, la valeur ne bougeait presque jamais
-            // d'un rafraîchissement à l'autre.
-            ? (() => {
-                const [euros, centimes] = euroEtCentimes(valeurTotale);
-                return (
-                  <>
-                    {euros}
-                    <span style={{ fontSize: "0.62em", fontWeight: 500, opacity: 0.7 }}>,{centimes}</span>
-                    {" €"}
-                  </>
-                );
-              })()
+            // Les centimes d'un seul tenant avec les euros, même corps et même
+            // encre. `toLocaleString` arrondit le nombre entier, ce qui laisse
+            // la retenue remonter : découper avant d'arrondir donnerait
+            // « 3 466,100 » dès que la décimale dépasse 99,5 centimes.
+            ? valeurTotale.toLocaleString("fr-FR", {
+                minimumFractionDigits: 2, maximumFractionDigits: 2,
+              }) + " €"
             : <span style={{ fontSize: 13, color: CLAIR.texteFaible }}>Non défini</span>}
       </div>
     )}
