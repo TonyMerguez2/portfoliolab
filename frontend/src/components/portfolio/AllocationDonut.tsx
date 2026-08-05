@@ -26,16 +26,6 @@ const SIZE = 108;
 /** Nombre de lignes montrées avant de renvoyer vers la vue détaillée. */
 const MAX_LEGENDE = 5;
 
-/**
- * Épaisseur du liseré.
- *
- * Moins d'un pixel, là où la carte en fait un plein. Ce n'est pas un écart de
- * réglage mais de proportion : le même trait borde ici un disque de 108 px et
- * là-bas une carte de 248, où il pèse deux fois moins dans le regard. Rendu à
- * 1 px, le camembert paraissait cerné quand la carte paraît ourlée.
- */
-const LISERE = 0.6;
-
 export default function AllocationDonut({
   assets, totalValue, onSeeAll,
 }: {
@@ -77,7 +67,7 @@ export default function AllocationDonut({
   // touchent, et seul le liseré de chacune marque la frontière.
   const arcs = useMemo(
     () => donutArcs(slices, {
-      cx: SIZE / 2, cy: SIZE / 2, r: SIZE / 2 - LISERE,
+      cx: SIZE / 2, cy: SIZE / 2, r: SIZE / 2,
       thickness: SIZE / 2, gap: 0,
     }),
     [slices]);
@@ -129,29 +119,6 @@ export default function AllocationDonut({
                 surface éclairée d'un même côté, au lieu de parts éclairées
                 chacune pour soi. */}
             <defs>
-              {/* Le liseré des cartes, transposé.
-                  `.novac-tile::before` pose un trait d'un pixel en dégradé de
-                  la couleur de la carte, jusqu'à 44 % — c'est ce bord lumineux
-                  qui fait lire la tuile comme éclairée, bien plus que le lavis
-                  lui-même. Sans lui, les parts paraissaient ternes à côté des
-                  cartes alors que leur remplissage était pourtant plus clair :
-                  ce qu'on lisait n'était pas la surface, c'était l'arête. */}
-              {arcs.map(a => (
-                <linearGradient key={`b-${a.key}`} id={`bord-${idSvg}-${a.key}`}
-                  x1="0" y1="0" x2="1" y2="1">
-                  <stop offset="0%"   stopColor={a.color} stopOpacity={0.44} />
-                  <stop offset="24%"  stopColor={a.color} stopOpacity={0.36} />
-                  <stop offset="44%"  stopColor={a.color} stopOpacity={0.17} />
-                  {/* Zéro, et non un plancher : la carte écrit `transparent`
-                      ici. Son liseré s'éteint donc au milieu et ne brille qu'aux
-                      deux angles opposés. Avec un plancher, le camembert portait
-                      un anneau continu — 1 px comme la carte, mais partout, ce
-                      qui le faisait paraître bien plus épais qu'elle. */}
-                  <stop offset="54%"  stopColor={a.color} stopOpacity={0} />
-                  <stop offset="68%"  stopColor={a.color} stopOpacity={0.15} />
-                  <stop offset="100%" stopColor={a.color} stopOpacity={0.40} />
-                </linearGradient>
-              ))}
               {arcs.map(a => (
                 <radialGradient key={a.key} id={`part-${idSvg}-${a.key}`}
                   gradientUnits="userSpaceOnUse"
@@ -185,33 +152,25 @@ export default function AllocationDonut({
                 <stop offset="100%" stopColor="#FFFFFF" stopOpacity={0} />
               </radialGradient>
             </defs>
-            {/* L'aplat sombre des cartes, posé sous les parts : c'est lui
-                qui donne aux lavis leur assise et empêche les teintes de
-                flotter sur le panneau. */}
-            {/* Même rayon que les parts, au liseré près. Plus large, son bord
-                dessinait un anneau sombre autour du camembert — une arête de
-                plus, celles-là mêmes qu'on cherche à supprimer. */}
-            <circle cx={SIZE / 2} cy={SIZE / 2} r={SIZE / 2 - LISERE} fill="rgba(2,10,24,0.38)" />
+            {/* L'aplat sombre des cartes, posé sous les parts : c'est lui qui
+                donne aux lavis leur assise et empêche les teintes de flotter
+                sur le panneau. */}
+            <circle cx={SIZE / 2} cy={SIZE / 2} r={SIZE / 2} fill="rgba(2,10,24,0.38)" />
             {arcs.map(a => (
-              <g key={a.key}
+              /* Un remplissage, rien d'autre. Les parts ont porté un liseré
+                 de leur couleur, à l'imitation du bord des cartes ; sur un
+                 disque de 108 px il cernait les parts au lieu de les ourler,
+                 et la frontière entre deux voisines se lisait comme un trait
+                 tracé plutôt que comme un changement de teinte. */
+              <path key={a.key} d={a.path} fill={`url(#part-${idSvg}-${a.key})`}
                 opacity={hover && hover !== a.key ? 0.32 : 1}
                 style={{ transition: "opacity 140ms", cursor: "default" }}
                 onMouseEnter={() => setHover(a.key)}
-                onMouseLeave={() => setHover(null)}>
-                {/* Un seul tracé par part : remplissage et liseré.
-                    Une version antérieure en superposait deux — un trait large
-                    de la couleur du bord, recouvert d'un plus étroit de la
-                    couleur du remplissage — pour arrondir les coins par la
-                    jointure. Elle échouait parce que le remplissage est
-                    translucide : il ne masque pas ce qu'il recouvre, et chaque
-                    part portait deux arêtes qui se mêlaient. */}
-                <path d={a.path} fill={`url(#part-${idSvg}-${a.key})`}
-                  stroke={`url(#bord-${idSvg}-${a.key})`} strokeWidth={LISERE} />
-              </g>
+                onMouseLeave={() => setHover(null)} />
             ))}
             {/* Par-dessus les parts, et sans capter la souris : il éclaire, il
                 ne se survole pas. */}
-            <circle cx={SIZE / 2} cy={SIZE / 2} r={SIZE / 2 - LISERE}
+            <circle cx={SIZE / 2} cy={SIZE / 2} r={SIZE / 2}
               fill={`url(#eclat-${idSvg})`} pointerEvents="none" />
           </svg>
         </div>
