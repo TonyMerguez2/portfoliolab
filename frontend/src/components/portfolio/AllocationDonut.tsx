@@ -27,15 +27,6 @@ const SIZE = 108;
 const MAX_LEGENDE = 5;
 
 /**
- * Rayon des coins, égal à la demi-largeur du trait qui les arrondit.
- *
- * Il était à 2,5 : `stroke-linejoin: round` enroulait alors le liseré autour
- * d'un rayon de 2,5 px, et les pointes des parts devenaient des pâtés de
- * couleur bien plus épais que le trait d'un pixel censé les border.
- */
-const RAYON_COIN = 1.75;
-
-/**
  * Épaisseur du liseré.
  *
  * Moins d'un pixel, là où la carte en fait un plein. Ce n'est pas un écart de
@@ -82,13 +73,12 @@ export default function AllocationDonut({
   // Camembert plein, écart nul. L'épaisseur vaut le rayon, ce qui referme le
   // centre : il ne portait plus aucune information, un anneau y aurait laissé
   // un trou pour rien.
-  // L'écart rouvert : il séparait les parts avant que le camembert ne devienne
-  // plein, et redevient nécessaire dès lors qu'elles portent un liseré. C'est
-  // le vide qui entoure une carte sur la page, transposé.
+  // Cercle plein : ni écart entre les parts, ni coins arrondis. Les parts se
+  // touchent, et seul le liseré de chacune marque la frontière.
   const arcs = useMemo(
     () => donutArcs(slices, {
-      cx: SIZE / 2, cy: SIZE / 2, r: SIZE / 2 - RAYON_COIN,
-      thickness: SIZE / 2, gap: 0.03,
+      cx: SIZE / 2, cy: SIZE / 2, r: SIZE / 2 - LISERE,
+      thickness: SIZE / 2, gap: 0,
     }),
     [slices]);
 
@@ -198,37 +188,30 @@ export default function AllocationDonut({
             {/* L'aplat sombre des cartes, posé sous les parts : c'est lui
                 qui donne aux lavis leur assise et empêche les teintes de
                 flotter sur le panneau. */}
-            <circle cx={SIZE / 2} cy={SIZE / 2} r={SIZE / 2} fill="rgba(2,10,24,0.38)" />
+            {/* Même rayon que les parts, au liseré près. Plus large, son bord
+                dessinait un anneau sombre autour du camembert — une arête de
+                plus, celles-là mêmes qu'on cherche à supprimer. */}
+            <circle cx={SIZE / 2} cy={SIZE / 2} r={SIZE / 2 - LISERE} fill="rgba(2,10,24,0.38)" />
             {arcs.map(a => (
               <g key={a.key}
                 opacity={hover && hover !== a.key ? 0.32 : 1}
                 style={{ transition: "opacity 140ms", cursor: "default" }}
                 onMouseEnter={() => setHover(a.key)}
                 onMouseLeave={() => setHover(null)}>
-                {/* Deux traits superposés, et c'est ce qui donne à la fois
-                    les coins arrondis et le liseré d'un pixel.
-
-                    Le premier, large, est peint dans la couleur de l'arête ;
-                    `stroke-linejoin: round` en arrondit les angles, d'un rayon
-                    valant la moitié de sa largeur. Le second, plus étroit de
-                    deux pixels, recouvre le premier dans la couleur du
-                    remplissage. Ce qui dépasse fait exactement un pixel de
-                    bord — la largeur de `.novac-tile::before`.
-
-                    Arrondir le tracé lui-même aurait demandé de refaire la
-                    trigonométrie de `donutArcs` pour y insérer quatre congés
-                    par part. Le trait obtient le même dessin sans y toucher. */}
-                <path d={a.path} fill="none"
-                  stroke={`url(#bord-${idSvg}-${a.key})`}
-                  strokeWidth={RAYON_COIN * 2} strokeLinejoin="round" />
+                {/* Un seul tracé par part : remplissage et liseré.
+                    Une version antérieure en superposait deux — un trait large
+                    de la couleur du bord, recouvert d'un plus étroit de la
+                    couleur du remplissage — pour arrondir les coins par la
+                    jointure. Elle échouait parce que le remplissage est
+                    translucide : il ne masque pas ce qu'il recouvre, et chaque
+                    part portait deux arêtes qui se mêlaient. */}
                 <path d={a.path} fill={`url(#part-${idSvg}-${a.key})`}
-                  stroke={`url(#part-${idSvg}-${a.key})`}
-                  strokeWidth={RAYON_COIN * 2 - LISERE * 2} strokeLinejoin="round" />
+                  stroke={`url(#bord-${idSvg}-${a.key})`} strokeWidth={LISERE} />
               </g>
             ))}
             {/* Par-dessus les parts, et sans capter la souris : il éclaire, il
                 ne se survole pas. */}
-            <circle cx={SIZE / 2} cy={SIZE / 2} r={SIZE / 2}
+            <circle cx={SIZE / 2} cy={SIZE / 2} r={SIZE / 2 - LISERE}
               fill={`url(#eclat-${idSvg})`} pointerEvents="none" />
           </svg>
         </div>
