@@ -23,6 +23,7 @@ import { JETONS, CLAIR, RAYON, couleurMontant, RAYONS, styleCadreExterieur, styl
 import { hexVersRvb, rvbVersHex, rvbVersTsl, tslVersRvb } from "@/lib/couleur";
 import { resoudreJeton } from "@/lib/theme";
 import { useClignotement, styleClignotement } from "@/lib/clignotement";
+import { CADENCE_COURS_MS } from "@/lib/cadence";
 import Cadre from "@/components/ui/Cadre";
 import ImagePortefeuille from "@/components/portfolio/ImagePortefeuille";
 
@@ -357,7 +358,7 @@ function PortfolioPageInner() {
     // chargement de la page — les cartes d'actifs avançaient pendant que le
     // grand chiffre au-dessus d'elles ne bougeait plus, et le clignotement
     // ajouté pour le signaler n'avait jamais rien à signaler.
-    const battement = setInterval(relire, 15000);
+    const battement = setInterval(relire, CADENCE_COURS_MS);
     return () => { cancelled = true; clearInterval(battement); };
   }, [portfolio?.id, txRefreshKey]);
 
@@ -528,7 +529,7 @@ function PortfolioPageInner() {
 
     fetchPrices().finally(() => { setLoading(false); isFirstLoad.current = false; });
 
-    const interval = setInterval(() => fetchPrices(), 15000);
+    const interval = setInterval(() => fetchPrices(), CADENCE_COURS_MS);
     return () => clearInterval(interval);
   }, [tickersSuivis, period]);
 

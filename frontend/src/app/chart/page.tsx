@@ -15,6 +15,7 @@ const GrowthChart = dynamic(() => import("@/components/charts/GrowthChart"), { s
 const SubChart    = dynamic(() => import("@/components/charts/SubChart"),    { ssr: false });
 import AssetLogo from "@/components/AssetLogo";
 import { useClignotement, styleClignotement } from "@/lib/clignotement";
+import { CADENCE_COURS_MS, LIBELLE_CADENCE } from "@/lib/cadence";
 import { pourFond } from "@/lib/couleur";
 import { useModeTheme } from "@/lib/theme";
 import { styleCadreExterieur, styleCarteInterieure } from "@/lib/palette";
@@ -718,7 +719,7 @@ function ChartContent() {
     return () => { if (ws.readyState === WebSocket.OPEN) ws.close(); };
   }, [ticker, isCrypto]);
 
-  // Refresh prix toutes les 60s pour actions/ETFs
+  // Refresh prix pour actions/ETF — la crypto passe par le WebSocket.
   useEffect(() => {
     if (!ticker || isCrypto) return;
     const interval = setInterval(() => {
@@ -726,7 +727,7 @@ function ChartContent() {
         .then(r => r.json())
         .then((d: any[]) => { if (Array.isArray(d) && d.length > 0) setCurrentPrice({ price: d[0].price, change: d[0].change }); })
         .catch(() => {});
-    }, 60000);
+    }, CADENCE_COURS_MS);
     return () => clearInterval(interval);
   }, [ticker, isCrypto]);
 
@@ -814,7 +815,7 @@ function ChartContent() {
   // Réinitialiser la couleur extraite quand on change de benchmark
   useEffect(() => { setBmExtractedColor(null); }, [customBmTicker]);
 
-  // Prix live du benchmark — WebSocket Binance pour crypto, polling 60s pour actions/ETF
+  // Prix live du benchmark — WebSocket Binance pour crypto, sondage pour actions/ETF
   const isBmCrypto = customBmType === "CRYPTOCURRENCY" || (customBmTicker?.endsWith("-USD") ?? false);
 
   useEffect(() => {
@@ -867,7 +868,7 @@ function ChartContent() {
         .then(r => r.json())
         .then((d: any[]) => { if (Array.isArray(d) && d.length > 0) setBmCurrentPrice({ price: d[0].price, change: d[0].change }); })
         .catch(() => {});
-    }, 60000);
+    }, CADENCE_COURS_MS);
     return () => clearInterval(interval);
   }, [customBmTicker, isBmCrypto]);
 
@@ -1319,7 +1320,7 @@ function ChartContent() {
                             {isCrypto ? (
                               <span style={{ marginTop:7, fontSize:9, color:"rgba(var(--nv-encre-rvb), 0.38)" }}>Cours en temps réel</span>
                             ) : isOpen ? (
-                              <span style={{ marginTop:7, fontSize:9, color:"rgba(var(--nv-encre-rvb), 0.38)" }}>Màj toutes les 60 s</span>
+                              <span style={{ marginTop:7, fontSize:9, color:"rgba(var(--nv-encre-rvb), 0.38)" }}>{LIBELLE_CADENCE}</span>
                             ) : null}
                           </div>
                         </div>
@@ -1431,7 +1432,7 @@ function ChartContent() {
                                   {isBmCrypto ? (
                                     <span style={{ marginTop:7, fontSize:9, color:"rgba(var(--nv-encre-rvb), 0.38)" }}>Cours en temps réel</span>
                                   ) : bmIsOpen ? (
-                                    <span style={{ marginTop:7, fontSize:9, color:"rgba(var(--nv-encre-rvb), 0.38)" }}>Màj toutes les 60 s</span>
+                                    <span style={{ marginTop:7, fontSize:9, color:"rgba(var(--nv-encre-rvb), 0.38)" }}>{LIBELLE_CADENCE}</span>
                                   ) : (
                                     <div style={{ display:"flex", flexDirection:"column", gap:1, marginTop:5 }}>
                                       <span style={{ fontSize:9, lineHeight:1.1, color:"rgba(var(--nv-encre-rvb), 0.5)" }}>Dernière clôture</span>

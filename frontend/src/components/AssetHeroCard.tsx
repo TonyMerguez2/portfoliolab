@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import AssetLogo from "@/components/AssetLogo";
+import { LIBELLE_CADENCE } from "@/lib/cadence";
 import TileCard from "@/components/TileCard";
 import { BRAND_COLORS, TRENDING } from "@/lib/assets";
 
@@ -306,7 +307,7 @@ export default function AssetHeroCard({
               {isCrypto ? (
                 <span style={{ marginTop: 7, fontSize: 9, color: "rgba(255,255,255,0.38)" }}>Cours en temps réel</span>
               ) : open ? (
-                <span style={{ marginTop: 7, fontSize: 9, color: "rgba(255,255,255,0.38)" }}>Màj toutes les 60 s</span>
+                <span style={{ marginTop: 7, fontSize: 9, color: "rgba(255,255,255,0.38)" }}>{LIBELLE_CADENCE}</span>
               ) : (
                 <div style={{ display: "flex", flexDirection: "column", gap: 1, marginTop: 5 }}>
                   <span style={{ fontSize: 9, lineHeight: 1.1, color: "rgba(255,255,255,0.5)" }}>Dernière clôture</span>
