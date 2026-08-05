@@ -1,5 +1,5 @@
 "use client";
-import { useMemo, useState } from "react";
+import { useId, useMemo, useState } from "react";
 import { donutArcs, type Slice } from "@/lib/donut";
 import { brandHex } from "@/lib/tileStyle";
 import { assetClass, type GridAsset } from "@/lib/portfolio";
@@ -36,6 +36,10 @@ export default function AllocationDonut({
 }) {
   const [mode, setMode] = useState<"actif" | "classe">("actif");
   const [hover, setHover] = useState<string | null>(null);
+  // Les identifiants de <defs> sont globaux au document : deux camemberts
+  // sur la même page partageraient leurs dégradés, et le second
+  // reprendrait les couleurs du premier.
+  const idSvg = useId().replace(/:/g, "");
 
   const slices: Slice[] = useMemo(() => {
     if (mode === "actif") {
@@ -98,13 +102,71 @@ export default function AllocationDonut({
             n'ayant plus d'appelant, il a été supprimé. */}
         <div style={{ position: "relative", width: SIZE, height: SIZE, flexShrink: 0 }}>
           <svg width={SIZE} height={SIZE} style={{ display: "block" }}>
+            {/* La matière des cartes d'actifs, transposée en SVG.
+                Une carte est faite de deux lavis d'angle — un fort depuis le
+                haut-gauche, un plus discret depuis le bas-droit — sous un
+                éclat spéculaire. Les mêmes teintes en aplat donnaient ici deux
+                objets de familles différentes alors qu'ils désignent les mêmes
+                lignes.
+
+                Les dégradés sont ancrés sur le camembert entier et non sur
+                chaque part : c'est ce qui fait lire l'ensemble comme une seule
+                surface éclairée d'un même côté, au lieu de parts éclairées
+                chacune pour soi. */}
+            <defs>
+              {arcs.map(a => (
+                <radialGradient key={a.key} id={`part-${idSvg}-${a.key}`}
+                  gradientUnits="userSpaceOnUse"
+                  cx={0} cy={0} r={SIZE * 1.55}>
+                  {/* La rampe suit celle de `tileSurface` — même sens, mêmes
+                      proportions — mais à opacité doublée.
+
+                      Reprendre ses valeurs exactes a été essayé : une carte
+                      plafonne à 88/255, soit 34 %, et le camembert devenait
+                      alors illisible. Une carte fait 248 px et vit seule sur la
+                      page ; ici, trois parts se touchent, souvent de teintes
+                      voisines, et à 34 % elles se confondent. Ce n'est pas le
+                      réglage qui diffère mais la situation.
+
+                      Une première version, à l'inverse, montait à 100 % : le
+                      camembert était bien plus vif que les cartes qu'il devait
+                      rappeler. */}
+                  <stop offset="0%"   stopColor={a.color} stopOpacity={0.70} />
+                  <stop offset="18%"  stopColor={a.color} stopOpacity={0.62} />
+                  <stop offset="36%"  stopColor={a.color} stopOpacity={0.50} />
+                  <stop offset="54%"  stopColor={a.color} stopOpacity={0.43} />
+                  <stop offset="78%"  stopColor={a.color} stopOpacity={0.37} />
+                  <stop offset="100%" stopColor={a.color} stopOpacity={0.33} />
+                </radialGradient>
+              ))}
+              {/* L'éclat de verre, posé une fois sur l'ensemble. */}
+              <radialGradient id={`eclat-${idSvg}`} gradientUnits="userSpaceOnUse"
+                cx={SIZE * 0.18} cy={SIZE * 0.08} r={SIZE * 0.78}>
+                <stop offset="0%"   stopColor="#FFFFFF" stopOpacity={0.16} />
+                <stop offset="42%"  stopColor="#FFFFFF" stopOpacity={0.06} />
+                <stop offset="100%" stopColor="#FFFFFF" stopOpacity={0} />
+              </radialGradient>
+            </defs>
+            {/* L'aplat sombre des cartes, posé sous les parts : c'est lui
+                qui donne aux lavis leur assise et empêche les teintes de
+                flotter sur le panneau. */}
+            <circle cx={SIZE / 2} cy={SIZE / 2} r={SIZE / 2} fill="rgba(2,10,24,0.38)" />
             {arcs.map(a => (
-              <path key={a.key} d={a.path} fill={a.color}
+              <path key={a.key} d={a.path} fill={`url(#part-${idSvg}-${a.key})`}
+                // Un trait de la couleur du panneau sépare deux parts voisines.
+                // L'écart avait été supprimé quand le camembert est devenu
+                // plein ; il redevient nécessaire dès lors que les parts sont
+                // translucides, une frontière de teinte ne suffisant plus.
+                stroke="var(--nv-carte)" strokeWidth={1.5}
                 opacity={hover && hover !== a.key ? 0.32 : 1}
                 style={{ transition: "opacity 140ms", cursor: "default" }}
                 onMouseEnter={() => setHover(a.key)}
                 onMouseLeave={() => setHover(null)} />
             ))}
+            {/* Par-dessus les parts, et sans capter la souris : il éclaire, il
+                ne se survole pas. */}
+            <circle cx={SIZE / 2} cy={SIZE / 2} r={SIZE / 2}
+              fill={`url(#eclat-${idSvg})`} pointerEvents="none" />
           </svg>
         </div>
 
