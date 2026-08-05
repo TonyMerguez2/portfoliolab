@@ -253,9 +253,14 @@
      soit de la couleur du fond, ce que rien ne confirme : son `bg-current`
      hérite d'une couleur que je n'ai pas su remonter. Le compte était donc
      une hypothèse, pas une mesure, et il tirait trop bas.
-     Réglé à l'œil sur la référence : 6,5 %, entre les deux. */
+     Réglé à l'œil sur la référence : 6,5 %, entre les deux.
+
+     Le second jeton est la trame sous le curseur. Les deux se superposent, si
+     bien que le point le plus vif ne vaut pas 28 % mais 1 − (1 − 0,065)(1 −
+     0,28), soit 32,7 % — cinq fois le repos. C'est ce rapport qui se voit,
+     pas la valeur brute. */
   --nv-point:             rgba(106,114,130,0.065);
-  --nv-point-vif:         rgba(106,114,130,0.19);
+  --nv-point-vif:         rgba(106,114,130,0.28);
 
   /* La barre latérale. Elle est translucide et floute ce qui passe dessous :
      ses fonds ne peuvent donc pas être les jetons de carte, qui sont opaques. */
@@ -360,7 +365,7 @@
      blanc se voit un peu mieux qu'un gris clair sur noir, d'où une opacité
      légèrement moindre qu'en sombre. */
   --nv-point:             rgba(106,114,130,0.055);
-  --nv-point-vif:         rgba(106,114,130,0.16);
+  --nv-point-vif:         rgba(106,114,130,0.24);
 
   /* La barre suit la page. L'état actif quitte le blanc translucide pour
      l'accent : sur fond clair, un voile blanc sur blanc ne marque rien. */
@@ -441,9 +446,15 @@
   background-image: radial-gradient(circle at 1px 1px, var(--nv-point-vif) 1px, transparent 1.5px);
   background-size: 14px 14px;
   /* Hors écran tant que la souris n'a pas bougé : sans cela, la lueur
-     apparaîtrait dans le coin haut-gauche au chargement. */
-  -webkit-mask-image: radial-gradient(200px circle at var(--nv-mx, -9999px) var(--nv-my, -9999px), #000 0%, rgba(0,0,0,0.30) 50%, transparent 78%);
-  mask-image: radial-gradient(200px circle at var(--nv-mx, -9999px) var(--nv-my, -9999px), #000 0%, rgba(0,0,0,0.30) 50%, transparent 78%);
+     apparaîtrait dans le coin haut-gauche au chargement.
+
+     La retombée du masque compte plus que l'opacité du point : elle décide de
+     la *largeur* apparente de la lueur, quand l'autre n'en règle que le cœur.
+     Elle tombait à 30 % dès la mi-rayon, ce qui resserrait tout en une tache
+     étroite autour du curseur ; à 45 % la lueur respire sur les 200 px
+     annoncés au lieu d'en éteindre la moitié. */
+  -webkit-mask-image: radial-gradient(200px circle at var(--nv-mx, -9999px) var(--nv-my, -9999px), #000 0%, rgba(0,0,0,0.45) 50%, transparent 82%);
+  mask-image: radial-gradient(200px circle at var(--nv-mx, -9999px) var(--nv-my, -9999px), #000 0%, rgba(0,0,0,0.45) 50%, transparent 82%);
 }
 
 /* La trame vaut pour les deux thèmes ; seules ses couleurs changent. */
