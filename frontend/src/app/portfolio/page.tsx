@@ -26,6 +26,7 @@ import { useClignotement, styleClignotement } from "@/lib/clignotement";
 import { CADENCE_COURS_MS } from "@/lib/cadence";
 import { useCoursCrypto, symboleBinance } from "@/lib/coursCrypto";
 import Cadre from "@/components/ui/Cadre";
+import ChiffresRoulants from "@/components/ui/ChiffresRoulants";
 import ImagePortefeuille from "@/components/portfolio/ImagePortefeuille";
 import { API_URL } from "@/lib/api";
 
@@ -886,9 +887,9 @@ function PortfolioPageInner() {
             // encre. `toLocaleString` arrondit le nombre entier, ce qui laisse
             // la retenue remonter : découper avant d'arrondir donnerait
             // « 3 466,100 » dès que la décimale dépasse 99,5 centimes.
-            ? valeurTotale.toLocaleString("fr-FR", {
+            ? <ChiffresRoulants texte={valeurTotale.toLocaleString("fr-FR", {
                 minimumFractionDigits: 2, maximumFractionDigits: 2,
-              }) + " €"
+              }) + " €"} />
             : <span style={{ fontSize: 13, color: CLAIR.texteFaible }}>Non défini</span>}
       </div>
     )}

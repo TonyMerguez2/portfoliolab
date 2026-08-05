@@ -439,6 +439,27 @@
   [style*="nv-clignote"] { animation: none !important; }
 }
 
+/* ── Défilement des chiffres ───────────────────────────────────────────────
+   Le flou culmine au milieu du trajet et s'éteint aux deux bouts : c'est ce
+   qui donne un mouvement plutôt qu'un saut. Constant, il rendrait le nombre
+   illisible ; décroissant seulement, il laisserait le départ net et la fin
+   trouble, soit l'inverse d'un déplacement.
+
+   Il est posé sur le rang, pas sur la bande qui glisse : appliqué à l'élément
+   en mouvement, il se déplacerait avec lui au lieu de le rendre.
+   ─────────────────────────────────────────────────────────────────────────── */
+@keyframes nv-roule-flou {
+  0%   { filter: blur(0); }
+  45%  { filter: blur(1.5px); }
+  100% { filter: blur(0); }
+}
+
+/* Le défilement dit d'où vient le nombre ; le nombre lui-même reste exact
+   sans lui. */
+@media (prefers-reduced-motion: reduce) {
+  @keyframes nv-roule-flou { 0%, 100% { filter: blur(0); } }
+}
+
 /* ── Fond à points ─────────────────────────────────────────────────────────
    Deux trames identiques superposées : l'une terne, visible partout, l'autre
    vive mais masquée sauf autour du curseur. Le masque est un dégradé radial
