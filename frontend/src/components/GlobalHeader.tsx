@@ -1,14 +1,17 @@
 "use client";
-import { useEffect, useRef, useState, memo, useCallback } from "react";
+import { useEffect, useRef, useState, memo, useCallback, useMemo } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { useApp } from "@/lib/AppContext";
 import { enTetesAuth } from "@/lib/session";
 import { TRENDING } from "@/lib/assets";
 import AssetLogo from "@/components/AssetLogo";
-import { JETONS, RAYONS } from "@/lib/palette";
+import { JETONS, RAYONS, rayonVignette } from "@/lib/palette";
+import { initiale } from "@/lib/initiale";
+import { encreSur } from "@/lib/couleur";
 import { API_URL } from "@/lib/api";
 
 type Asset = { ticker: string; type: string; name: string; };
+type Portefeuille = { id: string; name: string; color?: string | null; image_url?: string | null; assets?: unknown[] };
 type Price = { price: number; change: number; };
 
 type AssetRowProps = {
@@ -59,6 +62,44 @@ const AssetRow = memo(function AssetRow({ a, highlighted, focused, idx, price, o
 });
 
 
+/**
+ * Un portefeuille dans les résultats de recherche.
+ *
+ * Le sélecteur du bandeau ayant été retiré, il n'existait plus aucun chemin
+ * vers les autres portefeuilles : la page en ouvrait un et rien ne permettait
+ * d'en changer. Ils reviennent ici, à côté des actifs — ce sont deux choses
+ * qu'on cherche par leur nom.
+ */
+const LignePortefeuille = memo(function LignePortefeuille(
+  { p, actif, onSelect }: { p: Portefeuille; actif: boolean; onSelect: (p: Portefeuille) => void },
+) {
+  const [survol, setSurvol] = useState(false);
+  const fond = p.color || "#6366F1";
+  return (
+    <div onClick={() => onSelect(p)}
+      onMouseEnter={() => setSurvol(true)} onMouseLeave={() => setSurvol(false)}
+      style={{ display:"flex", alignItems:"center", gap:"10px", width:"100%", padding:"8px 12px",
+        background: survol ? "rgba(255,255,255,0.05)" : "transparent", cursor:"pointer",
+        borderBottom:"1px solid rgba(255,255,255,0.04)", boxSizing:"border-box" as const }}>
+      <span style={{ width:28, height:28, borderRadius:rayonVignette(28), flexShrink:0,
+        display:"flex", alignItems:"center", justifyContent:"center", overflow:"hidden",
+        background:fond, color:encreSur(fond), fontSize:13, fontWeight:700 }}>
+        {p.image_url
+          // eslint-disable-next-line @next/next/no-img-element
+          ? <img src={`${API_URL}${p.image_url}`} alt="" style={{ width:"100%", height:"100%", objectFit:"cover" }} />
+          : initiale(p.name)}
+      </span>
+      <span style={{ color:"#F8F9FC", fontSize:"11px", fontWeight:500, flex:1, textAlign:"left" }}>{p.name}</span>
+      {actif && (
+        <span style={{ fontSize:"9px", color:JETONS.positif, fontWeight:600, letterSpacing:"0.04em" }}>OUVERT</span>
+      )}
+      <span style={{ color:"rgba(255,255,255,0.35)", fontSize:"10px" }}>
+        {p.assets?.length ?? 0} actif{(p.assets?.length ?? 0) > 1 ? "s" : ""}
+      </span>
+    </div>
+  );
+});
+
 const typeColor = (type: string) => ({
   bg: type==="CRYPTOCURRENCY"?"rgba(245,158,11,0.16)":type==="ETF"?"rgba(139,92,246,0.16)":type==="INDEX"?"rgba(34,211,238,0.14)":"rgba(59,130,246,0.16)",
   border: type==="CRYPTOCURRENCY"?"rgba(245,158,11,0.35)":type==="ETF"?"rgba(139,92,246,0.35)":type==="INDEX"?"rgba(34,211,238,0.32)":"rgba(59,130,246,0.35)",
@@ -72,11 +113,10 @@ export default function GlobalHeader() {
   const [localSearch, setLocalSearch] = useState("");
   const [searchResults, setSearchResults] = useState<Asset[]>([]);
   const [showDropdown, setShowDropdown] = useState(false);
-  const [showPortfolioMenu, setShowPortfolioMenu] = useState(false);
   const [showSearch, setShowSearch] = useState(false);
   const [showNotifs, setShowNotifs] = useState(false);
   const searchRef = useRef<HTMLInputElement>(null);
-  const [portfolios, setPortfolios] = useState<any[]>([]);
+  const [portfolios, setPortfolios] = useState<Portefeuille[]>([]);
   const [showTools, setShowTools] = useState(false);
   const [category, setCategory] = useState("all");
   const [displayCount, setDisplayCount] = useState(20);
@@ -86,7 +126,6 @@ export default function GlobalHeader() {
   const tickerPosRef = useRef(0);
   const [isSearching, setIsSearching] = useState(false);
   const [highlightIndex, setHighlightIndex] = useState(-1);
-  const [hoveredPortfolioId, setHoveredPortfolioId] = useState<string|null>(null);
   const debounce = useRef<NodeJS.Timeout | undefined>(undefined);
   const listRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -195,6 +234,33 @@ export default function GlobalHeader() {
   };
 
   const filteredAssets = TRENDING.filter(a => category === "all" || a.type === category);
+  /**
+   * Les portefeuilles proposés.
+   *
+   * Tous quand le champ est vide, filtrés dès qu'on tape. Les montrer d'emblée
+   * est délibéré : une liste qui n'apparaît qu'après avoir tapé le bon mot
+   * suppose qu'on sache déjà qu'elle existe, et c'est précisément ce qui
+   * manquait.
+   */
+  const portefeuillesTrouves = useMemo(() => {
+    const q = localSearch.trim().toLowerCase();
+    if (!q) return portfolios;
+    return portfolios.filter(p => (p.name ?? "").toLowerCase().includes(q));
+  }, [portfolios, localSearch]);
+
+  const ouvrirPortefeuille = useCallback((p: Portefeuille) => {
+    // Le contexte type l'identifiant en nombre, l'API le rend en UUID — même
+    // conversion que sur la page portefeuille.
+    setActivePortfolio({ id: p.id as unknown as number, name: p.name,
+      assets: (p.assets ?? []) as { ticker: string; weight: number }[],
+      color: p.color || "#6366F1" });
+    setMode("portfolio");
+    setShowSearch(false);
+    setShowDropdown(false);
+    setLocalSearch("");
+    router.push(`/portfolio?id=${encodeURIComponent(p.id)}`);
+  }, [setActivePortfolio, setMode, router]);
+
   const displayAssets = localSearch ? searchResults.filter(a => category === "all" || a.type === category) : filteredAssets.slice(0, displayCount);
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
@@ -273,7 +339,6 @@ export default function GlobalHeader() {
       {/* La navigation vit désormais dans SideNav, en panneau latéral. */}
 
       {showDropdown && <div style={{ position:"fixed", inset:0, zIndex:49 }} onClick={() => setShowDropdown(false)}/>}
-      {showPortfolioMenu && <div style={{ position:"fixed", inset:0, zIndex:49 }} onClick={() => setShowPortfolioMenu(false)}/>}
 
 
       {/* Recherche globale.
@@ -349,6 +414,16 @@ export default function GlobalHeader() {
               ))}
             </div>
             <div ref={listRef} onScroll={handleScroll} style={{ maxHeight:"320px", overflowY:"auto" }}>
+              {portefeuillesTrouves.length > 0 && (
+                <>
+                  <div style={{ padding:"6px 12px 2px", color:"rgba(255,255,255,0.2)", fontSize:"9px", letterSpacing:"0.12em" }}>PORTEFEUILLES</div>
+                  {portefeuillesTrouves.map(p => (
+                    <LignePortefeuille key={p.id} p={p}
+                      actif={String(activePortfolio?.id ?? "") === String(p.id)}
+                      onSelect={ouvrirPortefeuille} />
+                  ))}
+                </>
+              )}
               {!localSearch && <div style={{ padding:"6px 12px 2px", color:"rgba(255,255,255,0.2)", fontSize:"9px", letterSpacing:"0.12em" }}>POPULAIRES</div>}
               {displayAssets.map((a, i) => (
                 <AssetRow key={a.ticker} a={a} highlighted={i===0 && !!localSearch} focused={i===highlightIndex}
@@ -356,7 +431,7 @@ export default function GlobalHeader() {
                   onSelect={x => { handleSelect(x); setShowSearch(false); }}
                   onChart={x => { handleChart(x); setShowSearch(false); }}/>
               ))}
-              {localSearch && displayAssets.length === 0 && !isSearching && (
+              {localSearch && displayAssets.length === 0 && portefeuillesTrouves.length === 0 && !isSearching && (
                 <div style={{ padding:"18px 14px", textAlign:"center", color:"rgba(255,255,255,0.25)", fontSize:"11px" }}>Aucun résultat</div>
               )}
             </div>
