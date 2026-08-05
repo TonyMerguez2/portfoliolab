@@ -9,7 +9,8 @@ from datetime import datetime, timedelta
 import pandas as pd
 import pytest
 
-from app.api.routes.backtest import _downsample, _intraday_session, _session_with_base, _trim_to_period
+from app.api.routes.backtest import (_downsample, _intraday_session, _session_with_base,
+                                     _trim_depuis, _trim_to_period)
 
 
 class TestTrimToPeriod:
@@ -77,6 +78,58 @@ class TestTrimToPeriod:
         coupe = _trim_to_period(df, "7d")
         assert (coupe.index[-1] - coupe.index[0]).days == 7
         assert list(coupe.columns) == ["AAPL", "MSFT"]
+
+
+class TestTrimDepuis:
+    """La courbe d'une carte s'arrête à la date de détention.
+
+    Sans borne, « max » rendait l'historique du fonds depuis sa création : un
+    ETF né en 2016 dessinait une multiplication par six sous une carte
+    annonçant +6 %, la courbe parlant du fonds et le chiffre de la position.
+    Mesuré sur ESE.PA : 5,27 → 34,04 € et +545,7 % au lieu de +15,6 %.
+    """
+
+    @staticmethod
+    def _serie(jours: int):
+        fin = datetime.today().date()
+        idx = pd.to_datetime([fin - timedelta(days=n) for n in range(jours, -1, -1)])
+        return pd.Series(range(len(idx)), index=idx, dtype=float)
+
+    def test_coupe_a_la_date_donnee(self):
+        s = self._serie(30)
+        borne = (datetime.today().date() - timedelta(days=10)).isoformat()
+        coupe = _trim_depuis(s, borne)
+        assert len(coupe) == 11
+        assert coupe.index[0].date().isoformat() == borne
+
+    def test_prend_la_cotation_anterieure_ou_egale(self):
+        """
+        Le jour d'un achat, le prix de référence est celui qu'on connaissait
+        alors — pas celui de la séance suivante. Même règle que pour les
+        périodes, sans quoi les deux coupes se contrediraient.
+        """
+        idx = pd.to_datetime(["2026-01-05", "2026-01-12", "2026-01-19"])
+        s = pd.Series([10.0, 11.0, 12.0], index=idx)
+        # Le 8 n'est pas coté : on repart du 5, pas du 12.
+        assert _trim_depuis(s, "2026-01-08").index[0] == idx[0]
+
+    def test_sans_borne_ne_touche_a_rien(self):
+        s = self._serie(30)
+        assert len(_trim_depuis(s, "")) == len(s)
+        assert len(_trim_depuis(s, None)) == len(s)
+
+    def test_date_illisible_ne_casse_pas_la_carte(self):
+        s = self._serie(5)
+        assert len(_trim_depuis(s, "pas-une-date")) == len(s)
+
+    def test_borne_postérieure_garde_de_quoi_tracer(self):
+        """
+        Une date plus récente que toute la série ne laisserait qu'un point, et
+        une sparkline d'un point est un pixel. Mieux vaut une courbe trop
+        longue qu'une carte vide.
+        """
+        s = self._serie(5)
+        assert len(_trim_depuis(s, "2099-01-01")) == len(s)
 
 
 class TestDownsample:

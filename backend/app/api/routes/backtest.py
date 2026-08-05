@@ -361,6 +361,37 @@ def _trim_to_period(obj, period: str):
     return obj[idx >= start]
 
 
+def _trim_depuis(obj, depuis: str | None):
+    """
+    Borne une série à une date de détention.
+
+    Le point de départ est la dernière cotation *antérieure ou égale* à cette
+    date, même règle que `_trim_to_period` : le jour d'un achat, le prix de
+    référence est celui qu'on connaissait alors, pas celui de la séance
+    suivante. Une position ouverte hier garde ainsi deux points au lieu d'un,
+    et il reste quelque chose à tracer.
+
+    Une date postérieure à toute la série ne coupe rien : mieux vaut une courbe
+    trop longue qu'une carte vide.
+    """
+    if not depuis or len(obj) == 0:
+        return obj
+    import pandas as pd
+
+    try:
+        borne = pd.Timestamp(depuis)
+    except (ValueError, TypeError):
+        return obj
+    idx = obj.index
+    tz = getattr(idx, "tz", None)
+    if tz is not None and borne.tz is None:
+        borne = borne.tz_localize(tz)
+    avant = idx[idx <= borne]
+    debut = avant[-1] if len(avant) else idx[0]
+    coupe = obj[idx >= debut]
+    return coupe if len(coupe) >= 2 else obj
+
+
 def _session_with_base(frame, sessions):
     """Dernière séance, précédée de la clôture de la séance d'avant.
 
@@ -432,7 +463,7 @@ def _downsample(values: list[float], max_points: int = 40) -> list[float]:
 
 
 @router.get("/prices", tags=["Prices"])
-async def get_prices(tickers: str = "", period: str = "1d") -> list:
+async def get_prices(tickers: str = "", period: str = "1d", depuis: str = "") -> list:
     """Prix courant, variation sur la période, et série pour la sparkline.
 
     La série accompagne la variation : elle part du même point de référence
@@ -445,6 +476,16 @@ async def get_prices(tickers: str = "", period: str = "1d") -> list:
     continue d'être calculée sur les clôtures journalières, à l'identique.
     Les dériver de l'intraday donnerait des chiffres légèrement différents
     (0,02 à 0,03 point mesuré), et cet écart se verrait d'une page à l'autre.
+
+    `depuis` borne chaque ticker à sa date de détention — une liste de dates
+    ISO alignée sur `tickers`, un champ vide valant « pas de borne ».
+
+    Elle sert à « max », qui n'en avait aucune : la période rendait alors
+    l'historique du fonds depuis sa création. Un ETF né en 2016 dessinait ainsi
+    une multiplication par six sous une carte annonçant +6 %, parce que la
+    courbe parlait du fonds et le chiffre de la position. Les autres fenêtres
+    en profitent aussi : « 1 an » sur une ligne détenue depuis trois mois
+    montrait neuf mois pendant lesquels elle n'était pas détenue.
     """
     if not tickers:
         return []
@@ -457,6 +498,14 @@ async def get_prices(tickers: str = "", period: str = "1d") -> list:
         ticker_list = [t.strip() for t in tickers.split(",") if t.strip()][:50]
         if not ticker_list:
             return []
+
+        # Alignement par rang, comme `tickers`. Une liste plus courte laisse
+        # les tickers suivants sans borne, ce qui est le comportement d'avant.
+        bornes = [b.strip() for b in depuis.split(",")] if depuis else []
+        depuis_par_ticker = {
+            t: bornes[i] for i, t in enumerate(ticker_list)
+            if i < len(bornes) and bornes[i]
+        }
 
         yf_period = _YF_WINDOW.get(period, "5d")
 
@@ -496,6 +545,7 @@ async def get_prices(tickers: str = "", period: str = "1d") -> list:
                         continue
                     series = close[ticker]
                 series = _trim_to_period(series.dropna(), period)
+                series = _trim_depuis(series, depuis_par_ticker.get(ticker))
                 if len(series) == 0:
                     continue
                 price = float(series.iloc[-1])

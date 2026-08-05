@@ -450,6 +450,27 @@ function PortfolioPageInner() {
     return Array.from(set);
   }, [portfolio, surTransactions, positions]);
 
+  /**
+   * La date du premier achat de chaque ligne, alignée sur `tickersSuivis`.
+   *
+   * Elle borne les courbes des cartes. Sans elle, la fenêtre « Max » rendait
+   * l'historique du fonds depuis sa création : un ETF né en 2016 dessinait une
+   * multiplication par six sous une carte annonçant +6 %, la courbe parlant du
+   * fonds et le chiffre de la position.
+   *
+   * Par ligne et non par portefeuille : un actif acheté en mai ne doit pas
+   * montrer une courbe qui commence en février. Une ligne sans date connue
+   * laisse un champ vide, que le serveur traite comme « pas de borne ».
+   */
+  const depuisParTicker = useMemo(() => {
+    const premier: Record<string, string> = {};
+    for (const op of reperesOperations) {
+      const jour = op.executed_at.slice(0, 10);
+      if (!premier[op.ticker] || jour < premier[op.ticker]) premier[op.ticker] = jour;
+    }
+    return tickersSuivis.map(t => premier[t] ?? "").join(",");
+  }, [reperesOperations, tickersSuivis]);
+
   useEffect(() => {
     if (!tickersSuivis.length) return;
     const tickers = tickersSuivis.join(",");
@@ -459,7 +480,7 @@ function PortfolioPageInner() {
     }
 
     const fetchPrices = (isInit = false) =>
-      fetch(`http://localhost:8000/api/v1/prices?tickers=${encodeURIComponent(tickers)}&period=${PERIOD_MAP[period]}`)
+      fetch(`http://localhost:8000/api/v1/prices?tickers=${encodeURIComponent(tickers)}&period=${PERIOD_MAP[period]}&depuis=${encodeURIComponent(depuisParTicker)}`)
         .then(r => r.json())
         .then((list: PriceData[]) => {
           const map: Record<string, PriceData> = {};
@@ -499,7 +520,7 @@ function PortfolioPageInner() {
 
     const interval = setInterval(() => fetchPrices(false), 15000);
     return () => clearInterval(interval);
-  }, [tickersSuivis, period]);
+  }, [tickersSuivis, period, depuisParTicker]);
 
   // Benchmark SPY — fetch séparé, silencieux en cas d'échec
   useEffect(() => {
