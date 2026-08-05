@@ -24,6 +24,7 @@ import { hexVersRvb, rvbVersHex, rvbVersTsl, tslVersRvb } from "@/lib/couleur";
 import { resoudreJeton } from "@/lib/theme";
 import { useClignotement, styleClignotement } from "@/lib/clignotement";
 import { CADENCE_COURS_MS } from "@/lib/cadence";
+import { useCoursCrypto, symboleBinance } from "@/lib/coursCrypto";
 import Cadre from "@/components/ui/Cadre";
 import ImagePortefeuille from "@/components/portfolio/ImagePortefeuille";
 
@@ -445,7 +446,37 @@ function PortfolioPageInner() {
     return () => { annule = true; };
   }, [portfolio?.id, surTransactions, period, txRefreshKey]);
 
-  const valeurTotale  = surTransactions ? positions!.total_value    : (portfolio?.total_value ?? null);
+  /**
+   * Les lignes crypto détenues, suivies en direct plutôt qu'au sondage.
+   *
+   * Tirées des positions et non de l'allocation cible : c'est la quantité
+   * réellement détenue qui sert à revaloriser, et une ligne visée mais non
+   * achetée n'a rien à revaloriser.
+   */
+  const tickersCrypto = useMemo(
+    () => (positions?.positions ?? []).map(p => p.ticker).filter(t => symboleBinance(t)),
+    [positions]);
+  const prixCrypto = useCoursCrypto(tickersCrypto);
+
+  /**
+   * Ce que le direct ajoute au total calculé par le serveur.
+   *
+   * On corrige au lieu de recalculer : le total sert aussi de repli hors
+   * transactions, et le refaire ligne à ligne ferait diverger les deux
+   * chemins au premier arrondi.
+   */
+  const ecartCrypto = useMemo(() => {
+    if (!surTransactions) return 0;
+    return positions!.positions.reduce((s, p) => {
+      const vif = prixCrypto[p.ticker];
+      return vif != null && p.current_price != null && p.quantity != null
+        ? s + p.quantity * (vif - p.current_price)
+        : s;
+    }, 0);
+  }, [surTransactions, positions, prixCrypto]);
+
+  const valeurTotaleBrute = surTransactions ? positions!.total_value : (portfolio?.total_value ?? null);
+  const valeurTotale = valeurTotaleBrute != null ? valeurTotaleBrute + ecartCrypto : null;
   /** Sens de la dernière variation de la valeur totale, pour le clignotement. */
   const clignoteValeur = useClignotement(valeurTotale);
   const prixDeRevient = surTransactions ? positions!.total_invested : (portfolio?.cost_basis  ?? null);
@@ -585,13 +616,25 @@ function PortfolioPageInner() {
     // afficherait le portefeuille voulu au lieu du portefeuille réel.
     if (surTransactions) {
       const base = valoriser(positions!.positions, prices);
-      return base.map((a, i) => ({
-        ...a,
-        quantity: positions!.positions[i].quantity,
-        avgCost:  positions!.positions[i].avg_cost,
-        invested: positions!.positions[i].invested,
-        pnlEur:   positions!.positions[i].pnl_eur,
-      }));
+      return base.map((a, i) => {
+        const p = positions!.positions[i];
+        // Le cours poussé prime sur le prix sondé, et entraîne avec lui la
+        // valeur de la ligne et son gain. S'en tenir au prix ferait bouger le
+        // seul chiffre du haut de la carte pendant que la valeur et le gain
+        // en dessous resteraient sur le dernier sondage.
+        const vif = prixCrypto[a.ticker];
+        const suit = vif != null && p.quantity != null;
+        const value = suit ? p.quantity! * vif : a.value;
+        return {
+          ...a,
+          price:    vif ?? a.price,
+          value,
+          quantity: p.quantity,
+          avgCost:  p.avg_cost,
+          invested: p.invested,
+          pnlEur:   suit && p.invested != null && value != null ? value - p.invested : p.pnl_eur,
+        };
+      });
     }
 
     return portfolio.assets.map(a => {
@@ -612,7 +655,7 @@ function PortfolioPageInner() {
         : null;
       return { ...a, price, change, value, perfEur };
     });
-  }, [portfolio, prices, surTransactions, positions]);
+  }, [portfolio, prices, surTransactions, positions, prixCrypto]);
 
   const totalWeight    = enriched.reduce((s, a) => s + a.weight, 0);
   const weightedChange = enriched.reduce((s, a) => {
