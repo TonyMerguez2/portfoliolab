@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import {
   hexVersRvb, rvbVersHex, rvbVersTsl, tslVersRvb, pourFondSombre, poidsGroupe,
-  CLARTE_MIN, CLARTE_MAX, SATURATION_MIN,
+  CLARTE_MIN, CLARTE_MAX, SATURATION_MIN, luminance, contraste, encreSur,
 } from "./couleur";
 
 describe("conversions", () => {
@@ -113,5 +113,47 @@ describe("poidsGroupe", () => {
   it("une plage bien plus grande l'emporte malgré une saturation moindre", () => {
     // La pondération corrige un biais, elle ne doit pas l'inverser.
     expect(poidsGroupe(5000, 0.20)).toBeGreaterThan(poidsGroupe(300, 0.95));
+  });
+});
+
+describe("contraste et encre", () => {
+  it("la luminance pondère les canaux selon l'œil", () => {
+    // Le vert pèse près de dix fois le bleu. Un modèle qui les traiterait à
+    // égalité — la clarté TSL, par exemple — inverserait ces deux-là.
+    expect(luminance("#00FF00")).toBeGreaterThan(luminance("#0000FF"));
+    expect(luminance("#FFFFFF")).toBeCloseTo(1, 5);
+    expect(luminance("#000000")).toBeCloseTo(0, 5);
+  });
+
+  it("le contraste va de 1 à 21 et se lit dans les deux sens", () => {
+    expect(contraste("#000000", "#FFFFFF")).toBeCloseTo(21, 1);
+    expect(contraste("#123456", "#123456")).toBeCloseTo(1, 5);
+    expect(contraste("#2177D1", "#FFFFFF")).toBeCloseTo(contraste("#FFFFFF", "#2177D1"), 10);
+  });
+
+  it("choisit l'encre lisible, y compris là où l'intuition se trompe", () => {
+    // Le jaune est la contre-épreuve : vif, donc perçu comme « fort », mais sa
+    // luminance est presque celle du blanc. Il réclame du noir.
+    expect(encreSur("#FFE500")).toBe("#0B1220");
+    expect(encreSur("#0B1220")).toBe("#FFFFFF");
+    expect(encreSur("#6366F1")).toBe("#FFFFFF");
+  });
+
+  it("l'encre retenue ne descend jamais sous 4,3:1", () => {
+    // 4,33 est le pire cas réel, relevé en balayant tout le cube sRGB : il
+    // tombe sur les verts moyens, vers #4B8746. Aucune encre unie ne fait
+    // mieux sur un fond de luminance médiane — c'est une propriété de la
+    // couleur, pas un défaut. Assez pour du texte large (seuil AA à 3:1),
+    // insuffisant pour du texte courant, d'où la mise en garde sur `encreSur`.
+    const couleurs = ["#6366F1", "#FFE500", "#00D492", "#EA0B27", "#2177D1",
+                      "#808080", "#FFFFFF", "#000000", "#FF8904", "#7A5C3E",
+                      "#4B8746"];
+    for (const c of couleurs) {
+      expect(contraste(c, encreSur(c))).toBeGreaterThanOrEqual(4.3);
+    }
+  });
+
+  it("le pire cas connu reste au-dessus du seuil du texte large", () => {
+    expect(contraste("#4B8746", encreSur("#4B8746"))).toBeGreaterThanOrEqual(3);
   });
 });

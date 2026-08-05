@@ -1,9 +1,10 @@
 "use client";
 import { useRef, useState } from "react";
-import type { ReactNode } from "react";
 import { JETONS, RAYONS, rayonVignette } from "@/lib/palette";
 import { FONT } from "@/lib/typography";
 import { enTetesAuth } from "@/lib/session";
+import { encreSur } from "@/lib/couleur";
+import { initiale } from "@/lib/initiale";
 
 /**
  * L'image de profil d'un portefeuille, et de quoi la changer.
@@ -13,20 +14,29 @@ import { enTetesAuth } from "@/lib/session";
  * qu'on désigne du regard au même endroit ; leur donner deux silhouettes
  * différentes ferait croire à deux natures différentes.
  *
- * Sans image, la vignette laisse voir ce qu'on lui passe en `children` — les
- * logos empilés du portefeuille. Ce repli en dit plus qu'un marque-place : il
- * montre le contenu au lieu d'annoncer un vide.
+ * Sans image, l'initiale du nom sur la couleur du portefeuille. Elle est
+ * redondante avec le nom affiché juste à côté, et c'est vrai de tous les
+ * avatars : leur rôle n'est pas d'informer mais d'occuper un emplacement
+ * stable et reconnaissable. C'est précisément ce qui manquait au repli
+ * précédent — les logos empilés des actifs. Ils montraient le contenu, mais
+ * ne ressemblaient pas à un emplacement d'image, si bien que personne ne
+ * pouvait deviner qu'on pouvait en poser une.
  *
- * D'où les deux gabarits ci-dessous plutôt qu'un seul. L'image occupe un carré
- * fixe ; les logos empilés font trois fois cette largeur et seraient rognés
- * s'ils héritaient de la même boîte. Le survol s'ajuste à ce que la boîte
- * contient au lieu d'imposer une taille aux deux.
+ * L'encre de l'initiale se calcule au lieu de se choisir : les couleurs de
+ * portefeuille sont libres, et entre un jaune et un bleu marine l'une réclame
+ * du noir et l'autre du blanc. Voir `encreSur`.
  */
 
 const API = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 
 /** Ce que l'API renvoie et que l'appelant doit réinjecter dans son état. */
-export type PortefeuilleImage = { id: string; image_url?: string | null };
+export type PortefeuilleImage = {
+  id: string; name: string; color?: string | null; image_url?: string | null;
+};
+
+/** La couleur par défaut de l'API, reprise ici pour les portefeuilles anciens. */
+const COULEUR_PAR_DEFAUT = "#6366F1";
+
 
 function Appareil() {
   return (
@@ -39,14 +49,12 @@ function Appareil() {
 }
 
 export default function ImagePortefeuille<T extends PortefeuilleImage>({
-  portefeuille, taille = 44, onChange, children,
+  portefeuille, taille = 44, onChange,
 }: {
   portefeuille: T;
   taille?: number;
   /** Reçoit le portefeuille tel que l'API le renvoie après écriture. */
   onChange: (p: T) => void;
-  /** Affiché à défaut d'image. */
-  children?: ReactNode;
 }) {
   const champ = useRef<HTMLInputElement>(null);
   const [survol, setSurvol] = useState(false);
@@ -55,6 +63,7 @@ export default function ImagePortefeuille<T extends PortefeuilleImage>({
 
   const rayon = rayonVignette(taille);
   const image = portefeuille.image_url;
+  const fond = portefeuille.color || COULEUR_PAR_DEFAUT;
 
   async function appeler(methode: "POST" | "DELETE", corps?: FormData) {
     setEnvoi(true); setErreur(null);
@@ -98,12 +107,16 @@ export default function ImagePortefeuille<T extends PortefeuilleImage>({
       <button type="button" onClick={() => champ.current?.click()} disabled={envoi}
         title={libelle} aria-label={libelle}
         style={{
-          // Carré imposé pour l'image, ajusté au contenu pour le repli.
-          ...(image ? { width: taille, height: taille, overflow: "hidden" } : {}),
+          width: taille, height: taille, overflow: "hidden",
           borderRadius: rayon, padding: 0, border: "none",
-          background: image ? JETONS.carteCreuse : "transparent",
+          background: image ? JETONS.carteCreuse : fond,
+          color: image ? undefined : encreSur(fond),
           cursor: envoi ? "progress" : "pointer", position: "relative",
           display: "flex", alignItems: "center", justifyContent: "center",
+          fontFamily: FONT, fontWeight: 700, letterSpacing: "-0.02em",
+          // Proportionnel : la vignette est réutilisable à d'autres tailles, et
+          // une taille de texte fixe s'y perdrait ou y déborderait.
+          fontSize: Math.round(taille * 0.45), lineHeight: 1,
           opacity: envoi ? 0.6 : 1, transition: "opacity 150ms",
         }}>
         {image
@@ -111,18 +124,13 @@ export default function ImagePortefeuille<T extends PortefeuilleImage>({
           // eslint-disable-next-line @next/next/no-img-element
           ? <img src={`${API}${image}`} alt=""
               style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
-          : children}
+          : <span aria-hidden="true">{initiale(portefeuille.name)}</span>}
 
         {survol && !envoi && (
           <span style={{
             position: "absolute", inset: 0, borderRadius: rayon,
             display: "flex", alignItems: "center", justifyContent: "center",
             background: "rgba(0,0,0,0.55)", color: "#FFFFFF",
-            // Les logos empilés sont des éléments flex, et `z-index` s'applique
-            // aux éléments flex sans qu'ils aient besoin d'être positionnés.
-            // Ils montent jusqu'à 4 ; un voile laissé à `auto` se peignait
-            // dessous, présent dans le DOM et invisible à l'écran.
-            zIndex: 10,
           }}>
             <Appareil />
           </span>

@@ -112,6 +112,53 @@ export function pourFond(hex: string, clair: boolean): string {
 }
 
 /**
+ * La luminance relative, au sens WCAG.
+ *
+ * Ce n'est pas la clarté du modèle TSL utilisé plus haut : celle-ci pondère
+ * les canaux selon la sensibilité de l'œil — le vert compte pour sept fois le
+ * bleu — et c'est elle, pas l'autre, qui décide si un texte se lit.
+ */
+export function luminance(hex: string): number {
+  const lineaire = (v: number) => {
+    const c = v / 255;
+    return c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
+  };
+  const [r, g, b] = hexVersRvb(hex).map(lineaire);
+  return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+}
+
+/** Le rapport de contraste entre deux couleurs, de 1 à 21. */
+export function contraste(a: string, b: string): number {
+  const [x, y] = [luminance(a), luminance(b)].sort((p, q) => q - p);
+  return (x + 0.05) / (y + 0.05);
+}
+
+/** Encre presque noire plutôt que noire : le noir pur pique sur une couleur vive. */
+const ENCRE_SOMBRE = "#0B1220";
+
+/**
+ * L'encre à poser sur un fond coloré.
+ *
+ * Le choix se fait au calcul et non à l'œil : entre un jaune et un bleu marine
+ * de même « intensité » apparente, l'un demande du noir et l'autre du blanc, et
+ * l'intuition se trompe régulièrement au milieu de la plage. On retient
+ * simplement celle des deux encres qui contraste le plus.
+ *
+ * Le pire cas vaut **4,33:1**, mesuré en balayant tout le cube sRGB — il tombe
+ * sur les verts moyens, autour de #4B8746. C'est une propriété des couleurs de
+ * luminance médiane, pas un défaut réparable : aucune encre unie ne fait mieux
+ * sur ces fonds-là, et seul un changement du fond y remédierait. Cette borne
+ * suffit au texte large — le seuil AA y est de 3:1 — mais pas au texte courant,
+ * qui demande 4,5. À réserver donc aux capitales d'avatar, aux pastilles et aux
+ * étiquettes de bonne taille.
+ */
+export function encreSur(fond: string): string {
+  return contraste(fond, "#FFFFFF") >= contraste(fond, ENCRE_SOMBRE)
+    ? "#FFFFFF"
+    : ENCRE_SOMBRE;
+}
+
+/**
  * Poids d'un groupe de pixels dans le choix de la couleur dominante.
  *
  * Compter les pixels seuls fait gagner les grandes plages ternes : le pelage

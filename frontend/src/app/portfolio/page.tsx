@@ -711,39 +711,13 @@ function PortfolioPageInner() {
             Les logos empilés montrent en plus ce qu'il contient. */}
         {portfolio && (
           <div style={{ display: "flex", alignItems: "center", gap: 11, minWidth: 0, flexShrink: 0 }}>
-            {/* L'image de profil prend la place des logos empilés lorsqu'elle
-                existe, et les laisse voir sinon. Elle nomme le portefeuille,
-                eux montrent son contenu : quand les deux sont possibles,
-                l'identité passe devant. */}
-            <ImagePortefeuille portefeuille={portfolio} onChange={setPortfolio}>
-            <div style={{ display: "flex", alignItems: "center" }}>
-              {enriched.slice(0, 4).map((a, i) => (
-                <div key={a.ticker} title={a.ticker} style={{
-                  width: 30, height: 30, borderRadius: "50%", overflow: "hidden",
-                  // Chevauchement vers la gauche, le premier logo devant : sans
-                  // l'ordre inverse, chaque logo masquait le précédent.
-                  marginLeft: i ? -10 : 0, zIndex: 4 - i,
-                  border: `2px solid ${CLAIR.fond}`,
-                  background: CLAIR.carteCreuse, flexShrink: 0,
-                  display: "flex", alignItems: "center", justifyContent: "center",
-                }}>
-                  <AssetLogo ticker={a.ticker} type={a.type || "EQUITY"} size={26} radius={13}
-                    fallbackBg={CLAIR.carteCreuse} fallbackBorder="transparent"
-                    fallbackTextColor={CLAIR.texteSecondaire} bare />
-                </div>
-              ))}
-              {enriched.length > 4 && (
-                <div style={{
-                  width: 30, height: 30, borderRadius: "50%", marginLeft: -10, zIndex: 0,
-                  border: `2px solid ${CLAIR.fond}`, background: CLAIR.carteCreuse,
-                  display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0,
-                  fontSize: 10, fontWeight: 700, color: CLAIR.texteSecondaire, fontFamily: FONT,
-                }}>
-                  +{enriched.length - 4}
-                </div>
-              )}
-            </div>
-            </ImagePortefeuille>
+            {/* L'identité du portefeuille : son image, ou l'initiale de son nom
+                sur sa couleur à défaut. Les logos empilés des actifs qui
+                occupaient cette place montraient le contenu, mais ne
+                ressemblaient pas à un emplacement d'image — personne ne
+                pouvait deviner qu'on pouvait en poser une. Le contenu reste
+                visible plus bas, dans les cartes d'actifs. */}
+            <ImagePortefeuille portefeuille={portfolio} onChange={setPortfolio} />
             <div style={{ minWidth: 0 }}>
               <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
                 <span style={{ width: 7, height: 7, borderRadius: RAYONS.plein, background: portfolio.color || "var(--nv-accent)", flexShrink: 0 }} />
