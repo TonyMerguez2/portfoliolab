@@ -22,6 +22,7 @@ import type { Period } from "@/lib/chart/portfolioCurve";
 import { JETONS, CLAIR, RAYON, couleurMontant, RAYONS, styleCadreExterieur, styleCarteInterieure } from "@/lib/palette";
 import { hexVersRvb, rvbVersHex, rvbVersTsl, tslVersRvb } from "@/lib/couleur";
 import { resoudreJeton } from "@/lib/theme";
+import { useClignotement, styleClignotement } from "@/lib/clignotement";
 import Cadre from "@/components/ui/Cadre";
 import ImagePortefeuille from "@/components/portfolio/ImagePortefeuille";
 
@@ -435,6 +436,8 @@ function PortfolioPageInner() {
   }, [portfolio?.id, surTransactions, period, txRefreshKey]);
 
   const valeurTotale  = surTransactions ? positions!.total_value    : (portfolio?.total_value ?? null);
+  /** Sens de la dernière variation de la valeur totale, pour le clignotement. */
+  const clignoteValeur = useClignotement(valeurTotale);
   const prixDeRevient = surTransactions ? positions!.total_invested : (portfolio?.cost_basis  ?? null);
 
   const isFirstLoad = useRef(true);
@@ -748,6 +751,12 @@ function PortfolioPageInner() {
         </button>
       </span>
     </div>
+    {/* Les cours sont relus toutes les quinze secondes ; le clignotement dit
+          dans quel sens la valeur vient de bouger. Sans lui, la seule trace
+          d'une mise à jour est un chiffre qui change au milieu d'une page
+          dense, ce que personne ne voit. `tabular-nums` évite que les
+          chiffres se déplacent latéralement à chaque rafraîchissement, ce qui
+          attirerait l'œil pour une mauvaise raison. */}
     {editingValue ? (
       <div style={{ display: "flex", alignItems: "center", gap: 5, marginBottom: 4 }}>
         <input autoFocus value={valueInput} onChange={e => setValueInput(e.target.value)}
@@ -757,7 +766,11 @@ function PortfolioPageInner() {
         <span style={{ fontSize: 11, color: CLAIR.texteAttenue }}>€</span>
       </div>
     ) : (
-      <div style={{ fontSize: 32, fontWeight: 600, fontFamily: FONT, color: CLAIR.texte, letterSpacing: "-0.02em", lineHeight: 1, marginBottom: 5 }}>
+      <div style={{
+        fontSize: 32, fontWeight: 600, fontFamily: FONT, letterSpacing: "-0.02em",
+        lineHeight: 1, marginBottom: 5, fontVariantNumeric: "tabular-nums",
+        ...styleClignotement(masque ? null : clignoteValeur, CLAIR.texte),
+      }}>
         {masque
           ? "•••• €"
           : valeurTotale != null

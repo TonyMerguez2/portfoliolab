@@ -414,6 +414,31 @@
   background: rgba(15,23,42,0.18);
 }
 
+/* ── Clignotement d'un cours ───────────────────────────────────────────────
+   La couleur marque le sens de la variation, puis revient. Elle ne reste pas :
+   un vert permanent dirait « cette valeur est bonne » là où on veut dire
+   « cette valeur vient de monter ».
+
+   L'arrivée se fait sur --nv-repos, que l'appelant pose à la couleur normale
+   du nombre. Elle diffère d'un endroit à l'autre — blanc cassé sur une carte
+   d'actif colorée, encre du thème dans le bandeau — et une valeur écrite en
+   dur ici en repeindrait un des deux. Voir lib/clignotement.
+   ─────────────────────────────────────────────────────────────────────────── */
+@keyframes nv-clignote-hausse {
+  0%, 80% { color: var(--nv-positif); }
+  100%    { color: var(--nv-repos, inherit); }
+}
+@keyframes nv-clignote-baisse {
+  0%, 80% { color: var(--nv-negatif); }
+  100%    { color: var(--nv-repos, inherit); }
+}
+
+/* Le clignotement est un signal de mouvement, pas une information : sans lui,
+   le chiffre reste lisible et à jour. */
+@media (prefers-reduced-motion: reduce) {
+  [style*="nv-clignote"] { animation: none !important; }
+}
+
 /* ── Fond à points ─────────────────────────────────────────────────────────
    Deux trames identiques superposées : l'une terne, visible partout, l'autre
    vive mais masquée sauf autour du curseur. Le masque est un dégradé radial

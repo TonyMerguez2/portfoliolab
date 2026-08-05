@@ -9,6 +9,7 @@ import { arrange, assetClass, type GridAsset, type SortKey } from "@/lib/portfol
 import { FONT, NUM } from "@/lib/typography";
 import { CLAIR, RAYONS } from "@/lib/palette";
 import Segments from "@/components/ui/Segments";
+import { useClignotement, styleClignotement } from "@/lib/clignotement";
 
 export type { GridAsset, SortKey };
 
@@ -30,6 +31,26 @@ export type { GridAsset, SortKey };
 const TRIS: Record<SortKey, string> = {
   poids: "Poids", perf: "Performance", valeur: "Valeur", alpha: "Nom",
 };
+
+/**
+ * Le cours d'une ligne, qui marque le sens de sa dernière variation.
+ *
+ * Composant à part, et non quelques lignes dans la boucle : le clignotement
+ * garde une mémoire propre à chaque actif, et un crochet ne s'appelle pas
+ * dans un `map`. Deux cartes qui partageraient cet état clignoteraient
+ * ensemble à chaque mouvement de l'une d'elles.
+ */
+function Cours({ prix }: { prix: number | null }) {
+  const sens = useClignotement(prix);
+  return (
+    <div style={{
+      ...NUM, fontSize: 20, fontWeight: 700, lineHeight: 1.1,
+      ...styleClignotement(sens, "rgba(255,255,255,0.94)"),
+    }}>
+      {prix != null ? eur(prix) : "—"}
+    </div>
+  );
+}
 
 const eur = (v: number, dec = 2) =>
   v.toLocaleString("fr-FR", { minimumFractionDigits: dec, maximumFractionDigits: dec }) + " €";
@@ -228,9 +249,7 @@ export default function AssetGrid({
 
               {/* Cours et variation */}
               <div style={{ marginTop: 10 }}>
-                <div style={{ ...NUM, fontSize: 20, fontWeight: 700, color: "rgba(255,255,255,0.94)", lineHeight: 1.1 }}>
-                  {a.price != null ? eur(a.price) : "—"}
-                </div>
+                <Cours prix={a.price ?? null} />
                 {/* Ce que la ligne a rapporté depuis son achat, et non la
                     variation du cours sur la période affichée. Sur la fenêtre
                     Max, un ETF né en 2021 annonçait « +520 % · +2 992 € » sur

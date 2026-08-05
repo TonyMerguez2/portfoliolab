@@ -14,6 +14,7 @@ import {
 const GrowthChart = dynamic(() => import("@/components/charts/GrowthChart"), { ssr: false });
 const SubChart    = dynamic(() => import("@/components/charts/SubChart"),    { ssr: false });
 import AssetLogo from "@/components/AssetLogo";
+import { useClignotement, styleClignotement } from "@/lib/clignotement";
 import { pourFond } from "@/lib/couleur";
 import { useModeTheme } from "@/lib/theme";
 import { styleCadreExterieur, styleCarteInterieure } from "@/lib/palette";
@@ -524,23 +525,12 @@ function ChartContent() {
   const [rawBenchmarkGrowth, setRawBenchmarkGrowth] = useState<{date:string;value:number}[]>([]);
   const [drawdownData, setDrawdownData] = useState<{date:string;drawdown:number;drawdown_eur:number}[]>([]);
   const [currentPrice, setCurrentPrice] = useState<{price:number;change:number}|null>(null);
-  const [priceFlash, setPriceFlash] = useState<"up"|"down"|null>(null);
-  const prevPriceRef = useRef<number|null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string|null>(null);
   const [investedAmount, setInvestedAmount] = useState(10000);
   const [wsLive, setWsLive] = useState(false);
 
-  useEffect(() => {
-    if (currentPrice == null) return;
-    const prev = prevPriceRef.current;
-    prevPriceRef.current = currentPrice.price;
-    if (prev !== null && currentPrice.price !== prev) {
-      setPriceFlash(currentPrice.price > prev ? "up" : "down");
-      const t = setTimeout(() => setPriceFlash(null), 900);
-      return () => clearTimeout(t);
-    }
-  }, [currentPrice?.price]); // eslint-disable-line react-hooks/exhaustive-deps
+  const priceFlash = useClignotement(currentPrice?.price);
 
   const [quote, setQuote] = useState<{day_high?:number;day_low?:number;open?:number;prev_close?:number;year_high?:number;year_low?:number;volume?:number;avg_volume?:number;market_cap?:number;currency?:string;global_rank?:number}|null>(null);
   const [isFavorite, setIsFavorite] = useState(() => {
@@ -594,18 +584,7 @@ function ChartContent() {
   const [customBmLoading, setCustomBmLoading] = useState(false);
   const [bmCurrentPrice,  setBmCurrentPrice]  = useState<{price:number;change:number}|null>(null);
   const [bmQuote,         setBmQuote]         = useState<{day_high?:number;day_low?:number;open?:number;prev_close?:number;year_high?:number;year_low?:number;volume?:number;avg_volume?:number;market_cap?:number;currency?:string;global_rank?:number}|null>(null);
-  const [bmPriceFlash, setBmPriceFlash] = useState<"up"|"down"|null>(null);
-  const prevBmPriceRef = useRef<number|null>(null);
-  useEffect(() => {
-    if (bmCurrentPrice == null) return;
-    const prev = prevBmPriceRef.current;
-    prevBmPriceRef.current = bmCurrentPrice.price;
-    if (prev !== null && bmCurrentPrice.price !== prev) {
-      setBmPriceFlash(bmCurrentPrice.price > prev ? "up" : "down");
-      const t = setTimeout(() => setBmPriceFlash(null), 900);
-      return () => clearTimeout(t);
-    }
-  }, [bmCurrentPrice?.price]); // eslint-disable-line react-hooks/exhaustive-deps
+  const bmPriceFlash = useClignotement(bmCurrentPrice?.price);
   const [showBmSearch,    setShowBmSearch]    = useState(false);
   const [bmQuery,         setBmQuery]         = useState("");
   const [similarLoading, setSimilarLoading] = useState(false);
@@ -1190,8 +1169,6 @@ function ChartContent() {
               <style dangerouslySetInnerHTML={{ __html: `
                 @keyframes hdr-glow-up{0%,100%{box-shadow:0 0 6px rgba(var(--nv-positif-rvb), .15)}50%{box-shadow:0 0 14px rgba(var(--nv-positif-rvb), .35)}}
                 @keyframes hdr-glow-dn{0%,100%{box-shadow:0 0 6px rgba(var(--nv-negatif-rvb), .15)}50%{box-shadow:0 0 14px rgba(var(--nv-negatif-rvb), .35)}}
-                @keyframes price-flash-up{0%{color:var(--nv-positif)}80%{color:var(--nv-positif)}100%{color:var(--nv-texte)}}
-                @keyframes price-flash-dn{0%{color:var(--nv-negatif)}80%{color:var(--nv-negatif)}100%{color:var(--nv-texte)}}
                 @keyframes hdr-pulse{0%,100%{box-shadow:0 0 0 0 rgba(var(--nv-positif-rvb), .7)}60%{box-shadow:0 0 0 5px rgba(var(--nv-positif-rvb), 0)}}
                 @keyframes hdr-pulse-live{0%,100%{box-shadow:0 0 0 0 rgba(var(--nv-positif-rvb), .9)}50%{box-shadow:0 0 0 6px rgba(var(--nv-positif-rvb), 0)}}
                 .chart-action-btn{width:30px!important;height:30px!important;box-sizing:border-box!important;border-width:1px!important;border-style:solid!important;border-radius:9px!important;box-shadow:0 2px 7px rgba(0,0,0,.22)!important;transition:transform .16s ease,filter .16s ease,background .16s ease,border-color .16s ease!important}
@@ -1298,7 +1275,7 @@ function ChartContent() {
 
                           <div className="asset-hero-section asset-hero-price">
                             <div style={{ display:"flex", alignItems:"baseline", gap:7, whiteSpace:"nowrap" }}>
-                              <span style={{ fontSize:34, fontWeight:650, color:"var(--nv-texte)", letterSpacing:"-0.055em", fontVariantNumeric:"tabular-nums", lineHeight:1, animation:priceFlash === "up" ? "price-flash-up 0.9s ease forwards" : priceFlash === "down" ? "price-flash-dn 0.9s ease forwards" : "none" }}>
+                              <span style={{ fontSize:34, fontWeight:650, letterSpacing:"-0.055em", fontVariantNumeric:"tabular-nums", lineHeight:1, ...styleClignotement(priceFlash, "var(--nv-texte)") }}>
                                 {currentPrice ? fmtNum(currentPrice.price) : "—"}
                               </span>
                               {quote?.currency && <span style={{ fontSize:10, fontWeight:500, color:"rgba(var(--nv-encre-rvb), 0.5)", letterSpacing:"0.04em" }}>{quote.currency}</span>}
@@ -1422,7 +1399,7 @@ function ChartContent() {
 
                                 <div className="asset-hero-section asset-hero-price">
                                   <div style={{ display:"flex", alignItems:"baseline", gap:7, whiteSpace:"nowrap" }}>
-                                    <span style={{ fontSize:34, fontWeight:650, color:"var(--nv-texte)", letterSpacing:"-0.055em", fontVariantNumeric:"tabular-nums", lineHeight:1, animation:bmPriceFlash === "up" ? "price-flash-up 0.9s ease forwards" : bmPriceFlash === "down" ? "price-flash-dn 0.9s ease forwards" : "none" }}>
+                                    <span style={{ fontSize:34, fontWeight:650, letterSpacing:"-0.055em", fontVariantNumeric:"tabular-nums", lineHeight:1, ...styleClignotement(bmPriceFlash, "var(--nv-texte)") }}>
                                       {bmCurrentPrice ? fmtNum(bmCurrentPrice.price) : "—"}
                                     </span>
                                     <span style={{ fontSize:10, fontWeight:500, color:"rgba(var(--nv-encre-rvb), 0.5)", letterSpacing:"0.04em" }}>{bmCurrency}</span>
