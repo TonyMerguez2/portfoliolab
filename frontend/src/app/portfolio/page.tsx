@@ -479,8 +479,8 @@ function PortfolioPageInner() {
       setSparkHistory({});
     }
 
-    const fetchPrices = (isInit = false) =>
-      fetch(`http://localhost:8000/api/v1/prices?tickers=${encodeURIComponent(tickers)}&period=${PERIOD_MAP[period]}&depuis=${encodeURIComponent(depuisParTicker)}`)
+    const fetchPrices = () =>
+      fetch(`http://localhost:8000/api/v1/prices?tickers=${encodeURIComponent(tickers)}&period=${PERIOD_MAP[period]}`)
         .then(r => r.json())
         .then((list: PriceData[]) => {
           const map: Record<string, PriceData> = {};
@@ -491,22 +491,23 @@ function PortfolioPageInner() {
           // d'un montant qui ne bougeait plus.
           setPrices(map);
 
+          // Ce tour n'apporte que le prix courant : la série de fond vient de
+          // l'appel voisin, et ne dépend pas de la période. On lui ajoute le
+          // dernier prix, qui bouge plus vite que le pas historique.
           const newUpdatedAt: Record<string, number> = {};
           setSparkHistory(prev => {
             const next = { ...prev };
             list.forEach(p => {
               if (p.price == null) return;
-              // La série du backend fait foi ; entre deux tours on lui ajoute
-              // le prix courant, qui bouge plus vite que le pas de 15 minutes.
-              if (!next[p.symbol] || isInit) {
-                next[p.symbol] = p.series?.length ? p.series : [p.price];
+              const serie = next[p.symbol];
+              if (!serie) {
+                next[p.symbol] = [p.price];
                 newUpdatedAt[p.symbol] = Date.now();
-              } else {
-                const lastPrice = next[p.symbol][next[p.symbol].length - 1];
-                if (Math.abs(p.price - lastPrice) > 0.0001) {
-                  next[p.symbol] = [...next[p.symbol], p.price].slice(-60);
-                  newUpdatedAt[p.symbol] = Date.now(); // prix réellement changé
-                }
+                return;
+              }
+              if (Math.abs(p.price - serie[serie.length - 1]) > 0.0001) {
+                next[p.symbol] = [...serie, p.price].slice(-60);
+                newUpdatedAt[p.symbol] = Date.now(); // prix réellement changé
               }
             });
             return next;
@@ -516,11 +517,43 @@ function PortfolioPageInner() {
         })
         .catch(() => {});
 
-    fetchPrices(true).finally(() => { setLoading(false); isFirstLoad.current = false; });
+    fetchPrices().finally(() => { setLoading(false); isFirstLoad.current = false; });
 
-    const interval = setInterval(() => fetchPrices(false), 15000);
+    const interval = setInterval(() => fetchPrices(), 15000);
     return () => clearInterval(interval);
-  }, [tickersSuivis, period, depuisParTicker]);
+  }, [tickersSuivis, period]);
+
+  /**
+   * La série de fond des courbes de carte : depuis le premier achat, toujours.
+   *
+   * Elle ne suit pas la période, contrairement au graphique du haut. Une carte
+   * porte un gain calculé sur le prix de revient, donc figé sur toute la
+   * détention ; une courbe qui, elle, se recadrait sur 24 h faisait raconter
+   * deux histoires différentes au même rectangle — le tracé montrait la
+   * journée, le chiffre à côté montrait six mois.
+   *
+   * D'où un appel distinct de celui des prix, et bien plus rare : cette série
+   * ne bouge qu'au changement de portefeuille ou d'achat, quand les prix sont
+   * relus tous les quarts de minute.
+   */
+  useEffect(() => {
+    if (!tickersSuivis.length) return;
+    let annule = false;
+    const tickers = tickersSuivis.join(",");
+    fetch(`http://localhost:8000/api/v1/prices?tickers=${encodeURIComponent(tickers)}`
+        + `&period=max&depuis=${encodeURIComponent(depuisParTicker)}`)
+      .then(r => r.json())
+      .then((list: PriceData[]) => {
+        if (annule) return;
+        setSparkHistory(prev => {
+          const next = { ...prev };
+          list.forEach(p => { if (p.series?.length) next[p.symbol] = p.series; });
+          return next;
+        });
+      })
+      .catch(() => {});
+    return () => { annule = true; };
+  }, [tickersSuivis, depuisParTicker]);
 
   // Benchmark SPY — fetch séparé, silencieux en cas d'échec
   useEffect(() => {
