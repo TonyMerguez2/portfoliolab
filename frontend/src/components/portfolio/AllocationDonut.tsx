@@ -114,6 +114,24 @@ export default function AllocationDonut({
                 surface éclairée d'un même côté, au lieu de parts éclairées
                 chacune pour soi. */}
             <defs>
+              {/* Le liseré des cartes, transposé.
+                  `.novac-tile::before` pose un trait d'un pixel en dégradé de
+                  la couleur de la carte, jusqu'à 44 % — c'est ce bord lumineux
+                  qui fait lire la tuile comme éclairée, bien plus que le lavis
+                  lui-même. Sans lui, les parts paraissaient ternes à côté des
+                  cartes alors que leur remplissage était pourtant plus clair :
+                  ce qu'on lisait n'était pas la surface, c'était l'arête. */}
+              {arcs.map(a => (
+                <linearGradient key={`b-${a.key}`} id={`bord-${idSvg}-${a.key}`}
+                  gradientUnits="userSpaceOnUse" x1={0} y1={0} x2={SIZE} y2={SIZE}>
+                  <stop offset="0%"   stopColor={a.color} stopOpacity={0.44} />
+                  <stop offset="24%"  stopColor={a.color} stopOpacity={0.36} />
+                  <stop offset="44%"  stopColor={a.color} stopOpacity={0.17} />
+                  <stop offset="54%"  stopColor={a.color} stopOpacity={0.10} />
+                  <stop offset="68%"  stopColor={a.color} stopOpacity={0.15} />
+                  <stop offset="100%" stopColor={a.color} stopOpacity={0.40} />
+                </linearGradient>
+              ))}
               {arcs.map(a => (
                 <radialGradient key={a.key} id={`part-${idSvg}-${a.key}`}
                   gradientUnits="userSpaceOnUse"
@@ -152,16 +170,24 @@ export default function AllocationDonut({
                 flotter sur le panneau. */}
             <circle cx={SIZE / 2} cy={SIZE / 2} r={SIZE / 2} fill="rgba(2,10,24,0.38)" />
             {arcs.map(a => (
-              <path key={a.key} d={a.path} fill={`url(#part-${idSvg}-${a.key})`}
-                // Un trait de la couleur du panneau sépare deux parts voisines.
-                // L'écart avait été supprimé quand le camembert est devenu
-                // plein ; il redevient nécessaire dès lors que les parts sont
-                // translucides, une frontière de teinte ne suffisant plus.
-                stroke="var(--nv-carte)" strokeWidth={1.5}
+              <g key={a.key}
                 opacity={hover && hover !== a.key ? 0.32 : 1}
                 style={{ transition: "opacity 140ms", cursor: "default" }}
                 onMouseEnter={() => setHover(a.key)}
-                onMouseLeave={() => setHover(null)} />
+                onMouseLeave={() => setHover(null)}>
+                {/* Le trait sombre sépare deux parts voisines — l'équivalent
+                    du vide qui entoure une carte sur la page. L'écart avait été
+                    supprimé quand le camembert est devenu plein ; il redevient
+                    nécessaire dès lors que les parts sont translucides, une
+                    frontière de teinte ne suffisant plus. */}
+                <path d={a.path} fill={`url(#part-${idSvg}-${a.key})`}
+                  stroke="var(--nv-carte)" strokeWidth={2} />
+                {/* Puis l'arête lumineuse, posée à l'intérieur du trait sombre
+                    pour qu'elle borde la part et non le vide. */}
+                <path d={a.path} fill="none"
+                  stroke={`url(#bord-${idSvg}-${a.key})`} strokeWidth={1.1}
+                  pointerEvents="none" />
+              </g>
             ))}
             {/* Par-dessus les parts, et sans capter la souris : il éclaire, il
                 ne se survole pas. */}
