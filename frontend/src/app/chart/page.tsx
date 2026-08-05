@@ -18,6 +18,10 @@ import ChiffresRoulants from "@/components/ui/ChiffresRoulants";
 import { useClignotement, styleClignotement } from "@/lib/clignotement";
 import { CADENCE_COURS_MS, LIBELLE_CADENCE } from "@/lib/cadence";
 import { pourFond } from "@/lib/couleur";
+import {
+  getCutoffDate, computeDrawdownFromPrices, toDailyClose, computeRollingVol,
+  computeRSI, computeDistribution, computeRollingCorrelation, computeRollingSharpe,
+} from "@/lib/indicateurs";
 import { useModeTheme } from "@/lib/theme";
 import { styleCadreExterieur, styleCarteInterieure } from "@/lib/palette";
 
@@ -67,142 +71,6 @@ function formatComparisonPerformance(value: number | null): string {
   return `${sign}${value.toFixed(1)}%`;
 }
 
-function getCutoffDate(days: number): string {
-  const d = new Date();
-  d.setDate(d.getDate() - days);
-  return d.toISOString().slice(0, 10);
-}
-
-function computeDrawdownFromPrices(data: {date:string;value:number}[]): {date:string;value:number}[] {
-  let peak = -Infinity;
-  return data.map(p => {
-    if (p.value > peak) peak = p.value;
-    const dd = peak > 0 ? ((p.value - peak) / peak) * 100 : 0;
-    return { date: p.date, value: dd };
-  });
-}
-
-function toDailyClose(data: {date:string;value:number;high?:number;low?:number}[]): {date:string;value:number;high?:number;low?:number}[] {
-  const byDate = new Map<string, {date:string;value:number;high:number;low:number}>();
-  for (const p of data) {
-    const d = p.date.slice(0, 10);
-    if (byDate.has(d)) {
-      const ex = byDate.get(d)!;
-      byDate.set(d, { date: d, value: p.value, high: Math.max(ex.high, p.high ?? p.value), low: Math.min(ex.low, p.low ?? p.value) });
-    } else {
-      byDate.set(d, { date: d, value: p.value, high: p.high ?? p.value, low: p.low ?? p.value });
-    }
-  }
-  return Array.from(byDate.values()).sort((a, b) => a.date.localeCompare(b.date));
-}
-
-function computeRollingVol(data: {date:string;value:number}[], window=30): {date:string;vol:number}[] {
-  const result: {date:string;vol:number}[] = [];
-  for (let i = window; i < data.length; i++) {
-    const slice = data.slice(i - window, i + 1);
-    const lr: number[] = [];
-    for (let j = 1; j < slice.length; j++) {
-      if (slice[j-1].value > 0 && slice[j].value > 0)
-        lr.push(Math.log(slice[j].value / slice[j-1].value));
-    }
-    if (lr.length < 2) continue;
-    const mean = lr.reduce((a,b) => a+b,0) / lr.length;
-    const vari = lr.reduce((a,b) => a+(b-mean)**2,0) / (lr.length-1);
-    result.push({ date: data[i].date, vol: Math.sqrt(vari) * Math.sqrt(252) * 100 });
-  }
-  return result;
-}
-
-function computeRSI(data: {date:string;value:number}[], period=14): {date:string;rsi:number}[] {
-  if (data.length < period + 1) return [];
-  const result: {date:string;rsi:number}[] = [];
-  let avgGain = 0, avgLoss = 0;
-  for (let i = 1; i <= period; i++) {
-    const delta = data[i].value - data[i-1].value;
-    if (delta > 0) avgGain += delta / period;
-    else avgLoss += Math.abs(delta) / period;
-  }
-  for (let i = period; i < data.length; i++) {
-    if (i > period) {
-      const delta = data[i].value - data[i-1].value;
-      avgGain = (avgGain * (period - 1) + Math.max(0,  delta)) / period;
-      avgLoss = (avgLoss * (period - 1) + Math.max(0, -delta)) / period;
-    }
-    const rs = avgLoss === 0 ? 100 : avgGain / avgLoss;
-    result.push({ date: data[i].date, rsi: 100 - 100 / (1 + rs) });
-  }
-  return result;
-}
-
-function computeDistribution(data: {date:string;value:number}[], bins=24): {label:string;count:number;ret:number}[] {
-  if (data.length < 2) return [];
-  const returns: number[] = [];
-  for (let i = 1; i < data.length; i++) {
-    if (data[i-1].value > 0 && data[i].value > 0)
-      returns.push((data[i].value - data[i-1].value) / data[i-1].value * 100);
-  }
-  if (returns.length === 0) return [];
-  const sorted = [...returns].sort((a,b) => a-b);
-  const p1 = sorted[Math.floor(sorted.length * 0.01)];
-  const p99 = sorted[Math.floor(sorted.length * 0.99)];
-  const clipped = returns.filter(r => r >= p1 && r <= p99);
-  const min = Math.min(...clipped), max = Math.max(...clipped);
-  const binSize = (max - min) / bins || 1;
-  const histo = Array.from({length: bins}, (_, i) => ({
-    label: (min + (i + 0.5) * binSize).toFixed(2) + "%",
-    ret: min + (i + 0.5) * binSize,
-    count: 0,
-  }));
-  clipped.forEach(r => { const idx = Math.min(Math.floor((r - min) / binSize), bins - 1); histo[idx].count++; });
-  return histo;
-}
-
-function computeRollingCorrelation(
-  portfolio: {date:string;value:number}[],
-  benchmark: {date:string;value:number}[],
-  window=90
-): {date:string;corr:number}[] {
-  const bmMap = new Map(benchmark.map(p => [p.date.slice(0,10), p.value]));
-  const aligned: {date:string;pRet:number;bRet:number}[] = [];
-  for (let i = 1; i < portfolio.length; i++) {
-    const d0 = portfolio[i-1].date.slice(0,10), d1 = portfolio[i].date.slice(0,10);
-    const bPrev = bmMap.get(d0), bCurr = bmMap.get(d1);
-    if (bPrev && bCurr && portfolio[i-1].value > 0 && portfolio[i].value > 0)
-      aligned.push({ date: portfolio[i].date,
-        pRet: (portfolio[i].value - portfolio[i-1].value) / portfolio[i-1].value,
-        bRet: (bCurr - bPrev) / bPrev });
-  }
-  const result: {date:string;corr:number}[] = [];
-  for (let i = window; i < aligned.length; i++) {
-    const sl = aligned.slice(i - window, i + 1);
-    const pm = sl.reduce((a,b) => a+b.pRet,0) / sl.length;
-    const bm = sl.reduce((a,b) => a+b.bRet,0) / sl.length;
-    let num=0, pv=0, bv=0;
-    sl.forEach(s => { num+=(s.pRet-pm)*(s.bRet-bm); pv+=(s.pRet-pm)**2; bv+=(s.bRet-bm)**2; });
-    const d = Math.sqrt(pv*bv);
-    if (d > 0) result.push({ date: aligned[i].date, corr: Math.max(-1, Math.min(1, num/d)) });
-  }
-  return result;
-}
-
-function computeRollingSharpe(data: {date:string;value:number}[], window=90, rf=0.035): {date:string;sharpe:number}[] {
-  const rets: {date:string;ret:number}[] = [];
-  for (let i = 1; i < data.length; i++) {
-    if (data[i-1].value > 0 && data[i].value > 0)
-      rets.push({ date: data[i].date, ret: (data[i].value - data[i-1].value) / data[i-1].value });
-  }
-  const dailyRF = rf / 252;
-  const result: {date:string;sharpe:number}[] = [];
-  for (let i = window; i < rets.length; i++) {
-    const sl = rets.slice(i - window, i + 1);
-    const exc = sl.map(r => r.ret - dailyRF);
-    const mean = exc.reduce((a,b) => a+b,0) / exc.length;
-    const vari = exc.reduce((a,b) => a+(b-mean)**2,0) / (exc.length-1);
-    const vol = Math.sqrt(vari);
-    if (vol > 0) result.push({ date: rets[i].date, sharpe: (mean / vol) * Math.sqrt(252) });
-  }
-  return result;
-}
 
 // ── News AI scoring ──────────────────────────────────────────────────────────
 type NewsImpact = "high" | "medium" | "low";
