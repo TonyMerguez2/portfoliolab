@@ -352,8 +352,16 @@ async def get_positions(
 # Repère de comparaison : le S&P 500, via son ETF le plus liquide.
 _BENCHMARK = "SPY"
 
+# `None` vaut « depuis la première transaction ».
+#
+# La clé « 1d » manquait, alors que les deux appelants l'envoient : le bandeau
+# du tableau de bord et le graphique de performance traduisent tous deux « 24h »
+# ainsi. Comme la lecture se faisait par `.get`, la clé absente rendait `None`
+# — c'est-à-dire précisément le sentinelle de « tout l'historique ». Choisir
+# 24h affichait donc le gain depuis l'origine, sous une étiquette qui disait
+# autre chose, et sans rien signaler.
 _HISTO_JOURS = {
-    "7d": 7, "1mo": 31, "3mo": 92, "6mo": 183,
+    "1d": 1, "7d": 7, "1mo": 31, "3mo": 92, "6mo": 183,
     "1y": 366, "3y": 1096, "max": None,
 }
 
@@ -393,7 +401,16 @@ async def get_history(
         return {"points": [], "start": None, "twr_pct": None, "pnl_eur": None, "source": "aucune"}
 
     debut_reel = min(t.executed_at for t in txs).date()
-    jours = _HISTO_JOURS.get(period)
+    # Refuser une période inconnue plutôt que la traiter comme « max ». C'est
+    # ce repli silencieux qui a laissé « 1d » se comporter en « max » sans que
+    # rien ne le dise ; une faute de frappe dans un appel doit se voir.
+    if period not in _HISTO_JOURS:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Période inconnue : « {period} ». Attendu : "
+                   + ", ".join(_HISTO_JOURS),
+        )
+    jours = _HISTO_JOURS[period]
     depart = debut_reel if jours is None else max(debut_reel, date.today() - timedelta(days=jours))
 
     tickers = sorted({t.ticker for t in txs})
@@ -440,6 +457,20 @@ async def get_history(
         cours,
         calendrier,
     )
+
+    # « 24h » se compte d'une séance à l'autre, pas d'un jour calendaire à
+    # l'autre.
+    #
+    # Retrancher un jour à la date du jour tombe un dimanche sur un lundi, un
+    # jour férié la veille d'un pont, ou simplement un jour sans cotation pour
+    # les places concernées. La fenêtre ne retenait alors qu'un seul point, et
+    # une mesure de variation qui n'a qu'une borne ne mesure rien : le gain
+    # sortait à zéro et la comparaison au repère disparaissait de l'écran.
+    #
+    # L'avant-dernier point de la courbe est la veille au sens boursier, qui
+    # est le seul sens utile ici.
+    if period == "1d" and len(resultat["points"]) >= 2:
+        depart = date.fromisoformat(resultat["points"][-2]["date"])
 
     # Le TWR suit la fenêtre demandée ; le P&L reste celui de la détention
     # entière, un « gain sur trois mois » n'ayant pas de sens en euros quand des

@@ -192,18 +192,28 @@ def dietz_sur_fenetre(points: list[dict], depuis: str) -> dict:
     qu'on lit sur son relevé. Elle reste calculée, sous son propre nom.
     """
     fenetre = [p for p in points if p["date"] >= depuis]
-    if len(fenetre) < 2:
+    avant = [p for p in points if p["date"] < depuis]
+    # Deux bornes suffisent, et la veille en est une : une fenêtre d'un seul
+    # point se mesure très bien dès lors qu'on sait ce que valait le
+    # portefeuille juste avant. Exiger deux points *dans* la fenêtre rendait
+    # zéro sur 24 heures — le cas le plus fréquent, puisqu'une journée ne
+    # compte qu'une séance.
+    if not fenetre or (len(fenetre) < 2 and not avant):
         return {"gain_eur": 0.0, "gain_pct": 0.0 if fenetre else None}
 
     # La valeur de départ est celle d'avant la fenêtre ; à défaut, le
     # portefeuille commence ici et vaut zéro.
-    avant = [p for p in points if p["date"] < depuis]
     v_debut = avant[-1]["value"] if avant else 0.0
     v_fin = fenetre[-1]["value"]
 
-    # Les flux du premier jour de la fenêtre en font partie s'il n'y a pas de
-    # veille : sinon le capital initial serait compté comme un gain.
-    flux = fenetre if not avant else fenetre[1:]
+    # Tous les flux de la fenêtre comptent, y compris ceux de son premier jour.
+    #
+    # Ils étaient exclus quand une veille existait, pour éviter de compter le
+    # capital initial comme un gain. Mais `v_debut` est la clôture de la
+    # veille : elle ne peut pas contenir un versement du lendemain. Les
+    # retrancher deux fois était impossible, les oublier une fois l'était — un
+    # dépôt le premier jour de la fenêtre passait alors pour de la performance.
+    flux = fenetre
 
     # Pondération par le temps réellement écoulé, et non par le rang du point.
     # Les deux coïncident sur un calendrier quotidien, mais divergent dès qu'il
@@ -247,10 +257,23 @@ def simuler_benchmark(
     étalés : « mes fonds ont fait +9 %, l'indice +8 % » laisse ouvert ce que
     l'épargnant aurait réellement eu. Rejouer ses flux répond en euros, sur le
     même calendrier et avec le même étalement — la seule comparaison qui parle.
+
+    Sur une fenêtre courte, le capital déjà présent compte autant que les
+    versements de la période. Ne rejouer que les flux internes revenait à
+    n'avoir rien à comparer dès qu'aucune opération n'était passée : sur
+    24 heures, ou sur un mois sans versement, `verse` valait zéro, la fonction
+    renonçait, et le bloc disparaissait de l'écran. La valeur d'ouverture est
+    donc convertie en parts de l'indice à sa date, comme si elle y avait été
+    placée la veille.
+
+    La base est la même que celle de `dietz_sur_fenetre` — valeur d'ouverture
+    plus versements — sans quoi les deux nombres affichés côte à côte ne se
+    compareraient pas.
     """
     fenetre = [p for p in points if p["date"] >= depuis]
     if not fenetre:
         return {"value": None, "gain_eur": None, "gain_pct": None}
+    avant = [p for p in points if p["date"] < depuis]
 
     def cours_le(jour: date) -> float | None:
         p = cours_repere.get(jour)
@@ -264,6 +287,17 @@ def simuler_benchmark(
 
     quantite = 0.0
     verse = 0.0
+
+    # Le capital d'ouverture, placé sur l'indice à la veille de la fenêtre.
+    # Sur la fenêtre complète il n'y a pas de veille : le portefeuille commence
+    # là, `avant` est vide, et le calcul se réduit à l'ancien.
+    if avant:
+        v_debut = avant[-1]["value"] or 0.0
+        prix_debut = cours_le(date.fromisoformat(avant[-1]["date"]))
+        if v_debut > 0 and prix_debut:
+            quantite += v_debut / prix_debut
+            verse += v_debut
+
     for p in fenetre:
         f = p.get("flow", 0.0)
         if not f:

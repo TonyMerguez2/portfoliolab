@@ -257,6 +257,40 @@ class TestRendementDeLEpargnant:
         assert dietz_sur_fenetre(r["points"], "2030-01-01")["gain_pct"] is None
 
 
+    def test_fenetre_d_un_seul_point_avec_veille_connue(self):
+        """
+        Deux bornes suffisent, et la veille en est une.
+
+        Exiger deux points *dans* la fenêtre rendait zéro sur 24 heures : une
+        journée ne compte qu'une séance. Le gain sortait donc à zéro pendant
+        que le repère, lui, affichait un chiffre — deux nombres censés se
+        soustraire, dont l'un était faux.
+        """
+        pts = [
+            {"date": "2026-01-01", "value": 100.0, "flow": 100.0, "ret": 0.0},
+            {"date": "2026-01-02", "value": 120.0, "flow": 0.0,   "ret": 0.0},
+        ]
+        g = dietz_sur_fenetre(pts, "2026-01-02")
+        assert g["gain_eur"] == pytest.approx(20.0)
+        assert g["gain_pct"] == pytest.approx(20.0)
+
+    def test_versement_le_premier_jour_de_la_fenetre_compte(self):
+        """
+        Un dépôt le premier jour de la fenêtre n'est pas de la performance.
+
+        Il était écarté quand une veille existait, par crainte de compter le
+        capital initial comme un gain. Mais la valeur d'ouverture est la
+        clôture de la veille : elle ne peut pas contenir un versement du
+        lendemain. L'écarter le faisait passer pour de la hausse.
+        """
+        pts = [
+            {"date": "2026-01-01", "value": 100.0, "flow": 100.0, "ret": 0.0},
+            {"date": "2026-01-02", "value": 250.0, "flow": 50.0,  "ret": 0.0},
+            {"date": "2026-01-03", "value": 250.0, "flow": 0.0,   "ret": 0.0},
+        ]
+        # 250 au bout, 100 à l'ouverture, 50 versés : la hausse vaut 100.
+        assert dietz_sur_fenetre(pts, "2026-01-02")["gain_eur"] == pytest.approx(100.0)
+
     def test_pondere_par_le_temps_pas_par_le_rang(self):
         """
         Un calendrier à trous ne doit pas fausser la pondération.
@@ -302,6 +336,60 @@ class TestSimulationBenchmark:
         repere = {date(2026, 1, 1): 10.0, date(2026, 1, 2): 20.0}
         r = simuler_benchmark(pts, repere, "2026-01-01")
         assert r["gain_eur"] == pytest.approx(0.0)
+
+    def test_fenetre_sans_versement_compare_quand_meme(self):
+        """
+        Le capital déjà là compte autant que les versements de la période.
+
+        Sur une fenêtre courte — 24 heures, ou un mois sans opération — il n'y
+        a aucun flux à rejouer. La simulation renonçait alors et renvoyait des
+        `None`, ce qui faisait disparaître le bloc de comparaison de l'écran :
+        le seul moment où la comparaison manquait était celui où rien ne
+        s'était passé, c'est-à-dire le cas le plus courant.
+        """
+        pts = [
+            {"date": "2026-01-01", "value": 100.0, "flow": 100.0, "ret": 0.0},
+            {"date": "2026-01-02", "value": 120.0, "flow": 0.0,   "ret": 0.0},
+        ]
+        repere = {date(2026, 1, 1): 10.0, date(2026, 1, 2): 11.0}
+        # Fenêtre du 2 seul : aucun flux dedans, mais 100 € y étaient déjà.
+        r = simuler_benchmark(pts, repere, "2026-01-02")
+        # 100 € placés à 10 € la part la veille font 10 parts, valant 110 € au 2.
+        assert r["value"] == pytest.approx(110.0)
+        assert r["gain_eur"] == pytest.approx(10.0)
+        assert r["gain_pct"] == pytest.approx(10.0)
+
+    def test_meme_base_que_le_gain_de_l_epargnant(self):
+        """
+        Les deux nombres sont affichés côte à côte : ils doivent se soustraire.
+
+        `dietz_sur_fenetre` rapporte le gain à la valeur d'ouverture plus les
+        versements ; la simulation doit partir de la même mise, sinon l'écart
+        entre les deux ne veut rien dire.
+        """
+        pts = [
+            {"date": "2026-01-01", "value": 100.0, "flow": 100.0, "ret": 0.0},
+            {"date": "2026-01-02", "value": 250.0, "flow": 50.0,  "ret": 0.0},
+        ]
+        repere = {date(2026, 1, 1): 10.0, date(2026, 1, 2): 10.0}
+        # 100 € d'ouverture + 50 € versés = 150 € de mise commune.
+        depuis = "2026-01-02"
+        mien = dietz_sur_fenetre(pts, depuis)
+        sien = simuler_benchmark(pts, repere, depuis)
+        # Mise commune : 100 € d'ouverture + 50 € versés.
+        assert sien["value"] - sien["gain_eur"] == pytest.approx(150.0)
+        # L'indice n'ayant pas bougé, tout l'écart revient au portefeuille.
+        assert mien["gain_eur"] - sien["gain_eur"] == pytest.approx(100.0)
+
+    def test_fenetre_complete_ignore_l_ouverture(self):
+        """Sur toute la détention il n'y a pas de veille : rien à ajouter."""
+        pts = [
+            {"date": "2026-01-01", "value": 100.0, "flow": 100.0, "ret": 0.0},
+            {"date": "2026-01-02", "value": 200.0, "flow": 100.0, "ret": 0.0},
+        ]
+        repere = {date(2026, 1, 1): 10.0, date(2026, 1, 2): 20.0}
+        r = simuler_benchmark(pts, repere, "2026-01-01")
+        assert r["value"] == pytest.approx(300.0)
 
     def test_cours_manquant_reprend_le_precedent(self):
         """Paris et New York ne chôment pas les mêmes jours."""

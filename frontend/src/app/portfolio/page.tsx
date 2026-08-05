@@ -864,21 +864,33 @@ function PortfolioPageInner() {
         <div style={{ position: "relative", marginTop: 3 }}
           onMouseEnter={() => setActiveTooltip("spy")}
           onMouseLeave={() => setActiveTooltip(null)}>
-          {/* Deux lignes plutôt qu'un écart seul : « +5 € » ne dit pas de quoi
-              il est l'écart. On montre ce que le même argent aurait donné sur
-              l'indice, puis la différence. */}
-          <div style={{ fontSize: 10, color: CLAIR.texteAttenue, fontFamily: FONT, cursor: "default" }}>
-            Sur S&amp;P 500&nbsp;
-            <span style={{ color: CLAIR.texteSecondaire, fontWeight: 600 }}>
+          {/* Les deux termes, puis l'écart.
+              Le bloc ne montrait que le repère et la différence : le lecteur
+              reconstituait le troisième nombre en le prenant dans « Gains /
+              pertes », à quatre centimètres de là. Or ces deux mesures ne sont
+              pas la même — l'une est la plus-value latente, l'autre le gain
+              total, réalisé compris — et leur écart vaut exactement le
+              résultat des ventes. Soustraire l'une de l'autre donnait donc un
+              nombre qui ne collait pas, sans que rien n'explique pourquoi.
+              Le bloc porte maintenant ses trois nombres. */}
+          <div style={{
+            display: "grid", gridTemplateColumns: "auto auto", columnGap: 10, rowGap: 2,
+            fontSize: 10, fontFamily: FONT, color: CLAIR.texteAttenue, cursor: "default",
+          }}>
+            <span>Vous</span>
+            <span style={{ color: CLAIR.texteSecondaire, fontWeight: 600, justifySelf: "end" }}>
+              {mien >= 0 ? "+" : ""}{mien.toLocaleString("fr-FR")} €
+            </span>
+            <span>Sur S&amp;P 500</span>
+            <span style={{ color: CLAIR.texteSecondaire, fontWeight: 600, justifySelf: "end" }}>
               {sien >= 0 ? "+" : ""}{sien.toLocaleString("fr-FR")} €
             </span>
-          </div>
-          <div style={{ fontSize: 10, color: CLAIR.texteAttenue, fontFamily: FONT, cursor: "default", marginTop: 2 }}>
-            Vous&nbsp;
-            <span style={{ color: col, fontWeight: 700 }}>
-              {ecart >= 0 ? "+" : "−"}{Math.abs(ecart).toLocaleString("fr-FR")} €
+            <span style={{ gridColumn: "1 / -1", marginTop: 1 }}>
+              <span style={{ color: col, fontWeight: 700 }}>
+                {ecart >= 0 ? "+" : "−"}{Math.abs(ecart).toLocaleString("fr-FR")} €
+              </span>
+              <span style={{ marginLeft: 3, opacity: 0.8 }}>{ecart >= 0 ? "de mieux" : "de moins"}</span>
             </span>
-            <span style={{ marginLeft: 3, opacity: 0.8 }}>{ecart >= 0 ? "de mieux" : "de moins"}</span>
           </div>
           {activeTooltip === "spy" && (
             <div style={{
@@ -899,6 +911,26 @@ function PortfolioPageInner() {
                 </b>.
                 <br />
                 Le repère est libellé en dollars : le change n&apos;est pas neutralisé.
+                {/* La note n'apparaît que si l'écart existe, c'est-à-dire s'il
+                    y a eu des ventes. Sans elle, deux gains différents à
+                    quatre centimètres l'un de l'autre restent inexpliqués ;
+                    avec elle sur un portefeuille sans vente, c'est du bruit. */}
+                {(() => {
+                  if (valeurTotale == null || prixDeRevient == null) return null;
+                  const latent = Math.round(valeurTotale - prixDeRevient);
+                  const realise = mien - latent;
+                  if (realise === 0) return null;
+                  return (
+                    <>
+                      <br />
+                      Ce gain comprend le résultat de vos ventes,{" "}
+                      <b style={{ color: realise >= 0 ? CLAIR.positif : CLAIR.negatif }}>
+                        {realise >= 0 ? "+" : "−"}{Math.abs(realise).toLocaleString("fr-FR")} €
+                      </b>, que « Gains / pertes » n&apos;affiche pas : ce dernier
+                      ne mesure que la plus-value des titres encore détenus.
+                    </>
+                  );
+                })()}
               </span>
             </div>
           )}
