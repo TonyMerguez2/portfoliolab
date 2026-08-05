@@ -847,7 +847,18 @@ function PortfolioPageInner() {
         </div>
         <div style={{ width: 1, alignSelf: "stretch", background: CLAIR.carteCreuse }} />
         <div style={{ minWidth: 120 }}>
-          <p style={{ margin: "0 0 4px", fontSize: 11.5, fontWeight: 500, color: CLAIR.texteSecondaire }}>Comparaison</p>
+          {/* La période est nommée dans le titre.
+              Ce bloc suit la période choisie sous le graphique, quand « Gains
+              / pertes », à sa gauche, compte toujours depuis l'origine. Rien
+              ne le disait : voir « Total +325 € » à côté d'un « vous » à
+              +247 € donnait deux gains inconciliables pour le même
+              portefeuille, alors que l'un couvrait trois mois et l'autre six.
+              Le libellé repris est celui des boutons — « 3M », « Max » — pour
+              qu'on reconnaisse celui sur lequel on vient de cliquer. */}
+          <p style={{ margin: "0 0 4px", fontSize: 11.5, fontWeight: 500, color: CLAIR.texteSecondaire }}>
+            Comparaison
+            <span style={{ marginLeft: 5, fontWeight: 400, opacity: 0.65 }}>· {period}</span>
+          </p>
     {/* Le repère, rejoué avec les mêmes versements aux mêmes dates.
         Opposer deux pourcentages laissait ouvert ce que l'épargnant aurait
         réellement eu ; en euros, la question ne se pose plus. */}
@@ -911,26 +922,18 @@ function PortfolioPageInner() {
                 </b>.
                 <br />
                 Le repère est libellé en dollars : le change n&apos;est pas neutralisé.
-                {/* La note n'apparaît que si l'écart existe, c'est-à-dire s'il
-                    y a eu des ventes. Sans elle, deux gains différents à
-                    quatre centimètres l'un de l'autre restent inexpliqués ;
-                    avec elle sur un portefeuille sans vente, c'est du bruit. */}
-                {(() => {
-                  if (valeurTotale == null || prixDeRevient == null) return null;
-                  const latent = Math.round(valeurTotale - prixDeRevient);
-                  const realise = mien - latent;
-                  if (realise === 0) return null;
-                  return (
-                    <>
-                      <br />
-                      Ce gain comprend le résultat de vos ventes,{" "}
-                      <b style={{ color: realise >= 0 ? CLAIR.positif : CLAIR.negatif }}>
-                        {realise >= 0 ? "+" : "−"}{Math.abs(realise).toLocaleString("fr-FR")} €
-                      </b>, que « Gains / pertes » n&apos;affiche pas : ce dernier
-                      ne mesure que la plus-value des titres encore détenus.
-                    </>
-                  );
-                })()}
+                {/* Ce qui sépare ce gain de celui de « Gains / pertes ».
+                    Une première version attribuait l'écart au résultat des
+                    ventes. C'était faux : un portefeuille sans aucune vente
+                    montre le même écart, parce que la vraie cause est
+                    ailleurs — les deux blocs ne couvrent pas la même période.
+                    Le calcul d'un « réalisé » par simple soustraction ne
+                    valait donc que sur « Max », et racontait n'importe quoi
+                    partout ailleurs. */}
+                <br />
+                Ce gain porte sur la période choisie sous le graphique
+                {period !== "Max" && <> — <b style={{ color: CLAIR.texte }}>{PERIOD_LABEL[period]}</b></>}.
+                « Gains / pertes » compte, lui, depuis la première opération.
               </span>
             </div>
           )}
