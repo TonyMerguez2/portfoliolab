@@ -14,6 +14,7 @@ import {
 const GrowthChart = dynamic(() => import("@/components/charts/GrowthChart"), { ssr: false });
 const SubChart    = dynamic(() => import("@/components/charts/SubChart"),    { ssr: false });
 import AssetLogo from "@/components/AssetLogo";
+import ChiffresRoulants from "@/components/ui/ChiffresRoulants";
 import { useClignotement, styleClignotement } from "@/lib/clignotement";
 import { CADENCE_COURS_MS, LIBELLE_CADENCE } from "@/lib/cadence";
 import { pourFond } from "@/lib/couleur";
@@ -1277,7 +1278,7 @@ function ChartContent() {
                           <div className="asset-hero-section asset-hero-price">
                             <div style={{ display:"flex", alignItems:"baseline", gap:7, whiteSpace:"nowrap" }}>
                               <span style={{ fontSize:34, fontWeight:650, letterSpacing:"-0.055em", fontVariantNumeric:"tabular-nums", lineHeight:1, ...styleClignotement(priceFlash, "var(--nv-texte)") }}>
-                                {currentPrice ? fmtNum(currentPrice.price) : "—"}
+                                {currentPrice ? <ChiffresRoulants texte={fmtNum(currentPrice.price)} /> : "—"}
                               </span>
                               {quote?.currency && <span style={{ fontSize:10, fontWeight:500, color:"rgba(var(--nv-encre-rvb), 0.5)", letterSpacing:"0.04em" }}>{quote.currency}</span>}
                             </div>
@@ -1401,7 +1402,7 @@ function ChartContent() {
                                 <div className="asset-hero-section asset-hero-price">
                                   <div style={{ display:"flex", alignItems:"baseline", gap:7, whiteSpace:"nowrap" }}>
                                     <span style={{ fontSize:34, fontWeight:650, letterSpacing:"-0.055em", fontVariantNumeric:"tabular-nums", lineHeight:1, ...styleClignotement(bmPriceFlash, "var(--nv-texte)") }}>
-                                      {bmCurrentPrice ? fmtNum(bmCurrentPrice.price) : "—"}
+                                      {bmCurrentPrice ? <ChiffresRoulants texte={fmtNum(bmCurrentPrice.price)} /> : "—"}
                                     </span>
                                     <span style={{ fontSize:10, fontWeight:500, color:"rgba(var(--nv-encre-rvb), 0.5)", letterSpacing:"0.04em" }}>{bmCurrency}</span>
                                   </div>

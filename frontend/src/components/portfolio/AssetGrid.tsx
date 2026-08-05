@@ -9,6 +9,7 @@ import { arrange, assetClass, type GridAsset, type SortKey } from "@/lib/portfol
 import { FONT, NUM } from "@/lib/typography";
 import { CLAIR, RAYONS } from "@/lib/palette";
 import Segments from "@/components/ui/Segments";
+import ChiffresRoulants from "@/components/ui/ChiffresRoulants";
 import { useClignotement, styleClignotement } from "@/lib/clignotement";
 
 export type { GridAsset, SortKey };
@@ -47,7 +48,7 @@ function Cours({ prix }: { prix: number | null }) {
       ...NUM, fontSize: 20, fontWeight: 700, lineHeight: 1.1,
       ...styleClignotement(sens, "rgba(255,255,255,0.94)"),
     }}>
-      {prix != null ? eur(prix) : "—"}
+      {prix != null ? <ChiffresRoulants texte={eur(prix)} /> : "—"}
     </div>
   );
 }
