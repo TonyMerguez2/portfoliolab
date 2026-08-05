@@ -37,10 +37,29 @@ app = FastAPI(
     redoc_url="/redoc",
 )
 
-# CORS — allow Next.js dev server
+# CORS — le serveur de développement Next, sur cette machine ou sur le réseau
+# local.
+#
+# La liste nommée ne couvre que « localhost », ce qui suffit tant qu'on ouvre le
+# site là où il tourne. Depuis un autre appareil, l'origine devient l'adresse IP
+# de la machine hôte, et le navigateur refuse la réponse.
+#
+# L'expression ci-dessous n'ouvre que les trois plages réservées aux réseaux
+# privés — celles qu'aucun routeur ne route vers l'extérieur. Une origine
+# publique reste refusée, et l'exposition ne dépasse donc pas le réseau auquel
+# la machine est déjà connectée.
+_ORIGINES_RESEAU_LOCAL = (
+    r"^http://("
+    r"192\.168\.\d{1,3}\.\d{1,3}"
+    r"|10\.\d{1,3}\.\d{1,3}\.\d{1,3}"
+    r"|172\.(1[6-9]|2\d|3[01])\.\d{1,3}\.\d{1,3}"
+    r"):\d+$"
+)
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.allowed_origins,
+    allow_origin_regex=_ORIGINES_RESEAU_LOCAL,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

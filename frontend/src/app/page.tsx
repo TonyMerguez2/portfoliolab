@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import AuthModal from "@/components/AuthModal";
 import Header from "@/components/Header";
 import ProfileModal from "@/components/ProfileModal";
+import { API_URL } from "@/lib/api";
 export default function Home() {
   const router = useRouter();
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -58,7 +59,7 @@ export default function Home() {
   useEffect(() => {
     const fetch_prices = async () => {
       try {
-        const res = await fetch("http://localhost:8000/ticker");
+        const res = await fetch(`${API_URL}/ticker`);
         const data = await res.json();
         if (Array.isArray(data)) setTickerData(data);
       } catch {}
@@ -413,7 +414,7 @@ export default function Home() {
                 cursor: "pointer",
               }}>
               {user?.avatar_url
-                ? <img src={user.avatar_url.startsWith("/uploads") ? `http://localhost:8000${user.avatar_url}` : user.avatar_url} className="w-full h-full object-cover"/>
+                ? <img src={user.avatar_url.startsWith("/uploads") ? `${API_URL}${user.avatar_url}` : user.avatar_url} className="w-full h-full object-cover"/>
                 : <span style={{ fontSize: "11px", fontWeight: 700, color: text, opacity: 0.7 }}>{user.username?.charAt(0).toUpperCase()}</span>
               }
             </button>

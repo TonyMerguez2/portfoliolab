@@ -6,6 +6,7 @@ import { enTetesAuth } from "@/lib/session";
 import { TRENDING } from "@/lib/assets";
 import AssetLogo from "@/components/AssetLogo";
 import { JETONS, RAYONS } from "@/lib/palette";
+import { API_URL } from "@/lib/api";
 
 type Asset = { ticker: string; type: string; name: string; };
 type Price = { price: number; change: number; };
@@ -92,7 +93,7 @@ export default function GlobalHeader() {
   const isLanding = pathname === "/";
   const isChartPage = pathname === "/chart";
   useEffect(() => {
-    fetch("http://localhost:8000/api/v1/portfolios", { headers: enTetesAuth() })
+    fetch(`${API_URL}/api/v1/portfolios`, { headers: enTetesAuth() })
       .then(r => r.json())
       .then(d => { if (Array.isArray(d)) setPortfolios(d); })
       .catch(() => {});
@@ -115,7 +116,7 @@ export default function GlobalHeader() {
   // Ticker tape
   useEffect(() => {
     const fetch_prices = async () => {
-      try { const r = await fetch("http://localhost:8000/ticker"); const d = await r.json(); if (Array.isArray(d)) setTickerData(d); } catch {}
+      try { const r = await fetch(`${API_URL}/ticker`); const d = await r.json(); if (Array.isArray(d)) setTickerData(d); } catch {}
     };
     fetch_prices(); const iv = setInterval(fetch_prices, 300000); return () => clearInterval(iv);
   }, []);
@@ -134,7 +135,7 @@ export default function GlobalHeader() {
   // Fetch prices for visible assets
   const fetchPrices = async (tickers: string[]) => {
     try {
-      const r = await fetch(`http://localhost:8000/api/v1/prices?tickers=${encodeURIComponent(tickers.join(","))}`);
+      const r = await fetch(`${API_URL}/api/v1/prices?tickers=${encodeURIComponent(tickers.join(","))}`);
       const d = await r.json();
       if (Array.isArray(d)) {
         const p: Record<string,Price> = {};
@@ -162,7 +163,7 @@ export default function GlobalHeader() {
     clearTimeout(debounce.current);
     debounce.current = setTimeout(async () => {
       try {
-        const r = await fetch(`http://localhost:8000/api/v1/search?q=${encodeURIComponent(localSearch)}`);
+        const r = await fetch(`${API_URL}/api/v1/search?q=${encodeURIComponent(localSearch)}`);
         const d = await r.json();
         const api: Asset[] = (d?.results || []).map((x: any) => ({ ticker: x.ticker, type: x.type || "EQUITY", name: x.name || x.ticker }));
         const seen = new Set(api.map(a => a.ticker));

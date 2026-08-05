@@ -27,6 +27,7 @@ import { CADENCE_COURS_MS } from "@/lib/cadence";
 import { useCoursCrypto, symboleBinance } from "@/lib/coursCrypto";
 import Cadre from "@/components/ui/Cadre";
 import ImagePortefeuille from "@/components/portfolio/ImagePortefeuille";
+import { API_URL } from "@/lib/api";
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 type PortfolioAsset = { ticker: string; weight: number };
@@ -278,7 +279,7 @@ function PortfolioPageInner() {
 
   useEffect(() => {
     const idFromUrl = searchParams.get("id");
-    fetch("http://localhost:8000/api/v1/portfolios", { headers: enTetesAuth() })
+    fetch(`${API_URL}/api/v1/portfolios`, { headers: enTetesAuth() })
       .then(r => r.json())
       .then((list: PortfolioData[]) => {
         if (!Array.isArray(list) || !list.length) { setLoading(false); return; }
@@ -319,7 +320,7 @@ function PortfolioPageInner() {
     });
 
     let cancelled = false;
-    fetch("http://localhost:8000/api/v1/portfolios", { headers: enTetesAuth() })
+    fetch(`${API_URL}/api/v1/portfolios`, { headers: enTetesAuth() })
       .then(r => r.json())
       .then((list: PortfolioData[]) => {
         if (cancelled || !Array.isArray(list)) return;
@@ -348,7 +349,7 @@ function PortfolioPageInner() {
 
     let cancelled = false;
     const relire = () =>
-      fetch(`http://localhost:8000/api/v1/portfolios/${id}/positions`, { headers: auth })
+      fetch(`${API_URL}/api/v1/portfolios/${id}/positions`, { headers: auth })
         .then(r => (r.ok ? r.json() : null))
         .then((d: PositionsData | null) => { if (!cancelled) setPositions(d); })
         .catch(() => { if (!cancelled) setPositions(null); });
@@ -397,7 +398,7 @@ function PortfolioPageInner() {
     const id = portfolio?.id;
     if (!id || !surTransactions) { setReperesOperations([]); return; }
     let annule = false;
-    fetch(`http://localhost:8000/api/v1/portfolios/${id}/transactions`, { headers: enTetesAuth() })
+    fetch(`${API_URL}/api/v1/portfolios/${id}/transactions`, { headers: enTetesAuth() })
       .then(r => (r.ok ? r.json() : null))
       .then((d) => {
         if (annule) return;
@@ -421,7 +422,7 @@ function PortfolioPageInner() {
     const id = portfolio?.id;
     if (!id || !surTransactions) { setTwr(null); return; }
     let annule = false;
-    fetch(`http://localhost:8000/api/v1/portfolios/${id}/history?period=${PERIOD_MAP[period]}`,
+    fetch(`${API_URL}/api/v1/portfolios/${id}/history?period=${PERIOD_MAP[period]}`,
           { headers: enTetesAuth() })
       .then(r => (r.ok ? r.json() : null))
       .then((d: {
@@ -521,7 +522,7 @@ function PortfolioPageInner() {
     }
 
     const fetchPrices = () =>
-      fetch(`http://localhost:8000/api/v1/prices?tickers=${encodeURIComponent(tickers)}&period=${PERIOD_MAP[period]}`)
+      fetch(`${API_URL}/api/v1/prices?tickers=${encodeURIComponent(tickers)}&period=${PERIOD_MAP[period]}`)
         .then(r => r.json())
         .then((list: PriceData[]) => {
           const map: Record<string, PriceData> = {};
@@ -581,7 +582,7 @@ function PortfolioPageInner() {
     if (!tickersSuivis.length) return;
     let annule = false;
     const tickers = tickersSuivis.join(",");
-    fetch(`http://localhost:8000/api/v1/prices?tickers=${encodeURIComponent(tickers)}`
+    fetch(`${API_URL}/api/v1/prices?tickers=${encodeURIComponent(tickers)}`
         + `&period=max&depuis=${encodeURIComponent(depuisParTicker)}`)
       .then(r => r.json())
       .then((list: PriceData[]) => {
@@ -598,7 +599,7 @@ function PortfolioPageInner() {
 
   // Benchmark SPY — fetch séparé, silencieux en cas d'échec
   useEffect(() => {
-    fetch(`http://localhost:8000/api/v1/prices?tickers=SPY&period=${PERIOD_MAP[period]}`)
+    fetch(`${API_URL}/api/v1/prices?tickers=SPY&period=${PERIOD_MAP[period]}`)
       .then(r => r.json())
       .then((list: PriceData[]) => {
         const spy = list.find(p => p.symbol === "SPY");
@@ -751,7 +752,7 @@ function PortfolioPageInner() {
     if (!portfolio) return;
     const v = parseFloat(valueInput.replace(/\s/g, "").replace(",", "."));
     if (isNaN(v) || v <= 0) { setEditingValue(false); return; }
-    await fetch(`http://localhost:8000/api/v1/portfolios/${portfolio.id}`, {
+    await fetch(`${API_URL}/api/v1/portfolios/${portfolio.id}`, {
       method: "PUT", headers: { "Content-Type": "application/json", ...enTetesAuth() },
       body: JSON.stringify({ total_value: v }),
     }).catch(() => {});
@@ -763,7 +764,7 @@ function PortfolioPageInner() {
     if (!portfolio) return;
     const v = parseFloat(costInput.replace(/\s/g, "").replace(",", "."));
     if (isNaN(v) || v <= 0) { setEditingCost(false); return; }
-    await fetch(`http://localhost:8000/api/v1/portfolios/${portfolio.id}`, {
+    await fetch(`${API_URL}/api/v1/portfolios/${portfolio.id}`, {
       method: "PUT", headers: { "Content-Type": "application/json", ...enTetesAuth() },
       body: JSON.stringify({ cost_basis: v }),
     }).catch(() => {});

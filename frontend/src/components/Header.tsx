@@ -2,6 +2,7 @@
 import { useRouter } from "next/navigation";
 import { useApp } from "@/lib/AppContext";
 import { useEffect, useRef, useState } from "react";
+import { API_URL } from "@/lib/api";
 
 export default function Header({ dark, setDark, hideToggle, showLogo }: { dark: boolean, setDark: (d: boolean) => void, hideToggle?: boolean, showLogo?: boolean }) {
   const router = useRouter();
@@ -18,7 +19,7 @@ export default function Header({ dark, setDark, hideToggle, showLogo }: { dark: 
     if (!q) { setLocalResults([]); return; }
     localDebounce.current = setTimeout(async () => {
       try {
-        const res = await fetch(`http://localhost:8000/api/v1/search?q=${encodeURIComponent(q)}`);
+        const res = await fetch(`${API_URL}/api/v1/search?q=${encodeURIComponent(q)}`);
         const data = await res.json();
         const items = (data?.quotes || data?.results || []).slice(0, 6);
         setLocalResults(items.map((r: any) => ({ ticker: r.symbol || r.ticker, name: r.shortname || r.longname || r.name })));
@@ -37,7 +38,7 @@ export default function Header({ dark, setDark, hideToggle, showLogo }: { dark: 
   useEffect(() => {
     const fetch_prices = async () => {
       try {
-        const res = await fetch("http://localhost:8000/ticker");
+        const res = await fetch(`${API_URL}/ticker`);
         const data = await res.json();
         if (Array.isArray(data)) setTickerData(data);
       } catch {}

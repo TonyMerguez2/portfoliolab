@@ -92,6 +92,29 @@ uvicorn app.main:app --reload --port 8000
 
 API docs available at: `http://localhost:8000/docs`
 
+#### Ouvrir le site depuis un autre appareil du réseau
+
+Par défaut, le serveur n'écoute que sur `127.0.0.1` : il n'est joignable que
+depuis la machine qui l'héberge. Pour tester depuis un téléphone ou un second
+ordinateur du même réseau :
+
+```bash
+# 1. Le serveur écoute sur toutes les interfaces
+uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+
+# 2. Le frontal vise l'IP de la machine hôte, et non « localhost » — qui,
+#    depuis l'autre appareil, le désignerait lui-même.
+echo "NEXT_PUBLIC_API_URL=http://192.168.1.142:8000" > frontend/.env.local
+npm --prefix frontend run dev
+```
+
+L'autre appareil ouvre alors `http://192.168.1.142:3000`. Remplacer l'adresse
+par celle de la machine — `ipconfig getifaddr en0` sous macOS.
+
+Le CORS accepte déjà les trois plages d'adresses privées, rien à déclarer. Mais
+l'API devient accessible à tout le réseau : à réserver à un réseau de
+confiance, et à ne pas laisser tourner ainsi sur un Wi-Fi public.
+
 ### Frontend
 ```bash
 cd frontend
