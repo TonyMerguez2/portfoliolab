@@ -13,22 +13,29 @@ demander de croire un chiffre sans le montrer.
 
 ⚠️ **Ce qui note, et ce qui a été retiré.**
 
-Six facteurs notent : `concentration`, `diversification`, `redondance`, `frais`,
-`frais_courtage`, `volatilite`. Un seul reste affiché sans noter, `perte_max`,
-parce qu'il dit le risque mieux qu'aucun autre à qui regarde son épargne.
+Sept facteurs notent : `concentration`, `diversification`, `geographie`,
+`redondance`, `frais`, `frais_courtage`, `volatilite`. Un seul reste affiché sans
+noter, `perte_max`, parce qu'il dit le risque mieux qu'aucun autre à qui regarde
+son épargne.
 
-Sept facteurs ont été retirés après avoir été mesurés sur des portefeuilles
-types aux propriétés connues. Le détail vit à côté de chacun, mais le principe
-est unique : **un facteur qui se trompe ou qui ne varie pas ne doit pas entrer
-dans une moyenne.** Trois se trompaient — la devise lisait la place de cotation
-et non l'exposition, le bêta était biaisé vers zéro par le décalage horaire, la
-géographie comptait des étiquettes. Deux ne variaient pas — la liquidité valait
-cent partout, le Sharpe était du bruit. Deux comptaient double — la corrélation
-moyenne doublait la redondance, la perte maximale doublait la volatilité à 0,88
-de corrélation.
+Six facteurs ont été retirés après avoir été mesurés sur des portefeuilles types
+aux propriétés connues. Le détail vit à côté de chacun, mais le principe est
+unique : **un facteur qui se trompe ou qui ne varie pas ne doit pas entrer dans
+une moyenne.** Deux se trompaient — la devise lisait la place de cotation et non
+l'exposition, le bêta était biaisé vers zéro par le décalage horaire. Deux ne
+variaient pas — la liquidité valait cent partout, le Sharpe était du bruit. Deux
+comptaient double — la corrélation moyenne doublait la redondance, la perte
+maximale doublait la volatilité à 0,88 de corrélation.
 
-Le nombre de facteurs a donc baissé, et c'est le but : la note portait huit
-entrées dont trois fausses, elle en porte six dont aucune.
+Deux facteurs ont été **retirés puis rétablis sur un autre calcul**, et ce sont
+les deux corrections les plus importantes. La géographie comptait des étiquettes
+de zone, ce qui donnait zéro à un ETF monde ; elle mesure l'écart aux poids du
+marché mondial. La concentration comptait les lignes du portefeuille, fonds
+compris, ce qui donnait zéro à ce même ETF monde et cent à quatre exemplaires du
+même fonds ; elle compte les sociétés détenues en direct.
+
+Ce qui a changé n'est donc pas le nombre de facteurs mais leur assiette : deux
+d'entre eux mesuraient l'enveloppe au lieu du contenu.
 """
 
 from __future__ import annotations
@@ -146,7 +153,7 @@ def profil_cible(horizon_annees: int | None, tolerance: str | None) -> dict | No
     si l'on vend au premier creux.
 
     Rend `None` si le profil n'est pas renseigné : on ne devine pas l'intention de
-    quelqu'un, et les trois facteurs redeviennent alors indicatifs.
+    quelqu'un, et la volatilité est alors mesurée sans être notée.
     """
     if horizon_annees is None or tolerance not in PLAFOND_ACTIONS:
         return None
@@ -293,7 +300,12 @@ def facteurs_de_risque(
                    else round(societes_eq, 2)),
         "libelle": (
             "Composition indéterminée" if societes_eq is None
-            else "aucune action détenue en direct" if societes_eq == float("inf")
+            # ⚠️ « sans objet » et non « inconnu ». Deux facteurs peuvent n'avoir
+            # aucune note pour des raisons opposées : les frais des fonds manquent
+            # parce que le fournisseur ne les publie pas — c'est un trou —, alors
+            # qu'ici la question ne se pose pas, ce qui n'en est pas un. Le lecteur
+            # doit pouvoir faire la différence sans survoler la ligne.
+            else "sans objet — aucune action en direct" if societes_eq == float("inf")
             else f"{societes_eq:.1f} société{'s' if societes_eq >= 2 else ''} équivalente"
                  f"{'s' if societes_eq >= 2 else ''}"
         ),

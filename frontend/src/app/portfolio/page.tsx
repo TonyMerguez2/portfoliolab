@@ -1598,11 +1598,37 @@ function PortfolioPageInner() {
                                   {mesure ? m.value : "—"}
                                 </span>
                               </div>
-                              <div style={{ height: 5, borderRadius: RAYONS.plein, background: CLAIR.carteCreuse }}>
-                                {mesure && (
+                              {/**
+                                * ⚠️ Un facteur non mesuré dit **pourquoi**, à la place
+                                * de la barre vide.
+                                *
+                                * La raison — « aucune action détenue en direct »,
+                                * « frais des fonds inconnus » — ne vivait que dans
+                                * l'infobulle au survol. Sur le panneau, la ligne
+                                * n'affichait qu'un tiret et une barre vide, ce qui se
+                                * lit comme une panne et non comme une absence
+                                * expliquée. Le défaut est devenu voyant quand la
+                                * concentration a cessé de s'appliquer aux
+                                * portefeuilles sans action en direct : deux lignes sur
+                                * huit montraient un tiret nu.
+                                *
+                                * Le texte prend la place de la barre, donc la hauteur
+                                * de ligne ne bouge pas — ce panneau tient dans une
+                                * colonne dont la place est comptée.
+                                */}
+                              {mesure ? (
+                                <div style={{ height: 5, borderRadius: RAYONS.plein, background: CLAIR.carteCreuse }}>
                                   <div style={{ height: "100%", borderRadius: RAYONS.plein, background: col, width: `${m.value}%`, opacity: 0.85, transition: "width 800ms ease" }} />
-                                )}
-                              </div>
+                                </div>
+                              ) : (
+                                <div style={{ height: 5, display: "flex", alignItems: "center" }}>
+                                  <span style={{ fontFamily: FONT, fontSize: 9, lineHeight: 1,
+                                                 color: CLAIR.texteFaible, overflow: "hidden",
+                                                 textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                                    {m.lecture}
+                                  </span>
+                                </div>
+                              )}
                               {activeTooltip === m.key && ancreBulle && typeof document !== "undefined"
                                 && createPortal(
                                 <div role="tooltip" style={{

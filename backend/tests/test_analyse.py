@@ -518,7 +518,10 @@ class TestCalibrage:
         # moyenne. C'est le motif pour lequel la liquidité a été retirée. Sur un vrai
         # PEA, cela gonflait la note de 83 à 86 sans information à l'appui.
         assert f["concentration"]["score"] is None
-        assert f["concentration"]["libelle"] == "aucune action détenue en direct"
+        # ⚠️ « sans objet » et non « inconnu » : à distinguer des frais des fonds,
+        # absents parce que le fournisseur ne les publie pas. Le lecteur voit ce
+        # texte à la place de la barre, sans survoler.
+        assert f["concentration"]["libelle"] == "sans objet — aucune action en direct"
 
     def test_decouper_en_plusieurs_enveloppes_ne_rapporte_rien(self):
         """
