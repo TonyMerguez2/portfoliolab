@@ -4,6 +4,7 @@ import RadarChart from "@/components/charts/RadarChart";
 import { FONT, NUM } from "@/lib/typography";
 import { donutArcs } from "@/lib/donut";
 import {
+  BANDES as SEUILS_BANDES,
   LIBELLE_FACTEUR, ORDRE, type Analyse, type EtatAnalyse, type Observation,
   type Part, type Projection, type Trajet,
 } from "@/lib/analyse";
@@ -63,13 +64,20 @@ const ABREGE: Record<string, string> = {
  * avec la rampe ; les deux premières bandes partageaient la même valeur, ce
  * qui rendait « Très bon » et « Bon » indiscernables.
  */
-const BANDES: { min: number; nom: string; couleur: string }[] = [
-  { min: 80, nom: "Très bon",    couleur: JETONS.positifFort },
-  { min: 60, nom: "Bon",         couleur: JETONS.positif },
-  { min: 40, nom: "Moyen",       couleur: JETONS.attentionFort },
-  { min: 20, nom: "Faible",      couleur: JETONS.attentionIntense },
-  { min: 0,  nom: "Très faible", couleur: JETONS.negatifFort },
-];
+/**
+ * ⚠️ Les seuils et les noms viennent de `lib/analyse.ts`, cette liste n'y ajoute
+ * que l'encre. Ils étaient écrits en dur ici : c'était la deuxième des **trois**
+ * copies divergentes que portait l'application, et une divergence colorait un
+ * « Bon » du vert de « Très bon » sans changer le mot — un désaccord discret entre
+ * la couleur et le texte, que rien n'aurait signalé.
+ *
+ * L'ordre des couleurs suit celui des bandes, de la meilleure à la pire.
+ */
+const BANDES = SEUILS_BANDES.map((b, i) => ({
+  ...b,
+  couleur: [JETONS.positifFort, JETONS.positif, JETONS.attentionFort,
+            JETONS.attentionIntense, JETONS.negatifFort][i],
+}));
 
 const couleurScore = (s: number | null) =>
   s == null ? "rgba(var(--nv-encre-rvb), 0.30)" : (BANDES.find(b => s >= b.min) ?? BANDES[4]).couleur;

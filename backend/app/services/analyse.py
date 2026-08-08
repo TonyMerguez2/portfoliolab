@@ -677,11 +677,40 @@ def score_global(facteurs: dict[str, dict]) -> int | None:
     return int(round(sum(scores) / len(scores))) if scores else None
 
 
+# Les cinq bandes qualitatives.
+#
+# ⚠️ Les seuils ne sont **pas** cinq tranches égales de vingt points, et ils l'ont
+# été à tort. Rien n'impose que la traduction d'une note en jugement soit linéaire,
+# et mesurée sur des portefeuilles construits, la version régulière tassait les
+# libellés en haut :
+#
+#     marché mondial complet   95  ─┐
+#     1 ETF monde seul         86   │ tous « Très bon »
+#     PEA à trois ETF          84   │
+#     60/40 monde-obligations  84  ─┘
+#     2 ETF World en doublon   68  ─┐ tous « Bon »
+#     10 mégacaps américaines  60  ─┘
+#     100 % ETF Nasdaq         43     « Moyen »
+#     1 seule action           18     « Très faible »
+#
+# La bande « Faible » restait vide, et « Très bon » réunissait le portefeuille
+# optimal et des portefeuilles à manques réels — celui à 84 n'a aucune exposition
+# aux marchés émergents et des frais inconnus.
+#
+# Les seuils sont donc ancrés sur ce que le mot doit vouloir dire, non sur une
+# division arithmétique. « Très bon » signifie « aucun manque nommable » : atteindre
+# 88 demande une couverture mondiale émergents compris, des frais connus et bas, et
+# une volatilité conforme au profil déclaré. C'est atteignable — le portefeuille de
+# marché obtient 95 — mais cela demande d'avoir tout fait.
+#
+# ⚠️ Ces valeurs sont **dupliquées** dans `AnalyseView.tsx`, qui en tire ses
+# couleurs. Le libellé, lui, vient d'ici : le serveur le calcule et le rend. À
+# modifier des deux côtés.
 BANDES = [
-    (80, "Très bon"),
-    (60, "Bon"),
-    (40, "Moyen"),
-    (20, "Faible"),
+    (88, "Très bon"),
+    (70, "Bon"),
+    (50, "Moyen"),
+    (30, "Faible"),
     (0,  "Très faible"),
 ]
 

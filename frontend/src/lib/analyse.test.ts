@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import {
-  couvertureFacteurs, EXPLICATION_FACTEUR, facteurLePlusFaible, FACTEURS_DU_PROFIL,
-  LIBELLE_FACTEUR, ORDRE, TOLERANCES, type Facteur,
+  BANDES, bandeDuScore, couvertureFacteurs, EXPLICATION_FACTEUR, facteurLePlusFaible,
+  FACTEURS_DU_PROFIL, LIBELLE_FACTEUR, ORDRE, TOLERANCES, type Facteur,
 } from "./analyse";
 
 const f = (score: number | null, compte = true): Facteur =>
@@ -130,5 +130,37 @@ describe("TOLERANCES", () => {
 
   it("n'a pas de doublon de valeur", () => {
     expect(new Set(TOLERANCES.map(t => t.valeur)).size).toBe(3);
+  });
+});
+
+describe("BANDES", () => {
+  it("porte les mêmes seuils et les mêmes mots que le serveur", () => {
+    // ⚠️ Le libellé affiché vient du serveur ; ces seuils ne servent qu'à l'encre.
+    // Une divergence colorerait un « Bon » du vert de « Très bon » sans changer le
+    // mot, et rien ne le signalerait. Les valeurs sont donc recopiées de
+    // `BANDES` dans `analyse.py` — à modifier des deux côtés ensemble.
+    expect(BANDES).toEqual([
+      { min: 88, nom: "Très bon" },
+      { min: 70, nom: "Bon" },
+      { min: 50, nom: "Moyen" },
+      { min: 30, nom: "Faible" },
+      { min: 0,  nom: "Très faible" },
+    ]);
+  });
+
+  it("n'emploie plus le vocabulaire de l'ancien score local", () => {
+    // « Excellent » et « À risque » venaient du score à quatre critères remplacé.
+    // Ils vivaient encore dans `scoreLabel`, affiché sur l'anneau du bandeau : deux
+    // vocabulaires pour une même note.
+    const mots = BANDES.map(b => b.nom);
+    expect(mots).not.toContain("Excellent");
+    expect(mots).not.toContain("À risque");
+  });
+
+  it("nomme chaque score, bornes comprises", () => {
+    expect(bandeDuScore(100)).toBe("Très bon");
+    expect(bandeDuScore(88)).toBe("Très bon");
+    expect(bandeDuScore(87)).toBe("Bon");
+    expect(bandeDuScore(0)).toBe("Très faible");
   });
 });

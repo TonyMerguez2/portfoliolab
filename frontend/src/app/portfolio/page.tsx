@@ -10,7 +10,8 @@ import AnalyseView from "@/components/portfolio/AnalyseView";
 import { createPortal } from "react-dom";
 import PanneauProfil from "@/components/portfolio/PanneauProfil";
 import {
-  couvertureFacteurs, EXPLICATION_FACTEUR, facteurLePlusFaible, FACTEURS_DU_PROFIL,
+  bandeDuScore, couvertureFacteurs, EXPLICATION_FACTEUR, facteurLePlusFaible,
+  FACTEURS_DU_PROFIL,
   LIBELLE_FACTEUR, ORDRE as ORDRE_FACTEURS, type Analyse, type EtatAnalyse,
   type Tolerance,
 } from "@/lib/analyse";
@@ -150,8 +151,17 @@ function SectionLabel({ children }: { children: ReactNode }) {
 }
 
 // ── NOVAC Score circle gauge ───────────────────────────────────────────────────
-function scoreColor(s: number) { return s >= 60 ? CLAIR.positif : s >= 40 ? CLAIR.attention : CLAIR.negatif; }
-function scoreLabel(s: number) { return s >= 80 ? "Excellent" : s >= 60 ? "Bon" : s >= 40 ? "Moyen" : "À risque"; }
+//
+// ⚠️ Les seuils viennent de `BANDES` dans `lib/analyse.ts`, alignés sur ceux du
+// serveur. Ils étaient écrits en dur ici, et `scoreLabel` portait un vocabulaire
+// que le reste de l'application ignore : « Excellent » au-dessus de 80, « À
+// risque » en bas — deux mots restés de l'ancien score local remplacé. Le serveur
+// dit « Très bon » et « Très faible ». Deux vocabulaires pour une même note, dont
+// un affiché sur l'anneau du bandeau.
+function scoreColor(s: number) {
+  return s >= 70 ? CLAIR.positif : s >= 50 ? CLAIR.attention : CLAIR.negatif;
+}
+const scoreLabel = bandeDuScore;
 
 /**
  * Deux teintes pour le dégradé de l'anneau, dérivées de la couleur du score.
@@ -162,12 +172,13 @@ function scoreLabel(s: number) { return s >= 80 ? "Excellent" : s >= 60 ? "Bon" 
  * l'autre de l'arc.
  */
 function degradeDuScore(score: number): [string, string] {
-  const jeton = score >= 60 ? "--nv-positif" : score >= 40 ? "--nv-attention" : "--nv-negatif";
+  // Mêmes seuils que `scoreColor` et que les bandes du serveur : 70 et 50.
+  const jeton = score >= 70 ? "--nv-positif" : score >= 50 ? "--nv-attention" : "--nv-negatif";
   // Le secours doit rester un hexadécimal littéral : c'est la valeur employée
   // quand la feuille de style n'est pas encore lue, et la ligne suivante la
   // décompose en TSL. Y mettre `JETONS.negatif` glisserait un `var()` que le
   // test de format rejette, et l'anneau perdrait son dégradé.
-  const secours = score >= 60 ? "#00D492" : score >= 40 ? "#FF8904" : "#FF6467";
+  const secours = score >= 70 ? "#00D492" : score >= 50 ? "#FF8904" : "#FF6467";
   const hex = resoudreJeton(jeton, secours);
   if (!/^#[0-9a-f]{6}$/i.test(hex)) return [hex, hex];
   const [h, sat, l] = rvbVersTsl(hexVersRvb(hex));

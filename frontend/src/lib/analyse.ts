@@ -136,6 +136,38 @@ export type Analyse = {
 /** L'état du chargement, partagé par le bandeau et l'onglet. */
 export type EtatAnalyse = "charge" | "prêt" | "vide";
 
+/**
+ * Les cinq bandes du score, **côté client**.
+ *
+ * ⚠️ Le libellé affiché vient du serveur, qui le calcule avec `analyse.py`. Ces
+ * seuils ne servent qu'à ce que le client ne peut pas recevoir : choisir une
+ * encre, dessiner un dégradé d'anneau. Ils doivent donc rester alignés sur ceux
+ * du serveur, faute de quoi la couleur et le mot se contrediraient en silence.
+ *
+ * Ils vivent ici plutôt que dans chaque composant parce qu'il en existait **trois**
+ * copies divergentes dans l'application, et l'une portait un vocabulaire fantôme :
+ * `scoreLabel` disait « Excellent » au-dessus de 80, un mot qui n'apparaît nulle
+ * part ailleurs et qui restait de l'ancien score local remplacé.
+ *
+ * Les seuils ne forment pas cinq tranches égales de vingt points, et c'est mesuré :
+ * régulières, elles tassaient les libellés en haut. Quatre portefeuilles types sur
+ * huit tombaient en « Très bon » — du portefeuille de marché à 95 jusqu'à un PEA à
+ * 84 sans aucune exposition aux marchés émergents — et la bande « Faible » restait
+ * vide. « Très bon » veut dire « aucun manque nommable », ce qui commence plus haut.
+ */
+export const BANDES: { min: number; nom: string }[] = [
+  { min: 88, nom: "Très bon" },
+  { min: 70, nom: "Bon" },
+  { min: 50, nom: "Moyen" },
+  { min: 30, nom: "Faible" },
+  { min: 0,  nom: "Très faible" },
+];
+
+/** Le libellé d'un score, identique à celui que rend le serveur. */
+export function bandeDuScore(score: number): string {
+  return (BANDES.find(b => score >= b.min) ?? BANDES[BANDES.length - 1]).nom;
+}
+
 export const LIBELLE_FACTEUR: Record<string, string> = {
   diversification:     "Diversification",
   geographie:          "Géographie",

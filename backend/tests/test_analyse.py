@@ -17,7 +17,7 @@ import pandas as pd
 import pytest
 
 from app.services.analyse import (
-    profil_cible,
+    profil_cible, BANDES,
     herfindahl, facteurs_de_risque, score_global, bande, observations,
     agreger_exposition, exposition_secteurs, exposition_simple,
     zone_du_fonds, exposition_zones, projection, ventilation_secteurs,
@@ -258,11 +258,43 @@ class TestScore:
 
     def test_bandes(self):
         assert bande(95) == "Très bon"
-        assert bande(62) == "Bon"
-        assert bande(45) == "Moyen"
-        assert bande(25) == "Faible"
+        assert bande(75) == "Bon"
+        assert bande(55) == "Moyen"
+        assert bande(35) == "Faible"
         assert bande(5)  == "Très faible"
         assert bande(None) is None
+
+    def test_les_bandes_ne_sont_pas_cinq_tranches_egales(self):
+        """
+        ⚠️ Elles l'ont été, et cela tassait les libellés en haut.
+
+        Mesuré sur huit portefeuilles construits : quatre tombaient en « Très bon »
+        avec un seuil à 80 — du portefeuille de marché à 95 jusqu'à un PEA à 84 sans
+        aucune exposition aux marchés émergents et aux frais inconnus — tandis que la
+        bande « Faible » restait vide. Rien n'impose que la traduction d'une note en
+        jugement soit linéaire.
+
+        Le test garde l'intention plutôt que les valeurs : les seuils doivent être
+        irréguliers, et le plus haut nettement au-dessus de 80.
+        """
+        seuils = [s for s, _ in BANDES]
+        assert seuils == sorted(seuils, reverse=True)
+        ecarts = [a - b for a, b in zip(seuils, seuils[1:])]
+        assert len(set(ecarts)) > 1, "des tranches égales tassent les libellés"
+        assert seuils[0] >= 85, "« Très bon » doit signifier « aucun manque nommable »"
+
+    def test_le_portefeuille_de_marche_atteint_la_bande_haute(self):
+        """
+        Une bande haute inatteignable serait pire qu'une bande trop facile : elle
+        n'apprendrait rien et découragerait. Le portefeuille de marché — couverture
+        mondiale émergents compris, frais bas, volatilité conforme — doit y entrer.
+        """
+        parfait = {
+            "diversification": {"score": 85}, "geographie": {"score": 100},
+            "redondance": {"score": 100}, "frais": {"score": 91},
+            "frais_courtage": {"score": 100}, "volatilite": {"score": 92},
+        }
+        assert bande(score_global(parfait)) == "Très bon"
 
 
 class TestObservations:
