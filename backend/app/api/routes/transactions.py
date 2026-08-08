@@ -772,7 +772,7 @@ _FICHIER_CACHE = pathlib.Path(__file__).resolve().parents[3] / ".cache_details.j
 #
 # C'est la contrepartie exacte du gain de la longue durée de vie : plus le cache
 # tient, plus il faut un moyen de le déclarer périmé autrement que par le temps.
-_VERSION_FICHE = 4
+_VERSION_FICHE = 5
 
 
 def _charger_cache_details() -> None:
@@ -937,6 +937,13 @@ def _pct_frais(brut) -> float | None:
     L'ordre des lectures compte dans la zone commune : 0,02 vaut 2 % en fraction
     et 0,02 % en pourcentage. Un TER de 0,02 % n'existe pas — les moins chers sont
     à 0,03 % — alors qu'un fonds à 2 % est banal. La fraction gagne donc.
+
+    ⚠️ Un **zéro est refusé**, et ce n'est pas un détail de bord. Le fournisseur
+    annonce un TER de `0.0` pour certains fonds — relevé sur ESE.PA et ETZ.PA, dont
+    les frais réels tournent autour de 0,12 % et 0,20 %. Ce n'est pas une donnée
+    absente mais une donnée **fausse**, et sans ce refus les frais se seraient
+    affichés à 0,00 % par an avec une note de cent : la note la plus flatteuse
+    possible, sur un chiffre inventé. Le facteur préfère se taire.
     """
     if brut is None:
         return None
@@ -1153,7 +1160,12 @@ def _details_titre(ticker: str) -> dict:
         # facteur supprimé à l'audit — il valait cent pour toute position de
         # particulier. C'était aussi le seul champ de cette fiche à varier d'un jour
         # à l'autre, donc le seul argument pour un cache court.
-        d["frais"] = _pct_frais(info.get("annualReportExpenseRatio"))
+        # ⚠️ Deux champs, pas un : le fournisseur ne les remplit pas tous les deux.
+        # Relevé sur PAEJ.PA, `netExpenseRatio` vaut 0,6 quand
+        # `annualReportExpenseRatio` est absent. Ne lire que le second laissait des
+        # fonds sans frais alors que la donnée était là, une clé plus loin.
+        d["frais"] = (_pct_frais(info.get("annualReportExpenseRatio"))
+                      or _pct_frais(info.get("netExpenseRatio")))
         d["nom"] = info.get("shortName") or info.get("longName")
         if info.get("quoteType") == "ETF":
             try:

@@ -444,6 +444,50 @@ def test_une_tolerance_inconnue_est_refusee(client):
     assert "prudent" in r.json()["detail"]
 
 
+class TestLectureDesFrais:
+    """
+    Ce que le fournisseur dit des frais, et ce qu'il faut en croire.
+
+    Relevé sur les trois fonds d'un vrai PEA :
+
+        ESE.PA    Annual Report Expense Ratio = '0.0'    info : aucun champ de frais
+        ETZ.PA    Annual Report Expense Ratio = '0.0'    info : aucun champ de frais
+        PAEJ.PA   Annual Report Expense Ratio = '0.006'  info : netExpenseRatio = 0.6
+    """
+
+    def test_un_ter_nul_est_refuse(self):
+        """
+        ⚠️ Le refus le plus important de cette fonction.
+
+        Le fournisseur annonce `0.0` pour ESE.PA et ETZ.PA, dont les frais réels
+        tournent autour de 0,12 % et 0,20 %. Ce n'est pas une donnée absente mais une
+        donnée **fausse**. Sans ce refus, les frais s'affichaient à 0,00 % par an avec
+        une note de cent — la note la plus flatteuse possible, sur un chiffre inventé.
+        """
+        import app.api.routes.transactions as routes
+
+        assert routes._pct_frais(0.0) is None
+        assert routes._pct_frais("0.0") is None
+        assert routes._pct_frais(-0.2) is None
+
+    def test_les_deux_unites_sont_lues(self):
+        """
+        Le même TER arrive en fraction dans `fund_operations` et en pourcentage dans
+        `info` : 0,006 et 0,6 pour PAEJ.PA. Le fournisseur n'annonce pas son unité.
+        """
+        import app.api.routes.transactions as routes
+
+        assert routes._pct_frais(0.006) == pytest.approx(0.6)
+        assert routes._pct_frais(0.6) == pytest.approx(0.6)
+
+    def test_un_ter_implausible_est_refuse(self):
+        """Au-delà de 3 % par an, aucune lecture ne donne un fonds réel."""
+        import app.api.routes.transactions as routes
+
+        assert routes._pct_frais(12.0) is None
+        assert routes._pct_frais(0.00001) is None
+
+
 class TestFraisSaisis:
     """
     Les frais courants saisis à la main.
