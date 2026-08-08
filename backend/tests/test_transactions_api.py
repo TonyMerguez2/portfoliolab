@@ -67,6 +67,24 @@ def creer_portefeuille(client, nom="Test"):
     return r.json()["id"]
 
 
+def metrique(reponse, cle):
+    """
+    Une métrique du NOVAC Score, retrouvée dans ses piliers.
+
+    ⚠️ La réponse ne porte plus une liste plate de facteurs mais cinq piliers. Cette
+    aide évite de recopier la traversée dans chaque test, et surtout de la recopier
+    **mal** — une métrique introuvable rendrait `None` en silence et le test passerait
+    en ne vérifiant rien.
+    """
+    for pilier in reponse["novac"]["piliers"]:
+        for m in pilier["metriques"]:
+            if m["cle"] == cle:
+                return m
+    raise AssertionError(f"métrique {cle!r} absente des piliers : "
+                         + ", ".join(m["cle"] for pil in reponse["novac"]["piliers"]
+                                     for m in pil["metriques"]))
+
+
 def ecriture(ticker, qty, prix, date, side="BUY", fees=0.0, note=None,
              type_actif="EQUITY"):
     return {
@@ -358,26 +376,23 @@ def test_analyse_sans_ecritures_utilise_les_poids_declares(client, monkeypatch):
     monkeypatch.setattr(routes, "fetch_current_prices", pas_de_cours)
     monkeypatch.setattr(yfinance, "download", lambda *a, **k: (_ for _ in ()).throw(RuntimeError("réseau coupé")))
 
-    captures = {}
-
-    # ⚠️ Le patch porte sur le module qui **définit** la fonction, pas sur celui
-    # de la route : la route l'importe dans son corps, donc son nom local est relié
-    # à l'original au moment de l'appel.
-    def facteurs_espion(poids, rendements, *a, **kw):
-        captures["poids"] = dict(poids)
-        return {"concentration": {"valeur": 0.5, "libelle": "2 lignes", "score": 40}}
-
-    monkeypatch.setattr(analyse, "facteurs_de_risque", facteurs_espion)
-
     r = client.get(f"/api/v1/portfolios/{pid}/analysis")
     assert r.status_code == 200
     d = r.json()
     assert d["source"] == "poids"
-    assert d["score"] == 40
-    # Les poids déclarés sont 60/40 et arrivent normalisés en pourcentage.
-    assert set(captures["poids"]) == {"AAPL", "MSFT"}
-    assert captures["poids"]["AAPL"] == pytest.approx(60.0)
-    assert captures["poids"]["MSFT"] == pytest.approx(40.0)
+    # ⚠️ On vérifie qu'une note **existe**, pas sa valeur. Une note écrite en dur dans
+    # un test verrouille la méthodologie : elle échoue à chaque recalibrage légitime, ce
+    # qui pousse à la mettre à jour sans réfléchir — et le jour où le calcul se trompe
+    # vraiment, le test l'aura déjà entérinée. C'est exactement ce qui est arrivé au
+    # classement d'un indice asiatique, rangé en développé par un test qui l'exigeait.
+    assert d["score"] is not None
+    assert d["novac"]["version_methodologie"]
+    # Les poids déclarés sont 60/40 et arrivent normalisés en pourcentage. Vérifiés
+    # dans la réponse plutôt que par un espion : c'est ce que l'interface reçoit.
+    poids_rendus = {p["ticker"]: p["part"] for p in d["poids"]}
+    assert set(poids_rendus) == {"AAPL", "MSFT"}
+    assert poids_rendus["AAPL"] == pytest.approx(60.0)
+    assert poids_rendus["MSFT"] == pytest.approx(40.0)
 
 
 def test_analyse_sans_ecritures_ni_poids_ne_note_pas(client, monkeypatch):
@@ -556,12 +571,12 @@ def test_les_frais_saisis_se_declarent_et_notent(client, monkeypatch):
                         lambda t: {"nom": "Un fonds", "secteurs": {"technology": 1.0}})
 
     muet = client.get(f"/api/v1/portfolios/{pid}/analysis").json()
-    assert muet["facteurs"]["frais"]["score"] is None
+    assert metrique(muet, "frais_fonds")["score"] is None
 
     r = client.put(f"/api/v1/portfolios/{pid}", json={"frais_lignes": {"ESE.PA": 0.15}})
     assert r.status_code == 200
 
-    note = client.get(f"/api/v1/portfolios/{pid}/analysis").json()["facteurs"]["frais"]
+    note = metrique(client.get(f"/api/v1/portfolios/{pid}/analysis").json(), "frais_fonds")
     assert note["valeur"] == pytest.approx(0.15)
     assert note["score"] > 90, "0,15 % par an est proche du meilleur tracker"
 
@@ -612,7 +627,7 @@ def test_l_analyse_rend_les_frais_par_ligne_avec_leur_provenance(client, monkeyp
     assert d["frais_lignes"]["AUTO.PA"] == {"valeur": 0.12, "source": "saisi"}
     assert d["frais_lignes"]["MUET.PA"] == {"valeur": 0.25, "source": "saisi"}
     # Et la moyenne pondérée suit la saisie, non le fournisseur.
-    assert d["facteurs"]["frais"]["valeur"] == pytest.approx(0.185, abs=0.005)
+    assert metrique(d, "frais_fonds")["valeur"] == pytest.approx(0.185, abs=0.005)
 
 
 def test_sans_fonds_les_frais_sont_sans_objet(client, monkeypatch):
@@ -645,10 +660,12 @@ def test_sans_fonds_les_frais_sont_sans_objet(client, monkeypatch):
         "nom": "Tesla", "secteur": "Consumer Cyclical", "pays": "United States",
         "type": "EQUITY"})
 
-    f = client.get(f"/api/v1/portfolios/{pid}/analysis").json()["facteurs"]
-    assert f["frais"]["score"] is None
-    assert f["frais"]["compte"] is False
-    assert f["frais"]["libelle"] == "sans objet — aucun fonds détenu"
+    f = metrique(client.get(f"/api/v1/portfolios/{pid}/analysis").json(), "frais_fonds")
+    assert f["score"] is None
+    # ⚠️ Poids nul : la métrique sort du pilier au lieu de le pénaliser. C'est ainsi
+    # que « sans objet » se distingue de « manquant » dans le nouveau moteur.
+    assert f["poids"] == 0.0
+    assert f["lecture"] == "sans objet — aucun fonds détenu"
 
 
 def test_une_crypto_compte_comme_un_actif_unique(client, monkeypatch):
@@ -679,9 +696,9 @@ def test_une_crypto_compte_comme_un_actif_unique(client, monkeypatch):
     monkeypatch.setattr(routes, "_details_titre",
                         lambda t: {"nom": t, "devise": "USD", "type": "CRYPTOCURRENCY"})
 
-    c = client.get(f"/api/v1/portfolios/{pid}/analysis").json()["facteurs"]["concentration"]
+    c = metrique(client.get(f"/api/v1/portfolios/{pid}/analysis").json(), "concentration")
     assert c["score"] is not None, "deux cryptos portent une concentration mesurable"
-    assert "actifs équivalents" in c["libelle"], "et non « sociétés » : Bitcoin n'en est pas une"
+    assert "actifs équivalents" in c["lecture"], "et non « sociétés » : Bitcoin n'en est pas une"
 
 
 def test_un_ter_hors_bornes_est_refuse(client):
@@ -1099,13 +1116,24 @@ def test_l_analyse_ne_rend_que_les_facteurs_retenus(client, monkeypatch):
                         lambda *a, **k: (_ for _ in ()).throw(RuntimeError("réseau coupé")))
 
     d = client.get(f"/api/v1/portfolios/{pid}/analysis").json()
-    assert set(d["facteurs"]) == {
-        "concentration", "diversification", "geographie", "redondance",
-        "frais", "frais_courtage", "volatilite", "perte_max",
+    assert set(p["cle"] for p in d["novac"]["piliers"]) == {
+        "diversification", "risque", "construction", "qualite", "adequation",
     }
+    # ⚠️ Les métriques écartées à l'audit ne doivent pas reparaître dans un pilier.
+    # Chacune a été retirée pour une raison mesurée, consignée dans `config.ECARTEES`
+    # et affichée dans l'écran de méthodologie.
+    presentes = {m["cle"] for pil in d["novac"]["piliers"] for m in pil["metriques"]}
+    for retiree in ("devise", "beta", "liquidite", "correlation_moyenne", "var", "cvar",
+                    "sharpe", "efficacite", "classes_actifs"):
+        assert retiree not in presentes, f"{retiree} a été écartée de la méthodologie"
+
     assert "devises" not in d["expositions"]
-    # Les trois ventilations conservées alimentent les graphiques.
     assert set(d["expositions"]) == {"secteurs", "zones", "classes"}
+    # Le score porte sa version, sa confiance et sa date : sans elles, deux notes
+    # calculées à six mois d'écart seraient incomparables sans qu'on puisse le savoir.
+    assert d["novac"]["version_methodologie"]
+    assert 0 <= d["novac"]["confiance"] <= 100
+    assert d["novac"]["calcule_le"]
 
 
 def test_analyse_refuse_de_noter_si_un_cours_manque(client, monkeypatch):
@@ -1183,16 +1211,11 @@ def test_le_courtage_vient_des_ecritures(client, monkeypatch):
     monkeypatch.setattr(yfinance, "download",
                         lambda *a, **k: (_ for _ in ()).throw(RuntimeError("réseau coupé")))
 
-    captures = {}
-
-    def espion(poids, rendements, *a, **kw):
-        captures["courtage"] = kw.get("courtage")
-        return {"concentration": {"valeur": 1.0, "libelle": "x", "score": 50}}
-
-    monkeypatch.setattr(analyse, "facteurs_de_risque", espion)
-
-    client.get(f"/api/v1/portfolios/{pid}/analysis")
-    assert captures["courtage"] == pytest.approx(0.20)
+    # ⚠️ On vérifie la **valeur rendue**, non un appel interne. La version précédente
+    # espionnait `facteurs_de_risque` ; cette fonction a cessé d'être appelée par la
+    # route, et le test aurait pu continuer de passer en n'observant plus rien.
+    d = client.get(f"/api/v1/portfolios/{pid}/analysis").json()
+    assert metrique(d, "frais_courtage")["valeur"] == pytest.approx(0.20)
 
 
 # ── Le cache des détails de titre ────────────────────────────────────────────

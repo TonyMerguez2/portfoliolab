@@ -1297,10 +1297,12 @@ async def get_analysis(
     import yfinance as yf
 
     from app.services.analyse import (
-        bande, exposition_secteurs, exposition_simple, exposition_zones,
-        facteurs_de_risque, observations, profil_cible, projection, score_global,
-        ventilation_secteurs, ventilation_zones,
+        exposition_secteurs, exposition_simple, exposition_zones,
+        profil_cible, projection, ventilation_secteurs, ventilation_zones,
     )
+    from app.services.score.calculer import Entrees as EntreesScore
+    from app.services.score.calculer import calculer as calculer_score
+    from app.services.score.calculer import en_dict as score_en_dict
 
     portefeuille = _get_portfolio_or_404(portfolio_id, db, user)
 
@@ -1465,6 +1467,11 @@ async def get_analysis(
         annonce = (d.get("type") or type_saisi.get(t) or "").upper()
         if d.get("secteurs") or annonce in FONDS:
             nature[t] = "fonds"
+        elif annonce == "CRYPTOCURRENCY":
+            # ⚠️ Distinguée de l'action : le pilier Qualité ne les juge pas sur les
+            # mêmes critères, et inventer des fondamentaux pour une crypto serait pire
+            # que de ne rien dire.
+            nature[t] = "crypto"
         elif annonce in ACTIFS_UNIQUES or d.get("secteur"):
             nature[t] = "actif"
 
@@ -1509,17 +1516,48 @@ async def get_analysis(
                        else None),
         }
 
-    facteurs = facteurs_de_risque(
-        poids, rendements,
-        secteurs=ventilation_secteurs(details, poids),
-        zones=ventilation_zones(details, poids),
-        hhi_lignes=hhi_lignes, hhi_par_indice=hhi_par_indice,
-        part_fonds=part_fonds,
+    # ⚠️ **Une seule définition du score**, celle du moteur `services/score`.
+    #
+    # Le calcul plat en sept facteurs qui vivait ici a été remplacé par les cinq
+    # piliers. Rendre les deux aurait laissé l'interface libre d'afficher deux chiffres
+    # différents pour un même portefeuille — le défaut qui existait déjà entre le
+    # bandeau et l'onglet Analyse, et qui donnait 0 contre 12 sur un vrai PEA.
+    #
+    # `facteurs_de_risque` reste dans `analyse.py` : ses briques calibrées — cible
+    # sectorielle, écart au marché, régions, plausibilité des frais — sont réutilisées
+    # par les métriques du moteur, et ses tests les tiennent.
+    # ⚠️ L'ancienneté de cotation, par ligne, pour le pilier Qualité.
+    #
+    # Elle vient de l'historique **déjà téléchargé** : aucun appel réseau
+    # supplémentaire. C'est la seule donnée solide dont on dispose pour juger une
+    # cryptomonnaie — ni capitalisation fiable, ni profondeur de marché ne sont
+    # exposées — et un actif qui a traversé plusieurs cycles est objectivement
+    # différent d'un actif de six mois.
+    if rendements is not None:
+        for t in details:
+            if t in rendements:
+                details[t] = {**(details[t] or {}),
+                              "seances": int(rendements[t].notna().sum())}
+
+    cible_profil = profil_cible(portefeuille.horizon_annees, portefeuille.tolerance)
+    resultat = calculer_score(EntreesScore(
+        poids=poids,
+        rendements=rendements,
+        details=details,
+        nature=nature,
+        ventilation_secteurs=ventilation_secteurs(details, poids),
+        ventilation_zones=ventilation_zones(details, poids),
+        classes=expositions["classes"],
+        hhi_lignes=hhi_lignes,
+        hhi_par_indice=hhi_par_indice,
         frais_par_ligne=frais_effectifs,
-        cible=profil_cible(portefeuille.horizon_annees, portefeuille.tolerance),
+        part_fonds=part_fonds,
         courtage=_courtage_paye(txs),
-    )
-    sc = score_global(facteurs)
+        profil=portefeuille.tolerance,
+        cible=cible_profil,
+        historique_jours=len(rendements) if rendements is not None else None,
+    ))
+    score_rendu = score_en_dict(resultat)
 
     # ── Projection à un an, sur le portefeuille tel qu'il est ────────────────
     proj = {"median": None, "p10": None, "p90": None, "trajectoire": []}
@@ -1533,11 +1571,17 @@ async def get_analysis(
             proj = projection(total, float(serie.mean()), float(serie.std()))
 
     return {
-        "score": sc,
-        "bande": bande(sc),
-        "facteurs": facteurs,
+        # ── NOVAC Portfolio Score ────────────────────────────────────────────
+        #
+        # `score` et `bande` restent aux mêmes clés pour ne rien casser dans
+        # l'interface ; ils viennent désormais du moteur à cinq piliers. Le reste du
+        # résultat — piliers, confiance, insights, version — est rendu sous `novac`.
+        "score": score_rendu["score"],
+        "bande": score_rendu["libelle"],
+        "novac": score_rendu,
         "expositions": expositions,
-        "observations": observations(poids, facteurs, expositions),
+        "observations": [{"ton": i["ton"], "titre": i["titre"], "detail": i["detail"]}
+                         for i in score_rendu["points_attention"]],
         "projection": proj,
         "poids": [{"ticker": t, "part": round(w, 2)} for t, w in
                   sorted(poids.items(), key=lambda kv: kv[1], reverse=True)],
