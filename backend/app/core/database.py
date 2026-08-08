@@ -32,6 +32,17 @@ class Portfolio(Base):
     # cost_basis : prix de revient total (montant investi à l'origine), saisi par l'utilisateur
     cost_basis     = Column(Float,   nullable=True, default=None)
     is_simulation  = Column(Boolean, nullable=True, default=None)
+    # ── Profil de risque déclaré ─────────────────────────────────────────────
+    #
+    # ⚠️ Sans lui, volatilité, perte maximale et bêta ne sont que des niveaux
+    # mesurés, et l'analyse les affiche sans les noter : juger un niveau de risque
+    # dans l'absolu revient à décider du projet de l'épargnant à sa place. Voir
+    # `profil_cible`.
+    #
+    # Rangé par portefeuille et non par compte : un PEA de retraite à vingt-cinq
+    # ans et un portefeuille d'essai n'ont pas la même intention.
+    horizon_annees = Column(Integer, nullable=True, default=None)
+    tolerance      = Column(String,  nullable=True, default=None)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
@@ -61,6 +72,8 @@ for table, col, typedef in [
     ("portfolios",   "is_simulation", "INTEGER"),
     ("portfolios",   "user_id",       "TEXT"),
     ("portfolios",   "image_url",     "TEXT"),
+    ("portfolios",   "horizon_annees", "INTEGER"),
+    ("portfolios",   "tolerance",      "TEXT"),
     ("transactions", "note",          "TEXT"),
 ]:
     try:

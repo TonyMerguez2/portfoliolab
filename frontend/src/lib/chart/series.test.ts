@@ -6,6 +6,7 @@ import {
   isoToBusinessDay,
   sampleDown,
   dedupByTime,
+  agregerEnBougies,
   windowEnds,
   joinOnMainGrid,
   indexToBase100,
@@ -247,5 +248,28 @@ describe("indexToBase100", () => {
   it("returns nothing rather than Infinity on a zero base", () => {
     expect(indexToBase100([{ date: "2025-01-01", value: 0 }])).toEqual([]);
     expect(indexToBase100([])).toEqual([]);
+  });
+});
+
+describe("agregerEnBougies", () => {
+  const pts = (...v: number[]) => v.map((value, i) => ({ time: 100 + i, value }));
+
+  it("laisse la série intacte quand elle tient dans la cible", () => {
+    const out = agregerEnBougies(pts(1, 2, 3), 60);
+    expect(out).toHaveLength(3);
+    expect(out[0]).toEqual({ time: 100, open: 1, high: 1, low: 1, close: 1 });
+  });
+
+  it("tire les quatre valeurs du paquet, et non des lignes prises à part", () => {
+    // Six points, cible 2 → paquets de 3.
+    const out = agregerEnBougies(pts(10, 30, 20, 5, 1, 4), 2);
+    expect(out).toHaveLength(2);
+    expect(out[0]).toEqual({ time: 100, open: 10, high: 30, low: 10, close: 20 });
+    expect(out[1]).toEqual({ time: 103, open: 5, high: 5, low: 1, close: 4 });
+  });
+
+  it("refuse une série d'un point : une bougie ne s'ouvre pas et se ferme pas au même endroit", () => {
+    expect(agregerEnBougies(pts(1))).toEqual([]);
+    expect(agregerEnBougies([])).toEqual([]);
   });
 });

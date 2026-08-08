@@ -19,8 +19,89 @@ bougé. Le TWR neutralise les flux et ne mesure que le rendement des actifs.
 
 from __future__ import annotations
 
-from datetime import date
+from datetime import date, datetime, timezone
 from typing import Iterable
+
+
+def _sans_fuseau(v: datetime) -> datetime:
+    """
+    Ramène un horodatage à UTC sans fuseau.
+
+    Les dates d'exécution viennent de la base et sont naïves ; les horodatages
+    des barres viennent de yfinance et portent un fuseau. Python refuse de
+    comparer les deux, et ce refus tombait au milieu d'une boucle.
+    """
+    if v.tzinfo is not None:
+        return v.astimezone(timezone.utc).replace(tzinfo=None)
+    return v
+
+
+def courbe_intraday(
+    transactions: list[dict],
+    cours: dict[str, dict[datetime, float]],
+    instants: Iterable[datetime],
+    depuis: datetime | None = None,
+) -> list[dict]:
+    """
+    La valeur du portefeuille au fil d'une séance, aux barres intraday.
+
+    Pendant que `courbe_portefeuille` avance de clôture en clôture, celle-ci
+    avance de barre en barre. Elle existe parce que la fenêtre « 24 h » n'avait
+    que deux clôtures à montrer — la veille et le jour — soit un segment de
+    droite là où on attend une journée.
+
+    ⚠️ **`instants` est l'union des horodatages, pas leur intersection.** C'est
+    tout l'enjeu : deux titres ne cotent pas aux mêmes instants, et un fonds peu
+    traité saute des créneaux entiers. En n'gardant que les instants communs, on
+    perdait l'essentiel de la séance — mesuré à 4 points sur les 24 attendus, et
+    ce sur trois fonds d'une même place. Ici chaque titre garde son dernier cours
+    connu tant qu'il n'en imprime pas de nouveau, et la courbe réagit donc à ceux
+    qui cotent sans attendre les autres.
+
+    Le report ne va **qu'en avant**, comme celui de `_cours_du_jour` : tant qu'un
+    titre détenu n'a pas imprimé un premier cours, l'instant est passé plutôt que
+    valorisé sur une supposition. C'est pour cela que `depuis` existe — la marche
+    lit toute la plage pour se constituer des bases, et ne rend que la fin.
+    """
+    ops = sorted(transactions, key=lambda t: _sans_fuseau(t["executed_at"]))
+    borne = _sans_fuseau(depuis) if depuis is not None else None
+
+    i = 0
+    quantites: dict[str, float] = {}
+    dernier: dict[str, float] = {}
+    investi = 0.0
+    points: list[dict] = []
+
+    for ts in instants:
+        nu = _sans_fuseau(ts)
+
+        while i < len(ops) and _sans_fuseau(ops[i]["executed_at"]) <= nu:
+            t = ops[i]
+            signe = 1.0 if str(t["side"]).upper() == "BUY" else -1.0
+            quantites[t["ticker"]] = quantites.get(t["ticker"], 0.0) + signe * float(t["quantity"])
+            # Le capital engagé, cumulé comme dans `courbe_portefeuille` : c'est
+            # lui qui permet à l'affichage de retirer les versements de la courbe.
+            # Sans cela, un renforcement fait un mur que l'échelle doit contenir,
+            # et les mouvements de marché deviennent invisibles à côté.
+            investi += signe * float(t["quantity"]) * float(t["unit_price"]) + float(t.get("fees") or 0.0)
+            i += 1
+
+        for tk, barres in cours.items():
+            p = barres.get(ts)
+            if p is not None:
+                dernier[tk] = p
+
+        detenus = {tk: q for tk, q in quantites.items() if abs(q) > 1e-9}
+        if not detenus or any(tk not in dernier for tk in detenus):
+            continue
+        if borne is not None and nu < borne:
+            continue
+
+        valeur = sum(q * dernier[tk] for tk, q in detenus.items())
+        points.append({"date": ts.isoformat(), "value": round(valeur, 2),
+                       "invested": round(investi, 2)})
+
+    return points
 
 
 def _quantites_et_flux(

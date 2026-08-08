@@ -444,3 +444,99 @@ class TestCoursManquants:
             [tx("A", 10, 10.0, d[0]),
              tx("B", 5, 10.0, d[0]), tx("B", 5, 10.0, d[0], side="SELL")], cours, d)
         assert r["sans_cours"] == []
+
+
+# ── courbe_intraday ───────────────────────────────────────────────────────────
+
+def _ts(h, m=0, jour=6):
+    """Un horodatage conscient, comme ceux que rend yfinance."""
+    from datetime import datetime, timezone
+    return datetime(2026, 8, jour, h, m, tzinfo=timezone.utc)
+
+
+def _achat(ticker, q, prix, jour=1):
+    from datetime import datetime
+    return {"ticker": ticker, "side": "BUY", "quantity": q, "unit_price": prix,
+            "fees": 0.0, "executed_at": datetime(2026, 8, jour, 10, 0)}
+
+
+def test_intraday_reagit_a_celui_qui_cote():
+    """Le cœur de l'affaire : un titre qui saute des créneaux ne gèle pas la courbe."""
+    from app.services.portfolio_history import courbe_intraday
+    txs = [_achat("A", 10, 100.0), _achat("B", 10, 50.0)]
+    cours = {
+        # A cote partout, B seulement au premier et au dernier créneau.
+        "A": {_ts(9): 100.0, _ts(9, 15): 101.0, _ts(9, 30): 102.0},
+        "B": {_ts(9): 50.0, _ts(9, 30): 60.0},
+    }
+    instants = sorted({i for m in cours.values() for i in m})
+    pts = courbe_intraday(txs, cours, instants)
+
+    assert len(pts) == 3, "l'intersection en aurait gardé deux"
+    # 9h00 : 10×100 + 10×50 = 1500
+    # 9h15 : A monte, B est reporté à 50 → 1010 + 500 = 1510
+    # 9h30 : les deux cotent → 1020 + 600 = 1620
+    assert [p["value"] for p in pts] == [1500.0, 1510.0, 1620.0]
+
+
+def test_intraday_ne_suppose_rien_avant_la_premiere_cotation():
+    from app.services.portfolio_history import courbe_intraday
+    txs = [_achat("A", 10, 100.0), _achat("B", 10, 50.0)]
+    cours = {"A": {_ts(9): 100.0, _ts(9, 15): 101.0}, "B": {_ts(9, 15): 50.0}}
+    instants = sorted({i for m in cours.values() for i in m})
+    pts = courbe_intraday(txs, cours, instants)
+    # B n'a pas de base à 9h00 : cet instant est passé, pas valorisé à moitié.
+    assert len(pts) == 1
+    assert pts[0]["value"] == 1010.0 + 500.0
+
+
+def test_intraday_lit_tout_mais_ne_rend_que_depuis_la_borne():
+    from app.services.portfolio_history import courbe_intraday
+    txs = [_achat("A", 10, 100.0)]
+    cours = {"A": {_ts(9, jour=5): 100.0, _ts(9, jour=6): 110.0, _ts(9, 15, jour=6): 111.0}}
+    instants = sorted(cours["A"])
+    pts = courbe_intraday(txs, cours, instants, depuis=_ts(9, jour=6))
+    assert [p["value"] for p in pts] == [1100.0, 1110.0]
+
+
+def test_intraday_suit_une_vente_en_cours_de_seance():
+    from app.services.portfolio_history import courbe_intraday
+    from datetime import datetime
+    txs = [
+        _achat("A", 10, 100.0),
+        {"ticker": "A", "side": "SELL", "quantity": 4, "unit_price": 105.0,
+         "fees": 0.0, "executed_at": datetime(2026, 8, 6, 9, 20)},
+    ]
+    cours = {"A": {_ts(9): 100.0, _ts(9, 15): 100.0, _ts(9, 30): 100.0}}
+    pts = courbe_intraday(txs, cours, sorted(cours["A"]))
+    assert [p["value"] for p in pts] == [1000.0, 1000.0, 600.0]
+
+
+def test_intraday_compare_les_horodatages_malgre_les_fuseaux():
+    """Les dates d'exécution sont naïves, les barres non : la comparaison doit tenir."""
+    from app.services.portfolio_history import courbe_intraday
+    txs = [_achat("A", 10, 100.0, jour=6)]   # naïf, 10h00
+    cours = {"A": {_ts(9): 100.0, _ts(11): 120.0}}
+    pts = courbe_intraday(txs, cours, sorted(cours["A"]))
+    # L'achat n'a lieu qu'à 10h : le premier créneau ne détient rien.
+    assert len(pts) == 1
+    assert pts[0]["value"] == 1200.0
+
+
+def test_intraday_expose_le_capital_engage():
+    """C'est `invested` qui permet de retirer les versements de la courbe."""
+    from app.services.portfolio_history import courbe_intraday
+    from datetime import datetime
+    txs = [
+        _achat("A", 10, 100.0),                                  # 1 000 € engagés
+        {"ticker": "A", "side": "BUY", "quantity": 5, "unit_price": 100.0,
+         "fees": 2.0, "executed_at": datetime(2026, 8, 6, 9, 20)},  # +502 €
+    ]
+    cours = {"A": {_ts(9): 100.0, _ts(9, 15): 100.0, _ts(9, 30): 100.0}}
+    pts = courbe_intraday(txs, cours, sorted(cours["A"]))
+
+    assert [p["invested"] for p in pts] == [1000.0, 1000.0, 1502.0]
+    # La valeur saute au renforcement ; nette du capital engagé, elle ne saute plus.
+    assert [p["value"] for p in pts] == [1000.0, 1000.0, 1500.0]
+    net = [p["value"] - p["invested"] for p in pts]
+    assert net == [0.0, 0.0, -2.0], "seuls les frais subsistent, pas le versement"

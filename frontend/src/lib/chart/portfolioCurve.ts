@@ -8,5 +8,16 @@
  * Leurs douze tests non plus — des tests qui gardent du code mort ne
  * protègent rien et donnent une fausse assurance.
  */
-export type HistoryPoint = { date: string; value: number };
+export type HistoryPoint = {
+  date: string;
+  value: number;
+  /**
+   * Le capital engagé à cet instant, quand la route le donne.
+   *
+   * Sert à tracer la courbe nette des versements : sans lui, un renforcement
+   * fait dans la valeur un mur de plusieurs centaines d'euros, à côté duquel les
+   * mouvements de marché ne se voient plus. Voir `PerformanceChart`.
+   */
+  invested?: number;
+};
 export type Period = "24h" | "1S" | "1M" | "3M" | "6M" | "1A" | "3A" | "Max";

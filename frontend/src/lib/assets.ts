@@ -251,3 +251,51 @@ const NAME_BY_TICKER: Record<string, string> = Object.fromEntries(
 export function assetName(ticker: string): string | null {
   return NAME_BY_TICKER[ticker] ?? null;
 }
+
+const PLACE_BY_TICKER: Record<string, string> = Object.fromEntries(
+  TRENDING.filter(a => a.exchange).map(a => [a.ticker, a.exchange]),
+);
+
+/**
+ * Les suffixes de ticker de Yahoo, et la place qu'ils désignent.
+ *
+ * C'est la convention dont viennent tous les tickers de l'application, puisque
+ * les cours passent par yfinance : `.PA` est Euronext Paris, `.DE` la Bourse
+ * allemande, et un ticker sans point cote aux États-Unis.
+ *
+ * La table ne couvre pas le monde entier, et elle n'a pas à le faire : un
+ * suffixe absent d'ici ressort tel quel, ce qui suffit à le dire « connu mais
+ * pas européen » — la seule question qu'on pose à cette fonction.
+ */
+const PLACE_PAR_SUFFIXE: Record<string, string> = {
+  PA: "PAR", AS: "AMS", BR: "BRU", LS: "LIS", MI: "MIL", MC: "MCE",
+  ST: "STO", HE: "HEL", CO: "CPH", IR: "DUB", VI: "VIE",
+  DE: "GER", F: "GER", BE: "GER", MU: "GER", SG: "GER", DU: "GER", HM: "GER", HA: "GER",
+  L: "LSE", SW: "EBS", TO: "TOR", HK: "HKG", T: "TYO",
+};
+
+/**
+ * Place de cotation d'un actif : le catalogue d'abord, son suffixe ensuite.
+ *
+ * ⚠️ Le catalogue seul ne suffit pas, et c'est mesuré : il compte cent trente
+ * lignes dont trente-sept sans place renseignée, si bien que deux des trois
+ * lignes d'un portefeuille réel n'y trouvaient rien. L'enveloppe déduite
+ * retombait alors sur « CTO » faute de savoir, pour un PEA. Le suffixe, lui,
+ * est porté par le ticker lui-même et ne peut pas manquer.
+ *
+ * Renvoie null seulement quand il n'y a vraiment rien à lire — ni entrée au
+ * catalogue, ni suffixe, ni ticker. Un appelant qui déduit quelque chose de la
+ * place doit pouvoir séparer « hors d'Europe » de « je ne sais pas ».
+ */
+export function assetExchange(ticker: string): string | null {
+  const auCatalogue = PLACE_BY_TICKER[ticker];
+  if (auCatalogue) return auCatalogue;
+  const point = ticker.lastIndexOf(".");
+  // Sans point, la convention de Yahoo désigne les États-Unis. Le tiret des
+  // paires crypto — BTC-USD — n'en est pas un : elles ressortent donc « US »,
+  // ce qui ne gêne pas, leurs appelants les traitant avant la place.
+  if (point < 0) return ticker ? "US" : null;
+  const suffixe = ticker.slice(point + 1).toUpperCase();
+  if (!suffixe) return null;
+  return PLACE_PAR_SUFFIXE[suffixe] ?? suffixe;
+}

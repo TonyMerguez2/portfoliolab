@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
-import { arrange, assetClass, relativeDay, valoriser, gainPeriode,
+import { assetExchange } from "./assets";
+import { arrange, assetClass, enveloppe, relativeDay, valoriser, gainPeriode,
   type GridAsset, type Position } from "./portfolio";
 
 const a = (ticker: string, o: Partial<GridAsset> = {}): GridAsset => ({
@@ -171,5 +172,80 @@ describe("valoriser", () => {
   it("retombe sur le cours du flux si la position n'en porte pas", () => {
     const [l] = valoriser([pos({ current_price: null })], { AAPL: { price: 211, change: 1 } });
     expect(l.price).toBe(211);
+  });
+});
+
+describe("enveloppe", () => {
+  // La place est injectée, pour que le test ne dépende pas du catalogue.
+  const places: Record<string, string> = {
+    "ESE.PA": "PAR", "ETZ.PA": "PAR", "SAP.DE": "GER",
+    AAPL: "NMS", MSFT: "NYQ", "HSBA.L": "LSE", "NESN.SW": "EBS",
+  };
+  const place = (t: string) => places[t] ?? null;
+
+  it("rend null sur un portefeuille vide", () => {
+    expect(enveloppe([], place)).toBeNull();
+  });
+
+  it("dit PEA quand toutes les places sont éligibles", () => {
+    expect(enveloppe(["ESE.PA", "ETZ.PA"], place)).toBe("PEA");
+    expect(enveloppe(["ESE.PA", "SAP.DE"], place)).toBe("PEA");
+  });
+
+  it("dit CTO dès qu'une place ne l'est pas", () => {
+    expect(enveloppe(["ESE.PA", "AAPL"], place)).toBe("CTO");
+    expect(enveloppe(["MSFT"], place)).toBe("CTO");
+  });
+
+  it("exclut Londres et la Suisse, européennes mais hors EEE", () => {
+    expect(enveloppe(["HSBA.L"], place)).toBe("CTO");
+    expect(enveloppe(["NESN.SW"], place)).toBe("CTO");
+  });
+
+  it("retombe sur CTO quand une place est inconnue, plutôt que de risquer PEA", () => {
+    expect(enveloppe(["ESE.PA", "INCONNU.XX"], place)).toBe("CTO");
+  });
+
+  it("dit Crypto seulement si tout est crypto", () => {
+    expect(enveloppe(["BTC-USD", "ETH-EUR"], place)).toBe("Crypto");
+    expect(enveloppe(["BTC-USD", "ESE.PA"], place)).toBe("CTO");
+  });
+});
+
+describe("assetExchange", () => {
+  it("préfère le catalogue quand il connaît le ticker", () => {
+    expect(assetExchange("ESE.PA")).toBe("PAR");
+  });
+
+  it("lit le suffixe pour les tickers hors catalogue", () => {
+    expect(assetExchange("ETZ.PA")).toBe("PAR");
+    expect(assetExchange("PAEJ.PA")).toBe("PAR");
+    expect(assetExchange("SAP.DE")).toBe("GER");
+    expect(assetExchange("ASML.AS")).toBe("AMS");
+  });
+
+  it("désigne les États-Unis en l'absence de suffixe", () => {
+    // « AAPL » ne sert pas à ça : il est au catalogue en « NMS », et le
+    // catalogue doit primer sur la déduction.
+    expect(assetExchange("ZZTOP")).toBe("US");
+    expect(assetExchange("AAPL")).toBe("NMS");
+  });
+
+  it("rend le suffixe tel quel s'il est hors table, ce qui suffit à l'exclure", () => {
+    expect(assetExchange("XXX.ZZ")).toBe("ZZ");
+  });
+
+  it("ne rend null que s'il n'y a rien à lire", () => {
+    expect(assetExchange("")).toBeNull();
+    expect(assetExchange("XXX.")).toBeNull();
+  });
+
+  it("suffit à reconnaître un PEA de tickers parisiens hors catalogue", () => {
+    expect(enveloppe(["ESE.PA", "ETZ.PA", "PAEJ.PA"], assetExchange)).toBe("PEA");
+  });
+
+  it("et un compte-titres dès qu'une ligne cote hors EEE", () => {
+    expect(enveloppe(["ESE.PA", "AAPL"], assetExchange)).toBe("CTO");
+    expect(enveloppe(["VOD.L"], assetExchange)).toBe("CTO");
   });
 });

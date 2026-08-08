@@ -112,6 +112,23 @@ export function pourFond(hex: string, clair: boolean): string {
 }
 
 /**
+ * Décale la clarté d'une couleur, en points de TSL, et rend l'hexadécimal.
+ *
+ * Sert à tirer d'une teinte de marque les deux bouts d'un dégradé — arête
+ * éclairée, pied assombri — sans avoir à écrire trois couleurs par actif.
+ *
+ * La clarté est bornée, pas la saturation : à l'approche du blanc ou du noir,
+ * TSL perd sa teinte de toute façon, et vouloir la garder à saturation
+ * constante rendrait des pastels ou des couleurs fluorescentes selon le sens du
+ * décalage. Aux amplitudes utilisées ici — un dixième au plus — la question ne
+ * se pose pas.
+ */
+export function decalerClarte(hex: string, delta: number): string {
+  const [h, s, l] = rvbVersTsl(hexVersRvb(hex));
+  return rvbVersHex(tslVersRvb([h, s, Math.max(0, Math.min(1, l + delta))]));
+}
+
+/**
  * La luminance relative, au sens WCAG.
  *
  * Ce n'est pas la clarté du modèle TSL utilisé plus haut : celle-ci pondère

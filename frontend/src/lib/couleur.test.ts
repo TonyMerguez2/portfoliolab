@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import {
   hexVersRvb, rvbVersHex, rvbVersTsl, tslVersRvb, pourFondSombre, poidsGroupe,
   CLARTE_MIN, CLARTE_MAX, SATURATION_MIN, luminance, contraste, encreSur,
+  decalerClarte,
 } from "./couleur";
 
 describe("conversions", () => {
@@ -155,5 +156,30 @@ describe("contraste et encre", () => {
 
   it("le pire cas connu reste au-dessus du seuil du texte large", () => {
     expect(contraste("#4B8746", encreSur("#4B8746"))).toBeGreaterThanOrEqual(3);
+  });
+});
+
+describe("decalerClarte", () => {
+  it("éclaircit et assombrit dans le sens attendu", () => {
+    const base = "#4aa8f0";
+    expect(luminance(decalerClarte(base, 0.12))).toBeGreaterThan(luminance(base));
+    expect(luminance(decalerClarte(base, -0.12))).toBeLessThan(luminance(base));
+  });
+
+  it("garde la teinte", () => {
+    const [teinte] = rvbVersTsl(hexVersRvb("#4aa8f0"));
+    for (const d of [-0.1, -0.05, 0.05, 0.1]) {
+      const [apres] = rvbVersTsl(hexVersRvb(decalerClarte("#4aa8f0", d)));
+      expect(apres).toBeCloseTo(teinte, 2);
+    }
+  });
+
+  it("borne aux extrêmes plutôt que de déborder", () => {
+    expect(decalerClarte("#ffffff", 0.5)).toBe("#ffffff");
+    expect(decalerClarte("#000000", -0.5)).toBe("#000000");
+  });
+
+  it("un décalage nul ne change rien", () => {
+    expect(decalerClarte("#4aa8f0", 0)).toBe("#4aa8f0");
   });
 });

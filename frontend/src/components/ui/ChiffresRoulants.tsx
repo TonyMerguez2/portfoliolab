@@ -34,23 +34,52 @@ function Rang({ chiffre }: { chiffre: number }) {
   const [position, setPosition] = useState(chiffre);
   const [roule, setRoule] = useState(false);
   const precedent = useRef(chiffre);
+  /** Le minuteur du roulement en cours, ou `null` s'il n'y en a pas. */
+  const minuterie = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     const avant = precedent.current;
     if (avant === chiffre) return;
     precedent.current = chiffre;
 
-    const avance = crans(avant, chiffre);
-    setRoule(true);
-    setPosition(p => p + avance);
+    // ⚠️ Un changement pendant qu'un roulement court : on se pose sur le
+    // chiffre, sans transition, plutôt que d'empiler.
+    //
+    // La version précédente ajoutait `crans` à la position et ne la ramenait
+    // modulo 10 qu'à la fin du roulement — dont le minuteur était annulé par le
+    // changement suivant. Sur des valeurs qui défilent vite, la position
+    // s'empilait donc sans borne : 5, 12, 19, 26… quand la bande ne compte que
+    // vingt rangs. Passé le dix-neuvième, le rang défilait dans le vide. Et
+    // chaque changement poussait deux états par chiffre, soit une vingtaine par
+    // nombre affiché — de quoi épuiser la profondeur de mise à jour de React.
+    //
+    // À cette cadence le roulement ne se verrait pas de toute façon : 420 ms de
+    // trajet pour une valeur qui change toutes les cinquante.
+    if (minuterie.current !== null) {
+      setRoule(false);
+      setPosition(chiffre);
+      return;
+    }
 
-    const t = setTimeout(() => {
+    setRoule(true);
+    // Le `% 10` borne la position : la première série au plus, plus une avance
+    // de neuf crans au plus, donc jamais au-delà du dix-huitième rang.
+    setPosition(p => (p % 10) + crans(avant, chiffre));
+
+    minuterie.current = setTimeout(() => {
+      minuterie.current = null;
       setRoule(false);
       // Retour dans la première série, transition coupée le temps du saut.
       setPosition(p => p % 10);
     }, DUREE_MS);
-    return () => clearTimeout(t);
   }, [chiffre]);
+
+  // Le minuteur ne s'annule qu'au démontage. L'annuler à chaque changement de
+  // chiffre — ce que faisait le nettoyage de l'effet — laissait le roulement en
+  // cours sans personne pour le clore, et c'est de là que venait l'empilement.
+  useEffect(() => () => {
+    if (minuterie.current !== null) clearTimeout(minuterie.current);
+  }, []);
 
   return (
     <span aria-hidden="true" style={{

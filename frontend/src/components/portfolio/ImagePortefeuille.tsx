@@ -5,6 +5,7 @@ import { FONT } from "@/lib/typography";
 import { enTetesAuth } from "@/lib/session";
 import { encreSur } from "@/lib/couleur";
 import { initiale } from "@/lib/initiale";
+import PocheActifs, { RAYON_CORPS } from "@/components/portfolio/PocheActifs";
 
 /**
  * L'image de profil d'un portefeuille, et de quoi la changer.
@@ -14,17 +15,23 @@ import { initiale } from "@/lib/initiale";
  * qu'on désigne du regard au même endroit ; leur donner deux silhouettes
  * différentes ferait croire à deux natures différentes.
  *
- * Sans image, l'initiale du nom sur la couleur du portefeuille. Elle est
- * redondante avec le nom affiché juste à côté, et c'est vrai de tous les
- * avatars : leur rôle n'est pas d'informer mais d'occuper un emplacement
- * stable et reconnaissable. C'est précisément ce qui manquait au repli
- * précédent — les logos empilés des actifs. Ils montraient le contenu, mais
- * ne ressemblaient pas à un emplacement d'image, si bien que personne ne
- * pouvait deviner qu'on pouvait en poser une.
+ * Sans image, une poche portant une carte par actif : voir `PocheActifs`.
+ * L'initiale du nom qui occupait cette place ne servait à rien d'autre qu'à
+ * tenir l'emplacement — elle répétait le nom affiché à côté d'elle.
  *
- * L'encre de l'initiale se calcule au lieu de se choisir : les couleurs de
- * portefeuille sont libres, et entre un jaune et un bleu marine l'une réclame
- * du noir et l'autre du blanc. Voir `encreSur`.
+ * ⚠️ **Rien n'indique plus, au repos, qu'on peut poser une image ici.** Ce repli
+ * a déjà été retiré une fois, sous la forme des logos empilés des actifs : ils
+ * montraient le contenu, mais ne ressemblaient pas à un emplacement d'image, si
+ * bien que personne ne devinait qu'on pouvait en poser une. La pastille « + » y
+ * avait répondu, avant d'être retirée à son tour sur demande — voir plus bas.
+ * Il ne reste que l'icône d'appareil photo au survol, et un survol seul ne se
+ * découvre pas. Le dessin de la poche est donc plus expressif que jamais, et son
+ * emplacement moins cliquable que jamais : les deux se sont éloignés.
+ *
+ * L'initiale sert encore aux appelants qui ne passent pas `actifs`, avec son
+ * encre calculée au lieu d'être choisie : les couleurs de portefeuille sont
+ * libres, et entre un jaune et un bleu marine l'une réclame du noir et l'autre
+ * du blanc. Voir `encreSur`.
  */
 
 const API = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
@@ -49,10 +56,20 @@ function Appareil() {
 }
 
 export default function ImagePortefeuille<T extends PortefeuilleImage>({
-  portefeuille, taille = 44, onChange,
+  portefeuille, taille = 44, actifs, onChange,
 }: {
   portefeuille: T;
   taille?: number;
+  /**
+   * Les lignes du portefeuille, pour la poche du repli. Omises, on retombe sur
+   * l'initiale du nom.
+   *
+   * À prendre à la même source que le compte affiché à côté de la vignette :
+   * trois cartes sous la mention « 4 actifs » se lirait comme un bogue, et ce
+   * serait le cas si l'un comptait l'allocation cible et l'autre les positions
+   * réellement détenues.
+   */
+  actifs?: { ticker: string; weight: number }[];
   /** Reçoit le portefeuille tel que l'API le renvoie après écriture. */
   onChange: (p: T) => void;
 }) {
@@ -61,9 +78,25 @@ export default function ImagePortefeuille<T extends PortefeuilleImage>({
   const [envoi, setEnvoi] = useState(false);
   const [erreur, setErreur] = useState<string | null>(null);
 
-  const rayon = rayonVignette(taille);
   const image = portefeuille.image_url;
   const fond = portefeuille.color || COULEUR_PAR_DEFAUT;
+  // La poche peint son propre fond, d'un bord à l'autre : l'aplat du bouton ne
+  // sert alors plus qu'aux angles qu'elle laisse voir, soit rien.
+  const poche = !image && actifs != null;
+
+  /**
+   * Le rayon des angles.
+   *
+   * ⚠️ La poche impose le sien, relevé sur le concept — voir `RAYON_CORPS`. Ce
+   * n'est pas un choix qu'on peut laisser à l'appelant : c'est ce bouton qui
+   * coupe les angles du dessin avec son `overflow: hidden`, et du plus creux des
+   * deux arrondis c'est toujours lui qui gagne. Un corps à 17,8 % dans un bouton
+   * à 21,7 % rendrait 21,7.
+   *
+   * Les autres replis — image posée, initiale — gardent `rayonVignette`, la
+   * silhouette commune aux logos d'actifs.
+   */
+  const rayon = poche ? Math.round(taille * RAYON_CORPS) : rayonVignette(taille);
 
   async function appeler(methode: "POST" | "DELETE", corps?: FormData) {
     setEnvoi(true); setErreur(null);
@@ -109,8 +142,8 @@ export default function ImagePortefeuille<T extends PortefeuilleImage>({
         style={{
           width: taille, height: taille, overflow: "hidden",
           borderRadius: rayon, padding: 0, border: "none",
-          background: image ? JETONS.carteCreuse : fond,
-          color: image ? undefined : encreSur(fond),
+          background: image || poche ? JETONS.carteCreuse : fond,
+          color: image || poche ? undefined : encreSur(fond),
           cursor: envoi ? "progress" : "pointer", position: "relative",
           display: "flex", alignItems: "center", justifyContent: "center",
           fontFamily: FONT, fontWeight: 700, letterSpacing: "-0.02em",
@@ -124,7 +157,9 @@ export default function ImagePortefeuille<T extends PortefeuilleImage>({
           // eslint-disable-next-line @next/next/no-img-element
           ? <img src={`${API}${image}`} alt=""
               style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
-          : <span aria-hidden="true">{initiale(portefeuille.name)}</span>}
+          : poche
+            ? <PocheActifs actifs={actifs!} taille={taille} />
+            : <span aria-hidden="true">{initiale(portefeuille.name)}</span>}
 
         {survol && !envoi && (
           <span style={{
@@ -137,25 +172,19 @@ export default function ImagePortefeuille<T extends PortefeuilleImage>({
         )}
       </button>
 
-      {/* Tant qu'aucune image n'est posée, la pastille reste visible en
-          permanence. Un survol seul ne se découvre pas : rien, au repos,
-          n'aurait dit qu'on peut cliquer ici — c'est bien ce qui s'est
-          produit. Une fois l'image en place, elle se supprime : l'image se
-          désigne elle-même, et le survol suffit à proposer de la changer. */}
-      {!image && !envoi && (
-        <span aria-hidden="true" style={{
-          position: "absolute", right: -4, bottom: -4, zIndex: 11,
-          width: 17, height: 17, borderRadius: RAYONS.plein,
-          display: "flex", alignItems: "center", justifyContent: "center",
-          background: JETONS.segmentActif, color: JETONS.segmentEncre,
-          boxShadow: JETONS.segmentOmbre, pointerEvents: "none",
-        }}>
-          <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-            strokeWidth={3} strokeLinecap="round">
-            <path d="M12 5v14M5 12h14" />
-          </svg>
-        </span>
-      )}
+      {/* Il y avait ici une pastille « + » à l'angle bas-droit, visible tant
+          qu'aucune image n'était posée. Retirée sur demande.
+
+          ⚠️ Elle n'était pas décorative, et son retrait a un coût connu : c'est
+          elle qui disait, au repos, qu'on peut poser une image ici. Il ne reste
+          que le survol, qui découvre l'icône d'appareil photo — et un survol
+          seul ne se découvre pas. C'est exactement l'état où les logos empilés
+          des actifs avaient échoué, quand ils occupaient cet emplacement : ils
+          montraient le contenu, personne ne devinait qu'on pouvait y mettre une
+          photo. Voir l'en-tête du fichier.
+
+          Si le besoin revient, la piste est de le dire ailleurs qu'à l'angle de
+          la vignette — dans le menu du portefeuille, ou au survol du nom. */}
 
       {image && survol && !envoi && (
         <button type="button" onClick={() => appeler("DELETE")}

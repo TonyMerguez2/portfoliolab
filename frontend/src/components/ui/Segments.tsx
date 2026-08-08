@@ -1,4 +1,5 @@
 "use client";
+import type { ReactNode } from "react";
 import { FONT } from "@/lib/typography";
 import { JETONS, RAYONS } from "@/lib/palette";
 
@@ -29,16 +30,34 @@ import { JETONS, RAYONS } from "@/lib/palette";
  *   voit pas.
  */
 
-export type Segment<T extends string> = { valeur: T; libelle: string };
+/**
+ * Une option de la piste.
+ *
+ * `libelle` accepte un nœud et pas seulement une chaîne : le bandeau du
+ * graphique du portefeuille y met des pictogrammes. Dans ce cas `titre` devient
+ * obligatoire en pratique — une icône seule n'a pas de texte, donc rien à
+ * annoncer à un lecteur d'écran ni à montrer au survol.
+ */
+export type Segment<T extends string> = { valeur: T; libelle: ReactNode; titre?: string };
 
 export default function Segments<T extends string>({
-  options, valeur, onChange, taille = "md", ariaLabel,
+  options, valeur, onChange, taille = "md", picto = false, ariaLabel,
 }: {
   options: readonly Segment<T>[];
   valeur: T;
   onChange: (v: T) => void;
   /** `sm` pour les en-têtes de panneau, `md` pour les barres de section. */
   taille?: "sm" | "md";
+  /**
+   * Pastilles carrées, pour des options qui ne portent qu'un pictogramme.
+   *
+   * Le rembourrage par défaut est réglé sur du texte : 13 px de part et d'autre
+   * d'un mot. Autour d'une icône de 14 px, il donne une pastille de 40 sur 26,
+   * soit une bande large et basse où le pictogramme flotte. On passe donc à une
+   * largeur fixée égale à la hauteur du bouton voisin, ce qui aligne aussi la
+   * piste sur la rangée de boutons du bandeau.
+   */
+  picto?: boolean;
   ariaLabel?: string;
 }) {
   const petit = taille === "sm";
@@ -60,13 +79,18 @@ export default function Segments<T extends string>({
         return (
           <button key={o.valeur} type="button" role="tab" aria-selected={actif}
             onClick={() => onChange(o.valeur)}
+            title={o.titre} aria-label={o.titre}
             style={{
-              padding: petit ? "0 10px" : "0 13px",
+              padding: picto ? 0 : petit ? "0 10px" : "0 13px",
+              width: picto ? (petit ? 26 : 30) : undefined,
               height: petit ? 22 : 26,
               borderRadius: rayon,
               border: "none", cursor: "pointer", whiteSpace: "nowrap",
               fontFamily: FONT, fontSize: petit ? 11 : 12,
               fontWeight: 500,
+              // Une icône ne se cale pas sur une ligne de base comme du texte :
+              // sans ce centrage, un pictogramme se posait deux pixels bas.
+              display: "inline-flex", alignItems: "center", justifyContent: "center",
               background: actif ? JETONS.segmentActif : "transparent",
               color: actif ? JETONS.segmentEncre : JETONS.segmentInactif,
               boxShadow: actif ? JETONS.segmentOmbre : "none",

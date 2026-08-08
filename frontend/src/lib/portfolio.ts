@@ -39,6 +39,71 @@ export function assetClass(ticker: string): "Crypto" | "ETF" | "Actions" {
   return "Actions";
 }
 
+/**
+ * Places européennes éligibles au PEA parmi les codes du catalogue.
+ *
+ * `LSE` en est absente depuis le Brexit et `EBS` — la Suisse — n'y a jamais
+ * figuré, bien que toutes deux soient européennes au sens géographique. C'est
+ * l'Espace économique européen qui compte, pas le continent.
+ */
+const PLACES_PEA = new Set(["PAR", "GER", "AMS", "BRU", "LIS", "MIL", "MCE", "STO", "HEL", "CPH", "DUB", "VIE"]);
+
+export type Enveloppe = "PEA" | "CTO" | "Crypto";
+
+/**
+ * L'enveloppe que le contenu d'un portefeuille laisse déduire.
+ *
+ * ⚠️ **C'est une inférence, pas une donnée.** Aucun champ ne dit dans quel
+ * compte les titres sont détenus ; la règle ne fait que lire ce que le contenu
+ * *interdit*. Elle se trompera sur un portefeuille de titres parisiens détenu
+ * en compte-titres ordinaire — ce qui est parfaitement possible — et sur un ETF
+ * coté à Paris mais à réplication physique d'actions américaines, qui n'est pas
+ * éligible au PEA malgré sa place de cotation. Le libellé mérite donc une
+ * infobulle qui dise d'où il sort ; il ne vaut pas une déclaration fiscale.
+ *
+ * Chaque étiquette n'est posée que lorsqu'elle est la seule possible au vu de
+ * ce qu'on sait :
+ *
+ * - **Crypto** si tout est crypto. Un PEA ne peut pas en détenir, un
+ *   compte-titres ordinaire non plus.
+ * - **PEA** s'il n'y a aucune crypto et que toutes les places sont connues et
+ *   éligibles. Une seule place inconnue suffit à retirer l'étiquette : c'est le
+ *   sens du `null` d'`assetExchange`.
+ * - **CTO** sinon, y compris quand on ne sait pas. C'est le fourre-tout, celui
+ *   qui peut tout détenir, donc le moins engageant des trois.
+ *
+ * Un portefeuille vide n'a pas d'enveloppe : `null`, et rien ne s'affiche.
+ */
+/**
+ * D'où sort l'étiquette, en une phrase, pour l'infobulle de la pastille.
+ *
+ * Ici et non dans les composants : la phrase est la même à deux endroits — la
+ * bande de tête et la liste du menu déroulant — et c'est exactement le genre de
+ * texte qui divergerait à la première retouche. Elle est aussi la seule chose
+ * qui empêche une déduction de passer pour une donnée ; elle mérite une source
+ * unique.
+ */
+export function infobulleEnveloppe(e: Enveloppe): string {
+  const raison = e === "Crypto" ? "toutes les lignes sont des cryptomonnaies."
+    : e === "PEA" ? "toutes les lignes cotent sur une place de l'Espace économique européen, éligible au PEA."
+    : "au moins une ligne n'est pas éligible au PEA, ou sa place de cotation est inconnue.";
+  return `Déduit du contenu du portefeuille, pas d'une donnée de compte : ${raison}`;
+}
+
+export function enveloppe(
+  tickers: string[],
+  place: (ticker: string) => string | null,
+): Enveloppe | null {
+  if (tickers.length === 0) return null;
+  const cryptos = tickers.filter(t => assetClass(t) === "Crypto");
+  if (cryptos.length === tickers.length) return "Crypto";
+  if (cryptos.length > 0) return "CTO";
+  return tickers.every(t => {
+    const p = place(t);
+    return p != null && PLACES_PEA.has(p);
+  }) ? "PEA" : "CTO";
+}
+
 /** Tri et filtrage, à part pour être testables sans rendu. */
 export function arrange(assets: GridAsset[], filter: string, sort: SortKey): GridAsset[] {
   const kept = filter === "Tous" ? assets : assets.filter(a => assetClass(a.ticker) === filter);

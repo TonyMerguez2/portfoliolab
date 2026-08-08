@@ -5,13 +5,31 @@ import { useApp } from "@/lib/AppContext";
 import { enTetesAuth } from "@/lib/session";
 import { TRENDING } from "@/lib/assets";
 import AssetLogo from "@/components/AssetLogo";
+import PocheActifs, { RAYON_CORPS } from "@/components/portfolio/PocheActifs";
+import PastilleEnveloppe from "@/components/portfolio/PastilleEnveloppe";
+import { enveloppe, infobulleEnveloppe } from "@/lib/portfolio";
+import { assetExchange } from "@/lib/assets";
+
+/**
+ * Taille de la vignette d'un portefeuille dans la liste du menu déroulant.
+ *
+ * Voir la mise en garde à l'endroit où elle sert : 48 est le plus petit nombre
+ * qui laisse tenir à la fois le logo de la première ligne et une pastille
+ * d'enveloppe lisible.
+ */
+const VIGNETTE = 48;
 import { JETONS, RAYONS, rayonVignette } from "@/lib/palette";
 import { initiale } from "@/lib/initiale";
 import { encreSur } from "@/lib/couleur";
 import { API_URL } from "@/lib/api";
 
 type Asset = { ticker: string; type: string; name: string; };
-type Portefeuille = { id: string; name: string; color?: string | null; image_url?: string | null; assets?: unknown[] };
+type Portefeuille = {
+  id: string; name: string; color?: string | null; image_url?: string | null;
+  // Le poids sert à la vignette, qui met la plus grosse ligne devant. Le type
+  // était `unknown[]`, ce que seul un `.length` tolérait.
+  assets?: { ticker: string; weight: number }[];
+};
 type Price = { price: number; change: number; };
 
 type AssetRowProps = {
@@ -75,19 +93,50 @@ const LignePortefeuille = memo(function LignePortefeuille(
 ) {
   const [survol, setSurvol] = useState(false);
   const fond = p.color || "#6366F1";
+  const enveloppeLigne = useMemo(
+    () => enveloppe((p.assets ?? []).map(a => a.ticker), assetExchange),
+    [p.assets]);
   return (
     <div onClick={() => onSelect(p)}
       onMouseEnter={() => setSurvol(true)} onMouseLeave={() => setSurvol(false)}
       style={{ display:"flex", alignItems:"center", gap:"10px", width:"100%", padding:"8px 12px",
         background: survol ? "rgba(255,255,255,0.05)" : "transparent", cursor:"pointer",
         borderBottom:"1px solid rgba(255,255,255,0.04)", boxSizing:"border-box" as const }}>
-      <span style={{ width:28, height:28, borderRadius:rayonVignette(28), flexShrink:0,
-        display:"flex", alignItems:"center", justifyContent:"center", overflow:"hidden",
-        background:fond, color:encreSur(fond), fontSize:13, fontWeight:700 }}>
-        {p.image_url
-          // eslint-disable-next-line @next/next/no-img-element
-          ? <img src={`${API_URL}${p.image_url}`} alt="" style={{ width:"100%", height:"100%", objectFit:"cover" }} />
-          : initiale(p.name)}
+      {/* La même vignette que la bande de tête du portefeuille, et désormais avec
+          les deux mêmes ajouts : le logo de la première ligne, et la pastille
+          d'enveloppe. Elle portait l'initiale du nom, à trois millimètres du nom
+          lui-même — répétition qui coûtait plus cher ici qu'ailleurs, cette liste
+          servant justement à distinguer des portefeuilles dont les initiales se
+          ressemblent.
+
+          ⚠️ **Elle passe de 28 à 48 px, et c'est ce que coûtent ces deux
+          ajouts.** À 28, le logo ne s'affichait pas — le seuil de `PocheActifs`
+          est à 40, en dessous duquel il mesure moins de 9 px et ne désigne plus
+          rien — et une pastille lisible ne descend pas sous 20 px de diamètre, ce
+          qui en aurait couvert la moitié. La ligne de la liste gagne donc une
+          vingtaine de pixels de haut. C'est le prix, il n'y a pas de réglage
+          intermédiaire qui tienne : entre 28 et 48, on paie la hauteur sans
+          gagner la lisibilité.
+
+          Le rayon suit celui du corps de la poche quand c'est elle qui s'affiche,
+          et `rayonVignette` sinon : c'est ce `overflow: hidden` qui coupe les
+          angles du dessin, donc les deux valeurs doivent s'accorder. */}
+      <span style={{ position:"relative", display:"inline-flex", flexShrink:0 }}>
+        <span style={{ width:VIGNETTE, height:VIGNETTE, flexShrink:0,
+          borderRadius: p.assets && !p.image_url ? Math.round(VIGNETTE * RAYON_CORPS) : rayonVignette(VIGNETTE),
+          display:"flex", alignItems:"center", justifyContent:"center", overflow:"hidden",
+          background:fond, color:encreSur(fond), fontSize:19, fontWeight:700 }}>
+          {p.image_url
+            // eslint-disable-next-line @next/next/no-img-element
+            ? <img src={`${API_URL}${p.image_url}`} alt="" style={{ width:"100%", height:"100%", objectFit:"cover" }} />
+            : p.assets
+              ? <PocheActifs actifs={p.assets} taille={VIGNETTE} />
+              : initiale(p.name)}
+        </span>
+        {enveloppeLigne && (
+          <PastilleEnveloppe enveloppe={enveloppeLigne} diametre={20}
+            infobulle={infobulleEnveloppe(enveloppeLigne)} />
+        )}
       </span>
       <span style={{ color:"#F8F9FC", fontSize:"11px", fontWeight:500, flex:1, textAlign:"left" }}>{p.name}</span>
       {actif && (

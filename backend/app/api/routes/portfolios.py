@@ -31,6 +31,10 @@ class PortfolioUpdate(BaseModel):
     total_value:   float | None = None
     cost_basis:    float | None = None
     is_simulation: bool  | None = None
+    # Profil de risque déclaré : horizon en années, et tolérance parmi
+    # `prudent`, `equilibre`, `dynamique`. Voir `profil_cible`.
+    horizon_annees: int | None = None
+    tolerance:      str | None = None
 
 def _adopter_orphelins(user: User, db: Session) -> None:
     """
@@ -104,6 +108,18 @@ def update_portfolio(
     if data.total_value   is not None: p.total_value   = data.total_value
     if data.cost_basis    is not None: p.cost_basis    = data.cost_basis
     if data.is_simulation is not None: p.is_simulation = data.is_simulation
+    if data.horizon_annees is not None: p.horizon_annees = data.horizon_annees
+    if data.tolerance is not None:
+        # ⚠️ Validé ici et non seulement à la lecture : une tolérance inconnue
+        # ferait taire les trois facteurs de risque sans que rien ne le dise, et
+        # le portefeuille paraîtrait simplement moins bien noté.
+        from app.services.analyse import TOLERANCES
+        if data.tolerance not in TOLERANCES:
+            raise HTTPException(
+                status_code=422,
+                detail=f"tolerance doit valoir l'une de {', '.join(TOLERANCES)}",
+            )
+        p.tolerance = data.tolerance
     db.commit()
     db.refresh(p)
     return p

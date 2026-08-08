@@ -165,3 +165,37 @@ export function indexToBase100(
   if (!Number.isFinite(base) || base === 0) return [];
   return src.map(p => ({ date: p.date, value: Math.round((pick(p) / base) * 10000) / 100 }));
 }
+
+/**
+ * Regroupe la série en bougies.
+ *
+ * L'ouverture, le sommet, le creux et la clôture sont tirés des **valeurs
+ * réelles du portefeuille** contenues dans chaque paquet. C'est important :
+ * composer la bougie à partir des plus hauts de chaque ligne donnerait une
+ * borne supérieure et non un vrai sommet — AAPL peut culminer à 10 h et NVDA à
+ * 15 h, le portefeuille n'a jamais valu la somme des deux.
+ *
+ * La contrepartie est que le sommet vaut celui des points échantillonnés : sur
+ * une série de clôtures journalières, les extrêmes intraday manquent. C'est la
+ * limite ordinaire de toute bougie construite sur des clôtures.
+ */
+export function agregerEnBougies<T extends number>(
+  data: { time: T; value: number }[],
+  cible = 60,
+): { time: T; open: number; high: number; low: number; close: number }[] {
+  if (data.length < 2) return [];
+  const taille = Math.max(1, Math.ceil(data.length / cible));
+  const out: { time: T; open: number; high: number; low: number; close: number }[] = [];
+  for (let i = 0; i < data.length; i += taille) {
+    const paquet = data.slice(i, i + taille);
+    const valeurs = paquet.map(p => p.value);
+    out.push({
+      time: paquet[0].time,
+      open: valeurs[0],
+      high: Math.max(...valeurs),
+      low: Math.min(...valeurs),
+      close: valeurs[valeurs.length - 1],
+    });
+  }
+  return out;
+}

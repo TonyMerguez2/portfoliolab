@@ -1094,7 +1094,19 @@ function ChartContent() {
                   .asset-hero-status{flex:1 1 100%;order:3}
                 }
               ` }} />
-              <div style={{ display:"flex", flexDirection:"column", padding:"8px 20px 8px", borderTop:"1px solid rgba(var(--nv-encre-rvb), 0.06)", borderBottom:"none", flexShrink:0, gap:8, marginTop:6 }}>
+              {/* Le liseré haut de ce bloc est retiré : il traçait un filet
+                  d'un pixel sur toute la largeur, juste sous la barre de
+                  recherche, et ne séparait rien — au-dessus de lui il n'y a que
+                  le bandeau, qui a déjà sa propre limite.
+
+                  Le retrait monte fin à 13 pour que la carte d'actif se pose à
+                  la même distance de la barre de recherche que la bande de tête
+                  du tableau de bord : 21 px dans les deux cas. Il valait 6 plus
+                  le pixel du liseré, ce qui plaçait la carte à 15 — six de trop
+                  près. La référence est le bord *visible* de la bande, celui de
+                  son anneau intérieur ; son anneau extérieur est de la couleur
+                  du fond et ne se voit pas, s'y fier aurait fait viser 14. */}
+              <div style={{ display:"flex", flexDirection:"column", padding:"8px 20px 8px", flexShrink:0, gap:8, marginTop:13 }}>
 
                 {/* ── Row 1: back · [logo + compact identity+price] · NOVAC ── */}
                 <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", gap:16 }}>
