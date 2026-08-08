@@ -9,6 +9,7 @@ import TransactionsView from "@/components/portfolio/TransactionsView";
 import AnalyseView from "@/components/portfolio/AnalyseView";
 import { createPortal } from "react-dom";
 import PanneauProfil from "@/components/portfolio/PanneauProfil";
+import PanneauFrais from "@/components/portfolio/PanneauFrais";
 import {
   bandeDuScore, couvertureFacteurs, EXPLICATION_FACTEUR, facteurLePlusFaible,
   FACTEURS_DU_PROFIL,
@@ -809,6 +810,8 @@ function PortfolioPageInner() {
 
   const [profilOuvert, setProfilOuvert] = useState(false);
   const [ancreProfil, setAncreProfil] = useState<{ droite: number; haut: number } | null>(null);
+  const [fraisOuvert, setFraisOuvert] = useState(false);
+  const [ancreFrais, setAncreFrais] = useState<{ droite: number; haut: number } | null>(null);
 
   /**
    * Enregistre le profil, puis relit l'analyse.
@@ -828,6 +831,30 @@ function PortfolioPageInner() {
         body: JSON.stringify({ horizon_annees: horizon, tolerance }),
       });
     } catch { /* réseau indisponible : le profil vaut pour la prochaine fois */ }
+    setTxRefreshKey(k => k + 1);
+  };
+
+  /**
+   * Enregistre les frais courants saisis, puis relit l'analyse.
+   *
+   * ⚠️ Le seul moyen de mesurer ce facteur pour un portefeuille européen : le
+   * fournisseur de cours ne publie pas le TER des ETF domiciliés en Europe. Sur un
+   * vrai PEA, un seul des trois fonds l'annonçait — 10 % du portefeuille, sous le
+   * seuil de couverture, donc aucune note.
+   *
+   * La relecture est nécessaire comme pour le profil : la moyenne pondérée et le
+   * contrôle de couverture se font côté serveur.
+   */
+  const enregistrerFrais = async (frais: Record<string, number>) => {
+    const id = portfolio?.id;
+    if (!id) return;
+    try {
+      await fetch(`${API_URL}/api/v1/portfolios/${id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json", ...enTetesAuth() },
+        body: JSON.stringify({ frais_lignes: frais }),
+      });
+    } catch { /* réseau indisponible : la saisie vaut pour la prochaine fois */ }
     setTxRefreshKey(k => k + 1);
   };
 
@@ -1413,6 +1440,16 @@ function PortfolioPageInner() {
               bande de tête : elle y est le premier chiffre qu'on cherche, et
               son départ rend une centaine de pixels à cette colonne. */}
           <Cadre style={{ padding: "14px 16px", flexShrink: 0 }}>
+            {fraisOuvert && ancreFrais && (
+              <PanneauFrais
+                lignes={(analyse?.poids ?? []).map(p => ({ ticker: p.ticker, part: p.part }))}
+                valeurs={Object.fromEntries(
+                  (analyse?.poids ?? []).map(p => [p.ticker, null]))}
+                surFrais={enregistrerFrais}
+                fermer={() => setFraisOuvert(false)}
+                ancre={ancreFrais}
+              />
+            )}
             {profilOuvert && ancreProfil && (
               <PanneauProfil
                 profil={analyse?.profil ?? null}
@@ -1533,6 +1570,49 @@ function PortfolioPageInner() {
                         </span>{" "}
                         pour que {enAttente.length === 1 ? "ce facteur soit noté" : `ces ${enAttente.length} facteurs soient notés`} :{" "}
                         {enAttente.map(k => (LIBELLE_FACTEUR[k] ?? k).toLowerCase()).join(", ")}.
+                      </button>
+                    );
+                  })()}
+                  {(() => {
+                    /**
+                     * L'invite à saisir les frais courants, quand ils manquent.
+                     *
+                     * ⚠️ C'est le **seul** facteur qui ne se rétablit jamais seul. Le
+                     * fournisseur de cours ne publie pas le TER des ETF domiciliés en
+                     * Europe : mesuré sur un vrai PEA, un seul des trois fonds
+                     * l'annonçait, soit 10 % du portefeuille — sous le seuil de
+                     * couverture, donc aucune note, définitivement.
+                     *
+                     * Sans cette invite, l'utilisateur voit « — » sans savoir qu'il
+                     * peut y remédier lui-même, et que le chiffre est sur le document
+                     * d'information de chacun de ses fonds. Les frais sont le facteur
+                     * le plus prédictif du résultat relatif sur vingt ans, et le seul
+                     * qui soit certain : ne pas les mesurer est le manque le plus
+                     * coûteux du score.
+                     */
+                    const f = analyse.facteurs?.frais;
+                    if (!f || f.score != null) return null;
+                    if (!(analyse.poids ?? []).length) return null;
+                    return (
+                      <button type="button"
+                        onClick={e => {
+                          const r = e.currentTarget.getBoundingClientRect();
+                          setAncreFrais({ droite: window.innerWidth - r.right, haut: r.bottom + 6 });
+                          setFraisOuvert(true);
+                        }}
+                        style={{
+                          display: "block", width: "100%", textAlign: "left",
+                          margin: "0 0 9px", padding: "7px 8px", cursor: "pointer",
+                          borderRadius: RAYONS.xs, background: CLAIR.carteCreuse,
+                          border: `1px solid ${JETONS.bord}`,
+                          fontFamily: FONT, fontSize: 10.5, color: CLAIR.texteAttenue,
+                          lineHeight: 1.45,
+                        }}>
+                        <span style={{ color: CLAIR.accent, fontWeight: 600 }}>
+                          Saisissez les frais de vos fonds
+                        </span>{" "}
+                        pour que ce facteur soit noté : le fournisseur de cours ne publie
+                        pas le TER des ETF européens.
                       </button>
                     );
                   })()}

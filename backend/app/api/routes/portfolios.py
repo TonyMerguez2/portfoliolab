@@ -35,6 +35,10 @@ class PortfolioUpdate(BaseModel):
     # `prudent`, `equilibre`, `dynamique`. Voir `profil_cible`.
     horizon_annees: int | None = None
     tolerance:      str | None = None
+    # Frais courants saisis à la main, `{ticker: pourcentage par an}`. Voir la note
+    # sur `Portfolio.frais_lignes` : le fournisseur de cours ne publie presque jamais
+    # le TER des ETF européens, et l'épargnant l'a sur son document d'information.
+    frais_lignes: dict[str, float] | None = None
 
 def _adopter_orphelins(user: User, db: Session) -> None:
     """
@@ -120,6 +124,34 @@ def update_portfolio(
                 detail=f"tolerance doit valoir l'une de {', '.join(TOLERANCES)}",
             )
         p.tolerance = data.tolerance
+    if data.frais_lignes is not None:
+        # ⚠️ Validé à l'écriture, comme la tolérance. Un TER hors bornes ne doit pas
+        # entrer en base : moyenné avec les autres, il déplacerait la note sans que
+        # rien ne signale l'erreur de saisie.
+        #
+        # Les bornes sont celles du marché réel — de 0,03 % pour un tracker large à
+        # 3 % pour un fonds actif — élargies à 5 % pour ne pas refuser un produit
+        # inhabituel. Zéro est accepté : certains fonds n'ont réellement aucun frais
+        # courant, et c'est une information.
+        #
+        # La borne haute protège surtout d'une confusion d'unité : quelqu'un qui tape
+        # « 15 » pour 0,15 % verra son erreur refusée au lieu d'obtenir zéro sur cent
+        # aux frais.
+        propres: dict[str, float] = {}
+        for ticker, valeur in data.frais_lignes.items():
+            try:
+                v = float(valeur)
+            except (TypeError, ValueError):
+                raise HTTPException(status_code=422,
+                                    detail=f"frais illisibles pour {ticker}")
+            if not 0.0 <= v <= 5.0:
+                raise HTTPException(
+                    status_code=422,
+                    detail=f"frais de {ticker} : {v} % par an est hors de 0 à 5 % — "
+                           "le taux s'exprime en pourcentage annuel, par exemple 0,15",
+                )
+            propres[str(ticker).upper()] = v
+        p.frais_lignes = propres
     db.commit()
     db.refresh(p)
     return p

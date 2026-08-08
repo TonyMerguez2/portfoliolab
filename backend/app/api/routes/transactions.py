@@ -772,7 +772,7 @@ _FICHIER_CACHE = pathlib.Path(__file__).resolve().parents[3] / ".cache_details.j
 #
 # C'est la contrepartie exacte du gain de la longue durée de vie : plus le cache
 # tient, plus il faut un moyen de le déclarer périmé autrement que par le temps.
-_VERSION_FICHE = 3
+_VERSION_FICHE = 4
 
 
 def _charger_cache_details() -> None:
@@ -869,6 +869,32 @@ def _ecrire_cache_details() -> None:
 # Date de modification du fichier lors de la dernière lecture. `None` tant qu'on
 # n'a rien lu, ce qui force une première tentative.
 _CACHE_MTIME: float | None = None
+
+
+def _frais_connus(details: dict[str, dict], declares) -> dict[str, float]:
+    """
+    Les frais courants par ligne : ceux du fournisseur, ceux saisis par-dessus.
+
+    ⚠️ La saisie de l'épargnant **prime** sur le fournisseur, et ce n'est pas de la
+    complaisance. Le TER dépend de la part détenue — capitalisante ou distribuante,
+    couverte ou non, institutionnelle ou grand public — et le fournisseur en donne
+    une seule pour un ticker. Le document d'information clé que l'épargnant a sous
+    les yeux décrit exactement sa part.
+
+    Sans cette saisie, le facteur reste muet pour la plupart des portefeuilles
+    européens : mesuré sur un vrai PEA, un seul des trois fonds annonçait son TER,
+    soit 10 % du portefeuille — sous le seuil de couverture de soixante pour cent.
+    """
+    connus = {t: d["frais"] for t, d in details.items()
+              if (d or {}).get("frais") is not None}
+    for ticker, valeur in (declares or {}).items():
+        try:
+            connus[str(ticker).upper()] = float(valeur)
+        except (TypeError, ValueError):
+            # Une valeur illisible en base — écrite par une version antérieure — est
+            # ignorée plutôt que propagée dans la moyenne.
+            continue
+    return connus
 
 
 def _courtage_paye(txs) -> float | None:
@@ -1134,18 +1160,35 @@ def _details_titre(ticker: str) -> dict:
                 fd = tk.funds_data
                 d["secteurs"] = dict(fd.sector_weightings or {})
                 d["hhi"], composition_lue = _hhi_du_fonds(fd)
-                # ⚠️ Repli sur l'indice quand le fonds ne publie rien — un
-                # synthétique n'a pas de composition à publier. On ne replie que sur
-                # une lecture **aboutie** : sous limitation de débit, mieux vaut
-                # réessayer le fonds que se rabattre sur un proxy par erreur.
-                if d["hhi"] is None and composition_lue:
-                    indice = _hhi_de_l_indice(d.get("nom"))
-                    if indice:
-                        d["hhi"] = indice
-                        # L'interface doit pouvoir dire que le chiffre vient de
-                        # l'indice et non du fonds : prétendre avoir lu le fonds
-                        # serait faux.
-                        d["hhi_indice"] = True
+                # ⚠️ L'indice **passe devant** la composition du fonds, et cette
+                # priorité a été inversée après mesure.
+                #
+                # Un ETF synthétique qui publie quelque chose publie son panier de
+                # **collatéral** — ce qu'il détient réellement — et non l'indice
+                # auquel l'épargnant est exposé. Or c'est l'exposition qui porte le
+                # risque société.
+                #
+                # Constaté sur ETZ.PA, « BNP Paribas Easy Stoxx Europe 600 » : sa
+                # composition publiée donnait 36 sociétés équivalentes, quand un ETF
+                # physique sur le même indice en donne 195. Le facteur mesurait un
+                # panier de garantie et l'annonçait comme la diversification du
+                # portefeuille.
+                #
+                # Pour un fonds **physique**, les deux coïncident par construction —
+                # ses lignes *sont* l'indice — donc rien n'est perdu à préférer
+                # l'indice. Cela donne en plus une propriété utile : deux ETF suivant
+                # le même indice reçoivent la même mesure, ce qui est juste puisqu'ils
+                # portent la même exposition.
+                #
+                # La composition propre ne sert donc que d'ultime recours, quand
+                # l'indice n'est pas reconnu — cas d'un fonds sectoriel ou thématique,
+                # presque toujours physique, donc lisible sans risque de collatéral.
+                indice = _hhi_de_l_indice(d.get("nom"))
+                if indice:
+                    d["hhi"] = indice
+                    # L'interface doit pouvoir dire que le chiffre vient de l'indice :
+                    # prétendre avoir lu le fonds serait faux.
+                    d["hhi_indice"] = True
                 d["classes"] = dict(fd.asset_classes or {})
                 # Le TER d'un fonds vit ici plutôt que dans `info`, sous une
                 # étiquette en clair et non sous une clé.
@@ -1366,8 +1409,7 @@ async def get_analysis(
         secteurs=ventilation_secteurs(details, poids),
         zones=ventilation_zones(details, poids),
         hhi_lignes=hhi_lignes, hhi_par_indice=hhi_par_indice,
-        frais_par_ligne={t: d["frais"] for t, d in details.items()
-                         if (d or {}).get("frais") is not None},
+        frais_par_ligne=_frais_connus(details, portefeuille.frais_lignes),
         cible=profil_cible(portefeuille.horizon_annees, portefeuille.tolerance),
         courtage=_courtage_paye(txs),
     )

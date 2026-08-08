@@ -43,6 +43,25 @@ class Portfolio(Base):
     # ans et un portefeuille d'essai n'ont pas la même intention.
     horizon_annees = Column(Integer, nullable=True, default=None)
     tolerance      = Column(String,  nullable=True, default=None)
+    # ── Frais courants saisis à la main ──────────────────────────────────────
+    #
+    # `{ticker: pourcentage par an}`, par exemple `{"ESE.PA": 0.15}`.
+    #
+    # ⚠️ Le seul moyen de mesurer les frais d'un portefeuille européen. Le
+    # fournisseur de cours ne publie presque jamais le TER des ETF domiciliés en
+    # Europe : mesuré sur un vrai PEA, un seul des trois fonds l'annonçait, soit
+    # 10 % du portefeuille — sous le seuil de couverture, donc le facteur restait
+    # muet. Or les frais sont le facteur le plus prédictif du résultat relatif d'un
+    # portefeuille de fonds sur vingt ans, et le seul qui soit **certain** : les
+    # rendements sont espérés, les frais sont prélevés.
+    #
+    # L'épargnant, lui, a le chiffre — il figure sur le document d'information clé
+    # de chaque fonds. Le lui demander vaut mieux que de renoncer à mesurer.
+    #
+    # Rangé par portefeuille plutôt que par ticker global : deux personnes peuvent
+    # détenir deux parts différentes du même fonds, aux frais différents, et rien
+    # ici ne justifie de trancher pour elles.
+    frais_lignes   = Column(JSON,    nullable=True, default=None)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
@@ -74,6 +93,7 @@ for table, col, typedef in [
     ("portfolios",   "image_url",     "TEXT"),
     ("portfolios",   "horizon_annees", "INTEGER"),
     ("portfolios",   "tolerance",      "TEXT"),
+    ("portfolios",   "frais_lignes",   "JSON"),
     ("transactions", "note",          "TEXT"),
 ]:
     try:

@@ -444,6 +444,94 @@ def test_une_tolerance_inconnue_est_refusee(client):
     assert "prudent" in r.json()["detail"]
 
 
+class TestFraisSaisis:
+    """
+    Les frais courants saisis à la main.
+
+    ⚠️ Le seul moyen de mesurer les frais d'un portefeuille européen. Le fournisseur
+    ne publie presque jamais le TER des ETF domiciliés en Europe : mesuré sur un vrai
+    PEA, un seul des trois fonds l'annonçait, soit 10 % du portefeuille — sous le
+    seuil de couverture, donc le facteur restait muet. Or les frais sont le facteur
+    le plus prédictif du résultat relatif sur vingt ans, et le seul qui soit certain.
+    """
+
+    def test_la_saisie_prime_sur_le_fournisseur(self):
+        """
+        Le TER dépend de la part détenue — capitalisante ou distribuante, couverte ou
+        non — et le fournisseur n'en donne qu'une par ticker. Le document
+        d'information de l'épargnant décrit exactement sa part.
+        """
+        import app.api.routes.transactions as routes
+
+        details = {"A": {"frais": 0.40}, "B": {"frais": None}}
+        connus = routes._frais_connus(details, {"A": 0.15, "B": 0.22})
+        assert connus == {"A": 0.15, "B": 0.22}
+
+    def test_le_fournisseur_sert_quand_rien_n_est_saisi(self):
+        import app.api.routes.transactions as routes
+
+        assert routes._frais_connus({"A": {"frais": 0.40}}, None) == {"A": 0.40}
+        assert routes._frais_connus({"A": {"frais": 0.40}}, {}) == {"A": 0.40}
+
+    def test_une_valeur_illisible_en_base_est_ignoree(self):
+        """Écrite par une version antérieure, elle ne doit pas entrer dans la moyenne."""
+        import app.api.routes.transactions as routes
+
+        assert routes._frais_connus({}, {"A": "abc", "B": 0.2}) == {"B": 0.2}
+
+    def test_le_ticker_est_normalise(self):
+        import app.api.routes.transactions as routes
+
+        assert routes._frais_connus({}, {"ese.pa": 0.15}) == {"ESE.PA": 0.15}
+
+
+def test_les_frais_saisis_se_declarent_et_notent(client, monkeypatch):
+    """
+    Le parcours complet : sans saisie le facteur est muet, avec elle il note.
+    """
+    import yfinance
+
+    import app.api.routes.transactions as routes
+
+    pid = creer_portefeuille(client, "Frais à la main")
+    assert client.post(f"/api/v1/portfolios/{pid}/transactions",
+                       json=ecriture("ESE.PA", 10, 100.0, "2026-01-05")).status_code == 201
+
+    async def cours(tickers):
+        return {t: 150.0 for t in tickers}
+
+    monkeypatch.setattr(routes, "fetch_current_prices", cours)
+    monkeypatch.setattr(yfinance, "download",
+                        lambda *a, **k: (_ for _ in ()).throw(RuntimeError("réseau coupé")))
+    monkeypatch.setattr(routes, "_details_titre", lambda t: {"nom": "Un fonds", "secteur": "Tech"})
+
+    muet = client.get(f"/api/v1/portfolios/{pid}/analysis").json()
+    assert muet["facteurs"]["frais"]["score"] is None
+
+    r = client.put(f"/api/v1/portfolios/{pid}", json={"frais_lignes": {"ESE.PA": 0.15}})
+    assert r.status_code == 200
+
+    note = client.get(f"/api/v1/portfolios/{pid}/analysis").json()["facteurs"]["frais"]
+    assert note["valeur"] == pytest.approx(0.15)
+    assert note["score"] > 90, "0,15 % par an est proche du meilleur tracker"
+
+
+def test_un_ter_hors_bornes_est_refuse(client):
+    """
+    ⚠️ Validé à l'écriture, comme la tolérance. La borne haute protège surtout d'une
+    confusion d'unité : quelqu'un qui tape « 15 » pour 0,15 % verra son erreur
+    refusée, au lieu d'obtenir zéro sur cent aux frais sans comprendre pourquoi.
+    """
+    pid = creer_portefeuille(client, "Frais douteux")
+    r = client.put(f"/api/v1/portfolios/{pid}", json={"frais_lignes": {"ESE.PA": 15.0}})
+    assert r.status_code == 422
+    assert "0 à 5" in r.json()["detail"]
+
+    # Zéro est accepté : certains fonds n'ont réellement aucun frais courant.
+    assert client.put(f"/api/v1/portfolios/{pid}",
+                      json={"frais_lignes": {"ESE.PA": 0.0}}).status_code == 200
+
+
 class TestProxyDeComposition:
     """
     Le repli sur l'indice, pour les fonds qui ne publient pas leur composition.
