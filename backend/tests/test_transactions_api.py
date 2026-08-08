@@ -631,19 +631,25 @@ class TestHhiDuFonds:
         assert routes._hhi_du_fonds(Casse()) == (None, False)
 
 
-def test_un_cache_d_ancien_format_est_ignore(tmp_path, monkeypatch):
+def test_un_cache_d_ancien_format_est_perime_mais_pas_jete(tmp_path, monkeypatch):
     """
-    ⚠️ La contrepartie de la longue durée de vie du cache.
+    ⚠️ Une montée de version **périme** les fiches, elle ne les supprime pas.
 
     Les fiches tiennent trente jours, ce qui rendait invisible pendant un mois tout
-    champ ajouté au format. Observé : `hhi` — la concentration interne d'un fonds,
-    ajoutée pour la concentration en transparence — n'apparaissait pas, parce que
-    les fiches enregistrées la veille ne le portaient pas et restaient valides. Le
-    facteur affichait « composition non publiée » pour des fonds qui la publient,
-    et rien ne distinguait ce cas d'une vraie absence.
+    champ ajouté au format : le champ `hhi` — la concentration interne d'un fonds —
+    n'apparaissait pas, car les fiches de la veille ne le portaient pas et restaient
+    valides. D'où le versionnement.
 
-    Un fichier d'une version antérieure est ignoré, pas migré : il se reconstruit au
-    premier appel.
+    Mais la première version du versionnement **ignorait le fichier entier**, et
+    c'était une faute. Passer la version de 2 à 3 pour ajouter un seul champ a fait
+    disparaître des ventilations sectorielles et géographiques encore parfaitement
+    justes ; le fournisseur limitant le débit à ce moment-là, trois facteurs du score
+    sont restés sans note. Jeter une donnée juste pour en obtenir une de plus est un
+    mauvais échange.
+
+    Les fiches sont donc chargées avec une échéance dépassée : une lecture fraîche
+    sera tentée, et si elle échoue l'ancienne est conservée — elle porte déjà tout
+    sauf le champ nouveau.
     """
     import json
     import time
@@ -653,30 +659,62 @@ def test_un_cache_d_ancien_format_est_ignore(tmp_path, monkeypatch):
     fichier = tmp_path / "vieux.json"
     monkeypatch.setattr(routes, "_FICHIER_CACHE", fichier)
 
-    # Format d'avant le champ `hhi` : un dictionnaire nu, sans version.
-    fichier.write_text(json.dumps({"VT": [time.time() + 3600, {"secteurs": {"tech": 1.0}}]}))
-    routes._CACHE_DETAILS.clear()
-    monkeypatch.setattr(routes, "_CACHE_MTIME", None)
-    routes._charger_cache_details()
-    assert routes._CACHE_DETAILS == {}, "un cache sans version doit être ignoré"
+    ancienne = {"secteurs": {"technology": 0.4, "healthcare": 0.6}, "nom": "Un fonds"}
+    for contenu in (
+        # Format d'avant le versionnement : un dictionnaire nu.
+        {"VT": [time.time() + 3600, ancienne]},
+        # Format versionné, version antérieure.
+        {"version": routes._VERSION_FICHE - 1, "fiches": {"VT": [time.time() + 3600, ancienne]}},
+    ):
+        fichier.write_text(json.dumps(contenu))
+        routes._CACHE_DETAILS.clear()
+        monkeypatch.setattr(routes, "_CACHE_MTIME", None)
+        routes._charger_cache_details()
+        entree = routes._CACHE_DETAILS.get("VT")
+        assert entree is not None, "la fiche doit survivre à la montée de version"
+        assert entree[1]["secteurs"] == ancienne["secteurs"], "les secteurs restent justes"
+        assert entree[0] <= time.time(), "mais l'échéance est dépassée, pour forcer la relecture"
 
-    # Format versionné, mais d'une version antérieure.
-    fichier.write_text(json.dumps(
-        {"version": routes._VERSION_FICHE - 1,
-         "fiches": {"VT": [time.time() + 3600, {"secteurs": {"tech": 1.0}}]}}))
-    routes._CACHE_DETAILS.clear()
-    monkeypatch.setattr(routes, "_CACHE_MTIME", None)
-    routes._charger_cache_details()
-    assert routes._CACHE_DETAILS == {}
-
-    # La version courante, elle, est relue.
+    # La version courante garde son échéance.
     fichier.write_text(json.dumps(
         {"version": routes._VERSION_FICHE,
-         "fiches": {"VT": [time.time() + 3600, {"secteurs": {"tech": 1.0}, "hhi": 0.005}]}}))
+         "fiches": {"VT": [time.time() + 3600, {**ancienne, "hhi": 0.005}]}}))
     routes._CACHE_DETAILS.clear()
     monkeypatch.setattr(routes, "_CACHE_MTIME", None)
     routes._charger_cache_details()
+    assert routes._CACHE_DETAILS["VT"][0] > time.time()
     assert routes._CACHE_DETAILS["VT"][1]["hhi"] == 0.005
+
+
+def test_une_fiche_perimee_survit_a_une_lecture_ratee(tmp_path, monkeypatch):
+    """
+    Le mécanisme de repli, bout à bout : fiche périmée par une montée de version,
+    fournisseur indisponible, et la donnée d'hier reste servie.
+
+    C'est ce qui aurait évité la perte : sans ce chemin, une montée de version
+    pendant une limitation de débit vide l'écran.
+    """
+    import json
+    import time
+
+    import yfinance
+
+    import app.api.routes.transactions as routes
+
+    fichier = tmp_path / "vieux.json"
+    monkeypatch.setattr(routes, "_FICHIER_CACHE", fichier)
+    ancienne = {"secteurs": {"technology": 1.0}, "nom": "Un fonds"}
+    fichier.write_text(json.dumps(
+        {"version": routes._VERSION_FICHE - 1, "fiches": {"VT": [time.time() + 3600, ancienne]}}))
+    routes._CACHE_DETAILS.clear()
+    monkeypatch.setattr(routes, "_CACHE_MTIME", None)
+
+    def refuse(_t):
+        raise RuntimeError("Too Many Requests")
+
+    monkeypatch.setattr(yfinance, "Ticker", refuse)
+    d = routes._details_titre("VT")
+    assert d["secteurs"] == ancienne["secteurs"], "la donnée d'hier doit être servie"
 
 
 def test_le_cache_des_fiches_survit_au_redemarrage(tmp_path, monkeypatch):

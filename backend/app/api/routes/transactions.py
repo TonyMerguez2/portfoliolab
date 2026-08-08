@@ -808,13 +808,29 @@ def _charger_cache_details() -> None:
     _CACHE_MTIME = mtime
     try:
         brut = json.loads(_FICHIER_CACHE.read_text(encoding="utf-8"))
-        # Un fichier d'une version antérieure du format est ignoré, pas migré : il se
-        # reconstruit au premier appel, et une migration serait du code à maintenir
-        # pour un cache qui se reconstitue tout seul.
-        if not isinstance(brut, dict) or brut.get("version") != _VERSION_FICHE:
+        if not isinstance(brut, dict):
             return
-        for ticker, entree in (brut.get("fiches") or {}).items():
+        # ⚠️ Un fichier d'une version antérieure est **périmé, pas jeté**.
+        #
+        # La première version l'ignorait entièrement. C'était une faute, et elle a
+        # coûté cher : en passant la version de 2 à 3 pour ajouter un seul champ, j'ai
+        # fait disparaître des ventilations sectorielles et géographiques encore
+        # parfaitement valides — et le fournisseur limitant le débit à ce moment-là,
+        # trois facteurs du score sont restés sans note. Jeter une donnée juste pour
+        # en obtenir une de plus est un mauvais échange.
+        #
+        # Les fiches sont donc chargées avec une échéance dépassée : `_details_titre`
+        # tentera une lecture fraîche, et si elle échoue il gardera l'ancienne, qui
+        # porte déjà tout sauf le champ nouveau. C'est le mécanisme de repli qui
+        # existait, il suffisait de ne pas le court-circuiter.
+        perime = brut.get("version") != _VERSION_FICHE
+        fiches = brut.get("fiches") if "fiches" in brut else brut
+        for ticker, entree in (fiches or {}).items():
+            if not isinstance(entree, (list, tuple)) or len(entree) != 2:
+                continue
             echeance, d = entree
+            if perime:
+                echeance = 0.0
             if isinstance(ticker, str) and isinstance(d, dict):
                 # ⚠️ La mémoire ne perd pas au profit du disque : une fiche lue à
                 # l'instant par ce processus vaut mieux qu'une version enregistrée
