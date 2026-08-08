@@ -4,10 +4,10 @@ import RadarChart from "@/components/charts/RadarChart";
 import { FONT, NUM } from "@/lib/typography";
 import { donutArcs } from "@/lib/donut";
 import {
-  BANDES as SEUILS_BANDES, EXPLICATION_FACTEUR,
-  LIBELLE_FACTEUR, ORDRE, type Analyse, type EtatAnalyse, type Observation,
+  type Analyse, type EtatAnalyse, type Observation,
   type Part, type Projection, type Trajet,
 } from "@/lib/analyse";
+import { BANDES as SEUILS_BANDES } from "@/lib/portfolio-score/types";
 import Cadre from "@/components/ui/Cadre";
 import { JETONS } from "@/lib/palette";
 
@@ -29,29 +29,19 @@ const GOUTTIERE = 8;
 /**
  * Intitulés du radar, abrégés.
  *
- * « Diversification » posé autour d'un cercle de 168 px chevauche ses voisins ;
+ * ⚠️ Le radar porte désormais les **cinq piliers** et non une liste de facteurs. Il
+ * représente la note : cinq branches dont chacune pèse un poids connu se lisent d'un
+ * coup d'œil, là où sept facteurs de natures différentes ne formaient pas une figure.
+ *
+ * « Adéquation au profil » posé autour d'un cercle de 168 px chevauche ses voisins ;
  * la liste à côté donne le nom entier.
- *
- * ⚠️ Seuls les facteurs **notants** ont un abrégé, parce que seuls eux figurent
- * sur le radar — il représente la note. Les indicatifs vivent dans la liste, avec
- * leur nom entier et la mention qui va avec.
- *
- * Le radar porte sept branches. « Devise » et « Marché » ont été retirés avec leurs
- * facteurs — la première lisait la place de cotation et non l'exposition, le second
- * avait un bêta biaisé vers zéro pour toute ligne cotée hors de New York.
- *
- * « Diversification » y est abrégé en « Secteurs » depuis que la géographie est un
- * facteur séparé : les deux branches voisines devaient se distinguer d'un coup
- * d'œil, et « Diversif. » ne disait plus laquelle des deux on lisait.
  */
 const ABREGE: Record<string, string> = {
-  diversification:    "Secteurs",
-  geographie:         "Géographie",
-  concentration:      "Concentr.",
-  frais:              "Frais fonds",
-  frais_courtage:     "Courtage",
-  redondance:         "Redond.",
-  volatilite:         "Volatilité",
+  diversification: "Diversif.",
+  risque:          "Risque",
+  construction:    "Construction",
+  qualite:         "Qualité",
+  adequation:      "Profil",
 };
 
 
@@ -161,15 +151,17 @@ export default function AnalyseView({ analyse: a, etat }: { analyse: Analyse | n
    * perte maximale, hors du score — laisserait croire qu'il y pèse. Elle reste dans
    * la liste en dessous, marquée comme telle.
    */
+  // ⚠️ Mémorisé : `?? []` crée un tableau neuf à chaque rendu, ce qui invaliderait
+  // le `useMemo` du radar en permanence — il recalculerait à chaque frappe ailleurs
+  // dans la page.
+  const piliers = useMemo(() => a?.novac?.piliers ?? [], [a]);
   const facteursRadar = useMemo(
-    () => ORDRE
-      .filter(k => a?.facteurs?.[k]?.score != null
-                && a!.facteurs[k].compte !== false
-                // Un facteur notant sans abrégé n'a pas sa place sur le radar :
-                // il s'y afficherait sans étiquette.
-                && ABREGE[k] != null)
-      .map(k => ({ label: ABREGE[k], value: a!.facteurs[k].score! })),
-    [a]);
+    () => piliers
+      // Un pilier non mesuré n'a pas de branche : la tracer à zéro le ferait passer
+      // pour une mauvaise note, alors qu'il n'est simplement pas calculable.
+      .filter(p => p.score != null && ABREGE[p.cle] != null)
+      .map(p => ({ label: ABREGE[p.cle], value: p.score! })),
+    [piliers]);
 
   if (etat === "charge") {
     return <div style={{ padding: 40, textAlign: "center", fontFamily: FONT, fontSize: 12,
@@ -247,56 +239,59 @@ export default function AnalyseView({ analyse: a, etat }: { analyse: Analyse | n
               </div>
             )}
             <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", gap: 4 }}>
-              {ORDRE.map(k => {
-                const f = a.facteurs[k];
-                if (!f) return null;
-                /**
-                 * ⚠️ Un facteur **indicatif** ne montre pas de tiret à la place de
-                 * sa note.
-                 *
-                 * La perte maximale est le seul de cette sorte, et elle n'a plus de
-                 * score : rendue « — » comme les autres, elle se lisait « non
-                 * mesurée » alors qu'elle l'est parfaitement — son libellé porte
-                 * « −6,4 %, pour 30 % attendus au pire ». Les deux cas sont
-                 * différents et doivent le rester : ici « indicatif » dit qu'on ne
-                 * la note pas, le tiret dit qu'on ne sait pas.
-                 */
-                const indicatif = f.compte === false;
-                return (
-                  // Intitulé et mesure sur deux lignes : côte à côte, ils se
-                  // disputaient cent cinquante pixels et se coupaient tous les
-                  // deux.
-                  // ⚠️ L'explication vit ici depuis que le détail a quitté la vue
-                  // générale. C'était sa seule adresse dans l'application : la
-                  // retirer avec les barres aurait effacé de l'interface ce que
-                  // chaque facteur mesure, et laissé sept notes sans définition.
-                  <div key={k} title={EXPLICATION_FACTEUR[k] ?? undefined}
+              {piliers.map(pil => (
+                <div key={pil.cle} style={{ marginBottom: 2 }}>
+                  {/* Le pilier : nom, poids réel, note. Le poids est affiché parce
+                      qu'un score composite sans ses pondérations n'est pas auditable. */}
+                  <div title={pil.explication}
                     style={{ display: "flex", alignItems: "center", gap: 8, cursor: "help" }}>
-                    <span style={{ flex: 1, minWidth: 0 }}>
-                      <span style={{ display: "block", fontFamily: FONT, fontSize: 11,
-                                     color: "rgba(var(--nv-encre-rvb), 0.68)", overflow: "hidden",
-                                     textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                        {LIBELLE_FACTEUR[k]}
-                        {indicatif && (
-                          <span style={{ marginLeft: 4, fontSize: 9,
-                                         color: "rgba(var(--nv-encre-rvb), 0.32)" }}>
-                            indicatif
-                          </span>
-                        )}
-                      </span>
-                      <span style={{ display: "block", fontFamily: FONT, fontSize: 9.5,
-                                     color: "rgba(var(--nv-encre-rvb), 0.32)", overflow: "hidden",
-                                     textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                        {f.libelle}
+                    <span style={{ flex: 1, minWidth: 0, fontFamily: FONT, fontSize: 11.5,
+                                   fontWeight: 600, color: "rgba(var(--nv-encre-rvb), 0.80)",
+                                   overflow: "hidden", textOverflow: "ellipsis",
+                                   whiteSpace: "nowrap" }}>
+                      {pil.libelle}
+                      <span style={{ marginLeft: 5, fontSize: 9, fontWeight: 500,
+                                     color: "rgba(var(--nv-encre-rvb), 0.32)" }}>
+                        {pil.poids_effectif > 0 ? `${pil.poids_effectif.toFixed(0)} %` : "hors calcul"}
                       </span>
                     </span>
-                    <span style={{ ...NUM, fontSize: 13, fontWeight: 700, width: 26, textAlign: "right",
-                                   color: couleurScore(f.score), flexShrink: 0 }}>
-                      {indicatif ? "" : f.score ?? "—"}
+                    <span style={{ ...NUM, fontSize: 14, fontWeight: 700, width: 28,
+                                   textAlign: "right", color: couleurScore(pil.score),
+                                   flexShrink: 0 }}>
+                      {pil.score ?? "—"}
                     </span>
                   </div>
-                );
-              })}
+                  {/* Les métriques du pilier, en retrait. ⚠️ Chacune porte sa lecture
+                      brute : « 5,6 secteurs équivalents » se vérifie, « 65 » se subit.
+                      C'est le niveau expert du §19, accessible sans quitter l'écran. */}
+                  {pil.metriques.filter(m => m.poids > 0).map(m => (
+                    <div key={m.cle} title={m.explication}
+                      style={{ display: "flex", alignItems: "baseline", gap: 8,
+                               padding: "2px 0 2px 10px", cursor: "help" }}>
+                      <span style={{ flex: 1, minWidth: 0, fontFamily: FONT, fontSize: 10,
+                                     color: "rgba(var(--nv-encre-rvb), 0.55)",
+                                     overflow: "hidden", textOverflow: "ellipsis",
+                                     whiteSpace: "nowrap" }}>
+                        {m.libelle}
+                        <span style={{ display: "block", fontSize: 9,
+                                       color: "rgba(var(--nv-encre-rvb), 0.30)" }}>
+                          {m.lecture}
+                          {m.statut === "partiel" && (
+                            <span style={{ marginLeft: 4 }}>
+                              · {(m.couverture * 100).toFixed(0)} % du portefeuille
+                            </span>
+                          )}
+                        </span>
+                      </span>
+                      <span style={{ ...NUM, fontSize: 10.5, fontWeight: 600, width: 26,
+                                     textAlign: "right", color: couleurScore(m.score),
+                                     flexShrink: 0 }}>
+                        {m.score ?? "—"}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              ))}
             </div>
           </div>
         </Carte>

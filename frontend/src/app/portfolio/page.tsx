@@ -11,10 +11,9 @@ import { createPortal } from "react-dom";
 import PanneauProfil from "@/components/portfolio/PanneauProfil";
 import PanneauFrais from "@/components/portfolio/PanneauFrais";
 import {
-  bandeDuScore, couvertureFacteurs, facteurLePlusFaible, FACTEURS_DU_PROFIL,
-  LIBELLE_FACTEUR, ORDRE as ORDRE_FACTEURS, type Analyse, type EtatAnalyse,
-  type Tolerance,
+  type Analyse, type EtatAnalyse, type Tolerance,
 } from "@/lib/analyse";
+import { bandeDuScore, pilierLePlusFaible } from "@/lib/portfolio-score/types";
 import PerformanceChart from "@/components/portfolio/PerformanceChart";
 import AssetGrid from "@/components/portfolio/AssetGrid";
 import AllocationDonut from "@/components/portfolio/AllocationDonut";
@@ -1494,11 +1493,22 @@ function PortfolioPageInner() {
                * citait la corrélation, la sensibilité au marché et la liquidité :
                * trois facteurs qui ne notaient déjà plus, et deux qui n'existent plus.
                */
-              const nomsNotants = ORDRE_FACTEURS
-                .filter(k => analyse.facteurs?.[k] && analyse.facteurs[k].compte !== false)
-                .map(k => (LIBELLE_FACTEUR[k] ?? k).toLowerCase());
-              const couverture = couvertureFacteurs(analyse.facteurs);
-              const faible = facteurLePlusFaible(analyse.facteurs);
+              const piliers = analyse.novac?.piliers ?? [];
+              const nomsNotants = piliers
+                .filter(pil => pil.poids_effectif > 0)
+                .map(pil => pil.libelle.toLowerCase());
+              // ⚠️ La couverture compte les **piliers** mesurés, non les métriques :
+              // c'est l'unité que l'écran affiche à côté de la note, et mélanger les
+              // deux granularités donnerait « 9/11 » sans qu'on sache de quoi.
+              const couverture = {
+                mesures: piliers.filter(pil => pil.score != null).length,
+                total: piliers.length,
+              };
+              const faible = pilierLePlusFaible(piliers);
+              // ⚠️ La confiance n'est **pas** la note : elle dit la qualité des
+              // données. « 76, confiance 58 % » signifie « ce portefeuille semble
+              // correct, mais je connais mal ce qu'il contient ».
+              const confiance = analyse.novac?.confiance ?? null;
               return (
                 <>
                   <div style={{ display: "flex", alignItems: "center", gap: 5, marginBottom: 10 }}>
@@ -1509,16 +1519,37 @@ function PortfolioPageInner() {
                         je l'ai lue, et deux qui n'existent plus du tout. Une
                         énumération figée décrit tôt ou tard un calcul qui n'a plus
                         lieu, et rien ne le signale. */}
-                    <span title={`Moyenne des facteurs notants mesurés : ${
+                    <span title={`Moyenne des cinq piliers mesurés : ${
                       nomsNotants.join(", ")
-                    }. ${couverture.mesures} sur ${couverture.total} mesurés ici — les autres sont ignorés plutôt que comptés zéro.`}
+                    }. ${couverture.mesures} sur ${couverture.total} mesurés — les autres sont ignorés plutôt que comptés zéro, et leur poids se répartit sur les piliers disponibles.${
+                      analyse.novac ? ` Méthodologie ${analyse.novac.version_methodologie}.` : ""
+                    }`}
                       style={{ display: "flex", color: CLAIR.texteFaible, cursor: "help" }}>
                       <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
                         <circle cx="12" cy="12" r="10" /><path d="M12 16v-4M12 8h.01" strokeLinecap="round" />
                       </svg>
                     </span>
-                    <span style={{ marginLeft: "auto", fontSize: 10, color: CLAIR.texteFaible }}>
-                      {couverture.mesures}/{couverture.total} mesurés
+                    {/* ⚠️ La confiance s'affiche **à côté** de la couverture, jamais à
+                        la place de la note. Ce sont deux chiffres de natures
+                        différentes : la note dit la qualité du portefeuille, la
+                        confiance celle des données qui ont servi à la calculer. Sans
+                        elle, une note portée par trois piliers ressemble à une note
+                        portée par cinq. */}
+                    <span style={{ marginLeft: "auto", display: "flex", alignItems: "baseline", gap: 7,
+                                   fontSize: 10, color: CLAIR.texteFaible }}>
+                      <span>{couverture.mesures}/{couverture.total} piliers</span>
+                      {confiance != null && (
+                        <span title={
+                          "La qualité des données, non celle du portefeuille. Les manques "
+                          + "sur une grosse position pèsent plus lourd que sur une petite."
+                          + (analyse.novac?.donnees_manquantes.length
+                            ? ` Absent : ${analyse.novac.donnees_manquantes.join(" · ")}.`
+                            : "")}
+                          style={{ cursor: "help",
+                                   color: confiance >= 80 ? CLAIR.texteFaible : CLAIR.attentionFort }}>
+                          confiance {confiance} %
+                        </span>
+                      )}
                     </span>
                   </div>
                   {(() => {
@@ -1536,8 +1567,12 @@ function PortfolioPageInner() {
                      * maximale passée en indicatif — et un libellé écrit en dur
                      * aurait menti sans que rien n'échoue.
                      */
-                    const enAttente = FACTEURS_DU_PROFIL
-                      .filter(k => analyse.facteurs?.[k] && analyse.facteurs[k].compte === false);
+                    // Les piliers qui n'ont aucun sens sans intention déclarée :
+                    // juger un niveau de risque dans l'absolu revient à décréter le
+                    // projet de l'épargnant à sa place.
+                    const enAttente = piliers.filter(
+                      pil => (pil.cle === "risque" || pil.cle === "adequation")
+                             && pil.score == null);
                     if (!enAttente.length) return null;
                     return (
                       <button type="button"
@@ -1557,8 +1592,8 @@ function PortfolioPageInner() {
                         <span style={{ color: CLAIR.accent, fontWeight: 600 }}>
                           Déclarez votre profil de risque
                         </span>{" "}
-                        pour que {enAttente.length === 1 ? "ce facteur soit noté" : `ces ${enAttente.length} facteurs soient notés`} :{" "}
-                        {enAttente.map(k => (LIBELLE_FACTEUR[k] ?? k).toLowerCase()).join(", ")}.
+                        pour que {enAttente.length === 1 ? "ce pilier soit noté" : `ces ${enAttente.length} piliers soient notés`} :{" "}
+                        {enAttente.map(pil => pil.libelle.toLowerCase()).join(", ")}.
                       </button>
                     );
                   })()}
@@ -1579,8 +1614,12 @@ function PortfolioPageInner() {
                      * qui soit certain : ne pas les mesurer est le manque le plus
                      * coûteux du score.
                      */
-                    const f = analyse.facteurs?.frais;
-                    if (!f || !(analyse.poids ?? []).length) return null;
+                    const f = piliers
+                      .flatMap(pil => pil.metriques)
+                      .find(m => m.cle === "frais_fonds");
+                    // Poids nul : aucun fonds détenu, donc aucun frais courant à
+                    // saisir. Proposer la saisie serait inviter à un geste impossible.
+                    if (!f || f.poids <= 0 || !(analyse.poids ?? []).length) return null;
                     // Mesurés, les frais restent modifiables : l'invite devient un
                     // simple lien, pour ne pas encombrer un panneau où tout va bien.
                     const mesure = f.score != null;
@@ -1637,8 +1676,15 @@ function PortfolioPageInner() {
                     <p style={{ margin: "0 0 9px", fontSize: 10.5, color: CLAIR.texteAttenue, lineHeight: 1.45 }}>
                       Ce qui pèse le plus : <span style={{ color: CLAIR.texte, fontWeight: 600 }}>{faible.libelle.toLowerCase()}</span>{" "}
                       ({faible.score}/100)
-                      {analyse.facteurs?.[faible.cle]?.libelle
-                        && <> — {analyse.facteurs[faible.cle].libelle}</>}.
+                      {(() => {
+                        // La métrique la plus faible **à l'intérieur** du pilier, avec
+                        // sa lecture brute : « diversification 76 » ne dit pas quoi
+                        // corriger, « 0,91 au plus entre deux lignes » le dit.
+                        const pire = faible.metriques
+                          .filter(m => m.score != null && m.poids > 0)
+                          .sort((x, y) => x.score! - y.score!)[0];
+                        return pire ? <> — {pire.lecture}</> : null;
+                      })()}.
                     </p>
                   )}
                   {/* ⚠️ Les sept barres de facteurs ne sont **plus ici**.
