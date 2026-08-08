@@ -4,7 +4,7 @@ import RadarChart from "@/components/charts/RadarChart";
 import { FONT, NUM } from "@/lib/typography";
 import { donutArcs } from "@/lib/donut";
 import {
-  BANDES as SEUILS_BANDES,
+  BANDES as SEUILS_BANDES, EXPLICATION_FACTEUR,
   LIBELLE_FACTEUR, ORDRE, type Analyse, type EtatAnalyse, type Observation,
   type Part, type Projection, type Trajet,
 } from "@/lib/analyse";
@@ -266,7 +266,12 @@ export default function AnalyseView({ analyse: a, etat }: { analyse: Analyse | n
                   // Intitulé et mesure sur deux lignes : côte à côte, ils se
                   // disputaient cent cinquante pixels et se coupaient tous les
                   // deux.
-                  <div key={k} style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  // ⚠️ L'explication vit ici depuis que le détail a quitté la vue
+                  // générale. C'était sa seule adresse dans l'application : la
+                  // retirer avec les barres aurait effacé de l'interface ce que
+                  // chaque facteur mesure, et laissé sept notes sans définition.
+                  <div key={k} title={EXPLICATION_FACTEUR[k] ?? undefined}
+                    style={{ display: "flex", alignItems: "center", gap: 8, cursor: "help" }}>
                     <span style={{ flex: 1, minWidth: 0 }}>
                       <span style={{ display: "block", fontFamily: FONT, fontSize: 11,
                                      color: "rgba(var(--nv-encre-rvb), 0.68)", overflow: "hidden",

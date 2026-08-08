@@ -11,8 +11,7 @@ import { createPortal } from "react-dom";
 import PanneauProfil from "@/components/portfolio/PanneauProfil";
 import PanneauFrais from "@/components/portfolio/PanneauFrais";
 import {
-  bandeDuScore, couvertureFacteurs, EXPLICATION_FACTEUR, facteurLePlusFaible,
-  FACTEURS_DU_PROFIL,
+  bandeDuScore, couvertureFacteurs, facteurLePlusFaible, FACTEURS_DU_PROFIL,
   LIBELLE_FACTEUR, ORDRE as ORDRE_FACTEURS, type Analyse, type EtatAnalyse,
   type Tolerance,
 } from "@/lib/analyse";
@@ -806,7 +805,6 @@ function PortfolioPageInner() {
    * La position fixe règle aussi deux choses au passage : la carte ne peut plus la
    * rogner, et l'infobulle du dernier facteur ne sort plus du cadre.
    */
-  const [ancreBulle, setAncreBulle] = useState<{ x: number; bas: number; largeur: number } | null>(null);
 
   const [profilOuvert, setProfilOuvert] = useState(false);
   const [ancreProfil, setAncreProfil] = useState<{ droite: number; haut: number } | null>(null);
@@ -1482,31 +1480,23 @@ function PortfolioPageInner() {
             )}
             {etatAnalyse === "prêt" && analyse && (() => {
               /**
-               * Les facteurs qui **font** la note, dans l'ordre du radar.
+               * Le nom des facteurs qui **font** la note, pour l'infobulle du titre.
                *
-               * ⚠️ Les indicatifs sont écartés d'ici. Ce panneau s'appelle
-               * « Détail du score » : y lister des facteurs qui n'y entrent pas
-               * était à contresens, et douze lignes portaient le panneau à 715 px
-               * dans une fenêtre de 950, écrasant la colonne. Ils restent visibles
-               * dans l'onglet Analyse, où la place existe.
+               * ⚠️ Réduit à des noms depuis que les barres ont quitté cette vue. Il
+               * portait aussi les notes, les lectures et les explications ; les garder
+               * aurait laissé croire que le panneau les affiche encore.
                *
-               * Les facteurs notants **non mesurés** restent affichés, eux, avec un
-               * tiret : un portefeuille trop jeune pour avoir une volatilité doit
-               * le lire, sinon il croit que sa note pèse plus de critères qu'elle
-               * n'en compte.
+               * Les indicatifs en sont écartés : ce panneau s'appelle « Détail du
+               * score », et y citer des facteurs qui n'y entrent pas serait à
+               * contresens. Ils vivent dans l'onglet Analyse.
+               *
+               * La liste est **dérivée** et non écrite à la main. Celle qui vivait ici
+               * citait la corrélation, la sensibilité au marché et la liquidité :
+               * trois facteurs qui ne notaient déjà plus, et deux qui n'existent plus.
                */
-              const subScores = ORDRE_FACTEURS
+              const nomsNotants = ORDRE_FACTEURS
                 .filter(k => analyse.facteurs?.[k] && analyse.facteurs[k].compte !== false)
-                .map(k => ({
-                  key: k,
-                  label: LIBELLE_FACTEUR[k] ?? k,
-                  value: analyse.facteurs[k].score,
-                  lecture: analyse.facteurs[k].libelle,
-                  tip: EXPLICATION_FACTEUR[k] ?? "",
-                  // Toujours vrai ici, le filtre au-dessus n'en laisse pas
-                  // passer d'autre — gardé pour que le rendu ne suppose rien.
-                  compte: analyse.facteurs[k].compte !== false,
-                }));
+                .map(k => (LIBELLE_FACTEUR[k] ?? k).toLowerCase());
               const couverture = couvertureFacteurs(analyse.facteurs);
               const faible = facteurLePlusFaible(analyse.facteurs);
               return (
@@ -1520,7 +1510,7 @@ function PortfolioPageInner() {
                         énumération figée décrit tôt ou tard un calcul qui n'a plus
                         lieu, et rien ne le signale. */}
                     <span title={`Moyenne des facteurs notants mesurés : ${
-                      subScores.map(s => s.label.toLowerCase()).join(", ")
+                      nomsNotants.join(", ")
                     }. ${couverture.mesures} sur ${couverture.total} mesurés ici — les autres sont ignorés plutôt que comptés zéro.`}
                       style={{ display: "flex", color: CLAIR.texteFaible, cursor: "help" }}>
                       <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
@@ -1640,113 +1630,29 @@ function PortfolioPageInner() {
                   {faible && (
                     // Nommer la cause : un score sans motif se subit au lieu de
                     // se corriger.
+                    // ⚠️ La mesure accompagne la note, parce que cette ligne est
+                    // devenue la seule information par facteur de la vue générale.
+                    // « diversification (65/100) » se subit ; « 5,6 secteurs
+                    // équivalents » se vérifie et se corrige.
                     <p style={{ margin: "0 0 9px", fontSize: 10.5, color: CLAIR.texteAttenue, lineHeight: 1.45 }}>
                       Ce qui pèse le plus : <span style={{ color: CLAIR.texte, fontWeight: 600 }}>{faible.libelle.toLowerCase()}</span>{" "}
-                      ({faible.score}/100).
+                      ({faible.score}/100)
+                      {analyse.facteurs?.[faible.cle]?.libelle
+                        && <> — {analyse.facteurs[faible.cle].libelle}</>}.
                     </p>
                   )}
-                      <div style={{ display: "flex", flexDirection: "column", gap: 7 }}>
-                        {subScores.map(m => {
-                          // Un facteur non mesuré n'a ni couleur ni barre : il
-                          // est gris et le dit. Le peindre à zéro l'aurait fait
-                          // passer pour une mauvaise note.
-                          const mesure = m.value != null;
-                          const col = !mesure ? CLAIR.texteFaible
-                            : m.compte ? scoreColor(m.value!)
-                            // Gris et non coloré : la couleur porte le jugement,
-                            // et ce facteur n'en porte pas.
-                            : CLAIR.texteAttenue;
-                          return (
-                            <div key={m.key} style={{ position: "relative", borderRadius: RAYONS.xs, padding: "2px 4px", transition: "background 150ms" }}
-                              onMouseEnter={e => {
-                                const el = e.currentTarget as HTMLElement;
-                                el.style.background = CLAIR.carteCreuse;
-                                const r = el.getBoundingClientRect();
-                                setAncreBulle({ x: r.left, bas: r.top, largeur: r.width });
-                                setActiveTooltip(m.key);
-                              }}
-                              onMouseLeave={e => {
-                                (e.currentTarget as HTMLElement).style.background = "transparent";
-                                setActiveTooltip(null);
-                                setAncreBulle(null);
-                              }}>
-                              <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 3, cursor: "default", gap: 8 }}>
-                                <span style={{ fontSize: 10, color: activeTooltip === m.key ? CLAIR.texte : CLAIR.texteAttenue, transition: "color 120ms" }}>
-                                  {m.label}
-                                  {!m.compte && (
-                                    <span style={{ marginLeft: 4, fontSize: 9, color: CLAIR.texteFaible }}>indicatif</span>
-                                  )}
-                                </span>
-                                <span style={{ fontSize: 10, fontWeight: 700, fontFamily: FONT, color: col, whiteSpace: "nowrap" }}>
-                                  {mesure ? m.value : "—"}
-                                </span>
-                              </div>
-                              {/**
-                                * ⚠️ Un facteur non mesuré dit **pourquoi**, à la place
-                                * de la barre vide.
-                                *
-                                * La raison — « aucune action détenue en direct »,
-                                * « frais des fonds inconnus » — ne vivait que dans
-                                * l'infobulle au survol. Sur le panneau, la ligne
-                                * n'affichait qu'un tiret et une barre vide, ce qui se
-                                * lit comme une panne et non comme une absence
-                                * expliquée. Le défaut est devenu voyant quand la
-                                * concentration a cessé de s'appliquer aux
-                                * portefeuilles sans action en direct : deux lignes sur
-                                * huit montraient un tiret nu.
-                                *
-                                * Le texte prend la place de la barre, donc la hauteur
-                                * de ligne ne bouge pas — ce panneau tient dans une
-                                * colonne dont la place est comptée.
-                                */}
-                              {mesure ? (
-                                <div style={{ height: 5, borderRadius: RAYONS.plein, background: CLAIR.carteCreuse }}>
-                                  <div style={{ height: "100%", borderRadius: RAYONS.plein, background: col, width: `${m.value}%`, opacity: 0.85, transition: "width 800ms ease" }} />
-                                </div>
-                              ) : (
-                                <div style={{ height: 5, display: "flex", alignItems: "center" }}>
-                                  <span style={{ fontFamily: FONT, fontSize: 9, lineHeight: 1,
-                                                 color: CLAIR.texteFaible, overflow: "hidden",
-                                                 textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                                    {m.lecture}
-                                  </span>
-                                </div>
-                              )}
-                              {activeTooltip === m.key && ancreBulle && typeof document !== "undefined"
-                                && createPortal(
-                                <div role="tooltip" style={{
-                                  position: "fixed",
-                                  left: ancreBulle.x,
-                                  // Posée au-dessus de la ligne, sauf s'il n'y a pas
-                                  // la place — auquel cas elle passe dessous.
-                                  ...(ancreBulle.bas > 130
-                                    ? { bottom: window.innerHeight - ancreBulle.bas + 8 }
-                                    : { top: ancreBulle.bas + 26 }),
-                                  width: ancreBulle.largeur,
-                                  zIndex: 60, boxSizing: "border-box",
-                                  background: JETONS.carte, border: `1px solid ${JETONS.bordFort}`,
-                                  borderRadius: RAYONS.sm, padding: "8px 10px",
-                                  boxShadow: JETONS.ombre, pointerEvents: "none",
-                                }}>
-                                  {/* La lecture brute d'abord — « 1,9 ligne
-                                      équivalente », « 14,2 % par an » — puis ce que
-                                      le facteur mesure. Elle vient du serveur, donc
-                                      du calcul lui-même, et non d'une prose écrite
-                                      à côté. */}
-                                  <span style={{ display: "block", fontFamily: FONT, fontSize: 10.5, fontWeight: 600,
-                                                 color: JETONS.texteIntense, marginBottom: 3 }}>
-                                    {m.lecture}
-                                  </span>
-                                  <span style={{ fontFamily: FONT, fontSize: 10, color: JETONS.texteSecondaire, lineHeight: 1.5 }}>
-                                    {m.tip}
-                                  </span>
-                                </div>,
-                                document.body,
-                              )}
-                            </div>
-                          );
-                        })}
-                  </div>
+                  {/* ⚠️ Les sept barres de facteurs ne sont **plus ici**.
+                      Elles vivent dans l'onglet Analyse, avec leurs explications.
+
+                      La vue générale répond à « comment je vais, et qu'est-ce qui
+                      pèse » ; le détail facteur par facteur répond à « pourquoi »,
+                      et c'est une autre question. Sept lignes plus leurs libellés
+                      portaient ce panneau à une hauteur qui écrasait la colonne,
+                      pour une information qu'un clic suffit à atteindre.
+
+                      Ce qui reste suffit à ne pas subir la note : la couverture
+                      dit sur combien de facteurs elle est calculée, et la cause
+                      principale est nommée avec sa mesure. */}
                   <button type="button" onClick={() => setDashView("analyse")}
                     style={{
                       display: "flex", alignItems: "center", gap: 5, marginTop: 10,
