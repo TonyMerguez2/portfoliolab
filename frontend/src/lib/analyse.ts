@@ -214,7 +214,7 @@ export const EXPLICATION_FACTEUR: Record<string, string> = {
     + "par arithmétique le plus diversifié qui existe, donc s'en écarter concentre — "
     + "quel que soit votre profil. Un ETF monde en est proche, un seul pays très loin.",
   concentration:
-    "Le risque qu'une société disparaisse : le nombre d'entreprises équipondérées "
+    "Le risque qu'un actif disparaisse : le nombre d'actifs équipondérés "
     + "auquel équivaut votre portefeuille, en transparence des fonds. Vingt vaut "
     + "cent, une seule vaut zéro. Un ETF monde pèse près de 200 sociétés, un ETF "
     + "sectoriel une vingtaine. Un fonds synthétique ne détient qu'un contrat "
@@ -227,6 +227,8 @@ export const EXPLICATION_FACTEUR: Record<string, string> = {
     + "mesurée sans être notée.",
   frais:
     "Les frais courants de vos fonds (TER), prélevés chaque année sur l'encours. "
+    + "Sans objet si vous ne détenez aucun fonds : un titre ou une crypto en direct "
+    + "n'en supportent pas, et le facteur sort alors du calcul. "
     + "0,10 % par an vaut cent, 1 % vaut zéro. Souvent indisponibles pour les ETF "
     + "européens : le fournisseur de cours ne les publie pas.",
   frais_courtage:

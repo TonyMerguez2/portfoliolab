@@ -67,9 +67,10 @@ def creer_portefeuille(client, nom="Test"):
     return r.json()["id"]
 
 
-def ecriture(ticker, qty, prix, date, side="BUY", fees=0.0, note=None):
+def ecriture(ticker, qty, prix, date, side="BUY", fees=0.0, note=None,
+             type_actif="EQUITY"):
     return {
-        "ticker": ticker, "asset_type": "EQUITY", "side": side,
+        "ticker": ticker, "asset_type": type_actif, "side": side,
         "quantity": qty, "unit_price": prix, "fees": fees,
         "executed_at": f"{date}T00:00:00", "note": note,
     }
@@ -547,7 +548,12 @@ def test_les_frais_saisis_se_declarent_et_notent(client, monkeypatch):
     monkeypatch.setattr(routes, "fetch_current_prices", cours)
     monkeypatch.setattr(yfinance, "download",
                         lambda *a, **k: (_ for _ in ()).throw(RuntimeError("réseau coupé")))
-    monkeypatch.setattr(routes, "_details_titre", lambda t: {"nom": "Un fonds", "secteur": "Tech"})
+    # ⚠️ Un **fonds**, et non une action. Saisir un TER sur un titre détenu en direct
+    # n'a pas de sens : il n'y a pas de frais courants à prélever, et le facteur est
+    # désormais « sans objet ». La première version de ce test simulait une action et
+    # passait quand même — elle vérifiait donc autre chose que ce qu'elle annonçait.
+    monkeypatch.setattr(routes, "_details_titre",
+                        lambda t: {"nom": "Un fonds", "secteurs": {"technology": 1.0}})
 
     muet = client.get(f"/api/v1/portfolios/{pid}/analysis").json()
     assert muet["facteurs"]["frais"]["score"] is None
@@ -589,9 +595,11 @@ def test_l_analyse_rend_les_frais_par_ligne_avec_leur_provenance(client, monkeyp
     monkeypatch.setattr(yfinance, "download",
                         lambda *a, **k: (_ for _ in ()).throw(RuntimeError("réseau coupé")))
     # Un fonds dont le fournisseur connaît le TER, un autre non.
+    # Deux **fonds** : l'un dont le fournisseur connaît le TER, l'autre non. Sur des
+    # actions, le facteur serait sans objet et le test ne dirait rien.
     monkeypatch.setattr(routes, "_details_titre", lambda t: (
-        {"nom": "Auto", "secteur": "Tech", "frais": 0.60} if t == "AUTO.PA"
-        else {"nom": "Muet", "secteur": "Tech"}))
+        {"nom": "Auto", "secteurs": {"technology": 1.0}, "frais": 0.60} if t == "AUTO.PA"
+        else {"nom": "Muet", "secteurs": {"technology": 1.0}}))
 
     d = client.get(f"/api/v1/portfolios/{pid}/analysis").json()
     assert d["frais_lignes"]["AUTO.PA"] == {"valeur": 0.6, "source": "fournisseur"}
@@ -605,6 +613,75 @@ def test_l_analyse_rend_les_frais_par_ligne_avec_leur_provenance(client, monkeyp
     assert d["frais_lignes"]["MUET.PA"] == {"valeur": 0.25, "source": "saisi"}
     # Et la moyenne pondérée suit la saisie, non le fournisseur.
     assert d["facteurs"]["frais"]["valeur"] == pytest.approx(0.185, abs=0.005)
+
+
+def test_sans_fonds_les_frais_sont_sans_objet(client, monkeypatch):
+    """
+    ⚠️ Deux absences de nature opposée, qui ne doivent pas se confondre.
+
+    « Des fonds sont détenus mais leur TER est introuvable » est un trou à combler, et
+    doit compter dans la couverture. « Aucun fonds n'est détenu » n'en est pas un : un
+    titre ou une cryptomonnaie détenus en direct ne supportent aucun frais courant.
+
+    Confondues, la seconde abîmait la couverture — « 6 sur 7 mesurés » sur un
+    portefeuille où les sept ne peuvent pas exister — et suggérait une saisie
+    impossible.
+    """
+    import yfinance
+
+    import app.api.routes.transactions as routes
+
+    pid = creer_portefeuille(client, "Actions seules")
+    assert client.post(f"/api/v1/portfolios/{pid}/transactions",
+                       json=ecriture("TSLA", 10, 100.0, "2026-01-05")).status_code == 201
+
+    async def cours(tickers):
+        return {t: 150.0 for t in tickers}
+
+    monkeypatch.setattr(routes, "fetch_current_prices", cours)
+    monkeypatch.setattr(yfinance, "download",
+                        lambda *a, **k: (_ for _ in ()).throw(RuntimeError("réseau coupé")))
+    monkeypatch.setattr(routes, "_details_titre", lambda t: {
+        "nom": "Tesla", "secteur": "Consumer Cyclical", "pays": "United States",
+        "type": "EQUITY"})
+
+    f = client.get(f"/api/v1/portfolios/{pid}/analysis").json()["facteurs"]
+    assert f["frais"]["score"] is None
+    assert f["frais"]["compte"] is False
+    assert f["frais"]["libelle"] == "sans objet — aucun fonds détenu"
+
+
+def test_une_crypto_compte_comme_un_actif_unique(client, monkeypatch):
+    """
+    ⚠️ La concentration ne voyait pas les cryptomonnaies.
+
+    Elle déduisait la nature d'une ligne de la présence d'un `secteur`, or BTC-USD n'en
+    a pas. Un portefeuille de deux cryptos — qui porte une concentration parfaitement
+    réelle — n'était donc pas mesuré du tout. Un titre dont le secteur manque subissait
+    le même sort.
+    """
+    import yfinance
+
+    import app.api.routes.transactions as routes
+
+    pid = creer_portefeuille(client, "Crypto")
+    for e in (ecriture("BTC-USD", 6, 100.0, "2026-01-05", type_actif="CRYPTOCURRENCY"),
+              ecriture("DOGE-USD", 4, 100.0, "2026-01-05", type_actif="CRYPTOCURRENCY")):
+        assert client.post(f"/api/v1/portfolios/{pid}/transactions", json=e).status_code == 201
+
+    async def cours(tickers):
+        return {t: 100.0 for t in tickers}
+
+    monkeypatch.setattr(routes, "fetch_current_prices", cours)
+    monkeypatch.setattr(yfinance, "download",
+                        lambda *a, **k: (_ for _ in ()).throw(RuntimeError("réseau coupé")))
+    # Ce que le fournisseur rend réellement pour une crypto : ni secteur, ni pays.
+    monkeypatch.setattr(routes, "_details_titre",
+                        lambda t: {"nom": t, "devise": "USD", "type": "CRYPTOCURRENCY"})
+
+    c = client.get(f"/api/v1/portfolios/{pid}/analysis").json()["facteurs"]["concentration"]
+    assert c["score"] is not None, "deux cryptos portent une concentration mesurable"
+    assert "actifs équivalents" in c["libelle"], "et non « sociétés » : Bitcoin n'en est pas une"
 
 
 def test_un_ter_hors_bornes_est_refuse(client):

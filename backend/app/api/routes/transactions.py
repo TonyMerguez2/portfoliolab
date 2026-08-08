@@ -772,7 +772,7 @@ _FICHIER_CACHE = pathlib.Path(__file__).resolve().parents[3] / ".cache_details.j
 #
 # C'est la contrepartie exacte du gain de la longue durée de vie : plus le cache
 # tient, plus il faut un moyen de le déclarer périmé autrement que par le temps.
-_VERSION_FICHE = 6
+_VERSION_FICHE = 7
 
 
 def _charger_cache_details() -> None:
@@ -1165,6 +1165,13 @@ def _details_titre(ticker: str) -> dict:
         # cotation. Seul le pays d'une action est exploitable ; la zone d'un
         # fonds se déduit de son mandat, plus loin.
         d["pays"] = info.get("country")
+        # ⚠️ Le type d'actif, pour savoir ce qu'une ligne **est**.
+        #
+        # La nature était devinée de la présence d'un `secteur`, ce qui excluait les
+        # cryptomonnaies — elles n'en ont pas — et aurait exclu un titre dont le
+        # secteur manque. Un portefeuille de deux cryptos, qui porte une concentration
+        # bien réelle, n'était donc pas mesuré du tout.
+        d["type"] = info.get("quoteType")
         # ⚠️ Le volume moyen n'est plus relevé : il ne servait qu'à la liquidité,
         # facteur supprimé à l'audit — il valait cent pour toute position de
         # particulier. C'était aussi le seul champ de cette fiche à varier d'un jour
@@ -1429,17 +1436,55 @@ async def get_analysis(
     # Une ligne absente n'est pas supposée : un fonds synthétique ne publie aucune
     # composition — il détient un contrat d'échange, pas des actions — et la deviner
     # reviendrait à inventer le contenu du portefeuille.
-    hhi_lignes, hhi_par_indice = {}, set()
+    # ── La nature de chaque ligne ────────────────────────────────────────────
+    #
+    # ⚠️ Deux facteurs en dépendent, et elle était devinée trop étroitement.
+    #
+    # La concentration a besoin de savoir si une ligne est un **actif unique** — dont
+    # la disparition emporte tout son poids — ou un fonds, déjà réparti. Elle le
+    # déduisait de la présence d'un `secteur`, ce qui écartait les cryptomonnaies, qui
+    # n'en ont pas, et aurait écarté un titre dont le secteur manque.
+    #
+    # Les frais courants ont besoin de savoir s'il y a un fonds **du tout** : sur un
+    # portefeuille d'actions ou de cryptos, la question ne se pose pas, et la compter
+    # comme manquante abîmait la couverture sans rien signaler d'utile.
+    #
+    # Le type déclaré à la saisie sert de repli au type du fournisseur : l'épargnant
+    # sait ce qu'il a acheté, et cette donnée ne dépend d'aucun réseau.
+    type_saisi = {t.ticker: (t.asset_type or "").upper() for t in txs}
+    # ⚠️ `INDEX` n'y figure pas : un indice est un **panier**, pas un actif unique. Le
+    # ranger là donnerait à une ligne d'indice la note d'une action isolée, alors
+    # qu'elle porte des centaines de valeurs. Faute de savoir lesquelles, la ligne
+    # reste non mesurée.
+    ACTIFS_UNIQUES = {"EQUITY", "CRYPTOCURRENCY"}
+    FONDS = {"ETF", "MUTUALFUND"}
+
+    nature = {}
     for t, d in details.items():
         d = d or {}
-        if d.get("secteurs"):
+        annonce = (d.get("type") or type_saisi.get(t) or "").upper()
+        if d.get("secteurs") or annonce in FONDS:
+            nature[t] = "fonds"
+        elif annonce in ACTIFS_UNIQUES or d.get("secteur"):
+            nature[t] = "actif"
+
+    hhi_lignes, hhi_par_indice = {}, set()
+    for t, genre in nature.items():
+        d = details.get(t) or {}
+        if genre == "fonds":
             if d.get("hhi"):
                 hhi_lignes[t] = float(d["hhi"])
                 if d.get("hhi_indice"):
                     hhi_par_indice.add(t)
-        elif d.get("secteur"):
-            # Une action est une seule société : sa concentration interne vaut un.
+        else:
+            # Une action ou une crypto est un actif unique : sa concentration interne
+            # vaut un.
             hhi_lignes[t] = 1.0
+
+    # La part du portefeuille réellement détenue en fonds. Zéro veut dire qu'aucun
+    # frais courant n'existe à mesurer, ce qui n'est pas la même chose qu'un TER
+    # introuvable.
+    part_fonds = sum(poids.get(t, 0.0) for t, g in nature.items() if g == "fonds")
 
     # ── Frais par ligne, avec leur provenance ────────────────────────────────
     #
@@ -1469,6 +1514,7 @@ async def get_analysis(
         secteurs=ventilation_secteurs(details, poids),
         zones=ventilation_zones(details, poids),
         hhi_lignes=hhi_lignes, hhi_par_indice=hhi_par_indice,
+        part_fonds=part_fonds,
         frais_par_ligne=frais_effectifs,
         cible=profil_cible(portefeuille.horizon_annees, portefeuille.tolerance),
         courtage=_courtage_paye(txs),

@@ -103,7 +103,7 @@ class TestHerfindahl:
 
 
 class TestFacteurs:
-    def test_vingt_societes_equiponderees_valent_cent(self):
+    def test_vingt_actifs_equiponderes_valent_cent(self):
         poids, types, _ = actions(*[(5.0, "Tech") for _ in range(20)])
         f = facteurs_de_risque(poids, None, hhi_lignes=types)
         assert f["concentration"]["score"] == 100
@@ -119,22 +119,22 @@ class TestFacteurs:
         f = facteurs_de_risque(poids, None, hhi_lignes=types)
         assert 0 < f["concentration"]["score"] < 100
 
-    def test_societe_unique_vaut_zero(self):
+    def test_actif_unique_vaut_zero(self):
         poids, types, _ = actions((100.0, "Tech"))
         f = facteurs_de_risque(poids, None, hhi_lignes=types)
         assert f["concentration"]["score"] == 0
 
-    def test_societes_equivalentes(self):
-        """L'inverse de la somme des carrés se lit comme un nombre de sociétés."""
+    def test_actifs_equivalents(self):
+        """L'inverse de la somme des carrés se lit comme un nombre d'actifs."""
         poids, types, _ = actions((50.0, "Tech"), (50.0, "Santé"))
         f = facteurs_de_risque(poids, None, hhi_lignes=types)
-        assert f["concentration"]["libelle"] == "2.0 sociétés équivalentes"
+        assert f["concentration"]["libelle"] == "2.0 actifs équivalents"
 
     def test_portefeuille_desequilibre(self):
         # 70/20/10 ne pèse pas trois sociétés mais moins de deux.
         poids, types, _ = actions((70.0, "Tech"), (20.0, "Santé"), (10.0, "Énergie"))
         f = facteurs_de_risque(poids, None, hhi_lignes=types)
-        assert f["concentration"]["libelle"] == "1.9 sociétés équivalentes"
+        assert f["concentration"]["libelle"] == "1.9 actifs équivalents"
         # 0,7² + 0,2² + 0,1² = 0,54, dont l'inverse vaut 1,85.
         assert f["concentration"]["valeur"] == pytest.approx(1.85, abs=0.01)
 
@@ -543,7 +543,7 @@ class TestCalibrage:
         poids, hhi = fonds_transparents(150, 100.0)
         f = facteurs_de_risque(poids, None, hhi_lignes=hhi)
         assert f["concentration"]["score"] == 100
-        assert "150 sociétés" in f["concentration"]["libelle"]
+        assert "150 actifs" in f["concentration"]["libelle"]
 
     def test_un_fonds_synthetique_ne_publie_rien_donc_n_est_pas_note(self):
         """
@@ -617,7 +617,7 @@ class TestCalibrage:
         assert f["concentration"]["score"] == 100
         # Cent parce qu'une société y est bien détenue et pèse peu — à distinguer du
         # cas sans action du tout, qui n'est pas noté.
-        assert "sociétés équivalentes" in f["concentration"]["libelle"]
+        assert "actifs équivalents" in f["concentration"]["libelle"]
 
     def test_la_moitie_sur_une_societe_est_mal_notee(self):
         poids = {"AAPL": 50.0, "IWDA": 50.0}

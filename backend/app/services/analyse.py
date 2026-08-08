@@ -218,7 +218,12 @@ def _frais_ponderes(
 
 def _libelle_societes(societes_eq: float, via_indice: bool) -> str:
     """
-    La lecture en clair du nombre de sociétés équivalentes.
+    La lecture en clair du nombre d'actifs équivalents.
+
+    ⚠️ « actifs » et non « sociétés ». Le facteur couvre aussi les cryptomonnaies,
+    et Bitcoin n'est pas une entreprise. Le mot doit rester vrai pour tout ce que le
+    calcul embrasse — une société détenue en direct, une pièce, ou une position au
+    travers d'un fonds.
 
     ⚠️ Une décimale sous dix, aucune au-delà. Sans elle, 1,85 société équivalente —
     un portefeuille à 70/20/10 en actions directes — s'affichait « 2 sociétés » à
@@ -232,11 +237,11 @@ def _libelle_societes(societes_eq: float, via_indice: bool) -> str:
     laisser croire qu'on a lu le fonds serait faux.
     """
     if societes_eq < 1.05:
-        base = "1 seule société"
+        base = "un seul actif"
     elif societes_eq < 10:
-        base = f"{societes_eq:.1f} sociétés équivalentes"
+        base = f"{societes_eq:.1f} actifs équivalents"
     else:
-        base = f"{societes_eq:.0f} sociétés équivalentes"
+        base = f"{societes_eq:.0f} actifs équivalents"
     return base + (" — composition de l'indice" if via_indice else "")
 
 
@@ -247,6 +252,7 @@ def facteurs_de_risque(
     zones: list[dict] | None = None,
     hhi_lignes: dict[str, float] | None = None,
     hhi_par_indice: set[str] | None = None,
+    part_fonds: float | None = None,
     frais_par_ligne: dict[str, float] | None = None,
     cible: dict | None = None,
     courtage: float | None = None,
@@ -262,6 +268,11 @@ def facteurs_de_risque(
     action détenue en direct, l'indice de Herfindahl de la composition publiée pour
     un fonds. Une ligne absente est écartée plutôt que supposée, et sous soixante
     pour cent du portefeuille lu, la concentration ne note pas.
+
+    `part_fonds` est la part du portefeuille détenue en fonds. À zéro, il n'existe
+    aucun frais courant à mesurer — un portefeuille d'actions ou de cryptomonnaies
+    n'en supporte pas — et le facteur `frais` devient sans objet plutôt que manquant.
+    `None` veut dire qu'on ne sait pas, et le facteur se comporte comme avant.
 
     `hhi_par_indice` nomme les lignes dont la composition vient de l'**indice suivi**
     et non du fonds lui-même — le cas d'un fonds synthétique, dont l'exposition est
@@ -560,12 +571,26 @@ def facteurs_de_risque(
     #
     # Repères du marché : 0,10 % par an pour un tracker large, 1 % pour un fonds
     # actif. Au-delà, la note tombe à zéro.
-    frais = _frais_ponderes(frais_par_ligne, poids)
+    # ⚠️ Sans aucun fonds, ce facteur est **sans objet** et sort de la moyenne.
+    #
+    # Un portefeuille d'actions ou de cryptomonnaies ne supporte pas de frais
+    # courants : il n'y a rien à prélever annuellement sur un titre détenu en direct.
+    # Compté comme « manquant », il abîmait la couverture — « 6 sur 7 mesurés » sur un
+    # portefeuille où les sept ne peuvent pas exister — et suggérait une saisie
+    # impossible.
+    #
+    # Deux absences de nature opposée doivent se distinguer : « des fonds sont détenus
+    # mais leur TER est introuvable » est un trou à combler, « aucun fonds n'est
+    # détenu » n'en est pas un. Seule la première doit compter dans la couverture.
+    sans_fonds = part_fonds is not None and part_fonds <= 0
+    frais = None if sans_fonds else _frais_ponderes(frais_par_ligne, poids)
     out["frais"] = {
         "valeur": round(frais, 3) if frais is not None else None,
         "libelle": (f"{frais:.2f} % par an" if frais is not None
+                    else "sans objet — aucun fonds détenu" if sans_fonds
                     else "Frais des fonds inconnus"),
         "score": round(_score_decroissant(frais, 0.10, 1.00), 0) if frais is not None else None,
+        "compte": not sans_fonds,
     }
 
     # ── Frais de courtage réellement payés ───────────────────────────────────
