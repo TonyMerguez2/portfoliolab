@@ -216,12 +216,37 @@ def _frais_ponderes(
     return cumul / couvert
 
 
+def _libelle_societes(societes_eq: float, via_indice: bool) -> str:
+    """
+    La lecture en clair du nombre de sociétés équivalentes.
+
+    ⚠️ Une décimale sous dix, aucune au-delà. Sans elle, 1,85 société équivalente —
+    un portefeuille à 70/20/10 en actions directes — s'affichait « 2 sociétés » à
+    l'arrondi, ou « 1 seule société » avec un seuil mal placé : deux lectures fausses
+    d'un même chiffre juste. Au-delà de dix, la décimale ne dit plus rien.
+
+    ⚠️ La mention « composition de l'indice » n'est pas une précaution de style. Le
+    chiffre vient alors d'un ETF **physique** suivant le même indice, parce que le
+    fonds détenu est synthétique et n'a aucune composition à publier. La grandeur
+    mesurée est la bonne — l'exposition économique est bien celle de l'indice — mais
+    laisser croire qu'on a lu le fonds serait faux.
+    """
+    if societes_eq < 1.05:
+        base = "1 seule société"
+    elif societes_eq < 10:
+        base = f"{societes_eq:.1f} sociétés équivalentes"
+    else:
+        base = f"{societes_eq:.0f} sociétés équivalentes"
+    return base + (" — composition de l'indice" if via_indice else "")
+
+
 def facteurs_de_risque(
     poids: dict[str, float],
     rendements: pd.DataFrame | None,
     secteurs: list[dict] | None = None,
     zones: list[dict] | None = None,
     hhi_lignes: dict[str, float] | None = None,
+    hhi_par_indice: set[str] | None = None,
     frais_par_ligne: dict[str, float] | None = None,
     cible: dict | None = None,
     courtage: float | None = None,
@@ -235,9 +260,14 @@ def facteurs_de_risque(
 
     `hhi_lignes` porte la concentration **interne** de chaque ligne : 1 pour une
     action détenue en direct, l'indice de Herfindahl de la composition publiée pour
-    un fonds. Une ligne absente est écartée plutôt que supposée — un fonds
-    synthétique ne publie pas de composition — et sous soixante pour cent du
-    portefeuille lu, la concentration ne note pas.
+    un fonds. Une ligne absente est écartée plutôt que supposée, et sous soixante
+    pour cent du portefeuille lu, la concentration ne note pas.
+
+    `hhi_par_indice` nomme les lignes dont la composition vient de l'**indice suivi**
+    et non du fonds lui-même — le cas d'un fonds synthétique, dont l'exposition est
+    celle de l'indice mais qui ne détient qu'un contrat d'échange. Le libellé le
+    mentionne : annoncer un chiffre lu ailleurs comme s'il venait du fonds serait
+    faux, même si la grandeur mesurée est la bonne.
     """
     out: dict[str, dict] = {}
 
@@ -313,14 +343,7 @@ def facteurs_de_risque(
         "libelle": (
             "composition des fonds non publiée" if not part_lue
             else f"transparence sur {part_lue:.0f} % seulement" if societes_eq is None
-            # ⚠️ Une décimale sous dix, aucune au-delà. Sans elle, 1,87 société
-            # équivalente — un portefeuille à 70/20/10 en actions directes —
-            # s'affichait « 2 sociétés » à l'arrondi, ou « 1 seule société » avec un
-            # seuil mal placé : deux lectures fausses d'un même chiffre juste.
-            # Au-delà de dix, la décimale ne dit plus rien : « 150 sociétés » suffit.
-            else "1 seule société" if societes_eq < 1.05
-            else f"{societes_eq:.1f} sociétés équivalentes" if societes_eq < 10
-            else f"{societes_eq:.0f} sociétés équivalentes"
+            else _libelle_societes(societes_eq, bool(hhi_par_indice))
         ),
         "score": (round(_score_decroissant(societes_eq, CIBLE_SOCIETES, 1.0), 0)
                   if societes_eq is not None else None),

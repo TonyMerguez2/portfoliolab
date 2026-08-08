@@ -205,8 +205,9 @@ export const EXPLICATION_FACTEUR: Record<string, string> = {
     "Le risque qu'une société disparaisse : le nombre d'entreprises équipondérées "
     + "auquel équivaut votre portefeuille, en transparence des fonds. Vingt vaut "
     + "cent, une seule vaut zéro. Un ETF monde pèse près de 200 sociétés, un ETF "
-    + "sectoriel une vingtaine. Non mesuré pour un fonds synthétique, qui détient "
-    + "un contrat d'échange et n'a donc aucune composition à publier.",
+    + "sectoriel une vingtaine. Un fonds synthétique ne détient qu'un contrat "
+    + "d'échange et n'a aucune composition à publier : la mesure vient alors de "
+    + "l'indice qu'il suit, lu chez un fonds physique, et le libellé le dit.",
   volatilite:
     "L'amplitude annualisée des variations, comparée à la cible de votre profil. "
     + "Rester en deçà coûte moins de points que la dépasser : un manque à gagner "

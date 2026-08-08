@@ -444,6 +444,89 @@ def test_une_tolerance_inconnue_est_refusee(client):
     assert "prudent" in r.json()["detail"]
 
 
+class TestProxyDeComposition:
+    """
+    Le repli sur l'indice, pour les fonds qui ne publient pas leur composition.
+
+    ⚠️ Un ETF synthétique détient un contrat d'échange, pas des actions : il n'a rien
+    à publier. Mais son exposition économique **est** celle de l'indice, et un ETF
+    physique sur le même indice publie la sienne. La lire là mesure donc la bonne
+    chose ; ce n'est pas un pis-aller.
+    """
+
+    def test_l_indice_est_reconnu_dans_le_nom_du_fonds(self):
+        import app.api.routes.transactions as routes
+
+        vus = []
+
+        def faux_hhi(fd):
+            vus.append(fd)
+            return 1 / 55, True
+
+        import yfinance
+        routes._CACHE_DETAILS.clear()
+        original = routes._hhi_du_fonds
+        routes._hhi_du_fonds = faux_hhi
+        yf_original = yfinance.Ticker
+        yfinance.Ticker = lambda t: type("T", (), {"funds_data": t})()
+        try:
+            hhi = routes._hhi_de_l_indice("BNP Paribas Easy S&P 500 UCITS ETF")
+        finally:
+            routes._hhi_du_fonds = original
+            yfinance.Ticker = yf_original
+        assert hhi == pytest.approx(1 / 55)
+        # Le premier candidat de la table pour le S&P 500.
+        assert vus and vus[0] == "CSPX.AS"
+
+    def test_un_indice_inconnu_ne_replie_pas(self):
+        """
+        Aucune correspondance devinée. Un nom non reconnu laisse la ligne non
+        mesurée — c'est ce qui évite de refaire l'erreur de la géographie, où une
+        étiquette manquante valait une note.
+        """
+        import app.api.routes.transactions as routes
+
+        assert routes._hhi_de_l_indice("Fonds obscur sans indice") is None
+        assert routes._hhi_de_l_indice(None) is None
+
+    def test_les_indices_etroits_sont_volontairement_absents(self):
+        """
+        ⚠️ L'erreur grave serait d'associer un indice **étroit** à un proxy large :
+        un fonds de trente valeurs recevrait la note d'un fonds de cinq cents. Le
+        Euro Stoxx 50, le CAC 40 et les indices sectoriels n'ont donc pas de proxy.
+        """
+        import app.api.routes.transactions as routes
+
+        for etroit in ("cac 40", "euro stoxx 50", "stoxx 50"):
+            assert all(motif != etroit for motif, _ in routes.PROXY_COMPOSITION), etroit
+        assert routes._hhi_de_l_indice("Amundi CAC 40 UCITS ETF") is None
+
+    def test_les_motifs_precis_passent_devant(self):
+        """
+        « nasdaq 100 » avant « nasdaq », comme pour la table des zones : l'ordre
+        décide, et un motif large placé devant avalerait le précis.
+        """
+        import app.api.routes.transactions as routes
+
+        motifs = [m for m, _ in routes.PROXY_COMPOSITION]
+        assert motifs.index("nasdaq 100") < motifs.index("nasdaq")
+        assert motifs.index("stoxx europe 600") < motifs.index("stoxx europe")
+
+    def test_la_composition_de_l_indice_ne_pollue_pas_la_fiche_du_fonds(self):
+        """
+        ⚠️ Les entrées de proxy portent un préfixe réservé.
+
+        Rangées sous le ticker du fonds qui publie, un utilisateur détenant
+        réellement ce fonds aurait reçu une fiche amputée de ses secteurs et de son
+        nom — la composition de l'indice l'aurait écrasée.
+        """
+        import app.api.routes.transactions as routes
+
+        assert routes._CLE_PROXY.startswith("@")
+        # Un préfixe impossible dans un ticker réel.
+        assert not routes._CLE_PROXY[0].isalnum()
+
+
 class TestHhiDuFonds:
     """
     La concentration **interne** d'un fonds, lue dans sa composition publiée.
@@ -468,8 +551,8 @@ class TestHhiDuFonds:
 
         # VT, relevé : dix premières lignes à 20,5 %, la plus grosse à 4,0 %.
         vt = [0.040, 0.035, 0.025, 0.020, 0.018, 0.016, 0.015, 0.014, 0.013, 0.009]
-        hhi = routes._hhi_du_fonds(self._fd(vt))
-        assert hhi is not None
+        hhi, abouti = routes._hhi_du_fonds(self._fd(vt))
+        assert abouti and hhi is not None
         assert 150 < 1 / hhi < 250
 
     def test_un_fonds_sectoriel_pese_peu_de_societes(self):
@@ -477,8 +560,8 @@ class TestHhiDuFonds:
 
         # XLK, relevé : dix premières lignes à 61 %, la plus grosse à 13,8 %.
         xlk = [0.138, 0.120, 0.080, 0.060, 0.050, 0.045, 0.040, 0.030, 0.025, 0.022]
-        hhi = routes._hhi_du_fonds(self._fd(xlk))
-        assert hhi is not None
+        hhi, abouti = routes._hhi_du_fonds(self._fd(xlk))
+        assert abouti and hhi is not None
         assert 15 < 1 / hhi < 25
 
     def test_une_composition_vide_ne_rend_rien(self):
@@ -488,8 +571,10 @@ class TestHhiDuFonds:
         """
         import app.api.routes.transactions as routes
 
-        assert routes._hhi_du_fonds(self._fd([])) is None
-        assert routes._hhi_du_fonds(self._fd(None)) is None
+        # ⚠️ `abouti` vaut **vrai** : la lecture a eu lieu et il n'y a rien. C'est un
+        # constat définitif, à ne pas confondre avec une lecture ratée.
+        assert routes._hhi_du_fonds(self._fd([])) == (None, True)
+        assert routes._hhi_du_fonds(self._fd(None)) == (None, True)
 
     def test_des_pourcentages_sont_ramenes_en_fractions(self):
         """
@@ -501,8 +586,8 @@ class TestHhiDuFonds:
 
         fractions = [0.040, 0.035, 0.025, 0.020, 0.018]
         pourcents = [w * 100 for w in fractions]
-        assert routes._hhi_du_fonds(self._fd(pourcents)) == pytest.approx(
-            routes._hhi_du_fonds(self._fd(fractions)), rel=1e-9)
+        assert routes._hhi_du_fonds(self._fd(pourcents))[0] == pytest.approx(
+            routes._hhi_du_fonds(self._fd(fractions))[0], rel=1e-9)
 
     def test_une_somme_impossible_est_refusee(self):
         """
@@ -517,12 +602,33 @@ class TestHhiDuFonds:
         import app.api.routes.transactions as routes
 
         # 180 % même après division : aucune lecture ne le sauve.
-        assert routes._hhi_du_fonds(self._fd([60.0, 60.0, 60.0])) is None
+        assert routes._hhi_du_fonds(self._fd([60.0, 60.0, 60.0])) == (None, True)
 
     def test_une_colonne_inattendue_ne_leve_pas(self):
         import app.api.routes.transactions as routes
 
-        assert routes._hhi_du_fonds(self._fd([0.1, 0.2], colonne="Autre")) is None
+        assert routes._hhi_du_fonds(self._fd([0.1, 0.2], colonne="Autre")) == (None, True)
+
+    def test_une_lecture_ratee_se_distingue_d_une_composition_vide(self):
+        """
+        ⚠️ La distinction qui évite de figer un ETF physique pendant un mois.
+
+        La lecture des secteurs peut réussir quand celle de la composition échoue —
+        sous limitation de débit, par exemple. La fiche était alors jugée utile et
+        gardée trente jours avec une composition absente : le fonds se retrouvait
+        annoncé « composition non publiée » alors qu'il la publie.
+
+        C'est le même défaut qui a d'abord vicié mon banc d'essai, où une erreur
+        avalée est devenue un « aucun ETF ne publie » parfaitement faux.
+        """
+        import app.api.routes.transactions as routes
+
+        class Casse:
+            @property
+            def top_holdings(self):
+                raise RuntimeError("Too Many Requests")
+
+        assert routes._hhi_du_fonds(Casse()) == (None, False)
 
 
 def test_un_cache_d_ancien_format_est_ignore(tmp_path, monkeypatch):

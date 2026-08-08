@@ -772,7 +772,7 @@ _FICHIER_CACHE = pathlib.Path(__file__).resolve().parents[3] / ".cache_details.j
 #
 # C'est la contrepartie exacte du gain de la longue durée de vie : plus le cache
 # tient, plus il faut un moyen de le déclarer périmé autrement que par le temps.
-_VERSION_FICHE = 2
+_VERSION_FICHE = 3
 
 
 def _charger_cache_details() -> None:
@@ -910,7 +910,109 @@ def _pct_frais(brut) -> float | None:
     return None
 
 
-def _hhi_du_fonds(fd) -> float | None:
+# Composition de repli, par indice suivi.
+#
+# ⚠️ Un ETF **synthétique** ne publie aucune composition : il détient un contrat
+# d'échange, pas des actions. Or son exposition économique est celle de l'indice, et
+# un ETF **physique** sur le même indice, lui, publie la sienne. La lire là revient
+# donc à lire la bonne chose — ce n'est pas un pis-aller mais la mesure de
+# l'exposition réelle.
+#
+# Mesuré : `top_holdings` est vide pour ESE.PA et CW8.PA — BNP et Amundi, éligibles
+# au PEA, donc synthétiques — et renseigné pour IWDA.AS, VT, QQQ et XLK.
+#
+# ⚠️ Plusieurs candidats par indice, essayés dans l'ordre, et **c'est l'exécution qui
+# tranche** : le premier qui publie gagne, aucun ne publie et la ligne reste non
+# mesurée. Rien ici n'affirme qu'un fonds donné publie sa composition — une telle
+# affirmation vieillirait mal, et je n'ai pas pu la vérifier pour tous.
+#
+# ⚠️ La table ne contient que des indices **larges et identifiés sans ambiguïté**, et
+# l'omission est délibérée. Associer un indice étroit à un proxy large serait
+# l'erreur grave : un fonds de trente valeurs obtiendrait la note d'un fonds de cinq
+# cents. Le Euro Stoxx 50, le CAC 40 et les indices sectoriels n'y figurent donc pas
+# — et ces fonds-là sont généralement physiques, donc lisibles directement.
+#
+# À l'inverse, une imprécision entre deux indices larges est sans conséquence sur la
+# note : la cible est de vingt sociétés, et qu'un indice régional en pèse 80 ou 120 le
+# score vaut cent dans les deux cas.
+#
+# L'ordre compte : les motifs les plus précis passent devant, comme pour `ZONES`.
+PROXY_COMPOSITION: list[tuple[str, tuple[str, ...]]] = [
+    ("nasdaq 100",      ("QQQ",)),
+    ("nasdaq",          ("QQQ",)),
+    ("s&p 500",         ("CSPX.AS", "VOO", "SPY")),
+    ("s&p500",          ("CSPX.AS", "VOO", "SPY")),
+    ("msci usa",        ("CSPX.AS", "VOO")),
+    ("msci world",      ("IWDA.AS", "URTH")),
+    ("pea monde",       ("IWDA.AS", "URTH")),
+    ("stoxx europe 600", ("EXSA.DE", "IEUR")),
+    ("stoxx europe",    ("EXSA.DE", "IEUR")),
+    ("msci europe",     ("IMEU.AS", "IEV")),
+    ("emerging asia",   ("EIMI.AS", "IEMG")),
+    ("msci emerging",   ("EIMI.AS", "IEMG")),
+    ("emerging markets", ("EIMI.AS", "IEMG")),
+    ("asie pacifique",  ("CPXJ.AS", "IPAC")),
+    ("asia pacific",    ("CPXJ.AS", "IPAC")),
+    ("msci pacific",    ("CPXJ.AS", "IPAC")),
+]
+
+# Préfixe réservé aux entrées de proxy dans le cache des fiches.
+#
+# ⚠️ Sans lui, la composition d'un indice serait rangée sous le ticker du fonds qui
+# la publie — et un utilisateur détenant réellement ce fonds recevrait une fiche
+# amputée de ses secteurs et de son nom. Un préfixe impossible dans un ticker évite
+# la collision.
+_CLE_PROXY = "@proxy:"
+
+
+def _hhi_de_l_indice(nom: str | None) -> float | None:
+    """
+    La concentration interne de l'indice suivi, lue chez un ETF physique.
+
+    Sert aux fonds qui ne publient pas de composition. Rend `None` si l'indice n'est
+    pas reconnu ou si aucun candidat ne publie : la ligne reste alors non mesurée,
+    plutôt que de recevoir une valeur devinée.
+    """
+    import time
+
+    import yfinance as yf
+
+    if not nom:
+        return None
+    n = nom.lower().replace("é", "e").replace("è", "e")
+    candidats: tuple[str, ...] = ()
+    for motif, tickers in PROXY_COMPOSITION:
+        if motif in n:
+            candidats = tickers
+            break
+    if not candidats:
+        return None
+
+    for proxy in candidats:
+        cle = _CLE_PROXY + proxy
+        entree = _CACHE_DETAILS.get(cle)
+        if entree and time.time() < entree[0]:
+            valeur = entree[1].get("hhi")
+            if valeur:
+                return float(valeur)
+            continue
+        try:
+            hhi, abouti = _hhi_du_fonds(yf.Ticker(proxy).funds_data)
+        except Exception:                                     # pragma: no cover
+            hhi, abouti = None, False
+        # Une lecture qui n'a pas abouti ne se garde pas longtemps : le prochain
+        # appel réessaiera plutôt que de figer l'indice comme illisible.
+        _CACHE_DETAILS[cle] = (
+            time.time() + (_TTL_DETAILS if abouti else _TTL_DETAILS_ECHEC),
+            {"hhi": hhi},
+        )
+        if hhi:
+            _ecrire_cache_details()
+            return hhi
+    return None
+
+
+def _hhi_du_fonds(fd) -> tuple[float | None, bool]:
     """
     La concentration interne d'un fonds, d'après sa composition publiée.
 
@@ -932,31 +1034,50 @@ def _hhi_du_fonds(fd) -> float | None:
     cette queue demanderait de connaître le nombre de lignes restantes, que le
     fournisseur ne donne pas : ce serait inventer la donnée plutôt que la borner.
 
-    Rend `None` quand rien n'est publié — le cas d'un fonds **synthétique**, qui ne
-    détient pas d'actions mais un contrat d'échange. Il n'y a alors pas de
-    composition à lire, et ce n'est pas un manque de la source.
+    ⚠️ Rend un couple `(hhi, abouti)`, et la distinction est nécessaire.
+
+    `(None, True)` signifie « rien n'est publié » — le cas d'un fonds
+    **synthétique**, qui ne détient pas d'actions mais un contrat d'échange. C'est un
+    constat définitif, pas un manque de la source.
+
+    `(None, False)` signifie « la lecture n'a pas abouti », par exemple sous
+    limitation de débit du fournisseur. Sans cette distinction, les deux cas se
+    confondaient en un simple `None` : la lecture des secteurs pouvant réussir quand
+    celle de la composition échoue, la fiche était jugée utile et gardée **trente
+    jours** avec une composition absente. Un ETF physique se retrouvait donc annoncé
+    « composition non publiée » pendant un mois.
+
+    C'est exactement le défaut qui a d'abord vicié mon propre banc d'essai : une
+    erreur avalée devenait indistinguable d'un résultat négatif réel, et le test a
+    rapporté qu'aucun ETF ne publiait sa composition alors que quatre venaient de le
+    faire.
     """
     try:
         th = fd.top_holdings
+    except Exception:
+        return None, False
+    try:
         if th is None or not len(th):
-            return None
+            return None, True
         colonnes = [c for c in th.columns if "ercent" in str(c)]
         if not colonnes:
-            return None
+            return None, True
         poids = [float(x) for x in th[colonnes[0]] if x is not None and float(x) > 0]
         if not poids:
-            return None
+            return None, True
         # Les poids arrivent en fraction. Un total supérieur à un signalerait des
         # pourcentages, auquel cas on ramène — se tromper d'un facteur cent
         # multiplierait le HHI par dix mille.
         if sum(poids) > 1.5:
             poids = [w / 100.0 for w in poids]
         if sum(poids) > 1.01:
-            return None
+            return None, True
         hhi = sum(w * w for w in poids)
-        return hhi if hhi > 0 else None
+        return (hhi, True) if hhi > 0 else (None, True)
     except Exception:                                         # pragma: no cover
-        return None
+        # Une composition présente mais illisible : c'est un format inattendu, pas un
+        # ratage réseau. Inutile de réessayer dans la minute.
+        return None, True
 
 
 def _details_titre(ticker: str) -> dict:
@@ -974,6 +1095,9 @@ def _details_titre(ticker: str) -> dict:
         return entree[1]
 
     d: dict = {}
+    # Vrai par défaut : une action n'a pas de composition à consulter, donc rien ne
+    # reste à réessayer de ce côté.
+    composition_lue = True
     try:
         tk = yf.Ticker(ticker)
         info = tk.info or {}
@@ -993,7 +1117,19 @@ def _details_titre(ticker: str) -> dict:
             try:
                 fd = tk.funds_data
                 d["secteurs"] = dict(fd.sector_weightings or {})
-                d["hhi"] = _hhi_du_fonds(fd)
+                d["hhi"], composition_lue = _hhi_du_fonds(fd)
+                # ⚠️ Repli sur l'indice quand le fonds ne publie rien — un
+                # synthétique n'a pas de composition à publier. On ne replie que sur
+                # une lecture **aboutie** : sous limitation de débit, mieux vaut
+                # réessayer le fonds que se rabattre sur un proxy par erreur.
+                if d["hhi"] is None and composition_lue:
+                    indice = _hhi_de_l_indice(d.get("nom"))
+                    if indice:
+                        d["hhi"] = indice
+                        # L'interface doit pouvoir dire que le chiffre vient de
+                        # l'indice et non du fonds : prétendre avoir lu le fonds
+                        # serait faux.
+                        d["hhi_indice"] = True
                 d["classes"] = dict(fd.asset_classes or {})
                 # Le TER d'un fonds vit ici plutôt que dans `info`, sous une
                 # étiquette en clair et non sous une clé.
@@ -1018,7 +1154,12 @@ def _details_titre(ticker: str) -> dict:
     # 70 % », et la diversification tombait à zéro. Une donnée un peu vieille vaut
     # infiniment mieux qu'une donnée absente — d'autant qu'un secteur ou une zone
     # ne changent pas d'un jour à l'autre.
-    utile = bool(d.get("secteurs") or d.get("secteur") or d.get("nom"))
+    # ⚠️ Pour un fonds, la fiche n'est « utile » — donc gardée trente jours — que si
+    # la composition a pu être **consultée**, qu'elle soit vide ou non. Sinon on la
+    # garde quatre-vingt-dix secondes et on réessaie : une lecture ratée sous
+    # limitation de débit ne doit pas figer un ETF physique en « composition non
+    # publiée » pour un mois.
+    utile = bool(d.get("secteurs") or d.get("secteur") or d.get("nom")) and composition_lue
     if not utile and entree and entree[1]:
         # On garde l'ancienne, et on réessaiera bientôt.
         _CACHE_DETAILS[ticker] = (time.time() + _TTL_DETAILS_ECHEC, entree[1])
@@ -1192,12 +1333,14 @@ async def get_analysis(
     # Une ligne absente n'est pas supposée : un fonds synthétique ne publie aucune
     # composition — il détient un contrat d'échange, pas des actions — et la deviner
     # reviendrait à inventer le contenu du portefeuille.
-    hhi_lignes = {}
+    hhi_lignes, hhi_par_indice = {}, set()
     for t, d in details.items():
         d = d or {}
         if d.get("secteurs"):
             if d.get("hhi"):
                 hhi_lignes[t] = float(d["hhi"])
+                if d.get("hhi_indice"):
+                    hhi_par_indice.add(t)
         elif d.get("secteur"):
             # Une action est une seule société : sa concentration interne vaut un.
             hhi_lignes[t] = 1.0
@@ -1206,7 +1349,7 @@ async def get_analysis(
         poids, rendements,
         secteurs=ventilation_secteurs(details, poids),
         zones=ventilation_zones(details, poids),
-        hhi_lignes=hhi_lignes,
+        hhi_lignes=hhi_lignes, hhi_par_indice=hhi_par_indice,
         frais_par_ligne={t: d["frais"] for t, d in details.items()
                          if (d or {}).get("frais") is not None},
         cible=profil_cible(portefeuille.horizon_annees, portefeuille.tolerance),
