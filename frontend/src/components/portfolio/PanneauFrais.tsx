@@ -26,8 +26,8 @@ export default function PanneauFrais({
 }: {
   /** Les tickers détenus, dans l'ordre d'affichage. */
   lignes: { ticker: string; part: number }[];
-  /** Les frais déjà connus, du fournisseur ou d'une saisie précédente. */
-  valeurs: Record<string, number | null>;
+  /** Les frais déjà connus, avec leur provenance. */
+  valeurs: Record<string, { valeur: number | null; source: "saisi" | "fournisseur" | null }>;
   surFrais: (frais: Record<string, number>) => void;
   fermer: () => void;
   ancre: { droite: number; haut: number };
@@ -42,7 +42,10 @@ export default function PanneauFrais({
   const [saisies, setSaisies] = useState<Record<string, string>>(() => {
     const depart: Record<string, string> = {};
     for (const l of lignes) {
-      const v = valeurs[l.ticker];
+      // ⚠️ Préremplir avec ce qui est **déjà connu**, y compris venant du
+      // fournisseur. Un champ vide devant un TER que l'application possède déjà
+      // demande de retaper la donnée, et invite à se contredire.
+      const v = valeurs[l.ticker]?.valeur;
       depart[l.ticker] = v == null ? "" : String(v);
     }
     return depart;
@@ -98,6 +101,14 @@ export default function PanneauFrais({
                 <span style={{ marginLeft: 5, fontSize: 9.5, color: JETONS.texteAttenue }}>
                   {l.part.toFixed(0)}&nbsp;%
                 </span>
+                {/* La provenance, pour que l'épargnant sache ce qu'il corrige. Un
+                    chiffre du fournisseur reste modifiable : le TER dépend de la
+                    part détenue, et la source n'en donne qu'une par ticker. */}
+                {valeurs[l.ticker]?.source === "fournisseur" && (
+                  <span style={{ marginLeft: 5, fontSize: 9, color: JETONS.texteFaible }}>
+                    auto
+                  </span>
+                )}
               </span>
               <input
                 value={brut}

@@ -1443,8 +1443,7 @@ function PortfolioPageInner() {
             {fraisOuvert && ancreFrais && (
               <PanneauFrais
                 lignes={(analyse?.poids ?? []).map(p => ({ ticker: p.ticker, part: p.part }))}
-                valeurs={Object.fromEntries(
-                  (analyse?.poids ?? []).map(p => [p.ticker, null]))}
+                valeurs={analyse?.frais_lignes ?? {}}
                 surFrais={enregistrerFrais}
                 fermer={() => setFraisOuvert(false)}
                 ancre={ancreFrais}
@@ -1591,8 +1590,10 @@ function PortfolioPageInner() {
                      * coûteux du score.
                      */
                     const f = analyse.facteurs?.frais;
-                    if (!f || f.score != null) return null;
-                    if (!(analyse.poids ?? []).length) return null;
+                    if (!f || !(analyse.poids ?? []).length) return null;
+                    // Mesurés, les frais restent modifiables : l'invite devient un
+                    // simple lien, pour ne pas encombrer un panneau où tout va bien.
+                    const mesure = f.score != null;
                     return (
                       <button type="button"
                         onClick={e => {
@@ -1609,10 +1610,12 @@ function PortfolioPageInner() {
                           lineHeight: 1.45,
                         }}>
                         <span style={{ color: CLAIR.accent, fontWeight: 600 }}>
-                          Saisissez les frais de vos fonds
-                        </span>{" "}
-                        pour que ce facteur soit noté : le fournisseur de cours ne publie
-                        pas le TER des ETF européens.
+                          {mesure ? "Modifier les frais de vos fonds" : "Saisissez les frais de vos fonds"}
+                        </span>
+                        {!mesure && (
+                          <> pour que ce facteur soit noté : le fournisseur de cours ne
+                          publie pas le TER des ETF européens.</>
+                        )}
                       </button>
                     );
                   })()}

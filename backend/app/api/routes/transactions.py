@@ -1416,12 +1416,35 @@ async def get_analysis(
             # Une action est une seule société : sa concentration interne vaut un.
             hhi_lignes[t] = 1.0
 
+    # ── Frais par ligne, avec leur provenance ────────────────────────────────
+    #
+    # ⚠️ Le facteur ne rend que la moyenne pondérée, ce qui ne suffit pas au panneau
+    # de saisie : sans le détail il présentait un champ vide même pour un fonds dont
+    # le TER est connu, et demandait de retaper une donnée déjà là. Relevé sur un vrai
+    # PEA, PAEJ.PA annonce 0,60 % tout seul — le redemander serait pénible et
+    # inviterait à se contredire.
+    #
+    # La provenance est rendue parce qu'elle change ce que l'écran doit dire : un
+    # chiffre « saisi » se modifie, un chiffre « fournisseur » se corrige si l'on sait
+    # mieux, et une absence se remplit.
+    frais_effectifs = _frais_connus(details, portefeuille.frais_lignes)
+    saisis = {str(k).upper() for k in (portefeuille.frais_lignes or {})}
+    frais_detail = {}
+    for t in poids:
+        v = frais_effectifs.get(t)
+        frais_detail[t] = {
+            "valeur": round(float(v), 3) if v is not None else None,
+            "source": ("saisi" if t in saisis
+                       else "fournisseur" if (details.get(t) or {}).get("frais") is not None
+                       else None),
+        }
+
     facteurs = facteurs_de_risque(
         poids, rendements,
         secteurs=ventilation_secteurs(details, poids),
         zones=ventilation_zones(details, poids),
         hhi_lignes=hhi_lignes, hhi_par_indice=hhi_par_indice,
-        frais_par_ligne=_frais_connus(details, portefeuille.frais_lignes),
+        frais_par_ligne=frais_effectifs,
         cible=profil_cible(portefeuille.horizon_annees, portefeuille.tolerance),
         courtage=_courtage_paye(txs),
     )
@@ -1453,4 +1476,16 @@ async def get_analysis(
         # proposer de le renseigner quand il manque — sans lui, trois facteurs
         # restent muets et l'utilisateur n'aurait aucun moyen de le savoir.
         "profil": profil_cible(portefeuille.horizon_annees, portefeuille.tolerance),
+        # ⚠️ Les frais **par ligne**, avec leur provenance.
+        #
+        # Le facteur ne rend que la moyenne pondérée, ce qui ne suffit pas au panneau
+        # de saisie : sans le détail, il présentait un champ vide même pour un fonds
+        # dont le TER est connu, et demandait de retaper une donnée déjà là. Relevé
+        # sur un vrai PEA, PAEJ.PA annonce 0,60 % tout seul — le redemander serait à
+        # la fois pénible et une invitation à se contredire.
+        #
+        # La provenance est rendue parce qu'elle change ce que l'écran doit dire :
+        # « saisi » se modifie, « fournisseur » se corrige si l'on sait mieux, et une
+        # absence se remplit.
+        "frais_lignes": frais_detail,
     }

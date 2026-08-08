@@ -131,6 +131,18 @@ export type Analyse = {
    * « États-Unis 70 % », avec un score d'apparence normale.
    */
   sans_cours?: string[];
+  /**
+   * Les frais courants par ligne, avec leur provenance.
+   *
+   * ⚠️ Le facteur `frais` ne rend que la moyenne pondérée, ce qui ne suffit pas au
+   * panneau de saisie : sans le détail, il montrait un champ vide même pour un fonds
+   * dont le TER est connu, et demandait de retaper une donnée déjà là.
+   *
+   * `source` change ce que l'écran doit dire. « fournisseur » se corrige si
+   * l'épargnant sait mieux — le TER dépend de la part détenue, et la source n'en
+   * donne qu'une par ticker. « saisi » se modifie. `null` se remplit.
+   */
+  frais_lignes?: Record<string, { valeur: number | null; source: "saisi" | "fournisseur" | null }>;
 };
 
 /** L'état du chargement, partagé par le bandeau et l'onglet. */

@@ -560,6 +560,53 @@ def test_les_frais_saisis_se_declarent_et_notent(client, monkeypatch):
     assert note["score"] > 90, "0,15 % par an est proche du meilleur tracker"
 
 
+def test_l_analyse_rend_les_frais_par_ligne_avec_leur_provenance(client, monkeypatch):
+    """
+    ⚠️ Le détail par ligne, sans lequel le panneau de saisie fait retaper une donnée
+    déjà connue.
+
+    Le facteur ne rend que la moyenne pondérée. Relevé sur un vrai PEA, PAEJ.PA
+    annonce 0,60 % tout seul : présenter un champ vide devant lui serait pénible et
+    inviterait à se contredire.
+
+    La provenance change ce que l'écran doit dire — « fournisseur » se corrige si
+    l'épargnant sait mieux, puisque le TER dépend de la part détenue et que la source
+    n'en donne qu'une par ticker ; une absence se remplit.
+    """
+    import yfinance
+
+    import app.api.routes.transactions as routes
+
+    pid = creer_portefeuille(client, "Provenance mixte")
+    for e in (ecriture("AUTO.PA", 10, 100.0, "2026-01-05"),
+              ecriture("MUET.PA", 10, 100.0, "2026-01-05")):
+        assert client.post(f"/api/v1/portfolios/{pid}/transactions", json=e).status_code == 201
+
+    async def cours(tickers):
+        return {t: 150.0 for t in tickers}
+
+    monkeypatch.setattr(routes, "fetch_current_prices", cours)
+    monkeypatch.setattr(yfinance, "download",
+                        lambda *a, **k: (_ for _ in ()).throw(RuntimeError("réseau coupé")))
+    # Un fonds dont le fournisseur connaît le TER, un autre non.
+    monkeypatch.setattr(routes, "_details_titre", lambda t: (
+        {"nom": "Auto", "secteur": "Tech", "frais": 0.60} if t == "AUTO.PA"
+        else {"nom": "Muet", "secteur": "Tech"}))
+
+    d = client.get(f"/api/v1/portfolios/{pid}/analysis").json()
+    assert d["frais_lignes"]["AUTO.PA"] == {"valeur": 0.6, "source": "fournisseur"}
+    assert d["frais_lignes"]["MUET.PA"] == {"valeur": None, "source": None}
+
+    # Une saisie complète la ligne muette et corrige l'autre.
+    assert client.put(f"/api/v1/portfolios/{pid}",
+                      json={"frais_lignes": {"AUTO.PA": 0.12, "MUET.PA": 0.25}}).status_code == 200
+    d = client.get(f"/api/v1/portfolios/{pid}/analysis").json()
+    assert d["frais_lignes"]["AUTO.PA"] == {"valeur": 0.12, "source": "saisi"}
+    assert d["frais_lignes"]["MUET.PA"] == {"valeur": 0.25, "source": "saisi"}
+    # Et la moyenne pondérée suit la saisie, non le fournisseur.
+    assert d["facteurs"]["frais"]["valeur"] == pytest.approx(0.185, abs=0.005)
+
+
 def test_un_ter_hors_bornes_est_refuse(client):
     """
     ⚠️ Validé à l'écriture, comme la tolérance. La borne haute protège surtout d'une
