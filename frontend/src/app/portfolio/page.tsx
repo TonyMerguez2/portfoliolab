@@ -7,13 +7,22 @@ import AssetLogo from "@/components/AssetLogo";
 import TransactionModal from "@/components/TransactionModal";
 import TransactionsView from "@/components/portfolio/TransactionsView";
 import AnalyseView from "@/components/portfolio/AnalyseView";
+import { createPortal } from "react-dom";
+import PanneauProfil from "@/components/portfolio/PanneauProfil";
+import {
+  couvertureFacteurs, EXPLICATION_FACTEUR, facteurLePlusFaible, FACTEURS_DU_PROFIL,
+  LIBELLE_FACTEUR, ORDRE as ORDRE_FACTEURS, type Analyse, type EtatAnalyse,
+  type Tolerance,
+} from "@/lib/analyse";
 import PerformanceChart from "@/components/portfolio/PerformanceChart";
 import AssetGrid from "@/components/portfolio/AssetGrid";
 import AllocationDonut from "@/components/portfolio/AllocationDonut";
 import RecentActivity from "@/components/portfolio/RecentActivity";
 import PortfolioTabs from "@/components/portfolio/PortfolioTabs";
 import { donutArcs } from "@/lib/donut";
-import { valoriser } from "@/lib/portfolio";
+import { enveloppe, infobulleEnveloppe, valoriser } from "@/lib/portfolio";
+import { assetExchange } from "@/lib/assets";
+import PastilleEnveloppe from "@/components/portfolio/PastilleEnveloppe";
 import RadarChart from "@/components/charts/RadarChart";
 import { enTetesAuth } from "@/lib/session";
 import { typesParOperation, COULEUR_OP, LIBELLE_OP, type Tx } from "@/lib/journal";
@@ -660,6 +669,24 @@ function PortfolioPageInner() {
   }, [portfolio, prices, surTransactions, positions, prixCrypto]);
 
   const totalWeight    = enriched.reduce((s, a) => s + a.weight, 0);
+
+  /**
+   * Le point de la courbe sous le curseur, remonté par le graphique.
+   *
+   * Il remplace le total et le gain de la bande de tête le temps du survol. Le
+   * total est le chiffre auquel on se fie pour « combien j'ai maintenant » : le
+   * rendre transitoire n'est acceptable qu'accompagné de sa date, affichée juste
+   * en dessous. Sans elle, on ne saurait pas si le nombre lu est celui de
+   * l'instant ou celui d'un mardi de juin.
+   */
+  const [survolCourbe, setSurvolCourbe] =
+    useState<{ valeur: number; date: string; investi?: number } | null>(null);
+
+  /** L'enveloppe déduite du contenu. Voir `enveloppe`, et sa mise en garde. */
+  const enveloppePortefeuille = useMemo(
+    () => enveloppe(enriched.map(a => a.ticker), assetExchange),
+    [enriched]);
+
   const weightedChange = enriched.reduce((s, a) => {
     if (a.change === null) return s;
     return s + (a.weight / totalWeight) * a.change;
@@ -718,24 +745,85 @@ function PortfolioPageInner() {
     .sort((a, b) => (a.change ?? 0) - (b.change ?? 0)).slice(0, 5);
 
   const exposition = useMemo(() => classifyExposition(enriched), [enriched]);
+  /**
+   * L'analyse du portefeuille : la **seule** source du score de santé.
+   *
+   * ⚠️ Chargée ici et non dans l'onglet Analyse, qui la lisait pour lui seul.
+   * Le bandeau tire désormais sa note du même appel, ce qui garantit qu'un
+   * portefeuille n'a qu'un score — et évite deux requêtes vers une route qui
+   * télécharge un an d'historique et les fiches sectorielles.
+   *
+   * L'appel remplace celui qui relevait les variations à trois mois : il n'avait
+   * d'autre usage que d'alimenter l'ancien score local, disparu avec lui.
+   */
+  const [analyse, setAnalyse] = useState<Analyse | null>(null);
+  const [etatAnalyse, setEtatAnalyse] = useState<EtatAnalyse>("charge");
+
+  useEffect(() => {
+    const id = portfolio?.id;
+    if (!id) { setAnalyse(null); setEtatAnalyse("vide"); return; }
+    let annule = false;
+    // ⚠️ On ne remet pas l'état à « charge » : la route met plusieurs secondes,
+    // et vider la note à chaque rafraîchissement des écritures l'aurait fait
+    // clignoter. Elle reste affichée jusqu'à son remplacement.
+    fetch(`${API_URL}/api/v1/portfolios/${id}/analysis`, { headers: enTetesAuth() })
+      .then(r => (r.ok ? r.json() : null))
+      .then((d: Analyse | null) => {
+        if (annule) return;
+        setAnalyse(d);
+        setEtatAnalyse(d && d.score != null ? "prêt" : "vide");
+      })
+      .catch(() => { if (!annule) { setAnalyse(null); setEtatAnalyse("vide"); } });
+    return () => { annule = true; };
+  }, [portfolio?.id, txRefreshKey]);
+
+  const scoreSante = analyse?.score ?? null;
+  const bandeSante = analyse?.bande ?? null;
+
+  /**
+   * Où poser l'infobulle d'un facteur, en coordonnées de fenêtre.
+   *
+   * ⚠️ En portail et en position fixe, comme les autres panneaux de cette page, et
+   * non en `position: absolute` dans la ligne survolée. Cette dernière forme ne
+   * peignait ni fond, ni liseré, ni rembourrage : mesuré, les propriétés de
+   * peinture disparaissaient dès que `position: absolute` et
+   * `pointer-events: none` coexistaient sur un élément hors flux placé au-dessus
+   * de son conteneur. Le texte de l'infobulle se mêlait alors à celui des lignes
+   * voisines, illisible.
+   *
+   * La position fixe règle aussi deux choses au passage : la carte ne peut plus la
+   * rogner, et l'infobulle du dernier facteur ne sort plus du cadre.
+   */
+  const [ancreBulle, setAncreBulle] = useState<{ x: number; bas: number; largeur: number } | null>(null);
+
+  const [profilOuvert, setProfilOuvert] = useState(false);
+  const [ancreProfil, setAncreProfil] = useState<{ droite: number; haut: number } | null>(null);
+
+  /**
+   * Enregistre le profil, puis relit l'analyse.
+   *
+   * ⚠️ La relecture est nécessaire, pas cosmétique : la cible de volatilité est
+   * calculée côté serveur, donc ce facteur passe de « mesuré » à « noté » et la
+   * note globale change. Sans elle, l'écran garderait l'ancienne note tout en
+   * affichant le nouveau profil.
+   */
+  const enregistrerProfil = async (horizon: number, tolerance: Tolerance) => {
+    const id = portfolio?.id;
+    if (!id) return;
+    try {
+      await fetch(`${API_URL}/api/v1/portfolios/${id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json", ...enTetesAuth() },
+        body: JSON.stringify({ horizon_annees: horizon, tolerance }),
+      });
+    } catch { /* réseau indisponible : le profil vaut pour la prochaine fois */ }
+    setTxRefreshKey(k => k + 1);
+  };
+
   const top3Conc   = [...enriched].sort((a, b) => b.weight - a.weight)
     .slice(0, 3).reduce((s, a) => s + a.weight, 0);
   const gainCount  = enriched.filter(a => (a.change ?? 0) > 0).length;
   const lossCount  = enriched.filter(a => (a.change ?? 0) < 0).length;
-
-  // NOVAC Score
-  const novacScore = useMemo(() => {
-    const n = enriched.length;
-    if (!n) return null;
-    const hhi  = enriched.reduce((s, a) => s + Math.pow(a.weight / 100, 2), 0);
-    const minH = 1 / n;
-    const diversification = n === 1 ? 0 : Math.round(Math.min(100, ((1 - hhi) / (1 - minH)) * 100));
-    const risque    = Math.round(Math.max(0, Math.min(100, 100 - top3Conc)));
-    const momentum  = Math.round(Math.max(0, Math.min(100, 50 + weightedChange * 5)));
-    const qualite   = Math.round((enriched.filter(a => (a.change ?? 0) > 0).length / n) * 100);
-    const global    = Math.round(diversification * 0.30 + risque * 0.30 + momentum * 0.20 + qualite * 0.20);
-    return { global, diversification, risque, momentum, qualite };
-  }, [enriched, top3Conc, weightedChange]);
 
   // Repli le temps que la série arrive : un segment plat entre les deux seules
   // valeurs connues, plutôt qu'une courbe inventée qui aurait l'air d'un cours.
@@ -823,16 +911,51 @@ function PortfolioPageInner() {
             Les logos empilés montrent en plus ce qu'il contient. */}
         {portfolio && (
           <div style={{ display: "flex", alignItems: "center", gap: 11, minWidth: 0, flexShrink: 0 }}>
-            {/* L'identité du portefeuille : son image, ou l'initiale de son nom
-                sur sa couleur à défaut. Les logos empilés des actifs qui
-                occupaient cette place montraient le contenu, mais ne
-                ressemblaient pas à un emplacement d'image — personne ne
-                pouvait deviner qu'on pouvait en poser une. Le contenu reste
-                visible plus bas, dans les cartes d'actifs. */}
-            <ImagePortefeuille portefeuille={portfolio} onChange={setPortfolio} />
+            {/* L'identité du portefeuille : son image, ou à défaut un
+                portefeuille de cuir portant une carte par actif, dans les
+                couleurs des cartes visibles plus bas. `enriched` et non
+                `portfolio.assets` : c'est la source du compte affiché juste en
+                dessous, et les deux doivent se répondre.
+
+                La taille égalise les trois marges qui l'entourent : autant de
+                pixels au-dessus, au-dessous et à gauche.
+
+                À gauche, l'écart vaut 19 — le retrait de 18 de `Cadre` et son
+                liseré d'un pixel — et il ne se négocie pas, c'est celui de tout
+                le contenu de la bande. Restent le haut et le bas, qui se
+                partagent également puisque la rangée centre ses éléments : il
+                faut donc que la bande dépasse la vignette de 38.
+
+                ⚠️ Et pour cela, il faut que la vignette **cesse d'être
+                l'élément le plus haut de la rangée**. À 88 elle l'était, et
+                commandait la hauteur de la bande : ses marges hautes valaient
+                alors la moitié des 28 de retrait, soit 14, contre 19 à gauche —
+                impossible à égaliser en grandissant. Sous 73, c'est le bloc de
+                la valeur totale qui commande, avec ses 72,8 : la bande retombe
+                à 100,8, et 100,8 − 38 donne 62,8. Mesuré à 63 : 19 en haut, 19
+                en bas, 19 à gauche.
+
+                ⚠️ À revoir si le bloc de la valeur totale change de hauteur :
+                c'est lui qui fixe désormais celle de la bande. */}
+            {/* Le conteneur relatif n'existe que pour la pastille d'enveloppe,
+                qui chevauche l'angle haut-droit de la vignette. Elle vit ici et
+                non dans `ImagePortefeuille` : ce composant sert aussi le menu
+                déroulant et la page de construction, où l'enveloppe n'a rien à
+                faire — et il n'a pas à connaître la fiscalité. */}
+            <span style={{ position: "relative", display: "inline-flex", flexShrink: 0 }}>
+              <ImagePortefeuille portefeuille={portfolio} actifs={enriched} taille={63} onChange={setPortfolio} />
+              {enveloppePortefeuille && (
+                <PastilleEnveloppe enveloppe={enveloppePortefeuille}
+                  infobulle={infobulleEnveloppe(enveloppePortefeuille)} />
+              )}
+            </span>
             <div style={{ minWidth: 0 }}>
+              {/* Le nom seul. Une pastille de la couleur du portefeuille le
+                  précédait ; elle est retirée. Elle était le dernier endroit du
+                  bandeau où cette couleur paraissait — la vignette ne s'en teinte
+                  plus depuis qu'elle a pris le cuir de la palette — donc elle ne
+                  distinguait plus rien de rien. */}
               <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                <span style={{ width: 7, height: 7, borderRadius: RAYONS.plein, background: portfolio.color || "var(--nv-accent)", flexShrink: 0 }} />
                 <span style={{ fontSize: 13, fontWeight: 700, color: CLAIR.texte, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
                   {portfolio.name}
                 </span>
@@ -878,10 +1001,20 @@ function PortfolioPageInner() {
       <div style={{
         fontSize: 32, fontWeight: 600, fontFamily: FONT, letterSpacing: "-0.02em",
         lineHeight: 1, marginBottom: 5, fontVariantNumeric: "tabular-nums",
-        ...styleClignotement(masque ? null : clignoteValeur, CLAIR.texte),
+        // Pas de clignotement sous le curseur : le vert et le rouge disent
+        // « ça vient de monter », or rien ne monte — c'est la souris qui se
+        // déplace. Le défilement des chiffres, lui, est conservé : il dit
+        // seulement que le nombre a changé, ce qui est le cas.
+        ...styleClignotement(masque || survolCourbe != null ? null : clignoteValeur, CLAIR.texte),
       }}>
         {masque
           ? "•••• €"
+          : survolCourbe != null
+            // Le point survolé prend la place du total, et la ligne du dessous
+            // en donne la date : sans elle, rien ne dirait si ce nombre est
+            // celui de maintenant ou celui d'un mardi de juin.
+            ? <ChiffresRoulants texte={survolCourbe.valeur.toLocaleString("fr-FR", {
+                minimumFractionDigits: 2, maximumFractionDigits: 2 }) + " €"} />
           : valeurTotale != null
             // Les centimes d'un seul tenant avec les euros, même corps et même
             // encre. `toLocaleString` arrondit le nombre entier, ce qui laisse
@@ -897,9 +1030,28 @@ function PortfolioPageInner() {
         Le gain figurait ici *et* dans « Gains / pertes », deux fois le même
         nombre à quatre centimètres d'écart. Ce qui manquait, c'était ce
         qu'on a mis pour arriver à cette valeur. */}
-    {surTransactions && prixDeRevient != null ? (
+    {survolCourbe != null ? (
+      /* Le capital engagé **à cette date**, et la date elle-même.
+         Les trois chiffres de la bande — valeur, capital, gain — décrivent alors
+         le même instant. Laisser le capital d'aujourd'hui sous une valeur d'hier
+         donnait un couple qui ne se recoupait pas, et dont l'écart se lisait
+         comme un gain qu'on n'avait pas.
+         La date reste : c'est elle qui empêche le total du dessus d'être pris
+         pour celui du moment. */
+      <div style={{ fontSize: 11, fontFamily: FONT, color: CLAIR.accent, fontWeight: 500 }}>
+        {survolCourbe.investi != null && (
+          <>{masque ? "•••• €" : `${survolCourbe.investi.toLocaleString("fr-FR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €`} investis
+            <span style={{ opacity: 0.5 }}> · </span></>
+        )}
+        {new Date(survolCourbe.date).toLocaleString("fr-FR", {
+          day: "numeric", month: "short", year: "numeric",
+          ...(survolCourbe.date.includes("T") && period === "24h"
+            ? { hour: "2-digit", minute: "2-digit" } : {}),
+        })}
+      </div>
+    ) : surTransactions && prixDeRevient != null ? (
       <div style={{ fontSize: 11, fontFamily: FONT, color: CLAIR.texteAttenue }}>
-        {masque ? "•••• €" : `${Math.round(prixDeRevient).toLocaleString("fr-FR")} €`} investis
+        {masque ? "•••• €" : `${prixDeRevient.toLocaleString("fr-FR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €`} investis
         {origine && ` ${libellePeriode.toLowerCase()}`}
       </div>
     ) : gainAffiche != null && (
@@ -943,14 +1095,27 @@ function PortfolioPageInner() {
           </div>
         );
       }
-      const plEur = valeurTotale - cb;
-      const plPct = (plEur / cb) * 100;
+      /* Sous le curseur, le gain se recalcule à la date survolée : valeur du
+         point moins le capital engagé ce jour-là. Sans ce second terme on
+         afficherait le gain d'aujourd'hui sous une valeur d'hier, et l'écart
+         entre les deux serait pris pour une perte. Le capital manque parfois —
+         la route ne le donne pas sur toutes les fenêtres — et on garde alors le
+         total, faute de mieux que de mentir. */
+      const survolGain = survolCourbe != null && survolCourbe.investi != null
+        ? { eur: survolCourbe.valeur - survolCourbe.investi, base: survolCourbe.investi }
+        : null;
+      const plEur = survolGain ? survolGain.eur : valeurTotale - cb;
+      const plPct = (plEur / (survolGain ? survolGain.base : cb)) * 100;
       const plCol = plEur >= 0 ? CLAIR.positif : CLAIR.negatif;
       return (
         <div style={{ marginTop: 3, fontSize: 11, fontFamily: FONT, color: plCol, fontWeight: 600, display: "flex", alignItems: "center", gap: 6 }}>
-          Total
-          <span>{plEur >= 0 ? "+" : ""}{Math.round(plEur).toLocaleString("fr-FR")} €</span>
-          <span style={{ opacity: 0.55 }}>({plPct >= 0 ? "+" : ""}{plPct.toFixed(1)}%)</span>
+          {survolGain ? "À cette date" : "Total"}
+          {/* Deux décimales, comme la valeur totale juste au-dessus. Arrondi à
+              l'euro, ce gain ne se recoupait pas avec elle : 3 447,92 € moins
+              3 256,73 € de capital font 191,19 €, pas 191. */}
+          <span>{plEur >= 0 ? "+" : ""}{plEur.toLocaleString("fr-FR", {
+            minimumFractionDigits: 2, maximumFractionDigits: 2 })} €</span>
+          <span style={{ opacity: 0.55 }}>({plPct >= 0 ? "+" : ""}{plPct.toFixed(2)}%)</span>
           {/* Le crayon disparaît dès que le prix de revient vient des
               écritures : la valeur saisie serait enregistrée puis ignorée,
               le calcul repartant des transactions au rafraîchissement. */}
@@ -995,9 +1160,14 @@ function PortfolioPageInner() {
       // les valeurs exactes : sinon « 85 € » moins « 77 € » peut s'accompagner
       // d'un « 9 € de mieux », et le lecteur qui refait la soustraction trouve
       // huit.
-      const mien = Math.round(gain.eur);
-      const sien = Math.round(simRepere.gain_eur);
-      const ecart = mien - sien;
+      //
+      // L'arrondi est passé au centime avec le reste de la bande, et la
+      // propriété tient toujours : c'est la même quantification appliquée aux
+      // trois nombres avant qu'on les soustraie.
+      const auCentime = (v: number) => Math.round(v * 100) / 100;
+      const mien = auCentime(gain.eur);
+      const sien = auCentime(simRepere.gain_eur);
+      const ecart = auCentime(mien - sien);
       const col   = ecart >= 0 ? CLAIR.positif : CLAIR.negatif;
       return (
         <div style={{ position: "relative", marginTop: 3 }}
@@ -1018,15 +1188,15 @@ function PortfolioPageInner() {
           }}>
             <span>Vous</span>
             <span style={{ color: CLAIR.texteSecondaire, fontWeight: 600, justifySelf: "end" }}>
-              {mien >= 0 ? "+" : ""}{mien.toLocaleString("fr-FR")} €
+              {mien >= 0 ? "+" : ""}{mien.toLocaleString("fr-FR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €
             </span>
             <span>Sur S&amp;P 500</span>
             <span style={{ color: CLAIR.texteSecondaire, fontWeight: 600, justifySelf: "end" }}>
-              {sien >= 0 ? "+" : ""}{sien.toLocaleString("fr-FR")} €
+              {sien >= 0 ? "+" : ""}{sien.toLocaleString("fr-FR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €
             </span>
             <span style={{ gridColumn: "1 / -1", marginTop: 1 }}>
               <span style={{ color: col, fontWeight: 700 }}>
-                {ecart >= 0 ? "+" : "−"}{Math.abs(ecart).toLocaleString("fr-FR")} €
+                {ecart >= 0 ? "+" : "−"}{Math.abs(ecart).toLocaleString("fr-FR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €
               </span>
               <span style={{ marginLeft: 3, opacity: 0.8 }}>{ecart >= 0 ? "de mieux" : "de moins"}</span>
             </span>
@@ -1080,20 +1250,20 @@ function PortfolioPageInner() {
       );
     })()}
         </div>
-        {novacScore && <>
+        {scoreSante != null && <>
           <div style={{ width: 1, alignSelf: "stretch", background: CLAIR.carteCreuse }} />
           {/* Santé du portefeuille : le titre chiffré passe en tête, la carte
               de droite ne garde que le détail par critère. */}
           <div style={{ display: "flex", alignItems: "center", gap: 12, minWidth: 170 }}>
-            <CircleScore score={novacScore.global} size={64} nu />
+            <CircleScore score={scoreSante} size={64} nu />
             <div>
               <p style={{ margin: "0 0 3px", fontSize: 11.5, fontWeight: 500, color: CLAIR.texteSecondaire }}>Santé du portefeuille</p>
               <div style={{ display: "flex", alignItems: "baseline", gap: 3 }}>
-                <span style={{ fontSize: 20, fontWeight: 800, fontFamily: FONT, color: CLAIR.texte, lineHeight: 1 }}>{novacScore.global}</span>
+                <span style={{ fontSize: 20, fontWeight: 800, fontFamily: FONT, color: CLAIR.texte, lineHeight: 1 }}>{scoreSante}</span>
                 <span style={{ fontSize: 10, color: CLAIR.texteFaible }}>/100</span>
               </div>
-              <span style={{ fontSize: 11, fontWeight: 600, color: scoreColor(novacScore.global) }}>
-                {scoreLabel(novacScore.global)}
+              <span style={{ fontSize: 11, fontWeight: 600, color: scoreColor(scoreSante) }}>
+                {bandeSante ?? scoreLabel(scoreSante)}
               </span>
             </div>
           </div>
@@ -1148,6 +1318,7 @@ function PortfolioPageInner() {
               surTransactions={surTransactions}
               operations={reperesOperations}
               onOperationClick={(id) => { setOperationVisee(id); setDashView("transactions"); }}
+              onSurvol={setSurvolCourbe}
             />
             </div>
           </div>
@@ -1231,51 +1402,226 @@ function PortfolioPageInner() {
               bande de tête : elle y est le premier chiffre qu'on cherche, et
               son départ rend une centaine de pixels à cette colonne. */}
           <Cadre style={{ padding: "14px 16px", flexShrink: 0 }}>
-            {novacScore && (() => {
-              const subScores = [
-                { key: "diversification", label: "Diversification", value: novacScore.diversification,
-                  tip: (v: number) => v >= 75 ? "Vos actifs couvrent plusieurs secteurs. Aucune position ne domine excessivement." : v >= 40 ? "Bonne base, mais certaines positions restent dominantes." : "Concentration élevée. Un choc sectoriel peut fortement impacter le portefeuille." },
-                { key: "risque", label: "Risque", value: novacScore.risque,
-                  tip: (v: number) => v >= 60 ? "La concentration top 3 reste raisonnable. Le risque de perte simultanée est limité." : v >= 40 ? "Vos 3 premiers actifs représentent une part significative. À surveiller." : "Fort risque de concentration. Un seul événement peut impacter lourdement le portefeuille." },
-                { key: "momentum", label: "Momentum", value: novacScore.momentum,
-                  tip: (v: number) => v >= 55 ? "Tendance positive sur la période. Bon contexte de maintien ou d'entrée." : v >= 40 ? "Momentum neutre. Le portefeuille évolue sans direction claire." : "Tendance baissière sur la période. Moment de réévaluation potentiel." },
-                { key: "qualite", label: "Qualité", value: novacScore.qualite,
-                  tip: (v: number) => v >= 70 ? "La majorité des actifs performent positivement. Le portefeuille est en bonne santé." : v >= 40 ? "Une partie des actifs sous-performe. Surveiller les positions négatives." : "Plus de la moitié des actifs sont en perte. Le portefeuille mérite une révision." },
-              ];
+            {profilOuvert && ancreProfil && (
+              <PanneauProfil
+                profil={analyse?.profil ?? null}
+                surProfil={enregistrerProfil}
+                fermer={() => setProfilOuvert(false)}
+                ancre={ancreProfil}
+              />
+            )}
+            {etatAnalyse === "charge" && (
+              <p style={{ margin: 0, fontSize: 11.5, color: CLAIR.texteFaible }}>Analyse en cours…</p>
+            )}
+            {etatAnalyse === "vide" && (
+              // Dire **pourquoi** il n'y a pas de note. Un cours manquant et un
+              // portefeuille vide n'appellent pas la même action, et les confondre
+              // enverrait ajouter des transactions à qui en a déjà.
+              analyse?.source === "incomplet" ? (
+                <p style={{ margin: 0, fontSize: 11.5, color: CLAIR.texteFaible, lineHeight: 1.5 }}>
+                  Score indisponible : le cours de{" "}
+                  <span style={{ color: CLAIR.texte, fontWeight: 600 }}>
+                    {(analyse.sans_cours ?? []).join(", ")}
+                  </span>{" "}
+                  n&apos;a pas pu être lu. Noter sans cette ligne reviendrait à la
+                  retirer du portefeuille.
+                </p>
+              ) : (
+                <p style={{ margin: 0, fontSize: 11.5, color: CLAIR.texteFaible, lineHeight: 1.5 }}>
+                  Pas encore de score : ajoutez des transactions, ou une composition
+                  et une valeur totale.
+                </p>
+              )
+            )}
+            {etatAnalyse === "prêt" && analyse && (() => {
+              /**
+               * Les facteurs qui **font** la note, dans l'ordre du radar.
+               *
+               * ⚠️ Les indicatifs sont écartés d'ici. Ce panneau s'appelle
+               * « Détail du score » : y lister des facteurs qui n'y entrent pas
+               * était à contresens, et douze lignes portaient le panneau à 715 px
+               * dans une fenêtre de 950, écrasant la colonne. Ils restent visibles
+               * dans l'onglet Analyse, où la place existe.
+               *
+               * Les facteurs notants **non mesurés** restent affichés, eux, avec un
+               * tiret : un portefeuille trop jeune pour avoir une volatilité doit
+               * le lire, sinon il croit que sa note pèse plus de critères qu'elle
+               * n'en compte.
+               */
+              const subScores = ORDRE_FACTEURS
+                .filter(k => analyse.facteurs?.[k] && analyse.facteurs[k].compte !== false)
+                .map(k => ({
+                  key: k,
+                  label: LIBELLE_FACTEUR[k] ?? k,
+                  value: analyse.facteurs[k].score,
+                  lecture: analyse.facteurs[k].libelle,
+                  tip: EXPLICATION_FACTEUR[k] ?? "",
+                  // Toujours vrai ici, le filtre au-dessus n'en laisse pas
+                  // passer d'autre — gardé pour que le rendu ne suppose rien.
+                  compte: analyse.facteurs[k].compte !== false,
+                }));
+              const couverture = couvertureFacteurs(analyse.facteurs);
+              const faible = facteurLePlusFaible(analyse.facteurs);
               return (
                 <>
                   <div style={{ display: "flex", alignItems: "center", gap: 5, marginBottom: 10 }}>
                     <p style={{ margin: 0, fontSize: 12.5, fontWeight: 600, color: CLAIR.texte }}>Détail du score</p>
-                    <span title="Quatre critères pondérés : diversification, concentration, tendance et part d'actifs en hausse."
+                    {/* ⚠️ La liste est **dérivée**, plus écrite à la main. Celle qui
+                        vivait ici citait la corrélation, la sensibilité au marché et
+                        la liquidité : trois facteurs qui ne notaient déjà plus quand
+                        je l'ai lue, et deux qui n'existent plus du tout. Une
+                        énumération figée décrit tôt ou tard un calcul qui n'a plus
+                        lieu, et rien ne le signale. */}
+                    <span title={`Moyenne des facteurs notants mesurés : ${
+                      subScores.map(s => s.label.toLowerCase()).join(", ")
+                    }. ${couverture.mesures} sur ${couverture.total} mesurés ici — les autres sont ignorés plutôt que comptés zéro.`}
                       style={{ display: "flex", color: CLAIR.texteFaible, cursor: "help" }}>
                       <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
                         <circle cx="12" cy="12" r="10" /><path d="M12 16v-4M12 8h.01" strokeLinecap="round" />
                       </svg>
                     </span>
+                    <span style={{ marginLeft: "auto", fontSize: 10, color: CLAIR.texteFaible }}>
+                      {couverture.mesures}/{couverture.total} mesurés
+                    </span>
                   </div>
+                  {(() => {
+                    /**
+                     * L'invite à déclarer son profil, quand il manque.
+                     *
+                     * ⚠️ Sans elle, la volatilité se tait et rien ne le dit :
+                     * l'utilisateur voit seulement une note calculée sur moins de
+                     * critères, sans savoir qu'il lui manque une réponse à donner.
+                     * « Ce facteur attend votre profil » est actionnable ; une note
+                     * discrètement plus basse ne l'est pas.
+                     *
+                     * Le nombre vient de `FACTEURS_DU_PROFIL` et le texte s'accorde
+                     * seul : ils étaient trois avant l'audit — bêta supprimé, perte
+                     * maximale passée en indicatif — et un libellé écrit en dur
+                     * aurait menti sans que rien n'échoue.
+                     */
+                    const enAttente = FACTEURS_DU_PROFIL
+                      .filter(k => analyse.facteurs?.[k] && analyse.facteurs[k].compte === false);
+                    if (!enAttente.length) return null;
+                    return (
+                      <button type="button"
+                        onClick={e => {
+                          const r = e.currentTarget.getBoundingClientRect();
+                          setAncreProfil({ droite: window.innerWidth - r.right, haut: r.bottom + 6 });
+                          setProfilOuvert(true);
+                        }}
+                        style={{
+                          display: "block", width: "100%", textAlign: "left",
+                          margin: "0 0 9px", padding: "7px 8px", cursor: "pointer",
+                          borderRadius: RAYONS.xs, background: CLAIR.carteCreuse,
+                          border: `1px solid ${JETONS.bord}`,
+                          fontFamily: FONT, fontSize: 10.5, color: CLAIR.texteAttenue,
+                          lineHeight: 1.45,
+                        }}>
+                        <span style={{ color: CLAIR.accent, fontWeight: 600 }}>
+                          Déclarez votre profil de risque
+                        </span>{" "}
+                        pour que {enAttente.length === 1 ? "ce facteur soit noté" : `ces ${enAttente.length} facteurs soient notés`} :{" "}
+                        {enAttente.map(k => (LIBELLE_FACTEUR[k] ?? k).toLowerCase()).join(", ")}.
+                      </button>
+                    );
+                  })()}
+                  {analyse.profil && (
+                    <p style={{ margin: "0 0 9px", fontSize: 10.5, color: CLAIR.texteAttenue, lineHeight: 1.45 }}>
+                      Profil : <span style={{ color: CLAIR.texte, fontWeight: 600 }}>
+                        {analyse.profil.horizon_annees} ans, {analyse.profil.tolerance}
+                      </span>{" "}
+                      — cible {analyse.profil.volatilite.toFixed(0)} % de volatilité.{" "}
+                      <button type="button"
+                        onClick={e => {
+                          const r = e.currentTarget.getBoundingClientRect();
+                          setAncreProfil({ droite: window.innerWidth - r.right, haut: r.bottom + 6 });
+                          setProfilOuvert(true);
+                        }}
+                        style={{
+                          background: "none", border: "none", padding: 0, cursor: "pointer",
+                          fontFamily: FONT, fontSize: 10.5, color: CLAIR.accent,
+                        }}>Modifier</button>
+                    </p>
+                  )}
+                  {faible && (
+                    // Nommer la cause : un score sans motif se subit au lieu de
+                    // se corriger.
+                    <p style={{ margin: "0 0 9px", fontSize: 10.5, color: CLAIR.texteAttenue, lineHeight: 1.45 }}>
+                      Ce qui pèse le plus : <span style={{ color: CLAIR.texte, fontWeight: 600 }}>{faible.libelle.toLowerCase()}</span>{" "}
+                      ({faible.score}/100).
+                    </p>
+                  )}
                       <div style={{ display: "flex", flexDirection: "column", gap: 7 }}>
                         {subScores.map(m => {
-                          const col = scoreColor(m.value);
+                          // Un facteur non mesuré n'a ni couleur ni barre : il
+                          // est gris et le dit. Le peindre à zéro l'aurait fait
+                          // passer pour une mauvaise note.
+                          const mesure = m.value != null;
+                          const col = !mesure ? CLAIR.texteFaible
+                            : m.compte ? scoreColor(m.value!)
+                            // Gris et non coloré : la couleur porte le jugement,
+                            // et ce facteur n'en porte pas.
+                            : CLAIR.texteAttenue;
                           return (
                             <div key={m.key} style={{ position: "relative", borderRadius: RAYONS.xs, padding: "2px 4px", transition: "background 150ms" }}
-                              onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = CLAIR.carteCreuse; setActiveTooltip(m.key); }}
-                              onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = "transparent"; setActiveTooltip(null); }}>
-                              <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 3, cursor: "default" }}>
-                                <span style={{ fontSize: 10, color: activeTooltip === m.key ? CLAIR.texte : CLAIR.texteAttenue, transition: "color 120ms" }}>{m.label}</span>
-                                <span style={{ fontSize: 10, fontWeight: 700, fontFamily: FONT, color: col }}>{m.value}</span>
+                              onMouseEnter={e => {
+                                const el = e.currentTarget as HTMLElement;
+                                el.style.background = CLAIR.carteCreuse;
+                                const r = el.getBoundingClientRect();
+                                setAncreBulle({ x: r.left, bas: r.top, largeur: r.width });
+                                setActiveTooltip(m.key);
+                              }}
+                              onMouseLeave={e => {
+                                (e.currentTarget as HTMLElement).style.background = "transparent";
+                                setActiveTooltip(null);
+                                setAncreBulle(null);
+                              }}>
+                              <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 3, cursor: "default", gap: 8 }}>
+                                <span style={{ fontSize: 10, color: activeTooltip === m.key ? CLAIR.texte : CLAIR.texteAttenue, transition: "color 120ms" }}>
+                                  {m.label}
+                                  {!m.compte && (
+                                    <span style={{ marginLeft: 4, fontSize: 9, color: CLAIR.texteFaible }}>indicatif</span>
+                                  )}
+                                </span>
+                                <span style={{ fontSize: 10, fontWeight: 700, fontFamily: FONT, color: col, whiteSpace: "nowrap" }}>
+                                  {mesure ? m.value : "—"}
+                                </span>
                               </div>
                               <div style={{ height: 5, borderRadius: RAYONS.plein, background: CLAIR.carteCreuse }}>
-                                <div style={{ height: "100%", borderRadius: RAYONS.plein, background: col, width: `${m.value}%`, opacity: 0.85, transition: "width 800ms ease" }} />
+                                {mesure && (
+                                  <div style={{ height: "100%", borderRadius: RAYONS.plein, background: col, width: `${m.value}%`, opacity: 0.85, transition: "width 800ms ease" }} />
+                                )}
                               </div>
-                              {activeTooltip === m.key && (
-                                <div style={{
-                                  position: "absolute", bottom: "calc(100% + 8px)", right: 0, left: 0, zIndex: 50,
-                                  background: "rgba(4,17,36,0.97)", border: `1px solid ${CLAIR.bordFort}`,
-                                  borderRadius: RAYONS.sm, padding: "8px 10px", boxShadow: "0 8px 24px rgba(0,0,0,0.50)",
-                                  pointerEvents: "none",
+                              {activeTooltip === m.key && ancreBulle && typeof document !== "undefined"
+                                && createPortal(
+                                <div role="tooltip" style={{
+                                  position: "fixed",
+                                  left: ancreBulle.x,
+                                  // Posée au-dessus de la ligne, sauf s'il n'y a pas
+                                  // la place — auquel cas elle passe dessous.
+                                  ...(ancreBulle.bas > 130
+                                    ? { bottom: window.innerHeight - ancreBulle.bas + 8 }
+                                    : { top: ancreBulle.bas + 26 }),
+                                  width: ancreBulle.largeur,
+                                  zIndex: 60, boxSizing: "border-box",
+                                  background: JETONS.carte, border: `1px solid ${JETONS.bordFort}`,
+                                  borderRadius: RAYONS.sm, padding: "8px 10px",
+                                  boxShadow: JETONS.ombre, pointerEvents: "none",
                                 }}>
-                                  <span style={{ fontSize: 10, color: CLAIR.texteSecondaire, lineHeight: 1.5 }}>{m.tip(m.value)}</span>
-                                </div>
+                                  {/* La lecture brute d'abord — « 1,9 ligne
+                                      équivalente », « 14,2 % par an » — puis ce que
+                                      le facteur mesure. Elle vient du serveur, donc
+                                      du calcul lui-même, et non d'une prose écrite
+                                      à côté. */}
+                                  <span style={{ display: "block", fontFamily: FONT, fontSize: 10.5, fontWeight: 600,
+                                                 color: JETONS.texteIntense, marginBottom: 3 }}>
+                                    {m.lecture}
+                                  </span>
+                                  <span style={{ fontFamily: FONT, fontSize: 10, color: JETONS.texteSecondaire, lineHeight: 1.5 }}>
+                                    {m.tip}
+                                  </span>
+                                </div>,
+                                document.body,
                               )}
                             </div>
                           );
@@ -1332,7 +1678,7 @@ function PortfolioPageInner() {
       {/* ══ VUE ANALYSE ═════════════════════════════════════════════════════════ */}
       <div style={{ display: dashView === "analyse" ? "flex" : "none", height: "100%", flexDirection: "column", overflow: "hidden" }}>
         {portfolio && (
-          <AnalyseView portfolioId={portfolio.id} refreshKey={txRefreshKey} />
+          <AnalyseView analyse={analyse} etat={etatAnalyse} />
         )}
       </div>
 
@@ -1410,20 +1756,20 @@ function PortfolioPageInner() {
               );
             })}
           </div>
-          {novacScore && <>
+          {scoreSante != null && <>
             <div style={{ width: 1, alignSelf: "stretch", background: CLAIR.carteCreuse }} />
             {/* Santé du portefeuille : le titre chiffré passe en tête, la carte
                 de droite ne garde que le détail par critère. */}
             <div style={{ display: "flex", alignItems: "center", gap: 12, minWidth: 170 }}>
-              <CircleScore score={novacScore.global} size={64} nu />
+              <CircleScore score={scoreSante} size={64} nu />
               <div>
                 <p style={{ margin: "0 0 3px", fontSize: 11.5, fontWeight: 500, color: CLAIR.texteSecondaire }}>Santé du portefeuille</p>
                 <div style={{ display: "flex", alignItems: "baseline", gap: 3 }}>
-                  <span style={{ fontSize: 20, fontWeight: 800, fontFamily: FONT, color: CLAIR.texte, lineHeight: 1 }}>{novacScore.global}</span>
+                  <span style={{ fontSize: 20, fontWeight: 800, fontFamily: FONT, color: CLAIR.texte, lineHeight: 1 }}>{scoreSante}</span>
                   <span style={{ fontSize: 10, color: CLAIR.texteFaible }}>/100</span>
                 </div>
-                <span style={{ fontSize: 11, fontWeight: 600, color: scoreColor(novacScore.global) }}>
-                  {scoreLabel(novacScore.global)}
+                <span style={{ fontSize: 11, fontWeight: 600, color: scoreColor(scoreSante) }}>
+                  {bandeSante ?? scoreLabel(scoreSante)}
                 </span>
               </div>
             </div>
@@ -1449,20 +1795,20 @@ function PortfolioPageInner() {
               </div>
             ))}
           </div>
-          {novacScore && <>
+          {scoreSante != null && <>
             <div style={{ width: 1, alignSelf: "stretch", background: CLAIR.carteCreuse }} />
             {/* Santé du portefeuille : le titre chiffré passe en tête, la carte
                 de droite ne garde que le détail par critère. */}
             <div style={{ display: "flex", alignItems: "center", gap: 12, minWidth: 170 }}>
-              <CircleScore score={novacScore.global} size={64} nu />
+              <CircleScore score={scoreSante} size={64} nu />
               <div>
                 <p style={{ margin: "0 0 3px", fontSize: 11.5, fontWeight: 500, color: CLAIR.texteSecondaire }}>Santé du portefeuille</p>
                 <div style={{ display: "flex", alignItems: "baseline", gap: 3 }}>
-                  <span style={{ fontSize: 20, fontWeight: 800, fontFamily: FONT, color: CLAIR.texte, lineHeight: 1 }}>{novacScore.global}</span>
+                  <span style={{ fontSize: 20, fontWeight: 800, fontFamily: FONT, color: CLAIR.texte, lineHeight: 1 }}>{scoreSante}</span>
                   <span style={{ fontSize: 10, color: CLAIR.texteFaible }}>/100</span>
                 </div>
-                <span style={{ fontSize: 11, fontWeight: 600, color: scoreColor(novacScore.global) }}>
-                  {scoreLabel(novacScore.global)}
+                <span style={{ fontSize: 11, fontWeight: 600, color: scoreColor(scoreSante) }}>
+                  {bandeSante ?? scoreLabel(scoreSante)}
                 </span>
               </div>
             </div>
@@ -1479,20 +1825,20 @@ function PortfolioPageInner() {
               </div>
             ))}
           </div>
-          {novacScore && <>
+          {scoreSante != null && <>
             <div style={{ width: 1, alignSelf: "stretch", background: CLAIR.carteCreuse }} />
             {/* Santé du portefeuille : le titre chiffré passe en tête, la carte
                 de droite ne garde que le détail par critère. */}
             <div style={{ display: "flex", alignItems: "center", gap: 12, minWidth: 170 }}>
-              <CircleScore score={novacScore.global} size={64} nu />
+              <CircleScore score={scoreSante} size={64} nu />
               <div>
                 <p style={{ margin: "0 0 3px", fontSize: 11.5, fontWeight: 500, color: CLAIR.texteSecondaire }}>Santé du portefeuille</p>
                 <div style={{ display: "flex", alignItems: "baseline", gap: 3 }}>
-                  <span style={{ fontSize: 20, fontWeight: 800, fontFamily: FONT, color: CLAIR.texte, lineHeight: 1 }}>{novacScore.global}</span>
+                  <span style={{ fontSize: 20, fontWeight: 800, fontFamily: FONT, color: CLAIR.texte, lineHeight: 1 }}>{scoreSante}</span>
                   <span style={{ fontSize: 10, color: CLAIR.texteFaible }}>/100</span>
                 </div>
-                <span style={{ fontSize: 11, fontWeight: 600, color: scoreColor(novacScore.global) }}>
-                  {scoreLabel(novacScore.global)}
+                <span style={{ fontSize: 11, fontWeight: 600, color: scoreColor(scoreSante) }}>
+                  {bandeSante ?? scoreLabel(scoreSante)}
                 </span>
               </div>
             </div>

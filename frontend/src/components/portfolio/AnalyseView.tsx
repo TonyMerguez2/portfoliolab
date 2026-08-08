@@ -1,13 +1,15 @@
 "use client";
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import RadarChart from "@/components/charts/RadarChart";
 import { FONT, NUM } from "@/lib/typography";
-import { enTetesAuth } from "@/lib/session";
 import { donutArcs } from "@/lib/donut";
+import {
+  LIBELLE_FACTEUR, ORDRE, type Analyse, type EtatAnalyse, type Observation,
+  type Part, type Projection, type Trajet,
+} from "@/lib/analyse";
 import Cadre from "@/components/ui/Cadre";
 import { JETONS } from "@/lib/palette";
 
-const API = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 
 /**
  * Analyse du portefeuille.
@@ -23,48 +25,34 @@ const API = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 const MARGE = 10;
 const GOUTTIERE = 8;
 
-type Facteur = { valeur: number | null; libelle: string; score: number | null };
-type Part = { libelle: string; part: number };
-type Observation = { ton: string; titre: string; detail: string };
-type Trajet = { jour: number; p10: number; median: number; p90: number };
-type Projection = { median: number | null; p10: number | null; p90: number | null; trajectoire: Trajet[] };
-type Analyse = {
-  score: number | null;
-  bande: string | null;
-  facteurs: Record<string, Facteur>;
-  expositions: Record<string, Part[]>;
-  observations: Observation[];
-  poids: { ticker: string; part: number }[];
-  projection: Projection;
-  source: string;
-};
-
-const LIBELLE_FACTEUR: Record<string, string> = {
-  diversification:     "Diversification",
-  concentration:       "Concentration",
-  volatilite:          "Volatilité",
-  liquidite:           "Liquidité",
-  correlation:         "Corrélation",
-  sensibilite_marche:  "Sensibilité marché",
-};
-
 /**
  * Intitulés du radar, abrégés.
  *
- * « Sensibilité marché » posé autour d'un cercle de 168 px chevauche ses
- * voisins ; la liste à côté donne le nom entier.
+ * « Diversification » posé autour d'un cercle de 168 px chevauche ses voisins ;
+ * la liste à côté donne le nom entier.
+ *
+ * ⚠️ Seuls les facteurs **notants** ont un abrégé, parce que seuls eux figurent
+ * sur le radar — il représente la note. Les indicatifs vivent dans la liste, avec
+ * leur nom entier et la mention qui va avec.
+ *
+ * Le radar porte sept branches. « Devise » et « Marché » ont été retirés avec leurs
+ * facteurs — la première lisait la place de cotation et non l'exposition, le second
+ * avait un bêta biaisé vers zéro pour toute ligne cotée hors de New York.
+ *
+ * « Diversification » y est abrégé en « Secteurs » depuis que la géographie est un
+ * facteur séparé : les deux branches voisines devaient se distinguer d'un coup
+ * d'œil, et « Diversif. » ne disait plus laquelle des deux on lisait.
  */
 const ABREGE: Record<string, string> = {
-  diversification:    "Diversif.",
+  diversification:    "Secteurs",
+  geographie:         "Géographie",
   concentration:      "Concentr.",
+  frais:              "Frais fonds",
+  frais_courtage:     "Courtage",
+  redondance:         "Redond.",
   volatilite:         "Volatilité",
-  liquidite:          "Liquidité",
-  correlation:        "Corrél.",
-  sensibilite_marche: "Marché",
 };
 
-/** Ordre d'affichage, celui du radar comme celui de la liste. */
-const ORDRE = ["diversification", "concentration", "volatilite", "liquidite", "correlation", "sensibilite_marche"];
 
 /**
  * Les cinq bandes du score.
@@ -142,29 +130,36 @@ function Titre({ children, action }: { children: React.ReactNode; action?: React
   );
 }
 
-export default function AnalyseView({ portfolioId, refreshKey }: { portfolioId: string; refreshKey: number }) {
-  const [a, setA] = useState<Analyse | null>(null);
-  const [etat, setEtat] = useState<"charge" | "prêt" | "vide">("charge");
-  const [ongletExpo, setOngletExpo] = useState<"secteurs" | "zones" | "devises" | "classes">("secteurs");
+/**
+ * L'onglet Analyse.
+ *
+ * ⚠️ L'analyse arrive en propriété et n'est plus chargée ici. Elle alimente
+ * aussi le score du bandeau : la charger deux fois aurait doublé les appels à une
+ * route qui télécharge un an d'historique et les fiches sectorielles, et surtout
+ * rien n'aurait garanti que les deux réponses concordent.
+ */
+export default function AnalyseView({ analyse: a, etat }: { analyse: Analyse | null; etat: EtatAnalyse }) {
+  // ⚠️ « devises » a été retiré des onglets. La ventilation venait de la devise de
+  // **cotation** : elle annonçait « EUR 100 % » pour un portefeuille de trackers
+  // S&P 500 cotés à Paris, dont l'exposition au dollar est totale. C'était faux, et
+  // aucune donnée disponible ne permet de la corriger — les poids par devise des
+  // sous-jacents ne sont pas publiés.
+  const [ongletExpo, setOngletExpo] = useState<"secteurs" | "zones" | "classes">("secteurs");
 
-  useEffect(() => {
-    if (!portfolioId) return;
-    let annule = false;
-    setEtat("charge");
-    fetch(`${API}/api/v1/portfolios/${portfolioId}/analysis`, { headers: enTetesAuth() })
-      .then(r => (r.ok ? r.json() : null))
-      .then((d: Analyse | null) => {
-        if (annule) return;
-        setA(d);
-        setEtat(d && d.source === "transactions" ? "prêt" : "vide");
-      })
-      .catch(() => { if (!annule) setEtat("vide"); });
-    return () => { annule = true; };
-  }, [portfolioId, refreshKey]);
-
+  /**
+   * Le radar ne porte que les facteurs qui **notent**.
+   *
+   * ⚠️ Il représente visuellement la note : y placer un facteur indicatif — la
+   * perte maximale, hors du score — laisserait croire qu'il y pèse. Elle reste dans
+   * la liste en dessous, marquée comme telle.
+   */
   const facteursRadar = useMemo(
     () => ORDRE
-      .filter(k => a?.facteurs?.[k]?.score != null)
+      .filter(k => a?.facteurs?.[k]?.score != null
+                && a!.facteurs[k].compte !== false
+                // Un facteur notant sans abrégé n'a pas sa place sur le radar :
+                // il s'y afficherait sans étiquette.
+                && ABREGE[k] != null)
       .map(k => ({ label: ABREGE[k], value: a!.facteurs[k].score! })),
     [a]);
 
@@ -247,6 +242,18 @@ export default function AnalyseView({ portfolioId, refreshKey }: { portfolioId: 
               {ORDRE.map(k => {
                 const f = a.facteurs[k];
                 if (!f) return null;
+                /**
+                 * ⚠️ Un facteur **indicatif** ne montre pas de tiret à la place de
+                 * sa note.
+                 *
+                 * La perte maximale est le seul de cette sorte, et elle n'a plus de
+                 * score : rendue « — » comme les autres, elle se lisait « non
+                 * mesurée » alors qu'elle l'est parfaitement — son libellé porte
+                 * « −6,4 %, pour 30 % attendus au pire ». Les deux cas sont
+                 * différents et doivent le rester : ici « indicatif » dit qu'on ne
+                 * la note pas, le tiret dit qu'on ne sait pas.
+                 */
+                const indicatif = f.compte === false;
                 return (
                   // Intitulé et mesure sur deux lignes : côte à côte, ils se
                   // disputaient cent cinquante pixels et se coupaient tous les
@@ -257,6 +264,12 @@ export default function AnalyseView({ portfolioId, refreshKey }: { portfolioId: 
                                      color: "rgba(var(--nv-encre-rvb), 0.68)", overflow: "hidden",
                                      textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                         {LIBELLE_FACTEUR[k]}
+                        {indicatif && (
+                          <span style={{ marginLeft: 4, fontSize: 9,
+                                         color: "rgba(var(--nv-encre-rvb), 0.32)" }}>
+                            indicatif
+                          </span>
+                        )}
                       </span>
                       <span style={{ display: "block", fontFamily: FONT, fontSize: 9.5,
                                      color: "rgba(var(--nv-encre-rvb), 0.32)", overflow: "hidden",
@@ -266,7 +279,7 @@ export default function AnalyseView({ portfolioId, refreshKey }: { portfolioId: 
                     </span>
                     <span style={{ ...NUM, fontSize: 13, fontWeight: 700, width: 26, textAlign: "right",
                                    color: couleurScore(f.score), flexShrink: 0 }}>
-                      {f.score ?? "—"}
+                      {indicatif ? "" : f.score ?? "—"}
                     </span>
                   </div>
                 );
@@ -280,7 +293,7 @@ export default function AnalyseView({ portfolioId, refreshKey }: { portfolioId: 
           <Titre action={
             <div style={{ display: "flex", gap: 3, background: "rgba(var(--nv-encre-rvb), 0.05)",
                           borderRadius: 8, padding: 2 }}>
-              {([["secteurs", "Secteurs"], ["zones", "Zones"], ["devises", "Devises"], ["classes", "Classes"]] as const).map(([k, l]) => (
+              {([["secteurs", "Secteurs"], ["zones", "Zones"], ["classes", "Classes"]] as const).map(([k, l]) => (
                 <button key={k} onClick={() => setOngletExpo(k)} style={{
                   padding: "3px 7px", borderRadius: 6, border: "none", cursor: "pointer",
                   fontFamily: FONT, fontSize: 9.5, fontWeight: ongletExpo === k ? 700 : 500,
