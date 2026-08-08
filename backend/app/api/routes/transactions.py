@@ -14,7 +14,10 @@ Ownership : les portefeuilles n'ont pas de user_id pour l'instant ; on vérifie
 """
 from __future__ import annotations
 
+import json
 import logging
+import os
+import pathlib
 from datetime import datetime
 from typing import Optional
 
@@ -352,6 +355,9 @@ async def get_positions(
 # Repère de comparaison : le S&P 500, via son ETF le plus liquide.
 _BENCHMARK = "SPY"
 
+# Fourchette réelle des frais courants annuels, en pourcentage. Voir `_pct_frais`.
+_FRAIS_MIN, _FRAIS_MAX = 0.03, 3.0
+
 # `None` vaut « depuis la première transaction ».
 #
 # La clé « 1d » manquait, alors que les deux appelants l'envoient : le bandeau
@@ -364,6 +370,163 @@ _HISTO_JOURS = {
     "1d": 1, "7d": 7, "1mo": 31, "3mo": 92, "6mo": 183,
     "1y": 366, "3y": 1096, "max": None,
 }
+
+
+def _pas_intraday(jours: int) -> str | None:
+    """
+    Le pas de barre pour une fenêtre de tant de jours, ou None pour les clôtures.
+
+    ⚠️ **Indexé sur la durée réelle de la fenêtre, pas sur le nom de la
+    période.** Une table par nom — « 1y » → horaire, « max » → clôtures — se
+    trompe dès que le portefeuille est jeune : celui sur lequel ceci a été réglé
+    n'a que six mois d'existence, si bien que ses fenêtres « 1 A », « 3 A » et
+    « Max » couvrent toutes six mois. Elles méritent le pas horaire, et la table
+    par nom le leur refusait pour une raison qui n'existait pas.
+
+    Les seuils de Yahoo — une minute sur sept jours, quinze minutes sur soixante,
+    une heure sur deux ans — permettraient d'aller bien plus loin. Ce n'est pas
+    eux qui bornent ici, c'est le graphique.
+
+    ⚠️ **Au-delà d'un mois, l'intraday nuit.** Essayé sur toute l'étendue, puis
+    retiré, pour deux raisons mesurées sur la fenêtre « Max » de ce portefeuille :
+
+    **L'axe devient indéchiffrable.** Avec des horodatages intraday,
+    lightweight-charts n'étiquette plus que le jour du mois. Sur six mois de
+    données, l'axe affichait « 17, 21, 23, 27, 29, 30 » sans jamais nommer le
+    mois — deux captures au même réglage devenaient impossibles à situer. Le
+    tracé journalier, lui, fait afficher les mois.
+
+    **Le zoom change la nature de la courbe.** 1 133 points horaires au lieu de
+    125 clôtures : en zoomant on découvre l'agitation intra-journalière, et comme
+    l'axe vertical se recale sur ce qui est visible, la courbe paraît toute autre.
+    Cette série va de 29 € — la première part achetée — à 3 453 €, avec un saut
+    de 1 057 € au versement du 9 juin ; deux ordres de grandeur que l'échelle
+    automatique ne peut pas tenir sans se recaler brutalement.
+
+    Rien de tout cela ne se voyait sur les fenêtres courtes : à un mois, l'écart
+    de valeur reste étroit et le jour du mois suffit à situer un point.
+    """
+    if jours <= 2:
+        return "1m"
+    if jours <= 31:
+        return "15m"
+    return None
+
+
+def _points_intraday(tickers: list[str], txs: list, period: str, depart) -> list[dict]:
+    """
+    Les vingt-quatre dernières heures en barres d'une minute.
+
+    Cette route ne connaissait que des clôtures journalières, si bien que sa
+    fenêtre d'un jour n'avait que deux points à rendre — la veille et le jour.
+    Mesuré sur un portefeuille réel à 15 h 08 : 2 points, donc un segment de
+    droite.
+
+    ⚠️ **La fenêtre est glissante, en heures d'horloge, et non « la séance
+    courante ».** C'est la correction d'une première version qui bornait au
+    dernier cours de la veille : à 15 h 35, la séance parisienne du jour ne
+    comptait que 25 minutes de données livrées, donc 3 points, alors que la page
+    graphique affichait la même journée bien remplie. Elle ne fait rien d'autre
+    que compter en heures : sur 24 heures glissantes, l'essentiel de ce qu'on
+    voit est la séance de la veille, et c'est très bien — c'est ce qu'il s'est
+    passé.
+
+    ⚠️ **Une minute, pas quinze.** Relevé au même instant sur ESE.PA : 21 barres
+    livrées aujourd'hui en 1 min, 6 en 5 min, 2 en 15 min, 1 en 60 min. Le pas
+    grossier ne perd pas seulement en finesse, il perd la fin de la journée —
+    une barre de quinze minutes n'existe qu'une fois révolue.
+
+    ⚠️ **Le `dropna()` est appliqué à une Series, pas à un tableau.** Sur un
+    tableau il supprime toute ligne où un seul titre manque — c'est l'intersection,
+    et c'est le défaut qui vide la courbe de `/portfolio-history`. Sur une Series
+    il ne retire que les trous du titre concerné, et l'union se reconstruit
+    ensuite : voir `courbe_intraday`.
+
+    Rend une liste vide à la moindre difficulté. L'appelant garde alors ses deux
+    points journaliers, qui sont pauvres mais justes.
+    """
+    from datetime import datetime as _dt, timedelta as _td, timezone as _tz
+
+    import pandas as pd
+    import yfinance as yf
+
+    from app.services.portfolio_history import courbe_intraday
+
+    jours = (_dt.now(_tz.utc).date() - depart).days
+    pas = _pas_intraday(max(1, jours))
+    if pas is None:
+        return []
+
+    # Un jour de marge avant la fenêtre : c'est lui qui donne à chaque titre un
+    # cours de référence avant le premier point rendu. Sans lui, un titre qui
+    # n'imprime qu'en cours de matinée ferait sauter les premiers instants.
+    debut = depart - _td(days=1)
+
+    try:
+        brut = yf.download(tickers, start=debut, interval=pas,
+                           progress=False, auto_adjust=True)["Close"]
+    except Exception as exc:                                  # pragma: no cover
+        logger.warning("history intraday: téléchargement refusé (%s)", exc)
+        return []
+
+    if brut is None or len(brut) == 0:
+        return []
+    if isinstance(brut, pd.Series):
+        brut = brut.to_frame(tickers[0])
+
+    cours: dict[str, dict] = {}
+    for tk in tickers:
+        if tk not in brut:
+            continue
+        serie = brut[tk].dropna()
+        if len(serie):
+            cours[tk] = {i.to_pydatetime(): float(v) for i, v in serie.items()}
+    if not cours:
+        return []
+
+    instants = sorted({i for m in cours.values() for i in m})
+
+    # « 24 h » se compte en heures d'horloge, les autres fenêtres en jours.
+    #
+    # C'est la correction d'une version qui bornait au dernier cours de la veille,
+    # donc à la séance courante : à 15 h 35, la séance parisienne du jour ne
+    # comptait que 25 minutes de données livrées — 3 points, quand la page
+    # graphique montrait la même journée bien remplie. Sur 24 heures glissantes,
+    # l'essentiel de ce qu'on voit est la séance de la veille, et c'est très bien :
+    # c'est ce qu'il s'est passé.
+    depuis = (_dt.now(_tz.utc) - _td(hours=24)) if period == "1d" else _dt(
+        depart.year, depart.month, depart.day, tzinfo=_tz.utc)
+
+    ops = [
+        {"ticker": t.ticker, "side": t.side, "quantity": t.quantity,
+         "unit_price": t.unit_price, "fees": t.fees or 0.0, "executed_at": t.executed_at}
+        for t in txs
+    ]
+    pts = courbe_intraday(ops, cours, instants, depuis=depuis)
+    if not pts:
+        return []
+
+    # ⚠️ Contrôle de couverture, et il ne se déduit pas de la documentation.
+    #
+    # Yahoo annonce le pas horaire sur deux ans ; mesuré sur ces titres, il ne
+    # remonte qu'à six mois. La fenêtre d'un an rendait donc 1 131 points —
+    # exactement le compte de la fenêtre de six mois — et une courbe qui couvrait
+    # la moitié de la période en se présentant comme un an.
+    #
+    # Compter les points ne suffit pas à s'en apercevoir : 1 131 est bien plus
+    # que les ~250 clôtures, donc le garde-fou du nombre laissait passer. C'est
+    # la date du premier point qu'il faut regarder. Trois jours de tolérance pour
+    # les fins de semaine et les jours fériés.
+    premier = _dt.fromisoformat(pts[0]["date"])
+    if premier.tzinfo is not None:
+        premier = premier.astimezone(_tz.utc)
+    else:
+        premier = premier.replace(tzinfo=_tz.utc)
+    if premier > depuis + _td(days=3):
+        logger.info("history intraday: couverture trop courte pour %s (%s > %s)",
+                    period, premier.date(), (depuis + _td(days=3)).date())
+        return []
+    return pts
 
 
 @router.get("/{portfolio_id}/history")
@@ -504,6 +667,20 @@ async def get_history(
 
     resultat["source"] = "transactions"
 
+    # La courbe passe en barres intraday là où `_PAS_INTRADAY` en prévoit une.
+    #
+    # Les chiffres, eux, restent journaliers : TWR, Dietz et repère sont calculés
+    # au-dessus sur les clôtures, et c'est délibéré. Un rendement qui changerait
+    # de valeur selon la finesse du tracé serait plus déroutant qu'utile — la
+    # bande de tête annonce une performance de période, pas de barre.
+    #
+    # Le remplacement n'a lieu que s'il apporte quelque chose : au moins trois
+    # points, et plus que ce que les clôtures donnaient déjà. Sinon la courbe
+    # journalière est plus pauvre mais aussi juste, et c'est elle qu'on garde.
+    intra = _points_intraday(tickers, txs, period, depart)
+    if len(intra) >= 3 and len(intra) > len(resultat["points"]):
+        resultat["points"] = intra
+
     # Le repère, rejoué avec les mêmes versements aux mêmes dates.
     #
     # Opposer deux pourcentages laisse ouvert ce que l'épargnant aurait
@@ -530,22 +707,202 @@ async def get_history(
 
 # ── GET — analyse du portefeuille ─────────────────────────────────────────────
 
-# Détails par ticker : secteurs internes, devise, classes d'actifs, volume.
+# Détails par ticker : secteurs internes, devise, classes d'actifs, TER.
 # Un appel yfinance par titre coûte plusieurs secondes et le fournisseur limite
 # le débit ; le cache évite de les refaire à chaque ouverture de l'onglet.
 _CACHE_DETAILS: dict[str, tuple[float, dict]] = {}
-_TTL_DETAILS = 6 * 3600
+
+# ⚠️ Trente jours, et non six heures.
+#
+# Six heures signifiait rechercher chaque fiche **quatre fois par jour**, et c'est
+# précisément ce qui déclenchait la limitation de débit du fournisseur — laquelle
+# faisait disparaître la diversification du score. Le remède était la cause.
+#
+# Or rien ici ne bouge à l'échelle de la journée : la devise de cotation et le nom
+# ne changent jamais, le secteur d'une action pratiquement jamais, le TER au plus
+# une fois l'an, et la ventilation sectorielle d'un fonds est publiée mensuellement
+# ou trimestriellement. Une fiche de la veille est aussi juste qu'une fiche de
+# l'instant.
+#
+# Le seul champ qui variait vraiment d'un jour à l'autre était le volume moyen, qui
+# servait à la liquidité — facteur supprimé à l'audit parce qu'il valait cent pour
+# toute position de particulier. Il ne reste donc plus rien qui justifie un cache
+# court, et le volume n'est même plus lu.
+#
+# Conséquence voulue : après **une** lecture réussie, la transparence des fonds est
+# acquise pour un mois, elle survit aux redémarrages par le fichier sur disque, et
+# une panne du fournisseur ne peut plus effacer un facteur du score.
+_TTL_DETAILS = 30 * 24 * 3600
+
+# ⚠️ Un ratage ne se garde pas six heures.
+#
+# Le cache retenait indistinctement les succès et les échecs. Un seul appel limité
+# par le fournisseur — ce qui arrive plusieurs fois par jour — et la transparence
+# restait indisponible jusqu'au soir : la diversification affichait « non mesuré »
+# pour le reste de la journée, sans que rien ne distingue ce cas d'un portefeuille
+# réellement inanalysable. Quatre-vingt-dix secondes suffisent à ne pas marteler
+# l'API tout en se rétablissant au rechargement suivant.
+_TTL_DETAILS_ECHEC = 90
+
+# ⚠️ Le cache vit aussi sur **disque**, et pas seulement en mémoire du serveur.
+#
+# Observé pendant l'audit : `uvicorn --reload` redémarre le processus à chaque
+# fichier enregistré, ce qui vidait le cache. Toute la transparence des fonds était
+# donc reperdue à chaque modification de code, et la diversification retombait à
+# « Transparence indisponible » jusqu'à ce que le fournisseur réponde de nouveau —
+# ce qu'il refuse justement de faire quand on vient de l'interroger en boucle. Les
+# deux effets se combinaient pour effacer un facteur du score sans qu'aucun bug
+# n'existe.
+#
+# Un secteur ou une classe d'actifs ne changent pas d'un jour à l'autre : c'est
+# exactement la donnée qui gagne à survivre au processus. Le fichier reste un
+# cache — perdu, il se reconstruit — donc aucune lecture n'en dépend pour être
+# correcte, seulement pour être rapide.
+_FICHIER_CACHE = pathlib.Path(__file__).resolve().parents[3] / ".cache_details.json"
+
+
+def _charger_cache_details() -> None:
+    """
+    Relit le cache de disque dès que le fichier a changé de date.
+
+    ⚠️ Relire à chaque changement, et non **une seule fois** au démarrage.
+
+    La première version chargeait une fois par processus. Observé aussitôt : le
+    serveur avait déjà servi une analyse — donc déjà chargé un fichier inexistant —
+    quand le cache a été écrit par un autre processus. Il ne l'a jamais relu, la
+    diversification est restée « — » et la note s'est calculée sur quatre facteurs
+    au lieu de cinq, affichant 75 au lieu de 73.
+
+    Le même défaut existerait en production : plusieurs workers, chacun avec sa
+    mémoire, chacun n'ayant lu le fichier qu'à son démarrage. Celui qui démarre
+    avant que le voisin ne l'écrive ne le verrait jamais. Comparer la date de
+    modification coûte un `stat` par appel et supprime le problème pour tous.
+
+    Tolérant par construction : un fichier absent, tronqué ou écrit par une version
+    antérieure du code ne doit pas empêcher l'analyse de répondre. On repart alors
+    d'un cache vide, ce qui est le comportement d'avant.
+    """
+    global _CACHE_MTIME
+    try:
+        mtime = _FICHIER_CACHE.stat().st_mtime
+    except OSError:
+        # Pas de fichier : rien à charger, et rien à signaler — c'est le cas normal
+        # au premier démarrage.
+        return
+    if _CACHE_MTIME is not None and mtime <= _CACHE_MTIME:
+        return
+    _CACHE_MTIME = mtime
+    try:
+        brut = json.loads(_FICHIER_CACHE.read_text(encoding="utf-8"))
+        for ticker, entree in (brut or {}).items():
+            echeance, d = entree
+            if isinstance(ticker, str) and isinstance(d, dict):
+                # ⚠️ La mémoire ne perd pas au profit du disque : une fiche lue à
+                # l'instant par ce processus vaut mieux qu'une version enregistrée
+                # par un autre, éventuellement plus ancienne.
+                ancienne = _CACHE_DETAILS.get(ticker)
+                if ancienne is None or ancienne[0] <= float(echeance):
+                    _CACHE_DETAILS[ticker] = (float(echeance), d)
+    except Exception as exc:
+        logger.warning("cache de détails illisible, on repart à vide : %s", exc)
+
+
+def _ecrire_cache_details() -> None:
+    """
+    Écrit le cache sur disque, par un fichier temporaire puis un remplacement.
+
+    ⚠️ L'écriture directe laisserait un JSON tronqué si le processus s'arrête au
+    milieu — et `--reload` l'arrête souvent. `os.replace` est atomique : le fichier
+    est soit l'ancien, soit le nouveau, jamais un mélange des deux.
+    """
+    try:
+        tmp = _FICHIER_CACHE.with_suffix(".json.tmp")
+        tmp.write_text(json.dumps(
+            {t: [e, d] for t, (e, d) in _CACHE_DETAILS.items()},
+            ensure_ascii=False), encoding="utf-8")
+        os.replace(tmp, _FICHIER_CACHE)
+        # On note la date qu'on vient d'écrire, pour ne pas se relire soi-même au
+        # prochain appel — la mémoire est déjà à jour.
+        global _CACHE_MTIME
+        _CACHE_MTIME = _FICHIER_CACHE.stat().st_mtime
+    except Exception as exc:                                  # pragma: no cover
+        # Un cache qu'on n'arrive pas à écrire reste un cache : on continue.
+        logger.warning("cache de détails non écrit : %s", exc)
+
+
+# Date de modification du fichier lors de la dernière lecture. `None` tant qu'on
+# n'a rien lu, ce qui force une première tentative.
+_CACHE_MTIME: float | None = None
+
+
+def _courtage_paye(txs) -> float | None:
+    """
+    Les commissions payées, en pourcentage des montants achetés.
+
+    Rapportées aux achats et non à la valeur actuelle : une commission se paie au
+    passage de l'ordre, sur le montant de l'ordre. La rapporter à un encours qui a
+    depuis monté flatterait le chiffre.
+
+    Rend `None` si rien n'a été acheté — il n'y a alors pas de base — mais rend
+    bien zéro si des achats existent sans frais : « aucun frais » est une
+    information, pas une absence de mesure.
+    """
+    brut = frais = 0.0
+    for t in txs:
+        if (t.side or "").upper() != "BUY":
+            continue
+        brut += (t.quantity or 0.0) * (t.unit_price or 0.0)
+        frais += t.fees or 0.0
+    if brut <= 0:
+        return None
+    return frais / brut * 100.0
+
+
+def _pct_frais(brut) -> float | None:
+    """
+    Les frais courants en **pourcentage par an**, ou `None` si le chiffre n'est
+    pas crédible.
+
+    ⚠️ Yahoo n'annonce pas son unité, et se tromper d'un facteur cent sur des
+    frais fausserait tout le score. Les positions d'actifs du même endpoint sont
+    des fractions, donc on lit d'abord une fraction : 0,0007 devient 0,07 %.
+
+    Le garde-fou est la vraie fourchette du marché — de 0,03 % pour un tracker
+    large à 3 % pour un fonds actif. Une valeur qui n'y entre par aucune des deux
+    lectures est refusée : le facteur vaut alors « non mesuré », ce que la moyenne
+    ignore, plutôt que d'afficher un chiffre faux.
+
+    L'ordre des lectures compte dans la zone commune : 0,02 vaut 2 % en fraction
+    et 0,02 % en pourcentage. Un TER de 0,02 % n'existe pas — les moins chers sont
+    à 0,03 % — alors qu'un fonds à 2 % est banal. La fraction gagne donc.
+    """
+    if brut is None:
+        return None
+    try:
+        v = float(brut)
+    except (TypeError, ValueError):
+        return None
+    if v <= 0:
+        return None
+    for lecture in (v * 100.0, v):
+        if _FRAIS_MIN <= lecture <= _FRAIS_MAX:
+            return lecture
+    return None
 
 
 def _details_titre(ticker: str) -> dict:
-    """Ce que yfinance sait d'un titre, mis en cache six heures."""
+    """Ce que yfinance sait d'un titre, mis en cache six heures, disque compris."""
     import time
 
     import yfinance as yf
 
-    frais = _CACHE_DETAILS.get(ticker)
-    if frais and time.time() - frais[0] < _TTL_DETAILS:
-        return frais[1]
+    _charger_cache_details()
+
+    # Le cache range une échéance, plus un horodatage : succès et échecs n'ont pas
+    # la même durée de vie.
+    entree = _CACHE_DETAILS.get(ticker)
+    if entree and time.time() < entree[0]:
+        return entree[1]
 
     d: dict = {}
     try:
@@ -557,13 +914,23 @@ def _details_titre(ticker: str) -> dict:
         # cotation. Seul le pays d'une action est exploitable ; la zone d'un
         # fonds se déduit de son mandat, plus loin.
         d["pays"] = info.get("country")
-        d["volume"] = info.get("averageVolume")
+        # ⚠️ Le volume moyen n'est plus relevé : il ne servait qu'à la liquidité,
+        # facteur supprimé à l'audit — il valait cent pour toute position de
+        # particulier. C'était aussi le seul champ de cette fiche à varier d'un jour
+        # à l'autre, donc le seul argument pour un cache court.
+        d["frais"] = _pct_frais(info.get("annualReportExpenseRatio"))
         d["nom"] = info.get("shortName") or info.get("longName")
         if info.get("quoteType") == "ETF":
             try:
                 fd = tk.funds_data
                 d["secteurs"] = dict(fd.sector_weightings or {})
                 d["classes"] = dict(fd.asset_classes or {})
+                # Le TER d'un fonds vit ici plutôt que dans `info`, sous une
+                # étiquette en clair et non sous une clé.
+                if d.get("frais") is None:
+                    ops = fd.fund_operations
+                    if ops is not None and "Annual Report Expense Ratio" in ops.index:
+                        d["frais"] = _pct_frais(ops.loc["Annual Report Expense Ratio"].iloc[0])
             except Exception:
                 pass
         elif info.get("sector"):
@@ -573,7 +940,28 @@ def _details_titre(ticker: str) -> dict:
     except Exception as exc:                                  # pragma: no cover
         logger.warning("détails indisponibles pour %s : %s", ticker, exc)
 
-    _CACHE_DETAILS[ticker] = (time.time(), d)
+    # ⚠️ On ne remplace pas une donnée connue par un échec.
+    #
+    # Une lecture ratée rendait `{}`, qui écrasait les secteurs et le nom obtenus à
+    # l'appel précédent. Observé sur un vrai portefeuille : la ligne à 70 % perdait
+    # sa zone, la ventilation annonçait « Europe 67 % » au lieu de « États-Unis
+    # 70 % », et la diversification tombait à zéro. Une donnée un peu vieille vaut
+    # infiniment mieux qu'une donnée absente — d'autant qu'un secteur ou une zone
+    # ne changent pas d'un jour à l'autre.
+    utile = bool(d.get("secteurs") or d.get("secteur") or d.get("nom"))
+    if not utile and entree and entree[1]:
+        # On garde l'ancienne, et on réessaiera bientôt.
+        _CACHE_DETAILS[ticker] = (time.time() + _TTL_DETAILS_ECHEC, entree[1])
+        return entree[1]
+
+    _CACHE_DETAILS[ticker] = (
+        time.time() + (_TTL_DETAILS if utile else _TTL_DETAILS_ECHEC), d)
+    # ⚠️ On n'écrit sur disque que ce qui a **servi**. Persister un échec ferait
+    # survivre au redémarrage précisément ce qu'on cherche à ne pas garder : un
+    # `{}` obtenu pendant une limitation de débit, qui masquerait ensuite la donnée
+    # réelle pendant toute la durée de vie du fichier.
+    if utile:
+        _ecrire_cache_details()
     return d
 
 
@@ -596,38 +984,97 @@ async def get_analysis(
 
     from app.services.analyse import (
         bande, exposition_secteurs, exposition_simple, exposition_zones,
-        facteurs_de_risque, observations, projection, score_global,
+        facteurs_de_risque, observations, profil_cible, projection, score_global,
+        ventilation_secteurs, ventilation_zones,
     )
 
-    _get_portfolio_or_404(portfolio_id, db, user)
+    portefeuille = _get_portfolio_or_404(portfolio_id, db, user)
 
     txs = (
         db.query(Transaction)
         .filter(Transaction.portfolio_id == portfolio_id)
         .all()
     )
-    if not txs:
-        return {"score": None, "bande": None, "facteurs": {}, "expositions": {},
-                "observations": [], "source": "aucune"}
 
     from app.utils.positions import compute_positions
 
-    pos = compute_positions(txs)
+    pos = compute_positions(txs) if txs else {}
     tickers = sorted(pos.keys())
-    if not tickers:
-        return {"score": None, "bande": None, "facteurs": {}, "expositions": {},
-                "observations": [], "source": "aucune"}
 
-    prix = await fetch_current_prices(tickers)
-    valeurs = {t: pos[t]["quantity"] * prix[t] for t in tickers if prix.get(t)}
-    total = sum(valeurs.values())
-    poids = {t: v / total * 100 for t, v in valeurs.items()} if total > 0 else {}
+    # ── Repli sur les poids déclarés, sans écritures ─────────────────────────
+    #
+    # Un portefeuille défini par ses poids n'a pas de positions à valoriser,
+    # mais il a une composition — et la composition suffit à presque tous les
+    # facteurs : concentration, corrélation, volatilité, bêta et diversification
+    # en transparence n'ont jamais eu besoin des quantités.
+    #
+    # Refuser d'analyser ces portefeuilles était plus qu'un manque : le bandeau
+    # du tableau de bord tire désormais sa note d'ici, donc les priver de
+    # réponse aurait fait disparaître leur score. Seule la liquidité reste hors
+    # de portée, faute de savoir combien de titres sont détenus — et elle vaut
+    # alors `None`, ce que `score_global` ignore au lieu de compter zéro.
+    if not tickers:
+        declares = portefeuille.assets or []
+        poids_declares = {
+            str(a["ticker"]): float(a.get("weight") or 0.0)
+            for a in declares
+            if isinstance(a, dict) and a.get("ticker")
+        }
+        poids_declares = {t: w for t, w in poids_declares.items() if w > 0}
+        if not poids_declares:
+            return {"score": None, "bande": None, "facteurs": {}, "expositions": {},
+                    "observations": [], "source": "aucune"}
+        tickers = sorted(poids_declares)
+        somme = sum(poids_declares.values())
+        poids = {t: w / somme * 100 for t, w in poids_declares.items()}
+        prix = {}
+        # La projection à un an part d'un montant : à défaut de positions
+        # valorisées, c'est la valeur totale saisie à la main qui le donne — ce
+        # champ n'existe que pour ça. Sans elle, `total` vaut zéro et la
+        # projection est simplement omise, comme pour tout facteur non mesurable.
+        total = float(portefeuille.total_value or 0.0)
+        source = "poids"
+    else:
+        prix = await fetch_current_prices(tickers)
+
+        # ⚠️ Une ligne sans cours **arrête** l'analyse, elle ne s'omet pas.
+        #
+        # Les poids se déduisent de `quantité × cours` : sans cours, la ligne
+        # sortait de `poids`, et les autres étaient renormalisées à cent. Observé
+        # sur un vrai PEA au cours d'un ratage de l'API : la ligne à 70 % avait
+        # disparu, la ventilation géographique annonçait « Europe 67 % » au lieu de
+        # « États-Unis 70 % », et le score s'affichait avec la même assurance qu'un
+        # score complet. Tous les facteurs étaient touchés, pas seulement la
+        # transparence.
+        #
+        # C'est le principe déjà tenu par la route d'historique, qui refuse de
+        # tracer plutôt que d'omettre un titre dont le cours manque. Une note
+        # partielle présentée comme entière est pire qu'une absence de note.
+        sans_cours = sorted(t for t in tickers if not prix.get(t))
+        if sans_cours:
+            return {
+                "score": None, "bande": None, "facteurs": {}, "expositions": {},
+                "observations": [], "poids": [],
+                "projection": {"median": None, "p10": None, "p90": None, "trajectoire": []},
+                "source": "incomplet", "sans_cours": sans_cours,
+                "profil": profil_cible(portefeuille.horizon_annees, portefeuille.tolerance),
+            }
+
+        valeurs = {t: pos[t]["quantity"] * prix[t] for t in tickers}
+        total = sum(valeurs.values())
+        poids = {t: v / total * 100 for t, v in valeurs.items()} if total > 0 else {}
+        source = "transactions"
 
     # ── Historique, pour les facteurs de marché ──────────────────────────────
-    rendements = marche = None
+    #
+    # ⚠️ L'indice de référence n'est plus téléchargé ici. Il ne servait qu'au bêta,
+    # supprimé : mesuré sur des rendements quotidiens, il était biaisé vers zéro
+    # pour toute ligne cotée hors des heures de New York — 0,54 contre 0,99 pour
+    # deux fonds suivant le même indice. Voir la note dans `analyse.py`.
+    rendements = None
     try:
         brut = yf.download(
-            tickers + [_BENCHMARK], period="1y",
+            tickers, period="1y",
             progress=False, auto_adjust=True, threads=True,
         )["Close"]
         if len(tickers) == 0:
@@ -638,36 +1085,57 @@ async def get_analysis(
             cols = [t for t in tickers if t in brut]
             if cols:
                 rendements = brut[cols].pct_change().dropna(how="all")
-            if _BENCHMARK in brut:
-                marche = brut[_BENCHMARK].pct_change().dropna()
     except Exception as exc:                                  # pragma: no cover
         logger.warning("historique d'analyse indisponible : %s", exc)
 
     details = {t: _details_titre(t) for t in tickers}
 
-    # ── Liquidité : séances nécessaires pour sortir des positions ────────────
-    jours = None
-    parts = []
-    for t in tickers:
-        vol = (details.get(t) or {}).get("volume")
-        p = prix.get(t)
-        if vol and p and vol > 0:
-            parts.append(pos[t]["quantity"] / vol)
-    if parts:
-        jours = max(parts)
+    # ⚠️ La liquidité n'est plus calculée. Elle valait cent pour toute position de
+    # particulier — il faudrait détenir un dixième du volume d'une séance pour
+    # perdre le premier point — donc elle affichait « moins d'une séance » à tout le
+    # monde. Voir la note dans `analyse.py`.
 
+    # Les quatre ventilations alimentent les graphiques d'exposition ; seuls les
+    # secteurs alimentent encore un facteur.
+    #
+    # ⚠️ « devises » a été retirée. Elle lisait la devise de **cotation**, donc
+    # annonçait « EUR 100 % » pour un portefeuille de trackers S&P 500 cotés à
+    # Paris, exposé en réalité au dollar. C'était faux, pas approximatif.
     expositions = {
         "secteurs": exposition_secteurs(details, poids),
         "zones":    exposition_zones(details, poids),
-        "devises":  exposition_simple(details, poids, "devise"),
         "classes":  exposition_simple(details, poids, "classes"),
     }
 
-    # La diversification se mesure sur ce qui est réellement détenu : les
-    # ventilations lui sont donc passées.
+    # La diversification se mesure sur ce qui est réellement détenu : les deux
+    # ventilations lui sont donc passées — secteurs pour la répartition d'activité,
+    # zones pour l'écart au marché mondial.
+    #
+    # ⚠️ Les ventilations **complètes**, pas celles des graphiques. Celles-ci
+    # plafonnent à six entrées plus un « Autres » qui compte pour une seule : onze
+    # secteurs équipondérés y devenaient 3,9 équivalents, plafonnant la note à 41
+    # pour la meilleure diversification possible. Voir `exposition_secteurs`.
+    # ⚠️ La nature de chaque ligne, pour la concentration : elle ne compte que les
+    # sociétés détenues en **direct**, un fonds étant un ensemble déjà réparti.
+    # `secteurs` (ventilation interne) désigne un fonds, `secteur` seul une action.
+    # Une ligne dont la fiche n'a pas pu être lue n'apparaît pas — elle est alors
+    # écartée du calcul plutôt que supposée être l'un ou l'autre.
+    types_lignes = {}
+    for t, d in details.items():
+        if (d or {}).get("secteurs"):
+            types_lignes[t] = "fonds"
+        elif (d or {}).get("secteur"):
+            types_lignes[t] = "action"
+
     facteurs = facteurs_de_risque(
-        poids, rendements, marche, jours,
-        secteurs=expositions["secteurs"], zones=expositions["zones"],
+        poids, rendements,
+        secteurs=ventilation_secteurs(details, poids),
+        zones=ventilation_zones(details, poids),
+        types_lignes=types_lignes,
+        frais_par_ligne={t: d["frais"] for t, d in details.items()
+                         if (d or {}).get("frais") is not None},
+        cible=profil_cible(portefeuille.horizon_annees, portefeuille.tolerance),
+        courtage=_courtage_paye(txs),
     )
     sc = score_global(facteurs)
 
@@ -691,5 +1159,10 @@ async def get_analysis(
         "projection": proj,
         "poids": [{"ticker": t, "part": round(w, 2)} for t, w in
                   sorted(poids.items(), key=lambda kv: kv[1], reverse=True)],
-        "source": "transactions",
+        "source": source,
+        "sans_cours": [],
+        # Le profil tel qu'il a été déclaré, ou `null`. L'interface s'en sert pour
+        # proposer de le renseigner quand il manque — sans lui, trois facteurs
+        # restent muets et l'utilisateur n'aurait aucun moyen de le savoir.
+        "profil": profil_cible(portefeuille.horizon_annees, portefeuille.tolerance),
     }

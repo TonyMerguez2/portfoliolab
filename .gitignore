@@ -46,3 +46,12 @@ backend/uploads/*
 .DS_Store
 *.log
 .env
+
+# Cache disque des fiches de titres (secteurs, classes d'actifs, volumes).
+#
+# Reconstructible à tout moment depuis le fournisseur de cours : il n'a rien à
+# faire dans le dépôt. Il existe parce que `uvicorn --reload` vide le cache
+# mémoire à chaque fichier enregistré, ce qui reperdait la transparence des fonds
+# et faisait disparaître la diversification du score.
+.cache_details.json
+.cache_details.json.tmp

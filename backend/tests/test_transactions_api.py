@@ -15,6 +15,9 @@ import tempfile
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
+import json
+import os
+
 import pytest
 from types import SimpleNamespace
 from fastapi.testclient import TestClient
@@ -327,3 +330,413 @@ def test_mot_de_passe_long_ne_leve_pas():
 def test_tronquer_laisse_les_mots_de_passe_normaux():
     from app.api.routes.auth import _tronquer
     assert _tronquer("MonMotDePasse123!") == "MonMotDePasse123!"
+
+
+# ── Analyse d'un portefeuille sans écritures ─────────────────────────────────
+#
+# Le bandeau du tableau de bord tire sa note de cette route. Un portefeuille
+# défini par ses poids doit donc obtenir une analyse, et non un refus : sa
+# composition suffit à la concentration, à la corrélation, à la volatilité et à
+# la diversification en transparence. Seule la liquidité manque, faute de
+# quantités détenues.
+
+def test_analyse_sans_ecritures_utilise_les_poids_declares(client, monkeypatch):
+    import yfinance
+
+    import app.api.routes.transactions as routes
+    import app.services.analyse as analyse
+
+    pid = creer_portefeuille(client, "Poids seuls")
+
+    # Les cours et yfinance sont coupés : on vérifie le choix de la source et des
+    # poids, pas la capacité du réseau à répondre. Sans cela le test sortait
+    # vraiment sur Internet et se faisait limiter.
+    async def pas_de_cours(_tickers):
+        return {}
+
+    monkeypatch.setattr(routes, "fetch_current_prices", pas_de_cours)
+    monkeypatch.setattr(yfinance, "download", lambda *a, **k: (_ for _ in ()).throw(RuntimeError("réseau coupé")))
+
+    captures = {}
+
+    # ⚠️ Le patch porte sur le module qui **définit** la fonction, pas sur celui
+    # de la route : la route l'importe dans son corps, donc son nom local est relié
+    # à l'original au moment de l'appel.
+    def facteurs_espion(poids, rendements, *a, **kw):
+        captures["poids"] = dict(poids)
+        return {"concentration": {"valeur": 0.5, "libelle": "2 lignes", "score": 40}}
+
+    monkeypatch.setattr(analyse, "facteurs_de_risque", facteurs_espion)
+
+    r = client.get(f"/api/v1/portfolios/{pid}/analysis")
+    assert r.status_code == 200
+    d = r.json()
+    assert d["source"] == "poids"
+    assert d["score"] == 40
+    # Les poids déclarés sont 60/40 et arrivent normalisés en pourcentage.
+    assert set(captures["poids"]) == {"AAPL", "MSFT"}
+    assert captures["poids"]["AAPL"] == pytest.approx(60.0)
+    assert captures["poids"]["MSFT"] == pytest.approx(40.0)
+
+
+def test_analyse_sans_ecritures_ni_poids_ne_note_pas(client, monkeypatch):
+    """Sans composition, il n'y a rien à mesurer — et on le dit."""
+    import app.api.routes.transactions as routes
+
+    r = client.post("/api/v1/portfolios", json={"name": "Vide", "assets": []})
+    pid = r.json()["id"]
+
+    async def pas_de_cours(_tickers):
+        return {}
+
+    monkeypatch.setattr(routes, "fetch_current_prices", pas_de_cours)
+
+    d = client.get(f"/api/v1/portfolios/{pid}/analysis").json()
+    assert d["source"] == "aucune"
+    assert d["score"] is None
+
+
+# ── Le profil de risque, de bout en bout ─────────────────────────────────────
+
+def test_le_profil_se_declare_et_revient_dans_l_analyse(client, monkeypatch):
+    """
+    ⚠️ Sans profil, la volatilité reste muette et l'interface doit pouvoir le dire.
+    La route rend donc le profil, pas seulement les facteurs.
+
+    Ils étaient trois — le bêta a été supprimé à l'audit pour biais de mesure, la
+    perte maximale ne note plus car elle doublait la volatilité.
+    """
+    import yfinance
+
+    import app.api.routes.transactions as routes
+
+    pid = creer_portefeuille(client, "Avec profil")
+
+    async def pas_de_cours(_tickers):
+        return {}
+
+    monkeypatch.setattr(routes, "fetch_current_prices", pas_de_cours)
+    monkeypatch.setattr(yfinance, "download",
+                        lambda *a, **k: (_ for _ in ()).throw(RuntimeError("réseau coupé")))
+
+    # Avant déclaration : aucun profil.
+    assert client.get(f"/api/v1/portfolios/{pid}/analysis").json()["profil"] is None
+
+    r = client.put(f"/api/v1/portfolios/{pid}",
+                   json={"horizon_annees": 20, "tolerance": "dynamique"})
+    assert r.status_code == 200
+
+    d = client.get(f"/api/v1/portfolios/{pid}/analysis").json()
+    assert d["profil"]["part_actions"] == 100.0
+    assert d["profil"]["volatilite"] == pytest.approx(16.0)
+    assert d["profil"]["tolerance"] == "dynamique"
+
+
+def test_une_tolerance_inconnue_est_refusee(client):
+    """
+    Refusée à l'écriture plutôt qu'ignorée à la lecture : acceptée en silence,
+    elle ferait taire la volatilité et le portefeuille paraîtrait simplement moins
+    bien noté, sans raison visible.
+    """
+    pid = creer_portefeuille(client, "Profil douteux")
+    r = client.put(f"/api/v1/portfolios/{pid}", json={"tolerance": "agressif"})
+    assert r.status_code == 422
+    assert "prudent" in r.json()["detail"]
+
+
+def test_le_cache_des_fiches_survit_au_redemarrage(tmp_path, monkeypatch):
+    """
+    ⚠️ Le cache des fiches de titres vit aussi sur disque.
+
+    Observé en travaillant : `uvicorn --reload` redémarre le processus à chaque
+    fichier enregistré, ce qui vidait le cache mémoire. Toute la transparence des
+    fonds était donc reperdue à chaque modification de code, et la diversification
+    retombait à « Transparence indisponible » — sans qu'aucun bug n'existe, et au
+    moment précis où le fournisseur de cours refuse de répondre parce qu'on vient
+    de l'interroger en boucle. Les deux effets se combinaient pour effacer un
+    facteur du score.
+
+    Un secteur ne change pas d'un jour à l'autre : c'est exactement la donnée qui
+    doit survivre au processus.
+    """
+    import time
+
+    import app.api.routes.transactions as routes
+
+    fichier = tmp_path / "cache.json"
+    monkeypatch.setattr(routes, "_FICHIER_CACHE", fichier)
+
+    fiche = {"nom": "Fonds test", "secteurs": {"technology": 0.5, "healthcare": 0.5}}
+    routes._CACHE_DETAILS.clear()
+    routes._CACHE_DETAILS["TEST.PA"] = (time.time() + 3600, fiche)
+    routes._ecrire_cache_details()
+    assert fichier.exists()
+
+    # Redémarrage : la mémoire repart à zéro, le disque reste.
+    routes._CACHE_DETAILS.clear()
+    monkeypatch.setattr(routes, "_CACHE_MTIME", None)
+    routes._charger_cache_details()
+    assert routes._CACHE_DETAILS["TEST.PA"][1]["secteurs"] == fiche["secteurs"]
+
+
+def test_le_cache_est_relu_quand_le_fichier_change(tmp_path, monkeypatch):
+    """
+    ⚠️ Relu à chaque changement de date, pas **une seule fois** au démarrage.
+
+    La première version chargeait une fois par processus. Observé aussitôt en
+    conditions réelles : le serveur avait déjà servi une analyse — donc déjà lu un
+    fichier qui n'existait pas encore — quand le cache a été écrit par un autre
+    processus. Il ne l'a jamais relu, la diversification est restée « — » et la note
+    s'est calculée sur quatre facteurs au lieu de cinq.
+
+    Le même défaut vaudrait en production : plusieurs workers, chacun avec sa
+    mémoire, chacun n'ayant lu qu'à son démarrage.
+    """
+    import time
+
+    import app.api.routes.transactions as routes
+
+    fichier = tmp_path / "cache.json"
+    monkeypatch.setattr(routes, "_FICHIER_CACHE", fichier)
+    routes._CACHE_DETAILS.clear()
+    monkeypatch.setattr(routes, "_CACHE_MTIME", None)
+
+    # Première lecture : le fichier n'existe pas. C'est le cas du démarrage.
+    routes._charger_cache_details()
+    assert routes._CACHE_DETAILS == {}
+
+    # Un autre processus écrit le cache après coup.
+    fichier.write_text(json.dumps(
+        {"TARD.PA": [time.time() + 3600, {"secteurs": {"technology": 1.0}}]}))
+    # Une date de modification plus récente que la dernière lue : on relit.
+    os.utime(fichier, (time.time() + 5, time.time() + 5))
+
+    routes._charger_cache_details()
+    assert "TARD.PA" in routes._CACHE_DETAILS, "le fichier apparu après coup doit être relu"
+
+
+def test_un_cache_illisible_ne_casse_pas_l_analyse(tmp_path, monkeypatch):
+    """
+    Le fichier reste un **cache** : perdu ou corrompu, il se reconstruit. Aucune
+    lecture n'en dépend pour être correcte, seulement pour être rapide — donc un
+    JSON tronqué doit ramener un cache vide, pas une erreur 500.
+    """
+    import app.api.routes.transactions as routes
+
+    for contenu in ("{ceci n'est pas du json", "[]", '{"X": "pas un couple"}'):
+        fichier = tmp_path / "abime.json"
+        fichier.write_text(contenu)
+        monkeypatch.setattr(routes, "_FICHIER_CACHE", fichier)
+        routes._CACHE_DETAILS.clear()
+        monkeypatch.setattr(routes, "_CACHE_MTIME", None)
+        routes._charger_cache_details()          # ne doit pas lever
+        assert routes._CACHE_DETAILS == {}, contenu
+
+    # Fichier absent : même exigence.
+    monkeypatch.setattr(routes, "_FICHIER_CACHE", tmp_path / "jamais_ecrit.json")
+    monkeypatch.setattr(routes, "_CACHE_MTIME", None)
+    routes._charger_cache_details()
+    assert routes._CACHE_DETAILS == {}
+
+
+def test_l_analyse_ne_rend_que_les_facteurs_retenus(client, monkeypatch):
+    """
+    Garde de bout en bout sur l'inventaire des facteurs.
+
+    ⚠️ Le test de service vérifie déjà que les sept facteurs retirés ne
+    réapparaissent pas, mais la route pourrait les réintroduire par un autre chemin
+    — une exposition repassée en facteur, une fusion mal résolue. Ce qui compte pour
+    l'utilisateur, c'est ce que la route rend ; c'est donc ici qu'on l'ancre.
+
+    L'exposition « devises » est vérifiée absente pour la même raison : elle lisait
+    la devise de cotation, donc annonçait « EUR 100 % » à un portefeuille de
+    trackers S&P 500 cotés à Paris.
+    """
+    import yfinance
+
+    import app.api.routes.transactions as routes
+
+    pid = creer_portefeuille(client, "Inventaire")
+    assert client.post(f"/api/v1/portfolios/{pid}/transactions",
+                       json=ecriture("AAPL", 10, 100.0, "2026-01-05")).status_code == 201
+
+    async def cours(tickers):
+        return {t: 150.0 for t in tickers}
+
+    monkeypatch.setattr(routes, "fetch_current_prices", cours)
+    monkeypatch.setattr(yfinance, "download",
+                        lambda *a, **k: (_ for _ in ()).throw(RuntimeError("réseau coupé")))
+
+    d = client.get(f"/api/v1/portfolios/{pid}/analysis").json()
+    assert set(d["facteurs"]) == {
+        "concentration", "diversification", "geographie", "redondance",
+        "frais", "frais_courtage", "volatilite", "perte_max",
+    }
+    assert "devises" not in d["expositions"]
+    # Les trois ventilations conservées alimentent les graphiques.
+    assert set(d["expositions"]) == {"secteurs", "zones", "classes"}
+
+
+def test_analyse_refuse_de_noter_si_un_cours_manque(client, monkeypatch):
+    """
+    ⚠️ Une ligne sans cours sortait de `poids` et les autres étaient renormalisées
+    à cent. Observé sur un vrai portefeuille : la ligne à 70 % avait disparu, la
+    ventilation annonçait « Europe 67 % » au lieu de « États-Unis 70 % », et le
+    score s'affichait comme s'il était complet.
+    """
+    import yfinance
+
+    import app.api.routes.transactions as routes
+
+    pid = creer_portefeuille(client, "Un cours manquant")
+    for e in (ecriture("AAPL", 10, 100.0, "2026-01-05"),
+              ecriture("MSFT", 5, 200.0, "2026-01-05")):
+        assert client.post(f"/api/v1/portfolios/{pid}/transactions", json=e).status_code == 201
+
+    async def un_seul_cours(tickers):
+        return {"AAPL": 150.0}          # MSFT reste sans cours
+
+    monkeypatch.setattr(routes, "fetch_current_prices", un_seul_cours)
+    monkeypatch.setattr(yfinance, "download",
+                        lambda *a, **k: (_ for _ in ()).throw(RuntimeError("réseau coupé")))
+
+    d = client.get(f"/api/v1/portfolios/{pid}/analysis").json()
+    assert d["source"] == "incomplet"
+    assert d["score"] is None
+    assert d["sans_cours"] == ["MSFT"]
+
+
+def test_analyse_complete_annonce_aucune_ligne_manquante(client, monkeypatch):
+    import yfinance
+
+    import app.api.routes.transactions as routes
+    import app.services.analyse as analyse
+
+    pid = creer_portefeuille(client, "Complet")
+    assert client.post(f"/api/v1/portfolios/{pid}/transactions",
+                       json=ecriture("AAPL", 10, 100.0, "2026-01-05")).status_code == 201
+
+    async def cours(tickers):
+        return {t: 150.0 for t in tickers}
+
+    monkeypatch.setattr(routes, "fetch_current_prices", cours)
+    monkeypatch.setattr(yfinance, "download",
+                        lambda *a, **k: (_ for _ in ()).throw(RuntimeError("réseau coupé")))
+    monkeypatch.setattr(analyse, "facteurs_de_risque",
+                        lambda *a, **k: {"concentration": {"valeur": 1.0, "libelle": "x", "score": 10}})
+
+    d = client.get(f"/api/v1/portfolios/{pid}/analysis").json()
+    assert d["source"] == "transactions"
+    assert d["sans_cours"] == []
+
+
+def test_le_courtage_vient_des_ecritures(client, monkeypatch):
+    """
+    ⚠️ Ce que l'épargnant a saisi doit servir. Un « Frais — » devant quelqu'un qui
+    a renseigné ses commissions est un défaut, pas une donnée manquante.
+    """
+    import yfinance
+
+    import app.api.routes.transactions as routes
+    import app.services.analyse as analyse
+
+    pid = creer_portefeuille(client, "Avec courtage")
+    # 10 × 100 € achetés, 2 € de frais → 0,20 % des montants achetés.
+    assert client.post(f"/api/v1/portfolios/{pid}/transactions",
+                       json=ecriture("AAPL", 10, 100.0, "2026-01-05", fees=2.0)).status_code == 201
+
+    async def cours(tickers):
+        return {t: 100.0 for t in tickers}
+
+    monkeypatch.setattr(routes, "fetch_current_prices", cours)
+    monkeypatch.setattr(yfinance, "download",
+                        lambda *a, **k: (_ for _ in ()).throw(RuntimeError("réseau coupé")))
+
+    captures = {}
+
+    def espion(poids, rendements, *a, **kw):
+        captures["courtage"] = kw.get("courtage")
+        return {"concentration": {"valeur": 1.0, "libelle": "x", "score": 50}}
+
+    monkeypatch.setattr(analyse, "facteurs_de_risque", espion)
+
+    client.get(f"/api/v1/portfolios/{pid}/analysis")
+    assert captures["courtage"] == pytest.approx(0.20)
+
+
+# ── Le cache des détails de titre ────────────────────────────────────────────
+
+class TestCacheDetails:
+    """
+    ⚠️ Ce qu'un ratage du fournisseur ne doit pas faire.
+
+    Le cache retenait indistinctement succès et échecs pendant six heures. Un seul
+    appel limité par Yahoo et la transparence disparaissait jusqu'au soir : sur un
+    vrai portefeuille, la ligne à 70 % a perdu sa zone, la ventilation a annoncé
+    « Europe 67 % » au lieu de « États-Unis 70 % », et la diversification est
+    tombée à zéro.
+    """
+
+    def _vider(self):
+        from app.api.routes.transactions import _CACHE_DETAILS
+        _CACHE_DETAILS.clear()
+
+    def test_un_succes_est_garde_longtemps(self, monkeypatch):
+        import time as _t
+
+        import app.api.routes.transactions as routes
+        self._vider()
+
+        class Faux:
+            info = {"shortName": "Un fonds", "quoteType": "EQUITY", "sector": "Tech"}
+
+        import yfinance
+        monkeypatch.setattr(yfinance, "Ticker", lambda t: Faux())
+
+        d = routes._details_titre("X")
+        assert d["nom"] == "Un fonds"
+        echeance = routes._CACHE_DETAILS["X"][0]
+        assert echeance - _t.time() > routes._TTL_DETAILS - 60
+        # ⚠️ Longtemps veut dire des semaines, pas des heures. Six heures
+        # signifiait rechercher chaque fiche quatre fois par jour, ce qui
+        # déclenchait la limitation de débit du fournisseur — laquelle faisait
+        # disparaître la diversification du score. Le remède était la cause.
+        assert routes._TTL_DETAILS >= 7 * 24 * 3600
+
+    def test_un_echec_ne_remplace_pas_une_donnee_connue(self, monkeypatch):
+        import app.api.routes.transactions as routes
+        import yfinance
+        self._vider()
+
+        class Bon:
+            info = {"shortName": "Un fonds", "quoteType": "EQUITY", "sector": "Tech"}
+
+        monkeypatch.setattr(yfinance, "Ticker", lambda t: Bon())
+        assert routes._details_titre("X")["nom"] == "Un fonds"
+
+        # Puis le fournisseur tombe, et le cache a expiré.
+        routes._CACHE_DETAILS["X"] = (0.0, routes._CACHE_DETAILS["X"][1])
+
+        def casse(_t):
+            raise RuntimeError("Too Many Requests")
+
+        monkeypatch.setattr(yfinance, "Ticker", casse)
+        d = routes._details_titre("X")
+        assert d["nom"] == "Un fonds", "la donnée connue doit survivre au ratage"
+
+    def test_un_echec_sans_historique_expire_vite(self, monkeypatch):
+        import time as _t
+
+        import app.api.routes.transactions as routes
+        import yfinance
+        self._vider()
+
+        def casse(_t):
+            raise RuntimeError("Too Many Requests")
+
+        monkeypatch.setattr(yfinance, "Ticker", casse)
+        d = routes._details_titre("Y")
+        assert d == {}
+        restant = routes._CACHE_DETAILS["Y"][0] - _t.time()
+        # On réessaie dans la minute et demie, pas dans six heures.
+        assert 0 < restant <= routes._TTL_DETAILS_ECHEC + 1
