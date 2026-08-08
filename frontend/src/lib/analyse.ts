@@ -203,10 +203,10 @@ export const EXPLICATION_FACTEUR: Record<string, string> = {
     + "quel que soit votre profil. Un ETF monde en est proche, un seul pays très loin.",
   concentration:
     "Le risque qu'une société disparaisse : le nombre d'entreprises équipondérées "
-    + "auquel équivaut votre poche d'actions en direct. Vingt vaut cent, une seule "
-    + "vaut zéro. Les fonds n'y comptent pas — ils sont déjà répartis, et leur "
-    + "contenu est jugé par la diversification. Une industrie recule rarement à "
-    + "zéro, une entreprise peut y aller.",
+    + "auquel équivaut votre portefeuille, en transparence des fonds. Vingt vaut "
+    + "cent, une seule vaut zéro. Un ETF monde pèse près de 200 sociétés, un ETF "
+    + "sectoriel une vingtaine. Non mesuré pour un fonds synthétique, qui détient "
+    + "un contrat d'échange et n'a donc aucune composition à publier.",
   volatilite:
     "L'amplitude annualisée des variations, comparée à la cible de votre profil. "
     + "Rester en deçà coûte moins de points que la dépasser : un manque à gagner "

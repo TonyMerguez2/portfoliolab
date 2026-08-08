@@ -221,7 +221,7 @@ def facteurs_de_risque(
     rendements: pd.DataFrame | None,
     secteurs: list[dict] | None = None,
     zones: list[dict] | None = None,
-    types_lignes: dict[str, str] | None = None,
+    hhi_lignes: dict[str, float] | None = None,
     frais_par_ligne: dict[str, float] | None = None,
     cible: dict | None = None,
     courtage: float | None = None,
@@ -233,15 +233,15 @@ def facteurs_de_risque(
     dépendent valent `None` quand l'historique manque — un portefeuille créé
     hier n'a pas de volatilité, et en inventer une serait pire que de l'omettre.
 
-    `types_lignes` associe à chaque ticker `"action"` ou `"fonds"`, pour les lignes
-    dont on a pu l'établir. Il sert à la concentration, qui ne compte que les
-    sociétés détenues en direct : une ligne dont on ignore la nature en est écartée
-    plutôt que supposée, et sous soixante pour cent du portefeuille identifié le
-    facteur ne note pas.
+    `hhi_lignes` porte la concentration **interne** de chaque ligne : 1 pour une
+    action détenue en direct, l'indice de Herfindahl de la composition publiée pour
+    un fonds. Une ligne absente est écartée plutôt que supposée — un fonds
+    synthétique ne publie pas de composition — et sous soixante pour cent du
+    portefeuille lu, la concentration ne note pas.
     """
     out: dict[str, dict] = {}
 
-    # ── Concentration : le risque propre à une société ───────────────────────
+    # ── Concentration : le risque propre à une société, en transparence ──────
     #
     # ⚠️ Ce facteur comptait les **lignes du portefeuille**, fonds compris. Il
     # comptait donc des enveloppes, et l'enveloppe ne porte pas le risque : le
@@ -263,56 +263,67 @@ def facteurs_de_risque(
     # affichent tous deux « Technologie 100 % », l'un détenant une entreprise et
     # l'autre soixante-cinq.
     #
-    # On mesure donc la somme des carrés des poids des seules **actions détenues en
-    # direct**, en part du portefeuille entier. Un fonds compte pour ce qu'il est :
-    # un ensemble déjà réparti, dont aucune société ne pèse assez pour compter. Ce
-    # n'est pas la diversification sous un autre nom — mesuré sur neuf portefeuilles
-    # types, les deux notes ne corrèlent qu'à 0,60, là où la perte maximale a été
-    # retirée du score à 0,88. Dix actions d'un même secteur donnent 47 ici et 0 en
-    # diversification : deux vérités différentes sur le même portefeuille.
+    # ⚠️ Les fonds ont d'abord été **exclus** du calcul, faute de savoir combien de
+    # sociétés ils portent. C'était une perte : un ETF monde et un ETF sectoriel ne
+    # portent pas du tout le même risque société. Ils y sont rentrés par la formule
+    # exacte de la concentration en transparence.
+    #
+    # Si la ligne i pèse Wᵢ dans le portefeuille et détient la société j à wᵢⱼ, la
+    # part de cette société dans le portefeuille vaut Wᵢ·wᵢⱼ, donc :
+    #
+    #     HHI du portefeuille = Σᵢ Σⱼ (Wᵢ·wᵢⱼ)² = Σᵢ Wᵢ² · HHIᵢ
+    #
+    # où HHIᵢ est la concentration **interne** de la ligne. Elle vaut 1 pour une
+    # action détenue en direct, et se lit dans la composition publiée pour un fonds.
+    # Actions et fonds se traitent ainsi d'un seul calcul, sans cas particulier.
+    #
+    # Ce n'est pas la diversification sous un autre nom — mesuré sur neuf
+    # portefeuilles types, les deux notes ne corrèlent qu'à 0,60, là où la perte
+    # maximale a été retirée du score à 0,88. Dix actions d'un même secteur donnent
+    # 47 ici et 0 en diversification : deux vérités différentes sur le même
+    # portefeuille.
     total_poids = sum(w for w in poids.values() if w > 0)
-    part_typee = sum(poids.get(t, 0.0) for t in (types_lignes or {}))
+    part_lue = sum(poids.get(t, 0.0) for t in (hhi_lignes or {}) if poids.get(t, 0.0) > 0)
     societes_eq: float | None = None
-    if total_poids > 0 and part_typee >= COUVERTURE_TRANSPARENCE_MIN:
+    if total_poids > 0 and part_lue >= COUVERTURE_TRANSPARENCE_MIN:
+        # ⚠️ Renormalisé sur la part **lue**, et non sur le portefeuille entier.
+        #
+        # Sans cela, une ligne dont la composition manque abaisserait tous les carrés
+        # et gonflerait le nombre de sociétés : ne pas savoir aurait amélioré la
+        # note. Le garde-fou de couverture borne l'extrapolation à quarante pour cent
+        # du portefeuille au plus.
         carres = sum(
-            (poids[t] / total_poids) ** 2
-            for t, genre in (types_lignes or {}).items()
-            if genre == "action" and poids.get(t, 0.0) > 0
+            (poids[t] / part_lue) ** 2 * h
+            for t, h in (hhi_lignes or {}).items()
+            if poids.get(t, 0.0) > 0
         )
-        # ⚠️ Aucune action en direct : le facteur ne note **pas**, il ne donne pas
-        # cent.
-        #
-        # « Aucune société dont la faillite emporterait une part du portefeuille »
-        # est vrai, et j'ai d'abord rendu la note pleine pour cette raison. Mais la
-        # majorité des épargnants ne détiennent que des fonds : le facteur aurait
-        # alors valu cent pour la plupart des portefeuilles, ajoutant une constante
-        # à la moyenne sans rien en dire — c'est précisément le motif pour lequel la
-        # liquidité a été retirée du score. Sur un vrai PEA, cela gonflait la note de
-        # 83 à 86 sans qu'aucune information la soutienne.
-        #
-        # La question « quel risque si une de vos sociétés disparaît » ne se pose pas
-        # à qui n'en détient aucune. Ne pas s'appliquer n'est pas réussir, et la
-        # couverture affichée — « 5 sur 7 mesurés » — le dit au lecteur.
-        societes_eq = (1.0 / carres) if carres > 0 else float("inf")
+        societes_eq = (1.0 / carres) if carres > 0 else None
     out["concentration"] = {
-        "valeur": (None if societes_eq is None
-                   else None if societes_eq == float("inf")
-                   else round(societes_eq, 2)),
+        "valeur": round(societes_eq, 2) if societes_eq is not None else None,
+        # ⚠️ Le libellé dit *pourquoi* quand il n'y a pas de note, et il distingue
+        # deux absences de nature opposée. Les frais des fonds manquent parce que le
+        # fournisseur ne les publie pas — c'est un trou. Ici, une composition
+        # absente est presque toujours celle d'un fonds **synthétique**, qui ne
+        # détient pas d'actions mais un contrat d'échange : il n'y a donc rien à
+        # publier, et ce n'est pas un manque de la source.
+        #
+        # Mesuré : `top_holdings` est vide pour ESE.PA et CW8.PA — BNP et Amundi,
+        # réplication synthétique, éligibles au PEA — et renseigné pour IWDA.AS, VT,
+        # QQQ et XLK, tous à réplication physique.
         "libelle": (
-            "Composition indéterminée" if societes_eq is None
-            # ⚠️ « sans objet » et non « inconnu ». Deux facteurs peuvent n'avoir
-            # aucune note pour des raisons opposées : les frais des fonds manquent
-            # parce que le fournisseur ne les publie pas — c'est un trou —, alors
-            # qu'ici la question ne se pose pas, ce qui n'en est pas un. Le lecteur
-            # doit pouvoir faire la différence sans survoler la ligne.
-            else "sans objet — aucune action en direct" if societes_eq == float("inf")
-            else f"{societes_eq:.1f} société{'s' if societes_eq >= 2 else ''} équivalente"
-                 f"{'s' if societes_eq >= 2 else ''}"
+            "composition des fonds non publiée" if not part_lue
+            else f"transparence sur {part_lue:.0f} % seulement" if societes_eq is None
+            # ⚠️ Une décimale sous dix, aucune au-delà. Sans elle, 1,87 société
+            # équivalente — un portefeuille à 70/20/10 en actions directes —
+            # s'affichait « 2 sociétés » à l'arrondi, ou « 1 seule société » avec un
+            # seuil mal placé : deux lectures fausses d'un même chiffre juste.
+            # Au-delà de dix, la décimale ne dit plus rien : « 150 sociétés » suffit.
+            else "1 seule société" if societes_eq < 1.05
+            else f"{societes_eq:.1f} sociétés équivalentes" if societes_eq < 10
+            else f"{societes_eq:.0f} sociétés équivalentes"
         ),
-        "score": (
-            None if societes_eq is None or societes_eq == float("inf")
-            else round(_score_decroissant(societes_eq, CIBLE_SOCIETES, 1.0), 0)
-        ),
+        "score": (round(_score_decroissant(societes_eq, CIBLE_SOCIETES, 1.0), 0)
+                  if societes_eq is not None else None),
     }
 
     # ── Redondance : deux lignes qui n'en font qu'une ─────────────────────────

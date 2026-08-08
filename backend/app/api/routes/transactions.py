@@ -760,6 +760,20 @@ _TTL_DETAILS_ECHEC = 90
 # correcte, seulement pour être rapide.
 _FICHIER_CACHE = pathlib.Path(__file__).resolve().parents[3] / ".cache_details.json"
 
+# Version du **format** d'une fiche. À incrémenter dès qu'on ajoute ou renomme un
+# champ lu par l'analyse.
+#
+# ⚠️ Sans elle, un cache de trente jours rend une évolution invisible pendant un
+# mois. Observé : le champ `hhi` — la concentration interne d'un fonds, ajoutée pour
+# la concentration en transparence — n'apparaissait pas, parce que les fiches
+# enregistrées la veille ne le portaient pas et restaient valides. Le facteur
+# affichait « composition non publiée » pour des fonds qui la publient
+# parfaitement, et rien ne distinguait ce cas d'une vraie absence.
+#
+# C'est la contrepartie exacte du gain de la longue durée de vie : plus le cache
+# tient, plus il faut un moyen de le déclarer périmé autrement que par le temps.
+_VERSION_FICHE = 2
+
 
 def _charger_cache_details() -> None:
     """
@@ -794,7 +808,12 @@ def _charger_cache_details() -> None:
     _CACHE_MTIME = mtime
     try:
         brut = json.loads(_FICHIER_CACHE.read_text(encoding="utf-8"))
-        for ticker, entree in (brut or {}).items():
+        # Un fichier d'une version antérieure du format est ignoré, pas migré : il se
+        # reconstruit au premier appel, et une migration serait du code à maintenir
+        # pour un cache qui se reconstitue tout seul.
+        if not isinstance(brut, dict) or brut.get("version") != _VERSION_FICHE:
+            return
+        for ticker, entree in (brut.get("fiches") or {}).items():
             echeance, d = entree
             if isinstance(ticker, str) and isinstance(d, dict):
                 # ⚠️ La mémoire ne perd pas au profit du disque : une fiche lue à
@@ -818,7 +837,8 @@ def _ecrire_cache_details() -> None:
     try:
         tmp = _FICHIER_CACHE.with_suffix(".json.tmp")
         tmp.write_text(json.dumps(
-            {t: [e, d] for t, (e, d) in _CACHE_DETAILS.items()},
+            {"version": _VERSION_FICHE,
+             "fiches": {t: [e, d] for t, (e, d) in _CACHE_DETAILS.items()}},
             ensure_ascii=False), encoding="utf-8")
         os.replace(tmp, _FICHIER_CACHE)
         # On note la date qu'on vient d'écrire, pour ne pas se relire soi-même au
@@ -890,6 +910,55 @@ def _pct_frais(brut) -> float | None:
     return None
 
 
+def _hhi_du_fonds(fd) -> float | None:
+    """
+    La concentration interne d'un fonds, d'après sa composition publiée.
+
+    L'indice de Herfindahl de ses lignes : son inverse se lit comme un nombre de
+    sociétés équipondérées. Il alimente la concentration en transparence, dont la
+    formule est Σ Wᵢ² · HHIᵢ — voir `analyse.py`.
+
+    ⚠️ Calculé sur les **dix premières lignes** seulement, seule composition que le
+    fournisseur publie. C'est donc un **minorant** du HHI, donc un majorant du
+    nombre de sociétés : la mesure est optimiste, jamais pessimiste, et il faut le
+    savoir en la lisant.
+
+    L'erreur est petite dans les deux régimes, ce qui rend l'approximation
+    acceptable. Pour un fonds large la queue est faite de milliers de poids
+    minuscules dont les carrés sont négligeables — sur VT, les dix premières lignes
+    pèsent 20,5 % et la queue ajoute moins d'un dix-millième au HHI. Pour un fonds
+    concentré ce sont au contraire les dix premières qui dominent — sur XLK elles
+    pèsent 61 %, et la queue n'ajoute qu'environ cinq pour cent du HHI. Estimer
+    cette queue demanderait de connaître le nombre de lignes restantes, que le
+    fournisseur ne donne pas : ce serait inventer la donnée plutôt que la borner.
+
+    Rend `None` quand rien n'est publié — le cas d'un fonds **synthétique**, qui ne
+    détient pas d'actions mais un contrat d'échange. Il n'y a alors pas de
+    composition à lire, et ce n'est pas un manque de la source.
+    """
+    try:
+        th = fd.top_holdings
+        if th is None or not len(th):
+            return None
+        colonnes = [c for c in th.columns if "ercent" in str(c)]
+        if not colonnes:
+            return None
+        poids = [float(x) for x in th[colonnes[0]] if x is not None and float(x) > 0]
+        if not poids:
+            return None
+        # Les poids arrivent en fraction. Un total supérieur à un signalerait des
+        # pourcentages, auquel cas on ramène — se tromper d'un facteur cent
+        # multiplierait le HHI par dix mille.
+        if sum(poids) > 1.5:
+            poids = [w / 100.0 for w in poids]
+        if sum(poids) > 1.01:
+            return None
+        hhi = sum(w * w for w in poids)
+        return hhi if hhi > 0 else None
+    except Exception:                                         # pragma: no cover
+        return None
+
+
 def _details_titre(ticker: str) -> dict:
     """Ce que yfinance sait d'un titre, mis en cache six heures, disque compris."""
     import time
@@ -924,6 +993,7 @@ def _details_titre(ticker: str) -> dict:
             try:
                 fd = tk.funds_data
                 d["secteurs"] = dict(fd.sector_weightings or {})
+                d["hhi"] = _hhi_du_fonds(fd)
                 d["classes"] = dict(fd.asset_classes or {})
                 # Le TER d'un fonds vit ici plutôt que dans `info`, sous une
                 # étiquette en clair et non sous une clé.
@@ -1115,23 +1185,28 @@ async def get_analysis(
     # plafonnent à six entrées plus un « Autres » qui compte pour une seule : onze
     # secteurs équipondérés y devenaient 3,9 équivalents, plafonnant la note à 41
     # pour la meilleure diversification possible. Voir `exposition_secteurs`.
-    # ⚠️ La nature de chaque ligne, pour la concentration : elle ne compte que les
-    # sociétés détenues en **direct**, un fonds étant un ensemble déjà réparti.
-    # `secteurs` (ventilation interne) désigne un fonds, `secteur` seul une action.
-    # Une ligne dont la fiche n'a pas pu être lue n'apparaît pas — elle est alors
-    # écartée du calcul plutôt que supposée être l'un ou l'autre.
-    types_lignes = {}
+    # ⚠️ La concentration **interne** de chaque ligne, pour la concentration en
+    # transparence : 1 pour une action détenue en direct, l'indice de Herfindahl de
+    # la composition publiée pour un fonds. Voir la formule dans `analyse.py`.
+    #
+    # Une ligne absente n'est pas supposée : un fonds synthétique ne publie aucune
+    # composition — il détient un contrat d'échange, pas des actions — et la deviner
+    # reviendrait à inventer le contenu du portefeuille.
+    hhi_lignes = {}
     for t, d in details.items():
-        if (d or {}).get("secteurs"):
-            types_lignes[t] = "fonds"
-        elif (d or {}).get("secteur"):
-            types_lignes[t] = "action"
+        d = d or {}
+        if d.get("secteurs"):
+            if d.get("hhi"):
+                hhi_lignes[t] = float(d["hhi"])
+        elif d.get("secteur"):
+            # Une action est une seule société : sa concentration interne vaut un.
+            hhi_lignes[t] = 1.0
 
     facteurs = facteurs_de_risque(
         poids, rendements,
         secteurs=ventilation_secteurs(details, poids),
         zones=ventilation_zones(details, poids),
-        types_lignes=types_lignes,
+        hhi_lignes=hhi_lignes,
         frais_par_ligne={t: d["frais"] for t, d in details.items()
                          if (d or {}).get("frais") is not None},
         cible=profil_cible(portefeuille.horizon_annees, portefeuille.tolerance),

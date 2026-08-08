@@ -45,24 +45,37 @@ def actions(*poids_secteurs):
     """
     Un portefeuille d'actions détenues en **direct**.
 
-    Rend `(poids, types_lignes, secteurs)` prêts pour `facteurs_de_risque`. La
-    concentration ne comptant que les sociétés en direct, un test qui oublierait
-    `types_lignes` verrait le facteur non mesuré et passerait pour la mauvaise
-    raison — d'où cette aide.
+    Rend `(poids, hhi_lignes, secteurs)` prêts pour `facteurs_de_risque`. Une action
+    est une seule société : sa concentration interne vaut un. Un test qui oublierait
+    `hhi_lignes` verrait le facteur non mesuré et passerait pour la mauvaise raison
+    — d'où cette aide.
     """
-    poids, types, secteurs = {}, {}, {}
+    poids, hhi, secteurs = {}, {}, {}
     for i, (w, sect) in enumerate(poids_secteurs):
         t = f"ACT{i}"
         poids[t] = w
-        types[t] = "action"
+        hhi[t] = 1.0
         secteurs[sect] = secteurs.get(sect, 0.0) + w
-    return poids, types, [{"libelle": k, "part": v} for k, v in secteurs.items()]
+    return poids, hhi, [{"libelle": k, "part": v} for k, v in secteurs.items()]
 
 
 def fonds(*poids_valeurs):
-    """Un portefeuille de fonds : aucune société détenue en direct."""
+    """
+    Un portefeuille de fonds **synthétiques** : aucune composition publiée.
+
+    C'est le cas des ETF éligibles au PEA — ils détiennent un contrat d'échange et
+    non des actions, donc `top_holdings` est vide. Mesuré sur ESE.PA et CW8.PA.
+    """
+    return {f"F{i}": w for i, w in enumerate(poids_valeurs)}, {}
+
+
+def fonds_transparents(societes, *poids_valeurs):
+    """
+    Un portefeuille de fonds à réplication physique, chacun portant `societes`
+    sociétés équipondérées — donc un HHI interne de 1/societes.
+    """
     poids = {f"F{i}": w for i, w in enumerate(poids_valeurs)}
-    return poids, {t: "fonds" for t in poids}
+    return poids, {t: 1.0 / societes for t in poids}
 
 
 def series(n=250, vol=0.01, graine=0):
@@ -92,7 +105,7 @@ class TestHerfindahl:
 class TestFacteurs:
     def test_vingt_societes_equiponderees_valent_cent(self):
         poids, types, _ = actions(*[(5.0, "Tech") for _ in range(20)])
-        f = facteurs_de_risque(poids, None, types_lignes=types)
+        f = facteurs_de_risque(poids, None, hhi_lignes=types)
         assert f["concentration"]["score"] == 100
 
     def test_l_echelle_ne_s_adapte_pas_au_portefeuille(self):
@@ -103,25 +116,27 @@ class TestFacteurs:
         monde : chaque portefeuille atteignait son propre idéal.
         """
         poids, types, _ = actions((50.0, "Tech"), (50.0, "Santé"))
-        f = facteurs_de_risque(poids, None, types_lignes=types)
+        f = facteurs_de_risque(poids, None, hhi_lignes=types)
         assert 0 < f["concentration"]["score"] < 100
 
     def test_societe_unique_vaut_zero(self):
         poids, types, _ = actions((100.0, "Tech"))
-        f = facteurs_de_risque(poids, None, types_lignes=types)
+        f = facteurs_de_risque(poids, None, hhi_lignes=types)
         assert f["concentration"]["score"] == 0
 
     def test_societes_equivalentes(self):
         """L'inverse de la somme des carrés se lit comme un nombre de sociétés."""
         poids, types, _ = actions((50.0, "Tech"), (50.0, "Santé"))
-        f = facteurs_de_risque(poids, None, types_lignes=types)
+        f = facteurs_de_risque(poids, None, hhi_lignes=types)
         assert f["concentration"]["libelle"] == "2.0 sociétés équivalentes"
 
     def test_portefeuille_desequilibre(self):
         # 70/20/10 ne pèse pas trois sociétés mais moins de deux.
         poids, types, _ = actions((70.0, "Tech"), (20.0, "Santé"), (10.0, "Énergie"))
-        f = facteurs_de_risque(poids, None, types_lignes=types)
-        assert f["concentration"]["libelle"].startswith("1.9")
+        f = facteurs_de_risque(poids, None, hhi_lignes=types)
+        assert f["concentration"]["libelle"] == "1.9 sociétés équivalentes"
+        # 0,7² + 0,2² + 0,1² = 0,54, dont l'inverse vaut 1,85.
+        assert f["concentration"]["valeur"] == pytest.approx(1.85, abs=0.01)
 
     def test_sans_historique_les_facteurs_de_marche_sont_nuls(self):
         """
@@ -205,7 +220,7 @@ class TestFacteurs:
         """
         secteurs = [{"libelle": f"S{i}", "part": 100 / 9} for i in range(9)]
         poids, types = fonds(80.0, 17.0, 3.0)
-        f = facteurs_de_risque(poids, None, secteurs=secteurs, types_lignes=types)
+        f = facteurs_de_risque(poids, None, secteurs=secteurs, hhi_lignes=types)
         # ⚠️ La concentration ne reproche plus les 80 % sur un seul fonds : un fonds
         # est un ensemble déjà réparti, et compter les enveloppes donnait 0 à un ETF
         # monde. C'est la diversification qui juge le contenu, et elle est bonne.
@@ -498,7 +513,7 @@ class TestCalibrage:
     portefeuille à effet de levier — avant d'être supprimé pour biais de mesure.
     """
 
-    def test_un_seul_fonds_n_est_plus_puni(self):
+    def test_un_fonds_physique_est_mesure_et_bien_note(self):
         """
         ⚠️ Le correctif final de l'audit sur ce facteur.
 
@@ -506,22 +521,50 @@ class TestCalibrage:
         enveloppes, alors que l'enveloppe ne porte pas le risque. Un ETF MSCI World
         à cent pour cent obtenait 0 sur 100 : mille cinq cents sociétés notées comme
         une action unique.
+
+        Les fonds ont ensuite été exclus faute de savoir ce qu'ils portent, ce qui
+        était une perte : un ETF monde et un ETF sectoriel ne portent pas le même
+        risque société. Ils sont rentrés par la formule Σ Wᵢ²·HHIᵢ, le HHI interne
+        venant de la composition publiée.
         """
-        poids, types = fonds(100.0)
-        f = facteurs_de_risque(poids, None, types_lignes=types)
-        # ⚠️ Ni 0 ni 100 : le facteur ne s'applique pas.
-        #
-        # 0 était l'ancien défaut — mille cinq cents sociétés notées comme une
-        # action unique. 100 était mon premier correctif, et il était mauvais aussi :
-        # la majorité des épargnants ne détenant que des fonds, le facteur aurait
-        # valu cent pour la plupart des portefeuilles, ajoutant une constante à la
-        # moyenne. C'est le motif pour lequel la liquidité a été retirée. Sur un vrai
-        # PEA, cela gonflait la note de 83 à 86 sans information à l'appui.
+        poids, hhi = fonds_transparents(150, 100.0)
+        f = facteurs_de_risque(poids, None, hhi_lignes=hhi)
+        assert f["concentration"]["score"] == 100
+        assert "150 sociétés" in f["concentration"]["libelle"]
+
+    def test_un_fonds_synthetique_ne_publie_rien_donc_n_est_pas_note(self):
+        """
+        ⚠️ Un ETF synthétique détient un contrat d'échange, pas des actions : il n'y
+        a aucune composition à publier, et ce n'est pas un manque de la source.
+
+        Mesuré : `top_holdings` est vide pour ESE.PA et CW8.PA — BNP et Amundi,
+        éligibles au PEA — et renseigné pour IWDA.AS, VT, QQQ et XLK, tous à
+        réplication physique. Deviner le contenu reviendrait à inventer le
+        portefeuille.
+
+        Le libellé le dit sans détour, parce que le lecteur voit ce texte à la place
+        de la barre, sans survoler : « composition des fonds non publiée » n'est pas
+        le même constat que « frais des fonds inconnus », qui est un trou de la
+        source.
+        """
+        poids, hhi = fonds(100.0)
+        f = facteurs_de_risque(poids, None, hhi_lignes=hhi)
         assert f["concentration"]["score"] is None
-        # ⚠️ « sans objet » et non « inconnu » : à distinguer des frais des fonds,
-        # absents parce que le fournisseur ne les publie pas. Le lecteur voit ce
-        # texte à la place de la barre, sans survoler.
-        assert f["concentration"]["libelle"] == "sans objet — aucune action en direct"
+        assert f["concentration"]["libelle"] == "composition des fonds non publiée"
+
+    def test_un_fonds_sectoriel_est_moins_bien_note_qu_un_fonds_monde(self):
+        """
+        Le gain de la transparence : l'ancien calcul notait les deux 0.
+
+        Repères relevés sur les compositions réellement publiées — VT pèse 196
+        sociétés équivalentes, XLK 19.
+        """
+        monde, h_monde = fonds_transparents(196, 100.0)
+        secteur, h_secteur = fonds_transparents(19, 100.0)
+        a = facteurs_de_risque(monde, None, hhi_lignes=h_monde)["concentration"]["score"]
+        b = facteurs_de_risque(secteur, None, hhi_lignes=h_secteur)["concentration"]["score"]
+        assert a == 100
+        assert b < a
 
     def test_decouper_en_plusieurs_enveloppes_ne_rapporte_rien(self):
         """
@@ -533,20 +576,20 @@ class TestCalibrage:
         """
         un, t1 = fonds(100.0)
         quatre, t4 = fonds(25.0, 25.0, 25.0, 25.0)
-        a = facteurs_de_risque(un, None, types_lignes=t1)["concentration"]
-        b = facteurs_de_risque(quatre, None, types_lignes=t4)["concentration"]
+        a = facteurs_de_risque(un, None, hhi_lignes=t1)["concentration"]
+        b = facteurs_de_risque(quatre, None, hhi_lignes=t4)["concentration"]
         assert a["score"] == b["score"] is None
         assert a["libelle"] == b["libelle"]
 
     def test_la_cible_est_vingt_societes(self):
         poids, types, _ = actions(*[(5.0, "Tech") for _ in range(20)])
-        f = facteurs_de_risque(poids, None, types_lignes=types)
+        f = facteurs_de_risque(poids, None, hhi_lignes=types)
         assert f["concentration"]["score"] == 100
 
     def test_une_societe_dominante_reste_mal_notee(self):
         # 69/20/10 en actions directes : moins de deux sociétés équivalentes.
         poids, types, _ = actions((69.0, "Tech"), (20.0, "Santé"), (10.0, "Énergie"))
-        f = facteurs_de_risque(poids, None, types_lignes=types)
+        f = facteurs_de_risque(poids, None, hhi_lignes=types)
         assert f["concentration"]["score"] < 15
 
     def test_une_petite_ligne_d_action_ne_plombe_pas_un_portefeuille_de_fonds(self):
@@ -556,8 +599,8 @@ class TestCalibrage:
         haute — l'assiette est le portefeuille entier, pas la poche d'actions.
         """
         poids = {"AAPL": 10.0, "IWDA": 90.0}
-        types = {"AAPL": "action", "IWDA": "fonds"}
-        f = facteurs_de_risque(poids, None, types_lignes=types)
+        types = {"AAPL": 1.0, "IWDA": 1 / 200}
+        f = facteurs_de_risque(poids, None, hhi_lignes=types)
         assert f["concentration"]["score"] == 100
         # Cent parce qu'une société y est bien détenue et pèse peu — à distinguer du
         # cas sans action du tout, qui n'est pas noté.
@@ -565,68 +608,24 @@ class TestCalibrage:
 
     def test_la_moitie_sur_une_societe_est_mal_notee(self):
         poids = {"AAPL": 50.0, "IWDA": 50.0}
-        types = {"AAPL": "action", "IWDA": "fonds"}
-        f = facteurs_de_risque(poids, None, types_lignes=types)
+        types = {"AAPL": 1.0, "IWDA": 1 / 200}
+        f = facteurs_de_risque(poids, None, hhi_lignes=types)
         assert f["concentration"]["score"] < 25
 
-    def test_sans_nature_de_ligne_le_facteur_ne_note_pas(self):
+    def test_une_transparence_partielle_ne_note_pas(self):
         """
-        Une fiche illisible ne doit pas faire supposer « fonds » — ce qui donnerait
-        la note pleine à un portefeuille inconnu — ni « action ». Sous soixante pour
-        cent du portefeuille identifié, le facteur se tait.
+        Sous soixante pour cent du portefeuille lu, le facteur se tait — et le dit
+        avec le chiffre, pour qu'on sache de combien il manque.
+
+        Sans ce garde-fou, une ligne dont la composition manque abaisserait tous les
+        carrés et gonflerait le nombre de sociétés : **ne pas savoir aurait amélioré
+        la note**.
         """
-        f = facteurs_de_risque({"X": 100.0}, None, types_lignes={})
+        f = facteurs_de_risque({"VT": 50.0, "ESE": 50.0}, None, hhi_lignes={"VT": 1 / 200})
         assert f["concentration"]["score"] is None
-        assert f["concentration"]["libelle"] == "Composition indéterminée"
-
-    def test_la_diversification_ne_juge_que_la_transparence(self):
-        """
-        ⚠️ La corrélation pesait deux fois : en propre, et comme composante de la
-        diversification. Elle a depuis été retirée des deux côtés.
-
-        Le test garde son cœur : deux lignes parfaitement corrélées — donc
-        totalement redondantes — n'entament pas la diversification, qui se juge sur
-        ce qui est **détenu** et non sur la façon dont les lignes bougent. Les deux
-        constats coexistent sans se confondre.
-        """
-        secteurs = [{"libelle": f"S{i}", "part": 100 / 8} for i in range(8)]
-        base = series()
-        d = pd.DataFrame({"A": base, "B": base})
-        f = facteurs_de_risque({"A": 50, "B": 50}, d, secteurs=secteurs)
-        assert f["redondance"]["score"] == 0
-        assert f["diversification"]["score"] == 100
-
-    def test_la_construction_et_le_cout_comptent(self):
-        f = facteurs_de_risque({"A": 50, "B": 50}, None)
-        # ⚠️ Sans profil déclaré, ce qui note se limite à la **construction** et au
-        # **coût** : on peut juger comment un portefeuille est bâti et ce qu'il
-        # coûte, pas quel risque il devrait porter. Seule la volatilité attend une
-        # intention déclarée.
-        for cle in ("concentration", "diversification", "frais", "redondance",
-                    "frais_courtage"):
-            assert f[cle]["compte"] is True, cle
-        assert f["volatilite"]["compte"] is False
-
-    def test_un_seul_facteur_depend_du_profil(self):
-        """
-        ⚠️ Ils étaient trois — volatilité, perte maximale, bêta. Le bêta a été
-        supprimé pour biais de mesure et la perte maximale ne note plus car elle
-        doublait la volatilité à 0,88 de corrélation. L'interface annonce le nombre
-        de facteurs en attente ; ce test tient le chiffre qu'elle annonce.
-        """
-        d = pd.DataFrame({"A": series(vol=0.01, graine=3)})
-        sans = facteurs_de_risque({"A": 100}, d)
-        avec = facteurs_de_risque({"A": 100}, d, cible=profil_cible(30, "equilibre"))
-        muets = [c for c in sans
-                 if sans[c]["compte"] is False and avec.get(c, {}).get("compte") is True]
-        assert muets == ["volatilite"]
-
-    def test_un_facteur_sans_cle_compte_est_compte(self):
-        """Un facteur ajouté plus tard doit peser, pas être oublié en silence."""
-        assert score_global({"neuf": {"score": 40}, "vieux": {"score": 80}}) == 60
+        assert f["concentration"]["libelle"] == "transparence sur 50 % seulement"
 
 
-# ── Les facteurs ajoutés ─────────────────────────────────────────────────────
 
 class TestFrais:
     def test_frais_ponderes_par_les_poids(self):

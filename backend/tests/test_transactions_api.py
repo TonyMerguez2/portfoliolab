@@ -444,6 +444,135 @@ def test_une_tolerance_inconnue_est_refusee(client):
     assert "prudent" in r.json()["detail"]
 
 
+class TestHhiDuFonds:
+    """
+    La concentration **interne** d'un fonds, lue dans sa composition publiée.
+
+    Elle alimente la concentration en transparence, dont la formule est Σ Wᵢ²·HHIᵢ.
+    Testée sans réseau, sur des compositions relevées sur de vrais fonds.
+    """
+
+    @staticmethod
+    def _fd(poids, colonne="Holding Percent"):
+        """Un faux `funds_data`, à la forme que rend le fournisseur."""
+        import pandas as pd
+
+        class Faux:
+            top_holdings = (pd.DataFrame({"Name": [f"S{i}" for i in range(len(poids))],
+                                          colonne: poids})
+                            if poids is not None else None)
+        return Faux()
+
+    def test_un_fonds_monde_pese_beaucoup_de_societes(self):
+        import app.api.routes.transactions as routes
+
+        # VT, relevé : dix premières lignes à 20,5 %, la plus grosse à 4,0 %.
+        vt = [0.040, 0.035, 0.025, 0.020, 0.018, 0.016, 0.015, 0.014, 0.013, 0.009]
+        hhi = routes._hhi_du_fonds(self._fd(vt))
+        assert hhi is not None
+        assert 150 < 1 / hhi < 250
+
+    def test_un_fonds_sectoriel_pese_peu_de_societes(self):
+        import app.api.routes.transactions as routes
+
+        # XLK, relevé : dix premières lignes à 61 %, la plus grosse à 13,8 %.
+        xlk = [0.138, 0.120, 0.080, 0.060, 0.050, 0.045, 0.040, 0.030, 0.025, 0.022]
+        hhi = routes._hhi_du_fonds(self._fd(xlk))
+        assert hhi is not None
+        assert 15 < 1 / hhi < 25
+
+    def test_une_composition_vide_ne_rend_rien(self):
+        """
+        Le cas d'un fonds **synthétique** : il détient un contrat d'échange et non
+        des actions, donc il n'y a rien à publier. Mesuré vide sur ESE.PA et CW8.PA.
+        """
+        import app.api.routes.transactions as routes
+
+        assert routes._hhi_du_fonds(self._fd([])) is None
+        assert routes._hhi_du_fonds(self._fd(None)) is None
+
+    def test_des_pourcentages_sont_ramenes_en_fractions(self):
+        """
+        ⚠️ Se tromper d'un facteur cent multiplierait le HHI par dix mille, donc
+        diviserait le nombre de sociétés par dix mille. Le fournisseur n'annonce pas
+        son unité.
+        """
+        import app.api.routes.transactions as routes
+
+        fractions = [0.040, 0.035, 0.025, 0.020, 0.018]
+        pourcents = [w * 100 for w in fractions]
+        assert routes._hhi_du_fonds(self._fd(pourcents)) == pytest.approx(
+            routes._hhi_du_fonds(self._fd(fractions)), rel=1e-9)
+
+    def test_une_somme_impossible_est_refusee(self):
+        """
+        Des poids qui somment à plus de cent pour cent ne sont pas des poids.
+
+        ⚠️ Le cas `[0.6, 0.6, 0.6]` n'est **pas** refusé, et c'est délibéré : somme
+        1,8, donc lu comme des pourcentages, donc 1,8 % au total. C'est le bon
+        arbitrage en pratique — des fractions sommant à 180 % n'existent pas, alors
+        que des pourcentages sont un format courant. La zone d'ambiguïté est étroite
+        et l'ordre de lecture y est celui qui produit une valeur plausible.
+        """
+        import app.api.routes.transactions as routes
+
+        # 180 % même après division : aucune lecture ne le sauve.
+        assert routes._hhi_du_fonds(self._fd([60.0, 60.0, 60.0])) is None
+
+    def test_une_colonne_inattendue_ne_leve_pas(self):
+        import app.api.routes.transactions as routes
+
+        assert routes._hhi_du_fonds(self._fd([0.1, 0.2], colonne="Autre")) is None
+
+
+def test_un_cache_d_ancien_format_est_ignore(tmp_path, monkeypatch):
+    """
+    ⚠️ La contrepartie de la longue durée de vie du cache.
+
+    Les fiches tiennent trente jours, ce qui rendait invisible pendant un mois tout
+    champ ajouté au format. Observé : `hhi` — la concentration interne d'un fonds,
+    ajoutée pour la concentration en transparence — n'apparaissait pas, parce que
+    les fiches enregistrées la veille ne le portaient pas et restaient valides. Le
+    facteur affichait « composition non publiée » pour des fonds qui la publient,
+    et rien ne distinguait ce cas d'une vraie absence.
+
+    Un fichier d'une version antérieure est ignoré, pas migré : il se reconstruit au
+    premier appel.
+    """
+    import json
+    import time
+
+    import app.api.routes.transactions as routes
+
+    fichier = tmp_path / "vieux.json"
+    monkeypatch.setattr(routes, "_FICHIER_CACHE", fichier)
+
+    # Format d'avant le champ `hhi` : un dictionnaire nu, sans version.
+    fichier.write_text(json.dumps({"VT": [time.time() + 3600, {"secteurs": {"tech": 1.0}}]}))
+    routes._CACHE_DETAILS.clear()
+    monkeypatch.setattr(routes, "_CACHE_MTIME", None)
+    routes._charger_cache_details()
+    assert routes._CACHE_DETAILS == {}, "un cache sans version doit être ignoré"
+
+    # Format versionné, mais d'une version antérieure.
+    fichier.write_text(json.dumps(
+        {"version": routes._VERSION_FICHE - 1,
+         "fiches": {"VT": [time.time() + 3600, {"secteurs": {"tech": 1.0}}]}}))
+    routes._CACHE_DETAILS.clear()
+    monkeypatch.setattr(routes, "_CACHE_MTIME", None)
+    routes._charger_cache_details()
+    assert routes._CACHE_DETAILS == {}
+
+    # La version courante, elle, est relue.
+    fichier.write_text(json.dumps(
+        {"version": routes._VERSION_FICHE,
+         "fiches": {"VT": [time.time() + 3600, {"secteurs": {"tech": 1.0}, "hhi": 0.005}]}}))
+    routes._CACHE_DETAILS.clear()
+    monkeypatch.setattr(routes, "_CACHE_MTIME", None)
+    routes._charger_cache_details()
+    assert routes._CACHE_DETAILS["VT"][1]["hhi"] == 0.005
+
+
 def test_le_cache_des_fiches_survit_au_redemarrage(tmp_path, monkeypatch):
     """
     ⚠️ Le cache des fiches de titres vit aussi sur disque.
@@ -466,7 +595,8 @@ def test_le_cache_des_fiches_survit_au_redemarrage(tmp_path, monkeypatch):
     fichier = tmp_path / "cache.json"
     monkeypatch.setattr(routes, "_FICHIER_CACHE", fichier)
 
-    fiche = {"nom": "Fonds test", "secteurs": {"technology": 0.5, "healthcare": 0.5}}
+    fiche = {"nom": "Fonds test", "secteurs": {"technology": 0.5, "healthcare": 0.5},
+             "hhi": 0.005}
     routes._CACHE_DETAILS.clear()
     routes._CACHE_DETAILS["TEST.PA"] = (time.time() + 3600, fiche)
     routes._ecrire_cache_details()
@@ -505,9 +635,10 @@ def test_le_cache_est_relu_quand_le_fichier_change(tmp_path, monkeypatch):
     routes._charger_cache_details()
     assert routes._CACHE_DETAILS == {}
 
-    # Un autre processus écrit le cache après coup.
+    # Un autre processus écrit le cache après coup, au format courant.
     fichier.write_text(json.dumps(
-        {"TARD.PA": [time.time() + 3600, {"secteurs": {"technology": 1.0}}]}))
+        {"version": routes._VERSION_FICHE,
+         "fiches": {"TARD.PA": [time.time() + 3600, {"secteurs": {"technology": 1.0}}]}}))
     # Une date de modification plus récente que la dernière lue : on relit.
     os.utime(fichier, (time.time() + 5, time.time() + 5))
 
