@@ -22,7 +22,7 @@ from app.services.analyse import (
     agreger_exposition, exposition_secteurs, exposition_simple,
     zone_du_fonds, exposition_zones, projection, ventilation_secteurs,
     ventilation_zones, regions_du_portefeuille, ecart_au_marche,
-    POIDS_MARCHE_MONDIAL, DECOMPOSITION_ZONE, ZONES,
+    POIDS_MARCHE_MONDIAL, DECOMPOSITION_ZONE, ZONES, ZONES_INDECOMPOSABLES,
 )
 
 
@@ -418,10 +418,23 @@ class TestExposition:
 
 class TestZones:
     def test_indices_courants(self):
+        """
+        ⚠️ Ce test **verrouillait** une erreur au lieu de la prévenir.
+
+        Il exigeait que « Amundi PEA Asie Pacifique (MSCI AC Asia Pacific Ex Japan) »
+        soit rangé en « Asie-Pacifique » — donc, par la décomposition, en développé.
+        Or « AC » signifie *All Countries* : cet indice est aux quatre cinquièmes
+        émergent. Le test passait, et le score annonçait « aucune exposition aux
+        marchés émergents » à un portefeuille qui en portait huit pour cent.
+
+        Un test qui recopie l'intention du code sans la confronter à la réalité de la
+        donnée ne protège de rien : il rend l'erreur permanente.
+        """
         cas = {
             "BNP Paribas Easy S&P 500 UCITS ETF EUR C": "États-Unis",
             "BNP Paribas Easy Stoxx Europe 600 UCITS ETF": "Europe",
-            "Amundi PEA Asie Pacifique (MSCI AC Asia Pacific Ex Japan)": "Asie-Pacifique",
+            "Amundi PEA Asie Pacifique (MSCI AC Asia Pacific Ex Japan)":
+                "Asie-Pacifique tous pays",
             "Amundi PEA Japon (TOPIX) UCITS ETF": "Japon",
             "Amundi PEA Monde (MSCI World) UCITS ETF": "Monde développé",
             "Amundi PEA Inde (MSCI India) UCITS ETF": "Inde",
@@ -934,7 +947,43 @@ class TestGeographie:
         qu'aucun test n'échoue et sans rien à l'écran pour le dire.
         """
         for _motif, etiquette in ZONES:
-            assert etiquette in DECOMPOSITION_ZONE, etiquette
+            assert (etiquette in DECOMPOSITION_ZONE
+                    or etiquette in ZONES_INDECOMPOSABLES), etiquette
+
+    def test_une_zone_ambigue_ne_se_decompose_pas(self):
+        """
+        ⚠️ L'erreur que ce refus empêche, et qu'il a fallu commettre pour la voir.
+
+        « Asie-Pacifique » sans autre précision ne dit pas si l'indice inclut les
+        marchés émergents : le MSCI Pacific est développé, le MSCI AC Asia Pacific en
+        est aux quatre cinquièmes émergent. Le supposer développé a fait dire au score
+        « aucune exposition aux marchés émergents » sur un portefeuille qui en portait
+        huit pour cent — et c'était la seule recommandation que la note mettait en
+        avant.
+
+        Une zone ambiguë sort donc du calcul et fait baisser la couverture, au lieu
+        d'être rangée d'un côté par défaut.
+        """
+        for etiquette in ZONES_INDECOMPOSABLES:
+            assert etiquette not in DECOMPOSITION_ZONE, etiquette
+        regions, situe = regions_du_portefeuille([{"libelle": "Asie-Pacifique", "part": 100.0}])
+        assert regions == {} and situe == 0.0
+
+    def test_un_indice_tous_pays_est_majoritairement_emergent(self):
+        """
+        Le MSCI AC Asia Pacific ex Japan : Chine, Taïwan, Inde et Corée en forment les
+        quatre cinquièmes, l'Australie et Hong Kong le reste.
+        """
+        assert zone_du_fonds(
+            "Amundi PEA Asie Pacifique (MSCI AC Asia Pacific Ex Japan) UCITS ETF"
+        ) == "Asie-Pacifique tous pays"
+        regions, _ = regions_du_portefeuille(
+            [{"libelle": "Asie-Pacifique tous pays", "part": 100.0}])
+        assert regions["Marchés émergents"] == pytest.approx(80.0)
+
+    def test_un_indice_pacifique_developpe_reste_developpe(self):
+        assert zone_du_fonds("iShares Core MSCI Pacific ex-Japan UCITS ETF") \
+            == "Asie-Pacifique développée"
 
     def test_l_ecart_se_lit_en_points_de_portefeuille(self):
         """

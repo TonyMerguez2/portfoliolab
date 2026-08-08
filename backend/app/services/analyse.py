@@ -1018,6 +1018,18 @@ ZONES = [
     ("amerique latine",     "Amérique latine"),
     ("emerging asia",       "Asie émergente"),
     ("asie emergente",      "Asie émergente"),
+    # ⚠️ « AC » — All Countries — passe devant, et cet ordre corrige une erreur
+    # réelle. Le MSCI AC Asia Pacific ex Japan est majoritairement **émergent** :
+    # Chine, Taïwan, Inde et Corée en forment les quatre cinquièmes, l'Australie et
+    # Hong Kong le reste. Rangé sous « Asie-Pacifique développée », il faisait dire
+    # au score « aucune exposition aux marchés émergents » à un portefeuille qui en
+    # portait huit pour cent.
+    ("ac asia pacific",     "Asie-Pacifique tous pays"),
+    ("all country asia",    "Asie-Pacifique tous pays"),
+    ("msci pacific",        "Asie-Pacifique développée"),
+    # ⚠️ Ces deux motifs restent pour l'affichage mais ne se décomposent **pas** :
+    # voir `ZONES_INDECOMPOSABLES`. Le libellé seul ne dit pas si l'indice inclut les
+    # émergents, et le supposer était l'erreur ci-dessus.
     ("asia pacific",        "Asie-Pacifique"),
     ("asie pacifique",      "Asie-Pacifique"),
     ("msci india",          "Inde"),
@@ -1127,13 +1139,31 @@ DECOMPOSITION_ZONE: dict[str, dict[str, float]] = {
     "Zone euro":         {"Europe": 1.0},
     "France":            {"Europe": 1.0},
     "Japon":             {"Asie-Pacifique développée": 1.0},
-    "Asie-Pacifique":    {"Asie-Pacifique développée": 1.0},
+    "Asie-Pacifique développée": {"Asie-Pacifique développée": 1.0},
+    # Quatre cinquièmes d'émergents : Chine, Taïwan, Inde et Corée dominent l'indice,
+    # l'Australie et Hong Kong forment le reste. Ordres de grandeur, comme la table
+    # de référence elle-même.
+    "Asie-Pacifique tous pays": {"Marchés émergents": 0.80,
+                                 "Asie-Pacifique développée": 0.20},
     "Marchés émergents": {"Marchés émergents": 1.0},
     "Asie émergente":    {"Marchés émergents": 1.0},
     "Amérique latine":   {"Marchés émergents": 1.0},
     "Chine":             {"Marchés émergents": 1.0},
     "Inde":              {"Marchés émergents": 1.0},
 }
+
+# Zones affichées mais **non situables** sur les régions de référence.
+#
+# ⚠️ Une omission délibérée, et le contraire d'un oubli. « Asie-Pacifique » sans
+# autre précision ne dit pas si l'indice inclut les marchés émergents : le MSCI
+# Pacific est développé, le MSCI AC Asia Pacific en est aux quatre cinquièmes
+# émergent. Les rapprocher a produit une conclusion fausse — « aucune exposition aux
+# émergents » sur un portefeuille qui en portait huit pour cent.
+#
+# Une ligne portant l'un de ces libellés sort donc du calcul géographique et fait
+# baisser la couverture, exactement comme une zone inconnue. C'est le bon aveu : on
+# sait qu'il y a de l'Asie-Pacifique, on ne sait pas laquelle.
+ZONES_INDECOMPOSABLES = {"Asie-Pacifique"}
 
 # Les pays tels que le fournisseur de cours les nomme, pour les **actions**.
 #

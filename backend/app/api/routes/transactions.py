@@ -772,7 +772,7 @@ _FICHIER_CACHE = pathlib.Path(__file__).resolve().parents[3] / ".cache_details.j
 #
 # C'est la contrepartie exacte du gain de la longue durée de vie : plus le cache
 # tient, plus il faut un moyen de le déclarer périmé autrement que par le temps.
-_VERSION_FICHE = 5
+_VERSION_FICHE = 6
 
 
 def _charger_cache_details() -> None:
@@ -1000,9 +1000,18 @@ PROXY_COMPOSITION: list[tuple[str, tuple[str, ...]]] = [
     ("emerging asia",   ("EIMI.AS", "IEMG")),
     ("msci emerging",   ("EIMI.AS", "IEMG")),
     ("emerging markets", ("EIMI.AS", "IEMG")),
-    ("asie pacifique",  ("CPXJ.AS", "IPAC")),
-    ("asia pacific",    ("CPXJ.AS", "IPAC")),
-    ("msci pacific",    ("CPXJ.AS", "IPAC")),
+    # ⚠️ « AC » — All Countries — passe **devant** les motifs Pacifique, et cet ordre
+    # corrige une erreur réelle. Le MSCI AC Asia Pacific ex Japan est majoritairement
+    # émergent, avec quelque 1 200 lignes ; le MSCI Pacific ex Japan est développé et
+    # n'en compte qu'une centaine. Les rapprocher donnait 36 sociétés équivalentes
+    # pour un fonds qui en porte des centaines.
+    ("ac asia pacific",  ("AAXJ", "EIMI.AS")),
+    ("all country asia", ("AAXJ", "EIMI.AS")),
+    ("msci pacific",     ("CPXJ.AS", "IPAC")),
+    # ⚠️ « asie pacifique » seul n'a **pas** de proxy, volontairement. Le libellé
+    # couvre aussi bien un indice développé qu'un indice tous pays, et deviner
+    # reviendrait à choisir entre cent et mille deux cents sociétés à la place de la
+    # donnée. Une ligne sans proxy reste non mesurée, ce qui est le bon aveu.
 ]
 
 # Préfixe réservé aux entrées de proxy dans le cache des fiches.
@@ -1166,7 +1175,23 @@ def _details_titre(ticker: str) -> dict:
         # fonds sans frais alors que la donnée était là, une clé plus loin.
         d["frais"] = (_pct_frais(info.get("annualReportExpenseRatio"))
                       or _pct_frais(info.get("netExpenseRatio")))
-        d["nom"] = info.get("shortName") or info.get("longName")
+        # ⚠️ `longName` **avant** `shortName`, et l'inverse a causé une erreur nette.
+        #
+        # Yahoo tronque `shortName` à une trentaine de caractères, ce qui coupe
+        # justement le nom de l'indice — la seule partie exploitable :
+        #
+        #   shortName : 'Amundi PEA Asie Pacifique (MSCI'
+        #   longName  : 'Amundi PEA Asie Pacifique (MSCI AC Asia Pacific Ex Japan) UCITS ETF'
+        #
+        # « AC » signifie *All Countries* : ce fonds est majoritairement composé de
+        # marchés émergents. Sur le nom tronqué, la géographie l'a rangé en
+        # Asie-Pacifique développée et le score a conclu « aucune exposition aux
+        # émergents » pour un portefeuille qui en portait huit pour cent.
+        #
+        # Le même piège frappait ETZ.PA, tronqué en 'Stoxx Europe 6' : le motif
+        # « stoxx europe 600 » ne pouvait pas correspondre, et seul le motif plus
+        # large sauvait la lecture — par chance, pas par construction.
+        d["nom"] = info.get("longName") or info.get("shortName")
         if info.get("quoteType") == "ETF":
             try:
                 fd = tk.funds_data
