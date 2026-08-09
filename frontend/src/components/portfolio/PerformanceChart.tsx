@@ -469,6 +469,20 @@ function ancrer(n: HTMLElement, c: Coord): void {
 const cléStickerPlace = (k: { id: string; x: number; y: number; taille: number; glyphe: string }) =>
   `${k.id}:${k.x}:${k.y}:${k.taille}:${k.glyphe}`;
 
+/**
+ * La même couleur, translucide.
+ *
+ * ⚠️ Le suffixe hexadécimal ne s'ajoute qu'à une couleur hexadécimale. Le repli
+ * de `couleurOp` pour un type inconnu est un `var(...)`, auquel on ne peut rien
+ * concaténer : on le rend alors tel quel, et l'anneau y est simplement opaque.
+ * Écrire `couleur + "59"` sans ce garde aurait produit `var(--nv-accent)59`, que
+ * le navigateur ignore en silence — donc un anneau qui disparaît sans dire
+ * pourquoi.
+ */
+function translucide(couleur: string, alphaHex: string): string {
+  return couleur.startsWith("#") ? couleur + alphaHex : couleur;
+}
+
 /** La couleur d'un type d'opération, selon le thème. */
 function couleurOp(type: string, clair: boolean): string {
   const t = type as keyof typeof COULEUR_OP;
@@ -2398,11 +2412,18 @@ export default function PerformanceChart({
             </div>
           );
         })}
-        {pastilles.map(p => (
-          // Pastille reliée à la courbe par une tige, comme si l'opération en
-          // sortait. Détachée, elle flottait sans qu'on sache à quel point du
-          // tracé elle se rapportait — sur une courbe en escalier, l'écart
-          // d'un jour se lit.
+        {pastilles.map(p => {
+        // Pastille reliée à la courbe par une tige, comme si l'opération en
+        // sortait. Détachée, elle flottait sans qu'on sache à quel point du
+        // tracé elle se rapportait — sur une courbe en escalier, l'écart
+        // d'un jour se lit.
+        const pointee = !!groupeSurvole
+          && groupeSurvole.jour === p.jour && groupeSurvole.type === p.type;
+        // Une bulle est estompée quand une *autre* est pointée : c'est ce qui
+        // répond à « laquelle je lis » quand plusieurs se serrent. Sur la fenêtre
+        // Max, dix jours d'écriture tiennent sur cent vingt-huit points.
+        const estompee = !!groupeSurvole && !pointee;
+        return (
           <button key={p.id} title={p.titre} type="button"
             onClick={onOperationClick ? () => onOperationClick(p.id) : undefined}
             /**
@@ -2438,17 +2459,43 @@ export default function PerformanceChart({
               border: `${CONTOUR}px solid ${clair ? "#FFFFFF" : "rgba(6,20,42,0.96)"}`,
               display: "flex", alignItems: "center", justifyContent: "center",
               color: clair ? "#FFFFFF" : "rgba(6,20,42,0.96)", flexShrink: 0,
-              zIndex: 6,
+              // Au premier plan quand elle est pointée : une bulle à demi
+              // recouverte par sa voisine redevient entière. Au-dessus des
+              // stickers, qui sont à 7.
+              zIndex: pointee ? 8 : 6,
               cursor: onOperationClick ? "pointer" : "default",
               // ⚠️ Toujours réceptive au pointeur, même sans clic à offrir : c'est
               // le survol qui déplie son détail en haut à gauche. Conditionner
               // cette réceptivité au gestionnaire de clic aurait rendu l'encart
               // silencieusement muet chez un appelant qui n'en fournit pas.
               pointerEvents: "auto",
+              /**
+               * ⚠️ **Un anneau peint à l'extérieur, et surtout pas un
+               * agrandissement.**
+               *
+               * Un `scale` au survol défait le travail d'ancrage : la position est
+               * écrite au pixel dans la transformée, et l'agrandir remettrait les
+               * bords du disque comme ceux de son contour de deux pixels entre deux
+               * pixels de l'écran. La bulle deviendrait floue au moment précis où on
+               * la regarde de près. Le `box-shadow`, lui, se peint hors de la boîte
+               * sans rien déplacer ni redimensionner.
+               */
+              boxShadow: pointee ? `0 0 0 3px ${translucide(couleurOp(p.type, clair), "59")}` : "none",
+              opacity: estompee ? 0.45 : 1,
+              /**
+               * ⚠️ **Jamais `transition: all` ici.** La position de la bulle est
+               * une transformée réécrite à chaque déplacement de la vue : une
+               * transition l'aurait animée, et les bulles se seraient mises à
+               * glisser mollement derrière la courbe à chaque molette — soit
+               * exactement le flottement qu'on vient de supprimer, mais en pire.
+               * Seules l'opacité et l'ombre sont adoucies.
+               */
+              transition: "opacity 120ms ease, box-shadow 120ms ease",
             }}>
             <Pictogramme type={p.type} />
           </button>
-        ))}
+        );
+        })}
         <canvas ref={glowRef} style={{
           position: "absolute", inset: 0, pointerEvents: "none",
           // Repris de la page graphique. Sans z-index, le canevas passait sous
