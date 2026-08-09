@@ -127,26 +127,6 @@ function MarqueMode({ cible }: { cible: "ligne" | "bougie" }) {
   );
 }
 
-/** Types d'opération jalonnés sur la courbe, dans l'ordre où on les lit. */
-const LEGENDE = [
-  // `largeur` est déclarée pour que chaque vignette démarre sur un pixel
-  // entier : une largeur laissée au texte est fractionnaire, et décale tout ce
-  // qui suit.
-  //
-  // Largeurs relevées au canevas dans la police réellement rendue, à 11 px :
-  // 30,15 px pour « Achat », 72,98 pour « Renforcement », 74,69 pour « Vente
-  // partielle », 29,85 pour « Vente ». Plus la vignette et son écart, soit 27,
-  // et le même mou d'une quinzaine de pixels que la version précédente — c'est
-  // lui qui donne à la ligne sa respiration.
-  //
-  // L'ordre met les deux flèches côte à côte : elles sont le même dessin
-  // retourné, et se lisent comme une paire.
-  { type: "achat",           libelle: "Achat",           largeur: 74 },
-  { type: "renforcement",    libelle: "Renforcement",    largeur: 116 },
-  { type: "vente_partielle", libelle: "Vente partielle", largeur: 118 },
-  { type: "vente",           libelle: "Vente",           largeur: 74 },
-];
-
 /**
  * L'habillage du canevas : texte, grille, réticule.
  *
@@ -485,7 +465,17 @@ export default function PerformanceChart({
    * de la couleur de son type — un versement ne se lit pas sur la courbe seule,
    * qui monte aussi bien parce qu'on a versé que parce que le marché a monté.
    */
-  operations?: { id: number; ticker: string; executed_at: string; type: string; couleur: string; libelle: string }[];
+  operations?: {
+    id: number; ticker: string; executed_at: string; type: string;
+    couleur: string; libelle: string;
+    /**
+     * Quantité, prix unitaire et frais — facultatifs, et lus seulement par
+     * l'encart de survol. Une pastille se dessine sans eux ; le détail affiché
+     * en haut à gauche s'adapte à ce qui est fourni plutôt que d'inventer un
+     * montant.
+     */
+    quantity?: number; unit_price?: number; fees?: number;
+  }[];
   /** Appelé au clic sur un repère, avec l'identifiant de l'écriture. */
   onOperationClick?: (id: number) => void;
   /**
@@ -1063,6 +1053,35 @@ export default function PerformanceChart({
     return haut.p.date === bas.p.date ? null : { haut, bas };
   }, [points]);
 
+  /**
+   * Les jours de la série, dans l'ordre où elle est tracée.
+   *
+   * Partagé par le placement des pastilles et par l'encart de survol : les deux
+   * doivent désigner exactement la même journée, sinon l'encart détaillerait une
+   * écriture dont la pastille est ailleurs.
+   */
+  const joursSerie = useMemo(() => points.map(p => p.date.slice(0, 10)), [points]);
+
+  /**
+   * Les écritures rattachées à chaque jour **tracé**, et non à leur propre date.
+   *
+   * C'est `jourAncre` qui décide du rattachement, exactement comme pour les
+   * pastilles : une écriture passée un samedi est portée par le lundi, et une
+   * écriture hors de la fenêtre n'est portée par personne. Reprendre la date
+   * brute ici aurait fait apparaître l'encart sur un jour sans pastille, et
+   * manquer celui qui en porte une.
+   */
+  const opsParJour = useMemo(() => {
+    const m = new Map<string, typeof operations>();
+    for (const op of operations) {
+      const jour = jourAncre(op.executed_at.slice(0, 10), joursSerie);
+      if (!jour) continue;
+      const liste = m.get(jour);
+      if (liste) liste.push(op); else m.set(jour, [op]);
+    }
+    return m;
+  }, [operations, joursSerie]);
+
   const [reperes, setReperes] = useState<{ x: number; y: number; sens: "haut" | "bas"; titre: string }[]>([]);
 
   /**
@@ -1088,7 +1107,7 @@ export default function PerformanceChart({
     //
     // L'ordonnée est celle de la courbe, et non un second calcul : voir `ordonnee`.
     const ancreAu = ancresParJour(points, ordonnee);
-    const jours = points.map(p => p.date.slice(0, 10));
+    const jours = joursSerie;
 
     const calculer = () => {
       // Regroupement par jour et par type.
@@ -1215,7 +1234,7 @@ export default function PerformanceChart({
       if (trame) cancelAnimationFrame(trame);
       ro.disconnect();
     };
-  }, [operations, points, totalValue, mode, ordonnee, extremes, cadrePret, stickers, echelle, tempsSerie]);
+  }, [operations, points, joursSerie, totalValue, mode, ordonnee, extremes, cadrePret, stickers, echelle, tempsSerie]);
 
   // ── Création du graphique ──────────────────────────────────────────────────
   useEffect(() => {
@@ -1753,57 +1772,130 @@ export default function PerformanceChart({
   const eur = (v: number) => v.toLocaleString("fr-FR", { maximumFractionDigits: 0 }) + " €";
   const dernier = points.length && totalValue ? totalValue : null;
 
+  /**
+   * Ce que l'encart en haut à gauche annonce.
+   *
+   * Au repos, le dernier point de la série : l'encart a ainsi une place fixe et
+   * ne surgit pas sous le curseur. Au survol, le point visé.
+   *
+   * ⚠️ L'ordonnée passe par `ordonnee`, jamais par `p.value`. La courbe est mise
+   * à l'échelle du total affiché, et un encart qui lirait la valeur brute
+   * annoncerait un autre chiffre que le point qu'il désigne.
+   */
+  const vise = (() => {
+    if (survol) return { date: survol.date, valeur: survol.valeur };
+    if (!points.length || !ordonnee) return null;
+    const p = points[points.length - 1];
+    return { date: p.date, valeur: ordonnee(p) };
+  })();
+  const opsVisees = vise ? opsParJour.get(vise.date.slice(0, 10)) ?? [] : [];
+  const investiVise = vise ? investiParDateRef.current.get(vise.date.slice(0, 10)) : undefined;
+
+  /**
+   * La date de l'encart, à la finesse de la série et pas plus.
+   *
+   * Les fenêtres 24 h et 1 M sont tracées en barres intraday : l'heure y est une
+   * information, et l'omettre ferait répéter la même date à trente-quatre barres
+   * d'affilée. Sur une série journalière elle n'existe pas, et l'afficher revient
+   * à annoncer « 00:00 » pour une séance entière.
+   *
+   * ⚠️ Déduit des **données**, et non de la forme de la chaîne. Une première
+   * version regardait si l'horodatage dépassait dix caractères : vu à l'écran,
+   * elle affichait « 1 janv. 2015 · 00:00 » sur une série de clôtures, la route
+   * des portefeuilles par poids datant ses points « AAAA-MM-JJT00:00:00 ». Deux
+   * points de la même journée, en revanche, ne peuvent venir que d'une série
+   * intraday.
+   */
+  const serieIntraday = useMemo(
+    () => joursSerie.some((j, i) => i > 0 && j === joursSerie[i - 1]),
+    [joursSerie]);
+
+  const dateEncart = (iso: string) => {
+    const d = new Date(iso);
+    const jour = d.toLocaleDateString("fr-FR", { day: "numeric", month: "short", year: "numeric" });
+    return serieIntraday
+      ? `${jour} · ${d.toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" })}`
+      : jour;
+  };
+
+  const montantOp = (o: { quantity?: number; unit_price?: number; fees?: number }) =>
+    o.quantity != null && o.unit_price != null
+      ? o.quantity * o.unit_price + (o.fees ?? 0)
+      : null;
+
+  /**
+   * Les périodes : libellé, rendement de la période dessous, et un filet sous
+   * celle qui est active.
+   *
+   * Les huit pourcentages sont tirés d'une seule série — celle de la fenêtre
+   * Max — plutôt que d'un appel par période : sinon un même intervalle pourrait
+   * annoncer un chiffre une fois sélectionné et un autre au repos.
+   *
+   * Sorties du bandeau de tête et posées sous le cadre, centrées. Elles y
+   * laissent le haut du graphique à l'encart de survol, qui a besoin du coin
+   * gauche — c'est là que l'œil va chercher ce genre de lecture, et c'est là que
+   * la page graphique la met déjà.
+   */
+  const barrePeriodes = (
+    <div style={{ display: "flex", gap: 4, flexWrap: "wrap", justifyContent: "center" }}>
+      {PERIODES.map(p => {
+        const actif = p === period;
+        const pct = rendements[p];
+        // Une fenêtre plus ancienne que le portefeuille se replie sur son
+        // origine et répète le chiffre de Max. Trois nombres identiques
+        // laissent croire à trois mesures : mieux vaut les éteindre.
+        const secs = PERIOD_SECS[p];
+        const anterieure = !!origine && secs != null
+          && Date.now() - secs * 1000 < new Date(origine).getTime();
+        return (
+          <div key={p} onClick={() => { if (!anterieure) onPeriodChange(p); }}
+            title={anterieure ? `Le portefeuille n'existe que depuis le ${new Date(origine!).toLocaleDateString("fr-FR")}` : undefined}
+            /**
+             * ⚠️ Une largeur **minimale**, et non fixe. Les quarante-cinq pixels
+             * d'origine étaient plus étroits que leur propre contenu : mesuré à
+             * l'encre dans la police rendue, « +390.48 % » en occupe 58,2 et
+             * « +65.43 % » 50,6, pour un écart de 4 px entre deux cases. Quatre
+             * des huit pourcentages débordaient donc sur leurs voisins et se
+             * touchaient. Le défaut ne datait pas du déplacement de la barre,
+             * mais il devient voyant au centre de l'écran.
+             */
+            style={{ position: "relative", paddingBottom: 4, textAlign: "center",
+                     minWidth: 45, paddingLeft: 3, paddingRight: 3,
+                     cursor: anterieure ? "default" : "pointer", flex: "none",
+                     opacity: anterieure ? 0.3 : 1 }}>
+            <div style={{
+              fontFamily: FONT, fontSize: 12, fontWeight: 500,
+              // Leur variante d'onglets « line » : l'actif passe à
+              // `foreground-intense`, l'inactif reste à `foreground-strong`
+              // — bien plus lumineux que le gris que j'avais.
+              color: actif ? JETONS.texteIntense : JETONS.texteFort,
+              transition: "color 250ms",
+            }}>{p}</div>
+            {pct != null && !anterieure && (
+              <div style={{
+                ...NUM, fontSize: 11, fontWeight: 700,
+                color: pct >= 0 ? JETONS.positif : JETONS.negatif,
+              }}>
+                {fmtPct(pct)}
+              </div>
+            )}
+            {actif && (
+              // Indicateur blanc, comme leur `bg-foreground-intense`, et non
+              // teinté à l'accent : la couleur y désignait le graphique, pas
+              // l'onglet retenu.
+              <div style={{ position: "absolute", bottom: 0, left: 0, right: 0, height: 2, borderRadius: RAYONS.plein, background: JETONS.texteIntense }} />
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+
   return (
     <div ref={boxRef} style={{ width: "100%", height: "100%", display: "flex", flexDirection: "column", minHeight: 0 }}>
-      {/* Périodes reprises de la page graphique : libellé, rendement de la
-          période dessous, et un filet sous celle qui est active. Les huit
-          pourcentages sont tirés d'une seule série — celle de la fenêtre Max —
-          plutôt que d'un appel par période : sinon un même intervalle pourrait
-          annoncer un chiffre une fois sélectionné et un autre au repos. */}
-      <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 10, marginBottom: 4 }}>
-        <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
-          {PERIODES.map(p => {
-            const actif = p === period;
-            const pct = rendements[p];
-            // Une fenêtre plus ancienne que le portefeuille se replie sur son
-            // origine et répète le chiffre de Max. Trois nombres identiques
-            // laissent croire à trois mesures : mieux vaut les éteindre.
-            const secs = PERIOD_SECS[p];
-            const anterieure = !!origine && secs != null
-              && Date.now() - secs * 1000 < new Date(origine).getTime();
-            return (
-              <div key={p} onClick={() => { if (!anterieure) onPeriodChange(p); }}
-                title={anterieure ? `Le portefeuille n'existe que depuis le ${new Date(origine!).toLocaleDateString("fr-FR")}` : undefined}
-                style={{ position: "relative", paddingBottom: 4, textAlign: "center", width: 45,
-                         cursor: anterieure ? "default" : "pointer", flex: "none",
-                         opacity: anterieure ? 0.3 : 1 }}>
-                <div style={{
-                  fontFamily: FONT, fontSize: 12, fontWeight: 500,
-                  // Leur variante d'onglets « line » : l'actif passe à
-                  // `foreground-intense`, l'inactif reste à `foreground-strong`
-                  // — bien plus lumineux que le gris que j'avais.
-                  color: actif ? JETONS.texteIntense : JETONS.texteFort,
-                  transition: "color 250ms",
-                }}>{p}</div>
-                {pct != null && !anterieure && (
-                  <div style={{
-                    ...NUM, fontSize: 11, fontWeight: 700,
-                    color: pct >= 0 ? JETONS.positif : JETONS.negatif,
-                  }}>
-                    {fmtPct(pct)}
-                  </div>
-                )}
-                {actif && (
-                  // Indicateur blanc, comme leur `bg-foreground-intense`, et non
-                  // teinté à l'accent : la couleur y désignait le graphique, pas
-                  // l'onglet retenu.
-                  <div style={{ position: "absolute", bottom: 0, left: 0, right: 0, height: 2, borderRadius: RAYONS.plein, background: JETONS.texteIntense }} />
-                )}
-              </div>
-            );
-          })}
-        </div>
-
+      {/* Les outils seuls en tête, alignés à droite : les périodes sont passées
+          sous le cadre, et rien ne reste à leur gauche. */}
+      <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "flex-end", gap: 10, marginBottom: 4 }}>
         <div style={{ display: "flex", gap: 6, flexShrink: 0, position: "relative" }}>
         {/* Stickers : des repères libres, posés à la main sur le tracé. */}
         <button type="button"
@@ -2101,6 +2193,109 @@ export default function PerformanceChart({
           // au lieu de la recouvrir d'un trait opaque.
           zIndex: 5, mixBlendMode: "screen",
         }} />
+        {/**
+          * L'encart de lecture, en haut à gauche du tracé.
+          *
+          * Repris de la page graphique, où il tient la même place. Il annonce la
+          * date et la valeur du point visé, et détaille les écritures de ce jour
+          * quand il y en a — c'est ce qu'on vient chercher en promenant le
+          * curseur sur une pastille.
+          *
+          * ⚠️ `pointerEvents: none` sur tout le bloc. Posé au-dessus du tracé, il
+          * capterait sinon le réticule qui le nourrit : l'encart s'effacerait au
+          * moment précis où l'on s'en approche, et les pastilles cachées dessous
+          * deviendraient incliquables.
+          *
+          * Il ne paraît qu'une fois le cadrage confirmé, comme les courbes : un
+          * chiffre lisible au-dessus d'un cadre vide n'aurait rien désigné.
+          */}
+        {vise && cadrePret && (
+          <div style={{
+            position: "absolute", top: 8, left: 10, zIndex: 20, pointerEvents: "none",
+            fontFamily: FONT, lineHeight: 1.5, maxWidth: "62%",
+            /**
+             * Un halo, et non un cadre.
+             *
+             * ⚠️ L'encart se pose sur le tracé, et sur la fenêtre d'un mois la
+             * courbe passe justement en haut : sans rien, un chiffre blanc sur un
+             * trait clair devient illisible. Un panneau opaque réglerait la
+             * lisibilité mais percerait un trou dans le graphique, alors que la
+             * page graphique — dont cet encart reprend la place — n'en a pas.
+             *
+             * Le halo détache chaque lettre de ce qu'il y a derrière sans rien
+             * masquer. Il prend la couleur du fond, donc s'inverse avec le thème :
+             * sombre sur fond sombre, clair sur fond clair.
+             */
+            textShadow: clair
+              ? "0 0 3px #FFFFFF, 0 0 6px #FFFFFF"
+              : "0 0 3px rgba(6,20,42,0.95), 0 0 7px rgba(6,20,42,0.85)",
+          }}>
+            <div style={{ fontSize: 10, color: JETONS.texteAttenue, letterSpacing: "0.02em" }}>
+              {dateEncart(vise.date)}
+            </div>
+            <div style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
+              <span style={{ ...NUM, fontSize: 15, fontWeight: 700, color: JETONS.texteIntense }}>
+                {vise.valeur.toLocaleString("fr-FR", { maximumFractionDigits: 0 })} €
+              </span>
+              {/* Le gain à la date visée, et non celui d'aujourd'hui : la même
+                  règle que la bande de tête, qui lit `investiParDate`. */}
+              {investiVise != null && investiVise > 0 && (() => {
+                const pct = (vise.valeur - investiVise) / investiVise * 100;
+                return (
+                  <span style={{
+                    ...NUM, fontSize: 11, fontWeight: 700,
+                    color: pct >= 0 ? JETONS.positif : JETONS.negatif,
+                  }}>
+                    {fmtPct(pct)}
+                  </span>
+                );
+              })()}
+            </div>
+
+            {/* Les écritures du jour visé.
+                Trois au plus : au-delà, l'encart deviendrait un tableau et
+                masquerait la courbe qu'il commente. Le compte des suivantes
+                suffit à dire qu'il y en a. */}
+            {opsVisees.slice(0, 3).map(o => {
+              const m = montantOp(o);
+              return (
+                <div key={o.id} style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 3 }}>
+                  <span style={{
+                    width: 14, height: 14, borderRadius: "50%", flexShrink: 0,
+                    background: couleurOp(o.type, clair),
+                    display: "flex", alignItems: "center", justifyContent: "center",
+                    color: clair ? "#FFFFFF" : "rgba(6,20,42,0.96)",
+                  }}>
+                    {/* Réduit ici, et c'est assumé : le libellé est écrit juste à
+                        côté, donc la vignette n'a qu'à rappeler la couleur et la
+                        silhouette. Elle n'a rien à expliquer seule. */}
+                    <Pictogramme type={o.type} taille={9} />
+                  </span>
+                  <span style={{ fontSize: 11, color: JETONS.texteFort, whiteSpace: "nowrap" }}>
+                    {o.libelle} <strong style={{ color: JETONS.texteIntense }}>{o.ticker}</strong>
+                  </span>
+                  {o.quantity != null && o.unit_price != null && (
+                    <span style={{ ...NUM, fontSize: 11, color: JETONS.texteSecondaire, whiteSpace: "nowrap" }}>
+                      {o.quantity.toLocaleString("fr-FR", { maximumFractionDigits: 4 })}
+                      {" × "}
+                      {o.unit_price.toLocaleString("fr-FR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €
+                    </span>
+                  )}
+                  {m != null && (
+                    <span style={{ ...NUM, fontSize: 11, fontWeight: 700, color: JETONS.texteFort, whiteSpace: "nowrap" }}>
+                      {m.toLocaleString("fr-FR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €
+                    </span>
+                  )}
+                </div>
+              );
+            })}
+            {opsVisees.length > 3 && (
+              <div style={{ fontSize: 10, color: JETONS.texteAttenue, marginTop: 2 }}>
+                et {opsVisees.length - 3} autre{opsVisees.length - 3 > 1 ? "s" : ""} ce jour-là
+              </div>
+            )}
+          </div>
+        )}
         {(state === "loading" && !points.length) || state === "error" ? (
           <div style={{
             position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center",
@@ -2115,45 +2310,12 @@ export default function PerformanceChart({
         ) : null}
       </div>
 
-      {/* Légende sous le cadre, et non dedans : posée en surcouche, elle
-          recouvrait les libellés de l'axe des dates. */}
-      {operations.length > 0 && (
-        // Hauteur de ligne fixée à celle de la vignette, et largeurs entières.
-        //
-        // Sans cela la ligne prend une hauteur impaire — le cercle de 14 px s'y
-        // centrait à 502,5 px — et chaque entrée démarre à l'abscisse fractionnaire
-        // laissée par la précédente. Le contour et le trait du signe se
-        // répartissaient alors sur deux rangées de pixels : le pictogramme
-        // paraissait décentré alors qu'il est à 2 px des quatre bords.
-        <div style={{ display: "flex", gap: 14, paddingTop: 8, paddingBottom: 8, flexShrink: 0, height: PASTILLE, boxSizing: "content-box" }}>
-          {LEGENDE.map(l => (
-            <span key={l.libelle} style={{
-              display: "flex", alignItems: "center", gap: 5,
-              width: l.largeur, height: PASTILLE, lineHeight: `${PASTILLE}px`,
-              // Onze pixels et non dix : comparées côte à côte à taille réelle,
-              // c'est la taille où le mot tient la balance face à une vignette de
-              // vingt-deux. À dix, le cercle écrasait son propre libellé.
-              fontFamily: FONT, fontSize: 11, color: JETONS.texteSecondaire,
-            }}>
-              {/* ⚠️ **La même vignette que sur la courbe, à la même taille**, et
-                  non plus en réduction. Un pictogramme détaillé ne supporte pas
-                  d'être rapetissé : le chariot devenait un pâté indistinct, si
-                  bien que la légende n'annonçait plus ce qu'elle est censée
-                  expliquer. Elle ne diffère que par l'absence du contour, qui ne
-                  sert qu'à détacher la pastille de la courbe qu'elle traverse. */}
-              <span style={{
-                width: PASTILLE, height: PASTILLE, borderRadius: "50%",
-                background: couleurOp(l.type, clair),
-                display: "flex", alignItems: "center", justifyContent: "center",
-                color: clair ? "#FFFFFF" : "rgba(6,20,42,0.96)", flexShrink: 0,
-              }}>
-                <Pictogramme type={l.type} />
-              </span>
-              {l.libelle}
-            </span>
-          ))}
-        </div>
-      )}
+      {/* Périodes sous le cadre, et non dedans : posées en surcouche au bas du
+          tracé, elles recouvriraient les libellés de l'axe des dates — c'est le
+          défaut mesuré qui avait déjà fait sortir la légende du cadre. */}
+      <div style={{ paddingTop: 6, flexShrink: 0 }}>
+        {barrePeriodes}
+      </div>
     </div>
   );
 }

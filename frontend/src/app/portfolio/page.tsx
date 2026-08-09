@@ -409,7 +409,11 @@ function PortfolioPageInner() {
    * un versement.
    */
   const [reperesOperations, setReperesOperations] = useState<
-    { id: number; ticker: string; executed_at: string; type: string; couleur: string; libelle: string }[]
+    {
+      id: number; ticker: string; executed_at: string; type: string;
+      couleur: string; libelle: string;
+      quantity: number; unit_price: number; fees: number;
+    }[]
   >([]);
   /** Écriture désignée en cliquant un repère du graphique. */
   const [operationVisee, setOperationVisee] = useState<number | null>(null);
@@ -427,6 +431,10 @@ function PortfolioPageInner() {
         setReperesOperations(liste.map(t => ({
           id: t.id, ticker: t.ticker, executed_at: t.executed_at,
           type: types[t.id], couleur: COULEUR_OP[types[t.id]], libelle: LIBELLE_OP[types[t.id]],
+          // Quantité, prix et frais : lus par l'encart de survol du graphique,
+          // qui détaille l'écriture sous le curseur. Sans eux il ne pourrait
+          // annoncer qu'un libellé et une date.
+          quantity: t.quantity, unit_price: t.unit_price, fees: t.fees ?? 0,
         })));
       })
       .catch(() => { if (!annule) setReperesOperations([]); });
