@@ -403,10 +403,43 @@ function memeListe<T>(a: readonly T[], b: readonly T[], cle: (x: T) => string): 
   return true;
 }
 
-const cléPastille = (p: { id: number; x: number; y: number; titre: string }) =>
-  `${p.id}:${p.x}:${p.y}:${p.titre}`;
-const cléRepere = (r: { sens: string; x: number; y: number; titre: string }) =>
-  `${r.sens}:${r.x}:${r.y}:${r.titre}`;
+/**
+ * ⚠️ **Sans les coordonnées**, et c'est là tout l'intérêt.
+ *
+ * Elles y étaient, et elles faisaient trembler les repères. Le raisonnement :
+ * `subscribeVisibleLogicalRangeChange` déclenche un recalcul, celui-ci posait les
+ * nouvelles positions dans un état React, et React livre son rendu à la trame
+ * suivante — alors que la bibliothèque, elle, a déjà repeint sa toile dans la
+ * trame courante. La courbe avançait donc d'un cran avant ses pastilles, et à la
+ * molette comme au glissement on voyait les bulles nager derrière le tracé.
+ *
+ * Les positions sont désormais écrites directement dans le DOM par `placer`, dans
+ * la trame même du recalcul. Ces clés ne servent plus qu'à savoir si la
+ * *composition* de la liste a changé — ce qui n'arrive qu'en changeant de
+ * portefeuille, de période ou d'écritures.
+ */
+const cléPastille = (p: { id: number; titre: string; nombre: number }) =>
+  `${p.id}:${p.nombre}:${p.titre}`;
+const cléRepere = (r: { sens: string; titre: string }) => `${r.sens}:${r.titre}`;
+
+/** Une position en pixels dans le cadre, ou `null` hors du cadre. */
+type Coord = { x: number; y: number } | null;
+
+/**
+ * Ancre un repère à sa position, ou le masque s'il n'en a pas.
+ *
+ * `translate3d` plutôt que `left`/`top` : la position ne touche alors ni la mise
+ * en page ni le calcul de style, et le navigateur n'a plus qu'à recomposer.
+ *
+ * Hors cadre, `visibility` plutôt que le retrait du nœud : un repère qui sort par
+ * la gauche revient souvent par le même bord, et le détruire pour le recréer
+ * aurait rendu la liste instable à chaque déplacement.
+ */
+function ancrer(n: HTMLElement, c: Coord): void {
+  if (!c) { n.style.visibility = "hidden"; return; }
+  n.style.visibility = "visible";
+  n.style.transform = `translate3d(${c.x}px, ${c.y}px, 0) translate(-50%, -50%)`;
+}
 const cléStickerPlace = (k: { id: string; x: number; y: number; taille: number; glyphe: string }) =>
   `${k.id}:${k.x}:${k.y}:${k.taille}:${k.glyphe}`;
 
@@ -773,7 +806,7 @@ export default function PerformanceChart({
     chartRef.current?.applyOptions(habillage(clair, grille));
   }, [clair, grille]);
 
-  const [pastilles, setPastilles] = useState<{ id: number; x: number; y: number; titre: string; nombre: number; type: string }[]>([]);
+  const [pastilles, setPastilles] = useState<{ id: number; titre: string; nombre: number; type: string }[]>([]);
 
   /**
    * L'ordonnée d'un point : sa valeur réelle, ramenée à l'échelle du total.
@@ -1082,7 +1115,49 @@ export default function PerformanceChart({
     return m;
   }, [operations, joursSerie]);
 
-  const [reperes, setReperes] = useState<{ x: number; y: number; sens: "haut" | "bas"; titre: string }[]>([]);
+  /**
+   * Les nœuds des repères et leur dernière position connue.
+   *
+   * Deux registres par famille : le nœud, pour écrire dedans sans passer par
+   * React, et la position, pour la réappliquer quand un nœud vient de naître —
+   * il n'existait pas encore au moment du calcul.
+   */
+  const noeudsPastille = useRef(new Map<number, HTMLElement>());
+  const coordsPastille = useRef(new Map<number, Coord>());
+  const noeudsRepere = useRef(new Map<string, HTMLElement>());
+  const coordsRepere = useRef(new Map<string, Coord>());
+
+  /** Retient une position et l'applique aussitôt si le nœud est déjà là. */
+  function placer<K>(
+    noeuds: React.RefObject<Map<K, HTMLElement>>,
+    coords: React.RefObject<Map<K, Coord>>,
+    cle: K, c: Coord,
+  ): void {
+    coords.current.set(cle, c);
+    const n = noeuds.current.get(cle);
+    if (n) ancrer(n, c);
+  }
+
+  /**
+   * Le rappel de référence d'un repère : il s'inscrit, et se pose.
+   *
+   * ⚠️ La pose au montage est indispensable. Le calcul a lieu avant que React
+   * n'ait créé le nœud : sans elle, une pastille apparaissait au coin haut gauche
+   * du cadre et n'en bougeait qu'au prochain déplacement de la vue.
+   */
+  function inscrire<K>(
+    noeuds: React.RefObject<Map<K, HTMLElement>>,
+    coords: React.RefObject<Map<K, Coord>>,
+    cle: K,
+  ) {
+    return (n: HTMLElement | null) => {
+      if (!n) { noeuds.current.delete(cle); return; }
+      noeuds.current.set(cle, n);
+      ancrer(n, coords.current.get(cle) ?? null);
+    };
+  }
+
+  const [reperes, setReperes] = useState<{ sens: "haut" | "bas"; titre: string }[]>([]);
 
   /**
    * Place les pastilles d'opération et les repères d'extrême au-dessus de la
@@ -1129,58 +1204,81 @@ export default function PerformanceChart({
         else groupes.set(cle, { op, jour: cible, n: 1, tickers: new Set([op.ticker]) });
       }
 
-      const out: { id: number; x: number; y: number; titre: string; nombre: number; type: string }[] = [];
+      const out: { id: number; titre: string; nombre: number; type: string }[] = [];
       for (const g of Array.from(groupes.values())) {
         const ancre = ancreAu.get(g.jour);
         const x = ancre == null ? null
           : chart.timeScale().timeToCoordinate(ancre.temps as UTCTimestamp);
         const y = ancre == null ? null : serie.priceToCoordinate(ancre.valeur);
-        if (x == null || y == null) continue;
         const quand = new Date(g.op.executed_at).toLocaleDateString("fr-FR");
+        // Coordonnées entières.
+        //
+        // La bibliothèque rend des positions fractionnaires — 462,443 px. Le
+        // contour de 2 px et le pictogramme se répartissaient alors sur deux
+        // rangées de pixels : le cerne paraissait plus épais d'un côté et le
+        // signe décentré, alors qu'il est géométriquement au milieu.
+        placer(noeudsPastille, coordsPastille, g.op.id,
+               x == null || y == null ? null : { x: Math.round(x), y: Math.round(y) });
+        // ⚠️ Une pastille hors cadre reste dans la liste, seulement masquée.
+        // L'en retirer aurait fait varier la liste à chaque déplacement de la
+        // vue, donc réveillé React — précisément ce que ce découplage évite.
         out.push({
-          // Coordonnées entières.
-          //
-          // La bibliothèque rend des positions fractionnaires — 462,443 px. Le
-          // contour de 2 px et le pictogramme se répartissaient alors sur deux
-          // rangées de pixels : le cerne paraissait plus épais d'un côté et le
-          // signe décentré, alors qu'il est géométriquement au milieu.
-          id: g.op.id, x: Math.round(x), y: Math.round(y),
-          nombre: g.n, type: g.op.type,
+          id: g.op.id, nombre: g.n, type: g.op.type,
           titre: g.n === 1
             ? `${g.op.libelle} ${g.op.ticker} — ${quand}`
             : `${g.n} ${g.op.libelle.toLowerCase()}s (${Array.from(g.tickers).join(", ")}) — ${quand}`,
         });
       }
-      // Rien n'a bougé — un rafraîchissement des cours qui ne déplace aucun
-      // repère, par exemple : on ne réveille pas React pour rien.
+      // Rien n'a changé dans la *composition* de la liste — les positions, elles,
+      // viennent d'être écrites dans le DOM : on ne réveille pas React pour rien.
       setPastilles(p => (memeListe(p, out, cléPastille) ? p : out));
 
       // Les deux repères d'extrême, placés par la même mécanique.
-      if (!extremes) { setReperes([]); return; }
-      const rep: { x: number; y: number; sens: "haut" | "bas"; titre: string }[] = [];
+      //
+      // ⚠️ La liste vide passe par la forme fonctionnelle. Rendre un `[]` neuf à
+      // chaque appel aurait suffi à faire rendre React à chaque cran de molette,
+      // puisque la référence change — exactement ce que ce chemin cherche à
+      // éviter, et d'autant plus vicieux que le contenu, lui, est identique.
+      if (!extremes) { setReperes(p => (p.length ? [] : p)); return; }
+      const rep: { sens: "haut" | "bas"; titre: string }[] = [];
       for (const [sens, e] of [["haut", extremes.haut], ["bas", extremes.bas]] as const) {
         const t = Math.floor(new Date(e.p.date).getTime() / 1000) as UTCTimestamp;
         const x = chart.timeScale().timeToCoordinate(t);
         const y = serie.priceToCoordinate(ordonnee(e.p));
-        if (x == null || y == null) continue;
         const quand = new Date(e.p.date).toLocaleDateString("fr-FR");
+        placer(noeudsRepere, coordsRepere, sens,
+               x == null || y == null ? null : { x: Math.round(x), y: Math.round(y) });
         rep.push({
-          x: Math.round(x), y: Math.round(y), sens,
+          sens,
           titre: `${sens === "haut" ? "Meilleur" : "Pire"} moment de la période — `
                + `${e.pct >= 0 ? "+" : ""}${e.pct.toFixed(2)} % le ${quand}`,
         });
       }
       setReperes(p => (memeListe(p, rep, cléRepere) ? p : rep));
 
-      /**
-       * Les stickers, projetés par la même mécanique.
-       *
-       * Placés ici plutôt que dans un effet à eux : c'est cette fonction qui est
-       * rappelée à chaque changement de plage visible et à chaque
-       * redimensionnement. Un effet séparé aurait dû s'abonner aux mêmes
-       * événements, et les deux jeux de repères auraient pu se désynchroniser
-       * d'une trame — visible, puisqu'ils se côtoient sur le tracé.
-       */
+    };
+
+    /**
+     * Les stickers, projetés par la même mécanique mais **pas au même rythme**.
+     *
+     * ⚠️ Ils restent portés par l'état React, coordonnées comprises, parce que
+     * leur position se compose avec le décalage transitoire du glissement — un
+     * ancrage impératif devrait s'accorder avec un geste en cours, et cela touche
+     * à la logique de déplacement plutôt qu'à celle de placement.
+     *
+     * Ils gardent donc le report d'une trame, et son motif d'origine : la molette
+     * émet plusieurs fois par trame, et chaque émission qui déplace un sticker
+     * relance un rendu complet — 7,4 ms l'unité en développement.
+     *
+     * Le prix est connu : pendant un glissement rapide, un sticker posé à côté
+     * d'une pastille traîne d'une trame sur elle. Les pastilles, elles, sont
+     * ancrées au pixel du tracé, et c'est ce qui était demandé. Sur un
+     * portefeuille sans sticker — le cas courant — la liste reste vide et le
+     * report ne coûte rien.
+     */
+    const calculerStickers = () => {
+      const chart = chartRef.current, serie = serieRef.current;
+      if (!chart || !serie || !points.length || !ordonnee || !cadrePret) { setStickersPlaces([]); return; }
       const st: { id: string; glyphe: string; x: number; y: number; taille: number; titre: string }[] = [];
       for (const k of stickers) {
         // Par l'indice logique là aussi : `timeToCoordinate` ne connaît que les
@@ -1206,31 +1304,48 @@ export default function PerformanceChart({
     };
 
     /**
-     * Un recalcul par trame, pas un par événement.
+     * Les pastilles dans la trame, les stickers à la suivante.
      *
-     * ⚠️ C'est ce qui rend le zoom fluide. La molette fait émettre le changement
-     * de plage plusieurs fois dans la même trame, et chaque émission relançait un
-     * rendu complet du composant : mesuré à 7,4 ms l'unité en développement, sur
-     * un budget de 16,7 ms par trame. Le recalcul lui-même n'y est pour rien —
-     * 0,08 ms — tout le coût est dans le rendu React.
+     * ⚠️ **Le report était la cause du flottement des bulles**, et il réglait le
+     * bon problème par le mauvais bout.
      *
-     * Les émissions surnuméraires d'une même trame décrivent des états
-     * intermédiaires que personne ne verra : seule la dernière compte. On garde
-     * donc la dernière et on jette les autres.
+     * Son motif, mesuré à l'époque : la molette émet le changement de plage
+     * plusieurs fois par trame, et chaque émission relançait un rendu complet du
+     * composant — 7,4 ms l'unité en développement, sur un budget de 16,7. Le
+     * calcul, lui, ne coûtait rien : 0,08 ms.
+     *
+     * Mais la bibliothèque repeint sa toile dans la trame de l'événement.
+     * Différer d'une trame garantissait donc que les pastilles arriveraient
+     * toujours une trame en retard sur le tracé auquel elles sont censées être
+     * clouées. À trois cents pixels par seconde de glissement, cela fait cinq
+     * pixels d'écart — assez pour qu'on voie les bulles nager.
+     *
+     * Ce qui coûtait cher n'existe plus pour elles : leurs positions vont
+     * directement dans le DOM, et l'état React ne porte que la composition de la
+     * liste, qui ne bouge pas quand la vue se déplace. `memeListe` absorbe alors
+     * les émissions surnuméraires sans qu'aucun rendu n'ait lieu. On calcule donc
+     * tout de suite, et c'est ce qui les ancre.
+     *
+     * Les stickers, eux, gardent le report : voir `calculerStickers`.
      */
     let trame = 0;
-    const calculerGroupe = () => {
+    const surPlage = () => {
+      calculer();
       if (trame) return;
-      trame = requestAnimationFrame(() => { trame = 0; calculer(); });
+      trame = requestAnimationFrame(() => { trame = 0; calculerStickers(); });
     };
 
     calculer();
+    calculerStickers();
     const ts = chart.timeScale();
-    ts.subscribeVisibleLogicalRangeChange(calculerGroupe);
-    const ro = new ResizeObserver(calculerGroupe);
+    ts.subscribeVisibleLogicalRangeChange(surPlage);
+    // Le redimensionnement passe par le même chemin. Aucun risque de boucle :
+    // `ancrer` n'écrit que `transform` et `visibility`, qui ne remettent rien en
+    // page.
+    const ro = new ResizeObserver(surPlage);
     ro.observe(el);
     return () => {
-      ts.unsubscribeVisibleLogicalRangeChange(calculerGroupe);
+      ts.unsubscribeVisibleLogicalRangeChange(surPlage);
       if (trame) cancelAnimationFrame(trame);
       ro.disconnect();
     };
@@ -1863,7 +1978,113 @@ export default function PerformanceChart({
     <div ref={boxRef} style={{ width: "100%", height: "100%", display: "flex", flexDirection: "column", minHeight: 0 }}>
       {/* Les outils seuls en tête, alignés à droite : les périodes sont passées
           sous le cadre, et rien ne reste à leur gauche. */}
-      <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "flex-end", gap: 10, marginBottom: 4 }}>
+      {/* Bandeau de tête : le détail de l'écriture à gauche, les outils à
+          droite, sur la même ligne et donc à la même marge. */}
+      <div style={{
+        display: "flex", alignItems: "flex-start", justifyContent: "flex-end",
+        gap: 10, marginBottom: 4,
+        /**
+         * ⚠️ Position de référence pour l'encart, et hauteur plancher.
+         *
+         * L'encart est posé en absolu dans ce bandeau : `left: 0` lui donne
+         * exactement la marge gauche que les boutons ont à droite, et sa hauteur
+         * ne peut plus faire respirer la ligne — sans quoi le tracé se serait
+         * raccourci de trente pixels chaque fois que le curseur passe sur une
+         * écriture, et rallongé en repartant.
+         */
+        position: "relative", minHeight: 30,
+      }}>
+        {/**
+          * L'encart de lecture, dans le bandeau de tête et non dans le cadre.
+          *
+          * Il ne dit **rien sur la date ni sur la valeur**, que la bande de tête
+          * de la page donne déjà à la date survolée. Uniquement le détail de
+          * l'écriture pointée, que personne d'autre n'affiche : il paraît donc là
+          * où il apporte quelque chose, et s'efface ailleurs.
+          *
+          * Sorti du tracé, il s'aligne sur la marge des boutons — même ligne,
+          * mêmes retraits. Il garde son halo pour autant : quand trois écritures
+          * s'y empilent, les lignes du bas dépassent sur le haut du tracé, et là
+          * encore un chiffre doit rester lisible.
+          *
+          * ⚠️ `pointerEvents: none` sur tout le bloc. Il déborde sur le tracé et
+          * capterait sinon le réticule qui le nourrit : l'encart s'effacerait au
+          * moment précis où l'on s'en approche, et les pastilles sous lui
+          * deviendraient incliquables.
+          *
+          * Il ne paraît qu'une fois le cadrage confirmé, comme les courbes : une
+          * ligne lisible au-dessus d'un cadre vide n'aurait rien désigné.
+          */}
+        {opsVisees.length > 0 && cadrePret && (
+          <div style={{
+            // `top: 0 ; left: 0` : le coin du bandeau, donc la marge même des
+            // boutons qui le terminent à droite.
+            position: "absolute", top: 0, left: 0, zIndex: 20, pointerEvents: "none",
+            fontFamily: FONT, lineHeight: 1.5, maxWidth: "62%",
+            // L'écart entre les lignes vient du conteneur, pour que la première
+            // n'hérite pas d'une marge haute qui la décollerait du bord.
+            display: "flex", flexDirection: "column", gap: 3,
+            /**
+             * Un halo, et non un cadre.
+             *
+             * ⚠️ Les lignes du bas dépassent sur le tracé dès qu'il y a plus d'une
+             * écriture, et sur la fenêtre d'un mois la courbe passe justement en
+             * haut : sans rien, un chiffre blanc sur un trait clair devient
+             * illisible. Un panneau opaque réglerait la lisibilité mais percerait
+             * un trou dans le graphique.
+             *
+             * Le halo détache chaque lettre de ce qu'il y a derrière sans rien
+             * masquer. Il prend la couleur du fond, donc s'inverse avec le thème :
+             * sombre sur fond sombre, clair sur fond clair.
+             */
+            textShadow: clair
+              ? "0 0 3px #FFFFFF, 0 0 6px #FFFFFF"
+              : "0 0 3px rgba(6,20,42,0.95), 0 0 7px rgba(6,20,42,0.85)",
+          }}>
+            {/* Les écritures du jour visé.
+                Trois au plus : au-delà, l'encart deviendrait un tableau et
+                masquerait la courbe qu'il commente. Le compte des suivantes
+                suffit à dire qu'il y en a. */}
+            {opsVisees.slice(0, 3).map(o => {
+              const m = montantOp(o);
+              return (
+                <div key={o.id} style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                  <span style={{
+                    width: 14, height: 14, borderRadius: "50%", flexShrink: 0,
+                    background: couleurOp(o.type, clair),
+                    display: "flex", alignItems: "center", justifyContent: "center",
+                    color: clair ? "#FFFFFF" : "rgba(6,20,42,0.96)",
+                  }}>
+                    {/* Réduit ici, et c'est assumé : le libellé est écrit juste à
+                        côté, donc la vignette n'a qu'à rappeler la couleur et la
+                        silhouette. Elle n'a rien à expliquer seule. */}
+                    <Pictogramme type={o.type} taille={9} />
+                  </span>
+                  <span style={{ fontSize: 11, color: JETONS.texteFort, whiteSpace: "nowrap" }}>
+                    {o.libelle} <strong style={{ color: JETONS.texteIntense }}>{o.ticker}</strong>
+                  </span>
+                  {o.quantity != null && o.unit_price != null && (
+                    <span style={{ ...NUM, fontSize: 11, color: JETONS.texteSecondaire, whiteSpace: "nowrap" }}>
+                      {o.quantity.toLocaleString("fr-FR", { maximumFractionDigits: 4 })}
+                      {" × "}
+                      {o.unit_price.toLocaleString("fr-FR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €
+                    </span>
+                  )}
+                  {m != null && (
+                    <span style={{ ...NUM, fontSize: 11, fontWeight: 700, color: JETONS.texteFort, whiteSpace: "nowrap" }}>
+                      {m.toLocaleString("fr-FR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €
+                    </span>
+                  )}
+                </div>
+              );
+            })}
+            {opsVisees.length > 3 && (
+              <div style={{ fontSize: 10, color: JETONS.texteAttenue }}>
+                et {opsVisees.length - 3} autre{opsVisees.length - 3 > 1 ? "s" : ""} ce jour-là
+              </div>
+            )}
+          </div>
+        )}
         <div style={{ display: "flex", gap: 6, flexShrink: 0, position: "relative" }}>
         {/* Stickers : des repères libres, posés à la main sur le tracé. */}
         <button type="button"
@@ -2038,8 +2259,13 @@ export default function PerformanceChart({
             l'empilement — quand un achat tombe sur le meilleur moment, c'est
             l'achat qui garde le pixel, lui seul étant cliquable. */}
         {reperes.map(r => (
-          <span key={r.sens} title={r.titre} aria-hidden="true" style={{
-            position: "absolute", left: r.x - 6, top: r.y - 6,
+          <span key={r.sens} title={r.titre} aria-hidden="true"
+            ref={inscrire(noeudsRepere, coordsRepere, r.sens)}
+            style={{
+            // Ancré par `transform`, écrit hors de React : voir `ancrer`. Le coin
+            // reste à l'origine, le déplacement est entièrement dans la transformée
+            // — et le `translate(-50%,-50%)` qu'elle porte recentre l'anneau.
+            position: "absolute", left: 0, top: 0, visibility: "hidden",
             width: 12, height: 12, borderRadius: RAYONS.plein,
             // Fond de la carte à l'intérieur de l'anneau : un anneau vraiment
             // creux laisse passer la courbe, qui le traverse et le referme.
@@ -2133,12 +2359,17 @@ export default function PerformanceChart({
           // d'un jour se lit.
           <button key={p.id} title={p.titre} type="button"
             onClick={onOperationClick ? () => onOperationClick(p.id) : undefined}
+            ref={inscrire(noeudsPastille, coordsPastille, p.id)}
             style={{
               // Centré sur le point de la courbe : le repère en sort au lieu
               // de flotter au-dessus. Une tige le rattachait, mais douze pixels
               // plus haut il semblait encore posé à côté.
-              position: "absolute", left: p.x, top: p.y,
-              transform: "translate(-50%,-50%)",
+              //
+              // La position est posée par `ancrer`, hors de React, et sa
+              // transformée porte le recentrage. Masquée par défaut : elle ne
+              // paraît qu'une fois ancrée, sinon la première trame la montrerait
+              // au coin haut gauche du cadre.
+              position: "absolute", left: 0, top: 0, visibility: "hidden",
               width: PASTILLE, height: PASTILLE, borderRadius: "50%", padding: 0,
               // Plein, et non cerclé : sur un tracé de la même teinte, un
               // cercle évidé se confondait avec la courbe qui le traverse.
@@ -2161,93 +2392,6 @@ export default function PerformanceChart({
           // au lieu de la recouvrir d'un trait opaque.
           zIndex: 5, mixBlendMode: "screen",
         }} />
-        {/**
-          * L'encart de lecture, en haut à gauche du tracé.
-          *
-          * Il tient la place que la page graphique donne à la sienne, mais il ne
-          * dit pas la même chose : **rien sur la date ni sur la valeur**, que la
-          * bande de tête donne déjà à la date survolée. Uniquement le détail de
-          * l'écriture pointée, que personne d'autre n'affiche.
-          *
-          * Il paraît donc là où il apporte quelque chose et s'effface ailleurs,
-          * au lieu de tenir une place fixe pour répéter deux chiffres.
-          *
-          * ⚠️ `pointerEvents: none` sur tout le bloc. Posé au-dessus du tracé, il
-          * capterait sinon le réticule qui le nourrit : l'encart s'effacerait au
-          * moment précis où l'on s'en approche, et les pastilles cachées dessous
-          * deviendraient incliquables.
-          *
-          * Il ne paraît qu'une fois le cadrage confirmé, comme les courbes : une
-          * ligne lisible au-dessus d'un cadre vide n'aurait rien désigné.
-          */}
-        {opsVisees.length > 0 && cadrePret && (
-          <div style={{
-            position: "absolute", top: 8, left: 10, zIndex: 20, pointerEvents: "none",
-            fontFamily: FONT, lineHeight: 1.5, maxWidth: "62%",
-            // L'écart entre les lignes vient du conteneur, pour que la première
-            // n'hérite pas d'une marge haute qui la décollerait du bord.
-            display: "flex", flexDirection: "column", gap: 3,
-            /**
-             * Un halo, et non un cadre.
-             *
-             * ⚠️ L'encart se pose sur le tracé, et sur la fenêtre d'un mois la
-             * courbe passe justement en haut : sans rien, un chiffre blanc sur un
-             * trait clair devient illisible. Un panneau opaque réglerait la
-             * lisibilité mais percerait un trou dans le graphique, alors que la
-             * page graphique — dont cet encart reprend la place — n'en a pas.
-             *
-             * Le halo détache chaque lettre de ce qu'il y a derrière sans rien
-             * masquer. Il prend la couleur du fond, donc s'inverse avec le thème :
-             * sombre sur fond sombre, clair sur fond clair.
-             */
-            textShadow: clair
-              ? "0 0 3px #FFFFFF, 0 0 6px #FFFFFF"
-              : "0 0 3px rgba(6,20,42,0.95), 0 0 7px rgba(6,20,42,0.85)",
-          }}>
-            {/* Les écritures du jour visé.
-                Trois au plus : au-delà, l'encart deviendrait un tableau et
-                masquerait la courbe qu'il commente. Le compte des suivantes
-                suffit à dire qu'il y en a. */}
-            {opsVisees.slice(0, 3).map(o => {
-              const m = montantOp(o);
-              return (
-                <div key={o.id} style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                  <span style={{
-                    width: 14, height: 14, borderRadius: "50%", flexShrink: 0,
-                    background: couleurOp(o.type, clair),
-                    display: "flex", alignItems: "center", justifyContent: "center",
-                    color: clair ? "#FFFFFF" : "rgba(6,20,42,0.96)",
-                  }}>
-                    {/* Réduit ici, et c'est assumé : le libellé est écrit juste à
-                        côté, donc la vignette n'a qu'à rappeler la couleur et la
-                        silhouette. Elle n'a rien à expliquer seule. */}
-                    <Pictogramme type={o.type} taille={9} />
-                  </span>
-                  <span style={{ fontSize: 11, color: JETONS.texteFort, whiteSpace: "nowrap" }}>
-                    {o.libelle} <strong style={{ color: JETONS.texteIntense }}>{o.ticker}</strong>
-                  </span>
-                  {o.quantity != null && o.unit_price != null && (
-                    <span style={{ ...NUM, fontSize: 11, color: JETONS.texteSecondaire, whiteSpace: "nowrap" }}>
-                      {o.quantity.toLocaleString("fr-FR", { maximumFractionDigits: 4 })}
-                      {" × "}
-                      {o.unit_price.toLocaleString("fr-FR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €
-                    </span>
-                  )}
-                  {m != null && (
-                    <span style={{ ...NUM, fontSize: 11, fontWeight: 700, color: JETONS.texteFort, whiteSpace: "nowrap" }}>
-                      {m.toLocaleString("fr-FR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €
-                    </span>
-                  )}
-                </div>
-              );
-            })}
-            {opsVisees.length > 3 && (
-              <div style={{ fontSize: 10, color: JETONS.texteAttenue }}>
-                et {opsVisees.length - 3} autre{opsVisees.length - 3 > 1 ? "s" : ""} ce jour-là
-              </div>
-            )}
-          </div>
-        )}
         {(state === "loading" && !points.length) || state === "error" ? (
           <div style={{
             position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center",
