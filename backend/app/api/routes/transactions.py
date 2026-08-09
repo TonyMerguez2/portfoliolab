@@ -453,7 +453,15 @@ def _points_intraday(tickers: list[str], txs: list, period: str, depart) -> list
     from app.services.portfolio_history import courbe_intraday
 
     jours = (_dt.now(_tz.utc).date() - depart).days
-    pas = _pas_intraday(max(1, jours))
+    # ⚠️ Sur « 24 h », le pas est imposé et ne se déduit pas de `depart`.
+    #
+    # `depart` y vaut la veille **boursière**, qui n'est pas la veille du
+    # calendrier : un lundi elle tombe le vendredi, soit trois jours. Le choix du
+    # pas basculait alors sur la règle des fenêtres longues et rendait des barres
+    # de quinze minutes. Mesuré le dimanche 9 août sur les titres d'un vrai PEA :
+    # 602 barres d'une minute contre 53 de quinze minutes pour la même séance.
+    # La finesse du tracé d'une journée dépendait donc du jour de la semaine.
+    pas = "1m" if period == "1d" else _pas_intraday(max(1, jours))
     if pas is None:
         return []
 
@@ -494,7 +502,24 @@ def _points_intraday(tickers: list[str], txs: list, period: str, depart) -> list
     # graphique montrait la même journée bien remplie. Sur 24 heures glissantes,
     # l'essentiel de ce qu'on voit est la séance de la veille, et c'est très bien :
     # c'est ce qu'il s'est passé.
-    depuis = (_dt.now(_tz.utc) - _td(hours=24)) if period == "1d" else _dt(
+    #
+    # ⚠️ Les vingt-quatre heures se comptent depuis la **dernière barre reçue**, et
+    # non depuis l'heure courante. C'était le défaut suivant, et il vidait la
+    # fenêtre un week-end sur un.
+    #
+    # Un dimanche, la dernière cotation a plus de vingt-quatre heures : la fenêtre
+    # d'horloge ne retenait aucune barre, la courbe intraday était abandonnée, et
+    # le repli journalier affichait deux clôtures — jeudi et vendredi — sous le
+    # libellé « 24 h », avec pour tout repère les nombres « 6 » et « 7 » en
+    # abscisse. Mesuré le dimanche 9 août 2026 à 13 h 39 UTC sur les titres d'un
+    # vrai PEA : 0 barre depuis l'horloge, 602 depuis la dernière barre, soit toute
+    # la séance du vendredi. Le même écart se produit tous les jours fériés.
+    #
+    # Ancrer sur le ruban ne change rien en séance — la dernière barre y date de
+    # quelques minutes — et rend la journée entière le reste du temps. C'est
+    # d'ailleurs l'intention déjà écrite plus haut : sur vingt-quatre heures
+    # glissantes, l'essentiel de ce qu'on voit est la dernière séance.
+    depuis = (max(instants) - _td(hours=24)) if period == "1d" else _dt(
         depart.year, depart.month, depart.day, tzinfo=_tz.utc)
 
     ops = [

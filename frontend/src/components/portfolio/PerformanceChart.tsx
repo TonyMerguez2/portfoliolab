@@ -14,6 +14,7 @@ import { COULEUR_OP, COULEUR_OP_CLAIR } from "@/lib/journal";
 import { useModeTheme, resoudreJeton } from "@/lib/theme";
 import { RAYONS, JETONS } from "@/lib/palette";
 import { agregerEnBougies } from "@/lib/chart/series";
+import { cleSource } from "@/lib/chart/sourceSerie";
 import {
   GLYPHES, TAILLE_DEFAUT, cleStickers, ecrireStickers, idSticker, lireStickers,
   coordonneeFine, logiqueFine, logiqueVersTemps, tailleEtiree, tempsVersLogique,
@@ -483,6 +484,8 @@ export default function PerformanceChart({
   const chartRef = useRef<IChartApi | null>(null);
   const serieRef = useRef<ISeriesApi<"Area"> | null>(null);
   const bougieRef = useRef<ISeriesApi<"Candlestick"> | null>(null);
+  /** L'axe des prix est-il affiché ? Voir l'effet d'alimentation. */
+  const axeVisibleRef = useRef(true);
   const colorRef = useRef(color);
   const clairRef = useRef(clair);
 
@@ -890,13 +893,31 @@ export default function PerformanceChart({
    * ⚠️ Uniquement sur la période, jamais sur `key`. Ce dernier contient les poids,
    * qui dérivent des cours sur un portefeuille suivi par transactions : le vider
    * là-dessus blanchirait le graphique toutes les dix secondes.
+   *
+   * ⚠️ **La période ne suffisait pas : le portefeuille compte autant.** Ce
+   * composant n'est jamais remonté — la page ne lui donne pas de `key` — si bien
+   * qu'en changeant de portefeuille sans changer de période, la série précédente
+   * restait à l'écran, avec son axe, sous le nom et le total du nouveau. Un
+   * portefeuille de crypto allant de 119 807 à 123 272 € laissait ainsi son axe
+   * devant un PEA de 5 304 €.
+   *
+   * L'identité retenue est l'identifiant du portefeuille quand il y en a un, et
+   * la liste des tickers sinon — **sans les poids**, pour la raison ci-dessus.
+   * Deux portefeuilles de mêmes tickers à poids différents ne sont donc pas
+   * distingués ici ; c'est le prix à payer pour ne pas blanchir le graphique à
+   * chaque rafraîchissement des cours, et le cas ne se produit pas en mode suivi
+   * par transactions, qui est celui des vrais portefeuilles.
    */
-  const periodeAfficheeRef = useRef(period);
+  const cleSerie = cleSource({
+    periode: period, portfolioId, surTransactions,
+    tickers: assets.map(a => a.ticker),
+  });
+  const sourceAfficheeRef = useRef(cleSerie);
   useEffect(() => {
-    if (periodeAfficheeRef.current === period) return;
-    periodeAfficheeRef.current = period;
+    if (sourceAfficheeRef.current === cleSerie) return;
+    sourceAfficheeRef.current = cleSerie;
     setPoints([]);
-  }, [period]);
+  }, [cleSerie]);
 
   useEffect(() => {
     if (!assets.length) { setPoints([]); setState("idle"); return; }
@@ -1187,7 +1208,28 @@ export default function PerformanceChart({
         fixLeftEdge: true, fixRightEdge: true,
       },
       handleScroll: { mouseWheel: true, pressedMouseMove: true, horzTouchDrag: true, vertTouchDrag: false },
-      handleScale: { mouseWheel: true, pinch: true, axisPressedMouseMove: { time: true, price: true } },
+      /**
+       * ⚠️ L'axe des prix ne se glisse **pas**, et ce n'est pas un choix de
+       * confort : c'était un bug, et le plus tenace de ce graphique.
+       *
+       * Relevé dans le code de la bibliothèque (5.2.0, `PriceScale._scaleTo`) :
+       * un glissement vertical sur l'axe pose `autoScale: false`. Or cet
+       * indicateur ne se relève jamais tout seul. À partir de ce geste,
+       * `autoscaleInfoProvider` — donc `bornes`, donc toute l'échelle verticale
+       * de ce graphique — n'est **plus consulté du tout** : la plage reste figée
+       * sur celle du moment du glissement, quel que soit le portefeuille ouvert
+       * ensuite, quelle que soit la période choisie.
+       *
+       * C'est ce qui affichait un axe gradué de 118 000 à 124 000 € devant un
+       * portefeuille de 5 304 € : la plage venait d'un portefeuille de crypto
+       * allant de 119 807 à 123 272 €, consulté plus tôt dans la même session.
+       *
+       * Le geste était de toute façon en contradiction avec l'intention : voir
+       * `bornes`, dont tout le propos est qu'une seule échelle vaille pour toute
+       * la série, afin que zoomer ne change pas l'allure de la courbe. Une
+       * échelle qu'on peut étirer à la souris n'est plus cette échelle-là.
+       */
+      handleScale: { mouseWheel: true, pinch: true, axisPressedMouseMove: { time: true, price: false } },
     });
 
     const serie = chart.addSeries(AreaSeries, {
@@ -1388,7 +1430,43 @@ export default function PerformanceChart({
     const serie = serieRef.current, chart = chartRef.current;
     if (!serie || !chart) return;
 
-    if (!points.length || !ordonnee) { serie.setData([]); return; }
+    /**
+     * Série vide : on retire aussi **l'axe**, et pas seulement la courbe.
+     *
+     * ⚠️ Vider les données ne remet pas l'échelle à zéro. Relevé dans le code de
+     * la bibliothèque (5.2.0, `PriceScale._recalculatePriceRangeImpl`), deux
+     * règles se conjuguent : une série sans valeur est ignorée par le calcul
+     * d'échelle, et quand plus aucune série n'y contribue, la plage courante est
+     * **conservée** telle quelle — le commentaire d'origine dit « keep current
+     * range is new is empty ».
+     *
+     * Le voile « Chargement… » ne suffit donc pas à masquer l'ancienne échelle :
+     * il est transparent et centré, et les graduations restent parfaitement
+     * lisibles derrière. Sur un portefeuille dont l'historique est vide, elles ne
+     * partaient même jamais — l'axe d'un autre portefeuille restait affiché
+     * indéfiniment sous un message d'indisponibilité.
+     *
+     * Le coût est un léger élargissement du cadre le temps du chargement, l'axe
+     * cessant d'occuper sa colonne. C'est le bon côté du marché : une largeur qui
+     * bouge se remarque à peine, des euros faux se lisent.
+     *
+     * ⚠️ Basculé **uniquement au changement**, jamais à chaque passage. Cet effet
+     * rejoue à chaque rafraîchissement des cours, toutes les dix secondes ;
+     * réappliquer les options de l'axe y provoquerait une remise en page, donc un
+     * risque de réveiller le `ResizeObserver` du cadrage — lequel force un
+     * recadrage et effacerait le zoom de l'utilisateur. C'est exactement le défaut
+     * décrit plus bas sur `rightOffset`, et il ne coûte rien de l'éviter.
+     */
+    const axeVoulu = !!points.length && !!ordonnee;
+    if (axeVisibleRef.current !== axeVoulu) {
+      axeVisibleRef.current = axeVoulu;
+      chart.priceScale("right").applyOptions({ visible: axeVoulu });
+    }
+    if (!axeVoulu) {
+      serie.setData([]);
+      bougieRef.current?.setData([]);
+      return;
+    }
 
     // Le capital engagé, indexé par jour, pour que le survol puisse rendre un
     // gain daté plutôt que celui d'aujourd'hui sous une date d'hier.
