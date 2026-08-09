@@ -122,10 +122,26 @@ const LignePortefeuille = memo(function LignePortefeuille(
           et `rayonVignette` sinon : c'est ce `overflow: hidden` qui coupe les
           angles du dessin, donc les deux valeurs doivent s'accorder. */}
       <span style={{ position:"relative", display:"inline-flex", flexShrink:0 }}>
+        {/**
+          * ⚠️ La couleur du portefeuille ne sert de fond **qu'à l'initiale**.
+          *
+          * Elle était posée dans tous les cas, et cela produisait un liseré coloré
+          * le long des angles arrondis — un liseré bleu sur les portefeuilles
+          * restés à la couleur par défaut, `#6366F1`. La cause n'est pas un
+          * débordement mais le lissage : le `overflow: hidden` découpe l'angle en
+          * fondu, et chaque pixel du bord mélange le dessin avec ce qu'il y a
+          * derrière. Derrière, il y avait cet indigo.
+          *
+          * Une image ou une poche remplissent la boîte : elles n'ont besoin
+          * d'aucun fond, et la surface creuse du thème leur suffit. C'est déjà ce
+          * que fait `ImagePortefeuille` sur le tableau de bord — d'où l'absence du
+          * liseré là-bas, et sa présence ici.
+          */}
         <span style={{ width:VIGNETTE, height:VIGNETTE, flexShrink:0,
           borderRadius: p.assets && !p.image_url ? Math.round(VIGNETTE * RAYON_CORPS) : rayonVignette(VIGNETTE),
           display:"flex", alignItems:"center", justifyContent:"center", overflow:"hidden",
-          background:fond, color:encreSur(fond), fontSize:19, fontWeight:700 }}>
+          background: p.image_url || p.assets ? JETONS.carteCreuse : fond,
+          color:encreSur(fond), fontSize:19, fontWeight:700 }}>
           {p.image_url
             // eslint-disable-next-line @next/next/no-img-element
             ? <img src={`${API_URL}${p.image_url}`} alt="" style={{ width:"100%", height:"100%", objectFit:"cover" }} />
