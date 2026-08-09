@@ -1773,50 +1773,18 @@ export default function PerformanceChart({
   const dernier = points.length && totalValue ? totalValue : null;
 
   /**
-   * Ce que l'encart en haut à gauche annonce.
+   * Les écritures du jour sous le curseur.
    *
-   * Au repos, le dernier point de la série : l'encart a ainsi une place fixe et
-   * ne surgit pas sous le curseur. Au survol, le point visé.
+   * ⚠️ L'encart n'annonce **ni la date ni la valeur** du point visé, et c'est
+   * délibéré : la bande de tête de la page les donne déjà, et à la date survolée
+   * — elle bascule sur `survol` pour la valeur comme pour le capital engagé. Les
+   * répéter dans le cadre aurait affiché deux fois le même chiffre à trente
+   * centimètres d'écart, dont l'un en plus petit.
    *
-   * ⚠️ L'ordonnée passe par `ordonnee`, jamais par `p.value`. La courbe est mise
-   * à l'échelle du total affiché, et un encart qui lirait la valeur brute
-   * annoncerait un autre chiffre que le point qu'il désigne.
+   * Il ne paraît donc que là où il apporte ce que personne d'autre ne dit : le
+   * détail de l'écriture. Ailleurs, il s'effface.
    */
-  const vise = (() => {
-    if (survol) return { date: survol.date, valeur: survol.valeur };
-    if (!points.length || !ordonnee) return null;
-    const p = points[points.length - 1];
-    return { date: p.date, valeur: ordonnee(p) };
-  })();
-  const opsVisees = vise ? opsParJour.get(vise.date.slice(0, 10)) ?? [] : [];
-  const investiVise = vise ? investiParDateRef.current.get(vise.date.slice(0, 10)) : undefined;
-
-  /**
-   * La date de l'encart, à la finesse de la série et pas plus.
-   *
-   * Les fenêtres 24 h et 1 M sont tracées en barres intraday : l'heure y est une
-   * information, et l'omettre ferait répéter la même date à trente-quatre barres
-   * d'affilée. Sur une série journalière elle n'existe pas, et l'afficher revient
-   * à annoncer « 00:00 » pour une séance entière.
-   *
-   * ⚠️ Déduit des **données**, et non de la forme de la chaîne. Une première
-   * version regardait si l'horodatage dépassait dix caractères : vu à l'écran,
-   * elle affichait « 1 janv. 2015 · 00:00 » sur une série de clôtures, la route
-   * des portefeuilles par poids datant ses points « AAAA-MM-JJT00:00:00 ». Deux
-   * points de la même journée, en revanche, ne peuvent venir que d'une série
-   * intraday.
-   */
-  const serieIntraday = useMemo(
-    () => joursSerie.some((j, i) => i > 0 && j === joursSerie[i - 1]),
-    [joursSerie]);
-
-  const dateEncart = (iso: string) => {
-    const d = new Date(iso);
-    const jour = d.toLocaleDateString("fr-FR", { day: "numeric", month: "short", year: "numeric" });
-    return serieIntraday
-      ? `${jour} · ${d.toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" })}`
-      : jour;
-  };
+  const opsVisees = survol ? opsParJour.get(survol.date.slice(0, 10)) ?? [] : [];
 
   const montantOp = (o: { quantity?: number; unit_price?: number; fees?: number }) =>
     o.quantity != null && o.unit_price != null
@@ -2196,23 +2164,29 @@ export default function PerformanceChart({
         {/**
           * L'encart de lecture, en haut à gauche du tracé.
           *
-          * Repris de la page graphique, où il tient la même place. Il annonce la
-          * date et la valeur du point visé, et détaille les écritures de ce jour
-          * quand il y en a — c'est ce qu'on vient chercher en promenant le
-          * curseur sur une pastille.
+          * Il tient la place que la page graphique donne à la sienne, mais il ne
+          * dit pas la même chose : **rien sur la date ni sur la valeur**, que la
+          * bande de tête donne déjà à la date survolée. Uniquement le détail de
+          * l'écriture pointée, que personne d'autre n'affiche.
+          *
+          * Il paraît donc là où il apporte quelque chose et s'effface ailleurs,
+          * au lieu de tenir une place fixe pour répéter deux chiffres.
           *
           * ⚠️ `pointerEvents: none` sur tout le bloc. Posé au-dessus du tracé, il
           * capterait sinon le réticule qui le nourrit : l'encart s'effacerait au
           * moment précis où l'on s'en approche, et les pastilles cachées dessous
           * deviendraient incliquables.
           *
-          * Il ne paraît qu'une fois le cadrage confirmé, comme les courbes : un
-          * chiffre lisible au-dessus d'un cadre vide n'aurait rien désigné.
+          * Il ne paraît qu'une fois le cadrage confirmé, comme les courbes : une
+          * ligne lisible au-dessus d'un cadre vide n'aurait rien désigné.
           */}
-        {vise && cadrePret && (
+        {opsVisees.length > 0 && cadrePret && (
           <div style={{
             position: "absolute", top: 8, left: 10, zIndex: 20, pointerEvents: "none",
             fontFamily: FONT, lineHeight: 1.5, maxWidth: "62%",
+            // L'écart entre les lignes vient du conteneur, pour que la première
+            // n'hérite pas d'une marge haute qui la décollerait du bord.
+            display: "flex", flexDirection: "column", gap: 3,
             /**
              * Un halo, et non un cadre.
              *
@@ -2230,28 +2204,6 @@ export default function PerformanceChart({
               ? "0 0 3px #FFFFFF, 0 0 6px #FFFFFF"
               : "0 0 3px rgba(6,20,42,0.95), 0 0 7px rgba(6,20,42,0.85)",
           }}>
-            <div style={{ fontSize: 10, color: JETONS.texteAttenue, letterSpacing: "0.02em" }}>
-              {dateEncart(vise.date)}
-            </div>
-            <div style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
-              <span style={{ ...NUM, fontSize: 15, fontWeight: 700, color: JETONS.texteIntense }}>
-                {vise.valeur.toLocaleString("fr-FR", { maximumFractionDigits: 0 })} €
-              </span>
-              {/* Le gain à la date visée, et non celui d'aujourd'hui : la même
-                  règle que la bande de tête, qui lit `investiParDate`. */}
-              {investiVise != null && investiVise > 0 && (() => {
-                const pct = (vise.valeur - investiVise) / investiVise * 100;
-                return (
-                  <span style={{
-                    ...NUM, fontSize: 11, fontWeight: 700,
-                    color: pct >= 0 ? JETONS.positif : JETONS.negatif,
-                  }}>
-                    {fmtPct(pct)}
-                  </span>
-                );
-              })()}
-            </div>
-
             {/* Les écritures du jour visé.
                 Trois au plus : au-delà, l'encart deviendrait un tableau et
                 masquerait la courbe qu'il commente. Le compte des suivantes
@@ -2259,7 +2211,7 @@ export default function PerformanceChart({
             {opsVisees.slice(0, 3).map(o => {
               const m = montantOp(o);
               return (
-                <div key={o.id} style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 3 }}>
+                <div key={o.id} style={{ display: "flex", alignItems: "center", gap: 6 }}>
                   <span style={{
                     width: 14, height: 14, borderRadius: "50%", flexShrink: 0,
                     background: couleurOp(o.type, clair),
@@ -2290,7 +2242,7 @@ export default function PerformanceChart({
               );
             })}
             {opsVisees.length > 3 && (
-              <div style={{ fontSize: 10, color: JETONS.texteAttenue, marginTop: 2 }}>
+              <div style={{ fontSize: 10, color: JETONS.texteAttenue }}>
                 et {opsVisees.length - 3} autre{opsVisees.length - 3 > 1 ? "s" : ""} ce jour-là
               </div>
             )}
