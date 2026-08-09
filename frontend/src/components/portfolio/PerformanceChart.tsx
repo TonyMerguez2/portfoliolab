@@ -96,8 +96,15 @@ const DISQUE = PASTILLE - 2 * CONTOUR;
 /** Deux pixels de marge autour du glyphe, de chaque côté du disque. */
 const GLYPHE = DISQUE - 4;
 
-/** Écritures détaillées au plus dans l'encart, avant de compter les suivantes. */
-const MAX_LIGNES_ENCART = 5;
+/**
+ * Écritures détaillées au plus dans l'encart, les suivantes étant comptées.
+ *
+ * Trois lignes, et non cinq : au-delà, l'encart devient un tableau posé sur la
+ * courbe qu'il commente — les lignes du bas débordent du bandeau de tête et
+ * recouvrent le tracé. Le compte des restantes suffit à dire qu'il y en a, et le
+ * clic sur la bulle ouvre l'onglet Transactions, qui les porte toutes.
+ */
+const MAX_LIGNES_ENCART = 3;
 
 /**
  * Pictogramme d'une opération.
@@ -2161,11 +2168,27 @@ export default function PerformanceChart({
                 </div>
               );
             })}
-            {opsVisees.length > MAX_LIGNES_ENCART && (
-              <div style={{ fontSize: 10, color: JETONS.texteAttenue }}>
-                et {opsVisees.length - MAX_LIGNES_ENCART} autre{opsVisees.length - MAX_LIGNES_ENCART > 1 ? "s" : ""} ce jour-là
-              </div>
-            )}
+            {/* Le reste, compté et non énuméré.
+                Aligné sur la colonne du texte des lignes au-dessus — la largeur
+                du disque plus l'écart qui le sépare de son libellé — pour que le
+                nombre se lise dans le prolongement de la liste et non sous les
+                vignettes.
+                ⚠️ Le nombre est nommé. Un « +2 » seul ne dit pas de quoi : deux
+                euros, deux pour cent, deux titres ? Le chiffre garde la fonte
+                chiffrée et le gras qui le font ressortir, le mot le rend lisible. */}
+            {opsVisees.length > MAX_LIGNES_ENCART && (() => {
+              const reste = opsVisees.length - MAX_LIGNES_ENCART;
+              return (
+                <div style={{
+                  fontFamily: FONT, fontSize: 10, color: JETONS.texteAttenue,
+                  paddingLeft: DISQUE + 6,
+                }}>
+                  <strong style={{ ...NUM, fontWeight: 700 }}>+{reste}</strong>
+                  {reste > 1 ? " autres opérations" : " autre opération"}
+                  {" ce jour-là"}
+                </div>
+              );
+            })()}
           </div>
         )}
         <div style={{ display: "flex", gap: 6, flexShrink: 0, position: "relative" }}>
