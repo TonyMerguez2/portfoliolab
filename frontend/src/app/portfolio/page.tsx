@@ -1512,7 +1512,8 @@ function PortfolioPageInner() {
               return (
                 <>
                   <div style={{ display: "flex", alignItems: "center", gap: 5, marginBottom: 10 }}>
-                    <p style={{ margin: 0, fontSize: 12.5, fontWeight: 600, color: CLAIR.texte }}>Détail du score</p>
+                    <p style={{ margin: 0, fontSize: 12.5, fontWeight: 600, color: CLAIR.texte,
+                                whiteSpace: "nowrap" }}>Détail du score</p>
                     {/* ⚠️ La liste est **dérivée**, plus écrite à la main. Celle qui
                         vivait ici citait la corrélation, la sensibilité au marché et
                         la liquidité : trois facteurs qui ne notaient déjà plus quand
@@ -1535,9 +1536,18 @@ function PortfolioPageInner() {
                         confiance celle des données qui ont servi à la calculer. Sans
                         elle, une note portée par trois piliers ressemble à une note
                         portée par cinq. */}
-                    <span style={{ marginLeft: "auto", display: "flex", alignItems: "baseline", gap: 7,
-                                   fontSize: 10, color: CLAIR.texteFaible }}>
-                      <span>{couverture.mesures}/{couverture.total} piliers</span>
+                    {/* ⚠️ `whiteSpace: nowrap` et libellés courts. Trois éléments sur
+                        une ligne de 240 px repliaient chacun sur deux lignes : le titre
+                        « Détail du / score », puis « 5/5 / piliers » et « confiance / 100
+                        % ». L'en-tête faisait trois hauteurs de ligne pour deux chiffres.
+                        « 5/5 » suffit — le mot « piliers » est dans l'infobulle. */}
+                    <span style={{ marginLeft: "auto", display: "flex", alignItems: "baseline",
+                                   gap: 8, fontSize: 10, color: CLAIR.texteFaible,
+                                   whiteSpace: "nowrap", flexShrink: 0 }}>
+                      <span title={`${couverture.mesures} des ${couverture.total} piliers sont mesurés.`}
+                        style={{ cursor: "help" }}>
+                        {couverture.mesures}/{couverture.total}
+                      </span>
                       {confiance != null && (
                         <span title={
                           "La qualité des données, non celle du portefeuille. Les manques "
@@ -1547,7 +1557,7 @@ function PortfolioPageInner() {
                             : "")}
                           style={{ cursor: "help",
                                    color: confiance >= 80 ? CLAIR.texteFaible : CLAIR.attentionFort }}>
-                          confiance {confiance} %
+                          {confiance} %
                         </span>
                       )}
                     </span>
@@ -1630,16 +1640,23 @@ function PortfolioPageInner() {
                           setAncreFrais({ droite: window.innerWidth - r.right, haut: r.bottom + 6 });
                           setFraisOuvert(true);
                         }}
+                        /* ⚠️ Encadré seulement quand il y a quelque chose à faire.
+                           Une fois les frais saisis, ce bloc bleu restait le plus
+                           voyant du panneau — au-dessus du profil et de la cause de la
+                           note — pour une action secondaire déjà accomplie. Il devient
+                           alors un simple lien. */
                         style={{
                           display: "block", width: "100%", textAlign: "left",
-                          margin: "0 0 9px", padding: "7px 8px", cursor: "pointer",
-                          borderRadius: RAYONS.xs, background: CLAIR.carteCreuse,
-                          border: `1px solid ${JETONS.bord}`,
+                          margin: mesure ? "0 0 6px" : "0 0 9px",
+                          padding: mesure ? 0 : "7px 8px", cursor: "pointer",
+                          borderRadius: RAYONS.xs,
+                          background: mesure ? "none" : CLAIR.carteCreuse,
+                          border: mesure ? "none" : `1px solid ${JETONS.bord}`,
                           fontFamily: FONT, fontSize: 10.5, color: CLAIR.texteAttenue,
                           lineHeight: 1.45,
                         }}>
-                        <span style={{ color: CLAIR.accent, fontWeight: 600 }}>
-                          {mesure ? "Modifier les frais de vos fonds" : "Saisissez les frais de vos fonds"}
+                        <span style={{ color: CLAIR.accent, fontWeight: mesure ? 500 : 600 }}>
+                          {mesure ? "Modifier les frais des fonds" : "Saisissez les frais de vos fonds"}
                         </span>
                         {!mesure && (
                           <> pour que ce facteur soit noté : le fournisseur de cours ne

@@ -7,7 +7,7 @@ import {
   type Analyse, type EtatAnalyse, type Observation,
   type Part, type Projection, type Trajet,
 } from "@/lib/analyse";
-import { BANDES as SEUILS_BANDES } from "@/lib/portfolio-score/types";
+import { BANDES as SEUILS_BANDES, LIBELLE_PROFIL } from "@/lib/portfolio-score/types";
 import Cadre from "@/components/ui/Cadre";
 import { JETONS } from "@/lib/palette";
 
@@ -63,14 +63,25 @@ const ABREGE: Record<string, string> = {
  *
  * L'ordre des couleurs suit celui des bandes, de la meilleure à la pire.
  */
-const BANDES = SEUILS_BANDES.map((b, i) => ({
-  ...b,
-  couleur: [JETONS.positifFort, JETONS.positif, JETONS.attentionFort,
-            JETONS.attentionIntense, JETONS.negatifFort][i],
-}));
+// ⚠️ **Six** couleurs pour six bandes. La table en portait cinq, donc la dernière
+// recevait `undefined` : tout score inférieur à quarante s'affichait sans couleur, en
+// blanc, comme une note neutre. Vu à l'écran sur un « 24 » qui devait alerter.
+//
+// L'échelle suit le §18 : vert pour ce qui va, orange pour ce qui mérite attention,
+// rouge pour ce qui pose problème. Deux crans de vert et deux d'orange pour que six
+// bandes se distinguent sans arc-en-ciel.
+const COULEURS_BANDES = [
+  JETONS.positifFort,       // Excellent
+  JETONS.positif,           // Très bon
+  JETONS.attentionFort,     // Bon
+  JETONS.attentionIntense,  // Correct
+  JETONS.negatif,           // À améliorer
+  JETONS.negatifFort,       // Fragile
+];
+const BANDES = SEUILS_BANDES.map((b, i) => ({ ...b, couleur: COULEURS_BANDES[i] }));
 
 const couleurScore = (s: number | null) =>
-  s == null ? "rgba(var(--nv-encre-rvb), 0.30)" : (BANDES.find(b => s >= b.min) ?? BANDES[4]).couleur;
+  s == null ? "rgba(var(--nv-encre-rvb), 0.30)" : (BANDES.find(b => s >= b.min) ?? BANDES[BANDES.length - 1]).couleur;
 
 /**
  * Le ton d'une observation, en fond et en encre.
@@ -143,6 +154,8 @@ export default function AnalyseView({ analyse: a, etat }: { analyse: Analyse | n
   // aucune donnée disponible ne permet de la corriger — les poids par devise des
   // sous-jacents ne sont pas publiés.
   const [ongletExpo, setOngletExpo] = useState<"secteurs" | "zones" | "classes">("secteurs");
+  // Un seul pilier déplié à la fois : la carte ne peut pas porter vingt-cinq lignes.
+  const [pilierOuvert, setPilierOuvert] = useState<string | null>(null);
 
   /**
    * Le radar ne porte que les facteurs qui **notent**.
@@ -155,6 +168,8 @@ export default function AnalyseView({ analyse: a, etat }: { analyse: Analyse | n
   // le `useMemo` du radar en permanence — il recalculerait à chaque frappe ailleurs
   // dans la page.
   const piliers = useMemo(() => a?.novac?.piliers ?? [], [a]);
+  const confiance = a?.novac?.confiance ?? null;
+  const profilLisible = a?.novac?.profil ? LIBELLE_PROFIL[a.novac.profil] : null;
   const facteursRadar = useMemo(
     () => piliers
       // Un pilier non mesuré n'a pas de branche : la tracer à zéro le ferait passer
@@ -194,104 +209,155 @@ export default function AnalyseView({ analyse: a, etat }: { analyse: Analyse | n
       <div style={{ display: "grid", gridTemplateColumns: "minmax(0,0.9fr) minmax(0,1.3fr) minmax(0,1fr)",
                     gap: GOUTTIERE, flex: 1.1, minHeight: 0 }}>
 
-        {/* Score */}
+        {/* Le bloc principal du score */}
         <Carte>
-          <Titre>Score d&apos;analyse</Titre>
-          {/* Anneau au-dessus, bandes dessous. Côte à côte, la légende ne
-              disposait que de soixante-douze pixels et repliait chaque
-              intitulé sur deux lignes. */}
+          <Titre>NOVAC Score</Titre>
+          {/* ⚠️ La légende des six bandes vivait ici, sur six lignes. Elle décrivait
+              l'échelle une fois pour toutes et prenait la place de ce qui change : le
+              profil et la confiance. Elle appartient à l'écran de méthodologie. */}
           <div style={{ display: "flex", flexDirection: "column", alignItems: "center",
-                        gap: 10, flex: 1, minHeight: 0, overflow: "hidden" }}>
+                        gap: 12, flex: 1, minHeight: 0, justifyContent: "center" }}>
             <Jauge score={a.score} bande={a.bande} />
-            <div style={{ display: "flex", flexDirection: "column", gap: 4, width: "100%", minWidth: 0 }}>
-              {BANDES.map(b => {
-                const actif = a.score != null && a.score >= b.min &&
-                  (b.min === 80 || a.score < (BANDES[BANDES.indexOf(b) - 1]?.min ?? 101));
-                return (
-                  <div key={b.nom} style={{ display: "flex", alignItems: "center", gap: 7,
-                                            fontFamily: FONT, fontSize: 10,
-                                            color: actif ? "rgba(var(--nv-encre-rvb), 0.88)" : "rgba(var(--nv-encre-rvb), 0.38)",
-                                            fontWeight: actif ? 600 : 400 }}>
-                    <i style={{ width: 6, height: 6, borderRadius: "50%", background: b.couleur, flexShrink: 0 }} />
-                    <span style={{ flex: 1 }}>{b.nom}</span>
-                    <span style={{ ...NUM, opacity: 0.55 }}>
-                      {b.min}–{b.min === 80 ? 100 : (BANDES[BANDES.indexOf(b) - 1]?.min ?? 100) - 1}
-                    </span>
-                  </div>
-                );
-              })}
+            {/* Profil et confiance côte à côte : deux chiffres de natures
+                différentes, et la confiance ne remplace jamais la note. */}
+            <div style={{ display: "flex", gap: 22, width: "100%", justifyContent: "center" }}>
+              <div style={{ textAlign: "center" }}>
+                <div style={{ fontFamily: FONT, fontSize: 9, letterSpacing: "0.06em",
+                              color: "rgba(var(--nv-encre-rvb), 0.32)", marginBottom: 2 }}>
+                  PROFIL
+                </div>
+                <div style={{ fontFamily: FONT, fontSize: 12, fontWeight: 600,
+                              color: "rgba(var(--nv-encre-rvb), 0.82)" }}>
+                  {profilLisible ?? "non déclaré"}
+                </div>
+              </div>
+              <div style={{ width: 1, background: JETONS.bord }} />
+              <div style={{ textAlign: "center" }} title={
+                "La qualité des données, non celle du portefeuille. Les manques sur une "
+                + "grosse position pèsent plus lourd que sur une petite."
+                + (a.novac?.donnees_manquantes.length
+                  ? ` Absent : ${a.novac.donnees_manquantes.join(" · ")}.` : "")}>
+                <div style={{ fontFamily: FONT, fontSize: 9, letterSpacing: "0.06em",
+                              color: "rgba(var(--nv-encre-rvb), 0.32)", marginBottom: 2 }}>
+                  CONFIANCE
+                </div>
+                <div style={{ ...NUM, fontSize: 12, fontWeight: 700, cursor: "help",
+                              color: confiance == null ? "rgba(var(--nv-encre-rvb), 0.40)"
+                                : confiance >= 80 ? JETONS.positif : JETONS.attentionFort }}>
+                  {confiance == null ? "—" : `${confiance} %`}
+                </div>
+              </div>
             </div>
           </div>
-          <p style={{ margin: "8px 0 0", fontFamily: FONT, fontSize: 9.5,
+          <p style={{ margin: "10px 0 0", fontFamily: FONT, fontSize: 9.5,
                       color: "rgba(var(--nv-encre-rvb), 0.28)", lineHeight: 1.45, flexShrink: 0 }}>
-            Moyenne des facteurs mesurables : ceux qui manquent d&apos;historique
-            sont écartés plutôt que comptés à zéro.
+            Moyenne des cinq piliers mesurables, pondérée selon votre profil. Les
+            piliers non calculables sont écartés, jamais comptés à zéro.
+            {a.novac && ` ${a.novac.version_methodologie}.`}
           </p>
         </Carte>
 
-        {/* Facteurs de risque */}
+        {/* Les cinq piliers */}
         <Carte>
-          <Titre>Facteurs de risque</Titre>
-          <div style={{ display: "flex", alignItems: "center", gap: 12, flex: 1, minHeight: 0 }}>
+          <Titre action={
+            <span style={{ fontFamily: FONT, fontSize: 9.5, color: "rgba(var(--nv-encre-rvb), 0.32)" }}>
+              cliquez un pilier pour le détail
+            </span>
+          }>Les cinq piliers</Titre>
+          <div style={{ display: "flex", alignItems: "center", gap: 14, flex: 1, minHeight: 0 }}>
             {facteursRadar.length >= 3 && (
               <div style={{ flexShrink: 0 }}>
                 <RadarChart size={140} metrics={facteursRadar} />
               </div>
             )}
-            <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", gap: 4 }}>
-              {piliers.map(pil => (
-                <div key={pil.cle} style={{ marginBottom: 2 }}>
-                  {/* Le pilier : nom, poids réel, note. Le poids est affiché parce
-                      qu'un score composite sans ses pondérations n'est pas auditable. */}
-                  <div title={pil.explication}
-                    style={{ display: "flex", alignItems: "center", gap: 8, cursor: "help" }}>
-                    <span style={{ flex: 1, minWidth: 0, fontFamily: FONT, fontSize: 11.5,
-                                   fontWeight: 600, color: "rgba(var(--nv-encre-rvb), 0.80)",
-                                   overflow: "hidden", textOverflow: "ellipsis",
-                                   whiteSpace: "nowrap" }}>
-                      {pil.libelle}
-                      <span style={{ marginLeft: 5, fontSize: 9, fontWeight: 500,
-                                     color: "rgba(var(--nv-encre-rvb), 0.32)" }}>
-                        {pil.poids_effectif > 0 ? `${pil.poids_effectif.toFixed(0)} %` : "hors calcul"}
-                      </span>
-                    </span>
-                    <span style={{ ...NUM, fontSize: 14, fontWeight: 700, width: 28,
-                                   textAlign: "right", color: couleurScore(pil.score),
-                                   flexShrink: 0 }}>
-                      {pil.score ?? "—"}
-                    </span>
-                  </div>
-                  {/* Les métriques du pilier, en retrait. ⚠️ Chacune porte sa lecture
-                      brute : « 5,6 secteurs équivalents » se vérifie, « 65 » se subit.
-                      C'est le niveau expert du §19, accessible sans quitter l'écran. */}
-                  {pil.metriques.filter(m => m.poids > 0).map(m => (
-                    <div key={m.cle} title={m.explication}
-                      style={{ display: "flex", alignItems: "baseline", gap: 8,
-                               padding: "2px 0 2px 10px", cursor: "help" }}>
-                      <span style={{ flex: 1, minWidth: 0, fontFamily: FONT, fontSize: 10,
-                                     color: "rgba(var(--nv-encre-rvb), 0.55)",
-                                     overflow: "hidden", textOverflow: "ellipsis",
-                                     whiteSpace: "nowrap" }}>
-                        {m.libelle}
-                        <span style={{ display: "block", fontSize: 9,
-                                       color: "rgba(var(--nv-encre-rvb), 0.30)" }}>
-                          {m.lecture}
-                          {m.statut === "partiel" && (
-                            <span style={{ marginLeft: 4 }}>
-                              · {(m.couverture * 100).toFixed(0)} % du portefeuille
-                            </span>
-                          )}
+            {/* ⚠️ Un accordéon, et non la liste complète. Cinq piliers portant jusqu'à
+                quatre métriques chacun font vingt-cinq lignes : elles débordaient de la
+                carte, et les notes de métriques s'affichaient aussi grosses que celles
+                des piliers — donc sans hiérarchie de lecture.
+
+                Un seul pilier ouvert à la fois : neuf lignes au plus. C'est aussi la
+                lecture à deux niveaux voulue — les cinq notes d'abord, le détail sur
+                demande. */}
+            <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column",
+                          gap: 3, overflowY: "auto", minHeight: 0 }}>
+              {piliers.map(pil => {
+                const ouvert = pilierOuvert === pil.cle;
+                const col = couleurScore(pil.score);
+                return (
+                  <div key={pil.cle}>
+                    <button type="button" title={pil.explication}
+                      onClick={() => setPilierOuvert(ouvert ? null : pil.cle)}
+                      style={{ display: "block", width: "100%", textAlign: "left",
+                               background: "none", border: "none", padding: "3px 0",
+                               cursor: "pointer" }}>
+                      <div style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
+                        <span style={{ flex: 1, minWidth: 0, fontFamily: FONT, fontSize: 11.5,
+                                       fontWeight: 600, color: "rgba(var(--nv-encre-rvb), 0.82)",
+                                       overflow: "hidden", textOverflow: "ellipsis",
+                                       whiteSpace: "nowrap" }}>
+                          {ouvert ? "▾" : "▸"} {pil.libelle}
+                          <span style={{ marginLeft: 5, fontSize: 9, fontWeight: 500,
+                                         color: "rgba(var(--nv-encre-rvb), 0.30)" }}>
+                            {pil.poids_effectif > 0
+                              ? `${pil.poids_effectif.toFixed(0)} %`
+                              : "hors calcul"}
+                          </span>
                         </span>
-                      </span>
-                      <span style={{ ...NUM, fontSize: 10.5, fontWeight: 600, width: 26,
-                                     textAlign: "right", color: couleurScore(m.score),
-                                     flexShrink: 0 }}>
-                        {m.score ?? "—"}
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              ))}
+                        <span style={{ ...NUM, fontSize: 15, fontWeight: 700, width: 30,
+                                       textAlign: "right", color: col, flexShrink: 0 }}>
+                          {pil.score ?? "—"}
+                        </span>
+                      </div>
+                      {/* Une barre très fine, comme le §18 le demande : elle donne
+                          l'ordre de grandeur sans peser dans la composition. */}
+                      <div style={{ height: 3, marginTop: 4, borderRadius: 2,
+                                    background: "rgba(var(--nv-encre-rvb), 0.07)" }}>
+                        {pil.score != null && (
+                          <div style={{ height: "100%", borderRadius: 2, background: col,
+                                        width: `${pil.score}%`, opacity: 0.85,
+                                        transition: "width 600ms ease" }} />
+                        )}
+                      </div>
+                    </button>
+                    {ouvert && (
+                      <div style={{ padding: "4px 0 6px 12px", display: "flex",
+                                    flexDirection: "column", gap: 4 }}>
+                        {pil.metriques.filter(m => m.poids > 0).map(m => (
+                          <div key={m.cle} title={m.explication}
+                            style={{ display: "flex", alignItems: "baseline", gap: 8,
+                                     cursor: "help" }}>
+                            <span style={{ flex: 1, minWidth: 0 }}>
+                              <span style={{ display: "block", fontFamily: FONT, fontSize: 10,
+                                             color: "rgba(var(--nv-encre-rvb), 0.62)",
+                                             overflow: "hidden", textOverflow: "ellipsis",
+                                             whiteSpace: "nowrap" }}>
+                                {m.libelle}
+                                <span style={{ marginLeft: 4, fontSize: 8.5,
+                                               color: "rgba(var(--nv-encre-rvb), 0.26)" }}>
+                                  {m.poids_effectif.toFixed(0)} %
+                                </span>
+                              </span>
+                              {/* La lecture brute : « 0,91 au plus entre deux lignes »
+                                  se vérifie, « 36 » se subit. */}
+                              <span style={{ display: "block", fontFamily: FONT, fontSize: 9,
+                                             color: "rgba(var(--nv-encre-rvb), 0.30)" }}>
+                                {m.lecture}
+                                {m.statut === "partiel"
+                                  && ` · ${(m.couverture * 100).toFixed(0)} % du portefeuille`}
+                              </span>
+                            </span>
+                            <span style={{ ...NUM, fontSize: 10.5, fontWeight: 600, width: 24,
+                                           textAlign: "right", color: couleurScore(m.score),
+                                           flexShrink: 0 }}>
+                              {m.score ?? "—"}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
             </div>
           </div>
         </Carte>
