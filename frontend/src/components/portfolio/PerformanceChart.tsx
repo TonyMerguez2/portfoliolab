@@ -2319,7 +2319,20 @@ export default function PerformanceChart({
             l'empilement — quand un achat tombe sur le meilleur moment, c'est
             l'achat qui garde le pixel, lui seul étant cliquable. */}
         {reperes.map(r => (
-          <span key={r.sens} title={r.titre} aria-hidden="true"
+          /**
+           * Aucune infobulle, et il n'y en avait déjà pas.
+           *
+           * ⚠️ Un `title` était posé là, mais il ne pouvait ni s'afficher ni se
+           * lire : l'anneau est en `pointerEvents: none`, donc le navigateur ne le
+           * survole jamais, et en `aria-hidden`, donc aucun lecteur d'écran ne
+           * l'annonce. Il donnait l'illusion d'une explication accessible.
+           *
+           * Le libellé reste calculé, car il entre dans l'identité du repère — voir
+           * `cléRepere`. Rendre ces anneaux explicables demanderait de les rendre
+           * survolables, ce qui les ferait capter le réticule : à faire seulement
+           * si le besoin se présente.
+           */
+          <span key={r.sens} aria-hidden="true"
             ref={inscrire(noeudsRepere, coordsRepere, r.sens)}
             style={{
             // Ancré par `transform`, écrit hors de React : voir `ancrer`. Le coin
@@ -2424,7 +2437,20 @@ export default function PerformanceChart({
         // Max, dix jours d'écriture tiennent sur cent vingt-huit points.
         const estompee = !!groupeSurvole && !pointee;
         return (
-          <button key={p.id} title={p.titre} type="button"
+          /**
+           * ⚠️ `aria-label` et non `title` : pas d'infobulle native.
+           *
+           * Le `title` faisait surgir la boîte grise du navigateur sous le
+           * curseur, qui répétait ce que l'encart en haut à gauche affiche
+           * désormais — en travers de la courbe, avec sa demi-seconde de retard et
+           * un style qui n'est pas celui de l'application. Deux réponses à la même
+           * question, dont la moins bonne masquait le tracé.
+           *
+           * Le libellé reste porté, pour que la bulle garde un nom accessible :
+           * elle ne contient qu'un dessin, et sans lui le bouton serait muet pour
+           * un lecteur d'écran.
+           */
+          <button key={p.id} aria-label={p.titre} type="button"
             onClick={onOperationClick ? () => onOperationClick(p.id) : undefined}
             /**
              * Le survol de la bulle elle-même commande l'encart.
