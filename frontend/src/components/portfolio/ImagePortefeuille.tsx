@@ -6,6 +6,7 @@ import { enTetesAuth } from "@/lib/session";
 import { encreSur } from "@/lib/couleur";
 import { initiale } from "@/lib/initiale";
 import PocheActifs, { RAYON_CORPS } from "@/components/portfolio/PocheActifs";
+import CadrerImage from "@/components/portfolio/CadrerImage";
 
 /**
  * L'image de profil d'un portefeuille, et de quoi la changer.
@@ -77,6 +78,8 @@ export default function ImagePortefeuille<T extends PortefeuilleImage>({
   const [survol, setSurvol] = useState(false);
   const [envoi, setEnvoi] = useState(false);
   const [erreur, setErreur] = useState<string | null>(null);
+  /** Le fichier en attente de cadrage, avant tout envoi. */
+  const [aCadrer, setACadrer] = useState<File | null>(null);
 
   const image = portefeuille.image_url;
   const fond = portefeuille.color || COULEUR_PAR_DEFAUT;
@@ -118,14 +121,32 @@ export default function ImagePortefeuille<T extends PortefeuilleImage>({
     }
   }
 
+  /**
+   * Le fichier choisi passe par le cadrage avant l'envoi.
+   *
+   * ⚠️ Il n'y allait pas, et cela décidait du cadrage à la place de
+   * l'utilisateur : le fichier partait tel quel, puis `object-fit: cover`
+   * prélevait le carré central. Une photo en pied s'y trouvait coupée au ventre,
+   * un logo posé en haut d'un visuel disparaissait, et rien ne permettait de le
+   * corriger — sinon retoucher le fichier ailleurs et recommencer.
+   */
   function choisir(e: React.ChangeEvent<HTMLInputElement>) {
     const f = e.target.files?.[0];
     // Le champ est remis à zéro pour que reprendre le même fichier après un
     // refus déclenche bien un nouvel événement.
     e.target.value = "";
     if (!f) return;
+    setErreur(null);
+    setACadrer(f);
+  }
+
+  function envoyer(decoupe: Blob) {
+    setACadrer(null);
     const form = new FormData();
-    form.append("file", f);
+    // Un nom est nécessaire : sans lui, le navigateur envoie « blob », que le
+    // serveur accepte — il lit la signature du contenu — mais qui ne dit rien
+    // dans un journal.
+    form.append("file", decoupe, "portefeuille.png");
     appeler("POST", form);
   }
 
@@ -196,6 +217,11 @@ export default function ImagePortefeuille<T extends PortefeuilleImage>({
             background: JETONS.negatif, color: "#FFFFFF",
             fontFamily: FONT, fontSize: 11, lineHeight: 1, fontWeight: 700,
           }}>×</button>
+      )}
+
+      {aCadrer && (
+        <CadrerImage fichier={aCadrer}
+          onValider={envoyer} onAnnuler={() => setACadrer(null)} />
       )}
 
       {erreur && (
