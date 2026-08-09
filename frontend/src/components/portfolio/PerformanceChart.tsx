@@ -14,7 +14,7 @@ import { COULEUR_OP, COULEUR_OP_CLAIR, GLYPHE_OP, type TypeOp } from "@/lib/jour
 import { useModeTheme, resoudreJeton } from "@/lib/theme";
 import { RAYONS, JETONS } from "@/lib/palette";
 import { agregerEnBougies } from "@/lib/chart/series";
-import { ancresParJour, jourAncre } from "@/lib/chart/reperes";
+import { ancresParJour, dominante, jourAncre } from "@/lib/chart/reperes";
 import { cleSource } from "@/lib/chart/sourceSerie";
 import {
   GLYPHES, TAILLE_DEFAUT, cleStickers, ecrireStickers, idSticker, lireStickers,
@@ -95,6 +95,9 @@ const CONTOUR = 2;
 const DISQUE = PASTILLE - 2 * CONTOUR;
 /** Deux pixels de marge autour du glyphe, de chaque côté du disque. */
 const GLYPHE = DISQUE - 4;
+
+/** Écritures détaillées au plus dans l'encart, avant de compter les suivantes. */
+const MAX_LIGNES_ENCART = 5;
 
 /**
  * Pictogramme d'une opération.
@@ -858,11 +861,11 @@ export default function PerformanceChart({
    * dessus. L'encart s'affichait ainsi en survolant la journée à côté de la
    * bulle, et disparaissait au moment précis où l'on pointait la bulle.
    *
-   * Le jour **et** le type : deux pastilles peuvent partager une date — un achat
-   * et une vente le même jour — et chacune ne doit détailler que les écritures
-   * qu'elle porte.
+   * Le jour suffit : il n'y a plus qu'une pastille par journée. Le type en avait
+   * fait partie, du temps où une journée mixte en portait deux — superposées au
+   * pixel, donc l'une invisible. Voir le regroupement.
    */
-  const [groupeSurvole, setGroupeSurvole] = useState<{ jour: string; type: string } | null>(null);
+  const [jourSurvole, setJourSurvole] = useState<string | null>(null);
 
   /**
    * L'ordonnée d'un point : sa valeur réelle, ramenée à l'échelle du total.
@@ -1241,23 +1244,36 @@ export default function PerformanceChart({
     const jours = joursSerie;
 
     const calculer = () => {
-      // Regroupement par jour et par type.
-      //
-      // Quatre renforcements le même jour partagent date et valeur : leurs
-      // pastilles se posaient exactement l'une sur l'autre, indiscernables
-      // d'une seule mais quatre fois plus opaques. Une pastille par groupe,
-      // qui dit combien d'opérations elle couvre.
-      const groupes = new Map<string, { op: typeof operations[number]; jour: string; n: number; tickers: Set<string> }>();
+      /**
+       * Regroupement **par jour**, et par jour seulement.
+       *
+       * Quatre renforcements le même jour partagent date et valeur : leurs
+       * pastilles se posaient exactement l'une sur l'autre, indiscernables d'une
+       * seule mais quatre fois plus opaques. D'où un regroupement.
+       *
+       * ⚠️ Le type en faisait partie, et c'était un défaut qui cachait des
+       * écritures. Une journée peut porter plusieurs natures d'acte : relevé sur
+       * un vrai PEA, le 19 février 2026 compte deux achats — PAEJ.PA et ETZ.PA,
+       * premières lignes — et deux renforcements d'ESE.PA. Cela faisait deux
+       * groupes, donc deux pastilles, **ancrées au même jour donc aux mêmes
+       * coordonnées au pixel**. L'une recouvrait l'autre exactement : les deux
+       * achats étaient invisibles sur le tracé, et le survol de la bulle visible
+       * n'en détaillait pas un seul.
+       *
+       * Une seule pastille par jour, donc, et le détail dit tout ce qu'elle
+       * couvre — chaque ligne y porte déjà sa propre vignette, à sa couleur et à
+       * son glyphe.
+       */
+      const groupes = new Map<string, { ops: typeof operations; jour: string }>();
       for (const op of operations) {
         const jour = op.executed_at.slice(0, 10);
         // Hors du cadre — antérieure ou postérieure à la fenêtre — l'écriture est
         // écartée plutôt que rapprochée du bord : voir `jourAncre`.
         const cible = jourAncre(jour, jours);
         if (!cible) continue;
-        const cle = `${cible}|${op.type}`;
-        const g = groupes.get(cle);
-        if (g) { g.n += 1; g.tickers.add(op.ticker); }
-        else groupes.set(cle, { op, jour: cible, n: 1, tickers: new Set([op.ticker]) });
+        const g = groupes.get(cible);
+        if (g) g.ops.push(op);
+        else groupes.set(cible, { jour: cible, ops: [op] });
       }
 
       // `jour` accompagne le groupe : c'est lui qui permet à l'encart de retrouver
@@ -1268,23 +1284,28 @@ export default function PerformanceChart({
         const x = ancre == null ? null
           : chart.timeScale().timeToCoordinate(ancre.temps as UTCTimestamp);
         const y = ancre == null ? null : serie.priceToCoordinate(ancre.valeur);
-        const quand = new Date(g.op.executed_at).toLocaleDateString("fr-FR");
+        const tete = g.ops.reduce(dominante);
+        const quand = new Date(tete.executed_at).toLocaleDateString("fr-FR");
+        const tickers = Array.from(new Set(g.ops.map(o => o.ticker)));
         // Coordonnées entières.
         //
         // La bibliothèque rend des positions fractionnaires — 462,443 px. Le
         // contour de 2 px et le pictogramme se répartissaient alors sur deux
         // rangées de pixels : le cerne paraissait plus épais d'un côté et le
         // signe décentré, alors qu'il est géométriquement au milieu.
-        placer(noeudsPastille, coordsPastille, g.op.id,
+        placer(noeudsPastille, coordsPastille, tete.id,
                x == null || y == null ? null : { x: Math.round(x), y: Math.round(y) });
         // ⚠️ Une pastille hors cadre reste dans la liste, seulement masquée.
         // L'en retirer aurait fait varier la liste à chaque déplacement de la
         // vue, donc réveillé React — précisément ce que ce découplage évite.
         out.push({
-          id: g.op.id, nombre: g.n, type: g.op.type, jour: g.jour,
-          titre: g.n === 1
-            ? `${g.op.libelle} ${g.op.ticker} — ${quand}`
-            : `${g.n} ${g.op.libelle.toLowerCase()}s (${Array.from(g.tickers).join(", ")}) — ${quand}`,
+          id: tete.id, nombre: g.ops.length, type: tete.type, jour: g.jour,
+          titre: g.ops.length === 1
+            ? `${tete.libelle} ${tete.ticker} — ${quand}`
+            // Plus d'une écriture : on ne nomme plus un type, puisque la journée
+            // peut en porter plusieurs. « 4 opérations » est vrai dans tous les
+            // cas, là où « 4 renforcements » aurait été faux les jours mixtes.
+            : `${g.ops.length} opérations (${tickers.join(", ")}) — ${quand}`,
         });
       }
       // Rien n'a changé dans la *composition* de la liste — les positions, elles,
@@ -1957,9 +1978,7 @@ export default function PerformanceChart({
    * Il ne paraît donc que là où il apporte ce que personne d'autre ne dit : le
    * détail de l'écriture, quand on pointe la bulle qui la porte.
    */
-  const opsVisees = groupeSurvole
-    ? (opsParJour.get(groupeSurvole.jour) ?? []).filter(o => o.type === groupeSurvole.type)
-    : [];
+  const opsVisees = jourSurvole ? opsParJour.get(jourSurvole) ?? [] : [];
 
   const montantOp = (o: { quantity?: number; unit_price?: number; fees?: number }) =>
     o.quantity != null && o.unit_price != null
@@ -2102,10 +2121,14 @@ export default function PerformanceChart({
               : "0 0 3px rgba(6,20,42,0.95), 0 0 7px rgba(6,20,42,0.85)",
           }}>
             {/* Les écritures du jour visé.
-                Trois au plus : au-delà, l'encart deviendrait un tableau et
-                masquerait la courbe qu'il commente. Le compte des suivantes
-                suffit à dire qu'il y en a. */}
-            {opsVisees.slice(0, 3).map(o => {
+                ⚠️ Cinq au plus, et non trois. La pastille ne regroupant plus par
+                type, une journée en porte davantage : relevé sur un vrai PEA, le
+                15 juillet 2026 en compte cinq et le 19 février quatre. À trois, la
+                plupart des journées chargées auraient fini par « et 2 autres »,
+                c'est-à-dire par masquer ce que le survol vient chercher.
+                Au-delà de cinq, l'encart deviendrait un tableau posé sur la
+                courbe qu'il commente ; le compte des suivantes suffit alors. */}
+            {opsVisees.slice(0, MAX_LIGNES_ENCART).map(o => {
               const m = montantOp(o);
               return (
                 <div key={o.id} style={{ display: "flex", alignItems: "center", gap: 6 }}>
@@ -2138,9 +2161,9 @@ export default function PerformanceChart({
                 </div>
               );
             })}
-            {opsVisees.length > 3 && (
+            {opsVisees.length > MAX_LIGNES_ENCART && (
               <div style={{ fontSize: 10, color: JETONS.texteAttenue }}>
-                et {opsVisees.length - 3} autre{opsVisees.length - 3 > 1 ? "s" : ""} ce jour-là
+                et {opsVisees.length - MAX_LIGNES_ENCART} autre{opsVisees.length - MAX_LIGNES_ENCART > 1 ? "s" : ""} ce jour-là
               </div>
             )}
           </div>
@@ -2430,12 +2453,11 @@ export default function PerformanceChart({
         // sortait. Détachée, elle flottait sans qu'on sache à quel point du
         // tracé elle se rapportait — sur une courbe en escalier, l'écart
         // d'un jour se lit.
-        const pointee = !!groupeSurvole
-          && groupeSurvole.jour === p.jour && groupeSurvole.type === p.type;
+        const pointee = jourSurvole === p.jour;
         // Une bulle est estompée quand une *autre* est pointée : c'est ce qui
         // répond à « laquelle je lis » quand plusieurs se serrent. Sur la fenêtre
         // Max, dix jours d'écriture tiennent sur cent vingt-huit points.
-        const estompee = !!groupeSurvole && !pointee;
+        const estompee = jourSurvole != null && !pointee;
         return (
           /**
            * ⚠️ `aria-label` et non `title` : pas d'infobulle native.
@@ -2464,9 +2486,8 @@ export default function PerformanceChart({
              * l'approche. Se fier au réticule affichait l'encart *à côté* de la
              * bulle et l'effaçait dessus.
              */
-            onPointerEnter={() => setGroupeSurvole({ jour: p.jour, type: p.type })}
-            onPointerLeave={() => setGroupeSurvole(g =>
-              (g && g.jour === p.jour && g.type === p.type ? null : g))}
+            onPointerEnter={() => setJourSurvole(p.jour)}
+            onPointerLeave={() => setJourSurvole(j => (j === p.jour ? null : j))}
             ref={inscrire(noeudsPastille, coordsPastille, p.id)}
             style={{
               // Centré sur le point de la courbe : le repère en sort au lieu

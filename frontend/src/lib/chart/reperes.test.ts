@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { ancresParJour, jourAncre } from "./reperes";
+import { ancresParJour, dominante, jourAncre, POIDS_GESTE } from "./reperes";
 
 /** Une série journalière, telle que la rendent les fenêtres longues. */
 const journalier = [
@@ -104,5 +104,50 @@ describe("jourAncre", () => {
     // Le seuil vaut aussi au milieu de la série : une écriture passée pendant
     // trois semaines sans cours ne doit pas se poser à la reprise.
     expect(jourAncre("2026-08-10", ["2026-08-05", "2026-09-01"])).toBeNull();
+  });
+});
+
+describe("dominante", () => {
+  const op = (type: string, ticker = "X") => ({ type, ticker });
+
+  it("une vente totale l'emporte sur tout le reste", () => {
+    for (const autre of ["vente_partielle", "achat", "renforcement"]) {
+      expect(dominante(op(autre), op("vente")).type).toBe("vente");
+      expect(dominante(op("vente"), op(autre)).type).toBe("vente");
+    }
+  });
+
+  it("un achat l'emporte sur un renforcement", () => {
+    // Le cas réel : le 19 février 2026, deux achats — PAEJ.PA et ETZ.PA,
+    // premières lignes — et deux renforcements d'ESE.PA. Le plus gros montant y
+    // est un renforcement de 88 €, contre 40 € pour l'achat d'ETZ : trier par
+    // montant aurait annoncé un renfort le jour où deux positions se sont
+    // ouvertes.
+    const jour = [
+      op("achat", "PAEJ.PA"), op("renforcement", "ESE.PA"),
+      op("renforcement", "ESE.PA"), op("achat", "ETZ.PA"),
+    ];
+    expect(jour.reduce(dominante).type).toBe("achat");
+  });
+
+  it("une vente partielle l'emporte sur un achat", () => {
+    expect(dominante(op("achat"), op("vente_partielle")).type).toBe("vente_partielle");
+  });
+
+  it("à poids égal, garde la première — donc la plus ancienne du jour", () => {
+    const a = op("achat", "AAA"), b = op("achat", "BBB");
+    expect(dominante(a, b)).toBe(a);
+    expect([a, b].reduce(dominante).ticker).toBe("AAA");
+  });
+
+  it("un type inconnu ne masque jamais un geste nommé", () => {
+    expect(dominante(op("bizarre"), op("renforcement")).type).toBe("renforcement");
+    expect(dominante(op("renforcement"), op("bizarre")).type).toBe("renforcement");
+  });
+
+  it("chaque type connu porte un poids distinct", () => {
+    const poids = ["vente", "vente_partielle", "achat", "renforcement"].map(t => POIDS_GESTE[t]);
+    expect(new Set(poids).size).toBe(4);
+    expect(poids.every(p => typeof p === "number")).toBe(true);
   });
 });

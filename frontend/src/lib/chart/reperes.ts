@@ -100,3 +100,38 @@ export function jourAncre(jourOp: string, jours: readonly string[]): string | nu
   if (cible === undefined) return null;
   return ecartJours(jourOp, cible) > REPORT_MAX_JOURS ? null : cible;
 }
+
+/**
+ * Ce qui rend un geste plus structurant qu'un autre. Le plus grand l'emporte.
+ *
+ * Fermer une ligne change la forme du portefeuille ; l'alléger, un peu moins ; en
+ * ouvrir une nouvelle change sa composition ; la renforcer ne fait que
+ * l'épaissir. C'est cet ordre-là, et non le montant, qui décide du visage d'une
+ * journée mixte.
+ *
+ * ⚠️ Le montant avait été retenu d'abord, comme critère « mesurable donc neutre ».
+ * Il l'est, mais il mesure la mauvaise chose. Relevé sur un vrai PEA, le
+ * 19 février 2026 porte deux achats — PAEJ.PA et ETZ.PA, premières lignes — et
+ * deux renforcements d'ESE.PA. Le plus gros montant y est un renforcement de
+ * 88 €, contre 40 € pour l'achat d'ETZ : la bulle aurait annoncé un renfort le
+ * jour où deux positions se sont ouvertes, et l'ouverture serait restée enfouie
+ * dans le détail.
+ */
+export const POIDS_GESTE: Record<string, number> = {
+  vente: 4, vente_partielle: 3, achat: 2, renforcement: 1,
+};
+
+/**
+ * Des deux écritures, celle qui donne son visage à la pastille du jour.
+ *
+ * Une journée peut mêler un achat, un renforcement et une vente ; une seule
+ * pastille tient sur le point, et le détail au survol dit tout le reste.
+ *
+ * À poids égal — deux achats, par exemple — la première rencontrée reste en
+ * place. L'ordre des écritures étant chronologique, cela revient à retenir la plus
+ * ancienne du jour, ce qui est stable d'un rendu à l'autre. Un type inconnu pèse
+ * zéro : il ne masquera jamais un geste nommé.
+ */
+export function dominante<T extends { type: string }>(a: T, b: T): T {
+  return (POIDS_GESTE[b.type] ?? 0) > (POIDS_GESTE[a.type] ?? 0) ? b : a;
+}
