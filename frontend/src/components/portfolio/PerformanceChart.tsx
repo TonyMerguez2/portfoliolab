@@ -832,7 +832,23 @@ export default function PerformanceChart({
     chartRef.current?.applyOptions(habillage(clair, grille));
   }, [clair, grille]);
 
-  const [pastilles, setPastilles] = useState<{ id: number; titre: string; nombre: number; type: string }[]>([]);
+  const [pastilles, setPastilles] = useState<
+    { id: number; titre: string; nombre: number; type: string; jour: string }[]>([]);
+  /**
+   * Le groupe d'écritures dont la pastille est **sous la souris**.
+   *
+   * ⚠️ Et non le jour sous le réticule, qui était la première version et se
+   * comportait exactement à l'envers de ce qu'on attend. La pastille capte le
+   * pointeur — il faut bien pouvoir la cliquer — donc lightweight-charts ne
+   * reçoit plus le mouvement et éteint son réticule dès que la souris arrive
+   * dessus. L'encart s'affichait ainsi en survolant la journée à côté de la
+   * bulle, et disparaissait au moment précis où l'on pointait la bulle.
+   *
+   * Le jour **et** le type : deux pastilles peuvent partager une date — un achat
+   * et une vente le même jour — et chacune ne doit détailler que les écritures
+   * qu'elle porte.
+   */
+  const [groupeSurvole, setGroupeSurvole] = useState<{ jour: string; type: string } | null>(null);
 
   /**
    * L'ordonnée d'un point : sa valeur réelle, ramenée à l'échelle du total.
@@ -1230,7 +1246,9 @@ export default function PerformanceChart({
         else groupes.set(cle, { op, jour: cible, n: 1, tickers: new Set([op.ticker]) });
       }
 
-      const out: { id: number; titre: string; nombre: number; type: string }[] = [];
+      // `jour` accompagne le groupe : c'est lui qui permet à l'encart de retrouver
+      // les écritures que cette pastille porte, sans redécouper les groupes.
+      const out: { id: number; titre: string; nombre: number; type: string; jour: string }[] = [];
       for (const g of Array.from(groupes.values())) {
         const ancre = ancreAu.get(g.jour);
         const x = ancre == null ? null
@@ -1249,7 +1267,7 @@ export default function PerformanceChart({
         // L'en retirer aurait fait varier la liste à chaque déplacement de la
         // vue, donc réveillé React — précisément ce que ce découplage évite.
         out.push({
-          id: g.op.id, nombre: g.n, type: g.op.type,
+          id: g.op.id, nombre: g.n, type: g.op.type, jour: g.jour,
           titre: g.n === 1
             ? `${g.op.libelle} ${g.op.ticker} — ${quand}`
             : `${g.n} ${g.op.libelle.toLowerCase()}s (${Array.from(g.tickers).join(", ")}) — ${quand}`,
@@ -1914,7 +1932,7 @@ export default function PerformanceChart({
   const dernier = points.length && totalValue ? totalValue : null;
 
   /**
-   * Les écritures du jour sous le curseur.
+   * Les écritures portées par la pastille sous la souris.
    *
    * ⚠️ L'encart n'annonce **ni la date ni la valeur** du point visé, et c'est
    * délibéré : la bande de tête de la page les donne déjà, et à la date survolée
@@ -1923,9 +1941,11 @@ export default function PerformanceChart({
    * centimètres d'écart, dont l'un en plus petit.
    *
    * Il ne paraît donc que là où il apporte ce que personne d'autre ne dit : le
-   * détail de l'écriture. Ailleurs, il s'effface.
+   * détail de l'écriture, quand on pointe la bulle qui la porte.
    */
-  const opsVisees = survol ? opsParJour.get(survol.date.slice(0, 10)) ?? [] : [];
+  const opsVisees = groupeSurvole
+    ? (opsParJour.get(groupeSurvole.jour) ?? []).filter(o => o.type === groupeSurvole.type)
+    : [];
 
   const montantOp = (o: { quantity?: number; unit_price?: number; fees?: number }) =>
     o.quantity != null && o.unit_price != null
@@ -2385,6 +2405,21 @@ export default function PerformanceChart({
           // d'un jour se lit.
           <button key={p.id} title={p.titre} type="button"
             onClick={onOperationClick ? () => onOperationClick(p.id) : undefined}
+            /**
+             * Le survol de la bulle elle-même commande l'encart.
+             *
+             * ⚠️ `pointerEnter` et non `mouseEnter` : le premier couvre aussi le
+             * stylet, et se déclenche au premier contact d'un doigt — sur mobile,
+             * effleurer la bulle en montre alors le détail au lieu de rien.
+             *
+             * ⚠️ Et il faut bien que ce soit la bulle : c'est elle qui capte le
+             * pointeur, donc le réticule de la bibliothèque s'éteint dès qu'on
+             * l'approche. Se fier au réticule affichait l'encart *à côté* de la
+             * bulle et l'effaçait dessus.
+             */
+            onPointerEnter={() => setGroupeSurvole({ jour: p.jour, type: p.type })}
+            onPointerLeave={() => setGroupeSurvole(g =>
+              (g && g.jour === p.jour && g.type === p.type ? null : g))}
             ref={inscrire(noeudsPastille, coordsPastille, p.id)}
             style={{
               // Centré sur le point de la courbe : le repère en sort au lieu
@@ -2405,7 +2440,11 @@ export default function PerformanceChart({
               color: clair ? "#FFFFFF" : "rgba(6,20,42,0.96)", flexShrink: 0,
               zIndex: 6,
               cursor: onOperationClick ? "pointer" : "default",
-              pointerEvents: onOperationClick ? "auto" : "none",
+              // ⚠️ Toujours réceptive au pointeur, même sans clic à offrir : c'est
+              // le survol qui déplie son détail en haut à gauche. Conditionner
+              // cette réceptivité au gestionnaire de clic aurait rendu l'encart
+              // silencieusement muet chez un appelant qui n'en fournit pas.
+              pointerEvents: "auto",
             }}>
             <Pictogramme type={p.type} />
           </button>
