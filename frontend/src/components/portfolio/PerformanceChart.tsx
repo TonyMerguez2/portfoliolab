@@ -14,6 +14,7 @@ import { COULEUR_OP, COULEUR_OP_CLAIR } from "@/lib/journal";
 import { useModeTheme, resoudreJeton } from "@/lib/theme";
 import { RAYONS, JETONS } from "@/lib/palette";
 import { agregerEnBougies } from "@/lib/chart/series";
+import { ancresParJour, jourAncre } from "@/lib/chart/reperes";
 import { cleSource } from "@/lib/chart/sourceSerie";
 import {
   GLYPHES, TAILLE_DEFAUT, cleStickers, ecrireStickers, idSticker, lireStickers,
@@ -1056,8 +1057,13 @@ export default function PerformanceChart({
     const chart = chartRef.current, serie = serieRef.current, el = plotRef.current;
     if (!chart || !serie || !el || !points.length || !ordonnee || !cadrePret) { setPastilles([]); setReperes([]); return; }
 
-    // La même ordonnée que la courbe, et non un second calcul : voir `ordonnee`.
-    const valeurAu = new Map(points.map(p => [p.date.slice(0, 10), ordonnee(p)]));
+    // L'ancre de chaque jour — horodatage réel et ordonnée — et la liste des
+    // jours tracés. Voir `lib/chart/reperes`, où les deux règles sont testées :
+    // les repères d'extrême prenaient déjà l'horodatage du point, c'est pourquoi
+    // eux seuls survivaient aux fenêtres tracées en barres intraday.
+    //
+    // L'ordonnée est celle de la courbe, et non un second calcul : voir `ordonnee`.
+    const ancreAu = ancresParJour(points, ordonnee);
     const jours = points.map(p => p.date.slice(0, 10));
 
     const calculer = () => {
@@ -1070,9 +1076,9 @@ export default function PerformanceChart({
       const groupes = new Map<string, { op: typeof operations[number]; jour: string; n: number; tickers: Set<string> }>();
       for (const op of operations) {
         const jour = op.executed_at.slice(0, 10);
-        // Le premier jour coté à partir de la date de l'opération : une
-        // écriture passée un samedi n'a pas de point à elle.
-        const cible = valeurAu.has(jour) ? jour : jours.find(j => j >= jour);
+        // Hors du cadre — antérieure ou postérieure à la fenêtre — l'écriture est
+        // écartée plutôt que rapprochée du bord : voir `jourAncre`.
+        const cible = jourAncre(jour, jours);
         if (!cible) continue;
         const cle = `${cible}|${op.type}`;
         const g = groupes.get(cle);
@@ -1082,10 +1088,10 @@ export default function PerformanceChart({
 
       const out: { id: number; x: number; y: number; titre: string; nombre: number; type: string }[] = [];
       for (const g of Array.from(groupes.values())) {
-        const t = Math.floor(new Date(g.jour + "T00:00:00Z").getTime() / 1000) as UTCTimestamp;
-        const x = chart.timeScale().timeToCoordinate(t);
-        const v = valeurAu.get(g.jour);
-        const y = v == null ? null : serie.priceToCoordinate(v);
+        const ancre = ancreAu.get(g.jour);
+        const x = ancre == null ? null
+          : chart.timeScale().timeToCoordinate(ancre.temps as UTCTimestamp);
+        const y = ancre == null ? null : serie.priceToCoordinate(ancre.valeur);
         if (x == null || y == null) continue;
         const quand = new Date(g.op.executed_at).toLocaleDateString("fr-FR");
         out.push({
