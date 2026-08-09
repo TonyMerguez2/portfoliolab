@@ -1,6 +1,5 @@
 "use client";
 import { useMemo, useState } from "react";
-import RadarChart from "@/components/charts/RadarChart";
 import { FONT, NUM } from "@/lib/typography";
 import { donutArcs } from "@/lib/donut";
 import {
@@ -27,22 +26,16 @@ const MARGE = 10;
 const GOUTTIERE = 8;
 
 /**
- * Intitulés du radar, abrégés.
+ * ⚠️ Le radar a été **retiré** de l'onglet, avec sa table d'abrégés.
  *
- * ⚠️ Le radar porte désormais les **cinq piliers** et non une liste de facteurs. Il
- * représente la note : cinq branches dont chacune pèse un poids connu se lisent d'un
- * coup d'œil, là où sept facteurs de natures différentes ne formaient pas une figure.
+ * Il doublait l'information des cinq barres, qui portent en plus les chiffres, les
+ * noms entiers et les poids — un radar dont les étiquettes ne tiennent pas ne dit rien
+ * qu'une barre ne dise mieux. Et sa colonne fixe étouffait la mise en page : mesuré à
+ * 800 px de large, elle faisait disparaître les cinq piliers du cadre.
  *
- * « Adéquation au profil » posé autour d'un cercle de 168 px chevauche ses voisins ;
- * la liste à côté donne le nom entier.
+ * Le code est supprimé plutôt que laissé de côté : un composant gardé « au cas où »
+ * cesse d'être maintenu tout en restant compilé.
  */
-const ABREGE: Record<string, string> = {
-  diversification: "Diversif.",
-  risque:          "Risque",
-  construction:    "Construction",
-  qualite:         "Qualité",
-  adequation:      "Profil",
-};
 
 
 /**
@@ -170,13 +163,6 @@ export default function AnalyseView({ analyse: a, etat }: { analyse: Analyse | n
   const piliers = useMemo(() => a?.novac?.piliers ?? [], [a]);
   const confiance = a?.novac?.confiance ?? null;
   const profilLisible = a?.novac?.profil ? LIBELLE_PROFIL[a.novac.profil] : null;
-  const facteursRadar = useMemo(
-    () => piliers
-      // Un pilier non mesuré n'a pas de branche : la tracer à zéro le ferait passer
-      // pour une mauvaise note, alors qu'il n'est simplement pas calculable.
-      .filter(p => p.score != null && ABREGE[p.cle] != null)
-      .map(p => ({ label: ABREGE[p.cle], value: p.score! })),
-    [piliers]);
 
   if (etat === "charge") {
     return <div style={{ padding: 40, textAlign: "center", fontFamily: FONT, fontSize: 12,
@@ -260,105 +246,113 @@ export default function AnalyseView({ analyse: a, etat }: { analyse: Analyse | n
         {/* Les cinq piliers */}
         <Carte>
           <Titre action={
-            <span style={{ fontFamily: FONT, fontSize: 9.5, color: "rgba(var(--nv-encre-rvb), 0.32)" }}>
-              cliquez un pilier pour le détail
+            <span style={{ fontFamily: FONT, fontSize: 9.5, whiteSpace: "nowrap",
+                           color: "rgba(var(--nv-encre-rvb), 0.30)" }}>
+              cliquez pour le détail
             </span>
           }>Les cinq piliers</Titre>
-          <div style={{ display: "flex", alignItems: "center", gap: 14, flex: 1, minHeight: 0 }}>
-            {facteursRadar.length >= 3 && (
-              <div style={{ flexShrink: 0 }}>
-                <RadarChart size={140} metrics={facteursRadar} />
-              </div>
-            )}
-            {/* ⚠️ Un accordéon, et non la liste complète. Cinq piliers portant jusqu'à
-                quatre métriques chacun font vingt-cinq lignes : elles débordaient de la
-                carte, et les notes de métriques s'affichaient aussi grosses que celles
-                des piliers — donc sans hiérarchie de lecture.
+          {/* ⚠️ `alignItems: stretch` et non `center`, et c'est tout le défaut d'avant.
+              Centrée, une liste plus haute que sa rangée débordait **des deux côtés** à
+              la fois : elle chevauchait le titre en haut et sortait du cadre en bas,
+              symétriquement. Le `overflowY: auto` de la liste ne servait à rien puisque
+              le centrage l'avait déjà fait grandir hors de son conteneur.
 
-                Un seul pilier ouvert à la fois : neuf lignes au plus. C'est aussi la
-                lecture à deux niveaux voulue — les cinq notes d'abord, le détail sur
-                demande. */}
-            <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column",
-                          gap: 3, overflowY: "auto", minHeight: 0 }}>
-              {piliers.map(pil => {
-                const ouvert = pilierOuvert === pil.cle;
-                const col = couleurScore(pil.score);
-                return (
-                  <div key={pil.cle}>
-                    <button type="button" title={pil.explication}
-                      onClick={() => setPilierOuvert(ouvert ? null : pil.cle)}
-                      style={{ display: "block", width: "100%", textAlign: "left",
-                               background: "none", border: "none", padding: "3px 0",
-                               cursor: "pointer" }}>
-                      <div style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
-                        <span style={{ flex: 1, minWidth: 0, fontFamily: FONT, fontSize: 11.5,
-                                       fontWeight: 600, color: "rgba(var(--nv-encre-rvb), 0.82)",
-                                       overflow: "hidden", textOverflow: "ellipsis",
-                                       whiteSpace: "nowrap" }}>
-                          {ouvert ? "▾" : "▸"} {pil.libelle}
-                          <span style={{ marginLeft: 5, fontSize: 9, fontWeight: 500,
-                                         color: "rgba(var(--nv-encre-rvb), 0.30)" }}>
-                            {pil.poids_effectif > 0
-                              ? `${pil.poids_effectif.toFixed(0)} %`
-                              : "hors calcul"}
+              Étirée, elle reçoit exactement la hauteur de la rangée et défile dedans.
+              Le radar, lui, se centre seul — c'est un carré, il n'a pas à s'étirer. */}
+          {/* ⚠️ **Le radar a été retiré de cette carte**, et c'est un retrait, pas un
+              oubli.
+
+              Il doublait l'information des cinq barres, qui portent en plus les
+              chiffres et les noms entiers — un radar sans étiquettes lisibles ne dit
+              rien qu'une barre ne dise mieux. Et c'est lui qui étouffait la mise en
+              page : mesuré à 800 px de large, sa colonne fixe de 150 px faisait
+              disparaître les cinq piliers du cadre, tronquait « Équilibré » en
+              « quilibré » et repliait le titre sur deux lignes.
+
+              Les cinq notes occupent donc toute la largeur, et le détail du pilier
+              ouvert vient dessous. La carte n'a pas la hauteur de tout montrer d'un
+              coup — cinq piliers plus quatre métriques demandent 376 px pour 291 —
+              donc l'ensemble défile, mais les cinq notes restent en tête de liste. */}
+          <div style={{ display: "flex", flexDirection: "column", gap: 6,
+                        flex: 1, minHeight: 0, overflowY: "auto", paddingRight: 4 }}>
+            {piliers.map(pil => {
+              const actif = pilierOuvert === pil.cle;
+              const col = couleurScore(pil.score);
+              return (
+                <div key={pil.cle}>
+                  <button type="button" title={pil.explication}
+                    onClick={() => setPilierOuvert(actif ? null : pil.cle)}
+                    style={{ display: "block", width: "100%", textAlign: "left",
+                             background: actif ? "rgba(var(--nv-encre-rvb), 0.04)" : "none",
+                             border: "none", borderRadius: 6, padding: "3px 6px",
+                             cursor: "pointer", transition: "background 150ms" }}>
+                    <div style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
+                      <span style={{ flex: 1, minWidth: 0, fontFamily: FONT, fontSize: 11.5,
+                                     fontWeight: 600, color: "rgba(var(--nv-encre-rvb), 0.82)",
+                                     overflow: "hidden", textOverflow: "ellipsis",
+                                     whiteSpace: "nowrap" }}>
+                        {pil.libelle}
+                        <span style={{ marginLeft: 5, fontSize: 9, fontWeight: 500,
+                                       color: "rgba(var(--nv-encre-rvb), 0.30)" }}>
+                          {pil.poids_effectif > 0
+                            ? `${pil.poids_effectif.toFixed(0)} %`
+                            : "hors calcul"}
+                        </span>
+                      </span>
+                      <span style={{ ...NUM, fontSize: 15, fontWeight: 700, width: 30,
+                                     textAlign: "right", color: col, flexShrink: 0 }}>
+                        {pil.score ?? "—"}
+                      </span>
+                    </div>
+                    {/* Une barre très fine, comme le §18 le demande : elle donne
+                        l'ordre de grandeur sans peser dans la composition. */}
+                    <div style={{ height: 3, marginTop: 4, borderRadius: 2,
+                                  background: "rgba(var(--nv-encre-rvb), 0.07)" }}>
+                      {pil.score != null && (
+                        <div style={{ height: "100%", borderRadius: 2, background: col,
+                                      width: `${pil.score}%`, opacity: 0.85,
+                                      transition: "width 600ms ease" }} />
+                      )}
+                    </div>
+                  </button>
+                  {actif && (
+                    <div style={{ padding: "5px 6px 7px 14px", display: "flex",
+                                  flexDirection: "column", gap: 5 }}>
+                      {pil.metriques.filter(m => m.poids > 0).map(m => (
+                        <div key={m.cle} title={m.explication}
+                          style={{ display: "flex", alignItems: "baseline", gap: 8,
+                                   cursor: "help" }}>
+                          <span style={{ flex: 1, minWidth: 0 }}>
+                            <span style={{ display: "block", fontFamily: FONT, fontSize: 10,
+                                           color: "rgba(var(--nv-encre-rvb), 0.64)" }}>
+                              {m.libelle}
+                              <span style={{ marginLeft: 4, fontSize: 8.5,
+                                             color: "rgba(var(--nv-encre-rvb), 0.26)" }}>
+                                {m.poids_effectif.toFixed(0)} %
+                              </span>
+                            </span>
+                            {/* La lecture brute : « 0,56 au plus entre deux lignes »
+                                se vérifie, « 100 » se subit. */}
+                            <span style={{ display: "block", fontFamily: FONT, fontSize: 9,
+                                           lineHeight: 1.35,
+                                           color: "rgba(var(--nv-encre-rvb), 0.30)" }}>
+                              {m.lecture}
+                              {m.statut === "partiel"
+                                && ` · ${(m.couverture * 100).toFixed(0)} % du portefeuille`}
+                            </span>
                           </span>
-                        </span>
-                        <span style={{ ...NUM, fontSize: 15, fontWeight: 700, width: 30,
-                                       textAlign: "right", color: col, flexShrink: 0 }}>
-                          {pil.score ?? "—"}
-                        </span>
-                      </div>
-                      {/* Une barre très fine, comme le §18 le demande : elle donne
-                          l'ordre de grandeur sans peser dans la composition. */}
-                      <div style={{ height: 3, marginTop: 4, borderRadius: 2,
-                                    background: "rgba(var(--nv-encre-rvb), 0.07)" }}>
-                        {pil.score != null && (
-                          <div style={{ height: "100%", borderRadius: 2, background: col,
-                                        width: `${pil.score}%`, opacity: 0.85,
-                                        transition: "width 600ms ease" }} />
-                        )}
-                      </div>
-                    </button>
-                    {ouvert && (
-                      <div style={{ padding: "4px 0 6px 12px", display: "flex",
-                                    flexDirection: "column", gap: 4 }}>
-                        {pil.metriques.filter(m => m.poids > 0).map(m => (
-                          <div key={m.cle} title={m.explication}
-                            style={{ display: "flex", alignItems: "baseline", gap: 8,
-                                     cursor: "help" }}>
-                            <span style={{ flex: 1, minWidth: 0 }}>
-                              <span style={{ display: "block", fontFamily: FONT, fontSize: 10,
-                                             color: "rgba(var(--nv-encre-rvb), 0.62)",
-                                             overflow: "hidden", textOverflow: "ellipsis",
-                                             whiteSpace: "nowrap" }}>
-                                {m.libelle}
-                                <span style={{ marginLeft: 4, fontSize: 8.5,
-                                               color: "rgba(var(--nv-encre-rvb), 0.26)" }}>
-                                  {m.poids_effectif.toFixed(0)} %
-                                </span>
-                              </span>
-                              {/* La lecture brute : « 0,91 au plus entre deux lignes »
-                                  se vérifie, « 36 » se subit. */}
-                              <span style={{ display: "block", fontFamily: FONT, fontSize: 9,
-                                             color: "rgba(var(--nv-encre-rvb), 0.30)" }}>
-                                {m.lecture}
-                                {m.statut === "partiel"
-                                  && ` · ${(m.couverture * 100).toFixed(0)} % du portefeuille`}
-                              </span>
-                            </span>
-                            <span style={{ ...NUM, fontSize: 10.5, fontWeight: 600, width: 24,
-                                           textAlign: "right", color: couleurScore(m.score),
-                                           flexShrink: 0 }}>
-                              {m.score ?? "—"}
-                            </span>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
+                          <span style={{ ...NUM, fontSize: 10.5, fontWeight: 600, width: 24,
+                                         textAlign: "right", color: couleurScore(m.score),
+                                         flexShrink: 0 }}>
+                            {m.score ?? "—"}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
           </div>
         </Carte>
 
