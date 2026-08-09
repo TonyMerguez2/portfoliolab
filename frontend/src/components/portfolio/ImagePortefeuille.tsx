@@ -7,6 +7,7 @@ import { encreSur } from "@/lib/couleur";
 import { initiale } from "@/lib/initiale";
 import PocheActifs, { RAYON_CORPS } from "@/components/portfolio/PocheActifs";
 import CadrerImage from "@/components/portfolio/CadrerImage";
+import { annoncerModification } from "@/lib/portefeuilleModifie";
 
 /**
  * L'image de profil d'un portefeuille, et de quoi la changer.
@@ -113,7 +114,11 @@ export default function ImagePortefeuille<T extends PortefeuilleImage>({
         const d = await r.json().catch(() => ({}));
         throw new Error(d.detail || "Envoi refusé");
       }
-      onChange(await r.json());
+      const maj = await r.json();
+      onChange(maj);
+      // L'appelant n'est pas le seul à afficher ce portefeuille : la liste du
+      // menu de l'en-tête le montre aussi, et elle ne le relit qu'au montage.
+      annoncerModification(maj);
     } catch (e) {
       setErreur(e instanceof Error ? e.message : "Envoi impossible");
     } finally {

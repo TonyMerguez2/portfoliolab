@@ -66,7 +66,30 @@ def test_changement_de_format_ne_laisse_pas_l_ancien_fichier():
         assert os.listdir(t) == ["abc-123.png"]
         chemin = enregistrer(JPEG, t, "abc-123")
         assert os.listdir(t) == ["abc-123.jpg"]
-        assert chemin == f"/{t}/abc-123.jpg"
+        # Le fichier garde un nom nu ; l'URL, elle, porte une empreinte de version.
+        assert chemin.startswith(f"/{t}/abc-123.jpg?v=")
+
+
+def test_l_url_change_quand_le_contenu_change():
+    """
+    Sans quoi un recadrage reste invisible.
+
+    Le fichier porte l'identifiant du portefeuille : son chemin ne change jamais
+    d'un envoi au suivant. Deux URL identiques laissaient le navigateur servir
+    l'image déjà décodée, et React ne touchait même pas au `src`.
+    """
+    with tempfile.TemporaryDirectory() as t:
+        a = enregistrer(PNG, t, "abc-123")
+        b = enregistrer(PNG + b"\x00\x01\x02", t, "abc-123")
+        assert a != b
+        assert a.split("?")[0] == b.split("?")[0]
+
+
+def test_le_meme_contenu_rend_la_meme_url():
+    """L'empreinte porte sur le contenu : renvoyer deux fois la même image ne
+    doit pas priver le navigateur de son cache."""
+    with tempfile.TemporaryDirectory() as t:
+        assert enregistrer(PNG, t, "abc-123") == enregistrer(PNG, t, "abc-123")
 
 
 def test_suppression_quelle_que_soit_l_extension():

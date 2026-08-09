@@ -3,6 +3,7 @@ import { useEffect, useRef, useState, memo, useCallback, useMemo } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { useApp } from "@/lib/AppContext";
 import { enTetesAuth } from "@/lib/session";
+import { surModification } from "@/lib/portefeuilleModifie";
 import { TRENDING } from "@/lib/assets";
 import AssetLogo from "@/components/AssetLogo";
 import PocheActifs, { RAYON_CORPS } from "@/components/portfolio/PocheActifs";
@@ -202,6 +203,22 @@ export default function GlobalHeader() {
       .then(d => { if (Array.isArray(d)) setPortfolios(d); })
       .catch(() => {});
   }, []);
+
+  /**
+   * La liste se corrige quand un portefeuille est écrit ailleurs.
+   *
+   * ⚠️ Elle n'est lue qu'une fois, au montage — et l'en-tête ne se démonte pas
+   * d'une page à l'autre. Poser une image sur le tableau de bord la laissait donc
+   * sur sa version périmée jusqu'au prochain chargement complet, ce qui se lisait
+   * comme un recadrage non enregistré alors qu'il l'était.
+   *
+   * On rapièce l'entrée concernée plutôt que de recharger la liste : c'est une
+   * requête en moins, et surtout aucun risque de la voir se réordonner ou
+   * clignoter sous le curseur de quelqu'un qui la parcourt.
+   */
+  useEffect(() => surModification(p => {
+    setPortfolios(l => l.map(x => (x.id === p.id ? { ...x, ...p } : x)));
+  }), []);
 
   // ⌘K shortcut
   useEffect(() => {

@@ -12,6 +12,7 @@ Le SVG est refusé pour cette raison : c'est un document, il peut porter du
 script, et rien ici n'en a besoin.
 """
 
+import hashlib
 import os
 
 # Les premiers octets de chaque format accepté, et l'extension qui leur
@@ -67,9 +68,27 @@ def enregistrer(donnees: bytes, dossier: str, base: str) -> str:
         if autre != ext and os.path.exists(vieux):
             os.remove(vieux)
 
-    with open(os.path.join(dossier, f"{base}.{ext}"), "wb") as f:
+    chemin = os.path.join(dossier, f"{base}.{ext}")
+    with open(chemin, "wb") as f:
         f.write(donnees)
-    return f"/{dossier}/{base}.{ext}"
+
+    # ⚠️ Une empreinte du contenu dans l'URL, sans quoi la nouvelle image ne
+    # s'affiche pas.
+    #
+    # Le fichier porte l'identifiant du portefeuille, donc son chemin ne change
+    # jamais d'un envoi au suivant. Le client recevait alors deux fois la même
+    # URL : le navigateur gardait l'image déjà décodée, et React ne touchait même
+    # pas au `src` puisque la chaîne était identique. Un recadrage était bien
+    # écrit sur le disque et restait invisible jusqu'au rechargement complet de la
+    # page — exactement le symptôme rapporté, sur la vignette comme dans le menu.
+    #
+    # L'empreinte du contenu plutôt que l'heure : deux envois du même fichier
+    # rendent la même URL, donc le cache du navigateur sert encore à quelque
+    # chose. Huit caractères suffisent à distinguer deux cadrages d'une même
+    # photo — ce n'est pas un usage de sécurité, seulement un identifiant de
+    # version.
+    empreinte = hashlib.sha256(donnees).hexdigest()[:8]
+    return f"/{dossier}/{base}.{ext}?v={empreinte}"
 
 
 def supprimer(dossier: str, base: str) -> None:
