@@ -71,6 +71,23 @@ const PASTILLE = 22;
 const GLYPHE = PASTILLE - 8;
 
 /**
+ * La vignette de l'encart, et son glyphe.
+ *
+ * ⚠️ **Seize et dix, pour que la marge soit un nombre entier de pixels.** La
+ * version précédente valait quatorze et neuf : deux virgule cinq pixels de marge,
+ * donc les bords du glyphe tombaient sur des demi-pixels et son lissage devenait
+ * asymétrique — plus sombre d'un côté que de l'autre. Mesuré au `getBBox`, les
+ * quatre tracés sont pourtant centrés dans leur boîte à un quart d'unité près,
+ * soit un septième de pixel : le décentrage n'était pas dans le dessin mais dans
+ * la grille de rendu.
+ *
+ * Seize plutôt que quatorze parce qu'un glyphe de huit rendait le chariot
+ * indéchiffrable, et que la marge de trois pixels tient dans les deux cas.
+ */
+const VIGNETTE = 16;
+const GLYPHE_VIGNETTE = 10;
+
+/**
  * Pictogramme d'une opération.
  *
  * Quatre cercles de couleurs différentes demanderaient de retenir un code ; un
@@ -2050,15 +2067,15 @@ export default function PerformanceChart({
               return (
                 <div key={o.id} style={{ display: "flex", alignItems: "center", gap: 6 }}>
                   <span style={{
-                    width: 14, height: 14, borderRadius: "50%", flexShrink: 0,
+                    width: VIGNETTE, height: VIGNETTE, borderRadius: "50%", flexShrink: 0,
                     background: couleurOp(o.type, clair),
                     display: "flex", alignItems: "center", justifyContent: "center",
                     color: clair ? "#FFFFFF" : "rgba(6,20,42,0.96)",
                   }}>
-                    {/* Réduit ici, et c'est assumé : le libellé est écrit juste à
-                        côté, donc la vignette n'a qu'à rappeler la couleur et la
-                        silhouette. Elle n'a rien à expliquer seule. */}
-                    <Pictogramme type={o.type} taille={9} />
+                    {/* Réduit par rapport au tracé, et c'est assumé : le libellé est
+                        écrit juste à côté, donc la vignette n'a qu'à rappeler la
+                        couleur et la silhouette. Elle n'a rien à expliquer seule. */}
+                    <Pictogramme type={o.type} taille={GLYPHE_VIGNETTE} />
                   </span>
                   <span style={{ fontSize: 11, color: JETONS.texteFort, whiteSpace: "nowrap" }}>
                     {o.libelle} <strong style={{ color: JETONS.texteIntense }}>{o.ticker}</strong>
