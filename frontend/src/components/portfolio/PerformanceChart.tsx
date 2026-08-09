@@ -68,24 +68,33 @@ const HALO = 22;
  * se lit sans légende.
  */
 const PASTILLE = 22;
-const GLYPHE = PASTILLE - 8;
 
 /**
- * La vignette de l'encart, et son glyphe.
+ * Le contour de la pastille, peint dans la couleur du fond.
  *
- * ⚠️ **Seize et dix, pour que la marge soit un nombre entier de pixels.** La
- * version précédente valait quatorze et neuf : deux virgule cinq pixels de marge,
- * donc les bords du glyphe tombaient sur des demi-pixels et son lissage devenait
- * asymétrique — plus sombre d'un côté que de l'autre. Mesuré au `getBBox`, les
- * quatre tracés sont pourtant centrés dans leur boîte à un quart d'unité près,
- * soit un septième de pixel : le décentrage n'était pas dans le dessin mais dans
- * la grille de rendu.
- *
- * Seize plutôt que quatorze parce qu'un glyphe de huit rendait le chariot
- * indéchiffrable, et que la marge de trois pixels tient dans les deux cas.
+ * Il détache le disque de la courbe qui le traverse — voir le style de la
+ * pastille — mais il ne se lit pas comme une partie du repère : l'œil y voit du
+ * fond, pas de la pastille.
  */
-const VIGNETTE = 16;
-const GLYPHE_VIGNETTE = 10;
+const CONTOUR = 2;
+
+/**
+ * ⚠️ **La surface colorée réellement vue**, et la seule mesure qui compte pour
+ * proportionner un glyphe.
+ *
+ * C'est la distinction qui manquait, et elle a produit deux repères visiblement
+ * différents pour la même chose. La vignette de l'encart avait été dimensionnée
+ * sur la boîte *extérieure* de la pastille : 10/16 contre 14/22, soit 0,625
+ * contre 0,636 — presque identiques, donc apparemment cohérents. Mais rapportés
+ * au disque coloré, les deux rapports sont 0,625 et **0,778** : sur la courbe le
+ * glyphe emplit son disque, dans l'encart il y flotte.
+ *
+ * Les deux partagent désormais le même disque et le même glyphe. La pastille n'en
+ * diffère que par son contour, qui s'ajoute à l'extérieur.
+ */
+const DISQUE = PASTILLE - 2 * CONTOUR;
+/** Deux pixels de marge autour du glyphe, de chaque côté du disque. */
+const GLYPHE = DISQUE - 4;
 
 /**
  * Pictogramme d'une opération.
@@ -2067,7 +2076,7 @@ export default function PerformanceChart({
               return (
                 <div key={o.id} style={{ display: "flex", alignItems: "center", gap: 6 }}>
                   <span style={{
-                    width: VIGNETTE, height: VIGNETTE, borderRadius: "50%", flexShrink: 0,
+                    width: DISQUE, height: DISQUE, borderRadius: "50%", flexShrink: 0,
                     background: couleurOp(o.type, clair),
                     display: "flex", alignItems: "center", justifyContent: "center",
                     color: clair ? "#FFFFFF" : "rgba(6,20,42,0.96)",
@@ -2075,7 +2084,7 @@ export default function PerformanceChart({
                     {/* Réduit par rapport au tracé, et c'est assumé : le libellé est
                         écrit juste à côté, donc la vignette n'a qu'à rappeler la
                         couleur et la silhouette. Elle n'a rien à expliquer seule. */}
-                    <Pictogramme type={o.type} taille={GLYPHE_VIGNETTE} />
+                    <Pictogramme type={o.type} />
                   </span>
                   <span style={{ fontSize: 11, color: JETONS.texteFort, whiteSpace: "nowrap" }}>
                     {o.libelle} <strong style={{ color: JETONS.texteIntense }}>{o.ticker}</strong>
@@ -2391,7 +2400,7 @@ export default function PerformanceChart({
               // Plein, et non cerclé : sur un tracé de la même teinte, un
               // cercle évidé se confondait avec la courbe qui le traverse.
               background: couleurOp(p.type, clair),
-              border: `2px solid ${clair ? "#FFFFFF" : "rgba(6,20,42,0.96)"}`,
+              border: `${CONTOUR}px solid ${clair ? "#FFFFFF" : "rgba(6,20,42,0.96)"}`,
               display: "flex", alignItems: "center", justifyContent: "center",
               color: clair ? "#FFFFFF" : "rgba(6,20,42,0.96)", flexShrink: 0,
               zIndex: 6,
