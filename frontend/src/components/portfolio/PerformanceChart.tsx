@@ -1625,9 +1625,28 @@ export default function PerformanceChart({
        * « la vue a été déplacée exprès ». La seule chose qui les sépare est de
        * savoir si on a demandé un cadrage : hors changement de période ou de mode,
        * on n'en a demandé aucun, donc il n'y a rien à vérifier.
+       *
+       * ⚠️ **Mais aussi quand la confirmation n'a jamais eu lieu**, et cette
+       * seconde condition répare une courbe qui ne se peignait pas du tout.
+       *
+       * La chaîne ci-dessous met trois trames à confirmer le cadrage, et le
+       * nettoyage de l'effet l'annule. Or elle est interrompue à la moindre
+       * variation des dépendances — `totalValue` change à chaque rafraîchissement
+       * des cours, et il entraîne `echelle`, `ordonnee` et `data` avec lui. Une
+       * seule interruption suffisait à tout bloquer : `cadrer` ayant déjà inscrit
+       * la clé, le passage suivant trouvait `enAttente` faux et ne replanifiait
+       * rien. `cadrePret` restait donc faux pour toujours, et les deux séries
+       * gardaient `visible: false` — un cadre vide, avec son axe et ses dates,
+       * mais sans courbe, jusqu'au prochain changement de période.
+       *
+       * C'est arrivé à l'arrivée sur la page, où les cours et les positions se
+       * posent en quelques trames, et sur la fenêtre Max qui est celle d'ouverture.
+       *
+       * La condition ne peut pas boucler : une fois `cadrePret` vrai à clé
+       * inchangée, elle est fausse.
        */
       let id = 0, id2 = 0, id3 = 0;
-      if (enAttente) id = requestAnimationFrame(() => {
+      if (enAttente || !cadrePret) id = requestAnimationFrame(() => {
         // Gardé, pas forcé : cet appel ne sert qu'à rattraper le cas où la largeur
         // était nulle à la passe synchrone.
         cadrer();

@@ -25,9 +25,19 @@ export interface Ancre {
  * séance ne tombe à minuit. Elle ne rendait donc aucune coordonnée, et la
  * pastille était omise sans un mot.
  *
- * Sur une série journalière, l'horodatage *est* minuit : rien ne change. Sur une
- * série intraday, c'est le dernier point de la journée qui est retenu — celui
- * dont la pastille affiche la valeur.
+ * Sur une série journalière, l'horodatage *est* minuit : rien ne change.
+ *
+ * ⚠️ **Le premier point de la journée, pas le dernier.** Une écriture est
+ * enregistrée à minuit et prise en compte dès le premier instant qui la suit :
+ * la courbe saute donc à la première barre du jour. En retenant la dernière, la
+ * pastille se posait à la clôture, soit une journée entière à droite du saut
+ * qu'elle prétend désigner — mesuré à 60 px sur la fenêtre d'un mois, où une
+ * séance vaut justement 60 px. Le repère annonçait un renforcement après la
+ * hausse qu'il avait causée.
+ *
+ * Cela vaut aussi si une écriture porte un jour une heure réelle : la première
+ * barre de la journée est alors la première barre postérieure à l'écriture,
+ * c'est-à-dire toujours celle où la courbe bouge.
  */
 export function ancresParJour<P extends { date: string }>(
   points: readonly P[],
@@ -35,9 +45,11 @@ export function ancresParJour<P extends { date: string }>(
 ): Map<string, Ancre> {
   const m = new Map<string, Ancre>();
   for (const p of points) {
+    const jour = p.date.slice(0, 10);
+    if (m.has(jour)) continue;
     const temps = Math.floor(new Date(p.date).getTime() / 1000);
     if (!Number.isFinite(temps)) continue;
-    m.set(p.date.slice(0, 10), { temps, valeur: ordonnee(p) });
+    m.set(jour, { temps, valeur: ordonnee(p) });
   }
   return m;
 }

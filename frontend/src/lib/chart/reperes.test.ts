@@ -32,12 +32,18 @@ describe("ancresParJour", () => {
     // disparaissait — plus aucun repère d'achat sur la fenêtre d'un mois.
     const a = ancresParJour(intraday, val);
     const ancre = a.get("2026-08-07");
-    expect(ancre?.temps).toBe(Date.parse("2026-08-07T17:29:00+02:00") / 1000);
+    expect(ancre?.temps).toBe(Date.parse("2026-08-07T09:00:00+02:00") / 1000);
     expect(ancre?.temps).not.toBe(Date.UTC(2026, 7, 7) / 1000);
   });
 
-  it("garde le dernier point de la journée, celui dont la valeur est affichée", () => {
-    expect(ancresParJour(intraday, val).get("2026-08-07")?.valeur).toBe(120);
+  it("garde la première barre de la journée, là où la courbe saute", () => {
+    // Le défaut observé : en retenant la clôture, la pastille se posait une
+    // séance entière à droite du saut qu'elle désigne — le renforcement
+    // paraissait postérieur à la hausse qu'il avait causée.
+    const a = ancresParJour(intraday, val);
+    expect(a.get("2026-08-07")?.valeur).toBe(100);
+    expect(a.get("2026-08-07")?.temps)
+      .toBeLessThan(Date.parse("2026-08-07T12:00:00+02:00") / 1000);
   });
 
   it("applique l'ordonnée fournie plutôt que la valeur brute", () => {
