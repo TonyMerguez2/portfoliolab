@@ -117,6 +117,17 @@ TOLERANCES = ("prudent", "equilibre", "dynamique")
 # d'État de duration moyenne autour de cinq.
 VOL_ACTIONS, VOL_OBLIGATIONS = 16.0, 5.0
 
+# Volatilité annualisée de référence des cryptomonnaies, en pourcentage.
+#
+# ⚠️ Un ordre de grandeur, et volontairement prudent. Bitcoin a tourné entre
+# quarante et quatre-vingts pour cent selon les périodes, les jetons plus petits
+# au-delà. Soixante place la classe là où elle est : quatre fois les actions.
+#
+# Sert à estimer la volatilité **structurelle** d'un portefeuille, celle que son
+# allocation implique — voir `metriques.risque.volatilite`. Sans cette constante, un
+# portefeuille de cryptomonnaies aurait une volatilité structurelle nulle.
+VOL_CRYPTO = 60.0
+
 # Part d'actions que chaque tolérance déclare pouvoir supporter.
 PLAFOND_ACTIONS = {"prudent": 35.0, "equilibre": 65.0, "dynamique": 100.0}
 

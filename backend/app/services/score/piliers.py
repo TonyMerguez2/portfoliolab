@@ -62,7 +62,7 @@ def diversification(poids_lignes, hhi_lignes, par_indice, ventilation_secteurs,
 
 
 def risque(poids_lignes, rendements, cible, reglages: Reglages | None,
-           poids_pilier: float) -> Pilier:
+           classes, nature, poids_pilier: float) -> Pilier:
     """
     Le niveau de risque porté, face à la cible du profil.
 
@@ -79,7 +79,8 @@ def risque(poids_lignes, rendements, cible, reglages: Reglages | None,
     return _pilier(
         "risque", "Risque",
         [
-            m_risque.volatilite(poids_lignes, rendements, cible, reglages),
+            m_risque.volatilite(poids_lignes, rendements, cible, reglages,
+                                classes, nature),
             m_risque.perte_maximale(poids_lignes, rendements, cible, reglages),
         ],
         poids_pilier,

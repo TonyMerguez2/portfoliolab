@@ -90,7 +90,8 @@ def calculer(entrees: Entrees) -> Resultat:
             entrees.ventilation_secteurs, entrees.ventilation_zones,
             entrees.rendements, structurel, poids_p["diversification"]),
         assemblage.risque(
-            entrees.poids, entrees.rendements, entrees.cible, regl, poids_p["risque"]),
+            entrees.poids, entrees.rendements, entrees.cible, regl,
+            entrees.classes, entrees.nature, poids_p["risque"]),
         assemblage.construction(
             entrees.poids, entrees.frais_par_ligne, entrees.part_fonds,
             entrees.courtage, entrees.nature, structurel, poids_p["construction"]),

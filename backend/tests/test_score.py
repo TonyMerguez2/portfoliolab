@@ -260,6 +260,78 @@ def _avec_profil(entrees: Entrees, profil: str, horizon: int = 20) -> Entrees:
     return entrees
 
 
+# ── La volatilité ne doit pas dépendre de la météo ───────────────────────────
+
+class TestVolatiliteAncree:
+    """
+    ⚠️ Le pilier Risque retient la **plus forte** de la volatilité réalisée et de celle
+    que l'allocation implique.
+
+    Mesuré sur un vrai PEA investi à cent pour cent en actions : 11,1 % réalisés sur une
+    année calme contre 16 % impliqués par l'allocation. Le pilier notait 96 et le score
+    global 83 ; à structure identique mais année agitée, le même portefeuille tombait à
+    62. **Huit points de score pour la seule météo**, alors que la construction n'avait
+    pas changé — contraire à l'esprit d'un score qui juge la construction.
+    """
+
+    def test_une_annee_calme_ne_certifie_pas_un_portefeuille_agressif(self):
+        """
+        Cent pour cent d'actions à 7 % de volatilité réalisée : la note doit refléter les
+        16 % qu'implique l'allocation, non l'accalmie.
+        """
+        calme = pf_fonds({"CW8": 100.0}, vol=7.0)
+        vif = pf_fonds({"CW8": 100.0}, vol=16.0)
+        m_calme = _volatilite(calme, "equilibre")
+        m_vif = _volatilite(vif, "equilibre")
+        assert m_calme.valeur == pytest.approx(m_vif.valeur, abs=0.2), \
+            "la structure doit plancher les deux au même niveau"
+        # ⚠️ Pas une égalité stricte : le portefeuille « vif » réalise 16,03 %, donc son
+        # réalisé dépasse la structure d'un cheveu et l'emporte. Trois centièmes de
+        # volatilité valent trois dixièmes de note — exiger l'égalité exacte ferait
+        # échouer un test pour une différence sans signification.
+        assert m_calme.score == pytest.approx(m_vif.score, abs=1.0)
+        # Et surtout : le portefeuille calme n'est pas mieux noté que l'agressif.
+        assert m_calme.score < 70, "16 % pour une cible de 12 % ne peut pas bien noter"
+
+    def test_une_annee_agitee_n_est_pas_adoucie(self):
+        """
+        La règle ne joue que dans un sens : une volatilité réalisée **au-dessus** de la
+        structure est retenue telle quelle. Sinon on masquerait un risque réel.
+        """
+        agite = _volatilite(pf_fonds({"CW8": 100.0}, vol=28.0), "equilibre")
+        assert agite.valeur == pytest.approx(28.0, abs=0.3)
+        assert agite.score < 20
+
+    def test_la_lecture_dit_d_ou_vient_le_chiffre(self):
+        """
+        Quand la structure prend le dessus, le chiffre affiché n'est pas celui qui a été
+        vécu. Le taire laisserait le lecteur devant une volatilité qu'il ne reconnaît pas.
+        """
+        m = _volatilite(pf_fonds({"CW8": 100.0}, vol=8.0), "equilibre")
+        assert "réalisés" in m.lecture and "impliqués par l'allocation" in m.lecture
+
+    def test_la_crypto_a_sa_propre_volatilite_de_reference(self):
+        """
+        Sans constante propre, un portefeuille de cryptomonnaies aurait une volatilité
+        structurelle nulle — donc jamais planchée.
+        """
+        from app.services.score.metriques.risque import volatilite_structurelle
+        v = volatilite_structurelle([{"libelle": "Autres", "part": 100}],
+                                    {"BTC": 100.0}, {"BTC": "crypto"})
+        assert v is not None and v > 40, "la crypto doit peser bien plus que des actions"
+
+    def test_sans_composition_la_realisee_sert_seule(self):
+        """On ne devine pas une allocation : sans classes, il n'y a rien pour plancher."""
+        from app.services.score.metriques.risque import volatilite_structurelle
+        assert volatilite_structurelle(None, {"A": 100.0}, {}) is None
+
+
+def _volatilite(entrees: Entrees, profil: str, horizon: int = 20):
+    """La métrique de volatilité d'un portefeuille sous un profil."""
+    r = calculer(_avec_profil(entrees, profil, horizon))
+    return [m for p in r.piliers for m in p.metriques if m.cle == "volatilite"][0]
+
+
 # ── Les profils ne sont pas trois multiplicateurs ─────────────────────────────
 
 class TestProfils:

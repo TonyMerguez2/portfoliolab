@@ -21,6 +21,8 @@ import math
 
 import numpy as np
 
+from app.services.analyse import VOL_ACTIONS, VOL_CRYPTO, VOL_OBLIGATIONS
+
 from ..normalisation import note_decroissante
 from ..profils import Reglages
 from ..types import Metrique
@@ -51,8 +53,46 @@ def _ecart_asymetrique(mesure: float, cible: float, indulgence: float) -> float:
     return ecart if ecart > 0 else -ecart * indulgence
 
 
+def volatilite_structurelle(classes: list[dict] | None, poids: dict[str, float],
+                            nature: dict[str, str]) -> float | None:
+    """
+    La volatilité que l'**allocation** implique, indépendamment de l'année écoulée.
+
+    Somme des volatilités de référence par classe, pondérées par les parts détenues.
+    Les constantes viennent de `analyse.py`, où elles servent déjà à calculer la cible
+    du profil : les réutiliser garantit que la mesure et sa cible parlent la même
+    langue.
+
+    Rend `None` si la composition par classes est inconnue — on ne devine pas une
+    allocation.
+    """
+    total_poids = sum(w for w in poids.values() if w > 0)
+    part_crypto = (sum(poids.get(t, 0.0) for t, g in nature.items() if g == "crypto")
+                   / total_poids * 100.0) if total_poids > 0 else 0.0
+
+    total = sum(x["part"] for x in (classes or []))
+    if total <= 0 and part_crypto <= 0:
+        return None
+
+    part = {x.get("libelle"): x["part"] / total * 100.0 for x in (classes or [])} if total > 0 else {}
+    actions = part.get("Actions", 0.0)
+    obligations = part.get("Obligations", 0.0)
+    # La crypto est rangée sous « Autres » par la ventilation : on la reprend de la
+    # nature des lignes, seule source qui la nomme, et on la retire des « Autres ».
+    autres = max(0.0, part.get("Autres", 0.0) - part_crypto)
+
+    # Les liquidités ne bougent pas ; « Autres » est traité comme des actions, faute de
+    # mieux, ce qui est le choix prudent — se tromper vers le bas serait flatteur.
+    risquees = actions + autres
+    vol = (risquees / 100 * VOL_ACTIONS
+           + obligations / 100 * VOL_OBLIGATIONS
+           + part_crypto / 100 * VOL_CRYPTO)
+    return vol if vol > 0 else None
+
+
 def volatilite(
     poids: dict[str, float], rendements, cible: dict | None, reglages: Reglages | None,
+    classes: list[dict] | None = None, nature: dict[str, str] | None = None,
 ) -> Metrique:
     """
     L'amplitude annualisée des variations, comparée à la cible du profil.
@@ -67,7 +107,32 @@ def volatilite(
     disqualifié le bêta : aucun repère extérieur, aucun décalage de clôture.
     """
     serie = _serie_portefeuille(poids, rendements)
-    vol = float(serie.std() * math.sqrt(252) * 100) if serie is not None else None
+    realisee = float(serie.std() * math.sqrt(252) * 100) if serie is not None else None
+    structurelle = volatilite_structurelle(classes, poids, nature or {})
+
+    # ⚠️ **La plus forte des deux**, et cette règle vient d'une mesure.
+    #
+    # La volatilité réalisée seule dépend du régime de marché autant que du
+    # portefeuille. Mesuré sur un vrai PEA investi à cent pour cent en actions : 11,1 %
+    # réalisés sur une année calme, contre 16 % qu'implique son allocation. Le pilier
+    # Risque notait 96 et le score global 83 ; à structure identique mais année agitée,
+    # le même portefeuille tombait à 62. **Huit points de score pour la seule météo**,
+    # alors que rien n'avait changé dans la construction — contraire à l'esprit d'un
+    # score qui juge la construction.
+    #
+    # J'ai d'abord proposé une moyenne des deux, puis une moyenne relevée. Les deux sont
+    # **pires** : à volatilité réalisée très basse, la moyenne se rapproche de la cible
+    # et se trouve donc mieux notée qu'un portefeuille réellement à la cible. Amplitude
+    # mesurée sur six régimes : 21 points pour la réalisée seule, 22 pour la moyenne
+    # relevée, **13 pour la plus forte**.
+    #
+    # Elle a un coût, et il faut le connaître : un portefeuille qui réduit réellement sa
+    # volatilité — couverture de change, facteur peu volatil, corrélations favorables —
+    # n'en reçoit pas le crédit, puisque la structure plafonne par le bas. C'est le sens
+    # de l'erreur que je choisis : sous-estimer un risque est flatteur, le surestimer ne
+    # l'est pas.
+    vol = (max(realisee, structurelle) if (realisee is not None and structurelle is not None)
+           else realisee)
     vol_cible = cible["volatilite"] if cible else None
 
     note = None
@@ -85,10 +150,17 @@ def volatilite(
         statut="disponible" if note is not None else "indisponible",
         poids=75.0,
         valeur=round(vol, 2) if vol is not None else None,
-        lecture=(f"{vol:.1f} % par an, pour {vol_cible:.0f} % visés"
-                 if vol is not None and vol_cible is not None
-                 else f"{vol:.1f} % par an — profil non déclaré" if vol is not None
-                 else "historique insuffisant"),
+        lecture=(
+            (f"{vol:.1f} % par an, pour {vol_cible:.0f} % visés"
+             # Quand la structure prend le dessus, on le dit : le chiffre affiché n'est
+             # pas celui qui a été vécu, et le lecteur doit savoir d'où il vient.
+             + (f" — {realisee:.1f} % réalisés, {structurelle:.0f} % impliqués par "
+                f"l'allocation"
+                if (realisee is not None and structurelle is not None
+                    and structurelle > realisee + 0.1) else ""))
+            if vol is not None and vol_cible is not None
+            else f"{vol:.1f} % par an — profil non déclaré" if vol is not None
+            else "historique insuffisant"),
         couverture=1.0 if note is not None else 0.0,
         explication=(
             "L'amplitude annualisée de vos variations, comparée à la cible de votre "
