@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import {
   typesParOperation, resultats, resume, repartitionTypes, montant, parDate,
+  COULEUR_OP, COULEUR_OP_CLAIR, GLYPHE_OP, LIBELLE_OP,
   type Tx,
 } from "./journal";
 
@@ -53,6 +54,42 @@ describe("typesParOperation", () => {
     const t2 = tx("A", "SELL", 4, 12, "2026-02-01");
     const t3 = tx("A", "BUY", 5, 11, "2026-03-01");
     expect(typesParOperation([t1, t2, t3])[t3.id]).toBe("renforcement");
+  });
+
+  it("distingue l'allègement de la sortie", () => {
+    const achat = tx("A", "BUY", 10, 10, "2026-01-01");
+    const part  = tx("A", "SELL", 4, 12, "2026-02-01");
+    const solde = tx("A", "SELL", 6, 13, "2026-03-01");
+    const types = typesParOperation([achat, part, solde]);
+    expect(types[part.id]).toBe("vente_partielle");
+    expect(types[solde.id]).toBe("vente");
+  });
+
+  it("une cession fractionnaire intégrale reste une sortie totale", () => {
+    // Le résidu d'arrondi : 0,1 + 0,2 vaut 0,30000000000000004, et la quantité
+    // restante après cession n'est pas exactement nulle. Comparer à zéro
+    // strictement aurait rangé cette sortie parmi les allègements.
+    const a = tx("A", "BUY", 0.1, 10, "2026-01-01");
+    const b = tx("A", "BUY", 0.2, 10, "2026-02-01");
+    const v = tx("A", "SELL", 0.1 + 0.2, 12, "2026-03-01");
+    expect(typesParOperation([a, b, v])[v.id]).toBe("vente");
+  });
+
+  it("vendre plus que détenu reste une sortie totale", () => {
+    const a = tx("A", "BUY", 5, 10, "2026-01-01");
+    const v = tx("A", "SELL", 8, 12, "2026-02-01");
+    expect(typesParOperation([a, v])[v.id]).toBe("vente");
+  });
+
+  it("chaque type a son tracé et son libellé", () => {
+    // `Record<TypeOp, …>` le garantit à la compilation ; ce test le garantit
+    // aussi à l'exécution, et dirait lequel manque.
+    for (const t of ["achat", "renforcement", "vente", "vente_partielle"] as const) {
+      expect(GLYPHE_OP[t]).toMatch(/^[Mm]/);
+      expect(LIBELLE_OP[t]).toBeTruthy();
+      expect(COULEUR_OP[t]).toMatch(/^#[0-9A-F]{6}$/);
+      expect(COULEUR_OP_CLAIR[t]).toMatch(/^#[0-9A-F]{6}$/);
+    }
   });
 
   it("se fie aux dates, pas à l'ordre de saisie", () => {

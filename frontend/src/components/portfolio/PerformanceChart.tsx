@@ -10,7 +10,7 @@ import {
 import type { HistoryPoint, Period } from "@/lib/chart/portfolioCurve";
 import { FONT, NUM } from "@/lib/typography";
 import { enTetesAuth } from "@/lib/session";
-import { COULEUR_OP, COULEUR_OP_CLAIR } from "@/lib/journal";
+import { COULEUR_OP, COULEUR_OP_CLAIR, GLYPHE_OP, type TypeOp } from "@/lib/journal";
 import { useModeTheme, resoudreJeton } from "@/lib/theme";
 import { RAYONS, JETONS } from "@/lib/palette";
 import { agregerEnBougies } from "@/lib/chart/series";
@@ -54,29 +54,43 @@ const API = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 const HALO = 22;
 
 /**
+ * Diamètre de la pastille d'opération, et du glyphe qu'elle porte.
+ *
+ * ⚠️ Vingt-deux pixels, et c'est une mesure, pas un goût. Les glyphes sont
+ * dessinés sur une boîte de 24 unités et détaillés — le chariot a deux roues et
+ * une anse. Rendus côte à côte à taille réelle sur le fond de l'application :
+ * illisibles à 10 px, où le chariot devient un pâté ; à peine devinables à
+ * 12 ; lisibles à 14. La pastille valant le glyphe plus ses deux pixels de
+ * contour de chaque côté, 14 impose 22.
+ *
+ * Le coût est assumé : les repères occupent 22 % de plus sur la courbe qu'avec
+ * les flèches au trait qui les précédaient. C'est le prix d'un pictogramme qui
+ * se lit sans légende.
+ */
+const PASTILLE = 22;
+const GLYPHE = PASTILLE - 8;
+
+/**
  * Pictogramme d'une opération.
  *
- * Trois cercles de couleurs différentes demandent de retenir un code ; une
- * flèche montante, un plus et une flèche descendante se lisent sans légende.
+ * Quatre cercles de couleurs différentes demanderaient de retenir un code ; un
+ * chariot, une étiquette et deux flèches opposées se lisent sans légende.
+ *
+ * Les tracés viennent de `GLYPHE_OP`, où un `Record<TypeOp, …>` garantit qu'un
+ * type ne peut pas exister sans son dessin.
  */
-function Pictogramme({ type }: { type: string }) {
-  const commun = {
-    // 10 unités rendues sur 10 pixels : un trait de 2 unités fait exactement
-    // 2 pixels, sans lissage. À 9 px, il en faisait 1,8 et bavait.
-    width: 10, height: 10, viewBox: "0 0 10 10", fill: "none",
-    stroke: "currentColor", strokeWidth: 2,
-    strokeLinecap: "round" as const, strokeLinejoin: "round" as const,
-    // Sans `display: block`, le SVG reste en ligne et s'aligne sur la ligne de
-    // base : il se posait deux pixels sous le centre du cercle.
-    style: { display: "block" },
-  };
-  if (type === "vente") {
-    return <svg {...commun}><path d="M5 1.5v7M2 5.5l3 3 3-3" /></svg>;
-  }
-  if (type === "renforcement") {
-    return <svg {...commun}><path d="M5 1.5v7M1.5 5h7" /></svg>;
-  }
-  return <svg {...commun}><path d="M5 8.5v-7M2 4.5l3-3 3 3" /></svg>;
+function Pictogramme({ type, taille = GLYPHE }: { type: string; taille?: number }) {
+  const trace = GLYPHE_OP[type as TypeOp] ?? GLYPHE_OP.achat;
+  return (
+    <svg
+      width={taille} height={taille} viewBox="0 0 24 24" fill="currentColor"
+      // Sans `display: block`, le SVG reste en ligne et s'aligne sur la ligne de
+      // base : il se posait deux pixels sous le centre du cercle.
+      style={{ display: "block" }}
+    >
+      <path d={trace} />
+    </svg>
+  );
 }
 
 /**
@@ -118,9 +132,19 @@ const LEGENDE = [
   // `largeur` est déclarée pour que chaque vignette démarre sur un pixel
   // entier : une largeur laissée au texte est fractionnaire, et décale tout ce
   // qui suit.
-  { type: "achat",        libelle: "Achat",        largeur: 62 },
-  { type: "renforcement", libelle: "Renforcement", largeur: 106 },
-  { type: "vente",        libelle: "Vente",        largeur: 62 },
+  //
+  // Largeurs relevées au canevas dans la police réellement rendue, à 11 px :
+  // 30,15 px pour « Achat », 72,98 pour « Renforcement », 74,69 pour « Vente
+  // partielle », 29,85 pour « Vente ». Plus la vignette et son écart, soit 27,
+  // et le même mou d'une quinzaine de pixels que la version précédente — c'est
+  // lui qui donne à la ligne sa respiration.
+  //
+  // L'ordre met les deux flèches côte à côte : elles sont le même dessin
+  // retourné, et se lisent comme une paire.
+  { type: "achat",           libelle: "Achat",           largeur: 74 },
+  { type: "renforcement",    libelle: "Renforcement",    largeur: 116 },
+  { type: "vente_partielle", libelle: "Vente partielle", largeur: 118 },
+  { type: "vente",           libelle: "Vente",           largeur: 74 },
 ];
 
 /**
@@ -2055,7 +2079,7 @@ export default function PerformanceChart({
               // plus haut il semblait encore posé à côté.
               position: "absolute", left: p.x, top: p.y,
               transform: "translate(-50%,-50%)",
-              width: 18, height: 18, borderRadius: "50%", padding: 0,
+              width: PASTILLE, height: PASTILLE, borderRadius: "50%", padding: 0,
               // Plein, et non cerclé : sur un tracé de la même teinte, un
               // cercle évidé se confondait avec la courbe qui le traverse.
               background: couleurOp(p.type, clair),
@@ -2101,17 +2125,24 @@ export default function PerformanceChart({
         // laissée par la précédente. Le contour et le trait du signe se
         // répartissaient alors sur deux rangées de pixels : le pictogramme
         // paraissait décentré alors qu'il est à 2 px des quatre bords.
-        <div style={{ display: "flex", gap: 14, paddingTop: 8, paddingBottom: 8, flexShrink: 0, height: 14, boxSizing: "content-box" }}>
+        <div style={{ display: "flex", gap: 14, paddingTop: 8, paddingBottom: 8, flexShrink: 0, height: PASTILLE, boxSizing: "content-box" }}>
           {LEGENDE.map(l => (
             <span key={l.libelle} style={{
               display: "flex", alignItems: "center", gap: 5,
-              width: l.largeur, height: 14, lineHeight: "14px",
-              fontFamily: FONT, fontSize: 10, color: JETONS.texteSecondaire,
+              width: l.largeur, height: PASTILLE, lineHeight: `${PASTILLE}px`,
+              // Onze pixels et non dix : comparées côte à côte à taille réelle,
+              // c'est la taille où le mot tient la balance face à une vignette de
+              // vingt-deux. À dix, le cercle écrasait son propre libellé.
+              fontFamily: FONT, fontSize: 11, color: JETONS.texteSecondaire,
             }}>
-              {/* Même vignette que sur la courbe, en réduction : une puce ronde
-                  n'annoncerait plus rien une fois les pictogrammes posés. */}
+              {/* ⚠️ **La même vignette que sur la courbe, à la même taille**, et
+                  non plus en réduction. Un pictogramme détaillé ne supporte pas
+                  d'être rapetissé : le chariot devenait un pâté indistinct, si
+                  bien que la légende n'annonçait plus ce qu'elle est censée
+                  expliquer. Elle ne diffère que par l'absence du contour, qui ne
+                  sert qu'à détacher la pastille de la courbe qu'elle traverse. */}
               <span style={{
-                width: 14, height: 14, borderRadius: "50%",
+                width: PASTILLE, height: PASTILLE, borderRadius: "50%",
                 background: couleurOp(l.type, clair),
                 display: "flex", alignItems: "center", justifyContent: "center",
                 color: clair ? "#FFFFFF" : "rgba(6,20,42,0.96)", flexShrink: 0,
