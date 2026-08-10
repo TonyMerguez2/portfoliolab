@@ -44,6 +44,14 @@ type Evenement = {
   exposition?: number | null;
   /** Le nom de la société : « 000660.KS » ne désigne rien, « SK Hynix » si. */
   nom_societe?: string | null;
+  /**
+   * Le code du drapeau d'une échéance macroéconomique — « us », « eu ».
+   *
+   * Un code, pas une image : les fichiers sont déjà dans `public/drapeaux`, ceux
+   * des places boursières des cartes d'actifs. Le serveur nomme le pays, la page
+   * choisit le dessin.
+   */
+  pays?: string | null;
 };
 
 type Reponse = {
@@ -349,13 +357,24 @@ export default function EvenementsAVenir({
               borderRadius: retenu(e) || survol === i ? RAYONS.xs : 0,
               transition: "background 120ms ease",
             }}>
-            {/* Une crypto ou une action portent leur logo ; un événement macro
-                n'a pas de titre, donc une pastille de sa couleur tient la place
-                pour que les lignes restent alignées. */}
+            {/* Trois cas, dans cet ordre : le logo d'un titre, le drapeau d'une
+                zone, et à défaut une pastille de couleur.
+                ⚠️ `maxWidth: none` sur le drapeau, sinon la règle globale
+                `img { max-width: 100% }` le rétrécit — le défaut déjà vécu sur le
+                cadreur d'image. Et aucune bordure : c'est elle qui faisait
+                apparaître les liserés bleus dans les coins des logos. */}
             {e.ticker && e.nature !== "economique" ? (
               <AssetLogo ticker={e.ticker} size={28} radius={7}
                 fallbackBg={CLAIR.carteCreuse} fallbackBorder={CLAIR.bord}
                 fallbackTextColor={CLAIR.texteSecondaire} bare />
+            ) : e.pays ? (
+              <img src={`/drapeaux/${e.pays}.svg`} alt=""
+                aria-label={`Zone : ${e.ticker ?? ""}`}
+                style={{
+                  width: 28, height: 28, maxWidth: "none", maxHeight: "none",
+                  flexShrink: 0, border: 0, outline: 0, boxShadow: "none",
+                  display: "block",
+                }} />
             ) : (
               <span style={{
                 width: 28, height: 28, borderRadius: 7, flexShrink: 0,

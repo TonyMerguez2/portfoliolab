@@ -7,6 +7,7 @@ données sans dépendre du réseau ni d'un titre qui publierait un jour autre ch
 """
 
 from datetime import date
+from zoneinfo import ZoneInfo
 
 import pytest
 
@@ -14,7 +15,7 @@ from app.services import evenements as ev
 
 #: Le calendrier réel, capturé à l'import — donc avant que la fixture ne le vide.
 #:
-#: ⚠️ Les tests des titres le neutralisent, sinon chacun verrait les dix-sept
+#: ⚠️ Les tests des titres le neutralisent, sinon chacun verrait les trente-trois
 #: échéances macro par-dessus ses propres entrées, et la suite entière casserait à
 #: chaque mise à jour du calendrier. Les tests d'intégrité, eux, ont besoin du vrai :
 #: ils lisent cet instantané.
@@ -155,6 +156,18 @@ class TestCalendrierMacro:
                 h, m = heure.split(":")
                 assert 0 <= int(h) < 24 and 0 <= int(m) < 60
 
+    def test_chaque_zone_a_un_drapeau_et_un_fuseau(self):
+        """
+        ⚠️ Sans ce test, une zone mal orthographiée dans une entrée du calendrier
+        passerait en silence : `ZONES.get` rendrait le fuseau de New York par
+        défaut, et l'interface afficherait la ligne sans drapeau. Deux dégâts muets.
+        """
+        for _, _, zone, _ in VRAI_CALENDRIER:
+            assert zone in ev.ZONES, zone
+        for zone, (drapeau, fuseau) in ev.ZONES.items():
+            assert len(drapeau) == 2, zone
+            assert ZoneInfo(fuseau), zone
+
     def test_les_dates_sont_uniques_par_libelle(self):
         # Deux entrées identiques feraient deux points le même jour dans le
         # calendrier, et deux lignes dans la liste.
@@ -172,7 +185,12 @@ class TestCalendrierMacro:
         n'a aucune échéance, alors qu'il en a probablement.
         """
         assert ev.PEREMPTION_MACRO is not None
-        ipc = [iso for iso, lib, _, _ in VRAI_CALENDRIER if "prix à la" in lib]
+        # ⚠️ Filtré sur la zone **et** sur le libellé. Sans la zone, le jour où une
+        # série européenne s'appellerait « indice des prix à la consommation
+        # harmonisé » elle entrerait dans ce calcul et le test cesserait de parler
+        # de l'IPC américain sans que personne ne s'en aperçoive.
+        ipc = [iso for iso, lib, zone, _ in VRAI_CALENDRIER
+               if zone == "USA" and "prix à la" in lib]
         assert ev.PEREMPTION_MACRO == max(ipc)
         assert ev.PEREMPTION_MACRO < max(iso for iso, *_ in VRAI_CALENDRIER)
 
@@ -182,6 +200,35 @@ class TestCalendrierMacro:
         for iso, libelle, _, heure in VRAI_CALENDRIER:
             if "FOMC" in libelle:
                 assert heure is None, iso
+
+    def test_la_bce_n_annonce_pas_d_heure_non_plus(self):
+        """
+        La page du Conseil des gouverneurs écrit « followed by press conference »
+        sans horaire, et le calendrier d'Eurostat est rendu en JavaScript. Les
+        sources tierces donnent 14 h 15 et 11 h ; c'est vraisemblable et ce n'est
+        pas relevé.
+        """
+        for iso, libelle, zone, heure in VRAI_CALENDRIER:
+            if zone == "Zone euro":
+                assert heure is None, (iso, libelle)
+
+    def test_une_decision_de_la_bce_tombe_un_jeudi(self):
+        """
+        ⚠️ Ce test a un passé. J'ai d'abord cru le relevé faux parce que quatre
+        dates de la BCE coïncidaient avec des dates du FOMC déjà présentes. La
+        raison est structurelle : le FOMC siège mardi-mercredi et décide le
+        mercredi, le Conseil des gouverneurs siège mercredi-jeudi et décide le
+        jeudi. Le même mercredi porte donc une décision de la Fed et le premier jour
+        de la BCE. Retenir le premier jour aurait annoncé la décision la veille.
+        """
+        for iso, libelle, zone, _ in VRAI_CALENDRIER:
+            if zone == "Zone euro" and "BCE" in libelle:
+                assert date.fromisoformat(iso).weekday() == 3, iso
+
+    def test_une_decision_de_la_fed_tombe_un_mercredi(self):
+        for iso, libelle, _, _ in VRAI_CALENDRIER:
+            if "FOMC" in libelle:
+                assert date.fromisoformat(iso).weekday() == 2, iso
 
     def test_l_heure_devient_un_instant_date_et_non_un_texte(self):
         # ⚠️ Envoyer « 08:30 » brut ferait lire l'heure de New York comme une heure
@@ -193,6 +240,32 @@ class TestCalendrierMacro:
         # décalage figé aurait été faux pour cette publication-là.
         assert ev.instant_publication("2026-10-29", "08:30").endswith("-04:00")
         assert ev.instant_publication("2026-11-25", "08:30").endswith("-05:00")
+
+    def test_le_fuseau_europeen_a_sa_propre_regle_d_heure_d_ete(self):
+        """
+        ⚠️ Le décalage européen n'est pas constant lui non plus, et il ne bascule pas
+        le même week-end que l'américain. Ce test existe pour qu'une heure ajoutée à
+        une ligne « Zone euro » ne soit pas lue dans le fuseau de New York — six
+        heures d'écart, et aucune erreur pour le signaler.
+        """
+        eu = ev.ZONES["Zone euro"][1]
+        assert ev.instant_publication("2026-09-01", "11:00", eu).endswith("+02:00")
+        assert ev.instant_publication("2026-12-01", "11:00", eu).endswith("+01:00")
+        # La même date, dans les deux fuseaux : c'est tout l'intérêt du paramètre.
+        assert ev.instant_publication("2026-12-01", "11:00").endswith("-05:00")
+
+    def test_une_echeance_macro_porte_le_drapeau_de_sa_zone(self, monkeypatch):
+        monkeypatch.setattr(ev, "CALENDRIER_MACRO",
+                            [("2026-08-28", "Décision", "Zone euro", None)])
+        e = ev.evenements_du_portefeuille([], REF)["evenements"][0]
+        assert e["pays"] == "eu"
+
+    def test_une_zone_inconnue_ne_porte_pas_de_drapeau(self, monkeypatch):
+        # ⚠️ Pas de drapeau plutôt qu'un drapeau faux : l'interface retombe sur sa
+        # pastille de couleur, qui ne prétend rien.
+        monkeypatch.setattr(ev, "CALENDRIER_MACRO",
+                            [("2026-08-28", "Inconnu", "Mars", None)])
+        assert ev.evenements_du_portefeuille([], REF)["evenements"][0]["pays"] is None
 
     def test_sans_heure_aucun_instant(self):
         assert ev.instant_publication("2026-09-16", None) is None

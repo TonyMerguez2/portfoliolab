@@ -80,6 +80,15 @@ class Evenement:
     """
     nom_societe: str | None = None
 
+    #: Le code du drapeau à afficher, pour les seules échéances macroéconomiques.
+    #:
+    #: ⚠️ Un code de deux lettres — « us », « eu » — et non une URL ni un emoji.
+    #: L'interface a déjà ses fichiers dans `public/drapeaux`, ceux des places
+    #: boursières des cartes d'actifs : laisser le serveur choisir l'image aurait
+    #: dédoublé l'iconographie, et un emoji n'aurait pas le même dessin sur deux
+    #: systèmes.
+    pays: str | None = None
+
 
 # ── Calendrier macroéconomique ───────────────────────────────────────────────
 #
@@ -88,9 +97,14 @@ class Evenement:
 #   PCE   https://www.bea.gov/news/schedule
 #   IPC   https://www.bls.gov/schedule/news_release/cpi.htm
 #
-# Format : (date ISO, libellé, zone, heure de New York « HH:MM » ou None).
+# Format : (date ISO, libellé, zone, heure « HH:MM » ou None).
 #
-# ⚠️ **L'heure est celle de New York, pas une heure locale déjà convertie.**
+# ⚠️ **L'heure est celle de la zone qui publie**, et le fuseau correspondant est dans
+# `ZONES`. Elle valait « New York » tant que le calendrier était américain ; l'écrire
+# encore aujourd'hui décalerait de six heures la première publication européenne à
+# laquelle on donnerait une heure.
+#
+# ⚠️ **L'heure n'est jamais déjà convertie dans le fuseau du lecteur.**
 # L'écart avec l'Europe n'est pas constant : les deux continents ne changent pas
 # d'heure le même week-end — les États-Unis début novembre, l'Europe fin octobre —
 # donc il vaut cinq heures pendant une semaine et six le reste de l'année.
@@ -139,7 +153,73 @@ CALENDRIER_MACRO: list[tuple[str, str, str, str | None]] = [
     ("2027-09-15", "Décision de la Fed · FOMC", "USA", None),
     ("2027-10-27", "Décision de la Fed · FOMC", "USA", None),
     ("2027-12-08", "Décision de la Fed · FOMC", "USA", None),
+
+    # ── Zone euro ────────────────────────────────────────────────────────────
+    #
+    # Relevé le 10 août 2026 :
+    #   BCE       https://www.ecb.europa.eu/press/calendars/mgcgc/html/index.en.html
+    #   Inflation https://www.ecb.europa.eu/press/calendars/statscal/ges/html/sthicp.en.html
+    #
+    # ⚠️ **Aucune heure, et pour la même raison que le FOMC.** La page de la BCE
+    # écrit « followed by press conference » sans horaire, et le calendrier de
+    # publication d'Eurostat est rendu en JavaScript — sa page ne contient aucune
+    # date en clair. Les sources tierces annoncent 14 h 15 pour la décision et 11 h
+    # pour l'inflation ; c'est probablement juste, ce n'est pas relevé, donc ce
+    # champ reste vide.
+    #
+    # ⚠️ **La date retenue est le second jour**, celui de la décision, comme pour le
+    # FOMC. Le Conseil des gouverneurs siège mercredi et jeudi et décide le jeudi ;
+    # le FOMC siège mardi et mercredi et décide le mercredi. C'est ce qui explique
+    # que le 28 octobre 2026 soit à la fois une décision de la Fed et le premier
+    # jour de la BCE : les deux institutions se réunissent la même semaine, pas le
+    # même jour. J'ai d'abord pris cette coïncidence pour une erreur de relevé.
+    #
+    # ⚠️ **La page n'annonce aucune réunion de politique monétaire avant mars 2027.**
+    # Le relevé mot pour mot de la section 2027 commence par une réunion *non*
+    # monétaire le 24 février. Les années précédentes en comptaient huit, celle-ci
+    # sept : je transcris ce que la source publie et n'ajoute pas la réunion
+    # manquante par symétrie.
+    ("2026-09-10", "Décision de la BCE · Conseil des gouverneurs", "Zone euro", None),
+    ("2026-10-29", "Décision de la BCE · Conseil des gouverneurs", "Zone euro", None),
+    ("2026-12-17", "Décision de la BCE · Conseil des gouverneurs", "Zone euro", None),
+    ("2027-03-18", "Décision de la BCE · Conseil des gouverneurs", "Zone euro", None),
+    ("2027-04-29", "Décision de la BCE · Conseil des gouverneurs", "Zone euro", None),
+    ("2027-06-10", "Décision de la BCE · Conseil des gouverneurs", "Zone euro", None),
+    ("2027-07-22", "Décision de la BCE · Conseil des gouverneurs", "Zone euro", None),
+    ("2027-09-09", "Décision de la BCE · Conseil des gouverneurs", "Zone euro", None),
+    ("2027-10-28", "Décision de la BCE · Conseil des gouverneurs", "Zone euro", None),
+    ("2027-12-16", "Décision de la BCE · Conseil des gouverneurs", "Zone euro", None),
+
+    # Estimation rapide de l'inflation — Eurostat, fin du mois de référence.
+    #
+    # Les dates viennent du calendrier statistique de la BCE, qui publie sa propre
+    # version désaisonnalisée le même jour. Corroborées par les publications passées
+    # d'Eurostat, dont l'adresse encode la date : « 2-31072026-ap » pour juillet,
+    # « 2-01072026-ap » pour juin, « 2-02062026-ap » pour mai — trois dates qui
+    # tombent exactement sur celles annoncées.
+    ("2026-09-01", "Inflation · estimation rapide (IPCH, août)", "Zone euro", None),
+    ("2026-10-02", "Inflation · estimation rapide (IPCH, septembre)", "Zone euro", None),
+    ("2026-11-04", "Inflation · estimation rapide (IPCH, octobre)", "Zone euro", None),
+    ("2026-12-01", "Inflation · estimation rapide (IPCH, novembre)", "Zone euro", None),
+    ("2027-01-06", "Inflation · estimation rapide (IPCH, décembre)", "Zone euro", None),
 ]
+
+#: Le drapeau et le fuseau de chaque zone du calendrier.
+#:
+#: ⚠️ Le fuseau est là bien qu'aucune entrée européenne ne porte encore d'heure. Ce
+#: n'est pas de la généralité gratuite : sans lui, la première heure ajoutée à une
+#: ligne « Zone euro » serait lue dans le fuseau de New York et annoncée six heures
+#: trop tard, sans qu'aucune erreur ne se déclare. Le piège est fermé maintenant
+#: qu'il existe une zone pour le tendre.
+#:
+#: ⚠️ « Zone euro » et non « Europe » : l'ETF STOXX Europe 600 détenu ici contient
+#: Novartis, Roche et Nestlé (Suisse), HSBC, AstraZeneca et Shell (Royaume-Uni) —
+#: que ni la BCE ni l'IPCH ne concernent. Étiqueter ces dates « Europe » aurait
+#: promis une couverture qu'elles n'ont pas.
+ZONES: dict[str, tuple[str, str]] = {
+    "USA": ("us", "America/New_York"),
+    "Zone euro": ("eu", "Europe/Brussels"),
+}
 
 #: Jusqu'où le calendrier est **complet**, toutes séries confondues.
 #:
@@ -240,21 +320,29 @@ def _jour(v: Any) -> str | None:
     return None
 
 
-def instant_publication(iso: str, heure: str | None) -> str | None:
+def instant_publication(
+    iso: str, heure: str | None, fuseau: str = FUSEAU_PUBLICATION,
+) -> str | None:
     """
-    L'heure de New York, rendue comme un instant daté et non comme un texte.
+    Une heure locale de publication, rendue comme un instant daté et non un texte.
 
     ⚠️ Un instant, pour que le client l'affiche dans **son** fuseau. Envoyer
     « 08:30 » brut aurait fait lire l'heure de New York comme une heure locale, et
     annoncé une publication du matin à un lecteur européen pour qui elle tombe
     l'après-midi.
+
+    ⚠️ Le fuseau est devenu un **paramètre** le jour où le calendrier a cessé d'être
+    uniquement américain. Une estimation d'inflation de la zone euro tombe à 11 h à
+    Bruxelles : la passer par le fuseau de New York l'aurait annoncée à 17 h à un
+    lecteur parisien — l'erreur exactement inverse de celle que cette fonction
+    existe pour empêcher.
     """
     if not heure:
         return None
     naif = datetime.fromisoformat(f"{iso}T{heure}:00")
     # `zoneinfo` applique la règle d'heure d'été propre à la date : c'est ce qui
     # rend juste la semaine où l'Amérique a changé d'heure et l'Europe pas encore.
-    return naif.replace(tzinfo=ZoneInfo(FUSEAU_PUBLICATION)).isoformat()
+    return naif.replace(tzinfo=ZoneInfo(fuseau)).isoformat()
 
 
 def trimestre(iso: str) -> str:
@@ -729,10 +817,12 @@ def evenements_du_portefeuille(
 
     for iso, libelle, zone, heure in CALENDRIER_MACRO:
         if iso >= ref.isoformat():
+            drapeau, fuseau = ZONES.get(zone, (None, FUSEAU_PUBLICATION))
             evs.append(Evenement(
                 nature="economique", date=iso, libelle=libelle, ticker=zone,
-                moment=instant_publication(iso, heure),
+                moment=instant_publication(iso, heure, fuseau),
                 jours=(date.fromisoformat(iso) - ref).days,
+                pays=drapeau,
             ))
 
     evs.sort(key=lambda e: (e.date, e.ticker or ""))
