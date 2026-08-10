@@ -1,10 +1,10 @@
 "use client";
-import { useEffect, useMemo, useState } from "react";
+import { useMemo } from "react";
+
+import type { AnalyseEvenements, EtatChargement } from "@/hooks/useAnalyseEvenements";
 
 import AssetLogo from "@/components/AssetLogo";
-import { API_URL as API } from "@/lib/api";
 import { CLAIR, JETONS, RAYONS } from "@/lib/palette";
-import { enTetesAuth } from "@/lib/session";
 import { FONT, NUM } from "@/lib/typography";
 
 /**
@@ -27,31 +27,6 @@ import { FONT, NUM } from "@/lib/typography";
  * affichées côte à côte au lieu que l'une résume l'autre.
  */
 
-type Passe = {
-  date: string;
-  ticker: string;
-  libelle: string;
-  moment: string;
-  surprise: number | null;
-  resultat: string;
-  variation: number | null;
-  impact_portefeuille: number | null;
-};
-
-type Impact = {
-  exposition: number;
-  impact_moyen: number;
-  probabilite: number;
-  seuil: number;
-  echantillon: number;
-};
-
-type Reponse = {
-  passes: Passe[];
-  impacts: Record<string, Impact>;
-  sans_donnees: string[];
-};
-
 /**
  * Le mot qui qualifie un impact, tiré de la **probabilité** et non de l'amplitude.
  *
@@ -61,7 +36,7 @@ type Reponse = {
  * pour cent est « élevé » et de deux « moyen » — un arbitrage qu'aucune donnée ne
  * soutient.
  */
-function qualifierImpact(p: number): { mot: string; teinte: string } {
+export function qualifierImpact(p: number): { mot: string; teinte: string } {
   if (p >= 66) return { mot: "Élevé", teinte: JETONS.negatif };
   if (p >= 33) return { mot: "Moyen", teinte: JETONS.attention };
   return { mot: "Faible", teinte: JETONS.positif };
@@ -73,22 +48,6 @@ const pct = (v: number, signe = true) =>
 const dateCourte = (iso: string) =>
   new Date(iso + "T12:00:00").toLocaleDateString("fr-FR",
     { day: "numeric", month: "short", year: "numeric" });
-
-function useAnalyse(portfolioId?: string) {
-  const [donnees, setDonnees] = useState<Reponse | null>(null);
-  const [etat, setEtat] = useState<"charge" | "pret" | "erreur">("charge");
-  useEffect(() => {
-    if (!portfolioId) { setEtat("pret"); setDonnees(null); return; }
-    let annule = false;
-    setEtat("charge");
-    fetch(`${API}/api/v1/portfolios/${portfolioId}/events/analyse`, { headers: enTetesAuth() })
-      .then(r => (r.ok ? r.json() : Promise.reject(new Error(String(r.status)))))
-      .then((d: Reponse) => { if (!annule) { setDonnees(d); setEtat("pret"); } })
-      .catch(() => { if (!annule) setEtat("erreur"); });
-    return () => { annule = true; };
-  }, [portfolioId]);
-  return { donnees, etat };
-}
 
 /** Une mesure encadrée, comme les trois de la maquette. */
 function Mesure({ titre, valeur, note }: { titre: string; valeur: string; note: string }) {
@@ -107,13 +66,13 @@ function Mesure({ titre, valeur, note }: { titre: string; valeur: string; note: 
 }
 
 export function ImpactPotentiel({
-  portfolioId, ticker,
+  donnees, etat, ticker,
 }: {
-  portfolioId?: string;
+  donnees: AnalyseEvenements | null;
+  etat: EtatChargement;
   /** Le titre à détailler. Par défaut, celui dont l'impact attendu est le plus fort. */
   ticker?: string;
 }) {
-  const { donnees, etat } = useAnalyse(portfolioId);
 
   /**
    * À défaut de sélection, le titre le plus réactif.
@@ -209,12 +168,12 @@ export function ImpactPotentiel({
 }
 
 export function HistoriqueEvenements({
-  portfolioId, limite = 8,
+  donnees, etat, limite = 8,
 }: {
-  portfolioId?: string;
+  donnees: AnalyseEvenements | null;
+  etat: EtatChargement;
   limite?: number;
 }) {
-  const { donnees, etat } = useAnalyse(portfolioId);
   const lignes = (donnees?.passes ?? []).slice(0, limite);
 
   const cellule = { padding: "7px 8px", fontFamily: FONT, fontSize: 10.5 } as const;

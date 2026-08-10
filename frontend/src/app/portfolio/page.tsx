@@ -37,6 +37,8 @@ import { useCoursCrypto, symboleBinance } from "@/lib/coursCrypto";
 import Cadre from "@/components/ui/Cadre";
 import ChiffresRoulants from "@/components/ui/ChiffresRoulants";
 import ImagePortefeuille from "@/components/portfolio/ImagePortefeuille";
+import { useAnalyseEvenements } from "@/hooks/useAnalyseEvenements";
+import { DividendesAVenir, ProchainsResultats } from "@/components/portfolio/TablesEvenements";
 import CalendrierEvenements from "@/components/portfolio/CalendrierEvenements";
 import EvenementsAVenir from "@/components/portfolio/EvenementsAVenir";
 import { HistoriqueEvenements, ImpactPotentiel } from "@/components/portfolio/ImpactEvenements";
@@ -419,11 +421,33 @@ function PortfolioPageInner() {
     }[]
   >([]);
   /**
-   * Les échéances du portefeuille, obtenues une fois par la liste et relues par le
-   * calendrier. Deux appels de la même route auraient pu se contredire d'une
-   * échéance selon l'instant.
+   * L'analyse des publications, obtenue **une fois** ici puis distribuée.
+   *
+   * ⚠️ Les deux panneaux qui s'en servent l'appelaient chacun de leur côté : la
+   * route la plus coûteuse de l'écran partait donc deux fois — celle qui va
+   * chercher, par titre, les publications passées *et* l'historique des cours qui
+   * les entoure. C'est le défaut que j'avais écarté pour le calendrier et laissé
+   * s'installer ici.
    */
-  const [echeances, setEcheances] = useState<{ date: string; nature: "resultats" | "dividende" | "economique" }[]>([]);
+  const analyseEvts = useAnalyseEvenements(portfolio?.id);
+
+  /**
+   * Les échéances du portefeuille, obtenues une fois par la liste et relues par le
+   * calendrier et les deux tableaux. Deux appels de la même route auraient pu se
+   * contredire d'une échéance selon l'instant.
+   */
+  const [evtsReponse, setEvtsReponse] = useState<{
+    evenements: {
+      nature: "resultats" | "dividende" | "economique";
+      date: string; libelle: string; ticker: string | null;
+      moment: string | null; jours: number | null;
+      montant: number | null; devise: string | null;
+      rendement: number | null; eps_estime: number | null;
+    }[];
+    sans_donnees: string[];
+    peremption_macro: string | null;
+  } | null>(null);
+  const echeances = evtsReponse?.evenements ?? [];
 
   /** Écriture désignée en cliquant un repère du graphique. */
   const [operationVisee, setOperationVisee] = useState<number | null>(null);
@@ -1796,7 +1820,8 @@ function PortfolioPageInner() {
             éteinte plutôt que masquée. */}
         <div style={{ width: 300, display: "flex", flexDirection: "column", gap: 10, flexShrink: 0 }}>
           <Cadre style={{ padding: "16px 18px" }}>
-            <CalendrierEvenements evenements={echeances} />
+            <CalendrierEvenements evenements={echeances}
+              peremption={evtsReponse?.peremption_macro} />
           </Cadre>
         </div>
 
@@ -1805,7 +1830,7 @@ function PortfolioPageInner() {
               Placé au-dessus des insights : c'est du constat daté, là où les
               insights sont une lecture de l'instant. */}
           <Cadre style={{ flex: 1, padding: "16px 18px", display: "flex", flexDirection: "column", minHeight: 0 }}>
-            <HistoriqueEvenements portfolioId={portfolio?.id} />
+            <HistoriqueEvenements donnees={analyseEvts.donnees} etat={analyseEvts.etat} />
           </Cadre>
           <Cadre style={{ flexShrink: 0, padding: "16px 18px" }}>
             <SectionLabel>INSIGHTS IA</SectionLabel>
@@ -1834,12 +1859,21 @@ function PortfolioPageInner() {
               échéances réellement publiées — voir `EvenementsAVenir`, et le
               service qui l'alimente pour ce que la source sait et ignore. */}
           <Cadre style={{ flex: 1, padding: "16px 18px", display: "flex", flexDirection: "column", minHeight: 0 }}>
-            <EvenementsAVenir portfolioId={portfolio?.id} onEvenements={setEcheances} />
+            <EvenementsAVenir portfolioId={portfolio?.id} onEvenements={setEvtsReponse} />
           </Cadre>
           {/* L'impact attendu de la prochaine échéance. Sous les échéances
               elles-mêmes : on lit d'abord *quand*, ensuite *combien*. */}
           <Cadre style={{ flexShrink: 0, padding: "16px 18px" }}>
-            <ImpactPotentiel portfolioId={portfolio?.id} />
+            <ImpactPotentiel donnees={analyseEvts.donnees} etat={analyseEvts.etat} />
+          </Cadre>
+          {/* Les deux vues détaillées de la maquette. Elles répètent ce que les
+              pastilles de la liste filtrent déjà, et c'est assumé : la liste répond
+              à « quand », ces tableaux à « combien ». */}
+          <Cadre style={{ flexShrink: 0, padding: "16px 18px" }}>
+            <DividendesAVenir evenements={echeances} />
+          </Cadre>
+          <Cadre style={{ flexShrink: 0, padding: "16px 18px" }}>
+            <ProchainsResultats evenements={echeances} analyse={analyseEvts.donnees} />
           </Cadre>
         </div>
       </div>{/* fin Vue Événements */}

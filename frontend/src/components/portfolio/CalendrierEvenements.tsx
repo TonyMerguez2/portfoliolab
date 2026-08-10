@@ -35,9 +35,18 @@ const LEGENDE: { cle: Nature; libelle: string }[] = [
 ];
 
 export default function CalendrierEvenements({
-  evenements, onJour,
+  evenements, peremption, onJour,
 }: {
   evenements: { date: string; nature: Nature }[];
+  /**
+   * Jusqu'où le calendrier macro est complet.
+   *
+   * ⚠️ Affiché, et non gardé pour le serveur. Passé cette date, un mois sans point
+   * n'est pas un mois sans échéance : c'est un mois que la source n'a pas encore
+   * publié. Le taire ferait lire une absence là où il n'y a qu'une ignorance — et
+   * c'est le genre de silence sur lequel on prend une décision.
+   */
+  peremption?: string | null;
   /** Appelé au clic sur un jour qui porte au moins une échéance. */
   onJour?: (iso: string) => void;
 }) {
@@ -160,6 +169,19 @@ export default function CalendrierEvenements({
           );
         })}
       </div>
+
+      {/* L'aveu d'incomplétude, quand le mois affiché dépasse ce que les sources
+          couvrent. Ne paraît que là où il est utile : l'afficher en permanence en
+          ferait une mention décorative qu'on cesse de lire. */}
+      {peremption && grille.some(c => c.duMois && c.iso > peremption) && (
+        <p style={{ margin: 0, fontFamily: FONT, fontSize: 9.5, color: CLAIR.texteFaible, lineHeight: 1.5 }}>
+          Publications économiques connues jusqu&apos;au{" "}
+          <span style={{ ...NUM }}>
+            {new Date(peremption + "T12:00:00").toLocaleDateString("fr-FR",
+              { day: "numeric", month: "long", year: "numeric" })}
+          </span>. Au-delà, les organismes n&apos;ont pas encore annoncé leurs dates.
+        </p>
+      )}
     </div>
   );
 }

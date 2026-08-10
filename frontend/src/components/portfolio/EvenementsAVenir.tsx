@@ -120,8 +120,12 @@ export default function EvenementsAVenir({
    *
    * Appelé depuis la réponse et non depuis un effet de rendu : un appel à chaque
    * rendu aurait bouclé avec l'état de l'appelant.
+   *
+   * La réponse entière et non la seule liste : le calendrier a besoin de la date
+   * de péremption pour avouer son incomplétude, et la lui faire chercher par un
+   * second appel aurait ramené le défaut qu'on évite ici.
    */
-  onEvenements?: (liste: Evenement[]) => void;
+  onEvenements?: (reponse: Reponse) => void;
 }) {
   const [donnees, setDonnees] = useState<Reponse | null>(null);
   const [etat, setEtat] = useState<"charge" | "pret" | "erreur">("charge");
@@ -137,7 +141,7 @@ export default function EvenementsAVenir({
         if (annule) return;
         setDonnees(d);
         setEtat("pret");
-        onEvenements?.(d.evenements);
+        onEvenements?.(d);
       })
       .catch(() => { if (!annule) setEtat("erreur"); });
     return () => { annule = true; };
