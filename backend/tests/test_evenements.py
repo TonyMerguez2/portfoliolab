@@ -34,6 +34,10 @@ def sans_reseau(monkeypatch):
     # Le calendrier macro est vidé par défaut : un test sur les résultats d'un
     # titre ne doit pas dépendre des dates de la Fed.
     monkeypatch.setattr(ev, "CALENDRIER_MACRO", [])
+    # ⚠️ Et aucune lecture des pages de la Fed ou de la BCE : un dictionnaire vide
+    # signifie « pages injoignables », donc le repli sur le relevé écrit. Sans ceci,
+    # la suite de tests appellerait deux sites publics à chaque exécution.
+    monkeypatch.setattr(ev, "decisions_officielles", dict)
 
 
 def fiche(**kw):

@@ -184,14 +184,18 @@ CALENDRIER_MACRO: list[tuple[str, str, str, str | None]] = [
     # jour de la BCE : les deux institutions se réunissent la même semaine, pas le
     # même jour. J'ai d'abord pris cette coïncidence pour une erreur de relevé.
     #
-    # ⚠️ **La page n'annonce aucune réunion de politique monétaire avant mars 2027.**
-    # Le relevé mot pour mot de la section 2027 commence par une réunion *non*
-    # monétaire le 24 février. Les années précédentes en comptaient huit, celle-ci
-    # sept : je transcris ce que la source publie et n'ajoute pas la réunion
-    # manquante par symétrie.
+    # ⚠️ **J'ai d'abord manqué la réunion des 3-4 février 2027, et j'ai eu tort de
+    # conclure qu'elle n'existait pas.** J'avais noté ici que « la page n'annonce aucune
+    # réunion avant mars 2027 », en m'appuyant sur une transcription qui l'avait omise
+    # en silence — sept réunions au lieu de huit, ce qui m'avait d'ailleurs paru
+    # suspect. La lecture mécanique de la même page, dans
+    # `calendriers_officiels.lire_bce`, l'a retrouvée : jour 1 le mercredi 3, jour 2 le
+    # jeudi 4. Le raisonnement — ne pas ajouter une date par symétrie — était bon ; la
+    # prémisse était fausse. D'où ce module qui lit la page lui-même.
     ("2026-09-10", "Décision de la BCE · Conseil des gouverneurs", "Zone euro", None),
     ("2026-10-29", "Décision de la BCE · Conseil des gouverneurs", "Zone euro", None),
     ("2026-12-17", "Décision de la BCE · Conseil des gouverneurs", "Zone euro", None),
+    ("2027-02-04", "Décision de la BCE · Conseil des gouverneurs", "Zone euro", None),
     ("2027-03-18", "Décision de la BCE · Conseil des gouverneurs", "Zone euro", None),
     ("2027-04-29", "Décision de la BCE · Conseil des gouverneurs", "Zone euro", None),
     ("2027-06-10", "Décision de la BCE · Conseil des gouverneurs", "Zone euro", None),
@@ -364,6 +368,76 @@ HORIZON_FLUX = 35
 _TTL_FLUX = 6 * 3600
 
 
+_TTL_OFFICIEL = 24 * 3600
+_TTL_OFFICIEL_ECHEC = 3600
+
+
+def decisions_officielles() -> dict[str, list[str]]:
+    """
+    Les dates de décision lues aux pages de la Fed et de la BCE, mises en cache.
+
+    ⚠️ Un jour de cache, contre six heures pour le reste. Ces calendriers sont annoncés
+    des années d'avance et ne bougent qu'exceptionnellement ; les relire toutes les six
+    heures aurait sollicité deux sites publics des centaines de fois par mois pour une
+    donnée qui change une fois par an.
+
+    ⚠️ Un dictionnaire **vide** est une réponse valide : les pages sont injoignables ou
+    n'ont pas passé la validation, et le relevé écrit prend le relais. C'est pourquoi
+    ce relevé reste dans le fichier au lieu d'être remplacé.
+    """
+    cache = _charger()
+    e = cache.get("decisions_officielles")
+    if e and e.get("echeance", 0) > time.time() and e.get("version") == _VERSION:
+        return e.get("zones") or {}
+
+    from app.services.calendriers_officiels import decisions_en_ligne
+    zones = decisions_en_ligne()
+    cache["decisions_officielles"] = {
+        "version": _VERSION, "zones": zones,
+        "echeance": time.time() + (_TTL_OFFICIEL if zones else _TTL_OFFICIEL_ECHEC),
+    }
+    _ecrire()
+    return zones
+
+
+def calendrier_macro() -> list[tuple[str, str, str, str | None]]:
+    """
+    Le calendrier macro effectif : le relevé écrit, ses décisions rafraîchies en ligne.
+
+    ⚠️ **Seules les décisions de banque centrale sont remplacées.** Ce sont les deux
+    seules séries dont une page officielle donne la liste complète et lisible. Les
+    publications d'indices — IPC, PCE, IPCH — n'ont pas d'équivalent gratuit et sans
+    compte : elles restent au relevé.
+
+    ⚠️ Le remplacement est **par zone**, pas global — et ce n'est pas une précaution
+    théorique : c'est l'état de marche normal. La page de la Fed refuse notre client
+    (403, voir `calendriers_officiels`), celle de la BCE nous sert. La zone euro se
+    rafraîchit donc, les États-Unis gardent leur relevé écrit, et l'écran ne perd rien.
+    Un remplacement global aurait fait perdre les deux séries pour un site sur deux.
+    """
+    en_ligne = decisions_officielles()
+    if not en_ligne:
+        return list(CALENDRIER_MACRO)
+
+    garde: list[tuple[str, str, str, str | None]] = []
+    for iso, libelle, zone, heure in CALENDRIER_MACRO:
+        # Une décision d'une zone rafraîchie est jetée : la page vient de la donner.
+        if zone in en_ligne and famille_macro(libelle) == "Décision de taux":
+            continue
+        garde.append((iso, libelle, zone, heure))
+
+    from app.services.calendriers_officiels import SERIES
+    libelles = {zone: libelle for zone, libelle, _, _ in SERIES}
+    for zone, dates in en_ligne.items():
+        for iso in dates:
+            # ⚠️ Aucune heure, comme au relevé : ni la Fed ni la BCE n'en publient sur
+            # ces pages. La lire en ligne ne rend pas disponible ce qui n'y est pas.
+            garde.append((iso, libelles.get(zone, "Décision de politique monétaire"),
+                          zone, None))
+    garde.sort()
+    return garde
+
+
 def famille_macro(libelle: str) -> str | None:
     """La famille d'un indicateur, ou `None` s'il n'est pas dans la liste blanche."""
     for motif, nom in FAMILLES_MACRO:
@@ -530,7 +604,7 @@ def retenir_du_flux(
 def familles_relevees(ref: date) -> set[tuple[str, str, str]]:
     """Les triplets `(zone, date, famille)` que le relevé à la main tient déjà."""
     deja: set[tuple[str, str, str]] = set()
-    for iso, libelle, zone, _ in CALENDRIER_MACRO:
+    for iso, libelle, zone, _ in calendrier_macro():
         if iso < ref.isoformat():
             continue
         if fam := famille_macro(libelle):
@@ -1214,7 +1288,7 @@ def evenements_du_portefeuille(
         if not trouve:
             sans.append(tk)
 
-    for iso, libelle, zone, heure in CALENDRIER_MACRO:
+    for iso, libelle, zone, heure in calendrier_macro():
         if iso >= ref.isoformat():
             z = ZONES.get(zone)
             evs.append(Evenement(
