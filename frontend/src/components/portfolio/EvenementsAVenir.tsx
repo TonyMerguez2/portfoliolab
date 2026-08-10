@@ -2,6 +2,7 @@
 import { useEffect, useMemo, useState } from "react";
 
 import AssetLogo from "@/components/AssetLogo";
+import { fichierAgenda, nomFichier } from "@/lib/agenda";
 import { API_URL as API } from "@/lib/api";
 import { CLAIR, JETONS, RAYONS } from "@/lib/palette";
 import { enTetesAuth } from "@/lib/session";
@@ -62,12 +63,53 @@ const dateCourte = (iso: string) =>
   new Date(iso + "T12:00:00").toLocaleDateString("fr-FR",
     { day: "numeric", month: "long", year: "numeric" });
 
+/**
+ * Télécharge l'événement au format iCalendar.
+ *
+ * ⚠️ L'URL de l'objet est révoquée aussitôt le clic simulé. Sans cela, chaque
+ * ajout laisserait le fichier en mémoire jusqu'au rechargement de la page — le
+ * même défaut que le cadreur d'image, et le même remède.
+ */
+function telecharger(e: Evenement) {
+  const detail = [
+    e.ticker,
+    e.montant != null ? `${e.montant} ${e.devise ?? ""}`.trim() : null,
+    e.eps_estime != null ? `EPS estimé ${e.eps_estime}` : null,
+  ].filter(Boolean).join(" · ");
+  const fiche = {
+    date: e.date,
+    titre: e.ticker ? `${e.ticker} — ${e.libelle}` : e.libelle,
+    description: detail || undefined,
+    // La clé porte la nature, le titre et la date : elle ne bouge pas d'un ajout
+    // au suivant, donc l'agenda remplace au lieu de dupliquer.
+    cle: `${e.nature}-${e.ticker ?? "macro"}-${e.date}`,
+  };
+  const url = URL.createObjectURL(
+    new Blob([fichierAgenda(fiche)], { type: "text/calendar;charset=utf-8" }));
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = nomFichier(fiche);
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
 export default function EvenementsAVenir({
-  portfolioId, limite = 6, onVoirTout,
+  portfolioId, limite = 6, onVoirTout, onEvenements,
 }: {
   portfolioId?: string;
   limite?: number;
   onVoirTout?: () => void;
+  /**
+   * Remonte la liste obtenue, pour que le calendrier la partage.
+   *
+   * ⚠️ Un second appel de la même route l'aurait exposé à afficher un mois qui
+   * contredit la liste d'à côté — deux réponses du fournisseur pouvant différer
+   * d'une échéance selon l'instant. Une seule requête, deux lecteurs.
+   *
+   * Appelé depuis la réponse et non depuis un effet de rendu : un appel à chaque
+   * rendu aurait bouclé avec l'état de l'appelant.
+   */
+  onEvenements?: (liste: Evenement[]) => void;
 }) {
   const [donnees, setDonnees] = useState<Reponse | null>(null);
   const [etat, setEtat] = useState<"charge" | "pret" | "erreur">("charge");
@@ -79,9 +121,15 @@ export default function EvenementsAVenir({
     setEtat("charge");
     fetch(`${API}/api/v1/portfolios/${portfolioId}/events`, { headers: enTetesAuth() })
       .then(r => (r.ok ? r.json() : Promise.reject(new Error(String(r.status)))))
-      .then((d: Reponse) => { if (!annule) { setDonnees(d); setEtat("pret"); } })
+      .then((d: Reponse) => {
+        if (annule) return;
+        setDonnees(d);
+        setEtat("pret");
+        onEvenements?.(d.evenements);
+      })
       .catch(() => { if (!annule) setEtat("erreur"); });
     return () => { annule = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [portfolioId]);
 
   const visibles = useMemo(() => {
@@ -220,6 +268,27 @@ export default function EvenementsAVenir({
                 {e.jours === 0 ? "aujourd’hui" : `J+${e.jours}`}
               </span>
             )}
+
+            {/* Ajout à l'agenda : un fichier iCalendar téléchargé.
+                Aucun service tiers, aucun compte à relier — le fichier s'ouvre
+                dans l'agenda du système, et son identifiant stable fait qu'un
+                second ajout remplace le premier au lieu de le doubler. */}
+            <button type="button" onClick={() => telecharger(e)}
+              aria-label={`Ajouter « ${e.libelle} » à l’agenda`}
+              title="Ajouter à l’agenda"
+              style={{
+                width: 22, height: 22, flexShrink: 0, padding: 0, cursor: "pointer",
+                borderRadius: RAYONS.xs, border: `1px solid ${CLAIR.bord}`,
+                background: "transparent", color: CLAIR.texteSecondaire,
+                display: "flex", alignItems: "center", justifyContent: "center",
+              }}>
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none"
+                stroke="currentColor" strokeWidth={2} strokeLinecap="round"
+                strokeLinejoin="round" aria-hidden="true">
+                <path d="M8 3v3m8-3v3M4 8h16M5 5h14a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1z" />
+                <path d="M12 12v5m-2.5-2.5h5" />
+              </svg>
+            </button>
           </div>
         ))}
       </div>

@@ -37,6 +37,7 @@ import { useCoursCrypto, symboleBinance } from "@/lib/coursCrypto";
 import Cadre from "@/components/ui/Cadre";
 import ChiffresRoulants from "@/components/ui/ChiffresRoulants";
 import ImagePortefeuille from "@/components/portfolio/ImagePortefeuille";
+import CalendrierEvenements from "@/components/portfolio/CalendrierEvenements";
 import EvenementsAVenir from "@/components/portfolio/EvenementsAVenir";
 import { HistoriqueEvenements, ImpactPotentiel } from "@/components/portfolio/ImpactEvenements";
 import { API_URL } from "@/lib/api";
@@ -417,6 +418,13 @@ function PortfolioPageInner() {
       quantity: number; unit_price: number; fees: number;
     }[]
   >([]);
+  /**
+   * Les échéances du portefeuille, obtenues une fois par la liste et relues par le
+   * calendrier. Deux appels de la même route auraient pu se contredire d'une
+   * échéance selon l'instant.
+   */
+  const [echeances, setEcheances] = useState<{ date: string; nature: "resultats" | "dividende" | "economique" }[]>([]);
+
   /** Écriture désignée en cliquant un repère du graphique. */
   const [operationVisee, setOperationVisee] = useState<number | null>(null);
 
@@ -1782,6 +1790,16 @@ function PortfolioPageInner() {
       </div>
 
 <div style={{ display: dashView === "evenements" ? "flex" : "none", height: "100%", padding: "14px 14px 10px", gap: 12, overflow: "hidden" }}>
+        {/* Le calendrier du mois, nourri de la même liste que le panneau des
+            échéances. Les points « résultats » et « dividendes » sont peuplés ; la
+            catégorie économique attend ses dates, et sa pastille de légende reste
+            éteinte plutôt que masquée. */}
+        <div style={{ width: 300, display: "flex", flexDirection: "column", gap: 10, flexShrink: 0 }}>
+          <Cadre style={{ padding: "16px 18px" }}>
+            <CalendrierEvenements evenements={echeances} />
+          </Cadre>
+        </div>
+
         <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: 10, minWidth: 0 }}>
           {/* L'historique des publications, avec la réaction mesurée du cours.
               Placé au-dessus des insights : c'est du constat daté, là où les
@@ -1816,7 +1834,7 @@ function PortfolioPageInner() {
               échéances réellement publiées — voir `EvenementsAVenir`, et le
               service qui l'alimente pour ce que la source sait et ignore. */}
           <Cadre style={{ flex: 1, padding: "16px 18px", display: "flex", flexDirection: "column", minHeight: 0 }}>
-            <EvenementsAVenir portfolioId={portfolio?.id} />
+            <EvenementsAVenir portfolioId={portfolio?.id} onEvenements={setEcheances} />
           </Cadre>
           {/* L'impact attendu de la prochaine échéance. Sous les échéances
               elles-mêmes : on lit d'abord *quand*, ensuite *combien*. */}
