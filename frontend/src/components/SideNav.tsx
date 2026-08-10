@@ -6,6 +6,7 @@ import { useApp } from "@/lib/AppContext";
 import ProfileModal from "@/components/ProfileModal";
 import AuthModal from "@/components/AuthModal";
 import { basculerMode, useModeTheme } from "@/lib/theme";
+import { API_URL } from "@/lib/api";
 
 /**
  * Navigation principale, en panneau latéral repliable.
@@ -18,7 +19,6 @@ import { basculerMode, useModeTheme } from "@/lib/theme";
 const EXPANDED = 232;
 const COLLAPSED = 68;
 const STORAGE_KEY = "novac_nav_collapsed";
-const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 
 type Item = { label: string; href: string; icon: React.JSX.Element };
 

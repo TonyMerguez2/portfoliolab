@@ -5,12 +5,12 @@ import { FONT, NUM } from "@/lib/typography";
 import { enTetesAuth } from "@/lib/session";
 import Cadre from "@/components/ui/Cadre";
 import { JETONS } from "@/lib/palette";
+import { API_URL as API } from "@/lib/api";
 import {
   resume, resultats, repartitionTypes, typesParOperation, montant, parDate,
   LIBELLE_OP, COULEUR_OP, type Tx, type TypeOp,
 } from "@/lib/journal";
 
-const API = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 
 /** Géométrie reprise de la vue générale, pour que les deux onglets s'alignent. */
 const MARGE = 10;

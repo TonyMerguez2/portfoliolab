@@ -4,6 +4,7 @@ import AssetLogo from "@/components/AssetLogo";
 import { relativeDay } from "@/lib/portfolio";
 import { FONT, NUM } from "@/lib/typography";
 import { CLAIR } from "@/lib/palette";
+import { API_URL as API } from "@/lib/api";
 
 export { relativeDay };
 
@@ -15,7 +16,6 @@ export { relativeDay };
  * toute l'activité → » de la maquette, qui n'en avait aucune jusqu'ici.
  */
 
-const API = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 
 type Tx = {
   id: string; ticker: string; side: "BUY" | "SELL";

@@ -21,6 +21,7 @@ import {
 // so the effect below only has to write the result. See comparison.test.ts.
 import { buildComparison, previousSessionClose } from "@/lib/chart/comparison";
 import { couleurGrille, LIBELLE_GRILLE, STYLES_GRILLE, type StyleGrille } from "@/lib/grille";
+import { API_URL } from "@/lib/api";
 
 // Fetch config par intervalle — charge tout le disponible Yahoo en un seul fetch
 const INTERVAL_FETCH_CONFIG: Record<string, { apiPeriod: string; apiInterval: string }> = {
@@ -484,7 +485,6 @@ export default function GrowthChart({
     const config = INTERVAL_FETCH_CONFIG[intervalKey];
     if (!config) { setAdaptiveData([]); return; }
 
-    const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
     let cancelled = false;
     fetch(`${API_URL}/api/v1/intraday?ticker=${encodeURIComponent(ticker)}&period=${config.apiPeriod}&interval=${config.apiInterval}`)
       .then(r => r.json())
@@ -512,7 +512,6 @@ export default function GrowthChart({
   const [dailyHistory, setDailyHistory] = useState<OHLCPt[]>([]);
   useEffect(() => {
     if (!ticker) { setDailyHistory([]); return; }
-    const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
     let cancelled = false;
     fetch(`${API_URL}/api/v1/intraday?ticker=${encodeURIComponent(ticker)}&period=max&interval=1d`)
       .then(r => r.json())
@@ -542,7 +541,6 @@ export default function GrowthChart({
     }
     const config = INTERVAL_FETCH_CONFIG[intervalKey];
     if (!config) { setBmAdaptiveData([]); return; }
-    const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
     let cancelled = false;
     fetch(`${API_URL}/api/v1/intraday?ticker=${encodeURIComponent(benchmarkTicker)}&period=${config.apiPeriod}&interval=${config.apiInterval}`)
       .then(r => r.json())

@@ -2,6 +2,7 @@
 import { useEffect, useState } from "react";
 import TileSparkline from "@/components/charts/TileSparkline";
 import { FONT, NUM } from "@/lib/typography";
+import { API_URL as API } from "@/lib/api";
 
 /**
  * Repères de marché : indice, crypto, devise.
@@ -16,7 +17,6 @@ import { FONT, NUM } from "@/lib/typography";
  * absente du projet.
  */
 
-const API = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 
 const PERIOD_API: Record<string, string> = { "1J": "1d", "7J": "7d", "1M": "1mo", "3M": "3mo", "1A": "1y" };
 

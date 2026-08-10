@@ -24,8 +24,8 @@ import {
 } from "@/lib/indicateurs";
 import { useModeTheme } from "@/lib/theme";
 import { styleCadreExterieur, styleCarteInterieure } from "@/lib/palette";
+import { API_URL } from "@/lib/api";
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 
 const COMPARISON_PERIODS = ["24h", "1S", "1M", "3M", "6M", "1A", "3A", "Max"] as const;
 const COMPARISON_INTERVALS = ["1m", "5m", "15m", "1h", "1d", "1W"] as const;

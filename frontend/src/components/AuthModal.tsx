@@ -1,6 +1,7 @@
 "use client";
 import { useState } from "react";
 import { enregistrerSession } from "@/lib/session";
+import { API_URL } from "@/lib/api";
 
 interface Props {
   onClose: () => void;
@@ -25,7 +26,6 @@ export default function AuthModal({ onClose, onAuth, dark = false }: Props) {
     setError("");
     setLoading(true);
     try {
-      const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
       const endpoint = mode === "login" ? "/api/v1/auth/login" : "/api/v1/auth/register";
       const body = mode === "login" ? { email, password } : { email, password, username };
       const res = await fetch(`${API_URL}${endpoint}`, {

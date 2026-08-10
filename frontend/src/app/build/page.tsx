@@ -8,6 +8,7 @@ import { ResponsiveContainer, PieChart, Pie, Cell, Tooltip } from "recharts";
 import TransactionModal, { type DraftTx } from "@/components/TransactionModal";
 import { repartir, sansCours, capitalEngage, agreger } from "@/lib/transactions";
 import { enTetesAuth } from "@/lib/session";
+import { API_URL } from "@/lib/api";
 
 /**
  * Construction d'un portefeuille.
@@ -23,7 +24,6 @@ type Asset = { ticker: string; name: string; weight: number; type: string };
 type SearchResult = { ticker: string; name: string; type: string; exchange?: string; logo?: string };
 type Preset = { name: string; tag: string; assets: Asset[] };
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 
 /** Catalogue local, celui du bandeau de recherche. */
 const POPULAR = TRENDING;

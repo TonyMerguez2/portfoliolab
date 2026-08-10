@@ -8,6 +8,7 @@ import { initiale } from "@/lib/initiale";
 import PocheActifs, { RAYON_CORPS } from "@/components/portfolio/PocheActifs";
 import CadrerImage from "@/components/portfolio/CadrerImage";
 import { annoncerModification } from "@/lib/portefeuilleModifie";
+import { API_URL as API } from "@/lib/api";
 
 /**
  * L'image de profil d'un portefeuille, et de quoi la changer.
@@ -36,7 +37,6 @@ import { annoncerModification } from "@/lib/portefeuilleModifie";
  * du blanc. Voir `encreSur`.
  */
 
-const API = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 
 /** Ce que l'API renvoie et que l'appelant doit réinjecter dans son état. */
 export type PortefeuilleImage = {

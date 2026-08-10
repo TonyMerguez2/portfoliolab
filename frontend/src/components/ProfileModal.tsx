@@ -1,6 +1,7 @@
 "use client";
 import { useState, useRef } from "react";
 import { fermerSession } from "@/lib/session";
+import { API_URL } from "@/lib/api";
 
 interface Props {
   user: any;
@@ -21,7 +22,6 @@ export default function ProfileModal({ user, onClose, onUpdate, dark = false }: 
   const border = dark ? "rgba(255,255,255,0.1)" : "rgba(0,0,0,0.08)";
   const inputBg = dark ? "rgba(255,255,255,0.05)" : "#F6F8FB";
 
-  const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
   const token = localStorage.getItem("novac_token");
 
   const handleAvatarUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {

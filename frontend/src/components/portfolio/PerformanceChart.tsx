@@ -22,6 +22,7 @@ import {
   type Sticker,
 } from "@/lib/chart/stickers";
 import Segments from "@/components/ui/Segments";
+import { API_URL as API } from "@/lib/api";
 
 export type { HistoryPoint, Period };
 
@@ -48,7 +49,6 @@ const PERIOD_API: Record<Period, string> = {
   "6M": "6mo", "1A": "1y", "3A": "3y", "Max": "max",
 };
 const PERIODES = Object.keys(PERIOD_API) as Period[];
-const API = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 
 /** Demi-largeur, en pixels, de la portion de courbe éclairée au survol. */
 const HALO = 22;

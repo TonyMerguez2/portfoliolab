@@ -2,8 +2,8 @@
 import { useEffect, useRef, useState } from "react";
 import AssetLogo from "@/components/AssetLogo";
 import { FONT } from "@/lib/typography";
+import { API_URL as API } from "@/lib/api";
 
-const API       = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 
 type Side        = "BUY" | "SELL";
 type SearchAsset = { ticker: string; name: string; type: string };

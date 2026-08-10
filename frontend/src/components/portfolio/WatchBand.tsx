@@ -5,6 +5,7 @@ import MarketPulse from "@/components/portfolio/MarketPulse";
 import { gaugeArc } from "@/lib/donut";
 import type { GridAsset } from "@/lib/portfolio";
 import { FONT, NUM } from "@/lib/typography";
+import { API_URL as API } from "@/lib/api";
 
 /**
  * Bande basse : ce qui mérite l'attention, les repères de marché, le sentiment.
@@ -18,7 +19,6 @@ import { FONT, NUM } from "@/lib/typography";
  * variation sort de l'ordinaire.
  */
 
-const API = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 
 /** Seuil au-delà duquel un mouvement mérite d'être signalé, en points de %. */
 const SEUIL = 2;

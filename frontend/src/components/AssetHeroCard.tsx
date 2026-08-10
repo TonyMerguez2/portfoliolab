@@ -5,8 +5,8 @@ import AssetLogo from "@/components/AssetLogo";
 import { LIBELLE_CADENCE } from "@/lib/cadence";
 import TileCard from "@/components/TileCard";
 import { BRAND_COLORS, TRENDING } from "@/lib/assets";
+import { API_URL } from "@/lib/api";
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 
 type Price = { price: number; change: number };
 type Quote = {
