@@ -234,7 +234,9 @@ def portfolio_events_transparence(
     les trois lignes d'un vrai PEA, dont les noms officiels portent « EUR C » et
     « Acc ». Sans cette route, ces portefeuilles n'ont aucun événement propre.
     """
-    from app.services.evenements import evenements_par_transparence
+    from app.services.evenements import (
+        evenements_macro_du_flux, evenements_par_transparence,
+    )
 
     p = _portefeuille_du_compte(portfolio_id, user, db)
     # Seuls les fonds : une action porte déjà ses propres échéances, et une crypto
@@ -247,7 +249,18 @@ def portfolio_events_transparence(
             continue
         if (_fiche(tk).get("genre") or "").upper() in ("ETF", "MUTUALFUND"):
             fonds[tk] = float(a.get("weight") or 0)
-    return evenements_par_transparence(fonds)
+
+    r = evenements_par_transparence(fonds)
+
+    # ⚠️ La macro du flux est jointe **ici** et non à `/events`, parce que c'est ici
+    # qu'on sait quels pays le portefeuille touche : les régions se déduisent des
+    # lignes des fonds, que seule cette route traverse. Les calculer dans `/events`
+    # aurait rendu la route rapide aussi lente que celle-ci.
+    directs = [a.get("ticker") for a in (p.assets or []) if a.get("ticker")]
+    r["evenements"] = r["evenements"] + evenements_macro_du_flux(
+        directs + r.pop("tickers_vus", []))
+    r["evenements"].sort(key=lambda e: e["date"])
+    return r
 
 
 @router.get("/{portfolio_id}/events/analyse")

@@ -41,6 +41,9 @@ export type EvenementTransparence = {
   exposition: number;
   /** Le nom de la société : « 000660.KS » ne désigne rien, « SK Hynix » si. */
   nom_societe?: string | null;
+  /** Le drapeau d'une échéance macro, et sa provenance. */
+  pays?: string | null;
+  source?: string | null;
 };
 
 export type Transparence = {

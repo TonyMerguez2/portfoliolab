@@ -164,9 +164,15 @@ class TestCalendrierMacro:
         """
         for _, _, zone, _ in VRAI_CALENDRIER:
             assert zone in ev.ZONES, zone
-        for zone, (drapeau, fuseau) in ev.ZONES.items():
-            assert len(drapeau) == 2, zone
-            assert ZoneInfo(fuseau), zone
+        for nom, z in ev.ZONES.items():
+            # ⚠️ Un drapeau vide est **permis** : Taïwan, la Corée et Singapour n'ont
+            # pas de fichier dans `public/drapeaux`, et l'interface retombe alors sur
+            # sa pastille. Exiger un code ici aurait poussé à en inventer un.
+            assert z.drapeau == "" or len(z.drapeau) == 2, nom
+            assert ZoneInfo(z.fuseau), nom
+            assert len(z.region) == 2, nom
+        # Une région ne doit pas désigner deux zones, sinon le flux en perdrait une.
+        assert len(ev.ZONE_PAR_REGION) == len(ev.ZONES)
 
     def test_les_dates_sont_uniques_par_libelle(self):
         # Deux entrées identiques feraient deux points le même jour dans le
@@ -248,7 +254,7 @@ class TestCalendrierMacro:
         une ligne « Zone euro » ne soit pas lue dans le fuseau de New York — six
         heures d'écart, et aucune erreur pour le signaler.
         """
-        eu = ev.ZONES["Zone euro"][1]
+        eu = ev.ZONES["Zone euro"].fuseau
         assert ev.instant_publication("2026-09-01", "11:00", eu).endswith("+02:00")
         assert ev.instant_publication("2026-12-01", "11:00", eu).endswith("+01:00")
         # La même date, dans les deux fuseaux : c'est tout l'intérêt du paramètre.
@@ -578,3 +584,151 @@ class TestImpactDuTitre:
             "lignes": [{"ticker": "NVDA", "part": 7.55}]})
         r = ev.impact_du_titre("NVDA", {"ESE.PA": 70.0}, {"ESE.PA": 70.0})
         assert r["exposition"] == pytest.approx(5.285)
+
+
+class TestFluxMacro:
+    """
+    Le flux macro automatique : ce qu'on en garde, et ce qu'on refuse.
+
+    ⚠️ Aucun appel au fournisseur ici. Le tri est écrit comme une fonction pure
+    précisément pour être éprouvé sur des lignes fabriquées — dont les cas tordus
+    relevés sur le flux réel : le même chiffre annoncé huit jours de suite, huit
+    libellés pour une même publication, et une date UTC qui n'est pas la date locale.
+    """
+
+    def ligne(self, region, evenement, jour, pour=None, heure=None):
+        return {"region": region, "evenement": evenement, "jour": jour,
+                "pour": pour, "heure": heure}
+
+    def test_une_region_hors_du_portefeuille_est_ecartee(self):
+        # Le flux compte 63 régions, dominées par l'Ouganda, Bahreïn et Oman. Sans
+        # filtre, la liste d'un PEA parlerait du solde budgétaire omanais.
+        l = [self.ligne("UG", "CPI YY*", "2026-08-20", "Aug")]
+        assert ev.retenir_du_flux(l, {"US"}, set(), REF) == []
+
+    def test_un_indicateur_hors_liste_blanche_est_ecarte(self):
+        l = [self.ligne("US", "M2 Money Supply*", "2026-08-20", "Jul")]
+        assert ev.retenir_du_flux(l, {"US"}, set(), REF) == []
+
+    def test_une_famille_annoncee_plusieurs_jours_est_ecartee(self):
+        """
+        ⚠️ Le cas le plus important. 71 % des libellés du flux portent un astérisque,
+        et le même chiffre est annoncé jusqu'à huit jours de suite — « SA CPI MM* »
+        pour la même période de référence. Le flux ne connaît pas la date ; en retenir
+        une aurait inventé une précision, et les retenir toutes aurait mis huit fois
+        la même publication au calendrier.
+        """
+        l = [self.ligne("TW", "CPI YY*", f"2026-08-2{j}", "Aug") for j in range(3)]
+        assert ev.retenir_du_flux(l, {"TW"}, set(), REF) == []
+
+    def test_deux_periodes_differentes_ne_sont_pas_une_date_incertaine(self):
+        # ⚠️ Le discriminant est la période de référence, pas le nombre de jours. Une
+        # série hebdomadaire paraît sur plusieurs jours en toute légitimité : l'écarter
+        # aurait supprimé les inscriptions au chômage, publiées chaque jeudi.
+        l = [self.ligne("US", "Jobless Claims", "2026-08-13", "Aug 8"),
+             self.ligne("US", "Jobless Claims", "2026-08-20", "Aug 15")]
+        assert len(ev.retenir_du_flux(l, {"US"}, set(), REF)) == 2
+
+    def test_huit_libelles_pour_une_publication_ne_font_qu_une_ligne(self):
+        # Relevé sur le flux réel : le PCE du 26 août arrive en huit libellés, « Core
+        # PCE Price Index MM », « PCE Price Index YY », « Dallas Fed PCE »…
+        l = [self.ligne("US", n, "2026-08-26", "Jul") for n in
+             ("Core PCE Price Index MM *", "PCE Price Index YY *", "Dallas Fed PCE*")]
+        r = ev.retenir_du_flux(l, {"US"}, set(), REF)
+        assert len(r) == 1
+        assert r[0].libelle == "Inflation · PCE (juillet)"
+
+    def test_le_releve_prime_sur_le_flux(self, monkeypatch):
+        """
+        ⚠️ Sans ceci, l'IPC américain du 12 août paraîtrait deux fois : une fois par
+        le relevé, avec son heure officielle de 8 h 30 et son libellé sourcé, une fois
+        par le flux sans heure. Deux lignes pour une publication, dont une moins bonne.
+        """
+        # ⚠️ Le vrai calendrier est remis en place : la fixture le vide par défaut, et
+        # sans lui `familles_relevees` ne tiendrait rien — le test aurait passé pour
+        # une raison qui n'est pas la bonne.
+        monkeypatch.setattr(ev, "CALENDRIER_MACRO", VRAI_CALENDRIER)
+        l = [self.ligne("US", "CPI YY, NSA", "2026-08-12", "Jul")]
+        deja = ev.familles_relevees(REF)
+        assert ("USA", "2026-08-12", "Inflation · IPC") in deja
+        assert ev.retenir_du_flux(l, {"US"}, deja, REF) == []
+        # Sans le relevé, la même ligne serait retenue : c'est bien lui qui l'écarte.
+        assert len(ev.retenir_du_flux(l, {"US"}, set(), REF)) == 1
+
+    def test_au_dela_de_l_horizon_rien_n_est_retenu(self):
+        l = [self.ligne("US", "Retail Sales", "2026-11-01", "Oct")]
+        assert ev.retenir_du_flux(l, {"US"}, set(), REF) == []
+
+    def test_le_jour_est_celui_de_la_zone_et_non_l_utc(self):
+        """
+        ⚠️ Relevé sur le flux réel : l'emploi coréen est daté du 11 août à 23 h UTC,
+        ce qui est le 12 à 8 h à Séoul. Recopier la date UTC l'annonçait la veille, et
+        le faisait manquer à qui filtre le calendrier sur le bon jour.
+        """
+        l = [self.ligne("KR", "Unemployment Rate", "2026-08-11", "Jul",
+                        "2026-08-11T23:00:00+00:00")]
+        r = ev.retenir_du_flux(l, {"KR"}, set(), REF)
+        assert [e.date for e in r] == ["2026-08-12"]
+
+    def test_une_zone_sans_drapeau_n_en_invente_pas(self):
+        # Taïwan, la Corée et Singapour n'ont pas de fichier dans `public/drapeaux` :
+        # l'interface retombe sur sa pastille. Mettre le drapeau chinois pour Taïwan
+        # aurait été à la fois faux et politique.
+        l = [self.ligne("TW", "GDP QQ", "2026-08-14", "Q2")]
+        assert ev.retenir_du_flux(l, {"TW"}, set(), REF)[0].pays is None
+
+    def test_le_flux_se_signe(self):
+        l = [self.ligne("US", "Retail Sales", "2026-08-14", "Jul")]
+        assert ev.retenir_du_flux(l, {"US"}, set(), REF)[0].source == "flux"
+
+    def test_le_releve_se_signe_aussi(self, monkeypatch):
+        monkeypatch.setattr(ev, "CALENDRIER_MACRO",
+                            [("2026-08-28", "Décision", "USA", None)])
+        assert ev.evenements_du_portefeuille([], REF)["evenements"][0]["source"] == "relevé"
+
+
+class TestRegionsDuPortefeuille:
+    def test_le_suffixe_de_cotation_donne_le_pays(self):
+        assert ev.region_du_ticker("2330.TW") == "TW"
+        assert ev.region_du_ticker("005930.KS") == "KR"
+        assert ev.region_du_ticker("0700.HK") == "HK"
+        assert ev.region_du_ticker("NOVN.SW") == "CH"
+        assert ev.region_du_ticker("AAPL") == "US"
+
+    def test_un_ticker_numerique_sans_suffixe_n_est_pas_americain(self):
+        """
+        ⚠️ « 005935 » est Samsung préférentielle et « 00939 » China Construction Bank,
+        toutes deux sorties des compositions de fonds sans suffixe. Les compter comme
+        américaines aurait fait entrer la macro des États-Unis par la Corée.
+        """
+        assert ev.region_du_ticker("005935") is None
+        assert ev.region_du_ticker("00939") is None
+
+    def test_une_paire_de_cryptomonnaie_n_a_pas_de_pays(self):
+        # ⚠️ Le critère est la devise de cotation et non le tiret : « BRK-B » en porte
+        # un et se traite bien à New York.
+        assert ev.region_du_ticker("BTC-USD") is None
+        assert ev.region_du_ticker("ETH-EUR") is None
+        assert ev.region_du_ticker("BRK-B") == "US"
+
+    def test_une_valeur_de_la_zone_euro_rend_la_zone_pertinente(self):
+        # Détenir Schneider rend les publications de la zone euro pertinentes, en plus
+        # des françaises.
+        assert ev.regions_du_portefeuille(["SU.PA"]) == {"FR", "EU"}
+        # Une valeur suisse ou britannique, non : ni la BCE ni l'IPCH ne la concernent.
+        assert ev.regions_du_portefeuille(["NOVN.SW"]) == {"CH"}
+
+    def test_la_periode_de_reference_est_traduite(self):
+        assert ev.periode_fr("Aug") == "août"
+        assert ev.periode_fr("Q2") == "T2"
+        assert ev.periode_fr(None) is None
+
+    def test_le_jour_de_la_periode_est_conserve(self):
+        """
+        ⚠️ Le défaut que le test des séries hebdomadaires a révélé. « Aug 8 » et
+        « Aug 15 » rendaient tous deux « août », donc la même période de référence,
+        donc une date jugée incertaine, donc deux publications écartées.
+        """
+        assert ev.periode_fr("Aug 8") == "8 août"
+        assert ev.periode_fr("Aug 15") == "15 août"
+        assert ev.periode_fr("Aug 8") != ev.periode_fr("Aug 15")

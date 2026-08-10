@@ -29,6 +29,7 @@ import json
 import logging
 import math
 import os
+import re
 import time
 from dataclasses import asdict, dataclass
 from datetime import date, datetime
@@ -88,6 +89,15 @@ class Evenement:
     #: dédoublé l'iconographie, et un emoji n'aurait pas le même dessin sur deux
     #: systèmes.
     pays: str | None = None
+
+    #: D'où vient cette échéance : « relevé » ou « flux ».
+    #:
+    #: ⚠️ Affichée, et pas seulement enregistrée. Les deux origines n'ont pas la même
+    #: garantie : le relevé vient d'une page officielle, porte son heure et va jusqu'à
+    #: fin 2027 ; le flux tient quatre semaines, sans décision de banque centrale et
+    #: avec des dates parfois indicatives. Mélanger les deux sans le dire aurait donné
+    #: à l'un le crédit de l'autre.
+    source: str | None = None
 
 
 # ── Calendrier macroéconomique ───────────────────────────────────────────────
@@ -216,10 +226,352 @@ CALENDRIER_MACRO: list[tuple[str, str, str, str | None]] = [
 #: Novartis, Roche et Nestlé (Suisse), HSBC, AstraZeneca et Shell (Royaume-Uni) —
 #: que ni la BCE ni l'IPCH ne concernent. Étiqueter ces dates « Europe » aurait
 #: promis une couverture qu'elles n'ont pas.
-ZONES: dict[str, tuple[str, str]] = {
-    "USA": ("us", "America/New_York"),
-    "Zone euro": ("eu", "Europe/Brussels"),
+@dataclass(frozen=True)
+class Zone:
+    """Une zone géographique du calendrier macroéconomique."""
+
+    #: Le code du fichier dans `public/drapeaux`, ou `""` si le projet ne l'a pas.
+    #:
+    #: ⚠️ Vide plutôt qu'approximatif. Taïwan, la Corée et Singapour n'ont pas de
+    #: fichier : l'interface retombe alors sur sa pastille de couleur, qui ne
+    #: prétend rien. Mettre le drapeau chinois pour Taïwan aurait été à la fois
+    #: faux et politique.
+    drapeau: str
+    #: Le fuseau dans lequel les heures de cette zone sont exprimées.
+    fuseau: str
+    #: Le code de région du flux Yahoo, quand il en a un pour cette zone.
+    region: str
+
+
+ZONES: dict[str, Zone] = {
+    # Les zones du relevé à la main.
+    "USA": Zone("us", "America/New_York", "US"),
+    "Zone euro": Zone("eu", "Europe/Brussels", "EU"),
+    # Celles que seul le flux alimente. Le fuseau sert à lire l'heure qu'il donne.
+    "Taïwan": Zone("", "Asia/Taipei", "TW"),
+    "Corée du Sud": Zone("", "Asia/Seoul", "KR"),
+    "Chine": Zone("cn", "Asia/Shanghai", "CN"),
+    "Hong Kong": Zone("hk", "Asia/Hong_Kong", "HK"),
+    "Singapour": Zone("", "Asia/Singapore", "SG"),
+    "Japon": Zone("jp", "Asia/Tokyo", "JP"),
+    "Inde": Zone("in", "Asia/Kolkata", "IN"),
+    "Royaume-Uni": Zone("gb", "Europe/London", "GB"),
+    "Suisse": Zone("ch", "Europe/Zurich", "CH"),
+    "France": Zone("fr", "Europe/Paris", "FR"),
+    "Allemagne": Zone("de", "Europe/Berlin", "DE"),
+    "Espagne": Zone("es", "Europe/Madrid", "ES"),
+    "Italie": Zone("it", "Europe/Rome", "IT"),
+    "Pays-Bas": Zone("nl", "Europe/Amsterdam", "NL"),
+    "Canada": Zone("ca", "America/Toronto", "CA"),
+    "Australie": Zone("au", "Australia/Sydney", "AU"),
 }
+
+#: De la région du flux vers le nom de zone, pour ne pas afficher « TW » brut.
+ZONE_PAR_REGION: dict[str, str] = {z.region: nom for nom, z in ZONES.items()}
+
+
+# ── Flux macroéconomique automatique ─────────────────────────────────────────
+#
+# `yfinance` expose un calendrier macro mondial. Mesuré sur 1 035 lignes réelles
+# avant d'écrire une ligne de code, du 10 août au 7 septembre 2026 :
+#
+# - **Il confirme le relevé à la main** là où les deux se recoupent : IPC américain
+#   le 12 août, PCE le 26 août, aux dates exactes du BLS et du BEA.
+# - **Son horizon est d'environ quatre semaines.** Demandé jusqu'au 20 septembre, il
+#   s'arrête au 7. Il ne peut donc pas remplacer le relevé, qui va jusqu'à fin 2027.
+# - **Il ne contient aucune décision de banque centrale utile** : trois décisions de
+#   taux dans 1 035 lignes, pour l'Égypte, la Norvège et la Roumanie. Ni la Fed ni la
+#   BCE. Les deux dates qui remuent le plus les marchés n'y sont pas.
+# - **71 % des libellés portent un astérisque**, et le même événement est annoncé
+#   jusqu'à huit jours de suite — « SA CPI MM* » pour la même période de référence.
+#   Ces dates ne sont pas connues ; en retenir une aurait inventé une précision.
+# - **63 régions**, dominées par l'Ouganda, Bahreïn et Oman. Sans filtre, la liste
+#   d'un PEA parlerait du solde budgétaire omanais.
+# - Il donne bien des heures, en UTC. Je l'avais d'abord cru dépourvu d'heures : mon
+#   premier échantillon était à 00:00 par hasard.
+#
+# D'où le partage : le relevé tient les rendez-vous structurels et lointains, le flux
+# apporte la largeur sur quatre semaines — Taïwan, la Corée, la Chine, que personne ne
+# maintiendrait à la main. Chaque échéance dit d'où elle vient.
+
+#: Les familles d'indicateurs retenues, et leur nom en français.
+#:
+#: ⚠️ Une **liste blanche**, pas une liste noire. Le flux compte des centaines de
+#: types d'événements ; en exclure les mauvais aurait laissé passer tout ce que je
+#: n'ai pas vu passer. Ici, ce qui n'est pas reconnu n'est pas affiché.
+#:
+#: Les motifs reconnaissent l'anglais du flux **et** le français du relevé : la même
+#: fonction classe les deux, ce qui permet au relevé de primer sur le flux pour un
+#: même indicateur le même jour.
+FAMILLES_MACRO: list[tuple[str, str]] = [
+    (r"\bPCE\b", "Inflation · PCE"),
+    (r"\bCPI\b|\bHICP\b|prix à la consommation|estimation rapide", "Inflation · IPC"),
+    (r"Rate Decision|Fed Funds|Refi Rate|Deposit Rate|Policy Rate|Bank Rate"
+     r"|Décision de la|FOMC", "Décision de taux"),
+    (r"Non-?Farm|Payrolls|Unemployment Rate|Jobless Claims", "Emploi"),
+    (r"\bGDP\b|\bPIB\b", "Croissance · PIB"),
+    (r"\bPMI\b|\bISM\b", "Activité · PMI"),
+    (r"Retail Sales", "Consommation · ventes de détail"),
+]
+
+#: Du suffixe de cotation vers la région du flux.
+#:
+#: ⚠️ Un ticker **sans** suffixe n'est américain que s'il est alphabétique. Les lignes
+#: d'un fonds asiatique sortent en « 005935 » et « 00939 » — Samsung préférentielle et
+#: China Construction Bank — qui n'ont pas de suffixe et ne sont pas américaines.
+#: Sans ce garde, la Corée et la Chine auraient été comptées comme les États-Unis.
+SUFFIXE_REGION: dict[str, str] = {
+    "TW": "TW", "KS": "KR", "KQ": "KR", "HK": "HK", "SS": "CN", "SZ": "CN",
+    "T": "JP", "SI": "SG", "NS": "IN", "BO": "IN",
+    "PA": "FR", "AS": "NL", "DE": "DE", "F": "DE", "MC": "ES", "MI": "IT",
+    "L": "GB", "SW": "CH", "TO": "CA", "AX": "AU",
+}
+
+#: Les régions dont les publications de la zone euro concernent aussi le lecteur.
+ZONE_EURO: frozenset[str] = frozenset({"FR", "DE", "ES", "IT", "NL"})
+
+#: Combien de jours du flux on retient. Au-delà, il n'a plus rien à dire.
+HORIZON_FLUX = 35
+
+_TTL_FLUX = 6 * 3600
+
+
+def famille_macro(libelle: str) -> str | None:
+    """La famille d'un indicateur, ou `None` s'il n'est pas dans la liste blanche."""
+    for motif, nom in FAMILLES_MACRO:
+        if re.search(motif, libelle, re.IGNORECASE):
+            return nom
+    return None
+
+
+def region_du_ticker(ticker: str) -> str | None:
+    """La région du flux correspondant à la place de cotation d'un ticker."""
+    t = ticker.upper()
+    # ⚠️ Une paire de cryptomonnaie n'a pas de pays. Le critère est la **devise de
+    # cotation** et non le tiret : « BRK-B » en porte un et se traite bien à New York,
+    # alors que « BTC-USD » ne se traite nulle part en particulier. Un test sur le
+    # tiret seul aurait rendu apatride la moitié des actions à plusieurs catégories.
+    if re.fullmatch(r"[A-Z0-9]+-(USD|EUR|GBP|JPY|CHF|USDT)", t):
+        return None
+    if "." in t:
+        return SUFFIXE_REGION.get(t.rsplit(".", 1)[1])
+    # ⚠️ Alphabétique seulement : « 005935 » n'est pas une valeur américaine.
+    return "US" if t.replace("-", "").isalpha() else None
+
+
+def regions_du_portefeuille(tickers: list[str]) -> set[str]:
+    """
+    Les régions dont la macroéconomie concerne réellement ces lignes.
+
+    ⚠️ Déduites des tickers et non choisies : c'est ce qui fait que la macro
+    taïwanaise apparaît dans un PEA d'ETF. Elle y a sa place parce que le fonds
+    asiatique détient TSMC pour dix-sept pour cent — la même transparence qui
+    justifie d'y annoncer les résultats de TSMC.
+    """
+    regions: set[str] = set()
+    for tk in tickers:
+        r = region_du_ticker(tk)
+        if not r:
+            continue
+        regions.add(r)
+        # Une valeur de la zone euro rend les publications de la zone pertinentes.
+        if r in ZONE_EURO:
+            regions.add("EU")
+    return regions
+
+
+#: Les mois et trimestres du flux, vers le français.
+_PERIODES = {
+    "jan": "janvier", "feb": "février", "mar": "mars", "apr": "avril",
+    "may": "mai", "jun": "juin", "jul": "juillet", "aug": "août",
+    "sep": "septembre", "oct": "octobre", "nov": "novembre", "dec": "décembre",
+}
+
+
+def periode_fr(pour: str | None) -> str | None:
+    """
+    « Aug » devient « août », « Q2 » devient « T2 », « Aug 8 » devient « 8 août ».
+
+    ⚠️ Le jour compte, et c'est mon propre test qui l'a montré. En ne gardant que les
+    trois premières lettres, « Aug 8 » et « Aug 15 » devenaient tous deux « août » :
+    les inscriptions hebdomadaires au chômage passaient alors pour une même
+    publication annoncée deux jours différents, donc pour une date inconnue, donc
+    étaient écartées. La période de référence sert précisément à distinguer une série
+    récurrente d'une date incertaine ; la tronquer détruisait cette distinction.
+    """
+    if not pour:
+        return None
+    p = str(pour).strip()
+    if m := re.fullmatch(r"Q([1-4])", p, re.IGNORECASE):
+        return f"T{m.group(1)}"
+    if m := re.fullmatch(r"([A-Za-z]{3,})\.?\s+(\d{1,2})", p):
+        if mois := _PERIODES.get(m.group(1)[:3].lower()):
+            return f"{int(m.group(2))} {mois}"
+        return p
+    return _PERIODES.get(p[:3].lower(), p)
+
+
+def jour_local(jour_utc: str, heure: str | None, fuseau: str) -> str:
+    """
+    Le jour de la publication **chez elle**, et non en temps universel.
+
+    ⚠️ Mesuré sur le flux réel : l'emploi coréen est daté du 11 août à 23 h UTC, ce
+    qui est le **12 à 8 h** à Séoul. Recopier la date UTC l'aurait annoncé la veille,
+    et l'aurait fait manquer à qui filtre le calendrier sur le bon jour. L'erreur ne
+    se voit que pour les zones à l'est, et seulement pour les publications du matin :
+    c'est exactement le genre de décalage qui passe inaperçu en relecture.
+    """
+    if not heure:
+        return jour_utc
+    try:
+        return datetime.fromisoformat(heure).astimezone(ZoneInfo(fuseau)).date().isoformat()
+    except (ValueError, TypeError):                            # pragma: no cover
+        return jour_utc
+
+
+def retenir_du_flux(
+    lignes: list[dict], regions: set[str], deja: set[tuple[str, str, str]],
+    ref: date, horizon: int = HORIZON_FLUX,
+) -> list[Evenement]:
+    """
+    Ce qu'on garde du flux : le tri, écrit à part pour être éprouvé sans réseau.
+
+    `lignes` porte des dictionnaires `{region, evenement, jour, pour, heure}`.
+    `deja` porte les triplets `(zone, date, famille)` déjà tenus par le relevé, qui
+    prime : il a l'heure officielle et un libellé sourcé.
+
+    Quatre filtres, tous motivés par une mesure du flux réel :
+
+    1. la région doit concerner le portefeuille ;
+    2. l'indicateur doit être dans la liste blanche ;
+    3. une famille annoncée **plusieurs jours** pour la même période de référence est
+       écartée : le flux ne connaît pas sa date, et huit jours d'affilée pour le même
+       chiffre ne font pas huit événements ;
+    4. le relevé prime sur le flux, sinon l'IPC américain du 12 août apparaîtrait
+       deux fois — une fois avec son heure officielle, une fois sans.
+    """
+    fin = ref.toordinal() + horizon
+    # Étape 1 : normaliser en (zone, jour, famille) et compter les jours par famille.
+    retenues: dict[tuple[str, str, str], dict] = {}
+    jours_par_famille: dict[tuple[str, str, str | None], set[str]] = {}
+
+    for l in lignes:
+        region = str(l.get("region") or "")
+        zone = ZONE_PAR_REGION.get(region)
+        brut = str(l.get("jour") or "")
+        if not zone or region not in regions or not brut:
+            continue
+        # ⚠️ Le jour dans le fuseau de la zone, avant tout le reste : le
+        # dédoublonnage, l'horizon et la comparaison au relevé doivent tous porter
+        # sur la même date, celle que le lecteur verra.
+        jour = jour_local(brut, l.get("heure"), ZONES[zone].fuseau)
+        try:
+            d = date.fromisoformat(jour)
+        except ValueError:
+            continue
+        if not (ref.toordinal() <= d.toordinal() <= fin):
+            continue
+        fam = famille_macro(str(l.get("evenement") or ""))
+        if not fam:
+            continue
+        periode = periode_fr(l.get("pour"))
+        jours_par_famille.setdefault((zone, fam, periode), set()).add(jour)
+        cle = (zone, jour, fam)
+        if cle in deja:
+            continue
+        # La première ligne de la famille fixe l'heure ; les suivantes ne font que
+        # confirmer le jour. Le flux en donne jusqu'à huit pour un même chiffre.
+        retenues.setdefault(cle, {"periode": periode, "heure": l.get("heure")})
+
+    # Étape 2 : écarter les familles dont la date n'est pas connue.
+    evs: list[Evenement] = []
+    for (zone, jour, fam), info in retenues.items():
+        if len(jours_par_famille[(zone, fam, info["periode"])]) > 1:
+            continue
+        z = ZONES[zone]
+        libelle = f"{fam} ({info['periode']})" if info["periode"] else fam
+        evs.append(Evenement(
+            nature="economique", date=jour, libelle=libelle, ticker=zone,
+            moment=info["heure"], jours=date.fromisoformat(jour).toordinal() - ref.toordinal(),
+            pays=z.drapeau or None, source="flux",
+        ))
+    evs.sort(key=lambda e: (e.date, e.ticker or ""))
+    return evs
+
+
+def familles_relevees(ref: date) -> set[tuple[str, str, str]]:
+    """Les triplets `(zone, date, famille)` que le relevé à la main tient déjà."""
+    deja: set[tuple[str, str, str]] = set()
+    for iso, libelle, zone, _ in CALENDRIER_MACRO:
+        if iso < ref.isoformat():
+            continue
+        if fam := famille_macro(libelle):
+            deja.add((zone, iso, fam))
+    return deja
+
+
+def _flux_macro(debut: str, fin: str) -> list[dict]:
+    """
+    Le calendrier macro du fournisseur, normalisé et mis en cache.
+
+    ⚠️ Le fournisseur plafonne à cent lignes par requête et sert les dates de la plus
+    lointaine à la plus proche. Il faut donc paginer, et une page vide est la seule
+    fin de liste fiable — mesuré : 1 035 lignes pour quatre semaines, toutes régions.
+    """
+    cache = _charger()
+    cle = f"flux_macro:{debut}:{fin}"
+    e = cache.get(cle)
+    if e and e.get("echeance", 0) > time.time() and e.get("version") == _VERSION:
+        return e.get("lignes") or []
+
+    res: dict = {"version": _VERSION, "abouti": False, "lignes": []}
+    try:
+        cal = yf.Calendars(start=debut, end=fin)
+        brut: list[dict] = []
+        for page in range(30):                      # 3 000 lignes : large de trois fois
+            df = cal.get_economic_events_calendar(limit=100, offset=page * 100)
+            if df is None or not len(df):
+                break
+            for evenement, r in df.iterrows():
+                instant = r.get("Event Time")
+                if _vide(instant):
+                    # Sans date, la ligne ne peut rien dire : `NaT` arrive.
+                    continue
+                # ⚠️ 00:00 UTC vaut « heure inconnue » et non « minuit ». Aucun
+                # institut ne publie à vingt heures à New York ; c'est le zéro du
+                # fournisseur. Le rendre tel quel aurait annoncé des publications
+                # nocturnes — et la veille au soir pour les lecteurs à l'ouest.
+                nuit = instant.hour == 0 and instant.minute == 0
+                brut.append({
+                    "region": str(r.get("Region") or "").strip(),
+                    "evenement": str(evenement).strip(),
+                    "jour": instant.date().isoformat(),
+                    "pour": None if _vide(r.get("For")) else str(r.get("For")).strip(),
+                    "heure": None if nuit else instant.isoformat(),
+                })
+        res["lignes"] = brut
+        res["abouti"] = True
+    except Exception as exc:                                   # pragma: no cover
+        logger.warning("flux macro indisponible (%s : %s)", type(exc).__name__, exc)
+
+    res["echeance"] = time.time() + (_TTL_FLUX if res["abouti"] else _TTL_ECHEC)
+    cache[cle] = res
+    _ecrire()
+    return res["lignes"]
+
+
+def evenements_macro_du_flux(
+    tickers: list[str], aujourdhui: date | None = None,
+) -> list[dict]:
+    """Les échéances macro du flux qui concernent ces lignes, prêtes pour l'interface."""
+    ref = aujourdhui or date.today()
+    regions = regions_du_portefeuille(tickers)
+    if not regions:
+        return []
+    fin = date.fromordinal(ref.toordinal() + HORIZON_FLUX)
+    lignes = _flux_macro(ref.isoformat(), fin.isoformat())
+    evs = retenir_du_flux(lignes, regions, familles_relevees(ref), ref)
+    return [asdict(e) for e in evs]
 
 #: Jusqu'où le calendrier est **complet**, toutes séries confondues.
 #:
@@ -294,6 +646,18 @@ def _ecrire() -> None:
             os.remove(tmp)
         except OSError:
             pass
+
+
+def _vide(v: Any) -> bool:
+    """Vrai pour ce que pandas rend quand il n'a rien : None, NaN, NaT, chaîne vide."""
+    if v is None:
+        return True
+    # ⚠️ `v != v` reconnaît NaN **et** NaT sans importer pandas : ces deux valeurs sont
+    # les seules à ne pas être égales à elles-mêmes. Un `isinstance(v, float)` aurait
+    # manqué NaT, qui n'est pas un flottant et qui est ce que rend une date absente.
+    if v != v:
+        return True
+    return isinstance(v, str) and not v.strip()
 
 
 def _nombre(v: Any) -> float | None:
@@ -685,12 +1049,18 @@ def evenements_par_transparence(
     ref = aujourdhui or date.today()
     evs: list[Evenement] = []
     opaques: list[str] = []
+    #: Les lignes traversées, pour que l'appelant sache quels pays le portefeuille
+    #: touche réellement. C'est ce qui fait entrer la macro taïwanaise dans un PEA
+    #: d'ETF : elle y a sa place parce qu'un fonds détient TSMC, exactement la même
+    #: raison qui fait y annoncer les résultats de TSMC.
+    vus: list[str] = []
 
     for tk, poids in fonds.items():
         comp = _lignes_du_fonds(tk)
         if not comp.get("abouti"):
             opaques.append(tk)
             continue
+        vus.extend(l["ticker"] for l in comp["lignes"])
         for ligne in comp["lignes"]:
             f = _fiche(ligne["ticker"])
             jr = f.get("resultats")
@@ -712,6 +1082,7 @@ def evenements_par_transparence(
         "evenements": [asdict(e) for e in evs],
         "fonds_opaques": opaques,
         "lignes_par_fonds": LIGNES_PAR_FONDS,
+        "tickers_vus": vus,
     }
 
 
@@ -817,12 +1188,14 @@ def evenements_du_portefeuille(
 
     for iso, libelle, zone, heure in CALENDRIER_MACRO:
         if iso >= ref.isoformat():
-            drapeau, fuseau = ZONES.get(zone, (None, FUSEAU_PUBLICATION))
+            z = ZONES.get(zone)
             evs.append(Evenement(
                 nature="economique", date=iso, libelle=libelle, ticker=zone,
-                moment=instant_publication(iso, heure, fuseau),
+                moment=instant_publication(iso, heure,
+                                           z.fuseau if z else FUSEAU_PUBLICATION),
                 jours=(date.fromisoformat(iso) - ref).days,
-                pays=drapeau,
+                pays=(z.drapeau or None) if z else None,
+                source="relevé",
             ))
 
     evs.sort(key=lambda e: (e.date, e.ticker or ""))

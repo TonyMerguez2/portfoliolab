@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import AssetLogo from "@/components/AssetLogo";
 import type { AnalyseEvenements } from "@/hooks/useAnalyseEvenements";
 import { fichierAgenda, nomFichier } from "@/lib/agenda";
+import { limiterMacro, macroEcartees } from "@/lib/echeances";
 import { libelleAmplitude, porteUnImpact } from "@/lib/impactEvenement";
 import { API_URL as API } from "@/lib/api";
 import { CLAIR, JETONS, RAYONS } from "@/lib/palette";
@@ -52,6 +53,15 @@ type Evenement = {
    * choisit le dessin.
    */
   pays?: string | null;
+  /**
+   * D'où vient l'échéance : « relevé » ou « flux ».
+   *
+   * ⚠️ Montrée, parce que les deux n'ont pas la même garantie. Le relevé vient d'une
+   * page officielle, porte son heure et court jusqu'à fin 2027 ; le flux du
+   * fournisseur tient quatre semaines et ne contient aucune décision de banque
+   * centrale. Les mêler sans le dire donnerait à l'un le crédit de l'autre.
+   */
+  source?: string | null;
 };
 
 type Reponse = {
@@ -224,10 +234,28 @@ export default function EvenementsAVenir({
     // ⚠️ Filtré sur un jour, la limite est levée : on a demandé *cette* journée,
     // en tronquer la fin serait absurde. Une journée porte au plus quelques
     // échéances, là où la liste entière en compte des dizaines.
-    return jour
-      ? parNature.filter(e => e.date === jour)
-      : parNature.slice(0, limite);
+    if (jour) return parNature.filter(e => e.date === jour);
+    // ⚠️ La vue d'ensemble réserve une part à la macro. Le calendrier automatique
+    // en a fait passer trois à dix-sept sur cinq semaines, dont onze **avant** la
+    // première publication du portefeuille : sans cette part, les six lignes de la
+    // liste étaient six lignes de macro et le portefeuille n'apparaissait plus.
+    // Le filtre « Économique » et le calendrier, eux, reçoivent tout.
+    const partagees = filtre === "tous" ? limiterMacro(parNature) : parNature;
+    return partagees.slice(0, limite);
   }, [tout, filtre, limite, jour]);
+
+  /**
+   * Combien de publications économiques ne sont pas dans cette liste.
+   *
+   * ⚠️ Le compte porte sur **tout** ce que la vue d'ensemble laisse de côté, parce que
+   * c'est ce que la phrase promet. J'avais d'abord tenté de ne compter que celles qui
+   * auraient tenu dans les six lignes, pour ne pas mêler deux troncatures — mais le
+   * lecteur, lui, veut savoir combien de publications existent qu'il ne voit pas, et
+   * la réponse à cette question-là est simple.
+   */
+  const macroCachees = useMemo(
+    () => (filtre === "tous" && !jour ? macroEcartees(tout) : 0),
+    [tout, filtre, jour]);
 
   /**
    * Un filtre sans aucune échéance est **éteint**, pas masqué.
@@ -397,6 +425,12 @@ export default function EvenementsAVenir({
               </div>
               <div style={{ fontFamily: FONT, fontSize: 10, color: CLAIR.texteFaible }}>
                 {e.ticker ? e.libelle : "Publication économique"}
+                {/* La provenance, sur les seules lignes macro : c'est là que les
+                    garanties diffèrent. Une date relevée à la Fed ou à la BCE n'a pas
+                    le même statut qu'une date lue chez le fournisseur de cours. */}
+                {e.nature === "economique" && e.source && (
+                  <> · {e.source === "relevé" ? "relevé officiel" : "flux fournisseur"}</>
+                )}
                 {/* L'origine, quand l'échéance vient d'une société détenue par un
                     fonds. La dire est indispensable : sans elle, une ligne « AAPL »
                     apparaîtrait dans un portefeuille qui ne détient pas Apple. */}
@@ -502,6 +536,24 @@ export default function EvenementsAVenir({
           </div>
         ))}
       </div>
+
+      {/* ⚠️ La troncature s'avoue. Une liste qui garde deux publications
+          économiques sur quarante-cinq, sans le dire, se lit comme une liste
+          complète : on en conclut que rien d'autre n'est prévu. C'est le même
+          défaut que le « + 2 » sans explication des pastilles du graphique, et le
+          bouton dit où trouver le reste plutôt que de laisser chercher. */}
+      {etat === "pret" && macroCachees > 0 && visibles.length > 0 && (
+        <button type="button" onClick={() => setFiltre("economique")}
+          style={{
+            alignSelf: "flex-start", background: "none", border: "none", padding: 0,
+            cursor: "pointer", textAlign: "left",
+            fontFamily: FONT, fontSize: 10, color: CLAIR.texteFaible,
+          }}>
+          {macroCachees} autre{macroCachees > 1 ? "s" : ""} publication
+          {macroCachees > 1 ? "s" : ""} économique{macroCachees > 1 ? "s" : ""} — voir
+          {" "}<span style={{ color: CLAIR.accent, fontWeight: 600 }}>Économique</span>
+        </button>
+      )}
 
       {onVoirTout && etat === "pret" && (donnees?.evenements.length ?? 0) > limite && (
         <button type="button" onClick={onVoirTout}
