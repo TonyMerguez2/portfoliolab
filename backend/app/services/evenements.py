@@ -264,6 +264,17 @@ ZONES: dict[str, Zone] = {
     "Pays-Bas": Zone("nl", "Europe/Amsterdam", "NL"),
     "Canada": Zone("ca", "America/Toronto", "CA"),
     "Australie": Zone("au", "Australia/Sydney", "AU"),
+    # ⚠️ Sans ces zones, une région déduite d'un ticker n'aurait aucun nom et le flux
+    # l'aurait écartée en silence : le portefeuille aurait paru ne rien devoir à un
+    # pays dont il détient le plus gros titre. Un test le vérifie désormais.
+    "Belgique": Zone("", "Europe/Brussels", "BE"),
+    "Finlande": Zone("", "Europe/Helsinki", "FI"),
+    "Portugal": Zone("", "Europe/Lisbon", "PT"),
+    "Autriche": Zone("", "Europe/Vienna", "AT"),
+    "Irlande": Zone("", "Europe/Dublin", "IE"),
+    "Danemark": Zone("", "Europe/Copenhagen", "DK"),
+    "Suède": Zone("", "Europe/Stockholm", "SE"),
+    "Norvège": Zone("", "Europe/Oslo", "NO"),
 }
 
 #: De la région du flux vers le nom de zone, pour ne pas afficher « TW » brut.
@@ -320,15 +331,32 @@ FAMILLES_MACRO: list[tuple[str, str]] = [
 #: d'un fonds asiatique sortent en « 005935 » et « 00939 » — Samsung préférentielle et
 #: China Construction Bank — qui n'ont pas de suffixe et ne sont pas américaines.
 #: Sans ce garde, la Corée et la Chine auraient été comptées comme les États-Unis.
+#: ⚠️ Les places nordiques et les petites places de la zone euro y figurent parce que
+#: leur absence était un **oubli silencieux**, trouvé en vérifiant : Novo Nordisk
+#: (Copenhague), AB InBev (Bruxelles), Atlas Copco (Stockholm), Nokia (Helsinki),
+#: Equinor (Oslo) ne renvoyaient aucune région. Ce sont des poids lourds d'un STOXX
+#: Europe 600 ; les détenir aurait fait perdre leur macro sans qu'aucune erreur ne
+#: le signale — le fonds aurait simplement paru ne concerner aucun pays.
 SUFFIXE_REGION: dict[str, str] = {
+    # Asie-Pacifique
     "TW": "TW", "KS": "KR", "KQ": "KR", "HK": "HK", "SS": "CN", "SZ": "CN",
-    "T": "JP", "SI": "SG", "NS": "IN", "BO": "IN",
+    "T": "JP", "SI": "SG", "NS": "IN", "BO": "IN", "AX": "AU",
+    # Zone euro
     "PA": "FR", "AS": "NL", "DE": "DE", "F": "DE", "MC": "ES", "MI": "IT",
-    "L": "GB", "SW": "CH", "TO": "CA", "AX": "AU",
+    "BR": "BE", "HE": "FI", "LS": "PT", "VI": "AT", "IR": "IE",
+    # Europe hors zone euro
+    "L": "GB", "SW": "CH", "CO": "DK", "ST": "SE", "OL": "NO",
+    # Amérique du Nord
+    "TO": "CA", "V": "CA",
 }
 
 #: Les régions dont les publications de la zone euro concernent aussi le lecteur.
-ZONE_EURO: frozenset[str] = frozenset({"FR", "DE", "ES", "IT", "NL"})
+#:
+#: ⚠️ La Suisse, le Royaume-Uni, le Danemark, la Suède et la Norvège n'y sont pas : ni
+#: la BCE ni l'IPCH ne les concernent, et les y mettre aurait annoncé à un détenteur
+#: de Nestlé une décision qui ne touche pas son titre.
+ZONE_EURO: frozenset[str] = frozenset(
+    {"FR", "DE", "ES", "IT", "NL", "BE", "FI", "PT", "AT", "IE"})
 
 #: Combien de jours du flux on retient. Au-delà, il n'a plus rien à dire.
 HORIZON_FLUX = 35

@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import AssetLogo from "@/components/AssetLogo";
 import type { AnalyseEvenements } from "@/hooks/useAnalyseEvenements";
 import { fichierAgenda, nomFichier } from "@/lib/agenda";
-import { limiterMacro, macroEcartees } from "@/lib/echeances";
+import { cleEcheance, limiterMacro, macroEcartees } from "@/lib/echeances";
 import { libelleAmplitude, porteUnImpact } from "@/lib/impactEvenement";
 import { API_URL as API } from "@/lib/api";
 import { CLAIR, JETONS, RAYONS } from "@/lib/palette";
@@ -365,7 +365,7 @@ export default function EvenementsAVenir({
         )}
 
         {etat === "pret" && visibles.map((e, i) => (
-          <div key={`${e.nature}:${e.ticker ?? ""}:${e.date}:${e.via ?? ""}`}
+          <div key={cleEcheance(e)}
             onClick={selectionnable(e)
               ? () => onChoisirTicker?.(retenu(e) ? null : e.ticker)
               : undefined}

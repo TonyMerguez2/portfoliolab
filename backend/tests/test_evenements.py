@@ -718,6 +718,32 @@ class TestRegionsDuPortefeuille:
         # Une valeur suisse ou britannique, non : ni la BCE ni l'IPCH ne la concernent.
         assert ev.regions_du_portefeuille(["NOVN.SW"]) == {"CH"}
 
+    def test_toute_region_deduite_a_une_zone_nommee(self):
+        """
+        ⚠️ Le garde contre un oubli **silencieux**. Une région déduite d'un ticker mais
+        absente de `ZONES` n'a pas de nom, donc `ZONE_PAR_REGION` ne la trouve pas,
+        donc le flux l'écarte sans un mot : le portefeuille paraît ne rien devoir à un
+        pays dont il détient le plus gros titre. C'est ce qui s'est passé pour le
+        Danemark et la Belgique — Novo Nordisk et AB InBev — avant ce test.
+        """
+        for suffixe, region in ev.SUFFIXE_REGION.items():
+            assert region in ev.ZONE_PAR_REGION, f".{suffixe} -> {region}"
+        for region in ev.ZONE_EURO:
+            assert region in ev.ZONE_PAR_REGION, region
+        assert "EU" in ev.ZONE_PAR_REGION
+
+    def test_les_places_europeennes_lourdes_sont_couvertes(self):
+        # Des valeurs qui pèsent dans un STOXX Europe 600 et n'avaient aucune région.
+        assert ev.region_du_ticker("NOVO-B.CO") == "DK"      # Novo Nordisk
+        assert ev.region_du_ticker("ABI.BR") == "BE"         # AB InBev
+        assert ev.region_du_ticker("ATCO-A.ST") == "SE"      # Atlas Copco
+        assert ev.region_du_ticker("NOKIA.HE") == "FI"
+        assert ev.region_du_ticker("EQNR.OL") == "NO"        # Equinor
+        # Un titre à catégories multiples garde bien sa place : le tiret ne trompe pas.
+        assert ev.regions_du_portefeuille(["NOVO-B.CO"]) == {"DK"}
+        # La Belgique est dans la zone euro, le Danemark non.
+        assert ev.regions_du_portefeuille(["ABI.BR"]) == {"BE", "EU"}
+
     def test_la_periode_de_reference_est_traduite(self):
         assert ev.periode_fr("Aug") == "août"
         assert ev.periode_fr("Q2") == "T2"

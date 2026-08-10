@@ -4,6 +4,7 @@ import { useState } from "react";
 import AssetLogo from "@/components/AssetLogo";
 import { qualifierImpact } from "@/components/portfolio/ImpactEvenements";
 import type { AnalyseEvenements } from "@/hooks/useAnalyseEvenements";
+import { cleEcheance } from "@/lib/echeances";
 import { libelleAmplitude } from "@/lib/impactEvenement";
 import { CLAIR, JETONS, RAYONS } from "@/lib/palette";
 import { FONT, NUM } from "@/lib/typography";
@@ -32,6 +33,15 @@ type Evenement = {
   devise: string | null;
   rendement: number | null;
   eps_estime: number | null;
+  /**
+   * Le fonds par lequel l'échéance concerne le portefeuille.
+   *
+   * ⚠️ Déclaré uniquement pour que `cleEcheance` le voie. Il arrivait déjà dans les
+   * données sans être dans le type : la clé de ligne le lisait donc à l'exécution
+   * sans que le compilateur le sache — exactement le genre de dépendance invisible
+   * qui casse à la première relecture qui « nettoie » un champ inutilisé.
+   */
+  via?: string | null;
 };
 
 const symbole = (devise: string | null) =>
@@ -94,7 +104,7 @@ export function DividendesAVenir({
             </thead>
             <tbody>
               {lignes.map(e => (
-                <tr key={`${e.ticker}:${e.date}`} style={{ borderBottom: `1px solid ${CLAIR.bord}` }}>
+                <tr key={cleEcheance(e)} style={{ borderBottom: `1px solid ${CLAIR.bord}` }}>
                   <td style={cellule}>
                     <span style={{ display: "inline-flex", alignItems: "center", gap: 7 }}>
                       <AssetLogo ticker={e.ticker ?? ""} size={20} radius={5}
@@ -169,7 +179,7 @@ export function ProchainsResultats({
             const cliquable = !!onChoisirTicker && !!e.ticker;
             const retenu = cliquable && e.ticker === tickerChoisi;
             return (
-              <div key={`${e.ticker}:${e.date}`}
+              <div key={cleEcheance(e)}
                 onClick={cliquable
                   ? () => onChoisirTicker?.(retenu ? null : e.ticker)
                   : undefined}

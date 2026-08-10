@@ -198,6 +198,29 @@ export default function CalendrierEvenements({
         })}
       </div>
 
+      {/* ⚠️ Le jour retenu survit à la navigation entre les mois, et c'est voulu — on
+          peut vouloir regarder septembre sans perdre son filtre. Mais alors plus rien
+          ne relie la liste voisine au calendrier : elle montre les échéances d'un jour
+          qui n'est plus à l'écran, ce qui se lit comme un reste d'affichage. Ce rappel
+          nomme le jour et ramène à son mois. */}
+      {selection && !grille.some(c => c.duMois && c.iso === selection) && (
+        <button type="button"
+          onClick={() => setMois([
+            Number(selection.slice(0, 4)), Number(selection.slice(5, 7)) - 1,
+          ])}
+          style={{
+            alignSelf: "flex-start", background: "none", border: "none", padding: 0,
+            cursor: "pointer", textAlign: "left",
+            fontFamily: FONT, fontSize: 9.5, color: CLAIR.texteFaible,
+          }}>
+          La liste est filtrée sur le{" "}
+          <span style={{ ...NUM, color: CLAIR.accent, fontWeight: 600 }}>
+            {new Date(selection + "T12:00:00").toLocaleDateString("fr-FR",
+              { day: "numeric", month: "long" })}
+          </span>, hors de ce mois — y revenir
+        </button>
+      )}
+
       {/* L'aveu d'incomplétude, quand le mois affiché dépasse ce que les sources
           couvrent. Ne paraît que là où il est utile : l'afficher en permanence en
           ferait une mention décorative qu'on cesse de lire. */}
