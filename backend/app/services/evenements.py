@@ -210,6 +210,187 @@ def _fiche(ticker: str) -> dict:
     return fiche
 
 
+# ── Réaction du cours à une publication ──────────────────────────────────────
+
+#: Au-delà de quoi un mouvement compte comme « significatif ».
+#:
+#: Deux pour cent : c'est le seuil de la maquette, et il se défend — la volatilité
+#: journalière d'une grande capitalisation tourne autour de 1,5 %, donc 2 % est un
+#: jour qui se remarque sans être exceptionnel. Nommé ici parce qu'il est rendu
+#: avec le résultat : une probabilité sans son seuil ne veut rien dire.
+SEUIL_MOUVEMENT = 2.0
+
+#: Nombre de publications passées retenues pour les statistiques.
+#:
+#: Douze trimestres, soit trois ans. Assez pour une moyenne qui ne dépende pas
+#: d'un seul trimestre, assez peu pour que la société décrite soit encore celle
+#: d'aujourd'hui — une réaction de 2019 ne dit plus grand-chose du titre actuel.
+ECHANTILLON = 12
+
+
+def moment_de_publication(heure_ny: int) -> str:
+    """
+    Où tombe la publication dans la journée de bourse américaine.
+
+    ⚠️ Cela décide de la séance qui porte la réaction, et non seulement d'un
+    libellé. Relevé sur TSLA : l'horodatage est en heure de New York et vaut
+    16 h 00 — l'heure de clôture — voire 20 h 00. Une publication d'après-clôture
+    n'est digérée par le marché que le **lendemain** ; attribuer la variation au
+    jour même aurait mesuré une séance qui ignorait encore l'information.
+    """
+    if heure_ny >= 16:
+        return "apres_cloture"
+    if heure_ny < 10:            # l'ouverture est à 9 h 30
+        return "avant_ouverture"
+    return "en_seance"
+
+
+def _reactions(ticker: str) -> dict:
+    """Les publications passées d'un titre et la réaction du cours à chacune."""
+    cache = _charger()
+    cle = f"reactions:{ticker}"
+    e = cache.get(cle)
+    if e and e.get("echeance", 0) > time.time() and e.get("version") == _VERSION:
+        return e
+
+    res: dict = {"version": _VERSION, "abouti": False, "lignes": []}
+    try:
+        t = yf.Ticker(ticker)
+        ed = t.get_earnings_dates(limit=ECHANTILLON * 2)
+        if ed is None or not len(ed):
+            raise ValueError("aucune publication recensée")
+
+        # Les clôtures couvrant la période, en une seule requête.
+        depart = min(ed.index).date()
+        serie = yf.download(ticker, start=depart, progress=False,
+                            auto_adjust=True)["Close"]
+        if hasattr(serie, "columns"):
+            serie = serie[ticker] if ticker in serie.columns else serie.iloc[:, 0]
+        cours = [(i.date(), float(v)) for i, v in serie.dropna().items()]
+
+        lignes = []
+        for horo, r in ed.iterrows():
+            jour = horo.date()
+            moment = moment_de_publication(horo.hour)
+            # La séance qui porte la réaction.
+            #
+            # Après la clôture, le marché ne digère l'information que le
+            # lendemain : la première séance **strictement postérieure**. Avant
+            # l'ouverture ou en séance, l'information circule le jour même :
+            # la première séance à cette date ou après.
+            idx = next(
+                (k for k, (d, _) in enumerate(cours)
+                 if (d > jour if moment == "apres_cloture" else d >= jour)),
+                None)
+            variation = None
+            if idx is not None and idx > 0:
+                # La clôture qui précède cette séance est le dernier cours d'avant
+                # l'information : c'est de là que se mesure la réaction.
+                avant, apres = cours[idx - 1][1], cours[idx][1]
+                if avant:
+                    variation = (apres / avant - 1) * 100
+            lignes.append({
+                "date": jour.isoformat(),
+                "moment": moment,
+                "surprise": _nombre(r.get("Surprise(%)")),
+                "eps_publie": _nombre(r.get("Reported EPS")),
+                "eps_estime": _nombre(r.get("EPS Estimate")),
+                "variation": variation,
+            })
+        res["lignes"] = lignes
+        res["abouti"] = True
+    except Exception as e:                                     # pragma: no cover
+        logger.info("réactions indisponibles pour %s (%s)", ticker, type(e).__name__)
+
+    res["echeance"] = time.time() + (_TTL if res["abouti"] else _TTL_ECHEC)
+    cache[cle] = res
+    _ecrire()
+    return res
+
+
+def statistiques(lignes: list[dict]) -> dict | None:
+    """
+    Ce que les réactions passées disent d'une publication à venir.
+
+    ⚠️ La moyenne porte sur la **valeur absolue** des variations, et c'est le
+    point : une hausse de 6 % et une baisse de 6 % ne s'annulent pas, elles disent
+    toutes deux que ce titre bouge de six pour cent le lendemain. Une moyenne
+    signée aurait rendu zéro pour le titre le plus agité.
+    """
+    v = [abs(x["variation"]) for x in lignes if x.get("variation") is not None]
+    v = v[:ECHANTILLON]
+    if len(v) < 4:
+        # ⚠️ Sous quatre trimestres, aucune statistique n'est rendue plutôt qu'une
+        # moyenne sur deux points. Un « impact moyen » calculé sur un échantillon
+        # d'un ou deux trimestres se lirait avec la même autorité qu'un autre.
+        return None
+    return {
+        "impact_moyen": sum(v) / len(v),
+        "probabilite": sum(1 for x in v if x > SEUIL_MOUVEMENT) / len(v) * 100,
+        "seuil": SEUIL_MOUVEMENT,
+        "echantillon": len(v),
+    }
+
+
+def qualifier(surprise: float | None) -> str:
+    """Le verdict d'une publication, tel que la maquette le nomme."""
+    if surprise is None:
+        return "Non publié"
+    if surprise > 1:
+        return "Supérieur aux attentes"
+    if surprise < -1:
+        return "Inférieur aux attentes"
+    # ⚠️ Une bande morte d'un point de pourcentage. Sans elle, une surprise de
+    # +0,04 % — c'est-à-dire un consensus atteint — s'annoncerait « supérieur aux
+    # attentes », ce qui est vrai arithmétiquement et faux dans les faits.
+    return "Conforme aux attentes"
+
+
+def analyse_du_portefeuille(
+    poids: dict[str, float], aujourdhui: date | None = None,
+) -> dict:
+    """
+    L'historique des publications et l'impact attendu, ligne par ligne.
+
+    `poids` est la part de chaque titre dans le portefeuille, en pourcentage :
+    c'est elle qui convertit la réaction d'un titre en effet sur l'ensemble.
+
+    ⚠️ L'impact sur le portefeuille est le produit du poids par la variation. Il
+    suppose que les autres lignes n'ont pas bougé ce jour-là, ce qui est faux — mais
+    c'est bien la contribution de *cette* publication qu'on cherche à isoler, et
+    non la performance du jour.
+    """
+    ref = aujourdhui or date.today()
+    passes: list[dict] = []
+    impacts: dict[str, dict] = {}
+    sans: list[str] = []
+
+    for tk, part in poids.items():
+        r = _reactions(tk)
+        if not r.get("abouti"):
+            sans.append(tk)
+            continue
+
+        publiees = [x for x in r["lignes"] if x["date"] < ref.isoformat()]
+        st = statistiques(publiees)
+        if st:
+            impacts[tk] = {"exposition": part, **st}
+
+        for pub in publiees[:ECHANTILLON]:
+            passes.append({
+                "date": pub["date"], "ticker": tk, "moment": pub["moment"],
+                "libelle": f"Résultats {trimestre(pub['date'])}",
+                "surprise": pub["surprise"],
+                "resultat": qualifier(pub["surprise"]),
+                "variation": pub["variation"],
+                "impact_portefeuille": (pub["variation"] * part / 100
+                                        if pub["variation"] is not None else None),
+            })
+
+    passes.sort(key=lambda e: (e["date"], e["ticker"]), reverse=True)
+    return {"passes": passes, "impacts": impacts, "sans_donnees": sans}
+
+
 def evenements_du_portefeuille(
     tickers: list[str], aujourdhui: date | None = None,
 ) -> dict:

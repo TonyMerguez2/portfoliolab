@@ -173,3 +173,119 @@ class TestNettoyage:
 
     def test_une_liste_vide_ne_donne_pas_de_date(self):
         assert ev._jour([]) is None
+
+
+class TestMomentDePublication:
+    """La séance qui porte la réaction dépend de l'heure, pas du seul jour."""
+
+    def test_seize_heures_est_apres_la_cloture(self):
+        # Relevé sur TSLA : l'horodatage vaut 16 h 00 heure de New York, soit
+        # l'heure de clôture. Le marché ne digère l'information que le lendemain.
+        assert ev.moment_de_publication(16) == "apres_cloture"
+        assert ev.moment_de_publication(20) == "apres_cloture"
+
+    def test_avant_dix_heures_est_avant_l_ouverture(self):
+        # L'ouverture est à 9 h 30 : une publication à 7 h ou 8 h précède la séance.
+        assert ev.moment_de_publication(7) == "avant_ouverture"
+        assert ev.moment_de_publication(9) == "avant_ouverture"
+
+    def test_le_milieu_de_journee_est_en_seance(self):
+        assert ev.moment_de_publication(12) == "en_seance"
+
+
+class TestQualifier:
+    def test_une_surprise_franche_est_nommee(self):
+        assert ev.qualifier(6.7) == "Supérieur aux attentes"
+        assert ev.qualifier(-38.35) == "Inférieur aux attentes"
+
+    def test_une_bande_morte_protege_du_faux_verdict(self):
+        # ⚠️ Sans elle, une surprise de +0,04 % — un consensus atteint —
+        # s'annoncerait « supérieur aux attentes » : vrai arithmétiquement, faux
+        # dans les faits.
+        assert ev.qualifier(0.04) == "Conforme aux attentes"
+        assert ev.qualifier(-0.5) == "Conforme aux attentes"
+
+    def test_une_publication_a_venir_n_a_pas_de_verdict(self):
+        assert ev.qualifier(None) == "Non publié"
+
+
+class TestStatistiques:
+    def lignes(self, variations):
+        return [{"variation": v} for v in variations]
+
+    def test_la_moyenne_porte_sur_la_valeur_absolue(self):
+        # ⚠️ Une hausse de 6 % et une baisse de 6 % ne s'annulent pas : elles
+        # disent toutes deux que ce titre bouge de six pour cent. Une moyenne
+        # signée aurait rendu zéro pour le titre le plus agité.
+        st = ev.statistiques(self.lignes([6, -6, 6, -6]))
+        assert st["impact_moyen"] == pytest.approx(6.0)
+
+    def test_la_probabilite_compte_les_depassements_du_seuil(self):
+        st = ev.statistiques(self.lignes([0.5, 1.0, 3.0, 5.0]))
+        assert st["seuil"] == ev.SEUIL_MOUVEMENT
+        assert st["probabilite"] == pytest.approx(50.0)
+
+    def test_sous_quatre_trimestres_aucune_statistique(self):
+        # Une moyenne sur deux points se lirait avec la même autorité qu'une
+        # moyenne sur douze. Mieux vaut ne rien annoncer.
+        assert ev.statistiques(self.lignes([4.0, 2.0, 3.0])) is None
+
+    def test_les_variations_absentes_ne_comptent_pas_dans_l_echantillon(self):
+        st = ev.statistiques(self.lignes([4.0, None, 2.0, None, 3.0, 1.0]))
+        assert st["echantillon"] == 4
+
+
+class TestAnalyseDuPortefeuille:
+    def brancher(self, monkeypatch, par_ticker):
+        monkeypatch.setattr(ev, "_reactions", lambda tk: par_ticker[tk])
+
+    def reactions(self, lignes):
+        return {"version": ev._VERSION, "abouti": True, "echeance": 9e18, "lignes": lignes}
+
+    def test_l_impact_sur_le_portefeuille_est_pondere(self, monkeypatch):
+        # Un titre qui pèse 25 % et qui bouge de 8 % déplace le portefeuille de 2 %.
+        self.brancher(monkeypatch, {"TSLA": self.reactions([
+            {"date": "2026-07-22", "moment": "apres_cloture", "surprise": -38.35,
+             "eps_publie": 0.4, "eps_estime": 0.65, "variation": 8.0},
+        ])})
+        r = ev.analyse_du_portefeuille({"TSLA": 25.0}, REF)
+        e = r["passes"][0]
+        assert e["impact_portefeuille"] == pytest.approx(2.0)
+        assert e["resultat"] == "Inférieur aux attentes"
+        assert e["libelle"] == "Résultats T2 2026"
+
+    def test_l_historique_va_du_plus_recent_au_plus_ancien(self, monkeypatch):
+        self.brancher(monkeypatch, {"V": self.reactions([
+            {"date": "2026-01-28", "moment": "apres_cloture", "surprise": 2.0,
+             "eps_publie": 1.0, "eps_estime": 1.0, "variation": 1.0},
+            {"date": "2026-04-22", "moment": "apres_cloture", "surprise": 2.0,
+             "eps_publie": 1.0, "eps_estime": 1.0, "variation": 1.0},
+        ])})
+        r = ev.analyse_du_portefeuille({"V": 10.0}, REF)
+        assert [e["date"] for e in r["passes"]] == ["2026-04-22", "2026-01-28"]
+
+    def test_une_publication_a_venir_reste_hors_de_l_historique(self, monkeypatch):
+        self.brancher(monkeypatch, {"TSLA": self.reactions([
+            {"date": "2026-10-21", "moment": "apres_cloture", "surprise": None,
+             "eps_publie": None, "eps_estime": 0.45, "variation": None},
+        ])})
+        r = ev.analyse_du_portefeuille({"TSLA": 50.0}, REF)
+        assert r["passes"] == []
+        assert r["impacts"] == {}
+
+    def test_l_exposition_accompagne_les_statistiques(self, monkeypatch):
+        self.brancher(monkeypatch, {"TSLA": self.reactions([
+            {"date": f"2025-0{i}-15", "moment": "apres_cloture", "surprise": 1.0,
+             "eps_publie": 1.0, "eps_estime": 1.0, "variation": 4.0}
+            for i in range(1, 6)
+        ])})
+        r = ev.analyse_du_portefeuille({"TSLA": 14.0}, REF)
+        assert r["impacts"]["TSLA"]["exposition"] == 14.0
+        assert r["impacts"]["TSLA"]["impact_moyen"] == pytest.approx(4.0)
+
+    def test_un_titre_muet_est_nomme_sans_rien_inventer(self, monkeypatch):
+        monkeypatch.setattr(ev, "_reactions", lambda tk: {
+            "version": ev._VERSION, "abouti": False, "echeance": 9e18, "lignes": []})
+        r = ev.analyse_du_portefeuille({"ESE.PA": 70.0}, REF)
+        assert r["passes"] == [] and r["impacts"] == {}
+        assert r["sans_donnees"] == ["ESE.PA"]

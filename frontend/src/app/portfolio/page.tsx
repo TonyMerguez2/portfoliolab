@@ -38,6 +38,7 @@ import Cadre from "@/components/ui/Cadre";
 import ChiffresRoulants from "@/components/ui/ChiffresRoulants";
 import ImagePortefeuille from "@/components/portfolio/ImagePortefeuille";
 import EvenementsAVenir from "@/components/portfolio/EvenementsAVenir";
+import { HistoriqueEvenements, ImpactPotentiel } from "@/components/portfolio/ImpactEvenements";
 import { API_URL } from "@/lib/api";
 
 // ── Types ──────────────────────────────────────────────────────────────────────
@@ -1781,8 +1782,14 @@ function PortfolioPageInner() {
       </div>
 
 <div style={{ display: dashView === "evenements" ? "flex" : "none", height: "100%", padding: "14px 14px 10px", gap: 12, overflow: "hidden" }}>
-        <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: 10 }}>
-          <Cadre style={{ flex: 1, padding: "16px 18px" }}>
+        <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: 10, minWidth: 0 }}>
+          {/* L'historique des publications, avec la réaction mesurée du cours.
+              Placé au-dessus des insights : c'est du constat daté, là où les
+              insights sont une lecture de l'instant. */}
+          <Cadre style={{ flex: 1, padding: "16px 18px", display: "flex", flexDirection: "column", minHeight: 0 }}>
+            <HistoriqueEvenements portfolioId={portfolio?.id} />
+          </Cadre>
+          <Cadre style={{ flexShrink: 0, padding: "16px 18px" }}>
             <SectionLabel>INSIGHTS IA</SectionLabel>
             <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
               {[
@@ -1810,6 +1817,11 @@ function PortfolioPageInner() {
               service qui l'alimente pour ce que la source sait et ignore. */}
           <Cadre style={{ flex: 1, padding: "16px 18px", display: "flex", flexDirection: "column", minHeight: 0 }}>
             <EvenementsAVenir portfolioId={portfolio?.id} />
+          </Cadre>
+          {/* L'impact attendu de la prochaine échéance. Sous les échéances
+              elles-mêmes : on lit d'abord *quand*, ensuite *combien*. */}
+          <Cadre style={{ flexShrink: 0, padding: "16px 18px" }}>
+            <ImpactPotentiel portfolioId={portfolio?.id} />
           </Cadre>
         </div>
       </div>{/* fin Vue Événements */}

@@ -177,6 +177,33 @@ def portfolio_events(
     return evenements_du_portefeuille(tickers)
 
 
+@router.get("/{portfolio_id}/events/analyse")
+def portfolio_events_analyse(
+    portfolio_id: str,
+    db: Session = Depends(get_db), user: User = Depends(require_auth),
+):
+    """
+    L'historique des publications et l'impact attendu, ligne par ligne.
+
+    Séparé de `/events` parce qu'il coûte bien plus cher : il faut, par titre, la
+    liste des publications passées **et** l'historique des cours qui les entoure.
+    Les mêler aurait rendu la liste des échéances à venir aussi lente que le
+    calcul le plus lourd de l'écran.
+
+    ⚠️ Les poids viennent de l'allocation déclarée du portefeuille, non des
+    positions réellement détenues. Sur un portefeuille suivi par transactions, les
+    deux peuvent différer — l'exposition affichée est alors la cible, pas le
+    constat. À reprendre le jour où ce panneau devra tomber d'accord au centime
+    avec la répartition.
+    """
+    from app.services.evenements import analyse_du_portefeuille
+
+    p = _portefeuille_du_compte(portfolio_id, user, db)
+    poids = {a["ticker"]: float(a.get("weight") or 0)
+             for a in (p.assets or []) if a.get("ticker")}
+    return analyse_du_portefeuille(poids)
+
+
 @router.post("/{portfolio_id}/image")
 async def upload_portfolio_image(
     portfolio_id: str, file: UploadFile = File(...),
