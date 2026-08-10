@@ -54,6 +54,98 @@ const PERIODES = Object.keys(PERIOD_API) as Period[];
 const HALO = 22;
 
 /**
+ * Demi-largeur de la lueur qui marque un extrême de la période.
+ *
+ * Un peu plus large que le halo de survol : celui-ci suit le curseur et n'a qu'à
+ * désigner un instant, tandis que la lueur doit se remarquer sans qu'on la
+ * cherche, en restant assez courte pour dire *où* et non *sur quelle plage*.
+ */
+const LUEUR = 28;
+
+/**
+ * La portion de courbe autour d'une abscisse, en pixels d'écran.
+ *
+ * ⚠️ Partagée par le halo de survol et les lueurs d'extrême. Recopier cette
+ * conversion aux deux endroits aurait donné deux tracés destinés à diverger, et
+ * l'écart se verrait : les deux se posent sur la même courbe, parfois au même
+ * pixel quand le curseur passe sur un extrême.
+ *
+ * Un point de part et d'autre de la fenêtre est conservé : sans eux, le tracé
+ * commencerait et finirait dans le vide au lieu de suivre la courbe jusqu'au bord
+ * de la découpe.
+ */
+function segmentAutour(
+  chart: IChartApi, serie: ISeriesApi<"Area">, cx: number, demi: number,
+): [number, number][] {
+  // `data()` renvoie un tableau en lecture seule mêlant points et blancs : on ne
+  // garde que ceux qui portent une valeur.
+  const pts = (serie.data() as readonly { time: unknown; value?: number }[])
+    .filter((p): p is { time: number; value: number } => typeof p.value === "number");
+  if (pts.length < 2) return [];
+
+  const seg: [number, number][] = [];
+  let gauche: [number, number] | null = null;
+  let droitePosee = false;
+  for (const p of pts) {
+    const sx = chart.timeScale().timeToCoordinate(p.time as UTCTimestamp);
+    const sy = serie.priceToCoordinate(p.value);
+    if (sx == null || sy == null || !isFinite(sx) || !isFinite(sy)) continue;
+    if (sx < cx - demi) gauche = [sx, sy];
+    else if (sx <= cx + demi) seg.push([sx, sy]);
+    else if (!droitePosee) { seg.push([sx, sy]); droitePosee = true; }
+  }
+  if (gauche) seg.unshift(gauche);
+  return seg.length < 2 ? [] : seg;
+}
+
+/**
+ * Un jeton de thème, garanti hexadécimal sur six chiffres.
+ *
+ * ⚠️ Nécessaire parce qu'on lui concatène une transparence — `teinte + "AA"` —
+ * pour les arrêts d'un dégradé. Or `addColorStop` **lève** sur une couleur qu'il
+ * ne sait pas lire : un jeton redéfini un jour en `rgb(...)` ou en `oklch(...)`
+ * donnerait `rgb(0 212 146)AA`, et l'exception tomberait dans la passe de
+ * peinture — qui tourne à chaque déplacement de la vue. Le graphique entier
+ * s'arrêterait pour une couleur.
+ *
+ * On préfère alors la valeur de secours, écrite ici en dur : la teinte peut se
+ * tromper d'une nuance, le tracé ne peut pas s'arrêter.
+ */
+function teinteHexadecimale(nom: string, secours: string): string {
+  const v = resoudreJeton(nom, secours);
+  return /^#[0-9a-fA-F]{6}$/.test(v) ? v : secours;
+}
+
+/** Le tracé d'un segment déjà converti en pixels. */
+function tracer(ctx: CanvasRenderingContext2D, seg: readonly [number, number][]): void {
+  ctx.beginPath();
+  ctx.moveTo(seg[0][0], seg[0][1]);
+  for (let i = 1; i < seg.length; i++) ctx.lineTo(seg[i][0], seg[i][1]);
+}
+
+/**
+ * Estompe les deux bords d'une bande, pour que la découpe ne se voie pas.
+ *
+ * ⚠️ À n'appeler qu'une fois par canevas et par peinture : l'opération travaille
+ * sur tout ce qui est déjà dessiné. Deux lueurs sur le même canevas doivent donc
+ * être peintes puis estompées ensemble, chacune par son propre dégradé — sinon la
+ * seconde effacerait la première, qui tombe hors de sa bande.
+ */
+function estomperBande(
+  ctx: CanvasRenderingContext2D, cx: number, demi: number, hauteur: number, largeur: number,
+): void {
+  ctx.globalCompositeOperation = "destination-in";
+  const fondu = ctx.createLinearGradient(cx - demi, 0, cx + demi, 0);
+  fondu.addColorStop(0, "rgba(0,0,0,0)");
+  fondu.addColorStop(0.2, "rgba(0,0,0,1)");
+  fondu.addColorStop(0.8, "rgba(0,0,0,1)");
+  fondu.addColorStop(1, "rgba(0,0,0,0)");
+  ctx.fillStyle = fondu;
+  ctx.fillRect(0, 0, largeur, hauteur);
+  ctx.globalCompositeOperation = "source-over";
+}
+
+/**
  * Diamètre de la pastille d'opération, et du glyphe qu'elle porte.
  *
  * ⚠️ Vingt-deux pixels, et c'est une mesure, pas un goût. Les glyphes sont
@@ -456,7 +548,6 @@ function memeListe<T>(a: readonly T[], b: readonly T[], cle: (x: T) => string): 
  */
 const cléPastille = (p: { id: number; titre: string; nombre: number }) =>
   `${p.id}:${p.nombre}:${p.titre}`;
-const cléRepere = (r: { sens: string; titre: string }) => `${r.sens}:${r.titre}`;
 
 /** Une position en pixels dans le cadre, ou `null` hors du cadre. */
 type Coord = { x: number; y: number } | null;
@@ -579,6 +670,8 @@ export default function PerformanceChart({
   const boxRef = useRef<HTMLDivElement>(null);
   const plotRef = useRef<HTMLDivElement>(null);
   const glowRef = useRef<HTMLCanvasElement>(null);
+  /** Canevas des lueurs d'extrême, distinct de celui du survol. */
+  const lueurRef = useRef<HTMLCanvasElement>(null);
   const chartRef = useRef<IChartApi | null>(null);
   const serieRef = useRef<ISeriesApi<"Area"> | null>(null);
   const bougieRef = useRef<ISeriesApi<"Candlestick"> | null>(null);
@@ -1190,8 +1283,6 @@ export default function PerformanceChart({
    */
   const noeudsPastille = useRef(new Map<number, HTMLElement>());
   const coordsPastille = useRef(new Map<number, Coord>());
-  const noeudsRepere = useRef(new Map<string, HTMLElement>());
-  const coordsRepere = useRef(new Map<string, Coord>());
 
   /** Retient une position et l'applique aussitôt si le nœud est déjà là. */
   function placer<K>(
@@ -1223,7 +1314,6 @@ export default function PerformanceChart({
     };
   }
 
-  const [reperes, setReperes] = useState<{ sens: "haut" | "bas"; titre: string }[]>([]);
 
   /**
    * Place les pastilles d'opération et les repères d'extrême au-dessus de la
@@ -1239,7 +1329,15 @@ export default function PerformanceChart({
    */
   useEffect(() => {
     const chart = chartRef.current, serie = serieRef.current, el = plotRef.current;
-    if (!chart || !serie || !el || !points.length || !ordonnee || !cadrePret) { setPastilles([]); setReperes([]); return; }
+    if (!chart || !serie || !el || !points.length || !ordonnee || !cadrePret) {
+      setPastilles([]);
+      // Le canevas des lueurs s'efface aussi : sans cela, celle de la période
+      // précédente resterait peinte pendant tout le recadrage de la suivante,
+      // posée sur une courbe qui n'est plus la sienne.
+      const toile = lueurRef.current;
+      toile?.getContext("2d")?.clearRect(0, 0, toile.width, toile.height);
+      return;
+    }
 
     // L'ancre de chaque jour — horodatage réel et ordonnée — et la liste des
     // jours tracés. Voir `lib/chart/reperes`, où les deux règles sont testées :
@@ -1319,29 +1417,80 @@ export default function PerformanceChart({
       // viennent d'être écrites dans le DOM : on ne réveille pas React pour rien.
       setPastilles(p => (memeListe(p, out, cléPastille) ? p : out));
 
-      // Les deux repères d'extrême, placés par la même mécanique.
-      //
-      // ⚠️ La liste vide passe par la forme fonctionnelle. Rendre un `[]` neuf à
-      // chaque appel aurait suffi à faire rendre React à chaque cran de molette,
-      // puisque la référence change — exactement ce que ce chemin cherche à
-      // éviter, et d'autant plus vicieux que le contenu, lui, est identique.
-      if (!extremes) { setReperes(p => (p.length ? [] : p)); return; }
-      const rep: { sens: "haut" | "bas"; titre: string }[] = [];
+      /**
+       * Les deux extrêmes, marqués par une lueur **sur la courbe** elle-même.
+       *
+       * ⚠️ C'étaient deux anneaux creux posés en surcouche. Ils désignaient bien
+       * l'endroit, mais ils le désignaient comme un objet ajouté : deux pastilles
+       * de plus sur un tracé qui en portait déjà — opérations, stickers — et dont
+       * la silhouette devait justement se distinguer des autres pour ne pas se
+       * lire comme la même chose. La lueur ne s'ajoute pas au dessin, elle
+       * l'éclaire : le meilleur moment devient un endroit où la courbe est verte,
+       * le pire un endroit où elle est rouge.
+       *
+       * Peinte sur un canevas séparé de celui du survol : ce dernier s'effface à
+       * chaque mouvement du curseur, alors que les lueurs ne changent qu'avec le
+       * cadrage. Les mêler aurait obligé à les repeindre à chaque pixel parcouru.
+       */
+      const cv = lueurRef.current;
+      const ctx = cv?.getContext("2d");
+      if (!cv || !ctx) return;
+      // Le canevas suit la taille du cadre, en pixels physiques.
+      if (cv.width !== el.clientWidth || cv.height !== el.clientHeight) {
+        cv.width = el.clientWidth; cv.height = el.clientHeight;
+      }
+      ctx.clearRect(0, 0, cv.width, cv.height);
+      if (!extremes) return;
+
       for (const [sens, e] of [["haut", extremes.haut], ["bas", extremes.bas]] as const) {
         const t = Math.floor(new Date(e.p.date).getTime() / 1000) as UTCTimestamp;
-        const x = chart.timeScale().timeToCoordinate(t);
-        const y = serie.priceToCoordinate(ordonnee(e.p));
-        const quand = new Date(e.p.date).toLocaleDateString("fr-FR");
-        placer(noeudsRepere, coordsRepere, sens,
-               x == null || y == null ? null : { x: Math.round(x), y: Math.round(y) });
-        rep.push({
-          sens,
-          titre: `${sens === "haut" ? "Meilleur" : "Pire"} moment de la période — `
-               + `${e.pct >= 0 ? "+" : ""}${e.pct.toFixed(2)} % le ${quand}`,
-        });
-      }
-      setReperes(p => (memeListe(p, rep, cléRepere) ? p : rep));
+        const cx = chart.timeScale().timeToCoordinate(t);
+        if (cx == null || !isFinite(cx)) continue;
+        const seg = segmentAutour(chart, serie, cx, LUEUR);
+        if (!seg.length) continue;
 
+        const teinte = teinteHexadecimale(
+          sens === "haut" ? "--nv-positif" : "--nv-negatif",
+          sens === "haut" ? "#00D492" : "#FF6467");
+
+        /**
+         * Le dégradé est **dans le trait**, et non appliqué après coup.
+         *
+         * ⚠️ Le halo de survol estompe ses bords par un `destination-in` sur tout
+         * le canevas — ce qui lui va, puisqu'il est seul et repeint à chaque
+         * mouvement. Ici il y a deux lueurs sur le même canevas : estomper la
+         * seconde aurait effacé la première, qui tombe hors de sa bande.
+         *
+         * Un trait dont la couleur s'éteint à ses extrémités règle cela sans
+         * composition : chaque lueur est indépendante, et l'ordre de peinture n'a
+         * plus d'importance.
+         */
+        const bande = (alpha: string) => {
+          const g = ctx.createLinearGradient(cx - LUEUR, 0, cx + LUEUR, 0);
+          g.addColorStop(0, teinte + "00");
+          g.addColorStop(0.5, teinte + alpha);
+          g.addColorStop(1, teinte + "00");
+          return g;
+        };
+
+        ctx.save();
+        // Deux passes, la large d'abord : elle donne la lueur, la fine redonne au
+        // trait sa netteté au milieu du flou. Un seul passage épais aurait épaissi
+        // la courbe à cet endroit, ce qui se lit comme un défaut de tracé plutôt
+        // que comme un éclairage.
+        ctx.lineCap = "round"; ctx.lineJoin = "round";
+        ctx.filter = "blur(3px)";
+        tracer(ctx, seg);
+        ctx.strokeStyle = bande("AA");
+        ctx.lineWidth = 7;
+        ctx.stroke();
+        ctx.filter = "none";
+        tracer(ctx, seg);
+        ctx.strokeStyle = bande("FF");
+        ctx.lineWidth = 2;
+        ctx.stroke();
+        ctx.restore();
+      }
     };
 
     /**
@@ -1551,34 +1700,8 @@ export default function PerformanceChart({
       }
 
       const cx = param.point.x;
-      // `data()` renvoie un tableau en lecture seule mêlant points et blancs :
-      // on ne garde que ceux qui portent une valeur.
-      const pts = (serie.data() as readonly { time: unknown; value?: number }[])
-        .filter((p): p is { time: number; value: number } => typeof p.value === "number");
-      if (pts.length < 2) return;
-
-      const seg: [number, number][] = [];
-      let gauche: [number, number] | null = null;
-      let droitePosee = false;
-      for (const p of pts) {
-        const sx = chart.timeScale().timeToCoordinate(p.time as UTCTimestamp);
-        const sy = serie.priceToCoordinate(p.value);
-        if (sx == null || sy == null || !isFinite(sx) || !isFinite(sy)) continue;
-        // Un point de part et d'autre de la fenêtre est conservé : sans eux le
-        // halo commencerait et finirait dans le vide au lieu de suivre la
-        // courbe jusqu'au bord de la découpe.
-        if (sx < cx - HALO) gauche = [sx, sy];
-        else if (sx <= cx + HALO) seg.push([sx, sy]);
-        else if (!droitePosee) { seg.push([sx, sy]); droitePosee = true; }
-      }
-      if (gauche) seg.unshift(gauche);
-      if (seg.length < 2) return;
-
-      const trace = () => {
-        ctx.beginPath();
-        ctx.moveTo(seg[0][0], seg[0][1]);
-        for (let i = 1; i < seg.length; i++) ctx.lineTo(seg[i][0], seg[i][1]);
-      };
+      const seg = segmentAutour(chart, serie, cx, HALO);
+      if (!seg.length) return;
 
       ctx.save();
       ctx.beginPath();
@@ -1587,28 +1710,19 @@ export default function PerformanceChart({
 
       ctx.save();
       ctx.filter = "blur(1.5px)";
-      trace();
+      tracer(ctx, seg);
       ctx.strokeStyle = colorRef.current + "80";
       ctx.lineWidth = 3; ctx.lineCap = "round"; ctx.lineJoin = "round";
       ctx.stroke();
       ctx.restore();
 
-      trace();
+      tracer(ctx, seg);
       ctx.strokeStyle = clairRef.current ? "rgba(15,23,42,0.75)" : "rgba(255,255,255,0.9)";
       ctx.lineWidth = 1.5; ctx.lineCap = "round"; ctx.lineJoin = "round";
       ctx.stroke();
       ctx.restore();
 
-      // Estompage des deux bords, pour que la découpe ne se voie pas.
-      ctx.globalCompositeOperation = "destination-in";
-      const fondu = ctx.createLinearGradient(cx - HALO, 0, cx + HALO, 0);
-      fondu.addColorStop(0, "rgba(0,0,0,0)");
-      fondu.addColorStop(0.2, "rgba(0,0,0,1)");
-      fondu.addColorStop(0.8, "rgba(0,0,0,1)");
-      fondu.addColorStop(1, "rgba(0,0,0,0)");
-      ctx.fillStyle = fondu;
-      ctx.fillRect(0, 0, cv.width, cv.height);
-      ctx.globalCompositeOperation = "source-over";
+      estomperBande(ctx, cx, HALO, cv.height, cv.width);
     });
 
     // Le canevas du halo suit la taille du graphique, en pixels physiques.
@@ -2358,41 +2472,14 @@ export default function PerformanceChart({
             la courbe descendait l'axe à −1 000 €, une valeur que le
             portefeuille n'a jamais eue. Positionnées ici à la main, elles
             flottent au-dessus du tracé sans rien déformer. */}
-        {/* Les deux extrêmes de la période, en anneau creux.
-            Forme délibérément différente des pastilles d'opération, qui sont des
-            disques pleins à pictogramme : deux repères de même silhouette se
-            liraient comme la même chose. Et posés **sous** elles dans
-            l'empilement — quand un achat tombe sur le meilleur moment, c'est
-            l'achat qui garde le pixel, lui seul étant cliquable. */}
-        {reperes.map(r => (
-          /**
-           * Aucune infobulle, et il n'y en avait déjà pas.
-           *
-           * ⚠️ Un `title` était posé là, mais il ne pouvait ni s'afficher ni se
-           * lire : l'anneau est en `pointerEvents: none`, donc le navigateur ne le
-           * survole jamais, et en `aria-hidden`, donc aucun lecteur d'écran ne
-           * l'annonce. Il donnait l'illusion d'une explication accessible.
-           *
-           * Le libellé reste calculé, car il entre dans l'identité du repère — voir
-           * `cléRepere`. Rendre ces anneaux explicables demanderait de les rendre
-           * survolables, ce qui les ferait capter le réticule : à faire seulement
-           * si le besoin se présente.
-           */
-          <span key={r.sens} aria-hidden="true"
-            ref={inscrire(noeudsRepere, coordsRepere, r.sens)}
-            style={{
-            // Ancré par `transform`, écrit hors de React : voir `ancrer`. Le coin
-            // reste à l'origine, le déplacement est entièrement dans la transformée
-            // — et le `translate(-50%,-50%)` qu'elle porte recentre l'anneau.
-            position: "absolute", left: 0, top: 0, visibility: "hidden",
-            width: 12, height: 12, borderRadius: RAYONS.plein,
-            // Fond de la carte à l'intérieur de l'anneau : un anneau vraiment
-            // creux laisse passer la courbe, qui le traverse et le referme.
-            background: clair ? "#FFFFFF" : JETONS.carte,
-            border: `2px solid ${r.sens === "haut" ? JETONS.positif : JETONS.negatif}`,
-            boxSizing: "border-box", zIndex: 5, pointerEvents: "none",
-          }} />
-        ))}
+        {/* Les deux extrêmes de la période, en lueur sur la courbe.
+            Peints sur un canevas, sous les pastilles : voir la passe de peinture.
+            Il y avait ici deux anneaux creux, de silhouette délibérément
+            différente des pastilles pour ne pas se lire comme elles ; la lueur n'a
+            plus ce problème puisqu'elle n'ajoute aucun objet au tracé. */}
+        <canvas ref={lueurRef} aria-hidden="true" style={{
+          position: "absolute", inset: 0, pointerEvents: "none", zIndex: 4,
+        }} />
         {/* Stickers posés à la main.
             Sous les pastilles d'opération dans l'empilement, comme les anneaux
             d'extrême : quand un sticker tombe sur une opération, c'est l'opération
