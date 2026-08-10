@@ -115,6 +115,7 @@ function telecharger(e: Evenement) {
 
 export default function EvenementsAVenir({
   portfolioId, limite = 6, onVoirTout, onEvenements, analyse, supplement = [],
+  jour, onEffacerJour,
 }: {
   portfolioId?: string;
   limite?: number;
@@ -124,6 +125,10 @@ export default function EvenementsAVenir({
    * transparence, chargées à part parce que leur route est plus lente.
    */
   supplement?: Evenement[];
+  /** Ne montrer que ce jour, quand il est choisi dans le calendrier. */
+  jour?: string | null;
+  /** Rend la main sur le filtre de jour, pour pouvoir en sortir depuis la liste. */
+  onEffacerJour?: () => void;
   /**
    * Les statistiques par titre, pour annoncer l'amplitude attendue.
    *
@@ -187,9 +192,15 @@ export default function EvenementsAVenir({
       .sort((a, b) => a.date.localeCompare(b.date)),
     [donnees, supplement]);
 
-  const visibles = useMemo(
-    () => (filtre === "tous" ? tout : tout.filter(e => e.nature === filtre)).slice(0, limite),
-    [tout, filtre, limite]);
+  const visibles = useMemo(() => {
+    const parNature = filtre === "tous" ? tout : tout.filter(e => e.nature === filtre);
+    // ⚠️ Filtré sur un jour, la limite est levée : on a demandé *cette* journée,
+    // en tronquer la fin serait absurde. Une journée porte au plus quelques
+    // échéances, là où la liste entière en compte des dizaines.
+    return jour
+      ? parNature.filter(e => e.date === jour)
+      : parNature.slice(0, limite);
+  }, [tout, filtre, limite, jour]);
 
   /**
    * Un filtre sans aucune échéance est **éteint**, pas masqué.
@@ -207,6 +218,24 @@ export default function EvenementsAVenir({
         <span style={{ fontFamily: FONT, fontSize: 13, fontWeight: 600, color: CLAIR.texte }}>
           Événements à venir
         </span>
+
+        {/* Le jour retenu au calendrier, et de quoi le relâcher.
+            ⚠️ Sans cette pastille, une liste filtrée sur une journée creuse
+            paraîtrait vide sans raison : rien à l'écran ne dirait qu'un filtre est
+            actif, ni comment en sortir. */}
+        {jour && (
+          <button type="button" onClick={onEffacerJour}
+            title="Voir toutes les échéances"
+            style={{
+              display: "inline-flex", alignItems: "center", gap: 6, cursor: "pointer",
+              padding: "3px 8px", borderRadius: RAYONS.plein,
+              border: `1px solid ${JETONS.accent}`, background: JETONS.accentVoile,
+              color: CLAIR.accent, fontFamily: FONT, fontSize: 10.5, fontWeight: 600,
+            }}>
+            {dateCourte(jour)}
+            <span aria-hidden="true" style={{ fontSize: 12, lineHeight: 1 }}>×</span>
+          </button>
+        )}
       </div>
 
       <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>

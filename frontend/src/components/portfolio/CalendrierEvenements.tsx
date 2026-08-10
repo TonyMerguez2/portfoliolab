@@ -35,7 +35,7 @@ const LEGENDE: { cle: Nature; libelle: string }[] = [
 ];
 
 export default function CalendrierEvenements({
-  evenements, peremption, onJour,
+  evenements, peremption, onJour, selection,
 }: {
   evenements: { date: string; nature: Nature }[];
   /**
@@ -47,8 +47,17 @@ export default function CalendrierEvenements({
    * c'est le genre de silence sur lequel on prend une décision.
    */
   peremption?: string | null;
-  /** Appelé au clic sur un jour qui porte au moins une échéance. */
-  onJour?: (iso: string) => void;
+  /**
+   * Appelé au clic sur un jour qui porte au moins une échéance, avec sa date — ou
+   * `null` quand on reclique le jour déjà choisi.
+   *
+   * ⚠️ Le second clic annule, et cela compte : sans issue, un utilisateur qui a
+   * filtré sur une journée n'a aucun moyen de revenir à la liste entière depuis le
+   * calendrier, et croit l'avoir cassée.
+   */
+  onJour?: (iso: string | null) => void;
+  /** Le jour retenu, pour le montrer comme tel. */
+  selection?: string | null;
 }) {
   const maintenant = new Date();
   const [[annee, mois], setMois] = useState<[number, number]>(
@@ -117,23 +126,42 @@ export default function CalendrierEvenements({
         {grille.map(c => {
           const natures = parJour.get(c.iso);
           const estAujourdhui = c.iso === aujourdhui;
+          const choisi = c.iso === selection;
           const cliquable = !!natures && !!onJour;
+          /**
+           * ⚠️ Le jour choisi et le jour courant ne se peignent pas pareil.
+           *
+           * Le courant est un aplat, la sélection un cerne. Leur donner le même
+           * fond aurait rendu impossible de voir qu'on a filtré sur aujourd'hui —
+           * le cas le plus fréquent.
+           */
           return (
             <div key={c.iso}
-              onClick={cliquable ? () => onJour!(c.iso) : undefined}
+              onClick={cliquable ? () => onJour!(choisi ? null : c.iso) : undefined}
+              title={cliquable
+                ? (choisi ? "Cliquer pour voir toutes les échéances"
+                          : "Ne voir que les échéances de ce jour")
+                : undefined}
               style={{
                 // Hauteur fixe : la rangée de points ne doit pas faire respirer la
                 // case, sinon la grille se déforme selon les jours chargés.
-                height: 30, borderRadius: RAYONS.xs,
+                height: 30, borderRadius: RAYONS.xs, boxSizing: "border-box",
                 display: "flex", flexDirection: "column", alignItems: "center",
                 justifyContent: "center", gap: 2,
                 cursor: cliquable ? "pointer" : "default",
-                background: estAujourdhui ? JETONS.accent : "transparent",
+                background: estAujourdhui ? JETONS.accent
+                  : choisi ? JETONS.accentVoile : "transparent",
+                border: choisi && !estAujourdhui
+                  ? `1px solid ${JETONS.accent}` : "1px solid transparent",
+                boxShadow: choisi && estAujourdhui ? `0 0 0 2px ${JETONS.accent}66` : "none",
                 color: estAujourdhui ? "#FFFFFF"
                   : c.duMois ? CLAIR.texteSecondaire : CLAIR.texteFaible,
                 // Les jours empruntés aux mois voisins restent lisibles mais
                 // s'effacent : les masquer casserait l'alignement des semaines.
                 opacity: c.duMois ? 1 : 0.35,
+                // Une case porteuse d'échéance se signale même sans survol : sans
+                // cela, rien n'indique qu'on peut cliquer.
+                fontWeight: natures ? 700 : 400,
               }}>
               <span style={{ ...NUM, fontSize: 11, lineHeight: 1 }}>{c.jour}</span>
               <span style={{ display: "flex", gap: 2, height: 4 }}>

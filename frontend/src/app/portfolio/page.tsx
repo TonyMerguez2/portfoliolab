@@ -459,6 +459,15 @@ function PortfolioPageInner() {
    */
   const transparence = useTransparence(portfolio?.id);
 
+  /**
+   * Le jour retenu dans le calendrier, ou `null` pour la liste entière.
+   *
+   * Vit ici parce que deux panneaux le partagent : le calendrier le montre, la
+   * liste le respecte. Le confiner à l'un des deux aurait obligé l'autre à le
+   * connaître par un chemin détourné.
+   */
+  const [jourChoisi, setJourChoisi] = useState<string | null>(null);
+
   const echeances = useMemo(
     () => [...(evtsReponse?.evenements ?? []), ...(transparence.donnees?.evenements ?? [])]
       .sort((a, b) => a.date.localeCompare(b.date)),
@@ -1828,72 +1837,68 @@ function PortfolioPageInner() {
         )}
       </div>
 
-<div style={{ display: dashView === "evenements" ? "flex" : "none", height: "100%", padding: "14px 14px 10px", gap: 12, overflow: "hidden" }}>
-        {/* Le calendrier du mois, nourri de la même liste que le panneau des
-            échéances. Les points « résultats » et « dividendes » sont peuplés ; la
-            catégorie économique attend ses dates, et sa pastille de légende reste
-            éteinte plutôt que masquée. */}
-        <div style={{ width: 300, display: "flex", flexDirection: "column", gap: 10, flexShrink: 0 }}>
-          <Cadre style={{ padding: "16px 18px" }}>
-            <CalendrierEvenements evenements={echeances}
-              peremption={evtsReponse?.peremption_macro} />
-          </Cadre>
-        </div>
+{/* ⚠️ **Deux rangées de trois, et non trois colonnes.**
+          La disposition précédente empilait quatre cartes dans la colonne de
+          droite : la première en `flex: 1`, les trois suivantes à contenu fixe.
+          Résultat, « Événements à venir » était écrasée à quelques pixels — une
+          tache grise en haut de colonne, sans rien de lisible. C'est le défaut
+          rapporté, et il vient de là.
+          La maquette, elle, pose deux rangées de trois cadres : chaque rangée
+          partage la hauteur, et aucune carte ne dépend du contenu de ses voisines.
+          Les échéances passent du coup à droite du calendrier, comme demandé. */}
+      <div style={{ display: dashView === "evenements" ? "flex" : "none", height: "100%",
+        flexDirection: "column", padding: "14px 14px 10px", gap: 12, overflow: "hidden" }}>
 
-        <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: 10, minWidth: 0 }}>
-          {/* L'historique des publications, avec la réaction mesurée du cours.
-              Placé au-dessus des insights : c'est du constat daté, là où les
-              insights sont une lecture de l'instant. */}
-          <Cadre style={{ flex: 1, padding: "16px 18px", display: "flex", flexDirection: "column", minHeight: 0 }}>
-            <HistoriqueEvenements donnees={analyseEvts.donnees} etat={analyseEvts.etat} />
+        {/* ── Rangée haute : quand, quoi, combien ─────────────────────────── */}
+        <div style={{ display: "flex", flex: 1, minHeight: 0, gap: 12 }}>
+          {/* Le calendrier, nourri de la même liste que le panneau voisin, et
+              cliquable : choisir un jour n'affiche que ses échéances. */}
+          <Cadre style={{ width: 300, flexShrink: 0, padding: "16px 18px", overflowY: "auto" }}>
+            <CalendrierEvenements evenements={echeances}
+              peremption={evtsReponse?.peremption_macro}
+              selection={jourChoisi} onJour={setJourChoisi} />
           </Cadre>
-          <Cadre style={{ flexShrink: 0, padding: "16px 18px" }}>
-            <SectionLabel>INSIGHTS IA</SectionLabel>
-            <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-              {[
-                `${topPerformers[0]?.ticker ?? "—"} tire la performance du portefeuille avec ${fmtChange(topPerformers[0]?.change ?? null)} sur la période.`,
-                `Concentration élevée : vos 3 premiers actifs représentent ${top3Conc.toFixed(0)}% du portefeuille. ${top3Conc > 60 ? "Diversification recommandée." : "Niveau acceptable."}`,
-                `${gainCount} actifs en hausse contre ${lossCount} en baisse — momentum ${weightedChange >= 0 ? "positif" : "négatif"} sur ${PERIOD_LABEL[period]}.`,
-              ].map((insight, i) => (
-                <div key={i} style={{ display: "flex", gap: 12, padding: "12px 14px", borderRadius: RAYONS.sm,
-                  background: JETONS.accentVoile, border: `1px solid ${JETONS.accentDoux}` }}>
-                  <div style={{ width: 24, height: 24, borderRadius: RAYONS.xs, background: JETONS.accentDoux,
-                    display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0,
-                    fontSize: 10, fontWeight: 800, color: CLAIR.accent }}>AI</div>
-                  <span style={{ fontSize: 12, color: CLAIR.texteSecondaire, lineHeight: 1.6 }}>{insight}</span>
-                </div>
-              ))}
-            </div>
-          </Cadre>
-        </div>
-        <div style={{ width: 360, display: "flex", flexDirection: "column", gap: 10 }}>
+
           {/* ⚠️ Ce panneau était **entièrement fabriqué** : il listait les actifs
               du portefeuille en leur collant « Résultats trimestriels » et un
               « J+3, J+6, J+9 » calculé depuis l'indice de la boucle. Aucune de ces
-              dates n'existait, et rien ne le disait. Il lit désormais les
-              échéances réellement publiées — voir `EvenementsAVenir`, et le
-              service qui l'alimente pour ce que la source sait et ignore. */}
-          <Cadre style={{ flex: 1, padding: "16px 18px", display: "flex", flexDirection: "column", minHeight: 0 }}>
+              dates n'existait, et rien ne le disait. */}
+          <Cadre style={{ flex: 1, minWidth: 0, padding: "16px 18px",
+            display: "flex", flexDirection: "column", minHeight: 0 }}>
             <EvenementsAVenir portfolioId={portfolio?.id} onEvenements={setEvtsReponse}
               analyse={analyseEvts.donnees}
-              supplement={transparence.donnees?.evenements ?? []} />
+              supplement={transparence.donnees?.evenements ?? []}
+              jour={jourChoisi} onEffacerJour={() => setJourChoisi(null)} />
           </Cadre>
-          {/* L'impact attendu de la prochaine échéance. Sous les échéances
-              elles-mêmes : on lit d'abord *quand*, ensuite *combien*. */}
-          <Cadre style={{ flexShrink: 0, padding: "16px 18px" }}>
+
+          <Cadre style={{ width: 340, flexShrink: 0, padding: "16px 18px", overflowY: "auto" }}>
             <ImpactPotentiel donnees={analyseEvts.donnees} etat={analyseEvts.etat} />
           </Cadre>
-          {/* Les deux vues détaillées de la maquette. Elles répètent ce que les
-              pastilles de la liste filtrent déjà, et c'est assumé : la liste répond
-              à « quand », ces tableaux à « combien ». */}
-          <Cadre style={{ flexShrink: 0, padding: "16px 18px" }}>
+        </div>
+
+        {/* ── Rangée basse : ce qui s'est passé, et les deux vues détaillées ── */}
+        <div style={{ display: "flex", flex: 1, minHeight: 0, gap: 12 }}>
+          <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", gap: 10, minHeight: 0 }}>
+            <Cadre style={{ flex: 1, padding: "16px 18px", display: "flex", flexDirection: "column", minHeight: 0 }}>
+              <HistoriqueEvenements donnees={analyseEvts.donnees} etat={analyseEvts.etat} />
+            </Cadre>
+          </div>
+
+          <Cadre style={{ width: 300, flexShrink: 0, padding: "16px 18px",
+            display: "flex", flexDirection: "column", minHeight: 0 }}>
             <DividendesAVenir evenements={echeances} />
           </Cadre>
-          <Cadre style={{ flexShrink: 0, padding: "16px 18px" }}>
+
+          <Cadre style={{ width: 340, flexShrink: 0, padding: "16px 18px",
+            display: "flex", flexDirection: "column", minHeight: 0 }}>
             <ProchainsResultats evenements={echeances} analyse={analyseEvts.donnees} />
           </Cadre>
         </div>
       </div>{/* fin Vue Événements */}
+
+      {/* Les insights, retirés de l'onglet Événements : ils n'y avaient pas de
+          place dans la maquette, et c'est une lecture de l'instant là où cet onglet
+          ne porte que des dates. Ils restent affichés dans la vue Résumé. */}
 
       {/* ══ VUE OBJECTIFS ═══════════════════════════════════════════════════════ */}
       <div style={{ display: dashView === "objectifs" ? "grid" : "none", height: "100%", padding: "14px 14px 10px",
