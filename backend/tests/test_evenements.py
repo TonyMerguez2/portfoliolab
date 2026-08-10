@@ -12,6 +12,14 @@ import pytest
 
 from app.services import evenements as ev
 
+#: Le calendrier réel, capturé à l'import — donc avant que la fixture ne le vide.
+#:
+#: ⚠️ Les tests des titres le neutralisent, sinon chacun verrait les dix-sept
+#: échéances macro par-dessus ses propres entrées, et la suite entière casserait à
+#: chaque mise à jour du calendrier. Les tests d'intégrité, eux, ont besoin du vrai :
+#: ils lisent cet instantané.
+VRAI_CALENDRIER = list(ev.CALENDRIER_MACRO)
+
 
 @pytest.fixture(autouse=True)
 def sans_reseau(monkeypatch):
@@ -22,6 +30,9 @@ def sans_reseau(monkeypatch):
     """
     monkeypatch.setattr(ev, "_ecrire", lambda: None)
     monkeypatch.setattr(ev, "_charger", dict)
+    # Le calendrier macro est vidé par défaut : un test sur les résultats d'un
+    # titre ne doit pas dépendre des dates de la Fed.
+    monkeypatch.setattr(ev, "CALENDRIER_MACRO", [])
 
 
 def fiche(**kw):
@@ -131,19 +142,60 @@ class TestTri:
 
 
 class TestCalendrierMacro:
-    def test_vide_par_defaut_plutot_que_peuple_de_dates_inventees(self):
+    """
+    Le calendrier est relevé aux sources officielles, et ces tests en défendent
+    l'intégrité — pas son contenu, qui vieillira, mais sa forme et sa cohérence.
+    """
+
+    def test_chaque_entree_est_bien_formee(self):
+        for iso, libelle, zone, heure in VRAI_CALENDRIER:
+            assert date.fromisoformat(iso)
+            assert libelle and zone
+            if heure is not None:
+                h, m = heure.split(":")
+                assert 0 <= int(h) < 24 and 0 <= int(m) < 60
+
+    def test_les_dates_sont_uniques_par_libelle(self):
+        # Deux entrées identiques feraient deux points le même jour dans le
+        # calendrier, et deux lignes dans la liste.
+        paires = [(iso, lib) for iso, lib, _, _ in VRAI_CALENDRIER]
+        assert len(paires) == len(set(paires))
+
+    def test_la_peremption_est_celle_de_la_serie_la_plus_courte(self):
         """
         ⚠️ Ce test défend une décision, pas un calcul.
 
-        Les dates du FOMC, de l'IPC et du PCE sont publiées un an à l'avance et
-        parfaitement inscriptibles. Elles ne sont pas écrites ici parce que je ne
-        les connais pas de mémoire avec certitude : un calendrier économique ne
-        sert qu'à préparer une échéance, et une échéance fausse est pire
-        qu'absente. À remplir depuis les sources officielles citées dans le
-        module.
+        Le FOMC est annoncé jusqu'à fin 2027, l'IPC seulement jusqu'à
+        septembre 2026 — le BLS ayant décalé ses publications après les
+        interruptions budgétaires et n'ayant pas encore annoncé la suite. Retenir
+        la borne la plus lointaine laisserait croire qu'un mois de 2027 sans point
+        n'a aucune échéance, alors qu'il en a probablement.
         """
-        assert ev.CALENDRIER_MACRO == []
-        assert ev.PEREMPTION_MACRO is None
+        assert ev.PEREMPTION_MACRO is not None
+        ipc = [iso for iso, lib, _, _ in VRAI_CALENDRIER if "prix à la" in lib]
+        assert ev.PEREMPTION_MACRO == max(ipc)
+        assert ev.PEREMPTION_MACRO < max(iso for iso, *_ in VRAI_CALENDRIER)
+
+    def test_le_fomc_n_annonce_pas_d_heure(self):
+        # La page de la Fed donne les dates et non les heures. Le communiqué tombe
+        # traditionnellement à 14 h à New York, mais la source ne l'écrit pas.
+        for iso, libelle, _, heure in VRAI_CALENDRIER:
+            if "FOMC" in libelle:
+                assert heure is None, iso
+
+    def test_l_heure_devient_un_instant_date_et_non_un_texte(self):
+        # ⚠️ Envoyer « 08:30 » brut ferait lire l'heure de New York comme une heure
+        # locale : une publication du matin annoncée l'après-midi à un Européen.
+        assert ev.instant_publication("2026-08-26", "08:30") == "2026-08-26T08:30:00-04:00"
+
+    def test_le_decalage_suit_la_regle_d_heure_d_ete_de_la_date(self):
+        # Fin octobre, l'Amérique est encore à l'heure d'été et l'Europe non : un
+        # décalage figé aurait été faux pour cette publication-là.
+        assert ev.instant_publication("2026-10-29", "08:30").endswith("-04:00")
+        assert ev.instant_publication("2026-11-25", "08:30").endswith("-05:00")
+
+    def test_sans_heure_aucun_instant(self):
+        assert ev.instant_publication("2026-09-16", None) is None
 
     def test_une_entree_macro_est_annoncee_sans_ticker(self, monkeypatch):
         monkeypatch.setattr(ev, "CALENDRIER_MACRO",
@@ -152,7 +204,9 @@ class TestCalendrierMacro:
         e = r["evenements"][0]
         assert e["nature"] == "economique"
         assert e["libelle"] == "Indice PCE"
-        assert e["moment"] == "14:30"
+        # `moment` est un instant daté et non un texte : le client l'affiche dans
+        # son propre fuseau, au lieu de lire une heure de New York comme locale.
+        assert e["moment"] == "2026-08-28T14:30:00-04:00"
         assert e["jours"] == 18
 
     def test_une_entree_macro_passee_est_ecartee(self, monkeypatch):

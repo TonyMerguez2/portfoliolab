@@ -64,6 +64,18 @@ const dateCourte = (iso: string) =>
     { day: "numeric", month: "long", year: "numeric" });
 
 /**
+ * L'heure d'une publication, dans le fuseau du lecteur.
+ *
+ * ⚠️ Le serveur envoie un **instant daté** — « 2026-08-26T08:30:00-04:00 » — et non
+ * une heure toute faite. C'est ce qui permet de l'afficher juste ici : ces
+ * publications tombent à 8 h 30 à New York, soit 14 h 30 à Paris la plupart de
+ * l'année mais 13 h 30 la semaine où l'Amérique n'a pas encore changé d'heure et
+ * l'Europe si. Recopier « 08:30 » aurait annoncé une publication du matin.
+ */
+const heureLocale = (instant: string) =>
+  new Date(instant).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" });
+
+/**
  * Télécharge l'événement au format iCalendar.
  *
  * ⚠️ L'URL de l'objet est révoquée aussitôt le clic simulé. Sans cela, chaque
@@ -254,7 +266,9 @@ export default function EvenementsAVenir({
                 {dateCourte(e.date)}
               </div>
               {e.moment && (
-                <div style={{ ...NUM, fontSize: 10, color: CLAIR.texteFaible }}>{e.moment}</div>
+                <div style={{ ...NUM, fontSize: 10, color: CLAIR.texteFaible }}>
+                  {heureLocale(e.moment)}
+                </div>
               )}
             </div>
 

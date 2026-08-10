@@ -33,6 +33,7 @@ import time
 from dataclasses import asdict, dataclass
 from datetime import date, datetime
 from typing import Any, Literal
+from zoneinfo import ZoneInfo
 
 import yfinance as yf
 
@@ -61,25 +62,74 @@ class Evenement:
 
 # ── Calendrier macroéconomique ───────────────────────────────────────────────
 #
-# ⚠️ **Vide, et délibérément vide.**
-#
-# Les dates de réunion du FOMC, de publication de l'IPC et du PCE sont annoncées
-# un an à l'avance par la Fed, le BLS et le BEA — donc parfaitement inscriptibles
-# ici. Mais je ne les connais pas de mémoire avec certitude, et les inventer
-# serait précisément la faute que ce fichier refuse : une date fausse est pire
-# qu'une date absente, d'autant qu'un calendrier économique ne sert qu'à préparer
-# une échéance.
-#
-# À remplir depuis les sources officielles :
+# Relevé le 10 août 2026 aux sources officielles :
 #   FOMC  https://www.federalreserve.gov/monetarypolicy/fomccalendars.htm
-#   IPC   https://www.bls.gov/schedule/news_release/cpi.htm
 #   PCE   https://www.bea.gov/news/schedule
+#   IPC   https://www.bls.gov/schedule/news_release/cpi.htm
 #
-# Format : (date ISO, libellé, zone, heure locale de publication ou None).
-# `PEREMPTION` est la dernière date couverte : au-delà, la route cesse d'annoncer
-# des événements macro plutôt que de laisser croire qu'il n'y en a plus.
-CALENDRIER_MACRO: list[tuple[str, str, str, str | None]] = []
-PEREMPTION_MACRO: str | None = None
+# Format : (date ISO, libellé, zone, heure de New York « HH:MM » ou None).
+#
+# ⚠️ **L'heure est celle de New York, pas une heure locale déjà convertie.**
+# L'écart avec l'Europe n'est pas constant : les deux continents ne changent pas
+# d'heure le même week-end — les États-Unis début novembre, l'Europe fin octobre —
+# donc il vaut cinq heures pendant une semaine et six le reste de l'année.
+# Convertir ici aurait figé un décalage faux pour les publications de fin
+# octobre, dont il y a une par an dans chaque série.
+#
+# ⚠️ **Trois séries, trois horizons, et ce n'est pas une négligence.**
+#
+# Le FOMC est annoncé jusqu'à fin 2027, et sa page précise que « chaque date
+# reste indicative jusqu'à confirmation par la réunion qui la précède ». Aucune
+# heure n'y est donnée : le communiqué tombe traditionnellement à 14 h à New York,
+# mais la source ne l'écrit pas, donc ce champ reste vide plutôt que d'affirmer.
+#
+# Le PCE est publié par le BEA jusqu'aux chiffres de novembre 2026.
+#
+# L'IPC s'arrête à septembre 2026, et **le BLS lui-même ne sait pas encore la
+# suite** : les interruptions budgétaires de 2025 et 2026 ont décalé ses
+# publications, il a renoncé à certaines données d'octobre 2025, et il annonce que
+# « les dates révisées seront publiées au fur et à mesure ». Les calendriers
+# financiers tiers qui affichent la suite le font par extrapolation du rythme
+# habituel — deuxième semaine du mois — et le disent. Extrapoler ici aurait produit
+# des dates d'apparence officielle et sans fondement, sur la seule série que
+# l'actualité a justement dérangée.
+CALENDRIER_MACRO: list[tuple[str, str, str, str | None]] = [
+    # Indice des prix à la consommation — BLS, 8 h 30 à New York.
+    ("2026-08-12", "Indice des prix à la consommation (juillet)", "USA", "08:30"),
+    ("2026-09-11", "Indice des prix à la consommation (août)", "USA", "08:30"),
+
+    # Revenus et dépenses des ménages, qui portent l'indice PCE — BEA, 8 h 30.
+    ("2026-08-26", "Revenus et dépenses des ménages · PCE (juillet)", "USA", "08:30"),
+    ("2026-09-30", "Revenus et dépenses des ménages · PCE (août)", "USA", "08:30"),
+    ("2026-10-29", "Revenus et dépenses des ménages · PCE (septembre)", "USA", "08:30"),
+    ("2026-11-25", "Revenus et dépenses des ménages · PCE (octobre)", "USA", "08:30"),
+    ("2026-12-23", "Revenus et dépenses des ménages · PCE (novembre)", "USA", "08:30"),
+
+    # Réunions du FOMC : la date retenue est le **second** jour, celui de la
+    # décision. Annoncer le premier ferait attendre l'annonce la veille.
+    ("2026-09-16", "Décision de la Fed · FOMC", "USA", None),
+    ("2026-10-28", "Décision de la Fed · FOMC", "USA", None),
+    ("2026-12-09", "Décision de la Fed · FOMC", "USA", None),
+    ("2027-01-27", "Décision de la Fed · FOMC", "USA", None),
+    ("2027-03-17", "Décision de la Fed · FOMC", "USA", None),
+    ("2027-04-28", "Décision de la Fed · FOMC", "USA", None),
+    ("2027-06-09", "Décision de la Fed · FOMC", "USA", None),
+    ("2027-07-28", "Décision de la Fed · FOMC", "USA", None),
+    ("2027-09-15", "Décision de la Fed · FOMC", "USA", None),
+    ("2027-10-27", "Décision de la Fed · FOMC", "USA", None),
+    ("2027-12-08", "Décision de la Fed · FOMC", "USA", None),
+]
+
+#: Jusqu'où le calendrier est **complet**, toutes séries confondues.
+#:
+#: ⚠️ La borne est celle de la série la plus courte, et non la plus longue. Le FOMC
+#: va jusqu'à fin 2027 : retenir cette date laisserait croire qu'un mois de 2027
+#: sans point n'a aucune échéance, alors qu'il en a probablement deux dont l'IPC.
+#: L'aveu d'incomplétude vaut mieux qu'un calendrier qui paraît exhaustif.
+PEREMPTION_MACRO: str | None = "2026-09-11"
+
+#: Le fuseau des heures ci-dessus.
+FUSEAU_PUBLICATION = "America/New_York"
 
 
 # ── Cache disque ─────────────────────────────────────────────────────────────
@@ -161,6 +211,23 @@ def _jour(v: Any) -> str | None:
     if isinstance(v, str) and len(v) >= 10:
         return v[:10]
     return None
+
+
+def instant_publication(iso: str, heure: str | None) -> str | None:
+    """
+    L'heure de New York, rendue comme un instant daté et non comme un texte.
+
+    ⚠️ Un instant, pour que le client l'affiche dans **son** fuseau. Envoyer
+    « 08:30 » brut aurait fait lire l'heure de New York comme une heure locale, et
+    annoncé une publication du matin à un lecteur européen pour qui elle tombe
+    l'après-midi.
+    """
+    if not heure:
+        return None
+    naif = datetime.fromisoformat(f"{iso}T{heure}:00")
+    # `zoneinfo` applique la règle d'heure d'été propre à la date : c'est ce qui
+    # rend juste la semaine où l'Amérique a changé d'heure et l'Europe pas encore.
+    return naif.replace(tzinfo=ZoneInfo(FUSEAU_PUBLICATION)).isoformat()
 
 
 def trimestre(iso: str) -> str:
@@ -442,7 +509,8 @@ def evenements_du_portefeuille(
         if iso >= ref.isoformat():
             evs.append(Evenement(
                 nature="economique", date=iso, libelle=libelle, ticker=zone,
-                moment=heure, jours=(date.fromisoformat(iso) - ref).days,
+                moment=instant_publication(iso, heure),
+                jours=(date.fromisoformat(iso) - ref).days,
             ))
 
     evs.sort(key=lambda e: (e.date, e.ticker or ""))
