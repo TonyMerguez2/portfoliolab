@@ -1011,33 +1011,10 @@ def _pct_frais(brut) -> float | None:
 # score vaut cent dans les deux cas.
 #
 # L'ordre compte : les motifs les plus précis passent devant, comme pour `ZONES`.
-PROXY_COMPOSITION: list[tuple[str, tuple[str, ...]]] = [
-    ("nasdaq 100",      ("QQQ",)),
-    ("nasdaq",          ("QQQ",)),
-    ("s&p 500",         ("CSPX.AS", "VOO", "SPY")),
-    ("s&p500",          ("CSPX.AS", "VOO", "SPY")),
-    ("msci usa",        ("CSPX.AS", "VOO")),
-    ("msci world",      ("IWDA.AS", "URTH")),
-    ("pea monde",       ("IWDA.AS", "URTH")),
-    ("stoxx europe 600", ("EXSA.DE", "IEUR")),
-    ("stoxx europe",    ("EXSA.DE", "IEUR")),
-    ("msci europe",     ("IMEU.AS", "IEV")),
-    ("emerging asia",   ("EIMI.AS", "IEMG")),
-    ("msci emerging",   ("EIMI.AS", "IEMG")),
-    ("emerging markets", ("EIMI.AS", "IEMG")),
-    # ⚠️ « AC » — All Countries — passe **devant** les motifs Pacifique, et cet ordre
-    # corrige une erreur réelle. Le MSCI AC Asia Pacific ex Japan est majoritairement
-    # émergent, avec quelque 1 200 lignes ; le MSCI Pacific ex Japan est développé et
-    # n'en compte qu'une centaine. Les rapprocher donnait 36 sociétés équivalentes
-    # pour un fonds qui en porte des centaines.
-    ("ac asia pacific",  ("AAXJ", "EIMI.AS")),
-    ("all country asia", ("AAXJ", "EIMI.AS")),
-    ("msci pacific",     ("CPXJ.AS", "IPAC")),
-    # ⚠️ « asie pacifique » seul n'a **pas** de proxy, volontairement. Le libellé
-    # couvre aussi bien un indice développé qu'un indice tous pays, et deviner
-    # reviendrait à choisir entre cent et mille deux cents sociétés à la place de la
-    # donnée. Une ligne sans proxy reste non mesurée, ce qui est le bon aveu.
-]
+# La table elle-même vit dans `app/services/proxies.py` : elle est partagée avec
+# les événements des sociétés sous-jacentes d'un fonds, et deux copies auraient
+# fait diverger l'ordre des motifs Asie-Pacifique, qui corrige une erreur réelle.
+from app.services.proxies import PROXY_COMPOSITION  # noqa: E402
 
 # Préfixe réservé aux entrées de proxy dans le cache des fiches.
 #

@@ -177,6 +177,40 @@ def portfolio_events(
     return evenements_du_portefeuille(tickers)
 
 
+@router.get("/{portfolio_id}/events/transparence")
+def portfolio_events_transparence(
+    portfolio_id: str,
+    db: Session = Depends(get_db), user: User = Depends(require_auth),
+):
+    """
+    Les publications des sociétés détenues par les fonds du portefeuille.
+
+    ⚠️ Route à part, et pour la même raison que l'analyse : elle coûte cher. Il
+    faut, par fonds, résoudre son indice, lire la composition chez un ETF physique,
+    puis interroger chacune des dix premières lignes. Mêlée à `/events`, elle aurait
+    rendu la liste des échéances aussi lente que le plus lourd de ses calculs.
+
+    ⚠️ C'est la **seule** échéance qu'un ETF puisse avoir : il ne publie pas de
+    résultats, et un ETF capitalisant ne détache jamais de dividende — vérifié sur
+    les trois lignes d'un vrai PEA, dont les noms officiels portent « EUR C » et
+    « Acc ». Sans cette route, ces portefeuilles n'ont aucun événement propre.
+    """
+    from app.services.evenements import evenements_par_transparence
+
+    p = _portefeuille_du_compte(portfolio_id, user, db)
+    # Seuls les fonds : une action porte déjà ses propres échéances, et une crypto
+    # n'a pas de sociétés derrière elle.
+    from app.services.evenements import _fiche
+    fonds = {}
+    for a in (p.assets or []):
+        tk = a.get("ticker")
+        if not tk:
+            continue
+        if (_fiche(tk).get("genre") or "").upper() in ("ETF", "MUTUALFUND"):
+            fonds[tk] = float(a.get("weight") or 0)
+    return evenements_par_transparence(fonds)
+
+
 @router.get("/{portfolio_id}/events/analyse")
 def portfolio_events_analyse(
     portfolio_id: str,

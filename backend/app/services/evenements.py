@@ -37,6 +37,8 @@ from zoneinfo import ZoneInfo
 
 import yfinance as yf
 
+from app.services.proxies import proxys_pour
+
 logger = logging.getLogger(__name__)
 
 Nature = Literal["resultats", "dividende", "economique"]
@@ -58,6 +60,16 @@ class Evenement:
     """Rendement du versement, en pourcentage du cours."""
     rendement: float | None = None
     eps_estime: float | None = None
+    """
+    Le fonds par lequel cette échéance concerne le portefeuille.
+
+    Renseigné pour les événements vus **par transparence** : un ETF ne publie pas
+    de résultats, mais les sociétés qu'il détient en publient, et c'est bien le
+    portefeuille qu'elles remuent.
+    """
+    via: str | None = None
+    """Part du portefeuille exposée à cette échéance, en pourcentage."""
+    exposition: float | None = None
 
 
 # ── Calendrier macroéconomique ───────────────────────────────────────────────
@@ -140,7 +152,13 @@ FUSEAU_PUBLICATION = "America/New_York"
 # relançait une rafale d'appels au fournisseur — qui limite le débit. Le défaut a
 # déjà été vécu sur le cache des fiches de titres.
 _FICHIER = "cache_evenements.json"
-_VERSION = 1
+#: ⚠️ Bougée de 1 à 2 quand la fiche a gagné `nom` et `genre`.
+#:
+#: L'oublier n'aurait rien cassé bruyamment : les fiches déjà en cache seraient
+#: restées valides, sans nom de fonds, donc sans indice reconnu, donc sans
+#: composition — et la transparence n'aurait simplement rien rendu pour les titres
+#: déjà consultés. Un silence, pas une erreur : le pire des deux.
+_VERSION = 2
 _TTL = 6 * 3600
 _TTL_ECHEC = 900
 _memoire: dict[str, dict] = {}
@@ -259,6 +277,11 @@ def _fiche(ticker: str) -> dict:
             fiche["detachement"] = _jour(cal.get("Ex-Dividend Date"))
             fiche["versement"] = _jour(cal.get("Dividend Date"))
         info = t.info or {}
+        # Le nom complet, pour reconnaître l'indice d'un fonds — voir
+        # `proxys_pour`. Le nom abrégé est tronqué vers trente et un caractères et
+        # perd justement le nom de l'indice.
+        fiche["nom"] = info.get("longName") or info.get("shortName")
+        fiche["genre"] = info.get("quoteType")
         fiche["dividende"] = _nombre(info.get("lastDividendValue")) \
             or _nombre(info.get("dividendRate"))
         fiche["cours"] = _nombre(info.get("regularMarketPrice")) \
@@ -456,6 +479,108 @@ def analyse_du_portefeuille(
 
     passes.sort(key=lambda e: (e["date"], e["ticker"]), reverse=True)
     return {"passes": passes, "impacts": impacts, "sans_donnees": sans}
+
+
+# ── Transparence : les échéances des sociétés détenues par un fonds ──────────
+
+#: Nombre de lignes retenues dans un fonds.
+#:
+#: ⚠️ Dix, parce que c'est ce que la source publie — pas un choix de confort. Le
+#: fournisseur ne rend que les dix premières positions d'un ETF. La vue est donc
+#: **partielle par construction** : un fonds S&P 500 en compte cinq cents, et ces
+#: dix en pèsent environ un tiers. L'interface doit le dire, sans quoi l'absence
+#: d'une société se lirait comme l'absence de sa publication.
+LIGNES_PAR_FONDS = 10
+
+
+def _lignes_du_fonds(ticker: str) -> dict:
+    """
+    Les principales sociétés derrière un fonds, et leur part dans ce fonds.
+
+    ⚠️ Lues chez un **ETF physique qui suit le même indice**, et non chez le fonds
+    lui-même. Un fonds synthétique publie un panier de collatéral, pas l'indice :
+    mesuré sur ETZ.PA, ses propres lignes donnaient trente-six sociétés
+    équivalentes contre cent quatre-vingt-quinze pour le Stoxx Europe 600 qu'il
+    réplique. Le panier décrit sa mécanique interne, l'indice décrit l'exposition.
+    """
+    cache = _charger()
+    cle = f"lignes:{ticker}"
+    e = cache.get(cle)
+    if e and e.get("echeance", 0) > time.time() and e.get("version") == _VERSION:
+        return e
+
+    res: dict = {"version": _VERSION, "abouti": False, "lignes": [], "proxy": None}
+    nom = _fiche(ticker).get("nom")
+    for proxy in proxys_pour(nom):
+        try:
+            th = yf.Ticker(proxy).funds_data.top_holdings
+            if th is None or not len(th):
+                continue
+            res["lignes"] = [
+                {"ticker": str(sym), "part": round(float(r.iloc[0]) * 100, 3)}
+                for sym, r in th.head(LIGNES_PAR_FONDS).iterrows()
+            ]
+            res["proxy"] = proxy
+            res["abouti"] = True
+            break
+        except Exception as ex:                                # pragma: no cover
+            # ⚠️ Le candidat suivant est essayé. Un proxy qui refuse n'est pas une
+            # absence de composition : c'est ce fournisseur-là qui n'a pas répondu.
+            logger.info("proxy %s muet pour %s (%s)", proxy, ticker, type(ex).__name__)
+
+    res["echeance"] = time.time() + (_TTL if res["abouti"] else _TTL_ECHEC)
+    cache[cle] = res
+    _ecrire()
+    return res
+
+
+def evenements_par_transparence(
+    fonds: dict[str, float], aujourdhui: date | None = None,
+) -> dict:
+    """
+    Les publications des sociétés détenues par les fonds du portefeuille.
+
+    `fonds` associe le ticker d'un fonds à son poids dans le portefeuille, en
+    pourcentage. L'exposition rendue est le produit des deux poids : une société
+    qui pèse sept pour cent d'un fonds qui pèse soixante-dix expose le portefeuille
+    à quatre virgule neuf pour cent.
+
+    ⚠️ C'est la seule échéance qu'un ETF puisse avoir. Il ne publie pas de résultats
+    — ce n'est pas une société — et un ETF capitalisant ne détache jamais de
+    dividende : vérifié sur les trois lignes d'un vrai PEA, dont les noms officiels
+    portent « EUR C » et « Acc ». Sans transparence, ces portefeuilles n'ont
+    strictement aucun événement propre.
+    """
+    ref = aujourdhui or date.today()
+    evs: list[Evenement] = []
+    opaques: list[str] = []
+
+    for tk, poids in fonds.items():
+        comp = _lignes_du_fonds(tk)
+        if not comp.get("abouti"):
+            opaques.append(tk)
+            continue
+        for ligne in comp["lignes"]:
+            f = _fiche(ligne["ticker"])
+            jr = f.get("resultats")
+            if not jr or jr < ref.isoformat():
+                continue
+            evs.append(Evenement(
+                nature="resultats", date=jr, ticker=ligne["ticker"],
+                libelle=f"Résultats {trimestre(jr)}",
+                jours=(date.fromisoformat(jr) - ref).days,
+                eps_estime=f.get("eps_estime"),
+                via=tk,
+                exposition=round(poids * ligne["part"] / 100, 3),
+            ))
+
+    # La plus forte exposition d'abord à date égale : c'est celle qui compte.
+    evs.sort(key=lambda e: (e.date, -(e.exposition or 0)))
+    return {
+        "evenements": [asdict(e) for e in evs],
+        "fonds_opaques": opaques,
+        "lignes_par_fonds": LIGNES_PAR_FONDS,
+    }
 
 
 def evenements_du_portefeuille(

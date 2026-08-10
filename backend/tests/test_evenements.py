@@ -343,3 +343,89 @@ class TestAnalyseDuPortefeuille:
         r = ev.analyse_du_portefeuille({"ESE.PA": 70.0}, REF)
         assert r["passes"] == [] and r["impacts"] == {}
         assert r["sans_donnees"] == ["ESE.PA"]
+
+
+class TestTransparence:
+    """
+    Les échéances des sociétés détenues par un fonds.
+
+    ⚠️ C'est la **seule** échéance qu'un ETF puisse avoir : il ne publie pas de
+    résultats, et un ETF capitalisant ne détache jamais de dividende — vérifié sur
+    les trois lignes d'un vrai PEA, dont les noms officiels portent « EUR C » et
+    « Acc ». Sans transparence, ces portefeuilles n'ont aucun événement propre.
+    """
+
+    def brancher(self, monkeypatch, compositions, fiches):
+        monkeypatch.setattr(ev, "_lignes_du_fonds", lambda tk: compositions[tk])
+        monkeypatch.setattr(ev, "_fiche", lambda tk: fiches.get(tk, fiche()))
+
+    def compo(self, *lignes, proxy="PROXY"):
+        return {"version": ev._VERSION, "abouti": True, "echeance": 9e18,
+                "proxy": proxy,
+                "lignes": [{"ticker": t, "part": p} for t, p in lignes]}
+
+    def test_l_exposition_est_le_produit_des_deux_poids(self, monkeypatch):
+        # Une société qui pèse 7 % d'un fonds qui pèse 70 % expose le portefeuille
+        # à 4,9 %. C'est le chiffre qui compte, pas le poids dans le fonds.
+        self.brancher(monkeypatch,
+                      {"ESE.PA": self.compo(("AAPL", 7.0))},
+                      {"AAPL": fiche(resultats="2026-10-29", eps_estime=1.6)})
+        r = ev.evenements_par_transparence({"ESE.PA": 70.0}, REF)
+        e = r["evenements"][0]
+        assert e["ticker"] == "AAPL"
+        assert e["via"] == "ESE.PA"
+        assert e["exposition"] == pytest.approx(4.9)
+        assert e["libelle"] == "Résultats T3 2026"
+        assert e["jours"] == 80
+
+    def test_une_publication_passee_est_ecartee(self, monkeypatch):
+        self.brancher(monkeypatch,
+                      {"ESE.PA": self.compo(("AAPL", 7.0))},
+                      {"AAPL": fiche(resultats="2026-07-30")})
+        assert ev.evenements_par_transparence({"ESE.PA": 70.0}, REF)["evenements"] == []
+
+    def test_un_fonds_sans_composition_est_nomme_sans_rien_inventer(self, monkeypatch):
+        # ⚠️ Ce cas arrive vraiment : le fournisseur limite le débit, et tous les
+        # proxys refusent. L'aveu vaut mieux qu'une composition devinée.
+        monkeypatch.setattr(ev, "_lignes_du_fonds", lambda tk: {
+            "version": ev._VERSION, "abouti": False, "echeance": 9e18,
+            "lignes": [], "proxy": None})
+        r = ev.evenements_par_transparence({"ESE.PA": 70.0}, REF)
+        assert r["evenements"] == []
+        assert r["fonds_opaques"] == ["ESE.PA"]
+
+    def test_une_ligne_sans_date_ne_produit_rien(self, monkeypatch):
+        self.brancher(monkeypatch,
+                      {"ESE.PA": self.compo(("AAPL", 7.0), ("BRK-B", 1.7))},
+                      {"AAPL": fiche(resultats="2026-10-29"), "BRK-B": fiche()})
+        r = ev.evenements_par_transparence({"ESE.PA": 70.0}, REF)
+        assert [e["ticker"] for e in r["evenements"]] == ["AAPL"]
+
+    def test_a_date_egale_la_plus_forte_exposition_passe_devant(self, monkeypatch):
+        self.brancher(monkeypatch,
+                      {"ESE.PA": self.compo(("AAPL", 7.0), ("MSFT", 6.0))},
+                      {"AAPL": fiche(resultats="2026-10-29"),
+                       "MSFT": fiche(resultats="2026-10-29")})
+        r = ev.evenements_par_transparence({"ESE.PA": 70.0}, REF)
+        assert [e["ticker"] for e in r["evenements"]] == ["AAPL", "MSFT"]
+
+    def test_deux_fonds_exposent_chacun_le_leur(self, monkeypatch):
+        self.brancher(monkeypatch, {
+            "ESE.PA": self.compo(("AAPL", 7.0)),
+            "PAEJ.PA": self.compo(("TSM", 10.0)),
+        }, {
+            "AAPL": fiche(resultats="2026-10-29"),
+            "TSM": fiche(resultats="2026-10-15"),
+        })
+        r = ev.evenements_par_transparence({"ESE.PA": 70.0, "PAEJ.PA": 10.0}, REF)
+        # Le taïwanais publie plus tôt mais pèse moins : l'ordre est chronologique.
+        assert [(e["ticker"], e["exposition"]) for e in r["evenements"]] == \
+            [("TSM", 1.0), ("AAPL", 4.9)]
+
+    def test_le_nombre_de_lignes_retenues_est_annonce(self, monkeypatch):
+        # ⚠️ La vue est partielle par construction : le fournisseur ne rend que les
+        # dix premières positions, et un fonds S&P 500 en compte cinq cents.
+        # L'interface doit pouvoir le dire.
+        monkeypatch.setattr(ev, "_lignes_du_fonds", lambda tk: self.compo())
+        r = ev.evenements_par_transparence({"ESE.PA": 70.0}, REF)
+        assert r["lignes_par_fonds"] == ev.LIGNES_PAR_FONDS == 10

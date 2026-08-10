@@ -38,6 +38,10 @@ type Evenement = {
   devise: string | null;
   rendement: number | null;
   eps_estime: number | null;
+  /** Le fonds par lequel l'échéance concerne le portefeuille, s'il y en a un. */
+  via?: string | null;
+  /** Part du portefeuille exposée, en pourcentage. */
+  exposition?: number | null;
 };
 
 type Reponse = {
@@ -108,11 +112,16 @@ function telecharger(e: Evenement) {
 }
 
 export default function EvenementsAVenir({
-  portfolioId, limite = 6, onVoirTout, onEvenements, analyse,
+  portfolioId, limite = 6, onVoirTout, onEvenements, analyse, supplement = [],
 }: {
   portfolioId?: string;
   limite?: number;
   onVoirTout?: () => void;
+  /**
+   * Des échéances à joindre à celles de cette route — celles vues par
+   * transparence, chargées à part parce que leur route est plus lente.
+   */
+  supplement?: Evenement[];
   /**
    * Les statistiques par titre, pour annoncer l'amplitude attendue.
    *
@@ -159,10 +168,26 @@ export default function EvenementsAVenir({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [portfolioId]);
 
-  const visibles = useMemo(() => {
-    const tout = donnees?.evenements ?? [];
-    return (filtre === "tous" ? tout : tout.filter(e => e.nature === filtre)).slice(0, limite);
-  }, [donnees, filtre, limite]);
+  /**
+   * Les échéances propres au portefeuille et celles vues par transparence, dans
+   * une seule liste chronologique.
+   *
+   * ⚠️ Fusionnées ici et non côté page, pour que les pastilles de filtre comptent
+   * juste. Les laisser dehors aurait fait afficher « Résultats » comme un onglet
+   * vide sur un portefeuille d'ETF, alors que ses fonds portent des sociétés qui
+   * publient — ce qui est précisément l'information qu'on vient chercher.
+   *
+   * La transparence arrive après, sa route étant plus lente : la liste s'affiche
+   * d'abord avec le macro, puis s'enrichit.
+   */
+  const tout = useMemo(
+    () => [...(donnees?.evenements ?? []), ...supplement]
+      .sort((a, b) => a.date.localeCompare(b.date)),
+    [donnees, supplement]);
+
+  const visibles = useMemo(
+    () => (filtre === "tous" ? tout : tout.filter(e => e.nature === filtre)).slice(0, limite),
+    [tout, filtre, limite]);
 
   /**
    * Un filtre sans aucune échéance est **éteint**, pas masqué.
@@ -172,9 +197,7 @@ export default function EvenementsAVenir({
    * et qu'il n'a rien à montrer.
    */
   const compte = (cle: Nature | "tous") =>
-    cle === "tous"
-      ? (donnees?.evenements.length ?? 0)
-      : (donnees?.evenements.filter(e => e.nature === cle).length ?? 0);
+    cle === "tous" ? tout.length : tout.filter(e => e.nature === cle).length;
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 12, minHeight: 0, flex: 1 }}>
@@ -261,6 +284,18 @@ export default function EvenementsAVenir({
               </div>
               <div style={{ fontFamily: FONT, fontSize: 10, color: CLAIR.texteFaible }}>
                 {e.ticker ? e.libelle : "Publication économique"}
+                {/* L'origine, quand l'échéance vient d'une société détenue par un
+                    fonds. La dire est indispensable : sans elle, une ligne « AAPL »
+                    apparaîtrait dans un portefeuille qui ne détient pas Apple. */}
+                {e.via && (
+                  <>
+                    {" · via "}
+                    <span style={{ color: CLAIR.texteSecondaire }}>{e.via}</span>
+                    {e.exposition != null && (
+                      <span style={{ ...NUM }}> ({e.exposition.toFixed(2)} %)</span>
+                    )}
+                  </>
+                )}
                 {e.nature === "dividende" && e.montant != null && (
                   <>
                     {" · "}

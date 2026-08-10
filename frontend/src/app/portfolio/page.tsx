@@ -38,6 +38,7 @@ import Cadre from "@/components/ui/Cadre";
 import ChiffresRoulants from "@/components/ui/ChiffresRoulants";
 import ImagePortefeuille from "@/components/portfolio/ImagePortefeuille";
 import { useAnalyseEvenements } from "@/hooks/useAnalyseEvenements";
+import { useTransparence } from "@/hooks/useTransparence";
 import { DividendesAVenir, ProchainsResultats } from "@/components/portfolio/TablesEvenements";
 import CalendrierEvenements from "@/components/portfolio/CalendrierEvenements";
 import EvenementsAVenir from "@/components/portfolio/EvenementsAVenir";
@@ -447,7 +448,21 @@ function PortfolioPageInner() {
     sans_donnees: string[];
     peremption_macro: string | null;
   } | null>(null);
-  const echeances = evtsReponse?.evenements ?? [];
+  /**
+   * Les échéances vues **par transparence** : les publications des sociétés que
+   * portent les fonds du portefeuille.
+   *
+   * ⚠️ Sans elles, un portefeuille d'ETF n'a aucun événement propre — un ETF ne
+   * publie pas de résultats, et un ETF capitalisant ne détache jamais de dividende.
+   * Chargées à part parce que la route coûte cher : la liste s'affiche d'abord, ces
+   * lignes s'y ajoutent.
+   */
+  const transparence = useTransparence(portfolio?.id);
+
+  const echeances = useMemo(
+    () => [...(evtsReponse?.evenements ?? []), ...(transparence.donnees?.evenements ?? [])]
+      .sort((a, b) => a.date.localeCompare(b.date)),
+    [evtsReponse, transparence.donnees]);
 
   /** Écriture désignée en cliquant un repère du graphique. */
   const [operationVisee, setOperationVisee] = useState<number | null>(null);
@@ -1860,7 +1875,8 @@ function PortfolioPageInner() {
               service qui l'alimente pour ce que la source sait et ignore. */}
           <Cadre style={{ flex: 1, padding: "16px 18px", display: "flex", flexDirection: "column", minHeight: 0 }}>
             <EvenementsAVenir portfolioId={portfolio?.id} onEvenements={setEvtsReponse}
-              analyse={analyseEvts.donnees} />
+              analyse={analyseEvts.donnees}
+              supplement={transparence.donnees?.evenements ?? []} />
           </Cadre>
           {/* L'impact attendu de la prochaine échéance. Sous les échéances
               elles-mêmes : on lit d'abord *quand*, ensuite *combien*. */}
