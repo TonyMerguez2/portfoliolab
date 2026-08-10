@@ -1859,7 +1859,8 @@ function PortfolioPageInner() {
               échéances réellement publiées — voir `EvenementsAVenir`, et le
               service qui l'alimente pour ce que la source sait et ignore. */}
           <Cadre style={{ flex: 1, padding: "16px 18px", display: "flex", flexDirection: "column", minHeight: 0 }}>
-            <EvenementsAVenir portfolioId={portfolio?.id} onEvenements={setEvtsReponse} />
+            <EvenementsAVenir portfolioId={portfolio?.id} onEvenements={setEvtsReponse}
+              analyse={analyseEvts.donnees} />
           </Cadre>
           {/* L'impact attendu de la prochaine échéance. Sous les échéances
               elles-mêmes : on lit d'abord *quand*, ensuite *combien*. */}

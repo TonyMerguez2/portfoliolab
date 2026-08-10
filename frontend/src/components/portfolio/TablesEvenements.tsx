@@ -2,6 +2,7 @@
 import AssetLogo from "@/components/AssetLogo";
 import { qualifierImpact } from "@/components/portfolio/ImpactEvenements";
 import type { AnalyseEvenements } from "@/hooks/useAnalyseEvenements";
+import { libelleAmplitude } from "@/lib/impactEvenement";
 import { CLAIR, JETONS, RAYONS } from "@/lib/palette";
 import { FONT, NUM } from "@/lib/typography";
 
@@ -175,6 +176,23 @@ export function ProchainsResultats({
                   textAlign: "right", whiteSpace: "nowrap" }}>
                   {dateCourte(e.date)}
                 </div>
+
+                {/* L'amplitude attendue **sur le portefeuille**, et non sur le
+                    titre : c'est ce que la ligne peut déplacer, une fois ramenée à
+                    son poids. Sans signe — la statistique dit de combien ça bouge,
+                    pas dans quel sens. */}
+                {im && (
+                  <span title={`Amplitude moyenne du titre sur ses ${im.echantillon} `
+                    + `derniers trimestres, ramenée à son poids de ${im.exposition.toFixed(1)} %`}
+                    style={{
+                      ...NUM, fontSize: 10, fontWeight: 700, flexShrink: 0,
+                      color: CLAIR.texteSecondaire, background: CLAIR.carteCreuse,
+                      border: `1px solid ${CLAIR.bord}`,
+                      borderRadius: RAYONS.xs, padding: "2px 7px",
+                    }}>
+                    {libelleAmplitude(im)}
+                  </span>
+                )}
 
                 {/* Le risque de mouvement, quand douze trimestres permettent de le
                     dire. Absent, la case reste vide plutôt que de porter un mot

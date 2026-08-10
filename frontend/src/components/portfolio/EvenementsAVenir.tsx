@@ -2,7 +2,9 @@
 import { useEffect, useMemo, useState } from "react";
 
 import AssetLogo from "@/components/AssetLogo";
+import type { AnalyseEvenements } from "@/hooks/useAnalyseEvenements";
 import { fichierAgenda, nomFichier } from "@/lib/agenda";
+import { libelleAmplitude, porteUnImpact } from "@/lib/impactEvenement";
 import { API_URL as API } from "@/lib/api";
 import { CLAIR, JETONS, RAYONS } from "@/lib/palette";
 import { enTetesAuth } from "@/lib/session";
@@ -106,11 +108,20 @@ function telecharger(e: Evenement) {
 }
 
 export default function EvenementsAVenir({
-  portfolioId, limite = 6, onVoirTout, onEvenements,
+  portfolioId, limite = 6, onVoirTout, onEvenements, analyse,
 }: {
   portfolioId?: string;
   limite?: number;
   onVoirTout?: () => void;
+  /**
+   * Les statistiques par titre, pour annoncer l'amplitude attendue.
+   *
+   * Passée par l'appelant et non cherchée ici : la page l'obtient déjà pour les
+   * autres panneaux, et un appel de plus aurait fait partir deux fois la route la
+   * plus coûteuse de l'écran. Absente, les lignes s'affichent sans amplitude — le
+   * chiffre est un complément, pas une condition.
+   */
+  analyse?: AnalyseEvenements | null;
   /**
    * Remonte la liste obtenue, pour que le calendrier la partage.
    *
@@ -275,6 +286,31 @@ export default function EvenementsAVenir({
                 </div>
               )}
             </div>
+
+            {/* L'amplitude attendue sur le portefeuille.
+                ⚠️ Seulement pour les résultats — voir `porteUnImpact`. Un
+                détachement de dividende fait mécaniquement baisser le cours, mais
+                la valeur passe du cours aux liquidités : annoncer « −0,19 % »
+                ferait lire une perte là où il n'y a qu'un transfert.
+                ⚠️ Et sans signe : la statistique dit de combien le titre bouge, pas
+                dans quel sens. */}
+            {(() => {
+              const st = porteUnImpact(e.nature) && e.ticker
+                ? analyse?.impacts[e.ticker] : undefined;
+              if (!st) return null;
+              return (
+                <span title={`Amplitude moyenne du titre sur ses ${st.echantillon} derniers `
+                  + `trimestres, ramenée à son poids de ${st.exposition.toFixed(1)} %`}
+                  style={{
+                    ...NUM, fontSize: 10, fontWeight: 700, flexShrink: 0,
+                    color: CLAIR.texteSecondaire, background: CLAIR.carteCreuse,
+                    border: `1px solid ${CLAIR.bord}`,
+                    borderRadius: RAYONS.xs, padding: "2px 7px",
+                  }}>
+                  {libelleAmplitude(st)}
+                </span>
+              );
+            })()}
 
             {e.jours != null && (
               <span style={{
