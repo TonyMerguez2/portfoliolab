@@ -42,6 +42,8 @@ type Evenement = {
   via?: string | null;
   /** Part du portefeuille exposée, en pourcentage. */
   exposition?: number | null;
+  /** Le nom de la société : « 000660.KS » ne désigne rien, « SK Hynix » si. */
+  nom_societe?: string | null;
 };
 
 type Reponse = {
@@ -281,6 +283,14 @@ export default function EvenementsAVenir({
             <div style={{ flex: 1, minWidth: 0 }}>
               <div style={{ fontFamily: FONT, fontSize: 12, fontWeight: 600, color: CLAIR.texte }}>
                 {e.ticker ? e.ticker.replace(/-USD$/, "") : e.libelle}
+                {/* Le nom de la société à côté du ticker : par transparence, les
+                    lignes sortent en « 0700.HK » ou « 000660.KS », qui ne désignent
+                    rien — alors que « Tencent » et « SK Hynix » se reconnaissent. */}
+                {e.nom_societe && (
+                  <span style={{ fontWeight: 400, color: CLAIR.texteFaible }}>
+                    {" "}{e.nom_societe}
+                  </span>
+                )}
               </div>
               <div style={{ fontFamily: FONT, fontSize: 10, color: CLAIR.texteFaible }}>
                 {e.ticker ? e.libelle : "Publication économique"}

@@ -39,6 +39,8 @@ export type EvenementTransparence = {
   via: string;
   /** Part du portefeuille exposée, en pourcentage. */
   exposition: number;
+  /** Le nom de la société : « 000660.KS » ne désigne rien, « SK Hynix » si. */
+  nom_societe?: string | null;
 };
 
 export type Transparence = {

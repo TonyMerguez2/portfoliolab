@@ -70,6 +70,15 @@ class Evenement:
     via: str | None = None
     """Part du portefeuille exposée à cette échéance, en pourcentage."""
     exposition: float | None = None
+    """
+    Le nom de la société, quand le ticker seul ne dit rien.
+
+    ⚠️ Indispensable par transparence : les lignes d'un fonds asiatique sortent en
+    « 0700.HK » et « 000660.KS », qui ne désignent rien pour un lecteur — alors que
+    « Tencent » et « SK Hynix » se reconnaissent. La composition rend ce nom, il
+    serait dommage de le jeter.
+    """
+    nom_societe: str | None = None
 
 
 # ── Calendrier macroéconomique ───────────────────────────────────────────────
@@ -492,6 +501,13 @@ def analyse_du_portefeuille(
 #: d'une société se lirait comme l'absence de sa publication.
 LIGNES_PAR_FONDS = 10
 
+#: Les colonnes du tableau de composition, nommées et non positionnelles.
+#:
+#: ⚠️ Relevé sur SPY : `['Name', 'Holding Percent']`, index `Symbol`. Lire par
+#: position donnait le nom là où on attendait la part.
+COLONNE_PART = "Holding Percent"
+COLONNE_NOM = "Name"
+
 
 def _lignes_du_fonds(ticker: str) -> dict:
     """
@@ -516,17 +532,44 @@ def _lignes_du_fonds(ticker: str) -> dict:
             th = yf.Ticker(proxy).funds_data.top_holdings
             if th is None or not len(th):
                 continue
-            res["lignes"] = [
-                {"ticker": str(sym), "part": round(float(r.iloc[0]) * 100, 3)}
-                for sym, r in th.head(LIGNES_PAR_FONDS).iterrows()
-            ]
+            # ⚠️ La part est lue **par le nom de sa colonne**, jamais par sa
+            # position. Le tableau rendu porte `['Name', 'Holding Percent']` : lire
+            # la première colonne donnait le nom de la société, et `float('NVIDIA
+            # Corp')` levait une `ValueError` — que le garde-fou ci-dessous avalait
+            # en « ce proxy ne publie rien ». Un défaut de lecture s'y déguisait
+            # ainsi en absence de donnée, sur les trois candidats à la suite, pour
+            # les trois fonds d'un vrai PEA. C'est exactement le piège que ce
+            # fichier dénonce ailleurs, et je l'avais tendu ici.
+            if COLONNE_PART not in th.columns:
+                logger.warning(
+                    "composition de %s illisible : colonnes %s, « %s » attendue",
+                    proxy, list(th.columns), COLONNE_PART)
+                continue
+            lignes = []
+            for sym, part in th[COLONNE_PART].head(LIGNES_PAR_FONDS).items():
+                p = _nombre(part)
+                if p is None:
+                    continue
+                nom_societe = th.at[sym, COLONNE_NOM] if COLONNE_NOM in th.columns else None
+                lignes.append({
+                    "ticker": str(sym),
+                    "nom": str(nom_societe) if nom_societe else None,
+                    # La source rend une fraction : 0,0754 pour 7,54 %.
+                    "part": round(p * 100, 3),
+                })
+            if not lignes:
+                continue
+            res["lignes"] = lignes
             res["proxy"] = proxy
             res["abouti"] = True
             break
         except Exception as ex:                                # pragma: no cover
             # ⚠️ Le candidat suivant est essayé. Un proxy qui refuse n'est pas une
             # absence de composition : c'est ce fournisseur-là qui n'a pas répondu.
-            logger.info("proxy %s muet pour %s (%s)", proxy, ticker, type(ex).__name__)
+            # Le niveau est `warning` et non `info` : c'est ce silence trop discret
+            # qui a laissé un défaut de lecture passer pour une absence de donnée.
+            logger.warning("proxy %s muet pour %s (%s: %s)",
+                           proxy, ticker, type(ex).__name__, str(ex)[:120])
 
     res["echeance"] = time.time() + (_TTL if res["abouti"] else _TTL_ECHEC)
     cache[cle] = res
@@ -572,6 +615,7 @@ def evenements_par_transparence(
                 eps_estime=f.get("eps_estime"),
                 via=tk,
                 exposition=round(poids * ligne["part"] / 100, 3),
+                nom_societe=ligne.get("nom"),
             ))
 
     # La plus forte exposition d'abord à date égale : c'est celle qui compte.
