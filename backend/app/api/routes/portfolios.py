@@ -177,6 +177,44 @@ def portfolio_events(
     return evenements_du_portefeuille(tickers)
 
 
+@router.get("/{portfolio_id}/events/impact")
+def portfolio_event_impact(
+    portfolio_id: str, ticker: str,
+    db: Session = Depends(get_db), user: User = Depends(require_auth),
+):
+    """
+    L'impact attendu d'un titre donné, détenu en direct ou à travers un fonds.
+
+    ⚠️ L'exposition est **résolue par le serveur** et non transmise par le client.
+    La faire passer en paramètre aurait laissé l'appelant dicter le poids qui
+    multiplie la statistique — un chiffre affiché comme une mesure et venu de
+    l'interface.
+
+    Rend 404 quand le titre n'expose pas ce portefeuille, et un corps vide quand
+    l'échantillon de publications est trop mince pour en tirer quoi que ce soit.
+    """
+    from app.services.evenements import _fiche, impact_du_titre
+
+    p = _portefeuille_du_compte(portfolio_id, user, db)
+    directs, fonds = {}, {}
+    for a in (p.assets or []):
+        tk = a.get("ticker")
+        if not tk:
+            continue
+        poids = float(a.get("weight") or 0)
+        directs[tk] = poids
+        if (_fiche(tk).get("genre") or "").upper() in ("ETF", "MUTUALFUND"):
+            fonds[tk] = poids
+
+    r = impact_du_titre(ticker.upper(), directs, fonds)
+    if r is None:
+        # ⚠️ 200 avec un corps explicite, et non 404 : « ce titre ne vous expose
+        # pas » et « je n'ai pas assez de trimestres » sont deux réponses valides
+        # que l'interface doit distinguer d'une panne.
+        return {"impact": None}
+    return {"impact": r}
+
+
 @router.get("/{portfolio_id}/events/transparence")
 def portfolio_events_transparence(
     portfolio_id: str,

@@ -627,6 +627,59 @@ def evenements_par_transparence(
     }
 
 
+def exposition_du_titre(
+    ticker: str, poids_directs: dict[str, float], compositions: dict[str, dict],
+) -> float:
+    """
+    La part du portefeuille exposée à un titre, détention directe et fonds cumulés.
+
+    ⚠️ Les deux s'**additionnent**, et c'est le cas réel : un portefeuille peut
+    détenir Tesla en direct *et* par son ETF S&P 500. Ne compter que la ligne
+    directe sous-estimerait l'exposition, ne compter que la transparence
+    l'oublierait tout à fait.
+
+    `compositions` associe chaque fonds à son poids et à ses lignes, telles que
+    `_lignes_du_fonds` les rend.
+    """
+    total = poids_directs.get(ticker, 0.0)
+    for comp in compositions.values():
+        for ligne in comp.get("lignes") or []:
+            if ligne["ticker"] == ticker:
+                total += comp["poids"] * ligne["part"] / 100
+    return round(total, 3)
+
+
+def impact_du_titre(
+    ticker: str, poids_directs: dict[str, float], fonds: dict[str, float],
+) -> dict | None:
+    """
+    Les statistiques de réaction d'un titre, avec son exposition dans ce portefeuille.
+
+    ⚠️ Calculé **à la demande**, pour le seul titre demandé. Les faire tous d'avance
+    aurait coûté, sur un portefeuille de trois ETF, une trentaine d'interrogations —
+    dates de publication et historique de cours pour chacune des dix premières
+    lignes de chaque fonds — dont l'utilisateur n'aurait regardé qu'une.
+
+    Rend `None` quand l'échantillon est trop mince : voir `statistiques`.
+    """
+    compositions = {
+        tk: {"poids": poids, **_lignes_du_fonds(tk)}
+        for tk, poids in fonds.items()
+    }
+    exposition = exposition_du_titre(ticker, poids_directs, compositions)
+    if exposition <= 0:
+        return None
+
+    r = _reactions(ticker)
+    if not r.get("abouti"):
+        return None
+    ref = date.today().isoformat()
+    st = statistiques([x for x in r["lignes"] if x["date"] < ref])
+    if not st:
+        return None
+    return {"ticker": ticker, "exposition": exposition, **st}
+
+
 def evenements_du_portefeuille(
     tickers: list[str], aujourdhui: date | None = None,
 ) -> dict:

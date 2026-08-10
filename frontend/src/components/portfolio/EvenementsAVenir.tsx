@@ -115,7 +115,7 @@ function telecharger(e: Evenement) {
 
 export default function EvenementsAVenir({
   portfolioId, limite = 6, onVoirTout, onEvenements, analyse, supplement = [],
-  jour, onEffacerJour,
+  jour, onEffacerJour, tickerChoisi, onChoisirTicker,
 }: {
   portfolioId?: string;
   limite?: number;
@@ -129,6 +129,16 @@ export default function EvenementsAVenir({
   jour?: string | null;
   /** Rend la main sur le filtre de jour, pour pouvoir en sortir depuis la liste. */
   onEffacerJour?: () => void;
+  /** Le titre dont l'impact est détaillé à droite, pour le montrer comme retenu. */
+  tickerChoisi?: string | null;
+  /**
+   * Appelé au clic sur une échéance qui porte un titre.
+   *
+   * ⚠️ Seules les publications de résultats sont sélectionnables : ce sont les
+   * seules dont on sache mesurer l'impact — voir `porteUnImpact`. Rendre une ligne
+   * macro cliquable aurait promis un détail qui n'existe pas.
+   */
+  onChoisirTicker?: (ticker: string | null) => void;
   /**
    * Les statistiques par titre, pour annoncer l'amplitude attendue.
    *
@@ -212,6 +222,27 @@ export default function EvenementsAVenir({
   const compte = (cle: Nature | "tous") =>
     cle === "tous" ? tout.length : tout.filter(e => e.nature === cle).length;
 
+  /**
+   * Une échéance est retenable quand on a effectivement un détail à montrer.
+   *
+   * Trois conditions, et aucune n'est décorative : un appelant qui n'écoute pas la
+   * sélection, une ligne sans titre — les dates macro n'en ont pas —, et une nature
+   * dont on ne sait pas mesurer l'effet. Un dividende est daté, son montant est
+   * connu, mais il ne fait pas bouger le cours de plusieurs pourcents : lui donner
+   * un curseur de clic aurait promis une statistique qui n'existe pas.
+   */
+  const selectionnable = (e: Evenement) =>
+    !!onChoisirTicker && !!e.ticker && porteUnImpact(e.nature);
+
+  /**
+   * La ligne montrée comme retenue.
+   *
+   * ⚠️ Passe par `selectionnable`, sans quoi choisir les résultats d'AAPL aurait
+   * aussi éclairé la ligne de son dividende : le titre coïncide, mais ce n'est pas
+   * cette échéance-là qu'on détaille à droite.
+   */
+  const retenu = (e: Evenement) => selectionnable(e) && e.ticker === tickerChoisi;
+
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 12, minHeight: 0, flex: 1 }}>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10 }}>
@@ -289,10 +320,25 @@ export default function EvenementsAVenir({
         )}
 
         {etat === "pret" && visibles.map((e, i) => (
-          <div key={`${e.nature}:${e.ticker ?? ""}:${e.date}`}
+          <div key={`${e.nature}:${e.ticker ?? ""}:${e.date}:${e.via ?? ""}`}
+            onClick={selectionnable(e)
+              ? () => onChoisirTicker?.(retenu(e) ? null : e.ticker)
+              : undefined}
+            title={selectionnable(e)
+              ? (retenu(e)
+                  ? "Cliquer pour revenir à la vue d’ensemble"
+                  : `Voir l’impact de ${e.ticker} sur le portefeuille`)
+              : undefined}
             style={{
-              display: "flex", alignItems: "center", gap: 10, padding: "10px 0",
+              display: "flex", alignItems: "center", gap: 10, padding: "10px 8px",
+              margin: "0 -8px",
               borderBottom: i < visibles.length - 1 ? `1px solid ${CLAIR.bord}` : "none",
+              cursor: selectionnable(e) ? "pointer" : "default",
+              // La ligne retenue porte un fond, non un cerne : un cerne se lit comme
+              // une bordure de tableau au milieu d'une liste déjà séparée par des
+              // filets. Le rayon accompagne le fond, sinon il ne se voit pas.
+              background: retenu(e) ? JETONS.accentVoile : "transparent",
+              borderRadius: retenu(e) ? RAYONS.xs : 0,
             }}>
             {/* Une crypto ou une action portent leur logo ; un événement macro
                 n'a pas de titre, donc une pastille de sa couleur tient la place
@@ -401,7 +447,15 @@ export default function EvenementsAVenir({
                 Aucun service tiers, aucun compte à relier — le fichier s'ouvre
                 dans l'agenda du système, et son identifiant stable fait qu'un
                 second ajout remplace le premier au lieu de le doubler. */}
-            <button type="button" onClick={() => telecharger(e)}
+            <button type="button"
+              onClick={ev => {
+                // ⚠️ La ligne est cliquable depuis qu'on peut retenir un titre :
+                // sans arrêter la remontée, ajouter une échéance à l'agenda
+                // changerait aussi le titre détaillé à droite. Deux effets pour un
+                // clic, dont un que personne n'a demandé.
+                ev.stopPropagation();
+                telecharger(e);
+              }}
               aria-label={`Ajouter « ${e.libelle} » à l’agenda`}
               title="Ajouter à l’agenda"
               style={{

@@ -38,6 +38,7 @@ import Cadre from "@/components/ui/Cadre";
 import ChiffresRoulants from "@/components/ui/ChiffresRoulants";
 import ImagePortefeuille from "@/components/portfolio/ImagePortefeuille";
 import { useAnalyseEvenements } from "@/hooks/useAnalyseEvenements";
+import { useImpactTitre } from "@/hooks/useImpactTitre";
 import { useTransparence } from "@/hooks/useTransparence";
 import { DividendesAVenir, ProchainsResultats } from "@/components/portfolio/TablesEvenements";
 import CalendrierEvenements from "@/components/portfolio/CalendrierEvenements";
@@ -472,6 +473,22 @@ function PortfolioPageInner() {
     () => [...(evtsReponse?.evenements ?? []), ...(transparence.donnees?.evenements ?? [])]
       .sort((a, b) => a.date.localeCompare(b.date)),
     [evtsReponse, transparence.donnees]);
+
+  /**
+   * Le titre retenu dans une liste d'échéances, dont l'impact est détaillé à droite.
+   *
+   * ⚠️ Son impact est demandé au serveur ligne par ligne, et non pris dans
+   * `analyseEvts` : cette analyse ne couvre que les lignes détenues en direct.
+   * Cliquer NVIDIA vue par transparence dans un PEA d'ETF n'y trouverait rien, alors
+   * que le portefeuille y est bel et bien exposé.
+   *
+   * Remis à zéro au changement de portefeuille, sinon un titre du précédent resterait
+   * détaillé sur un portefeuille qui ne le détient pas.
+   */
+  const [tickerChoisi, setTickerChoisi] = useState<string | null>(null);
+  const impactTitre = useImpactTitre(portfolio?.id, tickerChoisi);
+
+  useEffect(() => { setTickerChoisi(null); }, [portfolio?.id]);
 
   /** Écriture désignée en cliquant un repère du graphique. */
   const [operationVisee, setOperationVisee] = useState<number | null>(null);
@@ -1868,11 +1885,15 @@ function PortfolioPageInner() {
             <EvenementsAVenir portfolioId={portfolio?.id} onEvenements={setEvtsReponse}
               analyse={analyseEvts.donnees}
               supplement={transparence.donnees?.evenements ?? []}
-              jour={jourChoisi} onEffacerJour={() => setJourChoisi(null)} />
+              jour={jourChoisi} onEffacerJour={() => setJourChoisi(null)}
+              tickerChoisi={tickerChoisi} onChoisirTicker={setTickerChoisi} />
           </Cadre>
 
           <Cadre style={{ width: 340, flexShrink: 0, padding: "16px 18px", overflowY: "auto" }}>
-            <ImpactPotentiel donnees={analyseEvts.donnees} etat={analyseEvts.etat} />
+            <ImpactPotentiel donnees={analyseEvts.donnees} etat={analyseEvts.etat}
+              ticker={tickerChoisi} detail={impactTitre.impact}
+              etatDetail={impactTitre.etat}
+              onEffacer={() => setTickerChoisi(null)} />
           </Cadre>
         </div>
 
@@ -1891,7 +1912,8 @@ function PortfolioPageInner() {
 
           <Cadre style={{ width: 340, flexShrink: 0, padding: "16px 18px",
             display: "flex", flexDirection: "column", minHeight: 0 }}>
-            <ProchainsResultats evenements={echeances} analyse={analyseEvts.donnees} />
+            <ProchainsResultats evenements={echeances} analyse={analyseEvts.donnees}
+              tickerChoisi={tickerChoisi} onChoisirTicker={setTickerChoisi} />
           </Cadre>
         </div>
       </div>{/* fin Vue Événements */}

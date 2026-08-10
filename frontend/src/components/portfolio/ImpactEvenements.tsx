@@ -1,7 +1,7 @@
 "use client";
 import { useMemo } from "react";
 
-import type { AnalyseEvenements, EtatChargement } from "@/hooks/useAnalyseEvenements";
+import type { AnalyseEvenements, EtatChargement, Impact } from "@/hooks/useAnalyseEvenements";
 
 import AssetLogo from "@/components/AssetLogo";
 import { CLAIR, JETONS, RAYONS } from "@/lib/palette";
@@ -66,14 +66,31 @@ function Mesure({ titre, valeur, note }: { titre: string; valeur: string; note: 
 }
 
 export function ImpactPotentiel({
-  donnees, etat, ticker,
+  donnees, etat, ticker, detail, etatDetail, onEffacer,
 }: {
   donnees: AnalyseEvenements | null;
   etat: EtatChargement;
   /** Le titre à détailler. Par défaut, celui dont l'impact attendu est le plus fort. */
-  ticker?: string;
+  ticker?: string | null;
+  /**
+   * L'impact d'un titre demandé à la demande, quand il n'est pas dans l'analyse
+   * d'ensemble.
+   *
+   * ⚠️ Nécessaire pour les titres vus par transparence : l'analyse ne couvre que
+   * les lignes détenues en direct, et sur un portefeuille d'ETF ce sont justement
+   * celles qui ne publient rien. Sans ce détail, sélectionner NVIDIA n'aurait rien
+   * montré alors que c'est la société qui expose le plus ce portefeuille.
+   */
+  detail?: (Impact & { ticker: string }) | null;
+  etatDetail?: EtatChargement;
+  /**
+   * Relâche la sélection.
+   *
+   * Sans lui la pastille qui l'annonce n'est pas montrée : un « × » qui ne rend
+   * rien serait pire que pas de pastille du tout.
+   */
+  onEffacer?: () => void;
 }) {
-
   /**
    * À défaut de sélection, le titre le plus réactif.
    *
@@ -82,25 +99,60 @@ export function ImpactPotentiel({
    * alphabétique y aurait mis Apple devant Nvidia sans autre raison que la lettre.
    */
   const choisi = useMemo(() => {
+    if (ticker) return ticker;
     const im = donnees?.impacts ?? {};
-    if (ticker && im[ticker]) return ticker;
     return Object.keys(im).sort(
       (a, b) => (im[b].impact_moyen * im[b].exposition) - (im[a].impact_moyen * im[a].exposition),
     )[0];
   }, [donnees, ticker]);
 
-  const im = choisi ? donnees?.impacts[choisi] : undefined;
+  /**
+   * Les chiffres à montrer : le détail demandé d'abord, l'analyse d'ensemble sinon.
+   *
+   * ⚠️ Le repli se fait sur `choisi`, qui **vaut** `ticker` dès qu'une sélection est
+   * active. Ce n'est donc jamais un autre titre qui s'affiche sous le nom demandé —
+   * seulement, le cas échéant, la même statistique venue de l'autre route. Écrit
+   * ainsi plutôt qu'avec un test sur `ticker` parce que la version à deux branches
+   * disait la même chose de façon illisible.
+   */
+  const im = (ticker ? detail : undefined)
+    ?? (choisi ? donnees?.impacts[choisi] : undefined);
+
+  // Un état de chargement propre à la sélection : sans lui, changer de titre
+  // laisserait les chiffres du précédent à l'écran le temps de la requête.
+  const enCours = etat === "charge" || (!!ticker && etatDetail === "charge");
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 10, minHeight: 0 }}>
-      <span style={{ fontFamily: FONT, fontSize: 13, fontWeight: 600, color: CLAIR.texte }}>
-        Impact potentiel sur votre portefeuille
-      </span>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
+        <span style={{ fontFamily: FONT, fontSize: 13, fontWeight: 600, color: CLAIR.texte }}>
+          Impact potentiel sur votre portefeuille
+        </span>
 
-      {etat === "charge" && (
-        <p style={{ margin: 0, fontFamily: FONT, fontSize: 11, color: CLAIR.texteFaible }}>Calcul…</p>
+        {/* ⚠️ Sans cette pastille, le panneau montre le même titre qu'on l'ait
+            choisi ou non : par défaut il affiche le plus réactif, qui est souvent
+            celui qu'on vient de cliquer. Rien ne dirait alors qu'une sélection est
+            active, ni comment revenir à la vue d'ensemble. */}
+        {ticker && onEffacer && (
+          <button type="button" onClick={onEffacer} title="Revenir à la vue d’ensemble"
+            style={{
+              display: "inline-flex", alignItems: "center", gap: 5, cursor: "pointer",
+              flexShrink: 0, padding: "3px 8px", borderRadius: RAYONS.plein,
+              border: `1px solid ${JETONS.accent}`, background: JETONS.accentVoile,
+              color: CLAIR.accent, fontFamily: FONT, fontSize: 10, fontWeight: 700,
+            }}>
+            {ticker}
+            <span aria-hidden="true" style={{ fontSize: 12, lineHeight: 1 }}>×</span>
+          </button>
+        )}
+      </div>
+
+      {enCours && (
+        <p style={{ margin: 0, fontFamily: FONT, fontSize: 11, color: CLAIR.texteFaible }}>
+          Calcul{ticker ? ` pour ${ticker}` : ""}…
+        </p>
       )}
-      {etat === "erreur" && (
+      {(etat === "erreur" || etatDetail === "erreur") && !enCours && (
         <p style={{ margin: 0, fontFamily: FONT, fontSize: 11, color: CLAIR.texteFaible }}>
           Analyse indisponible pour le moment.
         </p>
@@ -109,9 +161,11 @@ export function ImpactPotentiel({
       {/* ⚠️ Le silence est motivé. Sous quatre trimestres publiés, le serveur ne
           rend aucune statistique — et un panneau qui n'explique pas son vide se lit
           comme une panne. */}
-      {etat === "pret" && !im && (
+      {!enCours && etat !== "erreur" && etatDetail !== "erreur" && !im && (
         <p style={{ margin: 0, fontFamily: FONT, fontSize: 11, color: CLAIR.texteFaible, lineHeight: 1.6 }}>
-          Aucune publication passée assez nombreuse pour en tirer une statistique.
+          {ticker
+            ? `${ticker} : pas assez de publications passées pour en tirer une statistique, ou ce titre n’expose pas ce portefeuille.`
+            : "Aucune publication passée assez nombreuse pour en tirer une statistique."}
           {donnees && donnees.sans_donnees.length > 0 && (
             <> {donnees.sans_donnees.join(", ")} ne publie
               {donnees.sans_donnees.length > 1 ? "nt" : ""} pas de résultats.</>
@@ -119,7 +173,7 @@ export function ImpactPotentiel({
         </p>
       )}
 
-      {etat === "pret" && im && choisi && (() => {
+      {!enCours && im && choisi && (() => {
         const q = qualifierImpact(im.probabilite);
         return (
           <div style={{
@@ -135,8 +189,14 @@ export function ImpactPotentiel({
                 <div style={{ fontFamily: FONT, fontSize: 12.5, fontWeight: 700, color: CLAIR.texte }}>
                   {choisi}
                 </div>
+                {/* Dire *pourquoi* ce titre-là. À défaut de sélection, le panneau
+                    montre le plus réactif : sans le mentionner, le lecteur croit
+                    voir la prochaine publication du calendrier, qui n'est pas
+                    forcément celle-ci. */}
                 <div style={{ fontFamily: FONT, fontSize: 10, color: CLAIR.texteFaible }}>
-                  Prochaine publication de résultats
+                  {ticker
+                    ? "Prochaine publication de résultats"
+                    : "Le titre le plus réactif du portefeuille"}
                 </div>
               </div>
               <span style={{

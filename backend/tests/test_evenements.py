@@ -429,3 +429,79 @@ class TestTransparence:
         monkeypatch.setattr(ev, "_lignes_du_fonds", lambda tk: self.compo())
         r = ev.evenements_par_transparence({"ESE.PA": 70.0}, REF)
         assert r["lignes_par_fonds"] == ev.LIGNES_PAR_FONDS == 10
+
+
+class TestExpositionDuTitre:
+    """L'exposition cumule la détention directe et celle vue par les fonds."""
+
+    def compositions(self, **fonds):
+        return {tk: {"poids": poids,
+                     "lignes": [{"ticker": t, "part": p} for t, p in lignes]}
+                for tk, (poids, lignes) in fonds.items()}
+
+    def test_une_ligne_detenue_en_direct(self):
+        assert ev.exposition_du_titre("TSLA", {"TSLA": 50.0}, {}) == 50.0
+
+    def test_une_ligne_vue_par_un_fonds(self):
+        c = self.compositions(**{"ESE.PA": (70.0, [("NVDA", 7.55)])})
+        assert ev.exposition_du_titre("NVDA", {"ESE.PA": 70.0}, c) == pytest.approx(5.285)
+
+    def test_les_deux_s_additionnent(self):
+        # ⚠️ Le cas réel : détenir Tesla en direct **et** par son ETF S&P 500. Ne
+        # compter que l'une des deux sous-estime l'exposition.
+        c = self.compositions(**{"ESE.PA": (70.0, [("TSLA", 1.83)])})
+        assert ev.exposition_du_titre("TSLA", {"TSLA": 10.0, "ESE.PA": 70.0}, c) \
+            == pytest.approx(11.281)
+
+    def test_plusieurs_fonds_portant_le_meme_titre(self):
+        c = self.compositions(**{
+            "ESE.PA": (70.0, [("NVDA", 7.0)]),
+            "CW8.PA": (20.0, [("NVDA", 5.0)]),
+        })
+        assert ev.exposition_du_titre("NVDA", {}, c) == pytest.approx(5.9)
+
+    def test_un_titre_absent_n_expose_pas(self):
+        c = self.compositions(**{"ESE.PA": (70.0, [("NVDA", 7.0)])})
+        assert ev.exposition_du_titre("AAPL", {}, c) == 0.0
+
+    def test_un_fonds_sans_composition_n_ajoute_rien(self):
+        assert ev.exposition_du_titre("NVDA", {}, {"ESE.PA": {"poids": 70.0}}) == 0.0
+
+
+class TestImpactDuTitre:
+    def brancher(self, monkeypatch, lignes, compo=None):
+        monkeypatch.setattr(ev, "_reactions", lambda tk: {
+            "version": ev._VERSION, "abouti": True, "echeance": 9e18, "lignes": lignes})
+        monkeypatch.setattr(ev, "_lignes_du_fonds", lambda tk: compo or {
+            "version": ev._VERSION, "abouti": True, "echeance": 9e18,
+            "lignes": [], "proxy": "P"})
+
+    def passees(self, n, variation=4.0):
+        return [{"date": f"2025-{m:02d}-15", "moment": "apres_cloture", "surprise": 1.0,
+                 "eps_publie": 1.0, "eps_estime": 1.0, "variation": variation}
+                for m in range(1, n + 1)]
+
+    def test_l_exposition_accompagne_la_statistique(self, monkeypatch):
+        self.brancher(monkeypatch, self.passees(6))
+        r = ev.impact_du_titre("TSLA", {"TSLA": 50.0}, {})
+        assert r["ticker"] == "TSLA"
+        assert r["exposition"] == 50.0
+        assert r["impact_moyen"] == pytest.approx(4.0)
+
+    def test_un_titre_qui_n_expose_pas_ne_rend_rien(self, monkeypatch):
+        self.brancher(monkeypatch, self.passees(6))
+        assert ev.impact_du_titre("AAPL", {"TSLA": 50.0}, {}) is None
+
+    def test_un_echantillon_trop_mince_ne_rend_rien(self, monkeypatch):
+        # Cohérent avec `statistiques` : sous quatre trimestres, aucune moyenne.
+        self.brancher(monkeypatch, self.passees(3))
+        assert ev.impact_du_titre("TSLA", {"TSLA": 50.0}, {}) is None
+
+    def test_un_titre_vu_par_transparence_est_couvert(self, monkeypatch):
+        # ⚠️ C'est le cas d'un PEA d'ETF : le titre n'est pas une ligne du
+        # portefeuille, mais il l'expose bel et bien.
+        self.brancher(monkeypatch, self.passees(6), compo={
+            "version": ev._VERSION, "abouti": True, "echeance": 9e18, "proxy": "SPY",
+            "lignes": [{"ticker": "NVDA", "part": 7.55}]})
+        r = ev.impact_du_titre("NVDA", {"ESE.PA": 70.0}, {"ESE.PA": 70.0})
+        assert r["exposition"] == pytest.approx(5.285)

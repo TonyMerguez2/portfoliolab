@@ -129,12 +129,22 @@ export function DividendesAVenir({
 }
 
 export function ProchainsResultats({
-  evenements, analyse, limite = 6,
+  evenements, analyse, limite = 6, tickerChoisi, onChoisirTicker,
 }: {
   evenements: Evenement[];
   /** Sert au seul risque de mouvement ; son absence n'empêche pas la liste. */
   analyse: AnalyseEvenements | null;
   limite?: number;
+  /** Le titre dont l'impact est détaillé ailleurs, pour le montrer comme retenu. */
+  tickerChoisi?: string | null;
+  /**
+   * Appelé au clic sur une ligne, avec `null` pour relâcher celle déjà retenue.
+   *
+   * Ici toutes les lignes sont retenables — le panneau ne garde que les résultats,
+   * et une publication de résultats porte toujours un titre. Pas besoin du garde
+   * qu'exige la liste des échéances, qui mêle les dates macro.
+   */
+  onChoisirTicker?: (ticker: string | null) => void;
 }) {
   const lignes = evenements.filter(e => e.nature === "resultats").slice(0, limite);
 
@@ -152,11 +162,26 @@ export function ProchainsResultats({
           {lignes.map((e, i) => {
             const im = e.ticker ? analyse?.impacts[e.ticker] : undefined;
             const q = im ? qualifierImpact(im.probabilite) : null;
+            const cliquable = !!onChoisirTicker && !!e.ticker;
+            const retenu = cliquable && e.ticker === tickerChoisi;
             return (
-              <div key={`${e.ticker}:${e.date}`} style={{
-                display: "flex", alignItems: "center", gap: 9, padding: "9px 0",
-                borderBottom: i < lignes.length - 1 ? `1px solid ${CLAIR.bord}` : "none",
-              }}>
+              <div key={`${e.ticker}:${e.date}`}
+                onClick={cliquable
+                  ? () => onChoisirTicker?.(retenu ? null : e.ticker)
+                  : undefined}
+                title={cliquable
+                  ? (retenu
+                      ? "Cliquer pour revenir à la vue d’ensemble"
+                      : `Voir l’impact de ${e.ticker} sur le portefeuille`)
+                  : undefined}
+                style={{
+                  display: "flex", alignItems: "center", gap: 9,
+                  padding: "9px 8px", margin: "0 -8px",
+                  borderBottom: i < lignes.length - 1 ? `1px solid ${CLAIR.bord}` : "none",
+                  cursor: cliquable ? "pointer" : "default",
+                  background: retenu ? JETONS.accentVoile : "transparent",
+                  borderRadius: retenu ? RAYONS.xs : 0,
+                }}>
                 <AssetLogo ticker={e.ticker ?? ""} size={26} radius={7}
                   fallbackBg={CLAIR.carteCreuse} fallbackBorder={CLAIR.bord}
                   fallbackTextColor={CLAIR.texteSecondaire} bare />
