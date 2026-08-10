@@ -156,6 +156,27 @@ def update_portfolio(
     db.refresh(p)
     return p
 
+@router.get("/{portfolio_id}/events")
+def portfolio_events(
+    portfolio_id: str,
+    db: Session = Depends(get_db), user: User = Depends(require_auth),
+):
+    """
+    Les événements à venir des lignes du portefeuille.
+
+    ⚠️ Une liste vide est une réponse **juste**, pas une panne. Les ETF et les
+    cryptomonnaies ne publient ni résultats ni dividende chez le fournisseur —
+    vérifié sur ESE.PA, ETZ.PA, PAEJ.PA, CW8.PA et BTC-USD. `sans_donnees` nomme
+    ces lignes, pour que l'interface puisse le dire au lieu d'afficher un cadre
+    muet.
+    """
+    from app.services.evenements import evenements_du_portefeuille
+
+    p = _portefeuille_du_compte(portfolio_id, user, db)
+    tickers = sorted({a["ticker"] for a in (p.assets or []) if a.get("ticker")})
+    return evenements_du_portefeuille(tickers)
+
+
 @router.post("/{portfolio_id}/image")
 async def upload_portfolio_image(
     portfolio_id: str, file: UploadFile = File(...),

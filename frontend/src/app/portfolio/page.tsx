@@ -37,6 +37,7 @@ import { useCoursCrypto, symboleBinance } from "@/lib/coursCrypto";
 import Cadre from "@/components/ui/Cadre";
 import ChiffresRoulants from "@/components/ui/ChiffresRoulants";
 import ImagePortefeuille from "@/components/portfolio/ImagePortefeuille";
+import EvenementsAVenir from "@/components/portfolio/EvenementsAVenir";
 import { API_URL } from "@/lib/api";
 
 // ── Types ──────────────────────────────────────────────────────────────────────
@@ -1800,27 +1801,15 @@ function PortfolioPageInner() {
             </div>
           </Cadre>
         </div>
-        <div style={{ width: 300, display: "flex", flexDirection: "column", gap: 10 }}>
-          <Cadre style={{ flex: 1, padding: "16px 18px" }}>
-            <SectionLabel>ÉVÉNEMENTS À VENIR</SectionLabel>
-            <div style={{ display: "flex", flexDirection: "column", gap: 0 }}>
-              {enriched.slice(0, 6).map((a, i) => (
-                <div key={a.ticker} style={{ display: "flex", alignItems: "center", gap: 10,
-                  padding: "10px 0", borderBottom: i < 5 ? `1px solid ${CLAIR.bord}` : "none" }}>
-                  <AssetLogo ticker={a.ticker} type={a.type} size={28} radius={7}
-                    fallbackBg={CLAIR.carteCreuse} fallbackBorder={CLAIR.bord} fallbackTextColor={CLAIR.texteSecondaire}
-                    bare />
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ fontSize: 12, fontWeight: 600, color: CLAIR.texte }}>{a.ticker.replace(/-USD$/,"")}</div>
-                    <div style={{ fontSize: 10, color: CLAIR.texteFaible }}>Résultats trimestriels</div>
-                  </div>
-                  <span style={{ fontSize: 10, fontWeight: 600, color: CLAIR.attention,
-                    background: JETONS.attentionVoile, borderRadius: RAYONS.xs, padding: "2px 7px" }}>
-                    J+{(i + 1) * 3}
-                  </span>
-                </div>
-              ))}
-            </div>
+        <div style={{ width: 360, display: "flex", flexDirection: "column", gap: 10 }}>
+          {/* ⚠️ Ce panneau était **entièrement fabriqué** : il listait les actifs
+              du portefeuille en leur collant « Résultats trimestriels » et un
+              « J+3, J+6, J+9 » calculé depuis l'indice de la boucle. Aucune de ces
+              dates n'existait, et rien ne le disait. Il lit désormais les
+              échéances réellement publiées — voir `EvenementsAVenir`, et le
+              service qui l'alimente pour ce que la source sait et ignore. */}
+          <Cadre style={{ flex: 1, padding: "16px 18px", display: "flex", flexDirection: "column", minHeight: 0 }}>
+            <EvenementsAVenir portfolioId={portfolio?.id} />
           </Cadre>
         </div>
       </div>{/* fin Vue Événements */}
