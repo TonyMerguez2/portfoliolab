@@ -190,8 +190,9 @@ def portfolio_event_impact(
     multiplie la statistique — un chiffre affiché comme une mesure et venu de
     l'interface.
 
-    Rend 404 quand le titre n'expose pas ce portefeuille, et un corps vide quand
-    l'échantillon de publications est trop mince pour en tirer quoi que ce soit.
+    Rend **toujours** 200 : un `impact` nul dit que le titre n'expose pas ce
+    portefeuille, ou que ses publications passées sont trop peu nombreuses pour en
+    tirer une statistique. Voir le commentaire au retour.
     """
     from app.services.evenements import _fiche, impact_du_titre
 

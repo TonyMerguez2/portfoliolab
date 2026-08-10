@@ -57,7 +57,11 @@ function Mesure({ titre, valeur, note }: { titre: string; valeur: string; note: 
       background: CLAIR.carteCreuse, border: `1px solid ${CLAIR.bord}`, textAlign: "center",
     }}>
       <div style={{ fontFamily: FONT, fontSize: 9.5, color: CLAIR.texteFaible }}>{titre}</div>
-      <div style={{ ...NUM, fontSize: 15, fontWeight: 700, color: CLAIR.texte, margin: "2px 0 1px" }}>
+      {/* ⚠️ `nowrap`, faute de quoi « ±4,84 % » se coupe entre le nombre et son
+          unité dans une case de cent pixels : le pourcentage passe seul à la ligne
+          et la mesure se lit sur deux étages. Vu sur le panneau réel. */}
+      <div style={{ ...NUM, fontSize: 15, fontWeight: 700, color: CLAIR.texte,
+        margin: "2px 0 1px", whiteSpace: "nowrap" }}>
         {valeur}
       </div>
       <div style={{ fontFamily: FONT, fontSize: 9, color: CLAIR.texteFaible }}>{note}</div>

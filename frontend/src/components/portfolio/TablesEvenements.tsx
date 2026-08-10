@@ -1,4 +1,6 @@
 "use client";
+import { useState } from "react";
+
 import AssetLogo from "@/components/AssetLogo";
 import { qualifierImpact } from "@/components/portfolio/ImpactEvenements";
 import type { AnalyseEvenements } from "@/hooks/useAnalyseEvenements";
@@ -147,6 +149,8 @@ export function ProchainsResultats({
   onChoisirTicker?: (ticker: string | null) => void;
 }) {
   const lignes = evenements.filter(e => e.nature === "resultats").slice(0, limite);
+  /** La ligne sous le curseur — même raison qu'ailleurs : pas d'infobulle native. */
+  const [survol, setSurvol] = useState<number | null>(null);
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 10, minHeight: 0, flex: 1 }}>
@@ -169,18 +173,18 @@ export function ProchainsResultats({
                 onClick={cliquable
                   ? () => onChoisirTicker?.(retenu ? null : e.ticker)
                   : undefined}
-                title={cliquable
-                  ? (retenu
-                      ? "Cliquer pour revenir à la vue d’ensemble"
-                      : `Voir l’impact de ${e.ticker} sur le portefeuille`)
-                  : undefined}
+                onMouseEnter={() => setSurvol(i)}
+                onMouseLeave={() => setSurvol(s => (s === i ? null : s))}
                 style={{
                   display: "flex", alignItems: "center", gap: 9,
                   padding: "9px 8px", margin: "0 -8px",
                   borderBottom: i < lignes.length - 1 ? `1px solid ${CLAIR.bord}` : "none",
                   cursor: cliquable ? "pointer" : "default",
-                  background: retenu ? JETONS.accentVoile : "transparent",
-                  borderRadius: retenu ? RAYONS.xs : 0,
+                  background: retenu
+                    ? JETONS.accentVoile
+                    : (survol === i && cliquable ? CLAIR.carteCreuse : "transparent"),
+                  borderRadius: retenu || survol === i ? RAYONS.xs : 0,
+                  transition: "background 120ms ease",
                 }}>
                 <AssetLogo ticker={e.ticker ?? ""} size={26} radius={7}
                   fallbackBg={CLAIR.carteCreuse} fallbackBorder={CLAIR.bord}

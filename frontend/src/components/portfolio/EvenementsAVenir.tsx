@@ -167,6 +167,15 @@ export default function EvenementsAVenir({
   const [donnees, setDonnees] = useState<Reponse | null>(null);
   const [etat, setEtat] = useState<"charge" | "pret" | "erreur">("charge");
   const [filtre, setFiltre] = useState<Nature | "tous">("tous");
+  /**
+   * La ligne sous le curseur.
+   *
+   * ⚠️ Tenue en état plutôt que confiée à un `title` : l'infobulle native rend
+   * exactement l'encadré gris qu'on a retiré des pastilles du graphique, et elle
+   * le pose par-dessus la liste. Un fond au survol dit la même chose sans rien
+   * recouvrir.
+   */
+  const [survol, setSurvol] = useState<number | null>(null);
 
   useEffect(() => {
     if (!portfolioId) { setEtat("pret"); setDonnees(null); return; }
@@ -324,11 +333,8 @@ export default function EvenementsAVenir({
             onClick={selectionnable(e)
               ? () => onChoisirTicker?.(retenu(e) ? null : e.ticker)
               : undefined}
-            title={selectionnable(e)
-              ? (retenu(e)
-                  ? "Cliquer pour revenir à la vue d’ensemble"
-                  : `Voir l’impact de ${e.ticker} sur le portefeuille`)
-              : undefined}
+            onMouseEnter={() => setSurvol(i)}
+            onMouseLeave={() => setSurvol(s => (s === i ? null : s))}
             style={{
               display: "flex", alignItems: "center", gap: 10, padding: "10px 8px",
               margin: "0 -8px",
@@ -337,8 +343,11 @@ export default function EvenementsAVenir({
               // La ligne retenue porte un fond, non un cerne : un cerne se lit comme
               // une bordure de tableau au milieu d'une liste déjà séparée par des
               // filets. Le rayon accompagne le fond, sinon il ne se voit pas.
-              background: retenu(e) ? JETONS.accentVoile : "transparent",
-              borderRadius: retenu(e) ? RAYONS.xs : 0,
+              background: retenu(e)
+                ? JETONS.accentVoile
+                : (survol === i && selectionnable(e) ? CLAIR.carteCreuse : "transparent"),
+              borderRadius: retenu(e) || survol === i ? RAYONS.xs : 0,
+              transition: "background 120ms ease",
             }}>
             {/* Une crypto ou une action portent leur logo ; un événement macro
                 n'a pas de titre, donc une pastille de sa couleur tient la place
