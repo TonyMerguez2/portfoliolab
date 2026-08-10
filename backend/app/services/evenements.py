@@ -234,12 +234,14 @@ CALENDRIER_MACRO: list[tuple[str, str, str, str | None]] = [
 class Zone:
     """Une zone géographique du calendrier macroéconomique."""
 
-    #: Le code du fichier dans `public/drapeaux`, ou `""` si le projet ne l'a pas.
+    #: Le code ISO à deux lettres du drapeau.
     #:
-    #: ⚠️ Vide plutôt qu'approximatif. Taïwan, la Corée et Singapour n'ont pas de
-    #: fichier : l'interface retombe alors sur sa pastille de couleur, qui ne
-    #: prétend rien. Mettre le drapeau chinois pour Taïwan aurait été à la fois
-    #: faux et politique.
+    #: ⚠️ Renseigné pour **toutes** les zones depuis que l'interface tire ses drapeaux
+    #: d'un jeu de 261 pays au lieu des quinze fichiers du dossier `public/drapeaux`.
+    #: Trois zones s'affichaient sans drapeau faute de fichier — Taïwan et la Corée,
+    #: c'est-à-dire les deux premières expositions asiatiques d'un vrai PEA. Le champ
+    #: reste une chaîne libre et l'interface garde son repli : un code absent du jeu ne
+    #: dessine rien du tout, donc mieux vaut une pastille qu'un trou.
     drapeau: str
     #: Le fuseau dans lequel les heures de cette zone sont exprimées.
     fuseau: str
@@ -252,11 +254,11 @@ ZONES: dict[str, Zone] = {
     "USA": Zone("us", "America/New_York", "US"),
     "Zone euro": Zone("eu", "Europe/Brussels", "EU"),
     # Celles que seul le flux alimente. Le fuseau sert à lire l'heure qu'il donne.
-    "Taïwan": Zone("", "Asia/Taipei", "TW"),
-    "Corée du Sud": Zone("", "Asia/Seoul", "KR"),
+    "Taïwan": Zone("tw", "Asia/Taipei", "TW"),
+    "Corée du Sud": Zone("kr", "Asia/Seoul", "KR"),
     "Chine": Zone("cn", "Asia/Shanghai", "CN"),
     "Hong Kong": Zone("hk", "Asia/Hong_Kong", "HK"),
-    "Singapour": Zone("", "Asia/Singapore", "SG"),
+    "Singapour": Zone("sg", "Asia/Singapore", "SG"),
     "Japon": Zone("jp", "Asia/Tokyo", "JP"),
     "Inde": Zone("in", "Asia/Kolkata", "IN"),
     "Royaume-Uni": Zone("gb", "Europe/London", "GB"),
@@ -271,14 +273,18 @@ ZONES: dict[str, Zone] = {
     # ⚠️ Sans ces zones, une région déduite d'un ticker n'aurait aucun nom et le flux
     # l'aurait écartée en silence : le portefeuille aurait paru ne rien devoir à un
     # pays dont il détient le plus gros titre. Un test le vérifie désormais.
-    "Belgique": Zone("", "Europe/Brussels", "BE"),
-    "Finlande": Zone("", "Europe/Helsinki", "FI"),
-    "Portugal": Zone("", "Europe/Lisbon", "PT"),
-    "Autriche": Zone("", "Europe/Vienna", "AT"),
-    "Irlande": Zone("", "Europe/Dublin", "IE"),
-    "Danemark": Zone("", "Europe/Copenhagen", "DK"),
-    "Suède": Zone("", "Europe/Stockholm", "SE"),
-    "Norvège": Zone("", "Europe/Oslo", "NO"),
+    #
+    # ⚠️ Leurs drapeaux existent tous — un test côté interface lit ces codes dans ce
+    # fichier même et vérifie que le jeu de drapeaux les connaît. Sans ce test, une
+    # coquille ici ne dessinerait simplement rien à l'écran.
+    "Belgique": Zone("be", "Europe/Brussels", "BE"),
+    "Finlande": Zone("fi", "Europe/Helsinki", "FI"),
+    "Portugal": Zone("pt", "Europe/Lisbon", "PT"),
+    "Autriche": Zone("at", "Europe/Vienna", "AT"),
+    "Irlande": Zone("ie", "Europe/Dublin", "IE"),
+    "Danemark": Zone("dk", "Europe/Copenhagen", "DK"),
+    "Suède": Zone("se", "Europe/Stockholm", "SE"),
+    "Norvège": Zone("no", "Europe/Oslo", "NO"),
 }
 
 #: De la région du flux vers le nom de zone, pour ne pas afficher « TW » brut.

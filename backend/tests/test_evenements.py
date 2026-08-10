@@ -169,10 +169,15 @@ class TestCalendrierMacro:
         for _, _, zone, _ in VRAI_CALENDRIER:
             assert zone in ev.ZONES, zone
         for nom, z in ev.ZONES.items():
-            # ⚠️ Un drapeau vide est **permis** : Taïwan, la Corée et Singapour n'ont
-            # pas de fichier dans `public/drapeaux`, et l'interface retombe alors sur
-            # sa pastille. Exiger un code ici aurait poussé à en inventer un.
-            assert z.drapeau == "" or len(z.drapeau) == 2, nom
+            # ⚠️ Un drapeau vide n'est **plus** permis. Il l'était tant que l'interface
+            # tirait ses images des quinze fichiers de `public/drapeaux` — Taïwan, la
+            # Corée et Singapour n'en avaient pas. Le jeu de 261 pays les a tous, donc
+            # une zone sans code est désormais un oubli, pas une limite.
+            #
+            # ⚠️ Ce test ne vérifie que la **forme**. Qu'un code existe dans le jeu de
+            # drapeaux est vérifié côté interface, par un test qui lit ce fichier même :
+            # un code bien formé mais inconnu ne dessine rien du tout à l'écran.
+            assert len(z.drapeau) == 2 and z.drapeau.islower(), nom
             assert ZoneInfo(z.fuseau), nom
             assert len(z.region) == 2, nom
         # Une région ne doit pas désigner deux zones, sinon le flux en perdrait une.
@@ -674,12 +679,16 @@ class TestFluxMacro:
         r = ev.retenir_du_flux(l, {"KR"}, set(), REF)
         assert [e.date for e in r] == ["2026-08-12"]
 
-    def test_une_zone_sans_drapeau_n_en_invente_pas(self):
-        # Taïwan, la Corée et Singapour n'ont pas de fichier dans `public/drapeaux` :
-        # l'interface retombe sur sa pastille. Mettre le drapeau chinois pour Taïwan
-        # aurait été à la fois faux et politique.
+    def test_taiwan_porte_desormais_son_drapeau(self):
+        """
+        ⚠️ Ce test disait l'inverse jusqu'ici, et c'était juste : le dossier d'images du
+        projet n'avait que quinze pays, sans Taïwan ni la Corée — les deux premières
+        expositions asiatiques d'un vrai PEA s'affichaient donc sans drapeau. Le jeu de
+        261 pays les a tous. Le repli existe toujours pour un code inconnu, mais il
+        n'est plus la situation normale de trois zones sur vingt-six.
+        """
         l = [self.ligne("TW", "GDP QQ", "2026-08-14", "Q2")]
-        assert ev.retenir_du_flux(l, {"TW"}, set(), REF)[0].pays is None
+        assert ev.retenir_du_flux(l, {"TW"}, set(), REF)[0].pays == "tw"
 
     def test_le_flux_se_signe(self):
         l = [self.ligne("US", "Retail Sales", "2026-08-14", "Jul")]

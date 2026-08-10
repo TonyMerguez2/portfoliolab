@@ -1,6 +1,8 @@
 "use client";
 import { useEffect, useMemo, useState } from "react";
 
+import { CountryFlagRounded } from "@appica/country-flags-react";
+
 import AssetLogo from "@/components/AssetLogo";
 import type { AnalyseEvenements } from "@/hooks/useAnalyseEvenements";
 import { fichierAgenda, nomFichier } from "@/lib/agenda";
@@ -387,22 +389,24 @@ export default function EvenementsAVenir({
             }}>
             {/* Trois cas, dans cet ordre : le logo d'un titre, le drapeau d'une
                 zone, et à défaut une pastille de couleur.
-                ⚠️ `maxWidth: none` sur le drapeau, sinon la règle globale
-                `img { max-width: 100% }` le rétrécit — le défaut déjà vécu sur le
-                cadreur d'image. Et aucune bordure : c'est elle qui faisait
-                apparaître les liserés bleus dans les coins des logos. */}
+
+                ⚠️ Le drapeau vient du jeu de 261 pays et non plus des quinze fichiers
+                de `public/drapeaux`. Ce dossier n'avait ni Taïwan ni la Corée, c'est-à-
+                dire les deux premières expositions asiatiques d'un vrai PEA, ni aucun
+                pays nordique : ces zones s'affichaient sans drapeau.
+
+                ⚠️ Le repli est conservé, et il sert. Mesuré sur le composant : un code
+                inconnu ne dessine **rien** — pas d'erreur, juste un vide de 28 pixels
+                qui décalerait la ligne — et un code `null` lève. D'où le test sur une
+                chaîne non vide, et la pastille derrière. */}
             {e.ticker && e.nature !== "economique" ? (
               <AssetLogo ticker={e.ticker} size={28} radius={7}
                 fallbackBg={CLAIR.carteCreuse} fallbackBorder={CLAIR.bord}
                 fallbackTextColor={CLAIR.texteSecondaire} bare />
-            ) : e.pays ? (
-              <img src={`/drapeaux/${e.pays}.svg`} alt=""
-                aria-label={`Zone : ${e.ticker ?? ""}`}
-                style={{
-                  width: 28, height: 28, maxWidth: "none", maxHeight: "none",
-                  flexShrink: 0, border: 0, outline: 0, boxShadow: "none",
-                  display: "block",
-                }} />
+            ) : typeof e.pays === "string" && e.pays.length === 2 ? (
+              <CountryFlagRounded code={e.pays} size={28}
+                title={e.ticker ?? undefined}
+                style={{ flexShrink: 0, display: "block" }} />
             ) : (
               <span style={{
                 width: 28, height: 28, borderRadius: 7, flexShrink: 0,
