@@ -14,11 +14,14 @@ import { FONT } from "@/lib/typography";
  * chacune se recompte à la main. L'épargnant en tire ses conclusions ; le logiciel ne les
  * tire pas pour lui.
  *
- * ⚠️ **Le panneau a l'aspect d'une carte mise en avant, et garde le mot « Constats ».**
- * L'habillage — dégradé continu, titre blanc, pictogramme d'étincelle — vient d'une
- * référence fournie. Ce qu'il n'emprunte pas, c'est la promesse : rien ici n'est produit par
- * un modèle, et l'appeler « insight IA » serait une affirmation fausse sur la provenance des
- * chiffres. Le pictogramme signale un encart à lire, pas une intelligence qui aurait parlé.
+ * ⚠️ **Le titre nomme la fonction du panneau, pas une parole du logiciel.** « Aide à la
+ * décision » est vrai : les huit lignes servent à trancher — combien il manque, à quelle date
+ * on arrive, ce que changerait un autre rythme. « Recommandations » serait faux, parce
+ * qu'aucune ligne ne dit quoi faire, et incohérent avec la mention du bas. « Insight IA »
+ * serait faux autrement : rien ici n'est produit par un modèle.
+ *
+ * L'habillage — dégradé continu, titre blanc, pictogramme d'étincelle — vient d'une référence
+ * fournie. Le pictogramme signale un encart à lire, pas une intelligence qui aurait parlé.
  *
  * Séparé de la progression globale parce que la maquette en fait deux cartes distinctes,
  * et parce que les deux ne parlent pas de la même chose : l'une agrège tous les
@@ -89,7 +92,7 @@ export default function ConstatsObjectif({
         </svg>
         <span style={{ fontFamily: FONT, fontSize: 13.5, fontWeight: 700,
           color: "rgba(255,255,255,0.96)", letterSpacing: "-0.01em" }}>
-          Constats
+          Aide à la décision
         </span>
         {objectif && (
           <span style={{ fontFamily: FONT, fontSize: 9.5,
@@ -105,7 +108,7 @@ export default function ConstatsObjectif({
           {objectif
             ? "Rien à constater sans échéance ni hypothèse de rendement : ce panneau ne "
               + "calcule que ce que vos paramètres permettent."
-            : "Choisissez un objectif pour en voir les constats."}
+            : "Choisissez un objectif pour voir ce que vos chiffres impliquent."}
         </p>
       ) : (
         <>
@@ -119,13 +122,14 @@ export default function ConstatsObjectif({
                 color: "rgba(255,255,255,0.88)" }}>{t}</span>
             </div>
           ))}
-          {/* ⚠️ Dit en clair, et d'autant plus nécessaire ici : l'emplacement de la maquette
-              promettait des recommandations, et cet habillage d'encart mis en avant peut
-              faire croire à une parole du logiciel. Ce sont des divisions. */}
+          {/* ⚠️ **Une invitation plutôt qu'une dénégation.** La formule précédente — « ce sont
+              des calculs, pas des recommandations » — disait le vrai mais en creux, et sous un
+              titre parlant de décision elle sonnait comme un dégagement de responsabilité. La
+              même chose se dit par l'endroit : chaque ligne se recompte, et la décision reste
+              à l'épargnant. C'est aussi ce qui rend la carte cohérente avec son titre. */}
           <span style={{ marginTop: 1, fontFamily: FONT, fontSize: 8.5, lineHeight: 1.45,
             color: "rgba(255,255,255,0.80)" }}>
-            Ce sont des calculs, pas des recommandations : ce logiciel ne conseille aucun
-            placement.
+            Chaque ligne est un calcul que vous pouvez refaire. Le choix reste le vôtre.
           </span>
         </>
       )}
