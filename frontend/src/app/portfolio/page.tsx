@@ -39,9 +39,13 @@ import ChiffresRoulants from "@/components/ui/ChiffresRoulants";
 import ImagePortefeuille from "@/components/portfolio/ImagePortefeuille";
 import { useAnalyseEvenements } from "@/hooks/useAnalyseEvenements";
 import { useImpactTitre } from "@/hooks/useImpactTitre";
+import { useObjectifs, type Saisie } from "@/hooks/useObjectifs";
+import { alerteRepartition, avertissementValeur, type Objectif } from "@/lib/objectifs";
 import { useTransparence } from "@/hooks/useTransparence";
 import { DividendesAVenir, ProchainsResultats } from "@/components/portfolio/TablesEvenements";
 import CalendrierEvenements from "@/components/portfolio/CalendrierEvenements";
+import CartesObjectifs from "@/components/portfolio/CartesObjectifs";
+import FormulaireObjectif from "@/components/portfolio/FormulaireObjectif";
 import EvenementsAVenir from "@/components/portfolio/EvenementsAVenir";
 import { HistoriqueEvenements, ImpactPotentiel } from "@/components/portfolio/ImpactEvenements";
 import { API_URL } from "@/lib/api";
@@ -489,6 +493,18 @@ function PortfolioPageInner() {
   const impactTitre = useImpactTitre(portfolio?.id, tickerChoisi);
 
   useEffect(() => { setTickerChoisi(null); }, [portfolio?.id]);
+
+  /**
+   * Les objectifs d'épargne du portefeuille, et la saisie en cours.
+   *
+   * ⚠️ Remplacent trois objectifs écrits dans le code — « Retraite 2035 », « Achat
+   * immobilier », « Indépendance financière » — dont les cibles étaient choisies au
+   * hasard et le montant courant obtenu en multipliant la valeur du portefeuille par
+   * 0,42 et 0,28. Rien n'appartenait à personne.
+   */
+  const objectifs = useObjectifs(portfolio?.id);
+  const [saisieObjectif, setSaisieObjectif] =
+    useState<{ mode: "creation" } | { mode: "edition"; o: Objectif } | null>(null);
 
   /** Écriture désignée en cliquant un repère du graphique. */
   const [operationVisee, setOperationVisee] = useState<number | null>(null);
@@ -1870,9 +1886,15 @@ function PortfolioPageInner() {
         <div style={{ display: "flex", flex: 1, minHeight: 0, gap: 12 }}>
           {/* Le calendrier, nourri de la même liste que le panneau voisin, et
               cliquable : choisir un jour n'affiche que ses échéances. */}
-          <Cadre style={{ width: 300, flexShrink: 0, padding: "16px 18px", overflowY: "auto" }}>
+          {/* ⚠️ Plus de `overflowY: auto` ici. Un mois se lit d'un coup d'œil : une barre
+              de défilement sur un calendrier oblige à faire défiler pour voir la dernière
+              semaine, ce qui en détruit l'intérêt. La grille s'adapte désormais à la
+              hauteur offerte — voir `CalendrierEvenements` — donc il n'y a plus rien à
+              faire défiler. Le cadre devient une colonne pour que le calendrier puisse
+              le remplir. */}
+          <Cadre style={{ width: 300, flexShrink: 0, padding: "16px 18px",
+            display: "flex", flexDirection: "column", minHeight: 0 }}>
             <CalendrierEvenements evenements={echeances}
-              peremption={evtsReponse?.peremption_macro}
               selection={jourChoisi} onJour={setJourChoisi} />
           </Cadre>
 
@@ -1926,30 +1948,53 @@ function PortfolioPageInner() {
       <div style={{ display: dashView === "objectifs" ? "grid" : "none", height: "100%", padding: "14px 14px 10px",
         gridTemplateColumns: "1fr 1fr 1fr", gap: 12, overflow: "hidden" }}>
         <Cadre style={{ padding: "16px 18px", display: "flex", flexDirection: "column", gap: 12 }}>
-          <SectionLabel>OBJECTIFS</SectionLabel>
-          <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-            {[
-              { label: "Retraite 2035",         current: valeurTotale ?? 0, target: 400000, color: "var(--nv-accent)" },
-              { label: "Achat immobilier",       current: (valeurTotale ?? 0) * 0.42, target: 100000, color: "#a78bfa" },
-              { label: "Indépendance financière", current: (valeurTotale ?? 0) * 0.28, target: 500000, color: CLAIR.positif },
-            ].map(g => {
-              const pct = Math.min(100, g.target > 0 ? (g.current / g.target) * 100 : 0);
-              return (
-                <div key={g.label}>
-                  <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
-                    <span style={{ fontSize: 12, fontWeight: 600, color: CLAIR.texteSecondaire }}>{g.label}</span>
-                    <span style={{ fontSize: 12, fontWeight: 700, fontFamily: FONT, color: g.color }}>{pct.toFixed(0)}%</span>
-                  </div>
-                  <div style={{ height: 5, borderRadius: RAYONS.plein, background: CLAIR.carteCreuse }}>
-                    <div style={{ height: "100%", borderRadius: RAYONS.plein, background: g.color, width: `${pct}%`, transition: "width 600ms ease" }} />
-                  </div>
-                  <div style={{ marginTop: 4, fontSize: 10, color: CLAIR.texteFaible, fontFamily: FONT }}>
-                    {Math.round(g.current).toLocaleString("fr-FR")} € / {g.target.toLocaleString("fr-FR")} €
-                  </div>
-                </div>
-              );
-            })}
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10 }}>
+            <SectionLabel>MES OBJECTIFS</SectionLabel>
+            {objectifs.donnees && objectifs.donnees.objectifs.length > 0 && (
+              <button type="button" onClick={() => setSaisieObjectif({ mode: "creation" })}
+                style={{ padding: "5px 11px", borderRadius: RAYONS.plein, cursor: "pointer",
+                  border: `1px solid ${JETONS.accent}`, background: JETONS.accentVoile,
+                  color: CLAIR.accent, fontFamily: FONT, fontSize: 10.5, fontWeight: 700 }}>
+                + Nouvel objectif
+              </button>
+            )}
           </div>
+
+          {/* ⚠️ Trois états distincts, et aucun ne ressemble à une panne. Un portefeuille
+              sans objectif n'est pas cassé : il n'en a pas encore. */}
+          {objectifs.etat === "charge" && (
+            <p style={{ margin: 0, fontFamily: FONT, fontSize: 11, color: CLAIR.texteFaible }}>
+              Chargement des objectifs…
+            </p>
+          )}
+          {objectifs.etat === "erreur" && (
+            <p style={{ margin: 0, fontFamily: FONT, fontSize: 11, color: CLAIR.texteFaible }}>
+              Objectifs indisponibles pour le moment.
+            </p>
+          )}
+          {objectifs.etat === "pret" && objectifs.donnees && (
+            <>
+              {/* Ce qui rend l'avancement discutable, dit avant les chiffres. */}
+              {avertissementValeur(objectifs.donnees.source_valeur,
+                objectifs.donnees.lignes_valorisees, objectifs.donnees.lignes_totales) && (
+                <p style={{ margin: 0, fontFamily: FONT, fontSize: 10, lineHeight: 1.5,
+                  color: JETONS.attention }}>
+                  {avertissementValeur(objectifs.donnees.source_valeur,
+                    objectifs.donnees.lignes_valorisees, objectifs.donnees.lignes_totales)}
+                </p>
+              )}
+              {alerteRepartition(objectifs.donnees.somme_des_parts) && (
+                <p style={{ margin: 0, fontFamily: FONT, fontSize: 10, lineHeight: 1.5,
+                  color: JETONS.attention }}>
+                  {alerteRepartition(objectifs.donnees.somme_des_parts)}
+                </p>
+              )}
+              <CartesObjectifs objectifs={objectifs.donnees.objectifs}
+                onAjouter={() => setSaisieObjectif({ mode: "creation" })}
+                onModifier={o => setSaisieObjectif({ mode: "edition", o })} />
+            </>
+          )}
+
           {scoreSante != null && <>
             <div style={{ width: 1, alignSelf: "stretch", background: CLAIR.carteCreuse }} />
             {/* Santé du portefeuille : le titre chiffré passe en tête, la carte
@@ -2039,6 +2084,29 @@ function PortfolioPageInner() {
           </>}
         </Cadre>
       </div>{/* fin Vue Objectifs */}
+
+      {/* ⚠️ Monté hors des vues : un formulaire rendu à l'intérieur d'un onglet caché
+          par `display: none` reste dans l'arbre mais invisible, et la saisie paraîtrait
+          perdue. Ici il se superpose à la page, quelle que soit la vue active. */}
+      {saisieObjectif && objectifs.donnees && (
+        <FormulaireObjectif
+          initial={saisieObjectif.mode === "edition" ? saisieObjectif.o : null}
+          anneeNaissanceConnue={objectifs.donnees.annee_naissance_connue}
+          erreur={objectifs.erreurEcriture}
+          onFermer={() => setSaisieObjectif(null)}
+          onEnregistrer={async (saisie: Saisie) => {
+            const ok = saisieObjectif.mode === "edition"
+              ? await objectifs.modifier(saisieObjectif.o.id, saisie)
+              : await objectifs.creer(saisie);
+            // ⚠️ On ne ferme que si le serveur a accepté : refermer sur un refus
+            // effacerait la saisie et le motif du refus du même geste.
+            if (ok) setSaisieObjectif(null);
+          }}
+          onSupprimer={saisieObjectif.mode === "edition" ? async () => {
+            if (await objectifs.supprimer(saisieObjectif.o.id)) setSaisieObjectif(null);
+          } : undefined}
+        />
+      )}
 
       {/* ══ VUE TRANSACTIONS ════════════════════════════════════════════════════ */}
       <div style={{ display: dashView === "transactions" ? "flex" : "none", height: "100%", flexDirection: "column", overflow: "hidden" }}>

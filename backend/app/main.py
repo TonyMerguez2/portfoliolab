@@ -17,6 +17,7 @@ from app.api.routes.portfolios import router as portfolios_router
 from app.api.routes.auth import router as auth_router
 from app.api.routes.ticker import router as ticker_router
 from app.api.routes.transactions import router as transactions_router
+from app.api.routes.objectifs import router as objectifs_router
 from app.models.user import User
 # Import pour que SQLAlchemy enregistre le modèle Transaction avant create_all
 from app.core.database import Transaction  # noqa: F401
@@ -70,6 +71,7 @@ app.include_router(portfolios_router)
 app.include_router(auth_router)
 app.include_router(ticker_router)
 app.include_router(transactions_router)
+app.include_router(objectifs_router)
 os.makedirs("uploads", exist_ok=True)
 app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
 

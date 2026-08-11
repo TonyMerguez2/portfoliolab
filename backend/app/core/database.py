@@ -65,6 +65,57 @@ class Portfolio(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
+class Objectif(Base):
+    """
+    Un objectif d'épargne, tel que l'épargnant l'a saisi.
+
+    ⚠️ **Cette table remplace trois objectifs inventés.** L'onglet affichait « Retraite
+    2035 », « Achat immobilier » et « Indépendance financière » écrits dans le code,
+    avec des cibles choisies au hasard et un montant courant obtenu en multipliant la
+    valeur du portefeuille par 0,42 et 0,28. Rien n'appartenait à personne.
+
+    ⚠️ **Rattaché à un portefeuille et non à un compte.** C'est le patrimoine qui
+    avance vers l'objectif, et un épargnant peut mener un PEA de retraite à côté d'un
+    portefeuille d'essai. La suppression en cascade suit : un objectif sans portefeuille
+    ne mesure plus rien.
+    """
+    __tablename__ = "objectifs"
+    id = Column(String, primary_key=True)
+    portfolio_id = Column(String, ForeignKey("portfolios.id", ondelete="CASCADE"),
+                          nullable=False, index=True)
+    nom = Column(String, nullable=False)
+    #: « capital », « capital_age », « achat » ou « revenu_mensuel ».
+    #:
+    #: ⚠️ Les quatre ne se calculent pas pareil — voir `services/objectifs.py`. Un
+    #: revenu mensuel n'est pas un montant : il faut le convertir en capital par un
+    #: taux de retrait avant de le comparer à un patrimoine.
+    genre = Column(String, nullable=False)
+    #: Des euros, ou des euros par mois pour un objectif de revenu.
+    cible = Column(Float, nullable=False)
+    #: L'année civile visée. Absente pour un objectif sans date.
+    echeance_annee = Column(Integer, nullable=True)
+    #: L'âge visé, pour « Retraite à 60 ans ». Sans année de naissance, il reste sans
+    #: date plutôt que de recevoir une échéance supposée.
+    age_cible = Column(Integer, nullable=True)
+    #: La part du portefeuille destinée à cet objectif, en pourcentage.
+    #:
+    #: ⚠️ Saisie et non déduite. Avec plusieurs objectifs sur un même portefeuille, le
+    #: logiciel ne devine pas qu'un tiers est pour la retraite et deux tiers pour
+    #: l'appartement. Cent par défaut, ce qui est juste quand il n'y en a qu'un.
+    part_affectee = Column(Float, nullable=True)
+    versement_mensuel = Column(Float, nullable=True)
+    #: ⚠️ Taux de rendement attendu et inflation sont des **hypothèses de
+    #: l'épargnant**, pas des mesures. Nullables sans valeur par défaut : sans elles la
+    #: projection ne rend rien, plutôt qu'un chiffre d'apparence sûre.
+    taux_attendu = Column(Float, nullable=True)
+    inflation = Column(Float, nullable=True)
+    #: Le taux auquel l'épargnant accepte de ponctionner son capital, en % par an.
+    #: Pré-rempli à 4 % par convention — voir `TAUX_RETRAIT_USUEL` — jamais imposé.
+    taux_retrait = Column(Float, nullable=True)
+    couleur = Column(String, nullable=True)
+    cree_le = Column(DateTime, default=datetime.utcnow)
+
+
 class Transaction(Base):
     __tablename__ = "transactions"
     id           = Column(Integer, primary_key=True, autoincrement=True)
