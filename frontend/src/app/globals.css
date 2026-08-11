@@ -709,3 +709,73 @@ canvas + div {
    voiles de bord, qui disent la même chose sans occuper 6 px sous les cartes.
    `scrollbar-width` couvre Firefox, ce sélecteur couvre WebKit. */
 .novac-rail::-webkit-scrollbar { height: 0; width: 0; }
+
+/* ─────────────────────────────────────────────────────────────
+   Liseré de verre — le bord épais du panneau d'aide à la décision.
+
+   Un anneau dégradé peint sur les bords par un pseudo-élément masqué, et non
+   une bordure : une bordure ne prend qu'une couleur, et l'aspect visé vient
+   justement de ce que la lumière tourne autour du cadre.
+
+   ⚠️ **Le fond de la carte n'est pas touché.** Le masque ne laisse subsister que
+   le rembourrage du pseudo-élément — sa périphérie — et découpe tout l'intérieur.
+   C'est la même mécanique que `.novac-tile::before`, à trois pixels au lieu d'un.
+
+   ⚠️ **Un dégradé conique et non linéaire.** Un dégradé linéaire éclaire deux
+   côtés opposés et laisse les deux autres égaux ; l'aspect de verre poli vient
+   d'une lumière qui fait le tour, avec deux reflets vifs et deux zones sombres à
+   quatre-vingt-dix degrés d'eux. C'est ce que la référence montre : un éclat en
+   haut à gauche, un second en bas à droite, et les diagonales éteintes.
+   ───────────────────────────────────────────────────────────── */
+.novac-verre {
+  position: relative;
+}
+
+.novac-verre::before {
+  content: '';
+  position: absolute;
+  z-index: 3;
+  inset: 0;
+  box-sizing: border-box;
+  border-radius: inherit;
+  /* L'épaisseur du liseré. Trois pixels sur un panneau de 458 de large : la même
+     proportion que la référence, dont le rebord fait environ deux pour cent de la
+     largeur de la carte. */
+  padding: 3px;
+  pointer-events: none;
+  background: conic-gradient(from 205deg at 50% 50%,
+    rgba(255, 255, 255, 0.62) 0deg,
+    rgba(255, 255, 255, 0.10) 34deg,
+    rgba(255, 255, 255, 0.92) 88deg,
+    rgba(255, 255, 255, 0.34) 132deg,
+    rgba(255, 255, 255, 0.06) 186deg,
+    rgba(255, 255, 255, 0.52) 250deg,
+    rgba(255, 255, 255, 0.14) 300deg,
+    rgba(255, 255, 255, 0.62) 360deg);
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+}
+
+/* Un second anneau, d'un pixel, juste en dedans du premier : c'est lui qui donne
+   l'arête. Sans cette ligne, le liseré épais se lit comme un aplati gris ; avec
+   elle, l'œil voit une tranche de matière et non une bande peinte. */
+.novac-verre::after {
+  content: '';
+  position: absolute;
+  z-index: 3;
+  inset: 3px;
+  box-sizing: border-box;
+  border-radius: 15px;
+  padding: 1px;
+  pointer-events: none;
+  background: conic-gradient(from 205deg at 50% 50%,
+    rgba(0, 0, 0, 0.55) 0deg,
+    rgba(255, 255, 255, 0.16) 88deg,
+    rgba(0, 0, 0, 0.45) 186deg,
+    rgba(255, 255, 255, 0.10) 250deg,
+    rgba(0, 0, 0, 0.55) 360deg);
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+}

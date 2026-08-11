@@ -150,12 +150,15 @@ export default function ConstatsObjectif({
     // intérieure ; l'anneau extérieur, son voile et les deux rayons concentriques restent
     // ceux des panneaux voisins. Seul le liseré change : un blanc translucide au lieu du gris
     // opaque, pour que le bord se lise sur un fond noir sans le trancher.
-    <Cadre style={{
+    <Cadre classeCarte="novac-verre" style={{
       flexShrink: 0,
       display: "flex", flexDirection: "column", gap: 10, minHeight: 0,
       background: `${CIEL}, ${FOND_ESPACE}`,
-      border: "1px solid rgba(255,255,255,0.13)",
-      padding: "14px 16px",
+      // ⚠️ Pas de bordure : le liseré de verre est peint par `.novac-verre::before`, et une
+      // bordure par-dessus l'aurait doublé d'un trait plat. Le rembourrage compense les
+      // trois pixels que l'anneau occupe, pour que le texte ne vienne pas s'y coller.
+      border: "none",
+      padding: "16px 18px",
     }}>
       <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
         <svg width="19" height="19" viewBox="0 0 24 24" fill="currentColor"

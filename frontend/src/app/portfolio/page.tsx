@@ -1999,12 +1999,13 @@ function PortfolioPageInner() {
                   objectifs.donnees.lignes_valorisees, objectifs.donnees.lignes_totales)}
               </p>
             )}
-            {alerteRepartition(objectifs.donnees.somme_des_parts) && (
-              <p style={{ margin: 0, fontFamily: FONT, fontSize: 10, lineHeight: 1.5,
-                color: JETONS.attention }}>
-                {alerteRepartition(objectifs.donnees.somme_des_parts)}
-              </p>
-            )}
+            {/* ⚠️ **L'alerte de répartition a quitté le haut de l'onglet, elle n'a pas
+                disparu.** Elle avertit d'un vrai défaut — au-delà de cent pour cent, le même
+                euro compte pour plusieurs objectifs, et le total « Déjà constitué » compte
+                alors deux fois le portefeuille. La supprimer laisserait un chiffre
+                silencieusement gonflé. Elle est donc descendue dans « Progression globale »,
+                au pied du nombre qu'elle concerne : c'est là qu'elle sert, et non en bandeau
+                au-dessus de cartes qui, elles, sont justes. */}
             <div style={{ flexShrink: 0 }}>
               <CartesObjectifs objectifs={listeObjectifs}
                 onAjouter={() => setSaisieObjectif({ mode: "creation" })}
@@ -2042,7 +2043,8 @@ function PortfolioPageInner() {
                 en reste plus de 200 pour les constats, qui en réclament 185. */}
             <Cadre style={{ padding: "14px 16px", display: "flex",
               flexDirection: "column", flexShrink: 0 }}>
-              <ProgressionGlobale objectifs={listeObjectifs} />
+              <ProgressionGlobale objectifs={listeObjectifs}
+                sommeDesParts={objectifs.donnees?.somme_des_parts ?? null} />
             </Cadre>
             {/* ⚠️ **Le panneau porte son propre `Cadre`**, contrairement à ses deux voisins
                 qui reçoivent le leur ici. Son dégradé remplace le fond de la carte

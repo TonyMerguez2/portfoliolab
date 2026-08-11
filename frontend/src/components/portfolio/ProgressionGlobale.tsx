@@ -1,5 +1,7 @@
 "use client";
-import { agregat, euros, pourcentageLisible, type Objectif } from "@/lib/objectifs";
+import {
+  agregat, alerteRepartition, euros, pourcentageLisible, type Objectif,
+} from "@/lib/objectifs";
 import { CLAIR, JETONS } from "@/lib/palette";
 import { FONT, NUM } from "@/lib/typography";
 
@@ -46,8 +48,20 @@ function Ligne({ titre, valeur }: { titre: string; valeur: string }) {
   );
 }
 
-export default function ProgressionGlobale({ objectifs }: { objectifs: Objectif[] }) {
+export default function ProgressionGlobale({ objectifs, sommeDesParts }: {
+  objectifs: Objectif[];
+  /**
+   * La somme des parts affectées, telle que le serveur la rend — non normalisée.
+   *
+   * ⚠️ Elle arrive jusqu'ici parce que c'est le total « Déjà constitué » qu'elle fausse : au
+   * delà de cent pour cent, le même euro est compté pour plusieurs objectifs. L'alerte vivait
+   * en bandeau au-dessus des cartes, qui sont justes ; elle appartient au nombre qui ne l'est
+   * pas.
+   */
+  sommeDesParts?: number | null;
+}) {
   const a = agregat(objectifs);
+  const alerte = alerteRepartition(sommeDesParts);
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 6, minHeight: 0, flex: 1 }}>
@@ -92,6 +106,18 @@ export default function ProgressionGlobale({ objectifs }: { objectifs: Objectif[
               color: CLAIR.texteFaible }}>
               {a.horsUnite} plafond{a.horsUnite > 1 ? "s" : ""} de versements hors total :
               vos versements sont déjà compris dans votre patrimoine.
+            </p>
+          )}
+
+          {/* ⚠️ **Descendue du bandeau de l'onglet, au pied du nombre qu'elle concerne.** Au
+              delà de cent pour cent, le même euro compte pour plusieurs objectifs et « Déjà
+              constitué » compte deux fois le portefeuille : c'est ce total-là qui est faussé,
+              pas les cartes au-dessus. En orange, parce que c'est une erreur de saisie à
+              corriger et non une convention assumée. */}
+          {alerte && (
+            <p style={{ margin: 0, fontFamily: FONT, fontSize: 9.5, lineHeight: 1.5,
+              color: JETONS.attention }}>
+              {alerte}
             </p>
           )}
 
