@@ -20,16 +20,17 @@ import { FONT, NUM } from "@/lib/typography";
  */
 
 function Anneau({ part }: { part: number }) {
-  const r = 34, c = 2 * Math.PI * r;
+  const r = 23, c = 2 * Math.PI * r;
   const couleur = part >= 66 ? JETONS.positif : part >= 33 ? JETONS.accent : JETONS.attention;
   return (
-    <svg width="86" height="86" viewBox="0 0 86 86" aria-hidden="true">
-      <circle cx="43" cy="43" r={r} fill="none" stroke={CLAIR.carteCreuse} strokeWidth="7" />
-      <circle cx="43" cy="43" r={r} fill="none" stroke={couleur} strokeWidth="7"
+    <svg width="58" height="58" viewBox="0 0 58 58" aria-hidden="true"
+      style={{ flexShrink: 0 }}>
+      <circle cx="29" cy="29" r={r} fill="none" stroke={CLAIR.carteCreuse} strokeWidth="5" />
+      <circle cx="29" cy="29" r={r} fill="none" stroke={couleur} strokeWidth="5"
         strokeLinecap="round" strokeDasharray={`${(part / 100) * c} ${c}`}
-        transform="rotate(-90 43 43)" />
-      <text x="43" y="48" textAnchor="middle"
-        style={{ ...NUM, fontSize: 18, fontWeight: 700, fill: CLAIR.texte }}>
+        transform="rotate(-90 29 29)" />
+      <text x="29" y="33" textAnchor="middle"
+        style={{ ...NUM, fontSize: 12.5, fontWeight: 700, fill: CLAIR.texte }}>
         {pourcentageLisible(part)}
       </text>
     </svg>
@@ -39,8 +40,8 @@ function Anneau({ part }: { part: number }) {
 function Ligne({ titre, valeur }: { titre: string; valeur: string }) {
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 1 }}>
-      <span style={{ fontFamily: FONT, fontSize: 9.5, color: CLAIR.texteFaible }}>{titre}</span>
-      <span style={{ ...NUM, fontSize: 13.5, fontWeight: 700, color: CLAIR.texte }}>{valeur}</span>
+      <span style={{ fontFamily: FONT, fontSize: 9, color: CLAIR.texteFaible }}>{titre}</span>
+      <span style={{ ...NUM, fontSize: 12.5, fontWeight: 700, color: CLAIR.texte }}>{valeur}</span>
     </div>
   );
 }
@@ -49,7 +50,7 @@ export default function ProgressionGlobale({ objectifs }: { objectifs: Objectif[
   const a = agregat(objectifs);
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 14, minHeight: 0, flex: 1 }}>
+    <div style={{ display: "flex", flexDirection: "column", gap: 6, minHeight: 0, flex: 1 }}>
       <span style={{ fontFamily: FONT, fontSize: 13, fontWeight: 600, color: CLAIR.texte }}>
         Progression globale
       </span>
@@ -60,9 +61,9 @@ export default function ProgressionGlobale({ objectifs }: { objectifs: Objectif[
         </p>
       ) : (
         <>
-          <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 11 }}>
             <Anneau part={a.part} />
-            <div style={{ display: "flex", flexDirection: "column", gap: 8, minWidth: 0 }}>
+            <div style={{ display: "flex", flexDirection: "column", gap: 3, minWidth: 0 }}>
               <Ligne titre="Somme de vos cibles" valeur={euros(a.total)} />
               <Ligne titre="Déjà constitué" valeur={euros(a.actuel)} />
               <Ligne titre="Reste à atteindre" valeur={euros(a.reste)} />
@@ -82,8 +83,9 @@ export default function ProgressionGlobale({ objectifs }: { objectifs: Objectif[
 
           <p style={{ margin: 0, fontFamily: FONT, fontSize: 9, lineHeight: 1.5,
             color: CLAIR.texteFaible }}>
-            Somme de cibles d’échéances différentes : un euro de 2044 n’a pas le pouvoir
-            d’achat d’un euro de 2031.
+            {/* Resserré à une ligne : la mise en garde reste, sans manger la place des
+                constats voisins. */}
+            Cibles d’échéances différentes : un euro futur vaut moins qu’aujourd’hui.
           </p>
         </>
       )}

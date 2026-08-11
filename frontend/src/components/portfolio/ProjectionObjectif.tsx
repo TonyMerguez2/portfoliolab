@@ -150,9 +150,10 @@ export default function ProjectionObjectif({
         const sansDispersion = p.volatilite == null;
 
         return (
-          <div style={{ display: "flex", gap: 16, minHeight: 0, flexWrap: "wrap" }}>
+          <div style={{ display: "flex", gap: 14, flex: 1, minHeight: 0 }}>
             {/* ── Colonne des mesures ──────────────────────────────────────── */}
-            <div style={{ display: "flex", flexDirection: "column", gap: 12, width: 176 }}>
+            <div style={{ display: "flex", flexDirection: "column", gap: 9, width: 168,
+              flexShrink: 0, overflowY: "auto" }}>
               <Mesure titre={`Valeur médiane dans ${ans} an${ans > 1 ? "s" : ""}`}
                 valeur={p.mediane != null ? euros(p.mediane) : "—"}
                 note={p.objectif.projetee_en_euros_constants != null
@@ -195,9 +196,22 @@ export default function ProjectionObjectif({
             </div>
 
             {/* ── La courbe ────────────────────────────────────────────────── */}
-            <div style={{ flex: 1, minWidth: 300 }}>
+            <div style={{ flex: 1, minWidth: 260, display: "flex",
+              flexDirection: "column", minHeight: 0 }}>
+              {/* ⚠️ `preserveAspectRatio="none"` et une hauteur en pourcentage : la courbe
+                  doit remplir la place qu'on lui laisse, et cette place varie avec la
+                  fenêtre. Avec `height: auto`, le SVG imposait sa proportion — 240 sur
+                  620, soit 340 pixels de haut dans un panneau de 880 de large — et
+                  poussait la page à défiler.
+
+                  L'étirement non uniforme est acceptable ici : les deux axes d'un
+                  graphique sont indépendants et gradués, la proportion n'y porte aucune
+                  information. Les tracés portent `vector-effect: non-scaling-stroke`,
+                  sans quoi l'étirement épaissirait les traits dans un seul sens. */}
               <svg viewBox={`0 0 ${CADRE.largeur} ${CADRE.hauteur}`}
-                style={{ width: "100%", height: "auto", display: "block" }}
+                preserveAspectRatio="none"
+                style={{ width: "100%", height: "100%", flex: 1, minHeight: 0,
+                  display: "block" }}
                 role="img"
                 // ⚠️ Le nom entre guillemets, pour éviter l'élision. « Projection de
                 // Indépendance financière » se lisait à l'écran ; l'apostrophe dépend du
@@ -206,7 +220,8 @@ export default function ProjectionObjectif({
                 {graduations(bas, haut).map(v => (
                   <g key={v}>
                     <line x1={CADRE.marge.gauche} x2={CADRE.largeur - CADRE.marge.droite}
-                      y1={y(v)} y2={y(v)} stroke={CLAIR.bord} strokeWidth="1" />
+                      y1={y(v)} y2={y(v)} stroke={CLAIR.bord} strokeWidth="1"
+                      vectorEffect="non-scaling-stroke" />
                     <text x={CADRE.marge.gauche - 6} y={y(v) + 3} textAnchor="end"
                       style={{ ...NUM, fontSize: 8.5, fill: CLAIR.texteFaible }}>
                       {montantCourt(v)}
@@ -226,14 +241,16 @@ export default function ProjectionObjectif({
                 {p.requis != null && p.requis <= haut && (
                   <line x1={CADRE.marge.gauche} x2={CADRE.largeur - CADRE.marge.droite}
                     y1={y(p.requis)} y2={y(p.requis)} stroke={CLAIR.texteSecondaire}
-                    strokeWidth="1.2" strokeDasharray="3 3" />
+                    strokeWidth="1.2" strokeDasharray="3 3"
+                    vectorEffect="non-scaling-stroke" />
                 )}
 
                 {COURBES.filter(c => !sansDispersion || c.centile === "50").map(c => (
                   <path key={c.centile}
                     d={chemin(p.mois, p.enveloppes[c.centile], x, y)}
                     fill="none" stroke={c.couleur} strokeWidth="1.8"
-                    strokeDasharray={c.tirets} strokeLinejoin="round" />
+                    strokeDasharray={c.tirets} strokeLinejoin="round"
+                    vectorEffect="non-scaling-stroke" />
                 ))}
 
                 {[p.mois[0], p.mois[Math.floor(p.mois.length / 2)],
@@ -246,7 +263,8 @@ export default function ProjectionObjectif({
                 ))}
               </svg>
 
-              <div style={{ display: "flex", gap: 12, flexWrap: "wrap", marginTop: 6 }}>
+              <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 5,
+                flexShrink: 0 }}>
                 {COURBES.filter(c => !sansDispersion || c.centile === "50").map(c => (
                   <span key={c.centile} style={{ display: "inline-flex", alignItems: "center",
                     gap: 5, fontFamily: FONT, fontSize: 9.5, color: CLAIR.texteFaible }}>
@@ -272,8 +290,8 @@ export default function ProjectionObjectif({
                   les marchés réels ont des queues plus épaisses, donc les extrêmes sont
                   sous-estimés. Sans cette phrase, trois courbes lisses passent pour une
                   prévision. */}
-              <p style={{ margin: "8px 0 0", fontFamily: FONT, fontSize: 9,
-                lineHeight: 1.5, color: CLAIR.texteFaible }}>
+              <p style={{ margin: "6px 0 0", fontFamily: FONT, fontSize: 8.5,
+                lineHeight: 1.45, color: CLAIR.texteFaible, flexShrink: 0 }}>
                 Ces courbes sont des centiles de {" "}
                 <span style={{ ...NUM }}>2 000</span> tirages, pas trois scénarios : aucune
                 n’est une trajectoire que le portefeuille suivrait. Le modèle suppose des
@@ -287,8 +305,8 @@ export default function ProjectionObjectif({
                   renseigné » plutôt qu'une valeur par défaut : un taux affiché sans avoir
                   été choisi se lit comme une donnée du logiciel, et la projection qu'il
                   produit comme une prévision. */}
-              <div style={{ display: "flex", gap: 18, flexWrap: "wrap", marginTop: 12,
-                paddingTop: 10, borderTop: `1px solid ${CLAIR.bord}` }}>
+              <div style={{ display: "flex", gap: 16, flexWrap: "wrap", marginTop: 8,
+                paddingTop: 8, borderTop: `1px solid ${CLAIR.bord}`, flexShrink: 0 }}>
                 {[
                   { titre: "Versement mensuel",
                     valeur: p.objectif.versement_mensuel != null

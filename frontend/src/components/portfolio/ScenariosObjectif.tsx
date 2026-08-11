@@ -1,6 +1,5 @@
 "use client";
 import type { Projection } from "@/hooks/useProjection";
-import { bornes, chemin, echelles } from "@/lib/courbeProjection";
 import { euros } from "@/lib/objectifs";
 import { CLAIR, JETONS, RAYONS } from "@/lib/palette";
 import { FONT, NUM } from "@/lib/typography";
@@ -20,16 +19,10 @@ import { FONT, NUM } from "@/lib/typography";
  */
 
 const CARTES = [
-  { centile: "95", titre: "95ᵉ centile", couleur: JETONS.positif,
-    sens: "95 % des tirages terminent en dessous" },
-  { centile: "50", titre: "Médiane", couleur: JETONS.accent,
-    sens: "la moitié des tirages terminent en dessous" },
-  { centile: "5", titre: "5ᵉ centile", couleur: JETONS.negatif,
-    sens: "5 % des tirages terminent en dessous" },
+  { centile: "95", titre: "95ᵉ centile", couleur: JETONS.positif },
+  { centile: "50", titre: "Médiane", couleur: JETONS.accent },
+  { centile: "5", titre: "5ᵉ centile", couleur: JETONS.negatif },
 ];
-
-const CADRE = { largeur: 200, hauteur: 44,
-  marge: { haut: 4, bas: 4, gauche: 2, droite: 2 } };
 
 export default function ScenariosObjectif({ projection }: { projection: Projection | null }) {
   if (!projection?.possible) {
@@ -48,9 +41,6 @@ export default function ScenariosObjectif({ projection }: { projection: Projecti
 
   const p = projection;
   const sansDispersion = p.volatilite == null;
-  const toutes = Object.values(p.enveloppes).flat();
-  const { bas, haut } = bornes(toutes);
-
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 12, minHeight: 0, flex: 1 }}>
       <div style={{ display: "flex", alignItems: "baseline", gap: 8, flexWrap: "wrap" }}>
@@ -59,6 +49,14 @@ export default function ScenariosObjectif({ projection }: { projection: Projecti
         </span>
         <span style={{ fontFamily: FONT, fontSize: 9.5, color: CLAIR.texteFaible }}>
           {p.objectif.nom}
+        </span>
+        {/* ⚠️ Le sens des centiles, dit **une fois** au lieu de trois. La formulation
+            reste exacte — un centile est une valeur sous laquelle une part des tirages
+            termine — et « 25 % » de la maquette n'apparaît nulle part, puisque ce chiffre
+            n'existe pas : ce sont des poids inventés. */}
+        <span style={{ fontFamily: FONT, fontSize: 9, color: CLAIR.texteFaible,
+          marginLeft: "auto" }}>
+          chaque centile est la valeur sous laquelle cette part des tirages termine
         </span>
       </div>
 
@@ -74,11 +72,10 @@ export default function ScenariosObjectif({ projection }: { projection: Projecti
           {CARTES.map(c => {
             const serie = p.enveloppes[c.centile] ?? [];
             const fin = serie[serie.length - 1];
-            const { x, y } = echelles(p.mois, bas, haut, CADRE);
             const atteint = p.requis != null && fin != null && fin >= p.requis;
             return (
               <div key={c.centile} style={{
-                display: "flex", flexDirection: "column", gap: 7, padding: "11px 12px",
+                display: "flex", flexDirection: "column", gap: 5, padding: "8px 11px",
                 borderRadius: RAYONS.sm, border: `1px solid ${CLAIR.bord}`,
                 background: CLAIR.carteCreuse,
               }}>
@@ -95,27 +92,18 @@ export default function ScenariosObjectif({ projection }: { projection: Projecti
                   )}
                 </div>
 
-                <div>
-                  <span style={{ fontFamily: FONT, fontSize: 9, color: CLAIR.texteFaible }}>
-                    Valeur à l’échéance
-                  </span>
-                  <div style={{ ...NUM, fontSize: 15, fontWeight: 700, color: CLAIR.texte }}>
-                    {fin != null ? euros(fin) : "—"}
-                  </div>
+                {/* L'étiquette « Valeur à l'échéance » a sauté : le montant suit
+                    immédiatement le nom du centile, et la légende de l'axe des temps le
+                    situe déjà. Une ligne de moins par carte, trois au total. */}
+                <div style={{ ...NUM, fontSize: 14, fontWeight: 700, color: CLAIR.texte }}>
+                  {fin != null ? euros(fin) : "—"}
                 </div>
 
-                <svg viewBox={`0 0 ${CADRE.largeur} ${CADRE.hauteur}`}
-                  style={{ width: "100%", height: 44, display: "block" }} aria-hidden="true">
-                  <path d={chemin(p.mois, serie, x, y)} fill="none" stroke={c.couleur}
-                    strokeWidth="1.6" strokeLinejoin="round" />
-                </svg>
-
-                {/* ⚠️ Le sens du centile, écrit en clair. « 25 % » aurait laissé croire à
-                    une chance attachée à ce scénario ; ce n'est pas ce que le nombre dit. */}
-                <span style={{ fontFamily: FONT, fontSize: 9, lineHeight: 1.45,
-                  color: CLAIR.texteFaible }}>
-                  {c.sens}
-                </span>
+                {/* ⚠️ La vignette de silhouette a été retirée : elle retraçait, sur
+                    deux centimètres, la courbe que le panneau du dessus dessine en grand.
+                    Vingt-deux pixels par carte rendus à la colonne voisine, où « Progression
+                    globale » manquait de place et défilait. Un doublon décoratif ne vaut pas
+                    un contenu tronqué. */}
 
                 {p.requis != null && (
                   <span style={{

@@ -1974,9 +1974,17 @@ function PortfolioPageInner() {
           ⚠️ « Meilleurs contributeurs » et « Répartition par classe » ont quitté cet
           onglet : la maquette ne les y met pas, et la vue générale liste déjà chaque
           ligne avec sa performance. Ils y restaient d'un état antérieur de la page. */}
+      {/* ⚠️ **Aucun défilement : tout doit tenir d'un coup d'œil.** La maquette regroupe
+          l'information sur un écran, et une page qui défile cache ce qu'on est venu
+          comparer. Mesuré avant correction : 1 044 pixels de contenu pour 765 de
+          disponibles. Les deux rangées de bord gardent leur hauteur naturelle, la
+          projection absorbe le reste, et ses panneaux rétrécissent avec elle. */}
       <div style={{ display: dashView === "objectifs" ? "flex" : "none",
-        flexDirection: "column", height: "100%", padding: "14px 14px 10px", gap: 12,
-        overflowY: "auto", overflowX: "hidden" }}>
+        // ⚠️ Écarts à 8 pixels et non 10 : les trois interstices rendent six pixels, soit
+        // exactement ce qui manquait aux constats. Le dernier réglage d'un ajustement où
+        // chaque panneau se disputait la même hauteur.
+        flexDirection: "column", height: "100%", padding: "12px 14px 8px", gap: 8,
+        overflow: "hidden" }}>
 
         {/* ── Rangée 1 : les objectifs ──────────────────────────────────────── */}
         <div style={{ display: "flex", alignItems: "center",
@@ -2027,10 +2035,14 @@ function PortfolioPageInner() {
         )}
 
         {/* ── Rangée 2 : projection à gauche, deux cartes à droite ──────────── */}
-        <div style={{ display: "grid", gap: 12, flexShrink: 0,
-          gridTemplateColumns: "minmax(0, 2fr) minmax(0, 1fr)" }}>
-          <Cadre style={{ padding: "16px 18px", display: "flex",
-            flexDirection: "column", minHeight: 360 }}>
+        <div style={{ display: "grid", gap: 10, flex: 1, minHeight: 0,
+          // ⚠️ 1,7 pour 1 et non 2 pour 1 : chaque retour à la ligne évité dans la
+          // colonne de droite lui rend une quinzaine de pixels, et c'est là que le
+          // contenu manquait de place. La courbe y perd quarante pixels de large, ce
+          // qu'elle absorbe sans rien perdre.
+          gridTemplateColumns: "minmax(0, 1.7fr) minmax(0, 1fr)" }}>
+          <Cadre style={{ padding: "14px 16px", display: "flex",
+            flexDirection: "column", minHeight: 0 }}>
             <ProjectionObjectif
               objectifs={listeObjectifs}
               choisi={projeteEffectif}
@@ -2040,13 +2052,25 @@ function PortfolioPageInner() {
               onParametres={o => setSaisieObjectif({ mode: "edition", o })} />
           </Cadre>
 
-          <div style={{ display: "flex", flexDirection: "column", gap: 12, minWidth: 0 }}>
-            <Cadre style={{ padding: "16px 18px", display: "flex",
-              flexDirection: "column", minHeight: 172 }}>
+          <div style={{ display: "flex", flexDirection: "column", gap: 10,
+            minWidth: 0, minHeight: 0 }}>
+            {/* ⚠️ **La progression prend sa hauteur naturelle, les constats absorbent le
+                reste** — et cet ordre a été inversé une fois. Avec un partage à parts
+                égales, la progression manquait de deux pixels et affichait une barre de
+                défilement pour rien ; avec la progression en premier servi mais son
+                contenu d'origine, c'était l'inverse et les constats tombaient à leur seul
+                titre. Après compression des deux, la progression tient en 150 pixels et il
+                en reste plus de 200 pour les constats, qui en réclament 185. */}
+            <Cadre style={{ padding: "14px 16px", display: "flex",
+              flexDirection: "column", flexShrink: 0 }}>
               <ProgressionGlobale objectifs={listeObjectifs} />
             </Cadre>
-            <Cadre style={{ padding: "16px 18px", display: "flex",
-              flexDirection: "column", minHeight: 172 }}>
+            {/* ⚠️ Seule carte à défiler, et c'est un arbitrage assumé : les constats sont
+                du texte, leur nombre varie avec les paramètres saisis, et les laisser
+                pousser la rangée ferait défiler la page entière. Un panneau qui défile
+                vaut mieux qu'un écran qui défile. */}
+            <Cadre style={{ padding: "14px 16px", display: "flex",
+              flexDirection: "column", flex: 1, minHeight: 0, overflowY: "auto" }}>
               <ConstatsObjectif
                 objectif={listeObjectifs.find(o => o.id === projeteEffectif) ?? null}
                 valeurPortefeuille={objectifs.donnees?.valeur_portefeuille ?? null}
@@ -2057,8 +2081,8 @@ function PortfolioPageInner() {
         </div>
 
         {/* ── Rangée 3 : la dispersion des tirages ──────────────────────────── */}
-        <Cadre style={{ padding: "16px 18px", display: "flex", flexDirection: "column",
-          minHeight: 250, flexShrink: 0 }}>
+        <Cadre style={{ padding: "12px 16px", display: "flex", flexDirection: "column",
+          flexShrink: 0 }}>
           <ScenariosObjectif projection={projection.projection} />
         </Cadre>
 

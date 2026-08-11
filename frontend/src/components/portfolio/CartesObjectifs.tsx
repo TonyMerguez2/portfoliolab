@@ -52,18 +52,18 @@ function Carte({ o, onModifier }: { o: Objectif; onModifier?: (o: Objectif) => v
     <div
       onClick={onModifier ? () => onModifier(o) : undefined}
       style={{
-        display: "flex", flexDirection: "column", gap: 10,
-        padding: "14px 16px", borderRadius: RAYONS.sm,
+        display: "flex", flexDirection: "column", gap: 7,
+        padding: "11px 13px", borderRadius: RAYONS.sm,
         border: `1px solid ${CLAIR.bord}`, background: CLAIR.carteCreuse,
         cursor: onModifier ? "pointer" : "default", minWidth: 0,
       }}>
       <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
         <span style={{
-          width: 34, height: 34, borderRadius: RAYONS.xs, flexShrink: 0,
+          width: 28, height: 28, borderRadius: RAYONS.xs, flexShrink: 0,
           display: "flex", alignItems: "center", justifyContent: "center",
           background: couleur + "1E", border: `1px solid ${couleur}33`,
         }}>
-          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke={couleur}
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke={couleur}
             strokeWidth={1.7} strokeLinecap="round" strokeLinejoin="round"
             aria-hidden="true">
             <path d={GLYPHE[o.genre]} />
@@ -79,7 +79,7 @@ function Carte({ o, onModifier }: { o: Objectif; onModifier?: (o: Objectif) => v
       </div>
 
       <div>
-        <div style={{ ...NUM, fontSize: 18, fontWeight: 700, color: CLAIR.texte,
+        <div style={{ ...NUM, fontSize: 16, fontWeight: 700, color: CLAIR.texte,
           lineHeight: 1.15 }}>
           {montantCible(o)}
         </div>
@@ -153,7 +153,7 @@ export default function CartesObjectifs({
         <button type="button" onClick={onAjouter}
           style={{
             display: "flex", flexDirection: "column", alignItems: "center",
-            justifyContent: "center", gap: 6, minHeight: 132, cursor: "pointer",
+            justifyContent: "center", gap: 5, minHeight: 112, cursor: "pointer",
             borderRadius: RAYONS.sm, border: `1px dashed ${CLAIR.bord}`,
             background: "transparent", color: CLAIR.texteFaible, fontFamily: FONT,
           }}>

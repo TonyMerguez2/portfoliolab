@@ -36,7 +36,10 @@ export default function ConstatsObjectif({
     ? observations(objectif, valeurPortefeuille, medianeProjection) : [];
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 10, minHeight: 0, flex: 1 }}>
+    // ⚠️ Typographie resserrée plutôt que contenu caché. La carte laissait 141 pixels
+    // pour 207 de constats, donc deux des cinq derrière un défilement interne — ce qui
+    // est le défaut qu'on cherche à supprimer, en plus petit.
+    <div style={{ display: "flex", flexDirection: "column", gap: 6, minHeight: 0, flex: 1 }}>
       <div style={{ display: "flex", alignItems: "baseline", gap: 8, flexWrap: "wrap" }}>
         <span style={{ fontFamily: FONT, fontSize: 13, fontWeight: 600, color: CLAIR.texte }}>
           Constats
@@ -59,16 +62,16 @@ export default function ConstatsObjectif({
       ) : (
         <>
           {constats.map(t => (
-            <div key={t} style={{ display: "flex", gap: 7, alignItems: "flex-start" }}>
-              <span style={{ width: 4, height: 4, borderRadius: "50%", flexShrink: 0,
+            <div key={t} style={{ display: "flex", gap: 6, alignItems: "flex-start" }}>
+              <span style={{ width: 3, height: 3, borderRadius: "50%", flexShrink: 0,
                 background: CLAIR.texteFaible, marginTop: 5 }} />
-              <span style={{ fontFamily: FONT, fontSize: 10.5, lineHeight: 1.55,
+              <span style={{ fontFamily: FONT, fontSize: 9.5, lineHeight: 1.45,
                 color: CLAIR.texteSecondaire }}>{t}</span>
             </div>
           ))}
           {/* ⚠️ Dit en clair, parce que l'emplacement de la maquette promettait des
               recommandations et qu'un lecteur peut s'attendre à en trouver ici. */}
-          <span style={{ marginTop: 2, fontFamily: FONT, fontSize: 9, lineHeight: 1.5,
+          <span style={{ marginTop: 1, fontFamily: FONT, fontSize: 8.5, lineHeight: 1.4,
             color: CLAIR.texteFaible }}>
             Ce sont des calculs, pas des recommandations : ce logiciel ne conseille aucun
             placement.
