@@ -1,6 +1,4 @@
 "use client";
-import type { CSSProperties } from "react";
-
 import TileCard from "@/components/TileCard";
 import type { Objectif } from "@/lib/objectifs";
 import {
@@ -45,42 +43,31 @@ const GLYPHE: Record<Objectif["genre"], string> = {
   plafond_versements: "M4 4h16M12 20V8m0 0-4 4m4-4 4 4",
 };
 
-/** Le pas du semis, en pixels. Assez large pour que le motif se lise, assez serré pour
- *  qu'il couvre la carte sans faire de vide. */
-const PAS_SEMIS = 52;
+/** Le côté de l'icône, aligné sur celui du logo d'une carte d'actif. */
+const COTE_ICONE = 28;
 
 /**
- * Le glyphe du genre, semé en fond de carte.
+ * L'icône du genre, simplement posée.
  *
- * ⚠️ **Remplace un glyphe gravé dans l'en-tête, qui ne rendait pas.** L'effet de creux —
- * un tracé sombre surmonté d'une copie claire décalée — demande une lumière franche pour se
- * lire. Sur une carte translucide dont le fond varie d'un angle à l'autre, il ressemblait
- * surtout à un dessin flou. Semé et discret, le même glyphe habille la surface au lieu de
- * réclamer une lecture.
+ * ⚠️ **Deux essais plus élaborés ont été écartés, dans cet ordre.** Un glyphe *gravé* —
+ * tracé sombre surmonté d'une copie claire décalée — demande une lumière franche pour se
+ * lire : sur une carte translucide dont le fond varie d'un angle à l'autre, il ressemblait à
+ * un dessin flou. Puis le même glyphe *semé* en filigrane sur toute la carte : lisible, mais
+ * c'était un monogramme, et une carte qui porte déjà quatre chiffres n'a pas besoin d'un
+ * motif de plus. Reste une icône.
  *
- * ⚠️ **Blanc et non de la couleur de l'objectif, pour une raison technique et non
- * esthétique.** Le motif est une image `data:` — un document SVG autonome — et une image ne
- * voit pas les variables CSS de la page. Or la couleur d'un objectif vaut souvent
- * « var(--nv-accent) », qui resterait littéral dans l'URL et ne donnerait aucun tracé. Le
- * blanc à très faible opacité prend la teinte de ce qu'il couvre : sur une carte déjà
- * colorée, le résultat est le même que si le glyphe portait la couleur.
- *
- * ⚠️ **Deux couches décalées d'un demi-pas**, et non une grille droite. Un semis aligné en
- * colonnes se lit comme un tableau et attire l'œil sur ses alignements ; en quinconce, il
- * redevient une texture.
+ * ⚠️ **Le trait est clair, non de la couleur de l'objectif.** Le fond de la carte porte déjà
+ * cette couleur : un tracé de la même teinte s'y dissoudrait. La couleur est dite quatre
+ * fois ailleurs — fond, liseré, jauge, pourcentage — l'icône n'a qu'à être lisible.
  */
-function fondSeme(genre: Objectif["genre"]): CSSProperties {
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${PAS_SEMIS}" `
-    + `height="${PAS_SEMIS}" viewBox="-6 -6 36 36" fill="none" stroke="white" `
-    + `stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">`
-    + `<path d="${GLYPHE[genre]}"/></svg>`;
-  const image = `url("data:image/svg+xml,${encodeURIComponent(svg)}")`;
-  return {
-    backgroundImage: `${image}, ${image}`,
-    backgroundSize: `${PAS_SEMIS}px ${PAS_SEMIS}px`,
-    backgroundPosition: `0 0, ${PAS_SEMIS / 2}px ${PAS_SEMIS / 2}px`,
-    backgroundRepeat: "repeat, repeat",
-  };
+function IconeGenre({ genre }: { genre: Objectif["genre"] }) {
+  return (
+    <svg width={COTE_ICONE} height={COTE_ICONE} viewBox="0 0 24 24" fill="none"
+      stroke="rgba(255,255,255,0.82)" strokeWidth={1.7} strokeLinecap="round"
+      strokeLinejoin="round" aria-hidden="true" style={{ flexShrink: 0, display: "block" }}>
+      <path d={GLYPHE[genre]} />
+    </svg>
+  );
 }
 
 /** Combien de barreaux compose la jauge. */
@@ -232,20 +219,9 @@ function Carte({ o, onModifier }: { o: Objectif; onModifier?: (o: Objectif) => v
       style={{ height: "100%", display: "flex", flexDirection: "column",
         padding: "14px 15px", boxSizing: "border-box" }}>
 
-      {/* ⚠️ Le semis de fond, sous le contenu. `zIndex: -1` et non `0` : dans un contexte
-          d'empilement, une couche à zéro se peint **au-dessus** du contenu en flux, et le
-          motif passait alors devant le texte. À moins un, il se glisse entre le fond de la
-          tuile et ses écritures — exactement la place d'un filigrane. */}
-      <div aria-hidden="true" style={{
-        position: "absolute", inset: 0, zIndex: -1, pointerEvents: "none",
-        // Très faible : le motif doit se deviner, pas se lire. Au-delà de huit centièmes il
-        // entre en concurrence avec les chiffres, qui sont ce que la carte a à dire.
-        opacity: 0.055,
-        ...fondSeme(o.genre),
-      }} />
-
       {/* Identité */}
       <div style={{ display: "flex", alignItems: "center", gap: 9 }}>
+        <IconeGenre genre={o.genre} />
         <span style={{ fontFamily: FONT, fontSize: 14, fontWeight: 700,
           color: "rgba(255,255,255,0.94)", minWidth: 0, flex: 1, overflow: "hidden",
           textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
