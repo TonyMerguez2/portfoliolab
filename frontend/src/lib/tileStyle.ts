@@ -92,9 +92,24 @@ export function tileSurface(ticker: string, radius = 18, colorHex?: string): {
   boxSizing: "border-box";
 } {
   const c = colorHex ?? brandHex(ticker);
-  /** Alpha sur deux chiffres hexadécimaux. */
-  const a = (v: number) => Math.round(Math.min(255, Math.max(0, v)))
-    .toString(16).padStart(2, "0");
+  /**
+   * La couleur de la tuile, voilée d'une opacité donnée sur 255.
+   *
+   * ⚠️ **`color-mix` et non un suffixe hexadécimal, et ce correctif vient d'un défaut vu à
+   * l'écran.** Cette fonction écrivait `${c}${alphaHex}` — juste tant que `c` est un
+   * hexadécimal, catastrophique sinon. Or les couleurs proposées par le formulaire
+   * d'objectifs viennent de la palette, où `JETONS.accent` vaut la chaîne
+   * `« var(--nv-accent) »` : la concaténation produisait `var(--nv-accent)58`, déclaration
+   * **invalide** que le navigateur ignore en silence. Résultat, les cartes concernées
+   * n'avaient aucun lavis de couleur — un fond gris uni — tandis que celles créées avec un
+   * hexadécimal littéral étaient franchement teintées. Deux cartes côte à côte, deux
+   * apparences, aucune erreur en console.
+   *
+   * `color-mix` accepte n'importe quelle couleur CSS, `var()` comprise, ce qui referme le
+   * problème à la source plutôt que d'imposer un format aux appelants.
+   */
+  const voile = (v: number) =>
+    `color-mix(in srgb, ${c} ${(Math.min(255, Math.max(0, v)) / 255 * 100).toFixed(1)}%, transparent)`;
   return {
     borderRadius: radius,
     // Deux lavis d'angle de pleine amplitude — l'aspect voulu, avec sa
@@ -121,8 +136,8 @@ export function tileSurface(ticker: string, radius = 18, colorHex?: string): {
       // sûr : un dégradé de 180 px ne traverse pas assez de surface pour que
       // ses paliers se lisent en anneaux.
       `radial-gradient(circle 180px at var(--tile-mx, 18%) var(--tile-my, 8%), rgba(255,255,255,0.085) 0%, rgba(255,255,255,0.035) 42%, rgba(255,255,255,0) 72%)`,
-      `radial-gradient(ellipse 260% 300% at 0% 0%, ${c}${a(88)} 0%, ${c}${a(77)} 18%, ${c}${a(59)} 36%, ${c}${a(41)} 54%, ${c}${a(23)} 72%, ${c}${a(10)} 88%, ${c}00 100%)`,
-      `radial-gradient(ellipse 260% 300% at 100% 100%, ${c}${a(76)} 0%, ${c}${a(66)} 18%, ${c}${a(51)} 36%, ${c}${a(35)} 54%, ${c}${a(20)} 72%, ${c}${a(9)} 88%, ${c}00 100%)`,
+      `radial-gradient(ellipse 260% 300% at 0% 0%, ${voile(88)} 0%, ${voile(77)} 18%, ${voile(59)} 36%, ${voile(41)} 54%, ${voile(23)} 72%, ${voile(10)} 88%, ${voile(0)} 100%)`,
+      `radial-gradient(ellipse 260% 300% at 100% 100%, ${voile(76)} 0%, ${voile(66)} 18%, ${voile(51)} 36%, ${voile(35)} 54%, ${voile(20)} 72%, ${voile(9)} 88%, ${voile(0)} 100%)`,
       // Assombrissement de fond, volontairement plus léger qu'avant : la tuile
       // laisse davantage passer ce qu'il y a derrière.
       "rgba(2,10,24,0.38)",
@@ -130,7 +145,7 @@ export function tileSurface(ticker: string, radius = 18, colorHex?: string): {
     backdropFilter: "blur(24px) saturate(1.6) brightness(1.06)",
     WebkitBackdropFilter: "blur(24px) saturate(1.6) brightness(1.06)",
     border: "none",
-    boxShadow: `0 14px 44px rgba(0,0,0,0.28), 0 0 28px ${c}10`,
+    boxShadow: `0 14px 44px rgba(0,0,0,0.28), 0 0 28px ${voile(16)}`,
     overflow: "hidden",
     boxSizing: "border-box",
   };

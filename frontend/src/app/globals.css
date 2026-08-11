@@ -584,13 +584,36 @@ canvas + div {
   border-radius: inherit;
   padding: 1px;
   pointer-events: none;
+  /* Les arrêts sont **symétriques autour de 50 %**, et ce n'est pas une préférence
+     esthétique : c'est ce qui fait que le liseré s'éteint avant l'angle haut-droit
+     *et* avant l'angle bas-gauche, au lieu d'un seul des deux.
+
+     La géométrie se calcule plutôt qu'elle ne s'estime. Pour un dégradé à 135°, un
+     point ramené au centre se projette sur l'axe en t = 0,5 + (x − y) / (2(w + h)).
+     Sur une tuile de 248 × 196 — carte d'actif comme carte d'objectif — l'angle
+     bas-gauche tombe à 44,1 % et l'angle haut-droit à 55,9 %, exactement symétriques
+     de 50 %.
+
+     Les arrêts précédents ne l'étaient pas : 17 % à 44 %, transparent à 54 %, puis
+     15 % à 68 %. L'angle bas-gauche recevait donc 17 % d'opacité — un liseré bien
+     visible — tandis que l'angle haut-droit, pris entre 54 % et 68 %, n'en recevait
+     que 1,5 %. D'où l'asymétrie constatée à l'écran : le trait atteignait un coin et
+     pas son opposé.
+
+     La plage transparente couvre maintenant 38 % à 62 %, ce qui englobe les deux
+     angles avec de la marge. ⚠️ Cette marge dépend des proportions : un élément
+     beaucoup plus large que haut ramènerait ses angles vers 25 % et 75 %, hors de la
+     plage, et le liseré les atteindrait de nouveau. La règle vaut pour des tuiles
+     proches du carré, ce qu'elles sont toutes ici. */
   background: linear-gradient(135deg,
     color-mix(in srgb, currentColor 44%, transparent) 0%,
-    color-mix(in srgb, currentColor 36%, transparent) 24%,
-    color-mix(in srgb, currentColor 17%, transparent) 44%,
-    transparent 54%,
-    color-mix(in srgb, currentColor 15%, transparent) 68%,
-    color-mix(in srgb, currentColor 40%, transparent) 100%);
+    color-mix(in srgb, currentColor 34%, transparent) 20%,
+    color-mix(in srgb, currentColor 14%, transparent) 32%,
+    transparent 38%,
+    transparent 62%,
+    color-mix(in srgb, currentColor 14%, transparent) 68%,
+    color-mix(in srgb, currentColor 34%, transparent) 80%,
+    color-mix(in srgb, currentColor 44%, transparent) 100%);
   -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
   -webkit-mask-composite: xor;
   mask-composite: exclude;

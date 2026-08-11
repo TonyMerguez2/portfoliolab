@@ -243,7 +243,12 @@ function Carte({ o, onModifier }: { o: Objectif; onModifier?: (o: Objectif) => v
             fontFamily: FONT, fontSize: 9, fontWeight: 600,
             padding: "2px 6px", borderRadius: RAYONS.xs,
             color: rythme.tenable ? JETONS.positif : JETONS.attention,
-            background: (rythme.tenable ? JETONS.positif : JETONS.attention) + "22",
+            // ⚠️ **Un jeton voilé, jamais une concaténation d'alpha.** `JETONS.attention`
+            // vaut la chaîne « var(--nv-attention) » : y coller « 22 » produit
+            // « var(--nv-attention)22 », déclaration invalide que le navigateur ignore en
+            // silence — le badge se retrouvait sans fond. C'est le même défaut qui privait
+            // les cartes de leur lavis de couleur, et il ne se voit jamais en console.
+            background: rythme.tenable ? JETONS.positifDoux : JETONS.attentionDoux,
           }}>
             {rythme.texte}
           </span>

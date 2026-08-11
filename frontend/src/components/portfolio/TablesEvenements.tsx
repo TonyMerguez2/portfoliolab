@@ -250,7 +250,9 @@ export function ProchainsResultats({
 
                 {e.jours != null && (
                   <span style={{ ...NUM, fontSize: 10, fontWeight: 700, flexShrink: 0,
-                    color: JETONS.accent, background: JETONS.accent + "1E",
+                    // ⚠️ `JETONS.accent` est « var(--nv-accent) » : lui coller « 1E »
+                    // donnait « var(--nv-accent)1E », invalide et donc sans fond.
+                    color: JETONS.accent, background: JETONS.accentVoile,
                     borderRadius: RAYONS.xs, padding: "2px 7px" }}>
                     {e.jours === 0 ? "auj." : `J+${e.jours}`}
                   </span>
