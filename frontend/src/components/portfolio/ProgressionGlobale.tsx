@@ -1,6 +1,6 @@
 "use client";
-import { agregat, euros, observations, pourcentageLisible, type Objectif } from "@/lib/objectifs";
-import { CLAIR, JETONS, RAYONS } from "@/lib/palette";
+import { agregat, euros, pourcentageLisible, type Objectif } from "@/lib/objectifs";
+import { CLAIR, JETONS } from "@/lib/palette";
 import { FONT, NUM } from "@/lib/typography";
 
 /**
@@ -45,17 +45,8 @@ function Ligne({ titre, valeur }: { titre: string; valeur: string }) {
   );
 }
 
-export default function ProgressionGlobale({
-  objectifs, valeurPortefeuille, objectifDetaille,
-}: {
-  objectifs: Objectif[];
-  valeurPortefeuille: number | null;
-  /** L'objectif dont on tire les constats — celui que la projection affiche. */
-  objectifDetaille: Objectif | null;
-}) {
+export default function ProgressionGlobale({ objectifs }: { objectifs: Objectif[] }) {
   const a = agregat(objectifs);
-  const constats = objectifDetaille
-    ? observations(objectifDetaille, valeurPortefeuille) : [];
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 14, minHeight: 0, flex: 1 }}>
@@ -94,31 +85,6 @@ export default function ProgressionGlobale({
             Somme de cibles d’échéances différentes : un euro de 2044 n’a pas le pouvoir
             d’achat d’un euro de 2031.
           </p>
-
-          {constats.length > 0 && (
-            <div style={{ borderTop: `1px solid ${CLAIR.bord}`, paddingTop: 12,
-              display: "flex", flexDirection: "column", gap: 8 }}>
-              <span style={{ fontFamily: FONT, fontSize: 10, fontWeight: 700,
-                color: CLAIR.texteSecondaire }}>
-                Constats sur « {objectifDetaille?.nom} »
-              </span>
-              {constats.map(t => (
-                <div key={t} style={{ display: "flex", gap: 7, alignItems: "flex-start" }}>
-                  <span style={{ width: 4, height: 4, borderRadius: "50%", flexShrink: 0,
-                    background: CLAIR.texteFaible, marginTop: 5 }} />
-                  <span style={{ fontFamily: FONT, fontSize: 10.5, lineHeight: 1.55,
-                    color: CLAIR.texteSecondaire }}>{t}</span>
-                </div>
-              ))}
-              {/* ⚠️ Dit explicitement, parce que l'emplacement de la maquette promettait
-                  des recommandations et qu'un lecteur peut s'attendre à en trouver. */}
-              <span style={{ fontFamily: FONT, fontSize: 9, lineHeight: 1.5,
-                color: CLAIR.texteFaible, borderRadius: RAYONS.xs }}>
-                Ce sont des calculs, pas des recommandations : ce logiciel ne conseille
-                aucun placement.
-              </span>
-            </div>
-          )}
         </>
       )}
     </div>

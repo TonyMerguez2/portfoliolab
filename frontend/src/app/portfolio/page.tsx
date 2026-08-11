@@ -48,6 +48,7 @@ import CalendrierEvenements from "@/components/portfolio/CalendrierEvenements";
 import CartesObjectifs from "@/components/portfolio/CartesObjectifs";
 import ProjectionObjectif from "@/components/portfolio/ProjectionObjectif";
 import ProgressionGlobale from "@/components/portfolio/ProgressionGlobale";
+import ConstatsObjectif from "@/components/portfolio/ConstatsObjectif";
 import ScenariosObjectif from "@/components/portfolio/ScenariosObjectif";
 import FormulaireObjectif from "@/components/portfolio/FormulaireObjectif";
 import EvenementsAVenir from "@/components/portfolio/EvenementsAVenir";
@@ -1964,169 +1965,103 @@ function PortfolioPageInner() {
           ne porte que des dates. Ils restent affichés dans la vue Résumé. */}
 
       {/* ══ VUE OBJECTIFS ═══════════════════════════════════════════════════════ */}
-      <div style={{ display: dashView === "objectifs" ? "grid" : "none", height: "100%",
-        padding: "14px 14px 10px", gridTemplateColumns: "1fr 1fr 1fr", gap: 12,
-        // ⚠️ La première rangée se dimensionne sur son contenu, les suivantes se
-        // partagent le reste. Sans `auto`, la rangée de cartes recevait un tiers de la
-        // hauteur et ses jauges se faisaient écraser.
-        // ⚠️ Toutes les rangées en « auto », et l'onglet défile. Une dernière rangée en
-        // « 1fr » recevait zéro dès que les trois premières remplissaient la hauteur :
-        // « Meilleurs contributeurs » et « Répartition par classe » tombaient à 14 pixels
-        // de haut, mesurés à l'écran. Aucune erreur, juste deux panneaux écrasés.
-        overflowY: "auto", overflowX: "hidden", alignContent: "start" }}>
-        <Cadre style={{ gridColumn: "1 / -1", padding: "16px 18px",
-          display: "flex", flexDirection: "column", gap: 12 }}>
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10 }}>
-            <SectionLabel>MES OBJECTIFS</SectionLabel>
-            {objectifs.donnees && objectifs.donnees.objectifs.length > 0 && (
-              <button type="button" onClick={() => setSaisieObjectif({ mode: "creation" })}
-                style={{ padding: "5px 11px", borderRadius: RAYONS.plein, cursor: "pointer",
-                  border: `1px solid ${JETONS.accent}`, background: JETONS.accentVoile,
-                  color: CLAIR.accent, fontFamily: FONT, fontSize: 10.5, fontWeight: 700 }}>
-                + Nouvel objectif
-              </button>
-            )}
-          </div>
+      {/* ⚠️ **La répartition suit la maquette, pas la grille de trois colonnes d'avant.**
+          Trois rangées empilées : les cartes d'objectifs en pleine largeur et **hors de
+          tout panneau** — la maquette les pose à même la page, un cadre autour aurait
+          ajouté un contenant que le dessin n'a pas ; puis la projection sur deux tiers
+          avec, à sa droite, deux cartes empilées ; puis la dispersion en pleine largeur.
 
-          {/* ⚠️ Trois états distincts, et aucun ne ressemble à une panne. Un portefeuille
-              sans objectif n'est pas cassé : il n'en a pas encore. */}
-          {objectifs.etat === "charge" && (
-            <p style={{ margin: 0, fontFamily: FONT, fontSize: 11, color: CLAIR.texteFaible }}>
-              Chargement des objectifs…
-            </p>
+          ⚠️ « Meilleurs contributeurs » et « Répartition par classe » ont quitté cet
+          onglet : la maquette ne les y met pas, et la vue générale liste déjà chaque
+          ligne avec sa performance. Ils y restaient d'un état antérieur de la page. */}
+      <div style={{ display: dashView === "objectifs" ? "flex" : "none",
+        flexDirection: "column", height: "100%", padding: "14px 14px 10px", gap: 12,
+        overflowY: "auto", overflowX: "hidden" }}>
+
+        {/* ── Rangée 1 : les objectifs ──────────────────────────────────────── */}
+        <div style={{ display: "flex", alignItems: "center",
+          justifyContent: "space-between", gap: 10, flexShrink: 0 }}>
+          <SectionLabel>MES OBJECTIFS</SectionLabel>
+          {objectifs.donnees && objectifs.donnees.objectifs.length > 0 && (
+            <button type="button" onClick={() => setSaisieObjectif({ mode: "creation" })}
+              style={{ padding: "5px 12px", borderRadius: RAYONS.plein, cursor: "pointer",
+                border: `1px solid ${JETONS.accent}`, background: JETONS.accentVoile,
+                color: CLAIR.accent, fontFamily: FONT, fontSize: 10.5, fontWeight: 700 }}>
+              + Nouvel objectif
+            </button>
           )}
-          {objectifs.etat === "erreur" && (
-            <p style={{ margin: 0, fontFamily: FONT, fontSize: 11, color: CLAIR.texteFaible }}>
-              Objectifs indisponibles pour le moment.
-            </p>
-          )}
-          {objectifs.etat === "pret" && objectifs.donnees && (
-            <>
-              {/* Ce qui rend l'avancement discutable, dit avant les chiffres. */}
-              {avertissementValeur(objectifs.donnees.source_valeur,
-                objectifs.donnees.lignes_valorisees, objectifs.donnees.lignes_totales) && (
-                <p style={{ margin: 0, fontFamily: FONT, fontSize: 10, lineHeight: 1.5,
-                  color: JETONS.attention }}>
-                  {avertissementValeur(objectifs.donnees.source_valeur,
-                    objectifs.donnees.lignes_valorisees, objectifs.donnees.lignes_totales)}
-                </p>
-              )}
-              {alerteRepartition(objectifs.donnees.somme_des_parts) && (
-                <p style={{ margin: 0, fontFamily: FONT, fontSize: 10, lineHeight: 1.5,
-                  color: JETONS.attention }}>
-                  {alerteRepartition(objectifs.donnees.somme_des_parts)}
-                </p>
-              )}
-              <CartesObjectifs objectifs={objectifs.donnees.objectifs}
+        </div>
+
+        {objectifs.etat === "charge" && (
+          <p style={{ margin: 0, fontFamily: FONT, fontSize: 11, color: CLAIR.texteFaible }}>
+            Chargement des objectifs…
+          </p>
+        )}
+        {objectifs.etat === "erreur" && (
+          <p style={{ margin: 0, fontFamily: FONT, fontSize: 11, color: CLAIR.texteFaible }}>
+            Objectifs indisponibles pour le moment.
+          </p>
+        )}
+        {objectifs.etat === "pret" && objectifs.donnees && (
+          <>
+            {avertissementValeur(objectifs.donnees.source_valeur,
+              objectifs.donnees.lignes_valorisees, objectifs.donnees.lignes_totales) && (
+              <p style={{ margin: 0, fontFamily: FONT, fontSize: 10, lineHeight: 1.5,
+                color: JETONS.attention }}>
+                {avertissementValeur(objectifs.donnees.source_valeur,
+                  objectifs.donnees.lignes_valorisees, objectifs.donnees.lignes_totales)}
+              </p>
+            )}
+            {alerteRepartition(objectifs.donnees.somme_des_parts) && (
+              <p style={{ margin: 0, fontFamily: FONT, fontSize: 10, lineHeight: 1.5,
+                color: JETONS.attention }}>
+                {alerteRepartition(objectifs.donnees.somme_des_parts)}
+              </p>
+            )}
+            <div style={{ flexShrink: 0 }}>
+              <CartesObjectifs objectifs={listeObjectifs}
                 onAjouter={() => setSaisieObjectif({ mode: "creation" })}
                 onModifier={o => setSaisieObjectif({ mode: "edition", o })} />
-            </>
-          )}
+            </div>
+          </>
+        )}
 
-          {/* ⚠️ Le bloc « Santé du portefeuille » a été retiré d'ici. Il datait de
-              l'ancien panneau OBJECTIFS et se retrouvait sous les cartes, où il n'avait
-              aucun rapport avec des objectifs d'épargne — et où il répétait la roue de
-              score que l'en-tête de la page affiche déjà, à trois centimètres au-dessus. */}
-        </Cadre>
-        {/* ⚠️ Sur deux colonnes : la projection porte une courbe, trois mesures et une
-            légende. Dans une colonne de tiers d'écran, la courbe tombait à moins de
-            deux cents pixels de large et ses vingt points devenaient illisibles. */}
-        <Cadre style={{ gridColumn: "span 2", padding: "16px 18px",
-          display: "flex", flexDirection: "column", minHeight: 360 }}>
-          <ProjectionObjectif
-            objectifs={listeObjectifs}
-            choisi={projeteEffectif}
-            onChoisir={setObjectifProjete}
-            projection={projection.projection}
-            etat={projection.etat}
-            onParametres={o => setSaisieObjectif({ mode: "edition", o })} />
-        </Cadre>
+        {/* ── Rangée 2 : projection à gauche, deux cartes à droite ──────────── */}
+        <div style={{ display: "grid", gap: 12, flexShrink: 0,
+          gridTemplateColumns: "minmax(0, 2fr) minmax(0, 1fr)" }}>
+          <Cadre style={{ padding: "16px 18px", display: "flex",
+            flexDirection: "column", minHeight: 360 }}>
+            <ProjectionObjectif
+              objectifs={listeObjectifs}
+              choisi={projeteEffectif}
+              onChoisir={setObjectifProjete}
+              projection={projection.projection}
+              etat={projection.etat}
+              onParametres={o => setSaisieObjectif({ mode: "edition", o })} />
+          </Cadre>
 
+          <div style={{ display: "flex", flexDirection: "column", gap: 12, minWidth: 0 }}>
+            <Cadre style={{ padding: "16px 18px", display: "flex",
+              flexDirection: "column", minHeight: 172 }}>
+              <ProgressionGlobale objectifs={listeObjectifs} />
+            </Cadre>
+            <Cadre style={{ padding: "16px 18px", display: "flex",
+              flexDirection: "column", minHeight: 172 }}>
+              <ConstatsObjectif
+                objectif={listeObjectifs.find(o => o.id === projeteEffectif) ?? null}
+                valeurPortefeuille={objectifs.donnees?.valeur_portefeuille ?? null}
+                medianeProjection={projection.projection?.possible
+                  ? projection.projection.mediane : null} />
+            </Cadre>
+          </div>
+        </div>
+
+        {/* ── Rangée 3 : la dispersion des tirages ──────────────────────────── */}
         <Cadre style={{ padding: "16px 18px", display: "flex", flexDirection: "column",
-          minHeight: 360, overflowY: "auto" }}>
-          <ProgressionGlobale objectifs={listeObjectifs}
-            valeurPortefeuille={objectifs.donnees?.valeur_portefeuille ?? null}
-            objectifDetaille={listeObjectifs.find(o => o.id === projeteEffectif) ?? null} />
-        </Cadre>
-
-        {/* La dispersion des tirages, en pleine largeur sous la projection : trois cartes
-            de deux cents pixels ne tiennent pas dans une colonne de tiers d'écran. */}
-        <Cadre style={{ gridColumn: "1 / -1", padding: "16px 18px",
-          display: "flex", flexDirection: "column", minHeight: 250 }}>
+          minHeight: 250, flexShrink: 0 }}>
           <ScenariosObjectif projection={projection.projection} />
         </Cadre>
 
-        <Cadre style={{ padding: "16px 18px", display: "flex", flexDirection: "column",
-          minHeight: 260 }}>
-          <SectionLabel>MEILLEURS CONTRIBUTEURS</SectionLabel>
-          <div style={{ display: "flex", flexDirection: "column", gap: 0 }}>
-            {[...enriched].filter(a => a.perfEur != null).sort((a, b) => Math.abs(b.perfEur!) - Math.abs(a.perfEur!))
-              .slice(0, 6).map((a, i) => (
-              <div key={a.ticker} style={{ display: "flex", alignItems: "center", gap: 10,
-                padding: "10px 0", borderBottom: i < 5 ? `1px solid ${CLAIR.bord}` : "none" }}>
-                <AssetLogo ticker={a.ticker} type={a.type} size={26} radius={6}
-                  fallbackBg={CLAIR.carteCreuse} fallbackBorder={CLAIR.bord} fallbackTextColor={CLAIR.texteSecondaire}
-                  bare />
-                <span style={{ fontSize: 12, fontWeight: 600, flex: 1, color: CLAIR.texteSecondaire }}>{a.ticker.replace(/-USD$/,"")}</span>
-                <div style={{ textAlign: "right" }}>
-                  <div style={{ fontSize: 12, fontWeight: 700, fontFamily: FONT, color: (a.perfEur ?? 0) >= 0 ? CLAIR.positif : CLAIR.negatif }}>
-                    {(a.perfEur ?? 0) >= 0 ? "+" : ""}{Math.round(a.perfEur!).toLocaleString("fr-FR")} €
-                  </div>
-                  <div style={{ fontSize: 10, color: CLAIR.texteFaible, fontFamily: FONT }}>{fmtChange(a.change)}</div>
-                </div>
-              </div>
-            ))}
-          </div>
-          {scoreSante != null && <>
-            <div style={{ width: 1, alignSelf: "stretch", background: CLAIR.carteCreuse }} />
-            {/* Santé du portefeuille : le titre chiffré passe en tête, la carte
-                de droite ne garde que le détail par critère. */}
-            <div style={{ display: "flex", alignItems: "center", gap: 12, minWidth: 170 }}>
-              <CircleScore score={scoreSante} size={64} nu />
-              <div>
-                <p style={{ margin: "0 0 3px", fontSize: 11.5, fontWeight: 500, color: CLAIR.texteSecondaire }}>Santé du portefeuille</p>
-                <div style={{ display: "flex", alignItems: "baseline", gap: 3 }}>
-                  <span style={{ fontSize: 20, fontWeight: 800, fontFamily: FONT, color: CLAIR.texte, lineHeight: 1 }}>{scoreSante}</span>
-                  <span style={{ fontSize: 10, color: CLAIR.texteFaible }}>/100</span>
-                </div>
-                <span style={{ fontSize: 11, fontWeight: 600, color: scoreColor(scoreSante) }}>
-                  {bandeSante ?? scoreLabel(scoreSante)}
-                </span>
-              </div>
-            </div>
-          </>}
-        </Cadre>
-        <Cadre style={{ padding: "16px 18px", display: "flex", flexDirection: "column",
-          minHeight: 260 }}>
-          <SectionLabel>RÉPARTITION PAR CLASSE</SectionLabel>
-          <div style={{ display: "flex", flexDirection: "column", gap: 10, flex: 1, justifyContent: "center" }}>
-            {Object.entries(exposition).sort((a, b) => b[1] - a[1]).map(([k, v]) => (
-              <div key={k} style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                <div style={{ width: 8, height: 8, borderRadius: "50%", background: EXPO_COLORS[k] ?? "#94a3b8", flexShrink: 0 }} />
-                <span style={{ fontSize: 12, color: CLAIR.texteSecondaire, flex: 1 }}>{k}</span>
-                <span style={{ fontSize: 14, fontWeight: 700, fontFamily: FONT, color: EXPO_COLORS[k] ?? "#94a3b8" }}>{v.toFixed(1)}%</span>
-              </div>
-            ))}
-          </div>
-          {scoreSante != null && <>
-            <div style={{ width: 1, alignSelf: "stretch", background: CLAIR.carteCreuse }} />
-            {/* Santé du portefeuille : le titre chiffré passe en tête, la carte
-                de droite ne garde que le détail par critère. */}
-            <div style={{ display: "flex", alignItems: "center", gap: 12, minWidth: 170 }}>
-              <CircleScore score={scoreSante} size={64} nu />
-              <div>
-                <p style={{ margin: "0 0 3px", fontSize: 11.5, fontWeight: 500, color: CLAIR.texteSecondaire }}>Santé du portefeuille</p>
-                <div style={{ display: "flex", alignItems: "baseline", gap: 3 }}>
-                  <span style={{ fontSize: 20, fontWeight: 800, fontFamily: FONT, color: CLAIR.texte, lineHeight: 1 }}>{scoreSante}</span>
-                  <span style={{ fontSize: 10, color: CLAIR.texteFaible }}>/100</span>
-                </div>
-                <span style={{ fontSize: 11, fontWeight: 600, color: scoreColor(scoreSante) }}>
-                  {bandeSante ?? scoreLabel(scoreSante)}
-                </span>
-              </div>
-            </div>
-          </>}
-        </Cadre>
       </div>{/* fin Vue Objectifs */}
 
       {/* ⚠️ Monté hors des vues : un formulaire rendu à l'intérieur d'un onglet caché

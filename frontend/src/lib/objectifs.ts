@@ -219,7 +219,16 @@ export function agregat(objectifs: Objectif[]): Agregat {
  */
 export function observations(
   o: Objectif, valeurPortefeuille?: number | null,
+  medianeProjection?: number | null,
 ): string[] {
+  // ⚠️ **La médiane vient de la projection quand elle existe, et c'est un correctif.**
+  // Vu à l'écran : le panneau de projection annonçait 373 261 € — la médiane des tirages —
+  // tandis que le constat parlait de 362 986 €, la capitalisation déterministe. Deux
+  // calculs de la même grandeur, à dix centimètres l'un de l'autre, tous deux justes et
+  // dont l'écart de 2,8 % ne se justifie par rien aux yeux du lecteur. Les tests
+  // garantissaient qu'ils se rejoignent à 5 % près ; ils ne garantissaient pas qu'on
+  // n'affiche pas les deux.
+  const mediane = medianeProjection ?? o.valeur_projetee;
   const sortie: string[] = [];
   const requis = o.capital_requis;
 
@@ -243,19 +252,21 @@ export function observations(
       + `par mois — la cible serait atteinte en ${annee} (${rythme.texte}).`);
   }
 
-  if (o.valeur_projetee != null && requis != null && o.mois_restants) {
-    const ecart = o.valeur_projetee - requis;
+  if (mediane != null && requis != null && o.mois_restants) {
+    const ecart = mediane - requis;
     sortie.push(ecart >= 0
       ? `À l’échéance, la trajectoire médiane dépasse la cible de ${euros(ecart)}.`
       : `À l’échéance, la trajectoire médiane reste ${euros(-ecart)} sous la cible.`);
   }
 
-  if (o.projetee_en_euros_constants != null && o.valeur_projetee != null
-      && o.inflation != null) {
-    const perte = o.valeur_projetee - o.projetee_en_euros_constants;
-    if (perte > 0) {
-      sortie.push(`À ${o.inflation} % d’inflation, ces ${euros(o.valeur_projetee)} `
-        + `vaudront ${euros(o.projetee_en_euros_constants)} d’aujourd’hui.`);
+  // ⚠️ Le pouvoir d'achat se recalcule sur la médiane affichée, et non sur la valeur
+  // déterministe du serveur : sinon la phrase citerait un montant qui n'apparaît nulle
+  // part ailleurs à l'écran.
+  if (mediane != null && o.inflation != null && o.mois_restants) {
+    const constants = mediane / (1 + o.inflation / 100) ** (o.mois_restants / 12);
+    if (mediane - constants > 0) {
+      sortie.push(`À ${o.inflation} % d’inflation, ces ${euros(mediane)} `
+        + `vaudront ${euros(constants)} d’aujourd’hui.`);
     }
   }
 

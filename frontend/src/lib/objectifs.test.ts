@@ -263,3 +263,44 @@ describe("pourcentageLisible", () => {
     expect(pourcentageLisible(50)).toBe("50 %");
   });
 });
+
+describe("cohérence de la médiane citée", () => {
+  const base: Objectif = {
+    id: "x", nom: "Retraite", genre: "capital", cible: 1_250_000,
+    echeance_annee: 2044, age_cible: null, part_affectee: 50,
+    versement_mensuel: 800, taux_attendu: 7.2, inflation: 2, taux_retrait: null,
+    couleur: null, capital_requis: 1_250_000, montant_actuel: 2_273,
+    avancement: 0.18, atteint: false, mois_restants: 220,
+    valeur_projetee: 362_986, projetee_en_euros_constants: 245_000,
+    mois_pour_atteindre: 397,
+  };
+
+  it("cite la médiane des tirages quand elle est fournie", () => {
+    /**
+     * ⚠️ Le défaut vu à l'écran : la projection affichait 373 261 € et le constat
+     * 362 986 €, deux calculs de la même grandeur côte à côte. Les tests garantissaient
+     * qu'ils se rejoignent à 5 % près ; ils ne garantissaient pas qu'on n'affiche pas
+     * les deux.
+     */
+    // ⚠️ On normalise l'espace **de la sortie**, pas du littéral : `Intl.NumberFormat`
+    // groupe les milliers avec une espace fine insécable (U+202F), et non l'espace du
+    // clavier. C'est exactement le piège déjà noté plus haut dans ce fichier, et j'y
+    // suis retombé.
+    const avec = observations(base, 4_545, 373_261).join(" ").replace(/\s/g, " ");
+    expect(avec).toContain("373 261 €");
+    expect(avec).not.toContain("362 986");
+  });
+
+  it("retombe sur la valeur du serveur sans médiane fournie", () => {
+    const sans = observations(base, 4_545).join(" ").replace(/\s/g, " ");
+    expect(sans).toContain("362 986");
+  });
+
+  it("recalcule le pouvoir d'achat sur la médiane citée", () => {
+    // Sinon la phrase citerait un montant absent partout ailleurs à l'écran.
+    const t = (observations(base, 4_545, 373_261).find(x => /inflation/.test(x)) ?? "")
+      .replace(/\s/g, " ");
+    expect(t).toContain("373 261 €");
+    expect(t).not.toContain("245 000");
+  });
+});
