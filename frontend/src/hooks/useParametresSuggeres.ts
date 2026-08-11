@@ -20,6 +20,20 @@ export type ParametresSuggeres = {
    * ses données.
    */
   rendements_passes: { annees: number; rendement: number; volatilite: number }[];
+  /**
+   * Le rendement à long terme de grandes classes d'actifs.
+   *
+   * ⚠️ **Celles-ci peuvent être proposées, contrairement aux précédentes.** Elles portent
+   * sur des fenêtres de dix-huit à trente-trois ans, qui contiennent 2000, 2008 et 2020,
+   * et sur des classes d'actifs — non sur les dix ans d'un portefeuille particulier. C'est
+   * la différence entre un ordre de grandeur et une extrapolation.
+   *
+   * ⚠️ Libellées en dollars : un épargnant en euros a touché autre chose selon le change.
+   */
+  references_longues: {
+    ticker: string; libelle: string; rendement: number; annees: number;
+    depuis: string; proposee: boolean;
+  }[];
   periode_mesuree: {
     debut: string; fin: string; seances: number; couverture: number;
     sans_historique: string[];

@@ -103,6 +103,9 @@ export default function FormulaireObjectif({
     initial?.taux_retrait != null ? String(initial.taux_retrait) : "4");
   const [couleur, setCouleur] = useState(initial?.couleur ?? JETONS.accent);
 
+  const reference = suggestions?.references_longues?.find(r => r.proposee) ?? null;
+  const autresReferences = (suggestions?.references_longues ?? []).filter(r => !r.proposee);
+
   const enAge = genre === "capital_age";
   const enRevenu = genre === "revenu_mensuel";
 
@@ -222,6 +225,32 @@ export default function FormulaireObjectif({
               <input value={taux} onChange={e => setTaux(e.target.value)}
                 inputMode="decimal" style={styleSaisie}
                 placeholder="votre hypothèse" />
+              {/* ⚠️ **Une référence peut être proposée, la performance du portefeuille non.**
+                  Celle-ci porte sur dix-huit à trente-trois ans — 2000, 2008 et 2020
+                  comprises — et sur une classe d'actifs entière ; l'autre extrapolait dix
+                  ans d'un portefeuille particulier. Les quatre autres références sont
+                  affichées pour situer : un épargnant tout en actions américaines et un
+                  épargnant obligataire n'ont pas la même attente à formuler. */}
+              {reference && (
+                <button type="button"
+                  onClick={() => setTaux(String(reference.rendement))}
+                  style={{ alignSelf: "flex-start", marginTop: 3, padding: "2px 7px",
+                    borderRadius: RAYONS.xs, cursor: "pointer", background: "transparent",
+                    border: `1px solid ${CLAIR.bord}`, color: CLAIR.accent,
+                    fontFamily: FONT, fontSize: 9.5, fontWeight: 600, textAlign: "left" }}>
+                  reprendre {pourcent(reference.rendement, 1)} % — {reference.libelle.toLowerCase()},
+                  mesuré sur {pourcent(reference.annees, 0)} ans
+                </button>
+              )}
+              {autresReferences.length > 0 && (
+                <span style={{ marginTop: 2, fontFamily: FONT, fontSize: 9,
+                  lineHeight: 1.45, color: CLAIR.texteFaible }}>
+                  Pour situer, dividendes réinvestis :{" "}
+                  {autresReferences.map(r =>
+                    `${r.libelle.toLowerCase()} ${pourcent(r.rendement, 1)} % sur ${Math.round(r.annees)} ans`
+                  ).join(" · ")}. Rendements en dollars.
+                </span>
+              )}
               {/* ⚠️ **Aucun bouton pour reprendre ces chiffres, volontairement.** Ils
                   mesurent le passé de votre allocation, sur une période — 2014 à 2026 —
                   qui fut exceptionnelle pour les actions. Un clic les transformerait en

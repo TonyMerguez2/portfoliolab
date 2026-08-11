@@ -147,3 +147,34 @@ def annualiser(rendements_log: list[float], seances_par_an: int = 252) -> float 
         return None
     total = sum(rendements_log)
     return round((pow(2.718281828459045, total * seances_par_an / n) - 1) * 100, 2)
+
+
+# ── Références de rendement à long terme ─────────────────────────────────────
+#
+# ⚠️ **Pourquoi des références et non la performance du portefeuille.** Mesurée sur
+# l'allocation réelle d'un épargnant, la dernière décennie donne 13 à 18 % par an. C'est
+# exact, et c'est une décennie exceptionnelle. Proposer ce chiffre comme attente rendrait
+# toute projection délirante, et l'épargnant y croirait *parce qu'il vient de ses données*.
+#
+# ⚠️ **Pourquoi des ETF et non des indices.** `^GSPC` rend 8,13 % par an depuis 1970 —
+# mais c'est un indice de **prix**, dividendes exclus. Le même marché, dividendes
+# réinvestis, rend 10,90 %. Deux à trois points par an d'écart, soit un facteur deux sur
+# vingt-quatre ans : proposer un indice de prix comme rendement attendu serait faux dans un
+# sens, l'appeler « rendement total » faux dans l'autre.
+#
+# ⚠️ **Ces rendements sont libellés en dollars.** Un épargnant en euros a touché autre
+# chose, selon le change. L'écran le dit ; le corriger demanderait une série de change par
+# référence, ce qui n'est pas fait.
+REFERENCES_LONGUES: tuple[tuple[str, str], ...] = (
+    ("ACWI", "Actions mondiales"),
+    ("SPY", "Actions américaines"),
+    ("EFA", "Actions développées hors États-Unis"),
+    ("AAXJ", "Actions Asie-Pacifique hors Japon"),
+    ("AGG", "Obligations agrégées"),
+)
+
+#: La référence proposée d'un clic : le marché mondial, le moins spécifique des cinq.
+REFERENCE_PROPOSEE = "ACWI"
+
+#: Une référence n'a de sens que sur une longue fenêtre : elle doit contenir des crises.
+ANNEES_MINIMALES_REFERENCE = 12

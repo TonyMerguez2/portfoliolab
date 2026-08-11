@@ -21,6 +21,7 @@ division ; « augmentez à 1 000 € » serait une recommandation d'investisseme
 from __future__ import annotations
 
 import logging
+import time
 import uuid
 from dataclasses import dataclass
 from datetime import date
@@ -37,8 +38,9 @@ from app.services.objectifs import (
     mois_pour_atteindre, progression, valeur_projetee,
 )
 from app.services.parametres_objectif import (
-    INFLATION_CIBLE_BCE, INFLATION_RELEVEE_LE, INFLATION_ZONE_EURO,
-    INFLATION_ZONE_EURO_COEUR, annualiser, versement_observe,
+    ANNEES_MINIMALES_REFERENCE, INFLATION_CIBLE_BCE, INFLATION_RELEVEE_LE,
+    INFLATION_ZONE_EURO, INFLATION_ZONE_EURO_COEUR, REFERENCES_LONGUES,
+    REFERENCE_PROPOSEE, annualiser, versement_observe,
 )
 from app.services.projection import projeter
 from app.services.volatilite import JOURS_MINIMAUX, volatilite_mesuree
@@ -363,6 +365,57 @@ async def projection(portfolio_id: str, objectif_id: str,
 #: Les fenêtres de rendement passé qu'on montre, en années.
 FENETRES_RENDEMENT = (3, 5, 10)
 
+_TTL_REFERENCES = 30 * 24 * 3600
+
+
+def references_longues() -> list[dict]:
+    """
+    Le rendement à long terme de quelques grandes classes d'actifs, mis en cache un mois.
+
+    ⚠️ Un mois de cache : ces chiffres bougent de quelques centièmes par mois, et les
+    relire à chaque ouverture du formulaire coûterait cinq téléchargements pour rien.
+    """
+    # ⚠️ On réutilise le cache disque du service des événements plutôt que d'en ouvrir un
+    # second : il gère déjà l'écriture atomique, le rechargement sur date de modification
+    # et la péremption par version. Deux caches auraient divergé.
+    from app.services.evenements import _charger, _ecrire, _TTL_ECHEC, _VERSION
+    cache = _charger()
+    e = cache.get("references_longues")
+    if e and e.get("echeance", 0) > time.time() and e.get("version") == _VERSION:
+        return e.get("lignes") or []
+
+    lignes: list[dict] = []
+    try:
+        import yfinance as yf
+        for ticker, libelle in REFERENCES_LONGUES:
+            h = yf.download(ticker, start="1990-01-01", progress=False,
+                            auto_adjust=True)["Close"].dropna()
+            if h is None or len(h) < 300:
+                continue
+            annees = (h.index[-1] - h.index[0]).days / 365.25
+            if annees < ANNEES_MINIMALES_REFERENCE:
+                continue
+            debut = float(h.iloc[0].iloc[0] if hasattr(h.iloc[0], "iloc") else h.iloc[0])
+            fin = float(h.iloc[-1].iloc[0] if hasattr(h.iloc[-1], "iloc") else h.iloc[-1])
+            if debut <= 0:
+                continue
+            tcam = ((fin / debut) ** (1 / annees) - 1) * 100
+            lignes.append({
+                "ticker": ticker, "libelle": libelle,
+                "rendement": round(tcam, 2), "annees": round(annees, 1),
+                "depuis": str(h.index[0].date()),
+                "proposee": ticker == REFERENCE_PROPOSEE,
+            })
+    except Exception as exc:                                    # pragma: no cover
+        logger.warning("références longues indisponibles (%s)", type(exc).__name__)
+
+    cache["references_longues"] = {
+        "version": _VERSION, "lignes": lignes,
+        "echeance": time.time() + (_TTL_REFERENCES if lignes else _TTL_ECHEC),
+    }
+    _ecrire()
+    return lignes
+
 
 @router.get("/{portfolio_id}/objectifs/parametres")
 async def parametres_suggeres(portfolio_id: str, db: Session = Depends(get_db),
@@ -443,6 +496,11 @@ async def parametres_suggeres(portfolio_id: str, db: Session = Depends(get_db),
         # ⚠️ Rendu sous une clé qui dit ce que c'est. Un champ nommé
         # « rendement_suggere » aurait invité l'interface à le pré-remplir.
         "rendements_passes": rendements,
+        # ⚠️ Les références, elles, **peuvent** être proposées : elles portent sur des
+        # fenêtres longues — dix-huit à trente-trois ans, contenant 2000, 2008 et 2020 — et
+        # sur des classes d'actifs, non sur les dix ans d'un portefeuille particulier.
+        # C'est la différence entre un ordre de grandeur et une extrapolation.
+        "references_longues": references_longues(),
         "periode_mesuree": periode,
         # ⚠️ Deux valeurs, et n'en rendre qu'une serait trompeur. La cible est proposée
         # parce qu'une banque centrale y ramène l'inflation sur un horizon long ; le
