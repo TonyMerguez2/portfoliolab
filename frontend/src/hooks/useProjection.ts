@@ -7,7 +7,11 @@ import { enTetesAuth } from "@/lib/session";
 
 /** La réponse de la route de projection, refus compris. */
 export type Projection =
-  | { possible: false; raison: "valeur_inconnue" | "sans_echeance" | "sans_rendement_attendu";
+  | { possible: false;
+      raison: "valeur_inconnue" | "sans_echeance" | "sans_rendement_attendu"
+        // ⚠️ Propre au plafond de versements : il ne manque pas une hypothèse mais le
+        // rythme d'apport, sans lequel la date du plafond n'existe pas.
+        | "sans_versement";
       objectif: Objectif }
   | {
       possible: true;
@@ -16,12 +20,19 @@ export type Projection =
       enveloppes: Record<string, number[]>;
       mediane: number | null;
       intervalle: [number, number] | null;
-      niveau_intervalle: number;
+      /** `null` quand il n'y a pas d'intervalle — une droite certaine n'en a pas. */
+      niveau_intervalle: number | null;
       probabilite: number | null;
       taux_implicites: Record<string, number>;
       requis: number | null;
       volatilite: number | null;
-      volatilite_source: "mesuree" | "echantillon_court" | "indisponible";
+      /**
+       * ⚠️ **« sans_objet » n'est pas « indisponible ».** Les trois premiers motifs sont des
+       * empêchements ; celui-là dit qu'une somme de versements ne dépend d'aucun marché.
+       * Les confondre afficherait « volatilité non mesurable » sur un portefeuille dont elle
+       * est parfaitement mesurable, et ferait passer un calcul exact pour une panne.
+       */
+      volatilite_source: "mesuree" | "echantillon_court" | "indisponible" | "sans_objet";
       seances_mesurees: number;
       seances_minimales: number;
       valeur_portefeuille: number | null;

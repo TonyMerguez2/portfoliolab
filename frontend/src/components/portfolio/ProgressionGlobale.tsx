@@ -81,6 +81,20 @@ export default function ProgressionGlobale({ objectifs }: { objectifs: Objectif[
             </p>
           )}
 
+          {/* ⚠️ **Un message distinct, et ce n'est pas un raffinement.** Vu à l'écran :
+              « 1 objectif non compté : montant indisponible » s'affichait pour un plafond de
+              versements, dont le montant est parfaitement connu. La vraie raison est autre —
+              les versements *sont* dans le patrimoine, les additionner compterait deux fois
+              le même argent — et la donner en orange, comme une panne, faisait passer un
+              choix de calcul assumé pour une défaillance. Ton neutre, et cause exacte. */}
+          {a.horsUnite > 0 && (
+            <p style={{ margin: 0, fontFamily: FONT, fontSize: 9.5, lineHeight: 1.5,
+              color: CLAIR.texteFaible }}>
+              {a.horsUnite} plafond{a.horsUnite > 1 ? "s" : ""} de versements hors total :
+              vos versements sont déjà compris dans votre patrimoine.
+            </p>
+          )}
+
           <p style={{ margin: 0, fontFamily: FONT, fontSize: 9, lineHeight: 1.5,
             color: CLAIR.texteFaible }}>
             {/* Resserré à une ligne : la mise en garde reste, sans manger la place des

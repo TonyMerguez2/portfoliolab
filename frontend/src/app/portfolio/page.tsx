@@ -144,28 +144,6 @@ function Sparkline({ pts, color, w = 48, h = 18, glow = false }: {
   );
 }
 
-// ── Surface card ───────────────────────────────────────────────────────────────
-/**
- * Répartit le style d'un appelant entre les deux couches du cadre.
- *
- * Ce qui place la carte dans sa grille va sur le cadre ; ce qui habille son
- * contenu va sur la carte. Le tri est explicite plutôt que déduit : une clé
- * de mise en page appliquée à la couche intérieure la décrocherait de son
- * cadre, et une clé de contenu appliquée à l'extérieure repousserait la carte
- * au lieu du texte.
- */
-function SectionLabel({ children }: { children: ReactNode }) {
-  return (
-    <span style={{
-      fontSize: 9, fontWeight: 700, letterSpacing: "0.12em",
-      color: CLAIR.texteFaible, fontFamily: FONT,
-      display: "block", marginBottom: 10,
-    }}>
-      {children}
-    </span>
-  );
-}
-
 // ── NOVAC Score circle gauge ───────────────────────────────────────────────────
 //
 // ⚠️ Les seuils viennent de `BANDES` dans `lib/analyse.ts`, alignés sur ceux du
@@ -1995,19 +1973,12 @@ function PortfolioPageInner() {
         overflowY: "auto", overflowX: "hidden" }}>
 
         {/* ── Rangée 1 : les objectifs ──────────────────────────────────────── */}
-        <div style={{ display: "flex", alignItems: "center",
-          justifyContent: "space-between", gap: 10, flexShrink: 0 }}>
-          <SectionLabel>MES OBJECTIFS</SectionLabel>
-          {objectifs.donnees && objectifs.donnees.objectifs.length > 0 && (
-            <button type="button" onClick={() => setSaisieObjectif({ mode: "creation" })}
-              style={{ padding: "5px 12px", borderRadius: RAYONS.plein, cursor: "pointer",
-                border: `1px solid ${JETONS.accent}`, background: JETONS.accentVoile,
-                color: CLAIR.accent, fontFamily: FONT, fontSize: 10.5, fontWeight: 700 }}>
-              + Nouvel objectif
-            </button>
-          )}
-        </div>
-
+        {/* ⚠️ **Ni titre « MES OBJECTIFS » ni bouton « + Nouvel objectif » ici.** Les deux
+            ont été retirés pour rendre leur hauteur aux cartes, sur un onglet dont toute la
+            mise en page est contrainte par la tenue en un écran. Le titre nommait ce que les
+            cartes montrent déjà ; le bouton doublait la tuile « Ajouter un objectif » que la
+            grille porte en dernière position, laquelle est visible dans tous les cas — y
+            compris quand il n'y a encore aucun objectif, là où ce bouton-ci disparaissait. */}
         {objectifs.etat === "charge" && (
           <p style={{ margin: 0, fontFamily: FONT, fontSize: 11, color: CLAIR.texteFaible }}>
             Chargement des objectifs…

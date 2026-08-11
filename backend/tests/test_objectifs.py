@@ -167,8 +167,20 @@ class TestEurosConstants:
 
 
 class TestGenres:
-    def test_les_quatre_sortes_de_la_maquette_sont_couvertes(self):
-        assert set(ob.GENRES) == {"capital", "capital_age", "achat", "revenu_mensuel"}
+    def test_les_sortes_couvertes(self):
+        assert set(ob.GENRES) == {"capital", "capital_age", "achat", "revenu_mensuel",
+                                  "plafond_versements"}
+
+    def test_seul_le_plafond_se_mesure_sur_les_versements(self):
+        """
+        ⚠️ La frontière que ce test garde. Les quatre premiers genres se mesurent sur la
+        valeur du portefeuille ; le cinquième sur ce qui y a été versé. Un genre qui
+        basculerait du mauvais côté de cette liste afficherait un plafond de PEA atteint
+        alors qu'il reste de la capacité de versement — voir `test_plafond_versements.py`.
+        """
+        assert ob.se_mesure_sur_les_versements("plafond_versements") is True
+        for genre in ("capital", "capital_age", "achat", "revenu_mensuel"):
+            assert ob.se_mesure_sur_les_versements(genre) is False
 
     def test_seul_le_revenu_mensuel_passe_par_un_taux_de_retrait(self):
         # Les trois autres sont des montants : leur capital requis est leur cible.

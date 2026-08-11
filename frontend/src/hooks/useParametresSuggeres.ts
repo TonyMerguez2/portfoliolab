@@ -20,6 +20,17 @@ export type ParametresSuggeres = {
    * ses données.
    */
   rendements_passes: { annees: number; rendement: number; volatilite: number }[];
+  /** Les plafonds de versements proposés d'un clic — PEA, PEA-Jeunes. */
+  plafonds: { libelle: string; montant: number }[];
+  /**
+   * Le cumul versé que les transactions permettent de mesurer.
+   *
+   * ⚠️ **Un minorant, et le nom du champ le dit.** L'application enregistre des achats et
+   * des ventes de titres, jamais les virements sur le compte : l'argent laissé en liquidités
+   * n'y figure pas. Sous-estimer un plafond fait croire à une marge qui n'existe pas, d'où
+   * le champ saisissable à côté.
+   */
+  verse_minorant: number | null;
   /**
    * Le rendement à long terme de grandes classes d'actifs.
    *

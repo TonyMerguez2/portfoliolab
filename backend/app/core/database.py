@@ -84,11 +84,13 @@ class Objectif(Base):
     portfolio_id = Column(String, ForeignKey("portfolios.id", ondelete="CASCADE"),
                           nullable=False, index=True)
     nom = Column(String, nullable=False)
-    #: « capital », « capital_age », « achat » ou « revenu_mensuel ».
+    #: « capital », « capital_age », « achat », « revenu_mensuel » ou
+    #: « plafond_versements ».
     #:
-    #: ⚠️ Les quatre ne se calculent pas pareil — voir `services/objectifs.py`. Un
-    #: revenu mensuel n'est pas un montant : il faut le convertir en capital par un
-    #: taux de retrait avant de le comparer à un patrimoine.
+    #: ⚠️ Ils ne se calculent pas pareil — voir `services/objectifs.py`. Un revenu mensuel
+    #: n'est pas un montant : il faut le convertir en capital par un taux de retrait avant
+    #: de le comparer à un patrimoine. Et un plafond de versements ne se mesure pas du tout
+    #: sur le patrimoine, mais sur ce qui a été versé.
     genre = Column(String, nullable=False)
     #: Des euros, ou des euros par mois pour un objectif de revenu.
     cible = Column(Float, nullable=False)
@@ -104,6 +106,18 @@ class Objectif(Base):
     #: l'appartement. Cent par défaut, ce qui est juste quand il n'y en a qu'un.
     part_affectee = Column(Float, nullable=True)
     versement_mensuel = Column(Float, nullable=True)
+    #: Le cumul des versements déjà effectués, pour un objectif de plafond.
+    #:
+    #: ⚠️ **Saisissable parce que l'application ne peut pas le mesurer exactement.** Elle
+    #: enregistre des achats et des ventes de titres, jamais les mouvements d'espèces du
+    #: compte. Le net des transactions en est un **minorant** : l'argent viré puis laissé en
+    #: liquidités n'y figure pas, et une vente non réinvestie le fait baisser alors qu'elle
+    #: ne rend aucune capacité de versement. Sous-estimer un plafond fait croire à une marge
+    #: qui n'existe pas, donc la mesure est **proposée** et l'épargnant peut inscrire le
+    #: chiffre de son relevé.
+    #:
+    #: `None` signifie « prendre la mesure des transactions », pas « zéro ».
+    verse_deja = Column(Float, nullable=True)
     #: ⚠️ Taux de rendement attendu et inflation sont des **hypothèses de
     #: l'épargnant**, pas des mesures. Nullables sans valeur par défaut : sans elles la
     #: projection ne rend rien, plutôt qu'un chiffre d'apparence sûre.
@@ -147,6 +161,7 @@ for table, col, typedef in [
     ("portfolios",   "frais_lignes",   "JSON"),
     ("transactions", "note",          "TEXT"),
     ("users",        "devise",         "TEXT"),
+    ("objectifs",    "verse_deja",     "REAL"),
 ]:
     try:
         with engine.connect() as conn:

@@ -34,8 +34,9 @@ from app.core.auth import require_auth
 from app.core.database import Objectif, Portfolio, Transaction, get_db
 from app.models.user import User
 from app.services.objectifs import (
-    GENRES, annee_de_l_age, capital_requis, echeance_en_mois, euros_constants,
-    mois_pour_atteindre, progression, valeur_projetee,
+    GENRES, PLAFONDS_CONNUS, annee_de_l_age, avancement_verse, capital_requis,
+    echeance_en_mois, euros_constants, mois_pour_atteindre, mois_pour_verser,
+    progression, se_mesure_sur_les_versements, valeur_projetee, verse_projete,
 )
 from app.services.parametres_objectif import (
     ANNEES_MINIMALES_REFERENCE, INFLATION_CIBLE_BCE, INFLATION_RELEVEE_LE,
@@ -59,6 +60,9 @@ class ObjectifEntree(BaseModel):
     age_cible: int | None = None
     part_affectee: float | None = None
     versement_mensuel: float | None = None
+    #: Le cumul des versements déjà effectués, pour un objectif de plafond. `None` veut
+    #: dire « reprends la mesure des transactions », et non « zéro ».
+    verse_deja: float | None = None
     taux_attendu: float | None = None
     inflation: float | None = None
     taux_retrait: float | None = None
@@ -79,6 +83,9 @@ BORNES = {
     # mais la conversion en capital devient impossible, ce que le service gère.
     "taux_retrait": (0.0, 20.0),
     "part_affectee": (0.0, 100.0),
+    # Un cumul de versements négatif n'existe pas ; cent millions borne la faute de frappe
+    # sans brider personne.
+    "verse_deja": (0.0, 100_000_000.0),
 }
 
 
@@ -172,16 +179,66 @@ def _annee_naissance(user: User) -> int | None:
     return getattr(user, "annee_naissance", None)
 
 
-def _en_dict(o: Objectif, valeur: float | None, user: User) -> dict:
-    """Un objectif, augmenté de ce que le serveur sait en déduire."""
+def _verse_mesure(p: Portfolio, db: Session) -> float | None:
+    """
+    Le cumul net que les transactions permettent de mesurer, ou `None` s'il n'y en a pas.
+
+    ⚠️ **C'est un minorant des versements réels, et l'écran doit le dire.** L'application
+    enregistre des achats et des ventes de **titres**, jamais les mouvements d'espèces du
+    compte : l'argent viré puis laissé en liquidités n'apparaît pas, et une vente non
+    réinvestie fait baisser ce net alors qu'elle ne rend aucune capacité de versement sur un
+    PEA. Sous-estimer un plafond fait croire à une marge qui n'existe pas — c'est le sens
+    dangereux de l'erreur, d'où le champ saisissable qui permet de reprendre son relevé.
+
+    ⚠️ Un arbitrage — vendre A pour acheter B — se compense de lui-même dans ce net, ce qui
+    est le comportement juste : il ne consomme aucune capacité de versement.
+    """
+    txs = db.query(Transaction).filter(Transaction.portfolio_id == p.id).all()
+    v = versement_observe(txs)
+    return None if v is None else v.net
+
+
+def _verse_retenu(o: Objectif, verse_mesure: float | None) -> float:
+    """
+    Le cumul de versements retenu : celui saisi, sinon celui mesuré.
+
+    ⚠️ **`verse_deja is None` veut dire « reprends la mesure », pas « zéro ».** Un objectif
+    créé sans toucher au champ doit partir des transactions ; confondre les deux afficherait
+    « 0 € versés » sur un PEA qui en a reçu cinq mille, et repousserait la date du plafond
+    de plusieurs années.
+    """
+    if o.verse_deja is not None:
+        return max(0.0, float(o.verse_deja))
+    return max(0.0, verse_mesure or 0.0)
+
+
+def _en_dict(o: Objectif, valeur: float | None, user: User,
+             verse_mesure: float | None = None) -> dict:
+    """
+    Un objectif, augmenté de ce que le serveur sait en déduire.
+
+    ⚠️ **Deux familles de calcul, et les mélanger serait la faute.** Un objectif de capital
+    se mesure sur ce que **vaut** le portefeuille ; un plafond de versements sur ce qu'on y
+    a **versé**. Le second ne dépend d'aucune hypothèse de marché : c'est une division, sans
+    rendement, sans volatilité et sans inflation.
+    """
     an_echeance = o.echeance_annee
     if o.genre == "capital_age":
         an_echeance = annee_de_l_age(o.age_cible, _annee_naissance(user)) or o.echeance_annee
 
     mois = echeance_en_mois(an_echeance)
     requis = capital_requis(o.genre, o.cible, o.taux_retrait)
-    prog = progression(o.genre, o.cible, valeur or 0.0,
-                       o.part_affectee, o.taux_retrait) if valeur is not None else None
+    sur_versements = se_mesure_sur_les_versements(o.genre)
+    verse = _verse_retenu(o, verse_mesure) if sur_versements else 0.0
+
+    if sur_versements:
+        # ⚠️ La valeur du portefeuille n'entre pas ici. Les gains ne consomment pas la
+        # capacité de versement d'un PEA : un PEA valant 150 000 € pour 90 000 € versés
+        # garde 60 000 € de marge, et le mesurer sur la valeur l'annoncerait plein.
+        prog = avancement_verse(o.cible, verse)
+    else:
+        prog = progression(o.genre, o.cible, valeur or 0.0,
+                           o.part_affectee, o.taux_retrait) if valeur is not None else None
 
     # ── Ce que les hypothèses permettent de calculer, et rien de plus ─────────
     #
@@ -189,12 +246,19 @@ def _en_dict(o: Objectif, valeur: float | None, user: User) -> dict:
     # recevoir un rendement choisi par le logiciel : une projection est une hypothèse
     # de l'épargnant, et la lui souffler la ferait passer pour une prévision.
     projete = atteinte_mois = None
-    if prog is not None and o.taux_attendu is not None and mois:
-        projete = valeur_projetee(prog.actuel, o.versement_mensuel or 0.0,
-                                  o.taux_attendu, mois)
-    if prog is not None and o.taux_attendu is not None and requis:
-        atteinte_mois = mois_pour_atteindre(prog.actuel, o.versement_mensuel or 0.0,
-                                           o.taux_attendu, requis)
+    if sur_versements:
+        # ⚠️ Aucune hypothèse n'est requise, donc rien n'est tu : le cumul et la date du
+        # plafond se calculent dès qu'un rythme de versement est connu.
+        if mois:
+            projete = verse_projete(verse, o.versement_mensuel, mois)
+        atteinte_mois = mois_pour_verser(o.cible, verse, o.versement_mensuel)
+    else:
+        if prog is not None and o.taux_attendu is not None and mois:
+            projete = valeur_projetee(prog.actuel, o.versement_mensuel or 0.0,
+                                      o.taux_attendu, mois)
+        if prog is not None and o.taux_attendu is not None and requis:
+            atteinte_mois = mois_pour_atteindre(prog.actuel, o.versement_mensuel or 0.0,
+                                               o.taux_attendu, requis)
 
     return {
         "id": o.id, "nom": o.nom, "genre": o.genre, "cible": o.cible,
@@ -210,12 +274,32 @@ def _en_dict(o: Objectif, valeur: float | None, user: User) -> dict:
         "valeur_projetee": projete,
         # En euros d'aujourd'hui, quand l'épargnant a donné une inflation : un million
         # dans trente ans n'a pas le pouvoir d'achat d'un million aujourd'hui.
+        #
+        # ⚠️ **Jamais pour un plafond de versements.** Cent cinquante mille euros est un
+        # seuil légal, exprimé en euros courants et non indexé : afficher à côté « soit
+        # 96 000 € d'aujourd'hui » laisserait croire que le plafond se déprécie, ou pire,
+        # qu'il reste de la marge quand la loi dit qu'il n'y en a plus.
         "projetee_en_euros_constants": (
             euros_constants(projete, o.inflation, mois)
-            if projete is not None and o.inflation is not None and mois else None),
+            if projete is not None and o.inflation is not None and mois
+            and not sur_versements else None),
         # ⚠️ Un constat, pas un conseil : le nombre de mois qu'il faudrait au rythme
         # actuel. L'écran peut le comparer à l'échéance ; il ne dit pas quoi changer.
         "mois_pour_atteindre": atteinte_mois,
+        # ── Ce qui n'existe que pour un objectif de versements ─────────────────
+        #
+        # ⚠️ Rendu pour que l'écran n'ait pas à recopier la liste des genres concernés :
+        # une seconde liste finirait par différer de celle du service.
+        "sur_versements": sur_versements,
+        # Le chiffre saisi, s'il l'a été : l'écran doit pouvoir dire « d'après votre
+        # relevé » plutôt que « d'après vos transactions ».
+        "verse_deja": o.verse_deja,
+        # ⚠️ Ce que les transactions mesurent, **toujours rendu même quand l'épargnant a
+        # saisi son propre chiffre**. C'est ce qui permet à l'écran de signaler un écart :
+        # un relevé à 40 000 € contre 12 000 € de transactions saisies veut dire qu'il
+        # manque des transactions, et l'avancement du reste de l'application est alors faux.
+        "verse_mesure": (round(verse_mesure, 2) if verse_mesure is not None else None),
+        "verse_retenu": round(verse, 2) if sur_versements else None,
     }
 
 
@@ -228,8 +312,9 @@ async def lister(portfolio_id: str, db: Session = Depends(get_db),
                  .filter(Objectif.portfolio_id == portfolio_id)
                  .order_by(Objectif.cree_le).all())
     parts = [o.part_affectee if o.part_affectee is not None else 100.0 for o in objectifs]
+    verse = _verse_mesure(p, db)
     return {
-        "objectifs": [_en_dict(o, v.valeur, user) for o in objectifs],
+        "objectifs": [_en_dict(o, v.valeur, user, verse) for o in objectifs],
         "valeur_portefeuille": v.valeur,
         "source_valeur": v.source,
         # ⚠️ Rendus pour que l'écran puisse avouer une valorisation partielle : un total
@@ -253,7 +338,7 @@ async def creer(portfolio_id: str, data: ObjectifEntree,
     db.add(o)
     db.commit()
     db.refresh(o)
-    return _en_dict(o, (await valeur_courante(p, db)).valeur, user)
+    return _en_dict(o, (await valeur_courante(p, db)).valeur, user, _verse_mesure(p, db))
 
 
 @router.put("/{portfolio_id}/objectifs/{objectif_id}")
@@ -269,7 +354,7 @@ async def modifier(portfolio_id: str, objectif_id: str, data: ObjectifEntree,
         setattr(o, champ, valeur)
     db.commit()
     db.refresh(o)
-    return _en_dict(o, (await valeur_courante(p, db)).valeur, user)
+    return _en_dict(o, (await valeur_courante(p, db)).valeur, user, _verse_mesure(p, db))
 
 
 @router.delete("/{portfolio_id}/objectifs/{objectif_id}")
@@ -314,10 +399,63 @@ async def projection(portfolio_id: str, objectif_id: str,
         raise HTTPException(404, "Objectif introuvable")
 
     v = await valeur_courante(p, db)
-    detail = _en_dict(o, v.valeur, user)
+    detail = _en_dict(o, v.valeur, user, _verse_mesure(p, db))
     mois = detail["mois_restants"]
     requis = detail["capital_requis"]
     depart = detail["montant_actuel"]
+
+    # ── Un plafond de versements ne se tire pas au hasard ─────────────────────
+    #
+    # ⚠️ **Aucun Monte Carlo ici, et ce n'est pas une simplification.** La somme des
+    # versements ne dépend d'aucun marché : « quand aurai-je versé 150 000 € ? » a une
+    # réponse exacte. Lui coller une enveloppe de centiles inventerait une incertitude que
+    # rien ne porte, et la seule vraie — tiendrai-je ce rythme ? — n'est pas un aléa de
+    # marché mais une décision de l'épargnant. Elle se montre en faisant varier le
+    # versement, pas en tirant des dés.
+    if detail["sur_versements"]:
+        if not o.versement_mensuel or o.versement_mensuel <= 0:
+            return {"possible": False, "raison": "sans_versement", "objectif": detail}
+        # ⚠️ **L'horizon est la date du plafond, et non une échéance à saisir.** C'est la
+        # question même de cet objectif : « quand aurai-je versé 150 000 € ? » La réponse est
+        # calculée, donc exiger en plus une année cible pour dessiner la courbe reviendrait à
+        # demander à l'épargnant de deviner ce qu'il vient chercher. Une échéance saisie reste
+        # respectée quand elle existe — elle sert alors à comparer un délai voulu au délai
+        # réel, ce que la carte affiche déjà.
+        horizon = mois or detail["mois_pour_atteindre"]
+        if not horizon:
+            return {"possible": False, "raison": "sans_echeance", "objectif": detail}
+        verse = detail["verse_retenu"] or 0.0
+        pas = list(range(0, horizon + 1, PAS_PROJECTION))
+        if pas[-1] != horizon:
+            pas.append(horizon)
+        cumul = [verse_projete(verse, o.versement_mensuel, m) for m in pas]
+        return {
+            "possible": True,
+            "objectif": detail,
+            "mois": pas,
+            # Une seule courbe, sous la clé de la médiane : l'écran sait déjà n'en dessiner
+            # qu'une quand la dispersion est absente, et lui inventer deux bornes égales
+            # aurait dessiné une bande d'épaisseur nulle qu'il aurait fallu expliquer.
+            "enveloppes": {"50": [round(c, 2) for c in cumul]},
+            "mediane": round(cumul[-1], 2),
+            "intervalle": None,
+            "niveau_intervalle": None,
+            # ⚠️ Ni probabilité ni taux implicite : la trajectoire est certaine si le
+            # rythme tient, et « 100 % des tirages » sur un unique tirage ne veut rien dire.
+            "probabilite": None,
+            "taux_implicites": {},
+            "requis": requis,
+            "volatilite": None,
+            # ⚠️ Une quatrième valeur, distincte de « indisponible ». La volatilité n'est pas
+            # manquante ici : elle est **hors sujet**. Réutiliser « indisponible » aurait
+            # affiché « volatilité non mesurable » sur un portefeuille dont elle est
+            # parfaitement mesurable, et fait passer un choix de calcul pour une panne.
+            "volatilite_source": "sans_objet",
+            "seances_mesurees": 0,
+            "seances_minimales": JOURS_MINIMAUX,
+            "valeur_portefeuille": v.valeur,
+            "source_valeur": v.source,
+        }
 
     # ⚠️ Trois refus explicites, plutôt qu'une courbe vide sans explication.
     if depart is None:
@@ -590,6 +728,15 @@ async def parametres_suggeres(portfolio_id: str, db: Session = Depends(get_db),
         # parce qu'une banque centrale y ramène l'inflation sur un horizon long ; le
         # relevé est affiché parce qu'il en diffère aujourd'hui de près d'un point, ce qui
         # change de dix-neuf pour cent le pouvoir d'achat projeté sur vingt-quatre ans.
+        # ── Ce qu'il faut pour un objectif de plafond de versements ────────────
+        #
+        # ⚠️ **Le cumul mesuré est rendu comme un minorant, et son nom le dit.** Une clé
+        # « versements_cumules » aurait invité l'interface à l'afficher comme un fait ;
+        # l'application ne voit que des achats et des ventes de titres, jamais les virements
+        # sur le compte. Sous-estimer un plafond fait croire à une marge qui n'existe pas.
+        "plafonds": [{"libelle": nom, "montant": montant}
+                     for nom, montant in PLAFONDS_CONNUS],
+        "verse_minorant": None if v is None else v.net,
         "inflation": {
             "valeur": INFLATION_CIBLE_BCE,
             "source": "cible de la Banque centrale européenne",

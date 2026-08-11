@@ -30,6 +30,10 @@ const GENRES: { cle: Genre; titre: string; aide: string }[] = [
     aide: "Un montant à une date. « 300 000 € en 2031 pour un appartement. »" },
   { cle: "revenu_mensuel", titre: "Un revenu mensuel",
     aide: "« 5 000 € par mois. » Converti en capital par le taux de retrait." },
+  { cle: "plafond_versements", titre: "Un plafond de versements",
+    aide: "« Quand aurai-je versé 150 000 € sur mon PEA ? » Seuls vos versements comptent : "
+      + "les plus-values ne consomment pas ce plafond, et aucune hypothèse de rendement "
+      + "n’entre dans le calcul." },
 ];
 
 const COULEURS = [JETONS.accent, "#a78bfa", JETONS.positif, JETONS.attention, "#f472b6"];
@@ -94,6 +98,10 @@ export default function FormulaireObjectif({
     initial?.part_affectee != null ? String(initial.part_affectee) : "");
   const [versement, setVersement] = useState(
     initial?.versement_mensuel != null ? String(initial.versement_mensuel) : "");
+  // ⚠️ Vide par défaut, et vide veut dire « reprends la mesure des transactions » — non
+  // « zéro ». Y mettre 0 afficherait « 0 € versés » sur un PEA qui en a reçu cinq mille.
+  const [verseDeja, setVerseDeja] = useState(
+    initial?.verse_deja != null ? String(initial.verse_deja) : "");
   const [taux, setTaux] = useState(
     initial?.taux_attendu != null ? String(initial.taux_attendu) : "");
   const [inflation, setInflation] = useState(
@@ -109,6 +117,11 @@ export default function FormulaireObjectif({
 
   const enAge = genre === "capital_age";
   const enRevenu = genre === "revenu_mensuel";
+  // ⚠️ Ce drapeau commande beaucoup de choses, parce que ce genre d'objectif ne partage
+  // presque rien avec les autres : ni rendement attendu, ni inflation, ni part du
+  // portefeuille. Laisser ces champs visibles inviterait à les remplir pour rien, et
+  // laisserait croire qu'ils changent la date du plafond.
+  const enPlafond = genre === "plafond_versements";
 
   return (
     <div
@@ -157,9 +170,29 @@ export default function FormulaireObjectif({
         </Champ>
 
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
-          <Champ etiquette={enRevenu ? "Revenu visé (€ / mois)" : "Montant visé (€)"}>
+          <Champ etiquette={enPlafond ? "Montant du plafond (€)"
+            : enRevenu ? "Revenu visé (€ / mois)" : "Montant visé (€)"}>
             <input value={cible} onChange={e => setCible(e.target.value)}
-              inputMode="decimal" style={styleSaisie} placeholder={enRevenu ? "5000" : "300000"} />
+              inputMode="decimal" style={styleSaisie}
+              placeholder={enPlafond ? "150000" : enRevenu ? "5000" : "300000"} />
+            {/* ⚠️ **Les plafonds sont proposés, jamais imposés.** Ce logiciel ne sait pas
+                quelle enveloppe est ce portefeuille — le type de compte n'est pas
+                enregistré — et il n'est pas conseiller fiscal. Le bouton nomme donc ce
+                qu'il propose, et le champ reste libre. */}
+            {enPlafond && (suggestions?.plafonds ?? []).length > 0 && (
+              <div style={{ display: "flex", gap: 5, marginTop: 4, flexWrap: "wrap" }}>
+                {suggestions!.plafonds.map(pl => (
+                  <button key={pl.libelle} type="button"
+                    onClick={() => setCible(String(pl.montant))}
+                    style={{ padding: "2px 7px", borderRadius: RAYONS.xs, cursor: "pointer",
+                      background: "transparent", border: `1px solid ${CLAIR.bord}`,
+                      color: CLAIR.accent, fontFamily: FONT, fontSize: 9.5,
+                      fontWeight: 600 }}>
+                    {pl.libelle} : {pl.montant.toLocaleString("fr-FR")} €
+                  </button>
+                ))}
+              </div>
+            )}
           </Champ>
 
           {enAge ? (
@@ -177,23 +210,79 @@ export default function FormulaireObjectif({
           )}
         </div>
 
-        <Champ etiquette="Part du portefeuille affectée (%)"
-          aide="100 % par défaut. Avec plusieurs objectifs, répartissez : au-delà de 100 % au total, le même euro compterait deux fois.">
-          <input value={part} onChange={e => setPart(e.target.value)}
-            inputMode="decimal" style={styleSaisie} placeholder="100" />
-        </Champ>
+        {/* ⚠️ **Masquée pour un plafond de versements, et pas par souci de concision.**
+            Répartir un *patrimoine* entre plusieurs objectifs se comprend ; répartir un
+            versement déjà effectué entre deux plafonds ne veut rien dire — l'euro versé sur
+            le PEA l'a été en entier. Le champ resté visible aurait invité à diviser un
+            cumul, donc à sous-estimer le remplissage du plafond. */}
+        {!enPlafond && (
+          <Champ etiquette="Part du portefeuille affectée (%)"
+            aide="100 % par défaut. Avec plusieurs objectifs, répartissez : au-delà de 100 % au total, le même euro compterait deux fois.">
+            <input value={part} onChange={e => setPart(e.target.value)}
+              inputMode="decimal" style={styleSaisie} placeholder="100" />
+          </Champ>
+        )}
+
+        {/* ── Le cumul déjà versé, propre au plafond ────────────────────────── */}
+        {enPlafond && (
+          <Champ etiquette="Versements déjà effectués (€)"
+            aide="Laissez vide pour reprendre la mesure de vos transactions.">
+            <input value={verseDeja} onChange={e => setVerseDeja(e.target.value)}
+              inputMode="decimal" style={styleSaisie}
+              placeholder={suggestions?.verse_minorant != null
+                ? String(Math.round(suggestions.verse_minorant)) : "0"} />
+            {/* ⚠️ **La mesure est proposée en disant qu'elle minore.** L'application
+                enregistre des achats et des ventes de titres, jamais les virements sur le
+                compte : l'argent viré puis laissé en liquidités n'y figure pas, et une vente
+                non réinvestie la fait baisser alors qu'elle ne rend aucune capacité de
+                versement. L'erreur va donc dans le sens dangereux — croire à une marge qui
+                n'existe pas — d'où l'invitation explicite à préférer son relevé. */}
+            {suggestions?.verse_minorant != null && (
+              <button type="button"
+                onClick={() => setVerseDeja(String(Math.round(suggestions.verse_minorant!)))}
+                style={{ alignSelf: "flex-start", marginTop: 3, padding: "2px 7px",
+                  borderRadius: RAYONS.xs, cursor: "pointer", background: "transparent",
+                  border: `1px solid ${CLAIR.bord}`, color: CLAIR.accent,
+                  fontFamily: FONT, fontSize: 9.5, fontWeight: 600, textAlign: "left" }}>
+                reprendre {Math.round(suggestions.verse_minorant).toLocaleString("fr-FR")} €
+                mesurés sur vos transactions
+              </button>
+            )}
+            <span style={{ marginTop: 3, fontFamily: FONT, fontSize: 9, lineHeight: 1.45,
+              color: CLAIR.texteFaible }}>
+              Cette mesure ne compte que vos achats et ventes de titres, pas vos virements :
+              elle <strong>sous-estime</strong> vos versements si vous laissez des
+              liquidités. Le chiffre de votre relevé bancaire est le bon.
+            </span>
+          </Champ>
+        )}
 
         {/* ── Hypothèses ─────────────────────────────────────────────────────── */}
         <div style={{ borderTop: `1px solid ${CLAIR.bord}`, paddingTop: 12,
           display: "flex", flexDirection: "column", gap: 10 }}>
+          {/* ⚠️ Deux textes, parce que ce bloc ne contient pas la même chose selon le
+              genre. Pour un plafond de versements il n'y a **aucune hypothèse** : la date
+              est une division. Garder le mot « hypothèses » aurait laissé croire que le
+              résultat dépend d'un choix discutable, alors qu'il est exact. */}
           <span style={{ fontFamily: FONT, fontSize: 10, color: CLAIR.texteFaible,
             lineHeight: 1.5 }}>
-            <strong style={{ color: CLAIR.texteSecondaire }}>Hypothèses</strong> — ce sont
-            vos choix, pas des mesures. Sans elles, la carte montre l’avancement mais
-            aucune projection.
+            {enPlafond ? (
+              <>
+                <strong style={{ color: CLAIR.texteSecondaire }}>Rythme de versement</strong>
+                {" "}— le seul paramètre qui change la date du plafond. Ni rendement ni
+                inflation n’entrent dans ce calcul : c’est une division, pas une projection.
+              </>
+            ) : (
+              <>
+                <strong style={{ color: CLAIR.texteSecondaire }}>Hypothèses</strong> — ce
+                sont vos choix, pas des mesures. Sans elles, la carte montre l’avancement
+                mais aucune projection.
+              </>
+            )}
           </span>
 
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+          <div style={{ display: "grid", gap: 10,
+            gridTemplateColumns: enPlafond ? "1fr" : "1fr 1fr" }}>
             <Champ etiquette="Versement mensuel (€)"
               aide={suggestions?.versement?.trompeur
                 ? `Vos apports sont concentrés (${suggestions.versement.concentration} % sur un seul mois) : `
@@ -216,6 +305,12 @@ export default function FormulaireObjectif({
                 </button>
               )}
             </Champ>
+            {/* ⚠️ **Retirés pour un plafond de versements, et c'est le cœur de la
+                demande.** « Quand aurai-je versé 150 000 € ? » ne dépend d'aucun marché.
+                Laisser un champ de rendement attendu ferait chercher une hypothèse là où il
+                n'y en a pas, et laisserait croire qu'une bonne performance avance la date —
+                alors qu'elle n'entame pas le plafond du tout. */}
+            {!enPlafond && (<>
             <Champ etiquette="Rendement attendu (% / an)">
               {/* ⚠️ **Plus de « 7,2 » en filigrane.** Ce nombre venait de la maquette et de
                   rien d'autre : aucune donnée ne le soutenait. Un exemple affiché dans un
@@ -344,6 +439,7 @@ export default function FormulaireObjectif({
                   inputMode="decimal" style={styleSaisie} />
               </Champ>
             )}
+            </>)}
           </div>
         </div>
 
@@ -375,10 +471,14 @@ export default function FormulaireObjectif({
               nom: nom.trim(), genre, cible: Number(cible.replace(",", ".")) || 0,
               echeance_annee: enAge ? null : nombre(echeance),
               age_cible: enAge ? nombre(age) : null,
-              part_affectee: nombre(part.replace(",", ".")),
+              // ⚠️ Mis à `null` pour un plafond plutôt que laissés tels quels : un
+              // rendement attendu enregistré sur un objectif qui l'ignore ressortirait à la
+              // modification, et donnerait à croire qu'il sert à quelque chose.
+              part_affectee: enPlafond ? null : nombre(part.replace(",", ".")),
               versement_mensuel: nombre(versement.replace(",", ".")),
-              taux_attendu: nombre(taux.replace(",", ".")),
-              inflation: nombre(inflation.replace(",", ".")),
+              verse_deja: enPlafond ? nombre(verseDeja.replace(",", ".")) : null,
+              taux_attendu: enPlafond ? null : nombre(taux.replace(",", ".")),
+              inflation: enPlafond ? null : nombre(inflation.replace(",", ".")),
               taux_retrait: enRevenu ? nombre(retrait.replace(",", ".")) : null,
               couleur,
             })}

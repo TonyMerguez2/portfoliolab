@@ -29,6 +29,9 @@ const GLYPHE: Record<Objectif["genre"], string> = {
   achat: "M4 11.5 12 4l8 7.5M6 10.5V20h12v-9.5M10 20v-5h4v5",
   // Une flèche qui revient : un revenu qui tombe chaque mois.
   revenu_mensuel: "M4 9h10a4 4 0 0 1 0 8H8m0 0 3-3m-3 3 3 3M4 9l3-3M4 9l3 3",
+  // Un plafond, et une flèche qui monte vers lui : ce qui le remplit vient d'en bas — les
+  // versements — et non de la valeur du portefeuille.
+  plafond_versements: "M4 4h16M12 20V8m0 0-4 4m4-4 4 4",
 };
 
 function Jauge({ part, couleur }: { part: number; couleur: string }) {
@@ -52,8 +55,12 @@ function Carte({ o, onModifier }: { o: Objectif; onModifier?: (o: Objectif) => v
     <div
       onClick={onModifier ? () => onModifier(o) : undefined}
       style={{
-        display: "flex", flexDirection: "column", gap: 7,
-        padding: "11px 13px", borderRadius: RAYONS.sm,
+        display: "flex", flexDirection: "column", gap: 8,
+        // ⚠️ Un peu plus d'air qu'avant : le titre « MES OBJECTIFS » et son bouton, retirés
+        // au-dessus, rendaient une trentaine de pixels à la rangée. Ils reviennent ici
+        // plutôt qu'à un panneau du bas, dont aucun ne les réclamait — et l'onglet tient
+        // toujours en un écran, ce qui était la contrainte de départ.
+        padding: "13px 15px", borderRadius: RAYONS.sm,
         border: `1px solid ${CLAIR.bord}`, background: CLAIR.carteCreuse,
         cursor: onModifier ? "pointer" : "default", minWidth: 0,
       }}>
@@ -79,7 +86,7 @@ function Carte({ o, onModifier }: { o: Objectif; onModifier?: (o: Objectif) => v
       </div>
 
       <div>
-        <div style={{ ...NUM, fontSize: 16, fontWeight: 700, color: CLAIR.texte,
+        <div style={{ ...NUM, fontSize: 18, fontWeight: 700, color: CLAIR.texte,
           lineHeight: 1.15 }}>
           {montantCible(o)}
         </div>
@@ -101,9 +108,12 @@ function Carte({ o, onModifier }: { o: Objectif; onModifier?: (o: Objectif) => v
           </div>
           <div style={{ display: "flex", alignItems: "baseline",
             justifyContent: "space-between", gap: 8 }}>
+            {/* ⚠️ « versés » pour un plafond : le même « 3 000 € / 150 000 € » se lirait
+                sinon comme un patrimoine, alors que c'est un cumul d'apports. */}
             <span style={{ ...NUM, fontSize: 10, color: CLAIR.texteFaible }}>
               {o.montant_actuel != null && o.capital_requis != null
                 ? `${euros(o.montant_actuel)} / ${euros(o.capital_requis)}`
+                  + (o.sur_versements ? " versés" : "")
                 : "—"}
             </span>
             <span style={{ fontFamily: FONT, fontSize: 10, color: CLAIR.texteFaible,
@@ -145,7 +155,15 @@ export default function CartesObjectifs({
       display: "grid", gap: 12,
       // Autant de colonnes que la largeur en autorise, sans jamais descendre sous une
       // largeur lisible : c'est ce qui fait tenir une carte comme cinq.
-      gridTemplateColumns: "repeat(auto-fill, minmax(228px, 1fr))",
+      //
+      // ⚠️ **205 et non 228, et ce chiffre vient d'une mesure.** À 228, quatre colonnes
+      // seulement tenaient dans les 1 134 pixels de la grille : le quatrième objectif
+      // renvoyait la tuile « Ajouter » à la ligne, ajoutant 136 pixels et faisant **défiler
+      // l'onglet** — 923 pixels de contenu pour 645 de hauteur utile. Or tenir en un écran
+      // est la contrainte qui commande toute cette page. Cinq colonnes tiennent à 205, les
+      // cartes gardent 214 pixels de large, et la rangée de la tuile disparaît : c'est plus
+      // de place gagnée que les quelques pixels de largeur cédés.
+      gridTemplateColumns: "repeat(auto-fill, minmax(205px, 1fr))",
     }}>
       {objectifs.map(o => <Carte key={o.id} o={o} onModifier={onModifier} />)}
 
@@ -153,7 +171,7 @@ export default function CartesObjectifs({
         <button type="button" onClick={onAjouter}
           style={{
             display: "flex", flexDirection: "column", alignItems: "center",
-            justifyContent: "center", gap: 5, minHeight: 112, cursor: "pointer",
+            justifyContent: "center", gap: 5, minHeight: 124, cursor: "pointer",
             borderRadius: RAYONS.sm, border: `1px dashed ${CLAIR.bord}`,
             background: "transparent", color: CLAIR.texteFaible, fontFamily: FONT,
           }}>

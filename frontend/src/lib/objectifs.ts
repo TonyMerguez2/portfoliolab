@@ -11,7 +11,20 @@
  * vérifient sans rien afficher.
  */
 
-export type Genre = "capital" | "capital_age" | "achat" | "revenu_mensuel";
+export type Genre =
+  | "capital" | "capital_age" | "achat" | "revenu_mensuel"
+  /**
+   * Un plafond de **versements** : « quand aurai-je versé 150 000 € sur mon PEA ? »
+   *
+   * ⚠️ **Le seul genre qui ignore la performance, et c'est tout son objet.** Le plafond
+   * d'un PEA porte sur le cumul des versements ; les plus-values ne le consomment pas. Un
+   * PEA valant 150 000 € pour 90 000 € versés garde 60 000 € de capacité — le mesurer sur
+   * la valeur l'annoncerait plein avec deux tiers du chemin restant.
+   */
+  | "plafond_versements";
+
+/** Vrai quand l'avancement compte les versements et non la valeur du portefeuille. */
+export const surVersements = (g: Genre): boolean => g === "plafond_versements";
 
 /** Un objectif tel que la route le rend. */
 export type Objectif = {
@@ -23,6 +36,20 @@ export type Objectif = {
   age_cible: number | null;
   part_affectee: number | null;
   versement_mensuel: number | null;
+  /** Le cumul saisi, ou `null` quand l'épargnant s'en remet à la mesure. */
+  verse_deja: number | null;
+  /**
+   * Ce que les transactions mesurent — un **minorant** des versements réels.
+   *
+   * ⚠️ L'application enregistre des achats et des ventes de titres, jamais les virements
+   * sur le compte : l'argent laissé en liquidités n'y figure pas. Rendu même quand un
+   * chiffre est saisi, pour que l'écran puisse signaler un écart.
+   */
+  verse_mesure: number | null;
+  /** Celui des deux qui sert au calcul. */
+  verse_retenu: number | null;
+  /** Rendu par le serveur pour que l'écran n'ait pas à recopier la liste des genres. */
+  sur_versements: boolean;
   taux_attendu: number | null;
   inflation: number | null;
   taux_retrait: number | null;
@@ -51,6 +78,9 @@ export function libelleCible(o: Pick<Objectif, "genre" | "age_cible">): string {
     case "capital_age": return o.age_cible ? `Objectif à ${o.age_cible} ans` : "Objectif";
     case "achat": return "Objectif";
     case "revenu_mensuel": return "Revenus passifs";
+    // ⚠️ « versés » et non « atteint » : ce plafond se remplit avec de l'argent apporté,
+    // pas avec de la valeur acquise. Le mot porte toute la distinction.
+    case "plafond_versements": return "Plafond de versements";
   }
 }
 
@@ -175,7 +205,17 @@ export type Agregat = {
   part: number;
   /** Combien d'objectifs entrent dans le calcul, et combien en sont écartés. */
   comptes: number;
+  /** Écartés faute de montant connu — valorisation impossible. */
   ecartes: number;
+  /**
+   * Écartés parce qu'ils ne se comptent pas dans la même unité : les plafonds de versements.
+   *
+   * ⚠️ **Distinct de `ecartes`, et le message à l'écran doit le rester.** « Montant
+   * indisponible » sur un plafond de versements est faux : son montant est parfaitement
+   * connu, il n'est simplement pas commensurable avec un patrimoine. Vu à l'écran, cette
+   * confusion faisait passer un choix de calcul assumé pour une donnée manquante.
+   */
+  horsUnite: number;
 };
 
 /**
@@ -193,15 +233,22 @@ export type Agregat = {
  * comme un patrimoine à constituer.
  */
 export function agregat(objectifs: Objectif[]): Agregat {
-  let total = 0, actuel = 0, comptes = 0, ecartes = 0;
+  let total = 0, actuel = 0, comptes = 0, ecartes = 0, horsUnite = 0;
   for (const o of objectifs) {
+    // ⚠️ **Les plafonds de versements sont exclus, et pas par commodité de présentation.**
+    // Leur `montant_actuel` est un cumul de versements ; celui des autres est la part du
+    // patrimoine affectée. Or les versements *sont* dans le patrimoine : les additionner
+    // compterait deux fois le même argent, et gonflerait l'avancement global d'un
+    // portefeuille qui n'aurait rien gagné. Comptés comme écartés, donc dits à l'écran.
+    if (o.sur_versements) { horsUnite += 1; continue; }
     if (o.capital_requis == null || o.montant_actuel == null) { ecartes += 1; continue; }
     total += o.capital_requis;
     actuel += o.montant_actuel;
     comptes += 1;
   }
   const part = total > 0 ? Math.min(100, (actuel / total) * 100) : 0;
-  return { total, actuel, reste: Math.max(0, total - actuel), part, comptes, ecartes };
+  return { total, actuel, reste: Math.max(0, total - actuel), part, comptes, ecartes,
+           horsUnite };
 }
 
 /**
@@ -217,10 +264,80 @@ export function agregat(objectifs: Objectif[]): Agregat {
  * Chaque constat est omis dès qu'une de ses entrées manque, plutôt que d'être bâti sur
  * une hypothèse par défaut.
  */
+/**
+ * Le mois où l'on sera dans `mois` mois, en clair : « mars 2041 ».
+ *
+ * ⚠️ Le **mois** et pas seulement l'année. Pour un plafond de versements, la réponse est une
+ * date précise — c'est une division, pas une projection de marché — et n'afficher que
+ * « 2041 » jetterait onze mois de précision que le calcul possède réellement.
+ */
+export function moisEnClair(mois: number, depuis?: Date): string {
+  const d = depuis ? new Date(depuis) : new Date();
+  d.setDate(1);
+  d.setMonth(d.getMonth() + mois);
+  return d.toLocaleDateString("fr-FR", { month: "long", year: "numeric" });
+}
+
+/**
+ * Les constats d'un objectif de plafond de versements.
+ *
+ * ⚠️ **Aucun de ces constats ne parle de performance, et c'est délibéré.** Un plafond de
+ * versements ne se remplit qu'avec de l'argent apporté : mentionner le rendement, la
+ * trajectoire médiane ou le pouvoir d'achat laisserait croire que les marchés en rapprochent
+ * ou en éloignent. Ils n'y changent rien.
+ */
+function constatsPlafond(o: Objectif): string[] {
+  const sortie: string[] = [];
+  const verse = o.verse_retenu ?? o.montant_actuel;
+  const plafond = o.capital_requis ?? o.cible;
+
+  if (verse != null && plafond != null) {
+    const reste = plafond - verse;
+    sortie.push(reste > 0
+      ? `Il reste ${euros(reste)} à verser avant le plafond de ${euros(plafond)}.`
+      : `Le plafond est atteint : ${euros(verse)} versés sur ${euros(plafond)}.`);
+  }
+
+  if (o.mois_pour_atteindre != null && o.mois_pour_atteindre > 0 && o.versement_mensuel) {
+    const ans = Math.floor(o.mois_pour_atteindre / 12);
+    const duree = ans >= 1
+      ? `dans ${ans} an${ans > 1 ? "s" : ""} et ${o.mois_pour_atteindre % 12} mois`
+      : `dans ${o.mois_pour_atteindre} mois`;
+    sortie.push(`À ${euros(o.versement_mensuel)} par mois, le plafond serait atteint en `
+      + `${moisEnClair(o.mois_pour_atteindre)} — ${duree}.`);
+  } else if (o.mois_pour_atteindre == null && !o.atteint) {
+    // ⚠️ La cause plutôt que « jamais » : sans rythme de versement, la question n'a pas de
+    // réponse, ce qui n'est pas la même chose qu'une réponse négative.
+    sortie.push("Sans versement mensuel renseigné, aucune date ne peut être calculée.");
+  }
+
+  // ⚠️ Le fait qui distingue ce plafond de tous les autres chiffres de l'écran. Sans cette
+  // phrase, un épargnant voyant son PEA valoir plus que ses versements pourrait croire qu'il
+  // approche de la limite, alors que la performance ne l'entame pas.
+  sortie.push("Les plus-values ne consomment pas ce plafond : seuls vos versements le "
+    + "remplissent.");
+
+  // ⚠️ L'écart entre le relevé et les transactions saisies est un signal, pas un détail. Un
+  // cumul déclaré très supérieur au net des transactions veut dire qu'il manque des
+  // écritures — et l'avancement de tous les autres objectifs est alors faux lui aussi.
+  if (o.verse_deja != null && o.verse_mesure != null
+      && Math.abs(o.verse_deja - o.verse_mesure) > Math.max(50, o.verse_deja * 0.05)) {
+    sortie.push(`Vos transactions saisies totalisent ${euros(o.verse_mesure)}, contre `
+      + `${euros(o.verse_deja)} déclarés : il manque probablement des transactions.`);
+  }
+
+  return sortie;
+}
+
 export function observations(
   o: Objectif, valeurPortefeuille?: number | null,
   medianeProjection?: number | null,
 ): string[] {
+  // ⚠️ Un aiguillage, et non des conditions ajoutées au fil du texte : les constats de
+  // capital parlent de patrimoine, de trajectoire médiane et de pouvoir d'achat, trois
+  // notions qui n'ont aucun sens pour un cumul de versements.
+  if (o.sur_versements) return constatsPlafond(o);
+
   // ⚠️ **La médiane vient de la projection quand elle existe, et c'est un correctif.**
   // Vu à l'écran : le panneau de projection annonçait 373 261 € — la médiane des tirages —
   // tandis que le constat parlait de 362 986 €, la capitalisation déterministe. Deux

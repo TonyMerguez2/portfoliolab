@@ -82,6 +82,12 @@ function Silence({ raison }: { raison: string }) {
     sans_rendement_attendu: "Aucun rendement attendu n’est renseigné. C’est une hypothèse "
       + "qui vous appartient : le logiciel n’en choisit pas à votre place, faute de quoi "
       + "la projection passerait pour une prévision.",
+    // ⚠️ Un motif distinct de « sans_rendement_attendu », parce que le remède est
+    // différent : ici il ne manque pas une hypothèse mais une donnée, le rythme auquel
+    // l'épargnant compte verser. Sans lui, la date du plafond n'existe pas.
+    sans_versement: "Aucun versement mensuel n’est renseigné. Un plafond de versements se "
+      + "remplit uniquement par vos apports : sans rythme, aucune date ne peut être "
+      + "calculée.",
   };
   return (
     <p style={{ margin: 0, fontFamily: FONT, fontSize: 11, lineHeight: 1.6,
@@ -167,7 +173,13 @@ export default function ProjectionObjectif({
           marge: MARGE,
         };
         const { x, y } = echelles(p.mois, bas, haut, cadre);
-        const ans = Math.round((p.objectif.mois_restants ?? 0) / 12);
+        // ⚠️ L'horizon vient de la **courbe** et non de `mois_restants`. Pour un plafond de
+        // versements sans échéance saisie, le serveur projette jusqu'à la date du plafond
+        // qu'il a calculée : lire `mois_restants`, nul dans ce cas, aurait affiché
+        // « Versements cumulés dans 0 an » au-dessus d'une courbe de dix-huit ans. Pour les
+        // autres genres les deux coïncident, donc rien ne change.
+        const horizon = p.mois[p.mois.length - 1] ?? p.objectif.mois_restants ?? 0;
+        const ans = Math.round(horizon / 12);
         const sansDispersion = p.volatilite == null;
 
         return (
@@ -175,7 +187,12 @@ export default function ProjectionObjectif({
             {/* ── Colonne des mesures ──────────────────────────────────────── */}
             <div style={{ display: "flex", flexDirection: "column", gap: 9, width: 168,
               flexShrink: 0, overflowY: "auto" }}>
-              <Mesure titre={`Valeur médiane dans ${ans} an${ans > 1 ? "s" : ""}`}
+              {/* ⚠️ « Versements cumulés » et non « valeur médiane » : ce n'est pas la
+                  même grandeur, et ce n'est pas une médiane. Le mot « médiane » sur une
+                  droite certaine laisserait chercher une dispersion qui n'existe pas. */}
+              <Mesure titre={p.objectif.sur_versements
+                ? `Versements cumulés dans ${ans} an${ans > 1 ? "s" : ""}`
+                : `Valeur médiane dans ${ans} an${ans > 1 ? "s" : ""}`}
                 valeur={p.mediane != null ? euros(p.mediane) : "—"}
                 note={p.objectif.projetee_en_euros_constants != null
                   ? `soit ${euros(p.objectif.projetee_en_euros_constants)} d’aujourd’hui`
@@ -203,9 +220,19 @@ export default function ProjectionObjectif({
 
               {/* ⚠️ La provenance de la volatilité, jamais tue : c'est elle qui décide si
                   l'intervalle et la probabilité existent. */}
+              {/* ⚠️ **« sans_objet » n'est pas une panne, et se dit autrement.** Les trois
+                  autres motifs sont des empêchements — historique trop court, mesure
+                  impossible — et se teintent d'orange. Celui-ci est un choix de calcul :
+                  une somme de versements ne dépend d'aucun marché. L'afficher en orange
+                  avec « volatilité non mesurable » aurait fait passer un résultat exact
+                  pour un résultat dégradé. */}
               <span style={{ fontFamily: FONT, fontSize: 9, lineHeight: 1.5,
-                color: sansDispersion ? JETONS.attention : CLAIR.texteFaible }}>
-                {p.volatilite_source === "mesuree"
+                color: sansDispersion && p.volatilite_source !== "sans_objet"
+                  ? JETONS.attention : CLAIR.texteFaible }}>
+                {p.volatilite_source === "sans_objet"
+                  ? "Aucune volatilité n’intervient : un cumul de versements ne dépend "
+                    + "d’aucun marché. Cette droite est exacte si le rythme est tenu."
+                  : p.volatilite_source === "mesuree"
                   ? `Volatilité mesurée sur votre portefeuille : ${pourcent(p.volatilite!)} % par an, `
                     + `sur ${p.seances_mesurees} séances.`
                   : p.volatilite_source === "echantillon_court"
@@ -291,7 +318,10 @@ export default function ProjectionObjectif({
                   <span key={c.centile} style={{ display: "inline-flex", alignItems: "center",
                     gap: 5, fontFamily: FONT, fontSize: 9.5, color: CLAIR.texteFaible }}>
                     <span style={{ width: 12, height: 2, background: c.couleur }} />
-                    {c.libelle}
+                    {/* ⚠️ Une droite de versements n'est pas une médiane : il n'y a qu'une
+                        trajectoire, pas une distribution dont elle serait le milieu. */}
+                    {p.objectif.sur_versements && c.centile === "50"
+                      ? "Cumul des versements" : c.libelle}
                     {p.taux_implicites[c.centile] != null && (
                       <span style={{ ...NUM }}> ({pourcent(p.taux_implicites[c.centile])} %/an)</span>
                     )}
@@ -312,13 +342,30 @@ export default function ProjectionObjectif({
                   les marchés réels ont des queues plus épaisses, donc les extrêmes sont
                   sous-estimés. Sans cette phrase, trois courbes lisses passent pour une
                   prévision. */}
+              {/* ⚠️ **Deux textes, et le second n'est pas un adoucissement du premier.**
+                  Vu à l'écran : « ces courbes sont des centiles de 2 000 tirages […] le
+                  modèle suppose des rendements log-normaux » s'affichait sous la droite d'un
+                  plafond de versements, où il n'y a **ni tirage ni modèle**. Un aveu de
+                  modèle placé sous un calcul qui n'en a pas est aussi trompeur qu'un modèle
+                  tu : il fait douter d'une addition exacte, et laisse croire que le logiciel
+                  a simulé quelque chose. */}
               <p style={{ margin: "6px 0 0", fontFamily: FONT, fontSize: 8.5,
                 lineHeight: 1.45, color: CLAIR.texteFaible, flexShrink: 0 }}>
-                Ces courbes sont des centiles de {" "}
-                <span style={{ ...NUM }}>2 000</span> tirages, pas trois scénarios : aucune
-                n’est une trajectoire que le portefeuille suivrait. Le modèle suppose des
-                rendements mensuels indépendants et log-normaux, ce qui sous-estime les
-                situations extrêmes.
+                {p.objectif.sur_versements ? (
+                  <>
+                    Cette droite est la somme de vos versements, mois après mois : aucun
+                    tirage, aucun rendement, aucune inflation n’y entre. Elle est exacte tant
+                    que le rythme est tenu — c’est la seule chose qu’elle suppose.
+                  </>
+                ) : (
+                  <>
+                    Ces courbes sont des centiles de{" "}
+                    <span style={{ ...NUM }}>2 000</span> tirages, pas trois scénarios :
+                    aucune n’est une trajectoire que le portefeuille suivrait. Le modèle
+                    suppose des rendements mensuels indépendants et log-normaux, ce qui
+                    sous-estime les situations extrêmes.
+                  </>
+                )}
                 {echeanceEnClair(p.objectif.mois_restants)
                   && ` Échéance ${echeanceEnClair(p.objectif.mois_restants)}.`}
               </p>
@@ -329,7 +376,25 @@ export default function ProjectionObjectif({
                   produit comme une prévision. */}
               <div style={{ display: "flex", gap: 16, flexWrap: "wrap", marginTop: 8,
                 paddingTop: 8, borderTop: `1px solid ${CLAIR.bord}`, flexShrink: 0 }}>
-                {[
+                {/* ⚠️ **La liste dépend du genre, faute de quoi elle affiche du vide.** Vu à
+                    l'écran sous un plafond de versements : « Rendement attendu : non
+                    renseigné · Inflation estimée : non renseigné · Part du portefeuille :
+                    100 % » — trois mentions dont aucune n'entre dans le calcul, et dont les
+                    deux premières donnent à croire qu'il manque quelque chose. Ce qui compte
+                    ici est le cumul déjà versé et sa provenance. */}
+                {(p.objectif.sur_versements ? [
+                  { titre: "Versement mensuel",
+                    valeur: p.objectif.versement_mensuel != null
+                      ? `${euros(p.objectif.versement_mensuel)} / mois` : null },
+                  { titre: "Déjà versé",
+                    valeur: p.objectif.verse_retenu != null
+                      ? euros(p.objectif.verse_retenu) : null },
+                  { titre: "Source du cumul",
+                    valeur: p.objectif.verse_deja != null
+                      ? "votre saisie" : "vos transactions" },
+                  { titre: "Plafond",
+                    valeur: p.requis != null ? euros(p.requis) : null },
+                ] : [
                   { titre: "Versement mensuel",
                     valeur: p.objectif.versement_mensuel != null
                       ? `${euros(p.objectif.versement_mensuel)} / mois` : null },
@@ -341,7 +406,7 @@ export default function ProjectionObjectif({
                       ? `${pourcent(p.objectif.inflation)} % / an` : null },
                   { titre: "Part du portefeuille",
                     valeur: `${pourcent(p.objectif.part_affectee ?? 100, 1)} %` },
-                ].map(m => (
+                ]).map(m => (
                   <div key={m.titre} style={{ display: "flex", flexDirection: "column" }}>
                     <span style={{ fontFamily: FONT, fontSize: 9,
                       color: CLAIR.texteFaible }}>{m.titre}</span>

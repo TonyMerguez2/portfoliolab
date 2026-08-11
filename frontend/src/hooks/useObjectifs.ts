@@ -14,6 +14,8 @@ export type Saisie = {
   age_cible?: number | null;
   part_affectee?: number | null;
   versement_mensuel?: number | null;
+  /** `null` veut dire « reprends la mesure des transactions », non « zéro ». */
+  verse_deja?: number | null;
   taux_attendu?: number | null;
   inflation?: number | null;
   taux_retrait?: number | null;

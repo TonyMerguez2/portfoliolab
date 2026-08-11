@@ -24,15 +24,59 @@ from dataclasses import dataclass
 from datetime import date
 from typing import Literal
 
-#: Les quatre sortes d'objectifs, telles que la maquette les distingue.
+#: Les sortes d'objectifs. Elles ne partagent pas le même calcul, et c'est la raison de
+#: ce type. Un capital se compare à un montant ; un revenu mensuel se compare à un
+#: capital qu'il faut d'abord déduire d'un taux de retrait. Les traiter ensemble aurait
+#: comparé des euros à des euros par mois.
 #:
-#: ⚠️ Elles ne partagent pas le même calcul, et c'est la raison de ce type. Un capital
-#: se compare à un montant ; un revenu mensuel se compare à un capital qu'il faut
-#: d'abord déduire d'un taux de retrait. Les traiter ensemble aurait comparé des euros
-#: à des euros par mois.
-Genre = Literal["capital", "capital_age", "achat", "revenu_mensuel"]
+#: ⚠️ **`plafond_versements` est à part, et c'est tout son intérêt.** Les quatre premiers
+#: se mesurent sur ce que **vaut** le portefeuille ; celui-là sur ce qu'on y a **versé**.
+#: La différence n'est pas un détail de présentation : le plafond d'un PEA — 150 000 € —
+#: porte sur le cumul des versements et **les gains ne le consomment pas**. Un PEA qui
+#: vaut 150 000 € après avoir reçu 90 000 € de versements a encore 60 000 € de capacité.
+#: Mesurer cet objectif sur la valeur du portefeuille l'annoncerait atteint avec deux
+#: tiers du chemin restant.
+Genre = Literal[
+    "capital", "capital_age", "achat", "revenu_mensuel", "plafond_versements",
+]
 
-GENRES: tuple[Genre, ...] = ("capital", "capital_age", "achat", "revenu_mensuel")
+GENRES: tuple[Genre, ...] = (
+    "capital", "capital_age", "achat", "revenu_mensuel", "plafond_versements",
+)
+
+#: Les objectifs dont l'avancement se mesure sur les versements et non sur le patrimoine.
+#:
+#: ⚠️ Un ensemble et non un test d'égalité, pour que l'ajout d'un genre du même type — un
+#: plafond d'assurance-vie, un plafond annuel — n'oblige pas à retrouver toutes les
+#: comparaisons dispersées dans le code.
+GENRES_SUR_VERSEMENTS: frozenset[str] = frozenset({"plafond_versements"})
+
+
+def se_mesure_sur_les_versements(genre: str) -> bool:
+    """Vrai quand l'avancement compte les versements, non la valeur du portefeuille."""
+    return genre in GENRES_SUR_VERSEMENTS
+
+
+#: Le plafond de versements d'un PEA, en euros.
+#:
+#: ⚠️ **Un plafond de versements cumulés, pas un plafond de valeur.** Les plus-values et
+#: les dividendes réinvestis ne l'entament pas : un PEA peut valoir bien davantage sans que
+#: la capacité de versement soit épuisée. C'est exactement la raison d'être de ce genre
+#: d'objectif.
+#:
+#: ⚠️ **Proposé, jamais imposé.** Ce logiciel ne sait pas quelle enveloppe est ce
+#: portefeuille — l'application n'enregistre pas le type de compte — et il n'est pas un
+#: conseiller fiscal. Le montant reste saisissable, et l'écran nomme ce qu'il propose.
+PLAFOND_PEA = 150_000.0
+
+#: Le plafond du PEA-Jeunes, réservé aux majeurs rattachés au foyer fiscal de leurs parents.
+PLAFOND_PEA_JEUNES = 20_000.0
+
+#: Les plafonds proposés d'un clic, avec ce qu'ils désignent.
+PLAFONDS_CONNUS: tuple[tuple[str, float], ...] = (
+    ("PEA", PLAFOND_PEA),
+    ("PEA-Jeunes", PLAFOND_PEA_JEUNES),
+)
 
 #: Le taux de retrait qui convertit un capital en revenu mensuel, en pourcentage par an.
 #:
@@ -189,6 +233,70 @@ def mois_pour_atteindre(
         if valeur >= requis:
             return m
     return None
+
+
+def avancement_verse(cible: float, verse: float) -> Progression | None:
+    """
+    L'avancement d'un objectif de **versements**, qui ignore la performance.
+
+    ⚠️ **Aucune valeur de portefeuille n'entre ici, et c'est la raison de cette fonction.**
+    `progression` part du patrimoine, ce qui est juste pour un objectif de capital et faux
+    pour un plafond de versements : les gains ne consomment pas la capacité de versement
+    d'un PEA. Sur un portefeuille valant 5 304 € pour 4 959 € versés, l'écart est de sept
+    pour cent ; sur un PEA de vingt ans, la plus-value peut dépasser les versements et
+    l'avancement afficherait le double du vrai.
+
+    ⚠️ **`part_affectee` n'a pas de sens ici et n'est pas acceptée.** Répartir un
+    patrimoine entre plusieurs objectifs se comprend ; répartir un versement déjà effectué
+    entre deux plafonds ne veut rien dire — l'euro versé sur le PEA l'a été en entier.
+    """
+    if cible <= 0:
+        return None
+    verse = max(0.0, verse)
+    return Progression(
+        actuel=verse, requis=float(cible),
+        part=min(100.0, verse / cible * 100.0),
+        atteint=verse >= cible,
+    )
+
+
+def mois_pour_verser(
+    cible: float, verse: float, versement_mensuel: float | None,
+) -> int | None:
+    """
+    Combien de mois de versements il reste avant d'atteindre le plafond.
+
+    ⚠️ **Une division, sans rendement ni capitalisation.** C'est tout l'objet de ce genre
+    d'objectif : la question « quand aurai-je versé 150 000 € ? » ne dépend d'aucune
+    hypothèse de marché. Y glisser un taux de rendement — même nul — laisserait croire que
+    la performance rapproche du plafond, alors qu'elle ne l'entame pas.
+
+    ⚠️ Arrondi **au mois supérieur** : à 800 € par mois, il reste 100 € à verser au
+    quatre-vingt-dix-neuvième mois, donc il en faut cent. Arrondir à l'inférieur
+    annoncerait le plafond atteint un mois avant qu'il ne le soit.
+    """
+    reste = float(cible) - max(0.0, verse)
+    if reste <= 0:
+        return 0
+    if not versement_mensuel or versement_mensuel <= 0:
+        # ⚠️ `None` et non un plafond de mois : sans versement, aucune durée ne convient.
+        # « 960 mois » se lirait comme une estimation là où c'est un abandon.
+        return None
+    from math import ceil
+    return int(ceil(reste / versement_mensuel))
+
+
+def verse_projete(verse: float, versement_mensuel: float | None, mois: int) -> float:
+    """
+    Le cumul des versements après `mois` mois, au rythme donné.
+
+    ⚠️ Une addition, non une capitalisation : un versement de 800 € reste 800 € versés,
+    quelle que soit la performance qu'il produit ensuite. C'est la grandeur que le plafond
+    d'un PEA mesure.
+    """
+    if mois <= 0:
+        return max(0.0, verse)
+    return max(0.0, verse) + max(0.0, versement_mensuel or 0.0) * mois
 
 
 def euros_constants(montant: float, inflation: float, mois: int) -> float:

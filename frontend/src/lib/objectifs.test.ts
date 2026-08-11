@@ -2,8 +2,8 @@ import { describe, expect, it } from "vitest";
 
 import {
   agregat, alerteRepartition, avertissementValeur, echeanceEnClair, ecartAuRythme,
-  euros, libelleCible, montantCible, observations, pourcent, pourcentageLisible,
-  type Objectif,
+  euros, libelleCible, moisEnClair, montantCible, observations, pourcent,
+  pourcentageLisible, surVersements, type Objectif,
 } from "./objectifs";
 
 describe("libelleCible", () => {
@@ -151,7 +151,9 @@ describe("agregat", () => {
     inflation: null, taux_retrait: null, couleur: null, capital_requis: null,
     montant_actuel: null, avancement: null, atteint: null, mois_restants: null,
     valeur_projetee: null, projetee_en_euros_constants: null,
-    mois_pour_atteindre: null, ...kw,
+    mois_pour_atteindre: null,
+    verse_deja: null, verse_mesure: null, verse_retenu: null, sur_versements: false,
+    ...kw,
   });
 
   it("additionne les cibles et les montants constitués", () => {
@@ -198,6 +200,7 @@ describe("observations", () => {
     avancement: 10, atteint: false, mois_restants: 220,
     valeur_projetee: 900_000, projetee_en_euros_constants: 600_000,
     mois_pour_atteindre: 240,
+    verse_deja: null, verse_mesure: null, verse_retenu: null, sur_versements: false,
   };
 
   it("dit ce qui manque et l'écart à la cible", () => {
@@ -274,6 +277,7 @@ describe("cohérence de la médiane citée", () => {
     avancement: 0.18, atteint: false, mois_restants: 220,
     valeur_projetee: 362_986, projetee_en_euros_constants: 245_000,
     mois_pour_atteindre: 397,
+    verse_deja: null, verse_mesure: null, verse_retenu: null, sur_versements: false,
   };
 
   it("cite la médiane des tirages quand elle est fournie", () => {
@@ -343,5 +347,124 @@ describe("pourcent, face à une donnée absente", () => {
 
   it("continue de formater un nombre valide", () => {
     expect(pourcent(2.9, 1)).toBe("2,9");
+  });
+});
+
+
+// ── Le plafond de versements ─────────────────────────────────────────────────
+//
+// ⚠️ **Ce que cette série protège.** Le plafond d'un PEA porte sur le cumul des versements ;
+// les plus-values ne le consomment pas. Toute la difficulté est là : les quatre autres
+// objectifs se mesurent sur la valeur du portefeuille, à juste titre, et réutiliser leur
+// calcul ici annoncerait le plafond atteint alors qu'il reste de la capacité.
+
+describe("plafond de versements", () => {
+  const plafond = (kw: Partial<Objectif> = {}): Objectif => ({
+    id: "p", nom: "Plafond PEA", genre: "plafond_versements", cible: 150_000,
+    echeance_annee: null, age_cible: null, part_affectee: null,
+    versement_mensuel: 800, taux_attendu: null, inflation: null, taux_retrait: null,
+    couleur: null, capital_requis: 150_000, montant_actuel: 5_000, avancement: 3.33,
+    atteint: false, mois_restants: null, valeur_projetee: null,
+    projetee_en_euros_constants: null, mois_pour_atteindre: 182,
+    verse_deja: null, verse_mesure: 5_000, verse_retenu: 5_000, sur_versements: true,
+    ...kw,
+  });
+
+  it("se reconnaît par le genre", () => {
+    expect(surVersements("plafond_versements")).toBe(true);
+    expect(surVersements("capital")).toBe(false);
+  });
+
+  it("s'intitule en versements, pas en capital", () => {
+    expect(libelleCible({ genre: "plafond_versements", age_cible: null }))
+      .toBe("Plafond de versements");
+  });
+
+  it("dit ce qu'il reste à verser et quand le plafond tombe", () => {
+    const c = observations(plafond());
+    // ⚠️ Le montant attendu est **construit par le formateur**, jamais recopié à la main :
+    // `Intl` sépare les milliers par une espace fine insécable (U+202F) et non par celle du
+    // clavier. Une comparaison littérale échoue alors sur deux chaînes visuellement
+    // identiques — piège dans lequel je suis retombé en écrivant ce test, après l'avoir
+    // documenté plus haut dans ce même fichier.
+    expect(c.some(t => t.includes(`reste ${euros(145_000)} à verser`))).toBe(true);
+    // 182 mois = 15 ans et 2 mois.
+    expect(c.some(t => /15 ans et 2 mois/.test(t))).toBe(true);
+    expect(c.some(t => /800 € par mois/.test(t))).toBe(true);
+  });
+
+  it("rappelle que les plus-values ne consomment pas le plafond", () => {
+    // ⚠️ Le constat le plus important de l'écran : sans lui, un épargnant dont le PEA vaut
+    // plus que ses versements peut croire qu'il approche de la limite.
+    expect(observations(plafond()).some(t => /plus-values ne consomment pas/.test(t)))
+      .toBe(true);
+  });
+
+  it("ne parle jamais de rendement, de médiane ni de pouvoir d'achat", () => {
+    // ⚠️ Ces trois notions sont justes pour un objectif de capital et fausses ici : elles
+    // laisseraient croire que les marchés rapprochent du plafond.
+    const texte = observations(plafond({ inflation: 2, taux_attendu: 7 })).join(" ");
+    expect(texte).not.toMatch(/médiane|rendement|pouvoir d’achat|d’aujourd’hui/i);
+  });
+
+  it("annonce le plafond atteint plutôt qu'un reste négatif", () => {
+    const c = observations(plafond({ verse_retenu: 160_000, montant_actuel: 160_000,
+      atteint: true, mois_pour_atteindre: 0 }));
+    expect(c.some(t => /plafond est atteint/.test(t))).toBe(true);
+    expect(c.join(" ")).not.toMatch(/-\s?10 000/);
+  });
+
+  it("dit la cause quand aucune date n'est calculable", () => {
+    // ⚠️ « Sans versement mensuel renseigné » plutôt que « jamais » : l'absence de réponse
+    // n'est pas une réponse négative.
+    const c = observations(plafond({ versement_mensuel: null, mois_pour_atteindre: null }));
+    expect(c.some(t => /aucune date ne peut être calculée/.test(t))).toBe(true);
+  });
+
+  it("signale un écart entre le relevé saisi et les transactions", () => {
+    // ⚠️ Un relevé très supérieur au net des transactions veut dire qu'il manque des
+    // écritures — et l'avancement de tous les autres objectifs est alors faux aussi.
+    const c = observations(plafond({ verse_deja: 40_000, verse_mesure: 3_000,
+      verse_retenu: 40_000 }));
+    expect(c.some(t => /manque probablement des transactions/.test(t))).toBe(true);
+  });
+
+  it("ne signale pas d'écart quand les deux chiffres concordent", () => {
+    const c = observations(plafond({ verse_deja: 5_000, verse_mesure: 5_010,
+      verse_retenu: 5_000 }));
+    expect(c.some(t => /manque probablement/.test(t))).toBe(false);
+  });
+
+  it("est exclu de l'agrégat, pour ne pas compter deux fois le même argent", () => {
+    // ⚠️ Le cœur du problème : les versements *sont* dans le patrimoine. Additionner
+    // « 5 000 € versés » et « 5 300 € de portefeuille affecté » compterait deux fois le même
+    // argent et gonflerait l'avancement global d'un portefeuille qui n'aurait rien gagné.
+    const capital: Objectif = { ...plafond(), genre: "capital", sur_versements: false,
+      cible: 1_000_000, capital_requis: 1_000_000, montant_actuel: 5_300 };
+    const a = agregat([capital, plafond()]);
+    expect(a.comptes).toBe(1);
+    // ⚠️ `horsUnite` et non `ecartes` : le montant du plafond est parfaitement connu, il
+    // n'est simplement pas commensurable. Vu à l'écran, la confusion affichait « montant
+    // indisponible » et faisait passer un choix de calcul pour une panne.
+    expect(a.horsUnite).toBe(1);
+    expect(a.ecartes).toBe(0);
+    expect(a.total).toBe(1_000_000);
+    expect(a.actuel).toBe(5_300);
+  });
+});
+
+describe("moisEnClair", () => {
+  it("donne le mois et l'année, pas seulement l'année", () => {
+    // ⚠️ La date d'un plafond est une division : elle est exacte au mois près, et
+    // n'afficher que l'année jetterait onze mois de précision que le calcul possède.
+    expect(moisEnClair(2, new Date(2026, 0, 15))).toBe("mars 2026");
+  });
+
+  it("franchit correctement l'année", () => {
+    expect(moisEnClair(14, new Date(2026, 0, 15))).toBe("mars 2027");
+  });
+
+  it("rend le mois courant pour zéro", () => {
+    expect(moisEnClair(0, new Date(2026, 7, 11))).toBe("août 2026");
   });
 });
