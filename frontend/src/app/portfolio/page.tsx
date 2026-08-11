@@ -47,6 +47,8 @@ import { DividendesAVenir, ProchainsResultats } from "@/components/portfolio/Tab
 import CalendrierEvenements from "@/components/portfolio/CalendrierEvenements";
 import CartesObjectifs from "@/components/portfolio/CartesObjectifs";
 import ProjectionObjectif from "@/components/portfolio/ProjectionObjectif";
+import ProgressionGlobale from "@/components/portfolio/ProgressionGlobale";
+import ScenariosObjectif from "@/components/portfolio/ScenariosObjectif";
 import FormulaireObjectif from "@/components/portfolio/FormulaireObjectif";
 import EvenementsAVenir from "@/components/portfolio/EvenementsAVenir";
 import { HistoriqueEvenements, ImpactPotentiel } from "@/components/portfolio/ImpactEvenements";
@@ -1967,7 +1969,8 @@ function PortfolioPageInner() {
         // ⚠️ La première rangée se dimensionne sur son contenu, les suivantes se
         // partagent le reste. Sans `auto`, la rangée de cartes recevait un tiers de la
         // hauteur et ses jauges se faisaient écraser.
-        gridTemplateRows: "auto minmax(0, 1fr)", overflowY: "auto", overflowX: "hidden" }}>
+        gridTemplateRows: "auto auto auto minmax(0, 1fr)", overflowY: "auto",
+        overflowX: "hidden", alignContent: "start" }}>
         <Cadre style={{ gridColumn: "1 / -1", padding: "16px 18px",
           display: "flex", flexDirection: "column", gap: 12 }}>
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10 }}>
@@ -2048,6 +2051,20 @@ function PortfolioPageInner() {
             projection={projection.projection}
             etat={projection.etat}
             onParametres={o => setSaisieObjectif({ mode: "edition", o })} />
+        </Cadre>
+
+        <Cadre style={{ padding: "16px 18px", display: "flex", flexDirection: "column",
+          minHeight: 0, overflowY: "auto" }}>
+          <ProgressionGlobale objectifs={listeObjectifs}
+            valeurPortefeuille={objectifs.donnees?.valeur_portefeuille ?? null}
+            objectifDetaille={listeObjectifs.find(o => o.id === projeteEffectif) ?? null} />
+        </Cadre>
+
+        {/* La dispersion des tirages, en pleine largeur sous la projection : trois cartes
+            de deux cents pixels ne tiennent pas dans une colonne de tiers d'écran. */}
+        <Cadre style={{ gridColumn: "1 / -1", padding: "16px 18px",
+          display: "flex", flexDirection: "column", minHeight: 0 }}>
+          <ScenariosObjectif projection={projection.projection} />
         </Cadre>
 
         <Cadre style={{ padding: "16px 18px", display: "flex", flexDirection: "column" }}>

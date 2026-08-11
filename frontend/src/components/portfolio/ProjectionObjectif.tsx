@@ -279,6 +279,36 @@ export default function ProjectionObjectif({
                 {echeanceEnClair(p.objectif.mois_restants)
                   && ` Échéance ${echeanceEnClair(p.objectif.mois_restants)}.`}
               </p>
+
+              {/* ⚠️ Les hypothèses en clair, sous la courbe qu'elles produisent. « Non
+                  renseigné » plutôt qu'une valeur par défaut : un taux affiché sans avoir
+                  été choisi se lit comme une donnée du logiciel, et la projection qu'il
+                  produit comme une prévision. */}
+              <div style={{ display: "flex", gap: 18, flexWrap: "wrap", marginTop: 12,
+                paddingTop: 10, borderTop: `1px solid ${CLAIR.bord}` }}>
+                {[
+                  { titre: "Versement mensuel",
+                    valeur: p.objectif.versement_mensuel != null
+                      ? `${euros(p.objectif.versement_mensuel)} / mois` : null },
+                  { titre: "Rendement attendu",
+                    valeur: p.objectif.taux_attendu != null
+                      ? `${p.objectif.taux_attendu} % / an` : null },
+                  { titre: "Inflation estimée",
+                    valeur: p.objectif.inflation != null
+                      ? `${p.objectif.inflation} % / an` : null },
+                  { titre: "Part du portefeuille",
+                    valeur: `${p.objectif.part_affectee ?? 100} %` },
+                ].map(m => (
+                  <div key={m.titre} style={{ display: "flex", flexDirection: "column" }}>
+                    <span style={{ fontFamily: FONT, fontSize: 9,
+                      color: CLAIR.texteFaible }}>{m.titre}</span>
+                    <span style={{ ...NUM, fontSize: 11.5, fontWeight: 700,
+                      color: m.valeur ? CLAIR.texte : CLAIR.texteFaible }}>
+                      {m.valeur ?? "non renseigné"}
+                    </span>
+                  </div>
+                ))}
+              </div>
             </div>
           </div>
         );

@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
 
 import {
-  alerteRepartition, avertissementValeur, echeanceEnClair, ecartAuRythme,
-  euros, libelleCible, montantCible,
+  agregat, alerteRepartition, avertissementValeur, echeanceEnClair, ecartAuRythme,
+  euros, libelleCible, montantCible, observations, type Objectif,
 } from "./objectifs";
 
 describe("libelleCible", () => {
@@ -140,5 +140,107 @@ describe("avertissementValeur", () => {
 
   it("ne dit rien quand tout est valorisé", () => {
     expect(avertissementValeur("transactions", 3, 3)).toBeNull();
+  });
+});
+
+describe("agregat", () => {
+  const o = (kw: Partial<Objectif>): Objectif => ({
+    id: "x", nom: "x", genre: "capital", cible: 0, echeance_annee: null,
+    age_cible: null, part_affectee: null, versement_mensuel: null, taux_attendu: null,
+    inflation: null, taux_retrait: null, couleur: null, capital_requis: null,
+    montant_actuel: null, avancement: null, atteint: null, mois_restants: null,
+    valeur_projetee: null, projetee_en_euros_constants: null,
+    mois_pour_atteindre: null, ...kw,
+  });
+
+  it("additionne les cibles et les montants constitués", () => {
+    const a = agregat([
+      o({ capital_requis: 1_000_000, montant_actuel: 400_000 }),
+      o({ capital_requis: 500_000, montant_actuel: 100_000 }),
+    ]);
+    expect(a.total).toBe(1_500_000);
+    expect(a.actuel).toBe(500_000);
+    expect(a.reste).toBe(1_000_000);
+    expect(a.part).toBeCloseTo(33.33, 1);
+    expect(a.comptes).toBe(2);
+  });
+
+  it("écarte et compte les objectifs sans montant connu", () => {
+    // ⚠️ Un objectif dont la valorisation a échoué ne vaut pas zéro : l'inclure tirerait
+    // l'avancement global vers le bas et ferait passer une ignorance pour un retard.
+    const a = agregat([
+      o({ capital_requis: 100_000, montant_actuel: 50_000 }),
+      o({ capital_requis: 100_000, montant_actuel: null }),
+    ]);
+    expect(a.total).toBe(100_000);
+    expect(a.part).toBe(50);
+    expect(a.ecartes).toBe(1);
+  });
+
+  it("ne divise pas par zéro sur une liste vide", () => {
+    expect(agregat([])).toMatchObject({ total: 0, part: 0, comptes: 0 });
+  });
+
+  it("borne l'avancement à cent", () => {
+    const a = agregat([o({ capital_requis: 1_000, montant_actuel: 5_000 })]);
+    expect(a.part).toBe(100);
+    expect(a.reste).toBe(0);
+  });
+});
+
+describe("observations", () => {
+  const base: Objectif = {
+    id: "x", nom: "Retraite", genre: "capital", cible: 1_000_000,
+    echeance_annee: 2044, age_cible: null, part_affectee: 100,
+    versement_mensuel: 800, taux_attendu: 7.2, inflation: 2, taux_retrait: null,
+    couleur: null, capital_requis: 1_000_000, montant_actuel: 100_000,
+    avancement: 10, atteint: false, mois_restants: 220,
+    valeur_projetee: 900_000, projetee_en_euros_constants: 600_000,
+    mois_pour_atteindre: 240,
+  };
+
+  it("dit ce qui manque et l'écart à la cible", () => {
+    const obs = observations(base, 100_000);
+    expect(obs.some(t => /Il manque/.test(t))).toBe(true);
+    expect(obs.some(t => /sous la cible/.test(t))).toBe(true);
+  });
+
+  it("ramène la projection en euros d'aujourd'hui", () => {
+    expect(observations(base, 100_000).some(t => /d’aujourd’hui/.test(t))).toBe(true);
+  });
+
+  it("ne formule jamais de conseil", () => {
+    /**
+     * ⚠️ Le garde contre la dérive de la maquette, qui proposait « augmenter votre
+     * investissement mensuel à 1 000 € » et « réduire l'exposition aux actions à 70 % ».
+     */
+    const interdits = /augment|réduis|devriez|il faut|conseill|recommand|placez|activez/i;
+    const jeux: Objectif[] = [
+      base,
+      { ...base, montant_actuel: 2_000_000, avancement: 100, atteint: true },
+      { ...base, mois_pour_atteindre: null, valeur_projetee: null },
+      { ...base, versement_mensuel: null, taux_attendu: null, inflation: null,
+        valeur_projetee: null, projetee_en_euros_constants: null },
+    ];
+    for (const o of jeux) {
+      for (const t of observations(o, 100_000)) expect(t).not.toMatch(interdits);
+    }
+  });
+
+  it("omet un constat plutôt que de l'appuyer sur une hypothèse absente", () => {
+    const sansRien: Objectif = {
+      ...base, versement_mensuel: null, taux_attendu: null, inflation: null,
+      valeur_projetee: null, projetee_en_euros_constants: null,
+      mois_pour_atteindre: null,
+    };
+    const obs = observations(sansRien, null);
+    expect(obs.every(t => !/inflation|rythme|médiane/.test(t))).toBe(true);
+  });
+
+  it("ne dit rien d'un objectif vide", () => {
+    const vide: Objectif = { ...base, capital_requis: null, montant_actuel: null,
+      valeur_projetee: null, projetee_en_euros_constants: null,
+      mois_pour_atteindre: null, mois_restants: null };
+    expect(observations(vide, null)).toEqual([]);
   });
 });

@@ -162,3 +162,102 @@ export function avertissementValeur(
   }
   return null;
 }
+
+/** L'agrégat de tous les objectifs d'un portefeuille. */
+export type Agregat = {
+  /** La somme des capitaux requis, en euros. */
+  total: number;
+  /** La somme des montants déjà constitués. */
+  actuel: number;
+  /** Ce qu'il reste, jamais négatif. */
+  reste: number;
+  /** L'avancement d'ensemble, borné à cent. */
+  part: number;
+  /** Combien d'objectifs entrent dans le calcul, et combien en sont écartés. */
+  comptes: number;
+  ecartes: number;
+};
+
+/**
+ * L'avancement de l'ensemble des objectifs.
+ *
+ * ⚠️ **Les objectifs sans capital requis ni montant connu sont écartés et comptés.** Un
+ * objectif dont la valorisation a échoué ne vaut pas zéro : l'inclure à zéro tirerait
+ * l'avancement global vers le bas et ferait passer une ignorance pour un retard. Le
+ * nombre d'écartés est rendu pour que l'écran puisse le dire.
+ *
+ * ⚠️ **Additionner des capitaux d'échéances différentes est une convention.** 300 000 €
+ * dans cinq ans et 1 250 000 € dans dix-huit ans ne sont pas commensurables : un euro de
+ * 2044 n'a pas le pouvoir d'achat d'un euro de 2031. La maquette additionne, donc on
+ * additionne — mais l'écran doit présenter le résultat comme une somme de cibles, pas
+ * comme un patrimoine à constituer.
+ */
+export function agregat(objectifs: Objectif[]): Agregat {
+  let total = 0, actuel = 0, comptes = 0, ecartes = 0;
+  for (const o of objectifs) {
+    if (o.capital_requis == null || o.montant_actuel == null) { ecartes += 1; continue; }
+    total += o.capital_requis;
+    actuel += o.montant_actuel;
+    comptes += 1;
+  }
+  const part = total > 0 ? Math.min(100, (actuel / total) * 100) : 0;
+  return { total, actuel, reste: Math.max(0, total - actuel), part, comptes, ecartes };
+}
+
+/**
+ * Des constats chiffrés sur un objectif — jamais des conseils.
+ *
+ * ⚠️ **Ce que ce panneau remplace.** La maquette proposait des « Recommandations IA » :
+ * « augmenter votre investissement mensuel à 1 000 € », « réduire l'exposition aux
+ * actions à 70 % », « activer le réinvestissement automatique ». C'est du conseil en
+ * investissement personnalisé, que ce logiciel ne produit pas. Ce qui suit est
+ * arithmétique et vérifiable : des divisions, des soustractions et des comparaisons de
+ * dates. L'épargnant en tire ses conclusions.
+ *
+ * Chaque constat est omis dès qu'une de ses entrées manque, plutôt que d'être bâti sur
+ * une hypothèse par défaut.
+ */
+export function observations(
+  o: Objectif, valeurPortefeuille?: number | null,
+): string[] {
+  const sortie: string[] = [];
+  const requis = o.capital_requis;
+
+  if (requis != null && o.montant_actuel != null && o.montant_actuel < requis) {
+    sortie.push(`Il manque ${euros(requis - o.montant_actuel)} pour atteindre la cible.`);
+  }
+
+  if (requis != null && valeurPortefeuille != null && valeurPortefeuille > 0) {
+    const fois = requis / valeurPortefeuille;
+    sortie.push(fois >= 1.05
+      ? `La cible représente ${fois.toFixed(1)} fois votre patrimoine actuel.`
+      : `La cible est du même ordre que votre patrimoine actuel.`);
+  }
+
+  // Le rythme, comparé à l'échéance : une soustraction de mois, pas une consigne.
+  const rythme = ecartAuRythme(o);
+  if (rythme && o.mois_pour_atteindre != null) {
+    const annee = new Date().getFullYear()
+      + Math.floor((new Date().getMonth() + o.mois_pour_atteindre) / 12);
+    sortie.push(`Au rythme actuel — ${o.versement_mensuel ? euros(o.versement_mensuel) : "0 €"} `
+      + `par mois — la cible serait atteinte en ${annee} (${rythme.texte}).`);
+  }
+
+  if (o.valeur_projetee != null && requis != null && o.mois_restants) {
+    const ecart = o.valeur_projetee - requis;
+    sortie.push(ecart >= 0
+      ? `À l’échéance, la trajectoire médiane dépasse la cible de ${euros(ecart)}.`
+      : `À l’échéance, la trajectoire médiane reste ${euros(-ecart)} sous la cible.`);
+  }
+
+  if (o.projetee_en_euros_constants != null && o.valeur_projetee != null
+      && o.inflation != null) {
+    const perte = o.valeur_projetee - o.projetee_en_euros_constants;
+    if (perte > 0) {
+      sortie.push(`À ${o.inflation} % d’inflation, ces ${euros(o.valeur_projetee)} `
+        + `vaudront ${euros(o.projetee_en_euros_constants)} d’aujourd’hui.`);
+    }
+  }
+
+  return sortie;
+}
