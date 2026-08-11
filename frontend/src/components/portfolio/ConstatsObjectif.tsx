@@ -160,9 +160,10 @@ export default function ConstatsObjectif({
       background: `${CIEL}, ${FOND_ESPACE}`,
       borderRadius: RAYONS.xl,
       boxSizing: "border-box",
-      // Le rembourrage tient compte des trois pixels du rebord, pour que le texte ne vienne
-      // pas s'y coller.
-      padding: "16px 18px",
+      // Le rembourrage tient compte des huit pixels du rebord : il en reste douze au-dessus
+      // du texte et quatorze sur les côtés, soit à peu près ce dont disposent les panneaux
+      // voisins à l'intérieur de leur cadre.
+      padding: "20px 22px",
     }}>
       <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
         <svg width="19" height="19" viewBox="0 0 24 24" fill="currentColor"

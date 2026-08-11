@@ -738,10 +738,18 @@ canvas + div {
   inset: 0;
   box-sizing: border-box;
   border-radius: inherit;
-  /* L'épaisseur du liseré. Trois pixels sur un panneau de 458 de large : la même
-     proportion que la référence, dont le rebord fait environ deux pour cent de la
-     largeur de la carte. */
-  padding: 3px;
+  /* L'épaisseur du liseré : **huit pixels, la même que le bord composite des autres
+     conteneurs de la page**, et non une valeur choisie pour l'allure.
+
+     Mesuré sur un panneau voisin plutôt que déduit : bordure du cadre extérieur 1 px,
+     son rembourrage voilé 6 px, bordure de la carte intérieure 1 px — soit 8. Le
+     rebord de verre occupe exactement cette bande, ce qui est la condition pour qu'il
+     *remplace* le bord au lieu de l'amincir. Mon premier essai en mettait trois, et
+     le panneau paraissait cerné d'un trait quand ses voisins ont une tranche.
+
+     Cela tombe juste avec la référence, dont le rebord fait environ deux pour cent de
+     la largeur de la carte. */
+  padding: 8px;
   pointer-events: none;
   /* ⚠️ **Des gris opaques, et non du blanc translucide.** Premier essai : du blanc
      de 0,06 à 0,92 d'opacité. Sur un fond noir, un blanc à 0,92 est du blanc pur et
@@ -771,12 +779,13 @@ canvas + div {
   content: '';
   position: absolute;
   z-index: 3;
-  inset: 3px;
+  inset: 8px;
   box-sizing: border-box;
-  /* 21 = le rayon extérieur (24) moins l'épaisseur de l'anneau (3), pour que les deux
+  /* 16 = le rayon extérieur (24) moins l'épaisseur de l'anneau (8), pour que les deux
      restent concentriques. Une valeur approchée décale l'arête dans les angles, là où
-     l'œil la repère le mieux. */
-  border-radius: 21px;
+     l'œil la repère le mieux. C'est aussi, à deux pixels près, le rayon de la carte
+     intérieure des autres panneaux : les deux géométries se superposent. */
+  border-radius: 16px;
   padding: 1px;
   pointer-events: none;
   background: rgba(0, 0, 0, 0.55);
