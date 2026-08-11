@@ -43,8 +43,8 @@ const GLYPHE: Record<Objectif["genre"], string> = {
   plafond_versements: "M4 4h16M12 20V8m0 0-4 4m4-4 4 4",
 };
 
-/** Le côté du glyphe. Plus grand qu'avant : sans logement, il porte seul l'identité. */
-const COTE_GLYPHE = 24;
+/** Le côté du glyphe. Sans logement, il porte seul l'identité de la carte. */
+const COTE_GLYPHE = 32;
 
 /**
  * Le glyphe du genre, gravé dans la carte.
@@ -64,7 +64,7 @@ function GlypheGrave({ genre, couleur }: { genre: Objectif["genre"]; couleur: st
   const d = GLYPHE[genre];
   return (
     <svg width={COTE_GLYPHE} height={COTE_GLYPHE} viewBox="0 0 24 24" fill="none"
-      strokeWidth={1.9} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"
+      strokeWidth={1.7} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"
       style={{ flexShrink: 0, display: "block" }}>
       {/* La lumière du dessous : c'est elle, et elle seule, qui fait le creux. Décalée d'un
           pixel — au-delà, le tracé se dédouble au lieu de s'enfoncer. */}
@@ -85,18 +85,38 @@ function GlypheGrave({ genre, couleur }: { genre: Objectif["genre"]; couleur: st
 /** Combien de barreaux compose la jauge. */
 const SEGMENTS = 34;
 
+/** Sous cette opacité, un barreau coloré ne se distingue plus du fond de la carte. */
+const OPACITE_MINIMALE = 0.28;
+
+/** De combien l'opacité décroît de gauche à droite sur la part acquise. */
+const DECROISSANCE = 0.2;
+
 /**
  * L'avancement en barreaux, valeur à gauche et cible à droite.
  *
- * ⚠️ **Au moins un barreau allumé dès qu'un euro est placé.** Trois pour cent de
- * trente-quatre barreaux font 1,02 : arrondi à l'entier inférieur, un objectif entamé
- * paraîtrait entièrement vide. C'est le même défaut que « 0 % » affiché pour 0,11 %, déjà
- * corrigé dans `pourcentageLisible` — un avancement réel ne doit pas se lire comme un départ
- * non pris. On arrondit donc **vers le haut**, sauf à zéro exact.
+ * ⚠️ **Le remplissage est fractionnaire, et la fraction devient l'opacité du barreau de
+ * tête.** Trois pour cent de trente-quatre barreaux font 1,02 : un barreau plein, puis un
+ * second à deux pour cent d'opacité. Un pour cent en fait 0,34 : **un seul** barreau coloré,
+ * et à un tiers d'opacité — parce que ce n'est qu'un pour cent.
  *
- * ⚠️ **Et jamais jusqu'au bout : le dernier barreau n'est réservé qu'à cent pour cent.**
- * Arrondir vers le haut sans borne ferait paraître pleine une jauge à 99 %, ce qui est le
- * symétrique exact du même mensonge.
+ * C'est ce qui remplace l'arrondi vers le haut que j'avais posé ici. Il partait d'une
+ * intuition juste — un objectif entamé ne doit pas paraître vide, le défaut du « 0 % »
+ * affiché pour 0,11 % — mais il la payait cher : à un pour cent comme à trois, la jauge
+ * montrait un barreau pleinement opaque, donc le même dessin pour un triple d'avancement.
+ * La fraction dit les deux choses à la fois, sans arrondi et sans cas particulier : combien
+ * de barreaux, et à quel point le suivant est entamé.
+ *
+ * ⚠️ **Un plancher d'opacité, tout de même, quand le barreau de tête est le seul coloré.**
+ * Un dixième de pour cent donnerait 0,034 d'opacité, soit rien de visible : l'objectif
+ * paraîtrait intouché alors qu'un versement a bien eu lieu. C'est le principe de
+ * `pourcentageLisible` — « < 1 % » plutôt que « 0 % » — appliqué à la couleur.
+ *
+ * ⚠️ **Près de cent pour cent, en revanche, la jauge ne distingue plus rien — et c'est le
+ * chiffre qui rattrape.** Tabulé avant de regarder l'écran : à 99,9 % le dernier barreau sort
+ * à 0,77 d'opacité contre 0,80 à cent pour cent. Arithmétiquement distinct, visuellement
+ * identique. Prétendre que la jauge « réserve » son dernier barreau à cent pour cent serait
+ * donc surestimer ce qu'elle montre. Ce qui tient la promesse est ailleurs :
+ * `pourcentageLisible` écrit « > 99 % » et non « 100 % » tant qu'il reste quelques euros.
  */
 function Jauge({
   part, couleur, valeur, cible,
@@ -107,9 +127,10 @@ function Jauge({
   cible: string;
 }) {
   const p = Math.max(0, Math.min(100, part ?? 0));
-  const allumes = p <= 0 ? 0
-    : p >= 100 ? SEGMENTS
-      : Math.max(1, Math.min(SEGMENTS - 1, Math.ceil((p / 100) * SEGMENTS)));
+  // Le remplissage exact, en barreaux : 0,34 pour 1 %, 20,4 pour 60 %, 34 pour 100 %.
+  const exact = (p / 100) * SEGMENTS;
+  const pleins = Math.floor(exact);
+  const fraction = exact - pleins;
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
@@ -131,35 +152,38 @@ function Jauge({
           l'avancement change. */}
       <div style={{ display: "flex", gap: 2.5, height: 15, alignItems: "center" }}>
         {Array.from({ length: SEGMENTS }, (_, i) => {
-          const empli = i < allumes;
+          // ⚠️ **Le dégradé est une affaire d'opacité, du plus opaque au moins opaque, et
+          // il décroît de gauche à droite sur toute la jauge.** J'avais d'abord assombri la
+          // couleur avec du noir : sur un fond de carte lui-même teinté, cela donnait une
+          // couleur *différente* plutôt qu'une même couleur plus discrète.
+          const rampe = 1 - DECROISSANCE * (i / (SEGMENTS - 1));
+
+          // ⚠️ Le barreau de tête reçoit la **fraction** de remplissage. C'est ce qui fait
+          // qu'un pour cent se lit comme un pour cent : un seul barreau, et pâle.
+          let opacite = 0;
+          if (i < pleins) opacite = rampe;
+          else if (i === pleins && fraction > 0) {
+            opacite = fraction * rampe;
+            // Le plancher ne vaut que si ce barreau est le seul coloré. Une traînée de fin
+            // de remplissage, elle, a le droit de s'éteindre complètement — c'est le fondu.
+            if (pleins === 0) opacite = Math.max(OPACITE_MINIMALE, opacite);
+          }
+
+          const colore = opacite > 0;
           return (
             <span key={i} style={{
               flex: 1, borderRadius: 1.5,
-              height: empli ? 15 : 11,
-              // ⚠️ **Le dégradé court sur les barreaux colorés, d'un bout à l'autre de la
-              // part acquise.** Je l'avais d'abord ancré à la barre entière, en me disant
-              // qu'une teinte fixe par position se vérifie mieux ; à trois pour cent
-              // d'avancement, cela ne montrait qu'une seule extrémité du dégradé, donc aucun
-              // dégradé. Et l'argument était creux : ce n'est pas la teinte qui porte
-              // l'information — c'est le **nombre** de barreaux allumés. La couleur peut donc
-              // servir l'œil sans rien prétendre.
-              //
-              // Le plus clair est en tête de progression : c'est là que le regard doit aller.
-              //
-              // ⚠️ `color-mix` et non une concaténation d'alpha : `couleur` peut valoir
-              // « var(--nv-accent) », et `${couleur}80` serait une déclaration invalide
-              // silencieusement ignorée — le défaut qui privait les cartes de leur teinte.
-              background: empli
-                // ⚠️ Un seul barreau allumé prend la teinte pleine, pas la plus sombre.
-                // Vérifié en tabulant les bornes avant de regarder l'écran : la formule
-                // générale donnait 28 % de noir à `i = 0`, or ce barreau unique est aussi la
-                // tête de progression. Trois des six objectifs réels sont à un pour cent
-                // d'avancement — le cas dégénéré était le cas courant.
-                ? (allumes <= 1 ? couleur
-                  : `color-mix(in srgb, ${couleur}, black ${
-                    (28 * (1 - i / (allumes - 1))).toFixed(0)}%)`)
-                : "rgba(255,255,255,0.09)",
-              transition: "background 500ms, height 300ms",
+              // Le barreau de tête se dresse dès qu'il est coloré : la limite se repère alors
+              // à la silhouette, sans avoir à juger d'une opacité.
+              height: colore ? 15 : 11,
+              // ⚠️ La couleur reste **la même** partout ; seule l'opacité varie. Et elle
+              // varie par `opacity` plutôt que par une concaténation d'alpha : `couleur` peut
+              // valoir « var(--nv-accent) », et `${couleur}80` serait une déclaration
+              // invalide silencieusement ignorée — le défaut qui privait les cartes de leur
+              // teinte.
+              background: colore ? couleur : "rgba(255,255,255,0.09)",
+              opacity: colore ? opacite : 1,
+              transition: "opacity 500ms, height 300ms",
             }} />
           );
         })}
@@ -287,10 +311,17 @@ function Carte({ o, onModifier }: { o: Objectif; onModifier?: (o: Objectif) => v
             {pourcentageLisible(o.avancement)}
           </span>
         )}
-        <span style={{ fontFamily: FONT, fontSize: 9.5, color: "rgba(255,255,255,0.38)",
-          overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-          {echeance ?? "sans échéance"}
-        </span>
+        {/* ⚠️ Plus de repli « sans échéance ». L'absence d'échéance n'apprend rien — c'est
+            un état, pas une information — et la carte dit désormais le temps restant au
+            rythme actuel, qui répond à la question que l'échéance servait à approcher. Une
+            échéance réellement saisie, elle, continue de s'afficher : elle est ce à quoi le
+            constat de rythme se compare. */}
+        {echeance && (
+          <span style={{ fontFamily: FONT, fontSize: 9.5, color: "rgba(255,255,255,0.38)",
+            overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+            {echeance}
+          </span>
+        )}
         {rythme && (
           <span style={{
             marginLeft: "auto", flexShrink: 0,
