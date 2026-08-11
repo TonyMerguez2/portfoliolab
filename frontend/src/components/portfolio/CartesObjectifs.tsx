@@ -43,8 +43,8 @@ const GLYPHE: Record<Objectif["genre"], string> = {
   plafond_versements: "M4 4h16M12 20V8m0 0-4 4m4-4 4 4",
 };
 
-/** Le côté du logement du glyphe, aligné sur celui du logo d'un actif. */
-const COTE_GLYPHE = 30;
+/** Le côté du glyphe. Plus grand qu'avant : sans logement, il porte seul l'identité. */
+const COTE_GLYPHE = 24;
 
 /**
  * Le glyphe du genre, gravé dans la carte.
@@ -63,27 +63,22 @@ const COTE_GLYPHE = 30;
 function GlypheGrave({ genre, couleur }: { genre: Objectif["genre"]; couleur: string }) {
   const d = GLYPHE[genre];
   return (
-    <span aria-hidden="true" style={{
-      width: COTE_GLYPHE, height: COTE_GLYPHE, flexShrink: 0, borderRadius: 9,
-      display: "flex", alignItems: "center", justifyContent: "center",
-      // Le logement : creusé dans la surface de la carte plutôt que posé dessus.
-      background: "rgba(0,0,0,0.22)",
-      boxShadow: [
-        "inset 0 1.5px 2.5px rgba(0,0,0,0.55)",
-        "inset 0 -1px 0 rgba(255,255,255,0.07)",
-        "0 1px 0 rgba(255,255,255,0.06)",
-      ].join(", "),
-    }}>
-      <svg width="17" height="17" viewBox="0 0 24 24" fill="none" strokeWidth={1.8}
-        strokeLinecap="round" strokeLinejoin="round">
-        {/* La lumière du dessous : c'est elle qui creuse. Décalée d'un pixel seulement —
-            au-delà, le tracé se dédouble au lieu de s'enfoncer. */}
-        <path d={d} stroke="rgba(255,255,255,0.30)" transform="translate(0 1)" />
-        {/* Le tracé lui-même. Légèrement transparent : un trait pleinement saturé
-            remonterait à la surface au lieu d'habiter le creux. */}
-        <path d={d} stroke={couleur} opacity={0.92} />
-      </svg>
-    </span>
+    <svg width={COTE_GLYPHE} height={COTE_GLYPHE} viewBox="0 0 24 24" fill="none"
+      strokeWidth={1.9} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"
+      style={{ flexShrink: 0, display: "block" }}>
+      {/* La lumière du dessous : c'est elle, et elle seule, qui fait le creux. Décalée d'un
+          pixel — au-delà, le tracé se dédouble au lieu de s'enfoncer. */}
+      <path d={d} stroke="rgba(255,255,255,0.34)" transform="translate(0 1)" />
+      {/* ⚠️ **Le tracé est une version sombre de la couleur, non la couleur pleine.** C'est
+          ce qui distingue un trait gravé d'un trait posé : une gravure ne réfléchit pas la
+          lumière, elle la retient. Peint dans la teinte vive, le même dessin remontait à la
+          surface et l'effet de creux disparaissait — seul le liseré clair du dessous
+          subsistait, qu'on lisait alors comme une ombre portée.
+
+          ⚠️ `color-mix` plutôt qu'un mélange calculé à la main : `couleur` peut valoir
+          « var(--nv-accent) », dont on ne connaît pas les composantes ici. */}
+      <path d={d} stroke={`color-mix(in srgb, ${couleur}, black 58%)`} />
+    </svg>
   );
 }
 
@@ -141,17 +136,28 @@ function Jauge({
             <span key={i} style={{
               flex: 1, borderRadius: 1.5,
               height: empli ? 15 : 11,
-              // ⚠️ **Le dégradé est ancré à la barre, non au remplissage.** Un barreau donné
-              // garde donc la même teinte que la jauge soit à dix ou à quatre-vingt-dix pour
-              // cent : sa couleur encode sa *position*, ce qui est vérifiable, là où un
-              // dégradé étiré sur la seule part acquise ferait varier les teintes sans qu'aucune
-              // grandeur ne varie.
+              // ⚠️ **Le dégradé court sur les barreaux colorés, d'un bout à l'autre de la
+              // part acquise.** Je l'avais d'abord ancré à la barre entière, en me disant
+              // qu'une teinte fixe par position se vérifie mieux ; à trois pour cent
+              // d'avancement, cela ne montrait qu'une seule extrémité du dégradé, donc aucun
+              // dégradé. Et l'argument était creux : ce n'est pas la teinte qui porte
+              // l'information — c'est le **nombre** de barreaux allumés. La couleur peut donc
+              // servir l'œil sans rien prétendre.
+              //
+              // Le plus clair est en tête de progression : c'est là que le regard doit aller.
               //
               // ⚠️ `color-mix` et non une concaténation d'alpha : `couleur` peut valoir
               // « var(--nv-accent) », et `${couleur}80` serait une déclaration invalide
               // silencieusement ignorée — le défaut qui privait les cartes de leur teinte.
               background: empli
-                ? `color-mix(in srgb, ${couleur}, white ${(i / SEGMENTS * 30).toFixed(0)}%)`
+                // ⚠️ Un seul barreau allumé prend la teinte pleine, pas la plus sombre.
+                // Vérifié en tabulant les bornes avant de regarder l'écran : la formule
+                // générale donnait 28 % de noir à `i = 0`, or ce barreau unique est aussi la
+                // tête de progression. Trois des six objectifs réels sont à un pour cent
+                // d'avancement — le cas dégénéré était le cas courant.
+                ? (allumes <= 1 ? couleur
+                  : `color-mix(in srgb, ${couleur}, black ${
+                    (28 * (1 - i / (allumes - 1))).toFixed(0)}%)`)
                 : "rgba(255,255,255,0.09)",
               transition: "background 500ms, height 300ms",
             }} />
