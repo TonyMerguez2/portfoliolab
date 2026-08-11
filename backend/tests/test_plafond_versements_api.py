@@ -263,3 +263,110 @@ def test_les_plafonds_connus_sont_proposes(client):
     # ⚠️ Le nom de la clé compte : « minorant » et non « versements_cumules ». L'application
     # ne voit pas les virements, seulement les achats de titres.
     assert corps["verse_minorant"] == 1_000.0
+
+
+# ── Les sensibilités : ce que changerait une autre décision ──────────────────
+
+def test_un_plafond_n_a_pas_de_sensibilites(client):
+    """
+    ⚠️ Le panneau « Selon le rythme de versement » montre déjà ces trois dates pour un
+    plafond. Les répéter dans les constats donnerait deux endroits pour la même chose, qui
+    finiraient par se contredire — c'est le défaut de la médiane affichée deux fois, déjà
+    corrigé une fois dans ce projet.
+    """
+    pid = _portefeuille(client)
+    _versements(client, pid, [(2025, 1)], 1_000.0)
+    o = _creer(client, pid, echeance_annee=2040)
+    assert o["sensibilites"] == []
+
+
+def test_un_capital_recoit_ses_sensibilites(client):
+    """
+    Un objectif de capital reçoit trois variantes : moitié du versement, double, et un point
+    de rendement en moins.
+
+    ⚠️ **Ce sont des sensibilités, pas des conseils.** La route rend le résultat du même
+    calcul à une autre entrée ; c'est l'épargnant qui compare. Rien dans la réponse ne
+    désigne une valeur comme préférable.
+    """
+    pid = _portefeuille(client)
+    _versements(client, pid, [(2025, 1)], 1_000.0)
+    r = client.post(f"/api/v1/portfolios/{pid}/objectifs", json={
+        "nom": "Retraite", "genre": "capital", "cible": 500_000.0,
+        "versement_mensuel": 800.0, "taux_attendu": 7.0, "echeance_annee": 2050,
+    })
+    assert r.status_code in (200, 201), r.text
+    o = r.json()
+    s = o["sensibilites"]
+    assert len(s) == 3, s
+
+    moitie, double, rendement = s
+    assert moitie["quoi"] == "versement" and moitie["versement"] == 400.0
+    assert double["quoi"] == "versement" and double["versement"] == 1_600.0
+    assert rendement["quoi"] == "rendement" and rendement["taux"] == 6.0
+
+    # ⚠️ Le sens des écarts, qui est tout ce que la phrase affirmera : moins on verse, plus
+    # c'est long. Un signe inversé retournerait le constat sans qu'aucun test ne bronche.
+    assert moitie["ecart_mois"] > 0, "verser moins doit repousser la cible"
+    assert double["ecart_mois"] < 0, "verser plus doit la rapprocher"
+    assert rendement["ecart_mois"] > 0, "un rendement plus faible doit la repousser"
+
+    # Et les durées elles-mêmes restent cohérentes avec la date de référence.
+    base = o["mois_pour_atteindre"]
+    assert moitie["mois"] == base + moitie["ecart_mois"]
+    assert double["mois"] == base + double["ecart_mois"]
+
+
+def test_sans_rendement_attendu_aucune_sensibilite(client):
+    """
+    ⚠️ Aucune variante sans hypothèse de rendement : les calculer supposerait un taux que
+    l'épargnant n'a pas choisi, et la phrase citerait un écart bâti sur rien.
+    """
+    pid = _portefeuille(client)
+    r = client.post(f"/api/v1/portfolios/{pid}/objectifs", json={
+        "nom": "Retraite", "genre": "capital", "cible": 500_000.0,
+        "versement_mensuel": 800.0, "echeance_annee": 2050,
+    })
+    assert r.json()["sensibilites"] == []
+
+
+def test_une_variante_hors_de_portee_est_rendue_telle_quelle(client):
+    """
+    ⚠️ `mois: None` plutôt qu'un très grand nombre : à la moitié du rythme, certaines cibles
+    ne sont plus atteignables du tout, et l'interface doit pouvoir le dire au lieu d'annoncer
+    « dans 80 ans » comme une estimation.
+
+    Le cas est construit pour être juste au-delà : 715 000 € restants à 800 € par mois sans
+    rendement font 894 mois, sous le plafond de quatre-vingts ans du calcul ; à 400 € ils en
+    font 1 788, au-delà.
+    """
+    pid = _portefeuille(client)
+    _versements(client, pid, [(2025, 1)], 1_000.0)
+    r = client.post(f"/api/v1/portfolios/{pid}/objectifs", json={
+        "nom": "Lointain", "genre": "capital", "cible": 720_000.0,
+        "versement_mensuel": 800.0, "taux_attendu": 0.0, "echeance_annee": 2050,
+    })
+    o = r.json()
+    assert o["mois_pour_atteindre"] is not None, "la référence doit rester atteignable"
+    s = o["sensibilites"]
+    moitie = next(v for v in s if v["versement"] == 400.0)
+    assert moitie["mois"] is None
+    assert moitie["ecart_mois"] is None, "pas d'écart sans durée"
+
+
+def test_une_reference_hors_de_portee_ne_produit_aucune_variante(client):
+    """
+    ⚠️ Le garde qui manquait à mon premier essai de test, et que ce premier essai a révélé :
+    quand la cible n'est **pas** atteignable au rythme actuel, aucune variante n'est calculée.
+    Un écart se mesure à une référence ; sans référence, « douze ans de plus que jamais » n'a
+    pas de sens. L'interface dit alors « hors de portée au rythme actuel », ce qu'elle sait
+    déjà faire.
+    """
+    pid = _portefeuille(client)
+    r = client.post(f"/api/v1/portfolios/{pid}/objectifs", json={
+        "nom": "Immense", "genre": "capital", "cible": 900_000_000.0,
+        "versement_mensuel": 100.0, "taux_attendu": 0.0, "echeance_annee": 2050,
+    })
+    o = r.json()
+    assert o["mois_pour_atteindre"] is None
+    assert o["sensibilites"] == []

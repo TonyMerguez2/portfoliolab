@@ -260,6 +260,46 @@ def _en_dict(o: Objectif, valeur: float | None, user: User,
             atteinte_mois = mois_pour_atteindre(prog.actuel, o.versement_mensuel or 0.0,
                                                o.taux_attendu, requis)
 
+    # ── Ce que change un autre rythme, ou un autre rendement ──────────────────
+    #
+    # ⚠️ **Une sensibilité n'est pas un conseil, et la distinction est nette.** « À 400 € par
+    # mois, la cible reculerait de douze ans » est la même fonction évaluée à une autre
+    # entrée : rien n'y est prescrit, et l'épargnant compare deux chiffres pour décider
+    # lui-même. « Versez 800 € » serait une recommandation d'investissement — ce logiciel n'en
+    # produit pas. La forme conditionnelle porte toute la différence, et les tests la gardent.
+    #
+    # ⚠️ **Calculé ici et non dans l'interface**, parce que `mois_pour_atteindre` capitalise
+    # mois par mois : réécrire cette boucle côté client, c'est se donner deux implémentations
+    # d'une même formule, qui finiront par ne plus répondre pareil.
+    #
+    # ⚠️ **Rien pour les plafonds de versements** : le panneau « Selon le rythme de
+    # versement » montre déjà ces trois dates pour eux. Deux endroits pour la même chose
+    # finissent par se contredire — c'est le défaut de la médiane affichée deux fois, déjà
+    # corrigé.
+    sensibilites: list[dict] = []
+    if (not sur_versements and prog is not None and requis
+            and o.taux_attendu is not None and atteinte_mois is not None):
+        verse = o.versement_mensuel or 0.0
+        essais: list[tuple[str, float, float]] = []
+        if verse > 0:
+            # La moitié et le double : deux écarts que l'épargnant reconnaît sans calculer.
+            essais.append(("versement", round(verse / 2, 2), o.taux_attendu))
+            essais.append(("versement", round(verse * 2, 2), o.taux_attendu))
+        # Un point de rendement en moins : l'hypothèse la plus fragile de la projection, et
+        # celle dont l'épargnant mesure le moins l'effet.
+        essais.append(("rendement", verse, round(o.taux_attendu - 1.0, 2)))
+        for quoi, v, taux in essais:
+            m = mois_pour_atteindre(prog.actuel, v, taux, requis)
+            sensibilites.append({
+                "quoi": quoi,
+                "versement": v,
+                "taux": taux,
+                "mois": m,
+                # `None` quand la cible devient hors de portée : c'est une réponse, pas un
+                # trou. L'interface la dit en clair.
+                "ecart_mois": (m - atteinte_mois) if m is not None else None,
+            })
+
     return {
         "id": o.id, "nom": o.nom, "genre": o.genre, "cible": o.cible,
         "echeance_annee": an_echeance, "age_cible": o.age_cible,
@@ -300,6 +340,7 @@ def _en_dict(o: Objectif, valeur: float | None, user: User,
         # manque des transactions, et l'avancement du reste de l'application est alors faux.
         "verse_mesure": (round(verse_mesure, 2) if verse_mesure is not None else None),
         "verse_retenu": round(verse, 2) if sur_versements else None,
+        "sensibilites": sensibilites,
     }
 
 

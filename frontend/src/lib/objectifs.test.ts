@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   agregat, alerteRepartition, avertissementValeur, dureeEnClair, echeanceEnClair, ecartAuRythme,
+  phraseSensibilite,
   euros, libelleCible, moisEnClair, montantCible, observations, pourcent,
   pourcentageLisible, surVersements, type Objectif,
 } from "./objectifs";
@@ -153,6 +154,7 @@ describe("agregat", () => {
     valeur_projetee: null, projetee_en_euros_constants: null,
     mois_pour_atteindre: null,
     verse_deja: null, verse_mesure: null, verse_retenu: null, sur_versements: false,
+    sensibilites: [],
     ...kw,
   });
 
@@ -201,6 +203,7 @@ describe("observations", () => {
     valeur_projetee: 900_000, projetee_en_euros_constants: 600_000,
     mois_pour_atteindre: 240,
     verse_deja: null, verse_mesure: null, verse_retenu: null, sur_versements: false,
+    sensibilites: [],
   };
 
   it("dit ce qui manque et l'écart à la cible", () => {
@@ -278,6 +281,7 @@ describe("cohérence de la médiane citée", () => {
     valeur_projetee: 362_986, projetee_en_euros_constants: 245_000,
     mois_pour_atteindre: 397,
     verse_deja: null, verse_mesure: null, verse_retenu: null, sur_versements: false,
+    sensibilites: [],
   };
 
   it("cite la médiane des tirages quand elle est fournie", () => {
@@ -367,6 +371,7 @@ describe("plafond de versements", () => {
     atteint: false, mois_restants: null, valeur_projetee: null,
     projetee_en_euros_constants: null, mois_pour_atteindre: 182,
     verse_deja: null, verse_mesure: 5_000, verse_retenu: 5_000, sur_versements: true,
+    sensibilites: [],
     ...kw,
   });
 
@@ -505,5 +510,101 @@ describe("dureeEnClair", () => {
   it("accorde le pluriel des années", () => {
     expect(dureeEnClair(13)).toBe("1 an 1 mois");
     expect(dureeEnClair(25)).toBe("2 ans 1 mois");
+  });
+});
+
+
+// ── Les sensibilités ─────────────────────────────────────────────────────────
+//
+// ⚠️ **La frontière que cette série garde.** « À 400 € par mois, la cible reculerait de
+// douze ans » est la même fonction évaluée à une autre entrée : rien n'y est prescrit, et
+// l'épargnant compare deux chiffres pour trancher lui-même. « Versez 800 € » serait une
+// recommandation d'investissement. Le conditionnel porte toute la différence, et il est
+// facile de le perdre en reformulant une phrase.
+
+describe("phraseSensibilite", () => {
+  const versement = (kw = {}) => ({
+    quoi: "versement" as const, versement: 400, taux: 7.2, mois: 397, ecart_mois: 144, ...kw,
+  });
+
+  it("dit ce que reculerait un rythme plus faible", () => {
+    const t = phraseSensibilite(versement(), 800);
+    expect(t).toContain("par mois");
+    expect(t).toContain("reculerait de 12 ans");
+    expect(t).toContain("(la moitié de votre rythme)");
+  });
+
+  it("dit ce qu'avancerait un rythme plus fort", () => {
+    const t = phraseSensibilite(versement({ versement: 1_600, ecart_mois: -96 }), 800);
+    expect(t).toContain("avancerait de 8 ans");
+    expect(t).toContain("(le double)");
+  });
+
+  it("nomme le rendement diminué avec sa valeur", () => {
+    const t = phraseSensibilite(
+      { quoi: "rendement", versement: 800, taux: 6.2, mois: 433, ecart_mois: 36 }, 800);
+    expect(t).toContain("un point de rendement en moins");
+    expect(t).toContain("6,2 %");
+    expect(t).toContain("reculerait de 3 ans");
+  });
+
+  it("dit « plus atteignable » plutôt que de taire l'impossible", () => {
+    const t = phraseSensibilite(versement({ mois: null, ecart_mois: null }), 800);
+    expect(t).toContain("ne serait plus atteignable");
+  });
+
+  it("se taît quand l'écart est nul", () => {
+    // ⚠️ « La cible reculerait de zéro mois » n'apprend rien et occupe une ligne d'un
+    // panneau qui en compte cinq.
+    expect(phraseSensibilite(versement({ ecart_mois: 0 }), 800)).toBeNull();
+    expect(phraseSensibilite(versement({ ecart_mois: null }), 800)).toBeNull();
+  });
+
+  it("reste au conditionnel et ne prescrit jamais", () => {
+    // ⚠️ Le garde de la frontière. Une reformulation qui passerait à l'impératif —
+    // « augmentez », « versez plutôt » — transformerait un calcul en conseil.
+    const interdits = /augment|réduis|devriez|il faut|conseill|recommand|placez|activez|versez/i;
+    const jeux = [
+      versement(),
+      versement({ versement: 1_600, ecart_mois: -96 }),
+      versement({ mois: null, ecart_mois: null }),
+      { quoi: "rendement" as const, versement: 800, taux: 6.2, mois: 433, ecart_mois: 36 },
+      { quoi: "rendement" as const, versement: 800, taux: 6.2, mois: null, ecart_mois: null },
+    ];
+    for (const s of jeux) {
+      const t = phraseSensibilite(s, 800);
+      if (t) {
+        expect(t).not.toMatch(interdits);
+        expect(t).toMatch(/rait\b/);  // reculerait, avancerait, serait
+      }
+    }
+  });
+
+  it("ne cite un repère que si le rythme actuel est connu", () => {
+    const t = phraseSensibilite(versement(), null);
+    expect(t).not.toContain("moitié");
+    expect(t).toContain("reculerait de 12 ans");
+  });
+});
+
+
+describe("virgule décimale des constats", () => {
+  it("écrit le rapport à la cible avec une virgule", () => {
+    // ⚠️ Vu à l'écran : « La cible représente 276.3 fois votre patrimoine actuel » — un
+    // point décimal au milieu d'une interface en français. `toFixed` ne connaît pas la
+    // locale ; ce défaut avait déjà été corrigé sur les taux, il était resté ici.
+    const o: Objectif = {
+      id: "x", nom: "R", genre: "capital", cible: 1_250_000, echeance_annee: 2044,
+      age_cible: null, part_affectee: 100, versement_mensuel: 800, taux_attendu: 7.2,
+      inflation: null, taux_retrait: null, couleur: null, capital_requis: 1_250_000,
+      montant_actuel: 4_524, avancement: 0.36, atteint: false, mois_restants: 220,
+      valeur_projetee: null, projetee_en_euros_constants: null, mois_pour_atteindre: 397,
+      verse_deja: null, verse_mesure: null, verse_retenu: null, sur_versements: false,
+      sensibilites: [],
+    };
+    const t = observations(o, 4_524).find(x => x.includes("fois votre patrimoine"));
+    expect(t).toBeDefined();
+    expect(t).not.toMatch(/\d\.\d/);
+    expect(t).toMatch(/\d,\d/);
   });
 });

@@ -50,6 +50,8 @@ export type Objectif = {
   verse_retenu: number | null;
   /** Rendu par le serveur pour que l'écran n'ait pas à recopier la liste des genres. */
   sur_versements: boolean;
+  /** Ce que changerait un autre rythme, ou un autre rendement. */
+  sensibilites: Sensibilite[];
   taux_attendu: number | null;
   inflation: number | null;
   taux_retrait: number | null;
@@ -62,6 +64,25 @@ export type Objectif = {
   valeur_projetee: number | null;
   projetee_en_euros_constants: number | null;
   mois_pour_atteindre: number | null;
+};
+
+/**
+ * Ce que devient la date d'atteinte si une entrée change.
+ *
+ * ⚠️ **Une sensibilité, pas un conseil.** « À 400 € par mois, la cible reculerait de douze
+ * ans » est la même fonction évaluée à une autre entrée : rien n'y est prescrit, et
+ * l'épargnant compare deux chiffres pour trancher lui-même. « Versez 800 € » serait une
+ * recommandation d'investissement, que ce logiciel ne produit pas. Le conditionnel porte
+ * toute la différence, et un test le garde.
+ */
+export type Sensibilite = {
+  quoi: "versement" | "rendement";
+  versement: number;
+  taux: number;
+  /** Les mois nécessaires dans ce cas, ou `null` si la cible devient hors de portée. */
+  mois: number | null;
+  /** L'écart en mois avec le rythme actuel : positif = plus tard. */
+  ecart_mois: number | null;
 };
 
 /**
@@ -348,6 +369,43 @@ function constatsPlafond(o: Objectif): string[] {
   return sortie;
 }
 
+/**
+ * Une sensibilité mise en phrase, au conditionnel.
+ *
+ * ⚠️ **Le conditionnel n'est pas une précaution de style, c'est le fond.** « À 400 € par
+ * mois, la cible reculerait de douze ans » informe ; « versez 800 € » prescrirait. Les deux
+ * portent le même calcul et n'ont pas le même statut — le premier laisse la décision à
+ * l'épargnant, le second la prend pour lui.
+ *
+ * ⚠️ Rend `null` quand l'écart est nul : « la cible reculerait de zéro mois » n'apprend rien
+ * et occupe une ligne d'un panneau qui en compte cinq.
+ */
+export function phraseSensibilite(s: Sensibilite, actuel: number | null): string | null {
+  if (s.mois == null) {
+    return s.quoi === "versement"
+      ? `À ${euros(s.versement)} par mois, la cible ne serait plus atteignable.`
+      : `Avec un point de rendement en moins (${pourcent(s.taux, 1)} %), la cible ne serait `
+        + "plus atteignable.";
+  }
+  if (s.ecart_mois == null || s.ecart_mois === 0) return null;
+  const duree = dureeEnClair(Math.abs(s.ecart_mois));
+  if (!duree) return null;
+  const sens = s.ecart_mois > 0 ? `reculerait de ${duree}` : `avancerait de ${duree}`;
+  if (s.quoi === "rendement") {
+    return `Avec un point de rendement en moins (${pourcent(s.taux, 1)} %), la cible ${sens}.`;
+  }
+  // Le repère « moitié » ou « double » se lit plus vite que le montant seul.
+  //
+  // ⚠️ Entre parenthèses et non entre tirets. Vu à l'écran : « À 400 € par mois — la moitié
+  // de votre rythme, la cible reculerait… » ouvre une incise que la virgule ne referme pas,
+  // et la phrase se lit de travers. Une incise au tiret réclame son tiret fermant, qui
+  // tomberait juste avant une virgule — deux ponctuations pour rien.
+  const repere = actuel && actuel > 0
+    ? (s.versement < actuel ? " (la moitié de votre rythme)" : " (le double)")
+    : "";
+  return `À ${euros(s.versement)} par mois${repere}, la cible ${sens}.`;
+}
+
 export function observations(
   o: Objectif, valeurPortefeuille?: number | null,
   medianeProjection?: number | null,
@@ -374,8 +432,11 @@ export function observations(
 
   if (requis != null && valeurPortefeuille != null && valeurPortefeuille > 0) {
     const fois = requis / valeurPortefeuille;
+    // ⚠️ `pourcent` et non `toFixed`, qui rend un **point** décimal : « 276.3 fois » se
+    // lisait à l'écran au milieu d'une interface entièrement en français. Le même défaut que
+    // les taux du serveur interpolés tels quels, déjà corrigé — il était resté ici.
     sortie.push(fois >= 1.05
-      ? `La cible représente ${fois.toFixed(1)} fois votre patrimoine actuel.`
+      ? `La cible représente ${pourcent(fois, 1)} fois votre patrimoine actuel.`
       : `La cible est du même ordre que votre patrimoine actuel.`);
   }
 
@@ -404,6 +465,14 @@ export function observations(
       sortie.push(`À ${o.inflation} % d’inflation, ces ${euros(mediane)} `
         + `vaudront ${euros(constants)} d’aujourd’hui.`);
     }
+  }
+
+  // ⚠️ **En dernier, et c'est un choix de hiérarchie.** Les constats précédents disent où
+  // l'on en est ; ceux-ci disent ce que changerait une autre décision. L'ordre suit celui
+  // dans lequel on se pose les questions : d'abord où j'en suis, ensuite quoi si.
+  for (const s of o.sensibilites ?? []) {
+    const phrase = phraseSensibilite(s, o.versement_mensuel);
+    if (phrase) sortie.push(phrase);
   }
 
   return sortie;
