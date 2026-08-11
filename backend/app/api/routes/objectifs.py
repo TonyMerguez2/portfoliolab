@@ -368,6 +368,86 @@ FENETRES_RENDEMENT = (3, 5, 10)
 _TTL_REFERENCES = 30 * 24 * 3600
 
 
+def backtest_allocation(poids: dict[str, float]) -> dict | None:
+    """
+    Ce qu'aurait fait cette répartition sur la plus longue fenêtre disponible.
+
+    ⚠️ **Chaque ligne est remplacée par un fonds plus ancien suivant le même marché.** Sans
+    cela, l'histoire commune des ETF d'un PEA commence en 2014 et ne contient aucune crise :
+    13 % par an, ce qui n'est pas une attente. Avec les substituts, la fenêtre remonte à
+    2001 — 2008, 2020 et 2022 comprises — et le même portefeuille rend 9,50 % par an, au
+    prix d'un recul de 57,5 %.
+
+    ⚠️ **C'est une simulation, pas l'histoire de l'épargnant** : il ne détenait pas cette
+    allocation en 2008. Les substitutions employées sont rendues, pour que l'écran les
+    nomme.
+    """
+    from app.services.backtest_allocation import (
+        ANNEES_MINIMALES, SEANCES_PAR_AN, SUBSTITUTS, annualiser_suite,
+        pire_recul, serie_rebalancee,
+    )
+    # Le cache du service des événements : un seul fichier, une seule mécanique.
+    from app.services.evenements import _charger, _ecrire, _TTL_ECHEC, _VERSION
+    if not poids:
+        return None
+
+    cache = _charger()
+    cle = "backtest:" + ",".join(f"{t}={round(w, 3)}" for t, w in sorted(poids.items()))
+    e = cache.get(cle)
+    if e and e.get("echeance", 0) > time.time() and e.get("version") == _VERSION:
+        return e.get("resultat")
+
+    resultat = None
+    try:
+        import numpy as np
+        import yfinance as yf
+
+        subs = {t: SUBSTITUTS.get(t, t) for t in poids}
+        tickers = sorted(set(subs.values()))
+        brut = yf.download(tickers, start="1990-01-01", progress=False,
+                           auto_adjust=True, threads=True)["Close"]
+        if brut is not None and len(brut):
+            if len(tickers) == 1:
+                brut = brut.to_frame(tickers[0])
+            vides = [c for c in brut.columns if brut[c].dropna().empty]
+            brut = brut.drop(columns=vides).dropna()
+            # Les poids sont regroupés par substitut : deux ETF du même marché fusionnent.
+            cible: dict[str, float] = {}
+            for t, w in poids.items():
+                sub = subs[t]
+                if sub in brut.columns:
+                    cible[sub] = cible.get(sub, 0.0) + w
+            couverture = round(sum(cible.values()) * 100, 1)
+            annees = ((brut.index[-1] - brut.index[0]).days / 365.25) if len(brut) else 0.0
+            if cible and annees >= ANNEES_MINIMALES:
+                releves = [{c: float(v) for c, v in ligne.items()}
+                           for _, ligne in brut.iterrows()]
+                mois = [d.year * 12 + d.month for d in brut.index]
+                suite = serie_rebalancee(releves, cible, mois)
+                tcam = annualiser_suite(suite, annees)
+                if tcam is not None:
+                    quot = np.diff(np.log(np.asarray(suite)))
+                    resultat = {
+                        "rendement": tcam,
+                        "volatilite": round(float(np.std(quot, ddof=1)
+                                                  * np.sqrt(SEANCES_PAR_AN) * 100), 2),
+                        "pire_recul": pire_recul(suite),
+                        "annees": round(annees, 1),
+                        "debut": str(brut.index[0].date()),
+                        "fin": str(brut.index[-1].date()),
+                        "substitutions": {t: s for t, s in subs.items() if s != t},
+                        "couverture": couverture,
+                        "rebalancement": "mensuel",
+                    }
+    except Exception as exc:                                    # pragma: no cover
+        logger.warning("backtest d'allocation indisponible (%s)", type(exc).__name__)
+
+    cache[cle] = {"version": _VERSION, "resultat": resultat,
+                  "echeance": time.time() + (_TTL_REFERENCES if resultat else _TTL_ECHEC)}
+    _ecrire()
+    return resultat
+
+
 def references_longues() -> list[dict]:
     """
     Le rendement à long terme de quelques grandes classes d'actifs, mis en cache un mois.
@@ -437,12 +517,12 @@ async def parametres_suggeres(portfolio_id: str, db: Session = Depends(get_db),
     p = _portefeuille(portfolio_id, user, db)
     txs = db.query(Transaction).filter(Transaction.portfolio_id == p.id).all()
     v = versement_observe(txs)
+    poids = {a["ticker"]: float(a.get("weight") or 0) / 100
+             for a in (p.assets or []) if a.get("ticker")}
 
     # ── Le passé de l'allocation, à titre de repère ───────────────────────────
     rendements: list[dict] = []
     periode = None
-    poids = {a["ticker"]: float(a.get("weight") or 0) / 100
-             for a in (p.assets or []) if a.get("ticker")}
     if poids:
         try:
             import numpy as np
@@ -501,6 +581,10 @@ async def parametres_suggeres(portfolio_id: str, db: Session = Depends(get_db),
         # sur des classes d'actifs, non sur les dix ans d'un portefeuille particulier.
         # C'est la différence entre un ordre de grandeur et une extrapolation.
         "references_longues": references_longues(),
+        # ⚠️ **Le chiffre proposé en premier.** C'est l'allocation de l'épargnant, backtestée
+        # bien avant qu'il n'ouvre son portefeuille — la seule façon d'obtenir une attente
+        # qui lui ressemble sans extrapoler une décennie exceptionnelle.
+        "backtest": backtest_allocation(poids),
         "periode_mesuree": periode,
         # ⚠️ Deux valeurs, et n'en rendre qu'une serait trompeur. La cible est proposée
         # parce qu'une banque centrale y ramène l'inflation sur un horizon long ; le

@@ -30,6 +30,24 @@ export type ParametresSuggeres = {
    *
    * ⚠️ Libellées en dollars : un épargnant en euros a touché autre chose selon le change.
    */
+  /**
+   * Le backtest de l'allocation, bien avant la création du portefeuille.
+   *
+   * ⚠️ **C'est le chiffre proposé en premier**, parce qu'il porte sur l'allocation de
+   * l'épargnant et non sur un marché générique. Chaque ETF est remplacé par un fonds plus
+   * ancien suivant le même marché, ce qui fait remonter la fenêtre de 2014 à 2001 : le
+   * même portefeuille passe de 13 % par an à 9,5 %, et l'échantillon contient enfin 2008.
+   *
+   * ⚠️ **Une simulation, pas son histoire** : il ne détenait pas cette allocation en 2008.
+   * Et `pire_recul` s'affiche toujours avec le rendement — 9,5 % obtenus au prix d'un recul
+   * de 57 % n'est pas la même proposition que 9,5 % tranquilles.
+   */
+  backtest: {
+    rendement: number; volatilite: number; pire_recul: number;
+    annees: number; debut: string; fin: string;
+    substitutions: Record<string, string>; couverture: number;
+    rebalancement: string;
+  } | null;
   references_longues: {
     ticker: string; libelle: string; rendement: number; annees: number;
     depuis: string; proposee: boolean;

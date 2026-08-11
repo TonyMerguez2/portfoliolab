@@ -103,6 +103,7 @@ export default function FormulaireObjectif({
     initial?.taux_retrait != null ? String(initial.taux_retrait) : "4");
   const [couleur, setCouleur] = useState(initial?.couleur ?? JETONS.accent);
 
+  const backtest = suggestions?.backtest ?? null;
   const reference = suggestions?.references_longues?.find(r => r.proposee) ?? null;
   const autresReferences = (suggestions?.references_longues ?? []).filter(r => !r.proposee);
 
@@ -231,7 +232,46 @@ export default function FormulaireObjectif({
                   ans d'un portefeuille particulier. Les quatre autres références sont
                   affichées pour situer : un épargnant tout en actions américaines et un
                   épargnant obligataire n'ont pas la même attente à formuler. */}
-              {reference && (
+              {/* ⚠️ **Le backtest de l'allocation passe devant la référence générique.**
+                  Il porte sur le portefeuille de l'épargnant, remonté à 2001 en substituant
+                  à chaque ETF un fonds plus ancien du même marché — sans quoi la fenêtre
+                  commence en 2014, ne contient aucune crise et rend 13 % par an. Le recul
+                  maximal est affiché avec le rendement : neuf et demi pour cent obtenus au
+                  prix d'un recul de 57 % n'est pas la même proposition que neuf et demi
+                  pour cent tranquilles, et c'est le second chiffre qui dit si l'épargnant
+                  aurait tenu. */}
+              {backtest && (
+                <>
+                  <button type="button"
+                    onClick={() => setTaux(String(backtest.rendement))}
+                    style={{ alignSelf: "flex-start", marginTop: 3, padding: "3px 8px",
+                      borderRadius: RAYONS.xs, cursor: "pointer",
+                      background: JETONS.accentVoile,
+                      border: `1px solid ${JETONS.accent}`, color: CLAIR.accent,
+                      fontFamily: FONT, fontSize: 10, fontWeight: 700, textAlign: "left" }}>
+                    reprendre {pourcent(backtest.rendement, 1)} % — votre allocation sur{" "}
+                    {pourcent(backtest.annees, 0)} ans
+                  </button>
+                  <span style={{ marginTop: 2, fontFamily: FONT, fontSize: 9,
+                    lineHeight: 1.45, color: CLAIR.texteFaible }}>
+                    Simulée de {new Date(backtest.debut).getFullYear()} à{" "}
+                    {new Date(backtest.fin).getFullYear()}, rééquilibrage{" "}
+                    {backtest.rebalancement} : {pourcent(backtest.rendement, 1)} % par an,
+                    volatilité {pourcent(backtest.volatilite, 1)} %, et un recul maximal de{" "}
+                    <strong style={{ color: JETONS.negatif }}>
+                      {pourcent(backtest.pire_recul, 1)} %
+                    </strong>.
+                    {Object.keys(backtest.substitutions).length > 0 && (
+                      <> Vos fonds étant récents, chaque ligne est remplacée par un fonds
+                      plus ancien du même marché ({Object.entries(backtest.substitutions)
+                        .map(([a, b]) => `${a} → ${b}`).join(", ")}).</>
+                    )}
+                    {" "}Vous ne déteniez pas cette allocation en 2008 : c’est une
+                    simulation, pas votre historique.
+                  </span>
+                </>
+              )}
+              {reference && !backtest && (
                 <button type="button"
                   onClick={() => setTaux(String(reference.rendement))}
                   style={{ alignSelf: "flex-start", marginTop: 3, padding: "2px 7px",
