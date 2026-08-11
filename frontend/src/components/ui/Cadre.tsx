@@ -28,6 +28,15 @@ const CLES_DE_PLACEMENT = new Set([
   "flex", "flexShrink", "flexGrow", "flexBasis", "minHeight", "maxHeight",
   "minWidth", "maxWidth", "width", "height", "alignSelf", "order", "gridArea",
   "marginTop", "marginBottom", "marginLeft", "marginRight", "margin",
+  // ⚠️ **`gridColumn` manquait, et son absence ne se voyait pas.** Seul `gridArea`
+  // figurait ici, alors que les appelants écrivent naturellement
+  // `gridColumn: "1 / -1"` — la forme courte, de loin la plus répandue. Appliquée à la
+  // couche intérieure, elle ne fait **rien** : ce div n'est pas un élément de grille.
+  // Aucune erreur, aucun avertissement, simplement un panneau qui reste dans sa
+  // colonne. Constaté à l'écran sur l'onglet Objectifs, dont la rangée de cartes devait
+  // traverser la largeur et s'entassait dans un tiers.
+  "gridColumn", "gridRow", "gridColumnStart", "gridColumnEnd",
+  "gridRowStart", "gridRowEnd", "justifySelf", "placeSelf",
 ]);
 
 export function repartir(style?: CSSProperties): { cadre: CSSProperties; carte: CSSProperties } {

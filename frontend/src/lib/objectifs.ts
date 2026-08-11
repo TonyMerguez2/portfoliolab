@@ -261,3 +261,18 @@ export function observations(
 
   return sortie;
 }
+
+/**
+ * Un pourcentage d'avancement, lisible même quand il est minuscule.
+ *
+ * ⚠️ **« 0 % » et « moins de 1 % » ne disent pas la même chose.** Constaté à l'écran :
+ * 4 545 € contre une somme de cibles de 3 050 000 € font 0,11 %, arrondis à « 0 % » —
+ * indiscernable d'un objectif auquel on n'a rien affecté, alors qu'un versement a bien
+ * commencé. Au-delà de 99,5 %, symétriquement, « 100 % » laisserait croire l'objectif
+ * atteint alors qu'il reste quelques euros.
+ */
+export function pourcentageLisible(part: number): string {
+  if (part > 0 && part < 0.5) return "< 1 %";
+  if (part >= 99.5 && part < 100) return "> 99 %";
+  return `${Math.round(part)} %`;
+}

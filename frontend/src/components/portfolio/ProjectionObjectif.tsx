@@ -3,7 +3,7 @@ import type { Projection } from "@/hooks/useProjection";
 import {
   anneeDuMois, bande, bornes, chemin, echelles, graduations, montantCourt,
 } from "@/lib/courbeProjection";
-import { echeanceEnClair, euros, type Objectif } from "@/lib/objectifs";
+import { echeanceEnClair, euros, pourcentageLisible, type Objectif } from "@/lib/objectifs";
 import { CLAIR, JETONS, RAYONS } from "@/lib/palette";
 import { FONT, NUM } from "@/lib/typography";
 
@@ -53,7 +53,7 @@ function Anneau({ part, couleur }: { part: number; couleur: string }) {
         transform="rotate(-90 34 34)" />
       <text x="34" y="38" textAnchor="middle"
         style={{ ...NUM, fontSize: 15, fontWeight: 700, fill: CLAIR.texte }}>
-        {Math.round(part)} %
+        {pourcentageLisible(part)}
       </text>
     </svg>
   );
@@ -199,7 +199,10 @@ export default function ProjectionObjectif({
               <svg viewBox={`0 0 ${CADRE.largeur} ${CADRE.hauteur}`}
                 style={{ width: "100%", height: "auto", display: "block" }}
                 role="img"
-                aria-label={`Projection de ${p.objectif.nom} sur ${ans} ans`}>
+                // ⚠️ Le nom entre guillemets, pour éviter l'élision. « Projection de
+                // Indépendance financière » se lisait à l'écran ; l'apostrophe dépend du
+                // nom que l'épargnant a choisi, donc on ne la devine pas.
+                aria-label={`Projection de « ${p.objectif.nom} » sur ${ans} ans`}>
                 {graduations(bas, haut).map(v => (
                   <g key={v}>
                     <line x1={CADRE.marge.gauche} x2={CADRE.largeur - CADRE.marge.droite}

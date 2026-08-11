@@ -1969,8 +1969,11 @@ function PortfolioPageInner() {
         // ⚠️ La première rangée se dimensionne sur son contenu, les suivantes se
         // partagent le reste. Sans `auto`, la rangée de cartes recevait un tiers de la
         // hauteur et ses jauges se faisaient écraser.
-        gridTemplateRows: "auto auto auto minmax(0, 1fr)", overflowY: "auto",
-        overflowX: "hidden", alignContent: "start" }}>
+        // ⚠️ Toutes les rangées en « auto », et l'onglet défile. Une dernière rangée en
+        // « 1fr » recevait zéro dès que les trois premières remplissaient la hauteur :
+        // « Meilleurs contributeurs » et « Répartition par classe » tombaient à 14 pixels
+        // de haut, mesurés à l'écran. Aucune erreur, juste deux panneaux écrasés.
+        overflowY: "auto", overflowX: "hidden", alignContent: "start" }}>
         <Cadre style={{ gridColumn: "1 / -1", padding: "16px 18px",
           display: "flex", flexDirection: "column", gap: 12 }}>
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10 }}>
@@ -2020,30 +2023,16 @@ function PortfolioPageInner() {
             </>
           )}
 
-          {scoreSante != null && <>
-            <div style={{ width: 1, alignSelf: "stretch", background: CLAIR.carteCreuse }} />
-            {/* Santé du portefeuille : le titre chiffré passe en tête, la carte
-                de droite ne garde que le détail par critère. */}
-            <div style={{ display: "flex", alignItems: "center", gap: 12, minWidth: 170 }}>
-              <CircleScore score={scoreSante} size={64} nu />
-              <div>
-                <p style={{ margin: "0 0 3px", fontSize: 11.5, fontWeight: 500, color: CLAIR.texteSecondaire }}>Santé du portefeuille</p>
-                <div style={{ display: "flex", alignItems: "baseline", gap: 3 }}>
-                  <span style={{ fontSize: 20, fontWeight: 800, fontFamily: FONT, color: CLAIR.texte, lineHeight: 1 }}>{scoreSante}</span>
-                  <span style={{ fontSize: 10, color: CLAIR.texteFaible }}>/100</span>
-                </div>
-                <span style={{ fontSize: 11, fontWeight: 600, color: scoreColor(scoreSante) }}>
-                  {bandeSante ?? scoreLabel(scoreSante)}
-                </span>
-              </div>
-            </div>
-          </>}
+          {/* ⚠️ Le bloc « Santé du portefeuille » a été retiré d'ici. Il datait de
+              l'ancien panneau OBJECTIFS et se retrouvait sous les cartes, où il n'avait
+              aucun rapport avec des objectifs d'épargne — et où il répétait la roue de
+              score que l'en-tête de la page affiche déjà, à trois centimètres au-dessus. */}
         </Cadre>
         {/* ⚠️ Sur deux colonnes : la projection porte une courbe, trois mesures et une
             légende. Dans une colonne de tiers d'écran, la courbe tombait à moins de
             deux cents pixels de large et ses vingt points devenaient illisibles. */}
         <Cadre style={{ gridColumn: "span 2", padding: "16px 18px",
-          display: "flex", flexDirection: "column", minHeight: 0 }}>
+          display: "flex", flexDirection: "column", minHeight: 360 }}>
           <ProjectionObjectif
             objectifs={listeObjectifs}
             choisi={projeteEffectif}
@@ -2054,7 +2043,7 @@ function PortfolioPageInner() {
         </Cadre>
 
         <Cadre style={{ padding: "16px 18px", display: "flex", flexDirection: "column",
-          minHeight: 0, overflowY: "auto" }}>
+          minHeight: 360, overflowY: "auto" }}>
           <ProgressionGlobale objectifs={listeObjectifs}
             valeurPortefeuille={objectifs.donnees?.valeur_portefeuille ?? null}
             objectifDetaille={listeObjectifs.find(o => o.id === projeteEffectif) ?? null} />
@@ -2063,11 +2052,12 @@ function PortfolioPageInner() {
         {/* La dispersion des tirages, en pleine largeur sous la projection : trois cartes
             de deux cents pixels ne tiennent pas dans une colonne de tiers d'écran. */}
         <Cadre style={{ gridColumn: "1 / -1", padding: "16px 18px",
-          display: "flex", flexDirection: "column", minHeight: 0 }}>
+          display: "flex", flexDirection: "column", minHeight: 250 }}>
           <ScenariosObjectif projection={projection.projection} />
         </Cadre>
 
-        <Cadre style={{ padding: "16px 18px", display: "flex", flexDirection: "column" }}>
+        <Cadre style={{ padding: "16px 18px", display: "flex", flexDirection: "column",
+          minHeight: 260 }}>
           <SectionLabel>MEILLEURS CONTRIBUTEURS</SectionLabel>
           <div style={{ display: "flex", flexDirection: "column", gap: 0 }}>
             {[...enriched].filter(a => a.perfEur != null).sort((a, b) => Math.abs(b.perfEur!) - Math.abs(a.perfEur!))
@@ -2106,7 +2096,8 @@ function PortfolioPageInner() {
             </div>
           </>}
         </Cadre>
-        <Cadre style={{ padding: "16px 18px", display: "flex", flexDirection: "column" }}>
+        <Cadre style={{ padding: "16px 18px", display: "flex", flexDirection: "column",
+          minHeight: 260 }}>
           <SectionLabel>RÉPARTITION PAR CLASSE</SectionLabel>
           <div style={{ display: "flex", flexDirection: "column", gap: 10, flex: 1, justifyContent: "center" }}>
             {Object.entries(exposition).sort((a, b) => b[1] - a[1]).map(([k, v]) => (

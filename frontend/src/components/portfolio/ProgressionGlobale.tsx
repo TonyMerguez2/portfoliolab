@@ -1,5 +1,5 @@
 "use client";
-import { agregat, euros, observations, type Objectif } from "@/lib/objectifs";
+import { agregat, euros, observations, pourcentageLisible, type Objectif } from "@/lib/objectifs";
 import { CLAIR, JETONS, RAYONS } from "@/lib/palette";
 import { FONT, NUM } from "@/lib/typography";
 
@@ -30,7 +30,7 @@ function Anneau({ part }: { part: number }) {
         transform="rotate(-90 43 43)" />
       <text x="43" y="48" textAnchor="middle"
         style={{ ...NUM, fontSize: 18, fontWeight: 700, fill: CLAIR.texte }}>
-        {Math.round(part)} %
+        {pourcentageLisible(part)}
       </text>
     </svg>
   );

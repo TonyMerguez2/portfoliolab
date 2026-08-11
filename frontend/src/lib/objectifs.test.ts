@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   agregat, alerteRepartition, avertissementValeur, echeanceEnClair, ecartAuRythme,
-  euros, libelleCible, montantCible, observations, type Objectif,
+  euros, libelleCible, montantCible, observations, pourcentageLisible, type Objectif,
 } from "./objectifs";
 
 describe("libelleCible", () => {
@@ -242,5 +242,24 @@ describe("observations", () => {
       valeur_projetee: null, projetee_en_euros_constants: null,
       mois_pour_atteindre: null, mois_restants: null };
     expect(observations(vide, null)).toEqual([]);
+  });
+});
+
+describe("pourcentageLisible", () => {
+  it("distingue « presque rien » de « rien »", () => {
+    // ⚠️ Constaté à l'écran : 4 545 € contre 3 050 000 € font 0,11 %, arrondis à « 0 % »
+    // — indiscernable d'un objectif auquel on n'a rien affecté.
+    expect(pourcentageLisible(0.11)).toBe("< 1 %");
+    expect(pourcentageLisible(0)).toBe("0 %");
+  });
+
+  it("ne proclame pas cent pour cent avant la fin", () => {
+    expect(pourcentageLisible(99.7)).toBe("> 99 %");
+    expect(pourcentageLisible(100)).toBe("100 %");
+  });
+
+  it("arrondit normalement entre les deux", () => {
+    expect(pourcentageLisible(33.4)).toBe("33 %");
+    expect(pourcentageLisible(50)).toBe("50 %");
   });
 });
