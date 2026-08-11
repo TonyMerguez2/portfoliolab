@@ -1973,8 +1973,14 @@ function PortfolioPageInner() {
         // onglets : Vue générale et Analyse finissent à zéro, Événements à dix, Objectifs à
         // huit. Trois marges différentes pour la même page, dont aucune ne s'était décidée —
         // chacune venait d'un réglage local. C'est celle de Vue générale qui fait foi.
+        // ⚠️ **`hidden` et non `auto` : plus de barre de défilement de page sur cet onglet.**
+        // Elle apparaissait dès que la fenêtre descendait sous environ 900 pixels de haut,
+        // parce que le panneau de projection refuse de comprimer sa courbe sous 150 pixels —
+        // à juste titre. Le débordement est donc renvoyé **dans** les deux panneaux de la
+        // rangée, qui défilent chacun chez eux. C'est le principe déjà posé ici pour les
+        // constats : un panneau qui défile vaut mieux qu'un écran qui défile.
         flexDirection: "column", height: "100%", padding: "12px 14px 0", gap: 8,
-        overflowY: "auto", overflowX: "hidden" }}>
+        overflow: "hidden" }}>
 
         {/* ── Rangée 1 : les objectifs ──────────────────────────────────────── */}
         {/* ⚠️ **Ni titre « MES OBJECTIFS » ni bouton « + Nouvel objectif » ici.** Les deux
@@ -2032,8 +2038,12 @@ function PortfolioPageInner() {
           // contenu manquait de place. La courbe y perd quarante pixels de large, ce
           // qu'elle absorbe sans rien perdre.
           gridTemplateColumns: "minmax(0, 1.7fr) minmax(0, 1fr)" }}>
+          {/* ⚠️ `overflowY: auto` avec `minHeight: 0` : c'est ce panneau qui absorbe le
+              manque de place, puisque c'est lui qui a un plancher — la courbe ne descend pas
+              sous 150 pixels. Sur une fenêtre courte, ce sont ses mentions du bas qui passent
+              sous la ligne de flottaison, pas la moitié de l'onglet. */}
           <Cadre style={{ padding: "14px 16px", display: "flex",
-            flexDirection: "column", minHeight: 0 }}>
+            flexDirection: "column", minHeight: 0, overflowY: "auto" }}>
             <ProjectionObjectif
               objectifs={listeObjectifs}
               choisi={projeteEffectif}
@@ -2043,8 +2053,12 @@ function PortfolioPageInner() {
               onParametres={o => setSaisieObjectif({ mode: "edition", o })} />
           </Cadre>
 
+          {/* ⚠️ La colonne ne défile pas : c'est « Progression globale » qui absorbe, juste
+              en dessous. Mesuré à 780 pixels de fenêtre : avec le défilement ici, les
+              83 pixels manquants poussaient le bas de l'aide à la décision hors de vue — or
+              c'est le panneau qu'on vient lire. */}
           <div style={{ display: "flex", flexDirection: "column", gap: 10,
-            minWidth: 0, minHeight: 0 }}>
+            minWidth: 0, minHeight: 0, overflow: "hidden" }}>
             {/* ⚠️ **La progression prend sa hauteur naturelle, les constats absorbent le
                 reste** — et cet ordre a été inversé une fois. Avec un partage à parts
                 égales, la progression manquait de deux pixels et affichait une barre de
@@ -2052,8 +2066,13 @@ function PortfolioPageInner() {
                 contenu d'origine, c'était l'inverse et les constats tombaient à leur seul
                 titre. Après compression des deux, la progression tient en 150 pixels et il
                 en reste plus de 200 pour les constats, qui en réclament 185. */}
+            {/* ⚠️ **C'est ce panneau qui cède, et le choix est délibéré.** Son contenu est le
+                plus variable de la colonne — trois mises en garde qui apparaissent selon les
+                données — et l'aide à la décision, à hauteur fixe depuis qu'elle ne montre
+                qu'une aide à la fois, doit rester entière. `flexShrink` implicite à 1, donc,
+                et un défilement interne en dernier recours. */}
             <Cadre style={{ padding: "14px 16px", display: "flex",
-              flexDirection: "column", flexShrink: 0 }}>
+              flexDirection: "column", minHeight: 0, overflowY: "auto" }}>
               <ProgressionGlobale objectifs={listeObjectifs}
                 sommeDesParts={objectifs.donnees?.somme_des_parts ?? null} />
             </Cadre>
