@@ -1,6 +1,6 @@
 "use client";
 import { observations, type Objectif } from "@/lib/objectifs";
-import { CLAIR } from "@/lib/palette";
+import { RAYONS } from "@/lib/palette";
 import { FONT } from "@/lib/typography";
 
 /**
@@ -14,10 +14,40 @@ import { FONT } from "@/lib/typography";
  * chacune se recompte à la main. L'épargnant en tire ses conclusions ; le logiciel ne les
  * tire pas pour lui.
  *
+ * ⚠️ **Le panneau a l'aspect d'une carte mise en avant, et garde le mot « Constats ».**
+ * L'habillage — dégradé continu, titre blanc, pictogramme d'étincelle — vient d'une
+ * référence fournie. Ce qu'il n'emprunte pas, c'est la promesse : rien ici n'est produit par
+ * un modèle, et l'appeler « insight IA » serait une affirmation fausse sur la provenance des
+ * chiffres. Le pictogramme signale un encart à lire, pas une intelligence qui aurait parlé.
+ *
  * Séparé de la progression globale parce que la maquette en fait deux cartes distinctes,
  * et parce que les deux ne parlent pas de la même chose : l'une agrège tous les
  * objectifs, l'autre détaille celui qu'on projette.
  */
+
+/**
+ * Le dégradé du panneau, et pourquoi il est plus sombre que sa référence.
+ *
+ * ⚠️ **Les couleurs ont été choisies par calcul de contraste, non à l'œil.** La référence est
+ * un dégradé pastel — bleu clair, lavande, rose, pêche — qui porte trois mots de titre. Aux
+ * mêmes teintes, du texte blanc donne un contraste de **1,56 à 2,11 pour 1**, quand la norme
+ * en réclame 4,5 pour du petit texte. Acceptable pour une bannière de trois mots, intenable
+ * pour cinq lignes de chiffres que l'épargnant doit pouvoir recompter.
+ *
+ * Le balayage de teintes est donc conservé — bleu, violet, magenta, rose, chaud — et
+ * assombri jusqu'à ce que le pire arrêt tienne la norme. Mesuré : **5,63 pour 1** au plus
+ * juste pour le corps du texte, 6,48 pour le titre.
+ */
+const DEGRADE = "linear-gradient(101deg, "
+  + "#233A93 0%, #4A2C9E 27%, #7A2472 55%, #94304C 80%, #8F4419 100%)";
+
+/** L'étincelle du titre : un encart à lire, pas une intelligence qui aurait parlé. */
+const ETINCELLE = "M16.999 21.744c-1.24-.066-2.862-.835-4.963-2.289l-.039-.026-.036.026c-2.101 "
+  + "1.455-3.723 2.224-4.964 2.29l-.174.005c-2.688 0-3.03-2.566-1.681-7.041l.053-.173-.098-.073c"
+  + "-5.926-4.508-4.938-7.628 2.5-7.84l.197-.005.113-.317c1.158-3.236 2.374-4.942 3.94-5.046L12 "
+  + "1.25c1.638 0 2.894 1.71 4.093 5.051l.111.317.2.005c7.437.212 8.426 3.332 2.498 7.84l-.1.072"
+  + ".054.173c1.321 4.386 1.018 6.937-1.523 7.037l-.159.003z";
+
 export default function ConstatsObjectif({
   objectif, valeurPortefeuille, medianeProjection,
 }: {
@@ -36,16 +66,37 @@ export default function ConstatsObjectif({
     ? observations(objectif, valeurPortefeuille, medianeProjection) : [];
 
   return (
+    // ⚠️ Le panneau porte lui-même sa surface, sans passer par `Cadre` : le dégradé doit
+    // atteindre les bords, et l'anneau du cadre l'aurait bordé d'un liseré sombre. Le rayon
+    // reprend celui de l'anneau extérieur des panneaux voisins, pour que la rangée reste
+    // d'aplomb.
+    //
     // ⚠️ Typographie resserrée plutôt que contenu caché. La carte laissait 141 pixels
     // pour 207 de constats, donc deux des cinq derrière un défilement interne — ce qui
     // est le défaut qu'on cherche à supprimer, en plus petit.
-    <div style={{ display: "flex", flexDirection: "column", gap: 6, minHeight: 0, flex: 1 }}>
-      <div style={{ display: "flex", alignItems: "baseline", gap: 8, flexWrap: "wrap" }}>
-        <span style={{ fontFamily: FONT, fontSize: 13, fontWeight: 600, color: CLAIR.texte }}>
+    <div style={{
+      display: "flex", flexDirection: "column", gap: 7, minHeight: 0, flex: 1,
+      background: DEGRADE,
+      borderRadius: RAYONS.xl,
+      padding: "13px 15px",
+      boxSizing: "border-box",
+      // Un liseré clair très ténu : sans lui, le dégradé flotte sur le fond sombre sans
+      // arête, et la carte perd son bord au coin supérieur droit où elle est la plus foncée.
+      boxShadow: "inset 0 0 0 1px rgba(255,255,255,0.09)",
+    }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 7, flexWrap: "wrap" }}>
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="currentColor"
+          aria-hidden="true" style={{ color: "rgba(255,255,255,0.92)", flexShrink: 0,
+            display: "block" }}>
+          <path d={ETINCELLE} />
+        </svg>
+        <span style={{ fontFamily: FONT, fontSize: 13.5, fontWeight: 700,
+          color: "rgba(255,255,255,0.96)", letterSpacing: "-0.01em" }}>
           Constats
         </span>
         {objectif && (
-          <span style={{ fontFamily: FONT, fontSize: 9.5, color: CLAIR.texteFaible }}>
+          <span style={{ fontFamily: FONT, fontSize: 9.5,
+            color: "rgba(255,255,255,0.66)" }}>
             {objectif.nom}
           </span>
         )}
@@ -53,7 +104,7 @@ export default function ConstatsObjectif({
 
       {constats.length === 0 ? (
         <p style={{ margin: 0, fontFamily: FONT, fontSize: 10.5, lineHeight: 1.55,
-          color: CLAIR.texteFaible }}>
+          color: "rgba(255,255,255,0.80)" }}>
           {objectif
             ? "Rien à constater sans échéance ni hypothèse de rendement : ce panneau ne "
               + "calcule que ce que vos paramètres permettent."
@@ -62,17 +113,20 @@ export default function ConstatsObjectif({
       ) : (
         <>
           {constats.map(t => (
-            <div key={t} style={{ display: "flex", gap: 6, alignItems: "flex-start" }}>
+            <div key={t} style={{ display: "flex", gap: 7, alignItems: "flex-start" }}>
               <span style={{ width: 3, height: 3, borderRadius: "50%", flexShrink: 0,
-                background: CLAIR.texteFaible, marginTop: 5 }} />
-              <span style={{ fontFamily: FONT, fontSize: 9.5, lineHeight: 1.45,
-                color: CLAIR.texteSecondaire }}>{t}</span>
+                background: "rgba(255,255,255,0.55)", marginTop: 5 }} />
+              {/* 0,88 d'alpha et non 0,78 : c'est le seuil sous lequel l'arrêt chaud du
+                  dégradé, le plus clair des cinq, tombe sous les 4,5 pour 1 exigés. */}
+              <span style={{ fontFamily: FONT, fontSize: 9.5, lineHeight: 1.5,
+                color: "rgba(255,255,255,0.88)" }}>{t}</span>
             </div>
           ))}
-          {/* ⚠️ Dit en clair, parce que l'emplacement de la maquette promettait des
-              recommandations et qu'un lecteur peut s'attendre à en trouver ici. */}
-          <span style={{ marginTop: 1, fontFamily: FONT, fontSize: 8.5, lineHeight: 1.4,
-            color: CLAIR.texteFaible }}>
+          {/* ⚠️ Dit en clair, et d'autant plus nécessaire ici : l'emplacement de la maquette
+              promettait des recommandations, et cet habillage d'encart mis en avant peut
+              faire croire à une parole du logiciel. Ce sont des divisions. */}
+          <span style={{ marginTop: 1, fontFamily: FONT, fontSize: 8.5, lineHeight: 1.45,
+            color: "rgba(255,255,255,0.80)" }}>
             Ce sont des calculs, pas des recommandations : ce logiciel ne conseille aucun
             placement.
           </span>
