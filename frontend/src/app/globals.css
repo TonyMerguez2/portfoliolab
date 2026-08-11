@@ -543,9 +543,31 @@
   box-shadow: none;
 }
 
-/* Globe.gl tooltip override */
+/* Globe.gl tooltip override.
+
+   ⚠️ **Un sélecteur a été retiré d'ici, et il faisait des dégâts dans toute
+   l'application.** La liste contenait :
+
+       div[style*="position: absolute"][style*="pointer-events: none"]
+
+   c'est-à-dire **n'importe quel** div dont le style en ligne porte ces deux
+   propriétés — pas seulement l'infobulle du globe. Avec
+   `background: transparent !important`, il effaçait le fond de tous les calques
+   décoratifs de l'application : les voiles de bord du rail d'actifs, les reflets
+   des tuiles, et le semis de fond des cartes d'objectifs. Mesuré au moment de la
+   découverte : **trente-trois** éléments dont le dégradé était calculé à `none`.
+
+   Le défaut était parfaitement muet. Rien n'échoue, rien n'apparaît en console :
+   le code demande un dégradé, le navigateur l'accepte, et une règle `!important`
+   écrite pour une bibliothèque tierce le remplace par du transparent. On croit
+   avoir écrit un voile et l'on a écrit un div vide. C'est en cherchant pourquoi un
+   motif de fond ne se peignait pas que la règle est apparue — en énumérant les
+   feuilles de style à la recherche de ce qui gagnait sur `background-image`.
+
+   L'infobulle du globe reste couverte par les quatre autres sélecteurs, dont
+   `canvas + div` juste en dessous, qui la cible par sa position réelle dans le
+   document plutôt que par la forme de son style. */
 .globe-tooltip,
-div[style*="position: absolute"][style*="pointer-events: none"],
 #__globegl-tooltip {
   background: transparent !important;
   border: none !important;
