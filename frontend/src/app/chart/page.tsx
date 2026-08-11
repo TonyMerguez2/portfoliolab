@@ -14,6 +14,8 @@ import {
 const GrowthChart = dynamic(() => import("@/components/charts/GrowthChart"), { ssr: false });
 const SubChart    = dynamic(() => import("@/components/charts/SubChart"),    { ssr: false });
 import AssetLogo from "@/components/AssetLogo";
+import DrapeauPlace from "@/components/DrapeauPlace";
+import DrapeauPays from "@/components/DrapeauPays";
 import ChiffresRoulants from "@/components/ui/ChiffresRoulants";
 import { useClignotement, styleClignotement } from "@/lib/clignotement";
 import { CADENCE_COURS_MS, LIBELLE_CADENCE } from "@/lib/cadence";
@@ -24,6 +26,7 @@ import {
 } from "@/lib/indicateurs";
 import { useModeTheme } from "@/lib/theme";
 import { styleCadreExterieur, styleCarteInterieure } from "@/lib/palette";
+import { libellePlace } from "@/lib/placesBoursieres";
 import { API_URL } from "@/lib/api";
 
 
@@ -929,16 +932,6 @@ function ChartContent() {
   );
 
   // ── metaCards hoisted so leftSlot can access it outside the header IIFE ──────
-  const _EXCH: Record<string,string> = {
-    NMS:"Nasdaq GS", NMQ:"Nasdaq", NYQ:"NYSE", NYSEArca:"NYSE Arca", PAR:"Euronext Paris",
-    GER:"Xetra", LSE:"London SE", MCE:"Madrid", AMS:"Amsterdam", MIL:"Milan", SWX:"SIX Swiss",
-    TOR:"Toronto", TSX:"Toronto", HKG:"Hong Kong", JPX:"Tokyo", TYO:"Tokyo", ASX:"Sydney",
-  };
-  const _EXCH_FLAG: Record<string,string> = {
-    NMS:"us", NMQ:"us", NYQ:"us", NYSEArca:"us",
-    PAR:"fr", GER:"de", LSE:"gb", MCE:"es", AMS:"nl", MIL:"it", SWX:"ch",
-    TOR:"ca", TSX:"ca", HKG:"hk", JPX:"jp", TYO:"jp", ASX:"au",
-  };
   const _fmtN = (v: number) => v < 1
     ? v.toLocaleString("en-US",{minimumFractionDigits:4,maximumFractionDigits:4})
     : v.toLocaleString("en-US",{minimumFractionDigits:2,maximumFractionDigits:2});
@@ -951,7 +944,7 @@ function ChartContent() {
     const isCrp = aType === "CRYPTOCURRENCY";
     const exchVal = (isIdx || isCrp)
       ? null
-      : (assetInfo?.exchange ? (_EXCH[assetInfo.exchange] || assetInfo.exchange) : null);
+      : (assetInfo?.exchange ? (libellePlace(assetInfo.exchange) ?? assetInfo.exchange) : null);
     return [
       exchVal                                               && { label:"Exchange", value: exchVal },
       aType                                                 && { label:"Type",     value: ({"EQUITY":"Action","ETF":"ETF","INDEX":"Indice","CRYPTOCURRENCY":"Crypto"} as Record<string,string>)[aType] || aType },
@@ -972,7 +965,7 @@ function ChartContent() {
     const isCrp = aType === "CRYPTOCURRENCY";
     const exchVal = (isIdx || isCrp)
       ? null
-      : (bmAssetInfo?.exchange ? (_EXCH[bmAssetInfo.exchange] || bmAssetInfo.exchange) : null);
+      : (bmAssetInfo?.exchange ? (libellePlace(bmAssetInfo.exchange) ?? bmAssetInfo.exchange) : null);
     return [
       exchVal                                                   && { label:"Exchange", value: exchVal },
       aType                                                     && { label:"Type",     value: ({"EQUITY":"Action","ETF":"ETF","INDEX":"Indice","CRYPTOCURRENCY":"Crypto"} as Record<string,string>)[aType] || aType },
@@ -1065,10 +1058,9 @@ function ChartContent() {
                 .asset-hero-star:active{opacity:.58;transform:none!important;scale:1!important}
                 .asset-hero-star:focus-visible{outline:2px solid rgba(var(--nv-encre-rvb), .38);outline-offset:2px}
                 .asset-hero-star svg,.asset-hero-star:hover svg{display:block;transform:none!important;translate:none!important;scale:1!important;transition:none!important}
-                .asset-meta-pill{display:inline-flex;align-items:center;min-height:17px;padding:2px 7px;border-radius:999px;border:1px solid rgba(var(--nv-encre-rvb), .035);background:rgba(var(--nv-encre-rvb), .055);font-size:9px;line-height:1;font-weight:600;white-space:nowrap}
+                .asset-meta-pill{display:inline-flex;align-items:center;min-height:20px;padding:2px 7px;border-radius:999px;border:1px solid rgba(var(--nv-encre-rvb), .035);background:rgba(var(--nv-encre-rvb), .055);font-size:9px;line-height:1;font-weight:600;white-space:nowrap}
                 .asset-hero-price{justify-content:space-between;padding-top:2px!important;padding-bottom:2px!important;box-sizing:border-box}
                 .asset-performance-pill{display:inline-flex;align-items:center;min-height:17px;padding:2px 7px;border-radius:999px;font-size:9px;line-height:1;font-weight:700;box-sizing:border-box}
-                .asset-exchange-flag{width:13px;height:13px;max-width:none;margin-left:3px;border:0;outline:0;flex:0 0 auto;display:inline-block;vertical-align:middle;box-shadow:none}
                 .asset-market-pill{display:inline-flex;align-items:center;align-self:flex-start;gap:5px;min-height:17px;padding:2px 7px;box-sizing:border-box;border-radius:9px;border:1px solid rgba(var(--nv-encre-rvb), .028);background:rgba(var(--nv-encre-rvb), .045);white-space:nowrap}
                 .similar-asset-card{transition:transform .16s ease,filter .16s ease,box-shadow .16s ease!important}
                 .similar-asset-card:hover{transform:translateY(-1px);filter:brightness(1.08);box-shadow:0 9px 24px rgba(0,0,0,.24)!important}
@@ -1146,9 +1138,18 @@ function ChartContent() {
                                   <span className="asset-meta-pill" style={{ color:"rgba(var(--nv-encre-rvb), 0.72)" }}>#{quote.global_rank}</span>
                                 )}
                                 {assetInfo?.exchange && !isCrypto && (
-                                  <span className="asset-meta-pill" style={{ color:"rgba(var(--nv-encre-rvb), 0.58)", fontWeight:500, overflow:"hidden", textOverflow:"ellipsis" }}>
-                                    {_EXCH[assetInfo.exchange] ?? assetInfo.exchange}
-                                    {_EXCH_FLAG[assetInfo.exchange] && <img className="asset-exchange-flag" src={`/drapeaux/${_EXCH_FLAG[assetInfo.exchange]}.svg`} alt="" aria-label="Pays de la place boursière" />}
+                                  <span className="asset-meta-pill" style={{ color:"rgba(var(--nv-encre-rvb), 0.58)", fontWeight:500, minWidth:0 }}>
+                                    {/* ⚠️ L'ellipse porte sur le **texte**, plus sur la pastille. Avec
+                                        `overflow:hidden` posé sur la pastille, c'était son dernier
+                                        enfant qui se faisait couper — le drapeau. Mesuré avant
+                                        correctif : il finissait à 0,1 pixel du bord utile, donc coupé
+                                        dès que le texte se rend un peu plus large qu'ici. Tronquer un
+                                        nom de place trop long était l'intention ; amputer le drapeau
+                                        n'en était pas une. */}
+                                    <span style={{ minWidth:0, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>
+                                      {libellePlace(assetInfo.exchange) ?? assetInfo.exchange}
+                                    </span>
+                                    <DrapeauPlace place={assetInfo.exchange} />
                                   </span>
                                 )}
                               </div>
@@ -1271,8 +1272,8 @@ function ChartContent() {
                                       )}
                                       {bmInfo?.exchange && customBmType !== "CRYPTOCURRENCY" && (
                                         <span className="asset-meta-pill" style={{ color:"rgba(var(--nv-encre-rvb), 0.58)", fontWeight:500 }}>
-                                          {_EXCH[bmInfo.exchange] ?? bmInfo.exchange}
-                                          {_EXCH_FLAG[bmInfo.exchange] && <img className="asset-exchange-flag" src={`/drapeaux/${_EXCH_FLAG[bmInfo.exchange]}.svg`} alt="" aria-label="Pays de la place boursière" />}
+                                          {libellePlace(bmInfo.exchange) ?? bmInfo.exchange}
+                                          <DrapeauPlace place={bmInfo.exchange} />
                                         </span>
                                       )}
                                     </div>
@@ -1456,7 +1457,12 @@ function ChartContent() {
           )}
           {!loading && error && (
             <div style={{ flex:1, display:"flex", alignItems:"center", justifyContent:"center", flexDirection:"column", gap:"16px" }}>
-              <div style={{ color:"rgba(var(--nv-encre-rvb), 0.3)", fontSize:"12px", textAlign:"center", maxWidth:"300px", lineHeight:1.6 }}>{error}</div>
+              {/* ⚠️ Lisible, pas discret. À 30 % d'opacité sur 12 pixels, ce message
+                  était invisible au milieu d'un cadre de neuf cents pixels de haut :
+                  un écran en panne se lisait « la partie graphique n'affiche plus
+                  rien », ce qui a été rapporté tel quel. Un message qu'on ne voit pas
+                  ne vaut pas mieux qu'un cadre vide. */}
+              <div style={{ color:"rgba(var(--nv-encre-rvb), 0.62)", fontSize:"13px", fontWeight:600, textAlign:"center", maxWidth:"340px", lineHeight:1.6 }}>{error}</div>
               <button onClick={() => router.back()}
                 style={{ background:"rgba(var(--nv-accent-rvb), 0.12)", border:"1px solid rgba(var(--nv-accent-rvb), 0.25)", borderRadius:"8px", color:"var(--nv-accent)", fontSize:"11px", padding:"8px 18px", cursor:"pointer", letterSpacing:"0.05em" }}>
                 ← Retour
@@ -2294,7 +2300,7 @@ function ChartContent() {
                               const name = info?.name ?? s.ticker;
                               const assetType = info?.type ?? s.type ?? "EQUITY";
                               const assetTypeLabel = ({EQUITY:"Action",ETF:"ETF",INDEX:"Indice",CRYPTOCURRENCY:"Crypto"} as Record<string,string>)[assetType] ?? assetType;
-                              const exchange = info?.exchange ? (_EXCH[info.exchange] ?? info.exchange) : "";
+                              const exchange = info?.exchange ? (libellePlace(info.exchange) ?? info.exchange) : "";
                               const assetColor = BRAND_COLORS[s.ticker] ?? "var(--nv-accent)";
                               const currency = assetType === "CRYPTOCURRENCY" ? "USD" : ({
                                 PAR:"EUR", GER:"EUR", AMS:"EUR", MIL:"EUR", MCE:"EUR",
@@ -2334,7 +2340,15 @@ function ChartContent() {
                                           <span style={{ overflow:"hidden", textOverflow:"ellipsis" }}>
                                             {similarBy === "marketcap" && s.market_cap != null ? `Cap ${_fmtC(s.market_cap)}` : (exchange || s.country)}
                                           </span>
-                                          {similarBy !== "marketcap" && info?.exchange && _EXCH_FLAG[info.exchange] && <img className="asset-exchange-flag" style={{ width:10, height:10 }} src={`/drapeaux/${_EXCH_FLAG[info.exchange]}.svg`} alt="" />}
+                                          {/* Le drapeau suit le texte de la pastille, qui dit
+                                              « la place si on la connaît, sinon le pays ». Un
+                                              titre absent du catalogue en dur n'a pas de place
+                                              — la liste sort alors « US », « NL » —, et c'est
+                                              son pays qui porte le pavillon. */}
+                                          {similarBy !== "marketcap" && (exchange
+                                            ? <DrapeauPlace place={info?.exchange} taille={10} />
+                                            : <DrapeauPays pays={s.country} taille={10}
+                                                style={{ marginLeft:3, display:"inline-block", verticalAlign:"middle" }} />)}
                                         </span>
                                       )}
                                     </div>
@@ -2426,7 +2440,21 @@ function ChartContent() {
           )}
           {!loading && !error && portfolioData.length === 0 && (
             <div style={{ flex:1, display:"flex", alignItems:"center", justifyContent:"center" }}>
-              <div style={{ color:"rgba(var(--nv-encre-rvb), 0.2)", fontSize:"12px" }}>Aucune donnée disponible</div>
+              {/* ⚠️ Ce cas se produit sans qu'aucune requête n'ait échoué : le
+                  fournisseur de cours limite le débit et rend alors une série vide,
+                  avec un code 200. L'écran affichait « Aucune donnée disponible » à
+                  20 % d'opacité, ce qui se lit comme un cadre vide et laisse croire à
+                  une panne de l'application. Dire la cause probable coûte une phrase
+                  et évite de chercher au mauvais endroit — vécu. */}
+              <div style={{ color:"rgba(var(--nv-encre-rvb), 0.55)", fontSize:"12.5px",
+                textAlign:"center", maxWidth:"330px", lineHeight:1.65 }}>
+                Aucune cotation reçue pour cet actif.
+                <span style={{ display:"block", marginTop:6, fontSize:"11px",
+                  color:"rgba(var(--nv-encre-rvb), 0.4)" }}>
+                  Le fournisseur de cours limite parfois le débit : réessayez dans une
+                  minute.
+                </span>
+              </div>
             </div>
           )}
         </div>

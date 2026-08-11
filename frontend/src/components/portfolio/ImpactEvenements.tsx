@@ -180,11 +180,13 @@ export function ImpactPotentiel({
       {!enCours && im && choisi && (() => {
         const q = qualifierImpact(im.probabilite);
         return (
-          <div style={{
-            padding: 12, borderRadius: RAYONS.sm,
-            background: CLAIR.carteCreuse, border: `1px solid ${CLAIR.bord}`,
-            display: "flex", flexDirection: "column", gap: 10,
-          }}>
+          // ⚠️ Plus de carte ici : le panneau est **déjà** une carte. Ce bloc portait son
+          // propre fond, sa bordure et son rayon à l'intérieur du cadre de la page, ce
+          // qui donnait deux boîtes arrondies emboîtées à quelques pixels l'une de
+          // l'autre — et une seule des six vues de l'onglet le faisait. Les trois
+          // mesures chiffrées gardent le leur : là, l'encadré distingue des valeurs, il
+          // ne redouble pas un contenant.
+          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
             <div style={{ display: "flex", alignItems: "center", gap: 9 }}>
               <AssetLogo ticker={choisi} size={30} radius={8}
                 fallbackBg={CLAIR.carte} fallbackBorder={CLAIR.bord}

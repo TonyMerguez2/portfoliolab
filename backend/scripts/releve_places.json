@@ -1,0 +1,286 @@
+{
+  "2330.TW": {
+    "place": "TAI",
+    "pays": "Taiwan"
+  },
+  "2317.TW": {
+    "place": "TAI",
+    "pays": "Taiwan"
+  },
+  "6488.TWO": {
+    "place": "TWO",
+    "pays": "Taiwan"
+  },
+  "005930.KS": {
+    "place": "KSC",
+    "pays": "South Korea"
+  },
+  "000660.KS": {
+    "place": "KSC",
+    "pays": "South Korea"
+  },
+  "247540.KQ": {
+    "place": "KOE",
+    "pays": "South Korea"
+  },
+  "D05.SI": {
+    "place": "SES",
+    "pays": "Singapore"
+  },
+  "O39.SI": {
+    "place": "SES",
+    "pays": "Singapore"
+  },
+  "0700.HK": {
+    "place": "HKG",
+    "pays": "China"
+  },
+  "7203.T": {
+    "place": "JPX",
+    "pays": "Japan"
+  },
+  "9984.T": {
+    "place": "JPX",
+    "pays": "Japan"
+  },
+  "600519.SS": {
+    "place": "SHH",
+    "pays": "China"
+  },
+  "000001.SZ": {
+    "place": "SHZ",
+    "pays": "China"
+  },
+  "RELIANCE.NS": {
+    "place": "NSI",
+    "pays": "India"
+  },
+  "INFY.BO": {
+    "place": "BSE",
+    "pays": "India"
+  },
+  "VOLV-B.ST": {
+    "place": "STO",
+    "pays": "Sweden"
+  },
+  "ERIC-B.ST": {
+    "place": "STO",
+    "pays": "Sweden"
+  },
+  "NOVO-B.CO": {
+    "place": "CPH",
+    "pays": "Denmark"
+  },
+  "MAERSK-B.CO": {
+    "place": "CPH",
+    "pays": "Denmark"
+  },
+  "EQNR.OL": {
+    "place": "OSL",
+    "pays": "Norway"
+  },
+  "DNB.OL": {
+    "place": "OSL",
+    "pays": "Norway"
+  },
+  "NOKIA.HE": {
+    "place": "HEL",
+    "pays": "Finland"
+  },
+  "NDA-FI.HE": {
+    "place": "HEL",
+    "pays": "Finland"
+  },
+  "ABI.BR": {
+    "place": "BRU",
+    "pays": "Belgium"
+  },
+  "KBC.BR": {
+    "place": "BRU",
+    "pays": "Belgium"
+  },
+  "EDP.LS": {
+    "place": "LIS",
+    "pays": "Portugal"
+  },
+  "OMV.VI": {
+    "place": "VIE",
+    "pays": "Austria"
+  },
+  "KRZ.IR": {
+    "place": "ISE",
+    "pays": "Ireland"
+  },
+  "ASML.AS": {
+    "place": "AMS",
+    "pays": "Netherlands"
+  },
+  "MC.PA": {
+    "place": "PAR",
+    "pays": "France"
+  },
+  "SIE.DE": {
+    "place": "GER",
+    "pays": "Germany"
+  },
+  "SIE.F": {
+    "place": "FRA",
+    "pays": "Germany"
+  },
+  "SAN.MC": {
+    "place": "MCE",
+    "pays": "Spain"
+  },
+  "ENI.MI": {
+    "place": "MIL",
+    "pays": "Italy"
+  },
+  "NESN.SW": {
+    "place": "EBS",
+    "pays": "Switzerland"
+  },
+  "NOVN.SW": {
+    "place": "EBS",
+    "pays": "Switzerland"
+  },
+  "HSBA.L": {
+    "place": "LSE",
+    "pays": "United Kingdom"
+  },
+  "SHEL.L": {
+    "place": "LSE",
+    "pays": "United Kingdom"
+  },
+  "GL9.IR": {
+    "place": "ISE",
+    "pays": "Ireland"
+  },
+  "A5G.IR": {
+    "place": "ISE",
+    "pays": "Ireland"
+  },
+  "8306.T": {
+    "place": "JPX",
+    "pays": "Japan"
+  },
+  "BNS.TO": {
+    "place": "TOR",
+    "pays": "Canada"
+  },
+  "UBSG.SW": {
+    "place": "EBS",
+    "pays": "Switzerland"
+  },
+  "ZURN.SW": {
+    "place": "EBS",
+    "pays": "Switzerland"
+  },
+  "AAPL": {
+    "place": "NMS",
+    "pays": "United States"
+  },
+  "JPM": {
+    "place": "NYQ",
+    "pays": "United States"
+  },
+  "SPY": {
+    "place": "PCX",
+    "pays": null
+  },
+  "VOO": {
+    "place": "PCX",
+    "pays": null
+  },
+  "IWM": {
+    "place": "PCX",
+    "pays": null
+  },
+  "EWJ": {
+    "place": "PCX",
+    "pays": null
+  },
+  "ARKK": {
+    "place": "BTS",
+    "pays": null
+  },
+  "QQQ": {
+    "place": "NGM",
+    "pays": null
+  },
+  "SIRI": {
+    "place": "NMS",
+    "pays": "United States"
+  },
+  "PLUG": {
+    "place": "NCM",
+    "pays": "United States"
+  },
+  "RIOT": {
+    "place": "NCM",
+    "pays": "United States"
+  },
+  "MARA": {
+    "place": "NCM",
+    "pays": "United States"
+  },
+  "FCEL": {
+    "place": "NGM",
+    "pays": "United States"
+  },
+  "GPRO": {
+    "place": "NMS",
+    "pays": "United States"
+  },
+  "SOFI": {
+    "place": "NMS",
+    "pays": "United States"
+  },
+  "LCID": {
+    "place": "NMS",
+    "pays": "United States"
+  },
+  "BB": {
+    "place": "NYQ",
+    "pays": "Canada"
+  },
+  "IONQ": {
+    "place": "NYQ",
+    "pays": "United States"
+  },
+  "NTDOY": {
+    "place": "PNK",
+    "pays": "Japan"
+  },
+  "SONY": {
+    "place": "NYQ",
+    "pays": "Japan"
+  },
+  "TM": {
+    "place": "NYQ",
+    "pays": "Japan"
+  },
+  "RY.TO": {
+    "place": "TOR",
+    "pays": "Canada"
+  },
+  "SHOP.TO": {
+    "place": "TOR",
+    "pays": "Canada"
+  },
+  "PETR4.SA": {
+    "place": "SAO",
+    "pays": "Brazil"
+  },
+  "BHP.AX": {
+    "place": "ASX",
+    "pays": "Australia"
+  },
+  "CBA.AX": {
+    "place": "ASX",
+    "pays": "Australia"
+  },
+  "AIR.NZ": {
+    "place": "NZE",
+    "pays": "New Zealand"
+  }
+}

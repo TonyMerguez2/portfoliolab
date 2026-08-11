@@ -187,7 +187,9 @@ export function ProchainsResultats({
                 onMouseLeave={() => setSurvol(s => (s === i ? null : s))}
                 style={{
                   display: "flex", alignItems: "center", gap: 9,
-                  padding: "9px 8px", margin: "0 -8px",
+                  // Même correctif que la liste des échéances : sans marge négative,
+                  // les lignes ne débordent plus et aucune barre horizontale n'apparaît.
+                  padding: "9px 0",
                   borderBottom: i < lignes.length - 1 ? `1px solid ${CLAIR.bord}` : "none",
                   cursor: cliquable ? "pointer" : "default",
                   background: retenu

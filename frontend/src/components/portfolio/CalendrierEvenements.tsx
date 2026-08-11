@@ -8,12 +8,18 @@ import { FONT, NUM } from "@/lib/typography";
 /**
  * Le mois, avec un point par échéance.
  *
- * ⚠️ **Deux des trois catégories sont peuplées, la troisième attend ses dates.**
- * Les résultats et les dividendes viennent des échéances réellement publiées ;
- * les publications économiques — IPC, PCE, FOMC — n'ont pas encore de source dans
- * le projet. Leur pastille de légende est donc éteinte plutôt que masquée : la
- * masquer laisserait croire que cette catégorie n'existe pas, l'éteindre dit
- * qu'elle existe et n'a rien à montrer.
+ * ⚠️ **Une pastille de légende sans échéance est éteinte, pas masquée.** La masquer
+ * ferait apparaître et disparaître des catégories selon le portefeuille ouvert, ce qui
+ * se lit comme un bogue ; éteinte, elle dit à la fois qu'elle existe et qu'elle n'a
+ * rien à montrer ce mois-ci.
+ *
+ * Ce commentaire disait jusqu'ici que les publications économiques « n'ont pas encore
+ * de source dans le projet ». C'était vrai, ce ne l'est plus : elles viennent du relevé
+ * officiel — Fed, BCE, BLS, BEA, Eurostat — et du calendrier du fournisseur. Une
+ * documentation périmée sur ce qui est réel ou non est pire qu'aucune.
+ *
+ * ⚠️ **Rien sous la légende.** Le panneau portait deux mentions de plus, retirées à la
+ * demande : voir la note en bas du rendu pour ce qui a été perdu au passage.
  *
  * Le calendrier ne décide de rien : il lit la liste d'événements que l'appelant a
  * déjà obtenue. Deux appels pour la même donnée l'auraient exposée à afficher un
@@ -35,18 +41,9 @@ const LEGENDE: { cle: Nature; libelle: string }[] = [
 ];
 
 export default function CalendrierEvenements({
-  evenements, peremption, onJour, selection,
+  evenements, onJour, selection,
 }: {
   evenements: { date: string; nature: Nature }[];
-  /**
-   * Jusqu'où le calendrier macro est complet.
-   *
-   * ⚠️ Affiché, et non gardé pour le serveur. Passé cette date, un mois sans point
-   * n'est pas un mois sans échéance : c'est un mois que la source n'a pas encore
-   * publié. Le taire ferait lire une absence là où il n'y a qu'une ignorance — et
-   * c'est le genre de silence sur lequel on prend une décision.
-   */
-  peremption?: string | null;
   /**
    * Appelé au clic sur un jour qui porte au moins une échéance, avec sa date — ou
    * `null` quand on reclique le jour déjà choisi.
@@ -100,8 +97,12 @@ export default function CalendrierEvenements({
   );
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 10, minHeight: 0 }}>
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
+    // ⚠️ `height: 100%` : sans elle, la racine se dimensionne sur son contenu et le
+    // « flex: 1 » de la grille ne partage rien. C'est ce qui fait que les semaines
+    // s'étirent jusqu'au bas du panneau au lieu de le déborder.
+    <div style={{ display: "flex", flexDirection: "column", gap: 10, minHeight: 0, height: "100%" }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8,
+        flexShrink: 0 }}>
         <span style={{ fontFamily: FONT, fontSize: 13, fontWeight: 600, color: CLAIR.texte }}>
           Calendrier
         </span>
@@ -115,14 +116,28 @@ export default function CalendrierEvenements({
         </div>
       </div>
 
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: 2 }}>
+      {/* ⚠️ L'en-tête des jours est sorti de la grille des cases. Les deux ne
+          partageaient qu'une seule grille, donc une seule règle de hauteur : impossible
+          de faire grandir les semaines sans étirer aussi la ligne « Lun Mar Mer ». */}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: 2,
+        flexShrink: 0 }}>
         {JOURS.map(j => (
           <div key={j} style={{
             fontFamily: FONT, fontSize: 9, fontWeight: 700, letterSpacing: "0.04em",
             color: CLAIR.texteFaible, textAlign: "center", paddingBottom: 2,
           }}>{j}</div>
         ))}
+      </div>
 
+      {/* ⚠️ **Les six semaines se partagent la place disponible** au lieu de mesurer
+          30 pixels chacune. Avec une hauteur fixe, la grille réclamait environ 319
+          pixels — six rangées, l'en-tête, la légende et les écarts — et le panneau en
+          offrait moins sur un écran moins haut : d'où une barre de défilement pour un
+          calendrier, ce qui n'a pas de sens puisqu'un mois se lit d'un coup d'œil.
+          `minmax(22px, 1fr)` laisse les rangées se serrer jusqu'à un plancher lisible
+          et s'étirer quand la place existe, à toute hauteur de fenêtre. */}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: 2,
+        gridAutoRows: "minmax(22px, 1fr)", flex: 1, minHeight: 0 }}>
         {grille.map(c => {
           const natures = parJour.get(c.iso);
           const estAujourdhui = c.iso === aujourdhui;
@@ -143,9 +158,11 @@ export default function CalendrierEvenements({
                           : "Ne voir que les échéances de ce jour")
                 : undefined}
               style={{
-                // Hauteur fixe : la rangée de points ne doit pas faire respirer la
-                // case, sinon la grille se déforme selon les jours chargés.
-                height: 30, borderRadius: RAYONS.xs, boxSizing: "border-box",
+                // ⚠️ Plus de hauteur fixe : c'est la rangée de la grille qui la donne,
+                // et toutes les rangées ont la même — la case ne respire donc pas plus
+                // selon les jours chargés, ce que la hauteur fixe servait à empêcher.
+                // Elle reste garantie lisible par le plancher de `minmax(22px, 1fr)`.
+                borderRadius: RAYONS.xs, boxSizing: "border-box",
                 display: "flex", flexDirection: "column", alignItems: "center",
                 justifyContent: "center", gap: 2,
                 cursor: cliquable ? "pointer" : "default",
@@ -177,7 +194,7 @@ export default function CalendrierEvenements({
         })}
       </div>
 
-      <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
+      <div style={{ display: "flex", gap: 12, flexWrap: "wrap", flexShrink: 0 }}>
         {LEGENDE.map(l => {
           const presente = evenements.some(e => e.nature === l.cle);
           return (
@@ -198,41 +215,19 @@ export default function CalendrierEvenements({
         })}
       </div>
 
-      {/* ⚠️ Le jour retenu survit à la navigation entre les mois, et c'est voulu — on
-          peut vouloir regarder septembre sans perdre son filtre. Mais alors plus rien
-          ne relie la liste voisine au calendrier : elle montre les échéances d'un jour
-          qui n'est plus à l'écran, ce qui se lit comme un reste d'affichage. Ce rappel
-          nomme le jour et ramène à son mois. */}
-      {selection && !grille.some(c => c.duMois && c.iso === selection) && (
-        <button type="button"
-          onClick={() => setMois([
-            Number(selection.slice(0, 4)), Number(selection.slice(5, 7)) - 1,
-          ])}
-          style={{
-            alignSelf: "flex-start", background: "none", border: "none", padding: 0,
-            cursor: "pointer", textAlign: "left",
-            fontFamily: FONT, fontSize: 9.5, color: CLAIR.texteFaible,
-          }}>
-          La liste est filtrée sur le{" "}
-          <span style={{ ...NUM, color: CLAIR.accent, fontWeight: 600 }}>
-            {new Date(selection + "T12:00:00").toLocaleDateString("fr-FR",
-              { day: "numeric", month: "long" })}
-          </span>, hors de ce mois — y revenir
-        </button>
-      )}
+      {/* ⚠️ **Rien d'autre sous la légende, et deux mentions ont été retirées d'ici.**
+          Le panneau en portait trop, et un panneau qu'on cesse de lire ne protège de
+          rien. Ce qui est parti, et où l'information subsiste ou non :
 
-      {/* L'aveu d'incomplétude, quand le mois affiché dépasse ce que les sources
-          couvrent. Ne paraît que là où il est utile : l'afficher en permanence en
-          ferait une mention décorative qu'on cesse de lire. */}
-      {peremption && grille.some(c => c.duMois && c.iso > peremption) && (
-        <p style={{ margin: 0, fontFamily: FONT, fontSize: 9.5, color: CLAIR.texteFaible, lineHeight: 1.5 }}>
-          Publications économiques connues jusqu&apos;au{" "}
-          <span style={{ ...NUM }}>
-            {new Date(peremption + "T12:00:00").toLocaleDateString("fr-FR",
-              { day: "numeric", month: "long", year: "numeric" })}
-          </span>. Au-delà, les organismes n&apos;ont pas encore annoncé leurs dates.
-        </p>
-      )}
+          - le rappel du jour filtré, quand la sélection sortait du mois affiché. La
+            liste voisine porte déjà une pastille qui nomme ce jour avec une croix pour
+            le relâcher : seul le raccourci « revenir à ce mois » est perdu ;
+          - l'aveu d'incomplétude du calendrier macroéconomique, qui disait jusqu'à
+            quelle date les organismes ont publié leurs dates. Celle-là n'a **plus
+            aucun équivalent à l'écran** : passé le 11 septembre 2026, un mois sans
+            point se lit désormais comme un mois sans échéance, alors que c'est un mois
+            que les sources n'ont pas encore annoncé. Le serveur continue de rendre
+            `peremption_macro` ; il suffira de le remettre ailleurs si le silence gêne. */}
     </div>
   );
 }

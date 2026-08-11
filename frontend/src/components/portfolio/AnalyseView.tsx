@@ -8,6 +8,7 @@ import {
 } from "@/lib/analyse";
 import { BANDES as SEUILS_BANDES, LIBELLE_PROFIL } from "@/lib/portfolio-score/types";
 import Cadre from "@/components/ui/Cadre";
+import DrapeauPays from "@/components/DrapeauPays";
 import { JETONS } from "@/lib/palette";
 
 
@@ -89,25 +90,6 @@ const TON: Record<string, { fond: string; encre: string; signe: string }> = {
   attention: { fond: JETONS.attentionVoile,  encre: JETONS.attentionFort,  signe: "!" },
   favorable: { fond: JETONS.positifVoile,    encre: JETONS.positifFort,    signe: "✓" },
   info:      { fond: JETONS.accentVoile,     encre: JETONS.accentFort,     signe: "i" },
-};
-
-/**
- * Le drapeau d'une zone d'exposition, quand il en existe un.
- *
- * La table est incomplète à dessein. « Asie-Pacifique », « Marchés émergents »
- * et « Monde développé » sont des agrégats de pays : aucun pavillon ne les
- * représente, et leur prêter celui du pays dominant laisserait lire une
- * exposition qui n'est pas celle des chiffres. Ces lignes n'ont donc pas de
- * drapeau, et c'est la bonne réponse.
- */
-const DRAPEAU_ZONE: Record<string, string> = {
-  "États-Unis": "us",
-  "Europe": "eu",
-  "Zone euro": "eu",
-  "France": "fr",
-  "Japon": "jp",
-  "Chine": "cn",
-  "Inde": "in",
 };
 
 const COULEURS_PART = ["#50A2FF", "#a78bfa", "#FF8904", "#00D492", JETONS.negatif, "#22d3ee", "#94a3b8"];
@@ -379,18 +361,22 @@ export default function AnalyseView({ analyse: a, etat }: { analyse: Analyse | n
                   <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 3 }}>
                     <span style={{ display: "flex", alignItems: "center", gap: 6, minWidth: 0,
                                    fontFamily: FONT, fontSize: 11, color: "rgba(var(--nv-encre-rvb), 0.68)" }}>
-                      {ongletExpo === "zones" && DRAPEAU_ZONE[e.libelle] && (
-                        // eslint-disable-next-line @next/next/no-img-element
-                        <img src={`/drapeaux/${DRAPEAU_ZONE[e.libelle]}.svg`} alt="" aria-hidden="true"
-                          style={{
-                            width: 14, height: 14, flexShrink: 0, display: "block",
-                            // La préflight de Tailwind pose `max-width: 100%` sur les
-                            // images. Dans un conteneur en flex dont la largeur de
-                            // contenu vaut zéro, cela réduit l'image à néant : elle
-                            // mesurait 0 de large pour 14 de haut.
-                            maxWidth: "none",
-                          }} />
-                      )}
+                      {/* ⚠️ Le libellé arrive en deux vocabulaires, et c'est ce qui
+                          faisait la panne. La zone d'un fonds se déduit de son mandat,
+                          en français — « Japon » —, mais le pays d'une **action** vient
+                          de `info["country"]` chez le fournisseur et sort en anglais —
+                          « Switzerland », « Taiwan ». La table d'avant tenait sept
+                          libellés français en dur : aucune action n'avait donc de
+                          drapeau, pas même les américaines, qui arrivent en
+                          « United States ». Le résolveur accepte les deux langues et
+                          les 245 pays du jeu de drapeaux.
+
+                          ⚠️ Les agrégats — « Marchés émergents », « Monde développé » —
+                          continuent de n'en avoir aucun : leur prêter le pavillon du
+                          pays dominant ferait lire une exposition qui n'est pas celle
+                          des chiffres. C'est `codePaysDrapeau` qui rend `null`, et un
+                          test le vérifie. */}
+                      {ongletExpo === "zones" && <DrapeauPays pays={e.libelle} taille={14} />}
                       <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                         {e.libelle}
                       </span>

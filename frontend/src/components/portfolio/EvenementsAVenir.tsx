@@ -50,9 +50,8 @@ type Evenement = {
   /**
    * Le code du drapeau d'une échéance macroéconomique — « us », « eu ».
    *
-   * Un code, pas une image : les fichiers sont déjà dans `public/drapeaux`, ceux
-   * des places boursières des cartes d'actifs. Le serveur nomme le pays, la page
-   * choisit le dessin.
+   * Un code, pas une image : le serveur nomme le pays, la page choisit le dessin
+   * dans le jeu de 261 drapeaux du paquet.
    */
   pays?: string | null;
   /**
@@ -374,8 +373,18 @@ export default function EvenementsAVenir({
             onMouseEnter={() => setSurvol(i)}
             onMouseLeave={() => setSurvol(s => (s === i ? null : s))}
             style={{
-              display: "flex", alignItems: "center", gap: 10, padding: "10px 8px",
-              margin: "0 -8px",
+              // ⚠️ Aucune marge négative, et c'est la correction d'un défaut que j'avais
+              // introduit ici même. Les lignes portaient `margin: 0 -8px` pour que leur
+              // surbrillance atteigne les bords du panneau : elles devenaient 16 pixels
+              // plus larges que le conteneur qui défile, lequel en déduisait une barre
+              // de défilement horizontale. Mesuré dans le navigateur : 266 pixels de
+              // contenu pour 258 de large.
+              //
+              // `overflow-x: hidden` masquait la barre sans régler la cause — le même
+              // relevé montre que 8 pixels de la surbrillance restaient rognés à droite,
+              // donc un fond qui débordait à gauche et se coupait à droite. Sans marge,
+              // le débordement est nul et la surbrillance est symétrique.
+              display: "flex", alignItems: "center", gap: 10, padding: "10px 0",
               borderBottom: i < visibles.length - 1 ? `1px solid ${CLAIR.bord}` : "none",
               cursor: selectionnable(e) ? "pointer" : "default",
               // La ligne retenue porte un fond, non un cerne : un cerne se lit comme

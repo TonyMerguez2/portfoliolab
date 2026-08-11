@@ -2,9 +2,11 @@
 
 import { useEffect, useMemo, useState } from "react";
 import AssetLogo from "@/components/AssetLogo";
+import DrapeauPlace from "@/components/DrapeauPlace";
 import { LIBELLE_CADENCE } from "@/lib/cadence";
 import TileCard from "@/components/TileCard";
 import { BRAND_COLORS, TRENDING } from "@/lib/assets";
+import { libellePlace } from "@/lib/placesBoursieres";
 import { API_URL } from "@/lib/api";
 
 
@@ -13,46 +15,6 @@ type Quote = {
   prev_close?: number;
   currency?: string;
   global_rank?: number;
-};
-
-const EXCHANGE_LABELS: Record<string, string> = {
-  NMS: "Nasdaq GS",
-  NMQ: "Nasdaq",
-  NYQ: "NYSE",
-  NYSEArca: "NYSE Arca",
-  PAR: "Euronext Paris",
-  GER: "Xetra",
-  LSE: "London SE",
-  MCE: "Madrid",
-  AMS: "Amsterdam",
-  MIL: "Milan",
-  SWX: "SIX Swiss",
-  TOR: "Toronto",
-  TSX: "Toronto",
-  HKG: "Hong Kong",
-  JPX: "Tokyo",
-  TYO: "Tokyo",
-  ASX: "Sydney",
-};
-
-const EXCHANGE_FLAGS: Record<string, string> = {
-  NMS: "us",
-  NMQ: "us",
-  NYQ: "us",
-  NYSEArca: "us",
-  PAR: "fr",
-  GER: "de",
-  LSE: "gb",
-  MCE: "es",
-  AMS: "nl",
-  MIL: "it",
-  SWX: "ch",
-  TOR: "ca",
-  TSX: "ca",
-  HKG: "hk",
-  JPX: "jp",
-  TYO: "jp",
-  ASX: "au",
 };
 
 const EXCHANGE_HOURS: Record<string, { tz: string; open: number; close: number }> = {
@@ -196,10 +158,9 @@ export default function AssetHeroCard({
         .shared-asset-hero-reflection{position:absolute;z-index:0;inset:0;border-radius:inherit;pointer-events:none;background:linear-gradient(118deg,rgba(255,255,255,.045) 0%,rgba(255,255,255,.01) 12%,transparent 27%,transparent 100%),radial-gradient(ellipse 17% 58% at 0% -10%,rgba(255,255,255,.052),transparent 70%),linear-gradient(180deg,rgba(255,255,255,.032),transparent 16%);mix-blend-mode:screen}
         .shared-asset-hero-star{width:18px;height:22px;margin:-3px 0 -3px 5px;padding:0;border:0;background:transparent;display:flex;align-items:center;justify-content:center;cursor:pointer;flex:0 0 auto;box-shadow:none;appearance:none;transform:none!important;transition:none!important}
         .shared-asset-hero-star:hover,.shared-asset-hero-star:active{background:transparent;transform:none!important;scale:1!important}
-        .shared-asset-meta-pill,.shared-asset-performance-pill{display:inline-flex;align-items:center;min-height:17px;padding:2px 7px;border-radius:999px;font-size:9px;line-height:1;font-weight:600;white-space:nowrap;box-sizing:border-box}
+        .shared-asset-meta-pill,.shared-asset-performance-pill{display:inline-flex;align-items:center;min-height:20px;padding:2px 7px;border-radius:999px;font-size:9px;line-height:1;font-weight:600;white-space:nowrap;box-sizing:border-box}
         .shared-asset-meta-pill{border:1px solid rgba(255,255,255,.035);background:rgba(255,255,255,.055)}
         .shared-asset-performance-pill{font-weight:700}
-        .shared-asset-exchange-flag{width:13px;height:13px;max-width:none;margin-left:3px;border:0;outline:0;flex:0 0 auto;display:inline-block;vertical-align:middle;box-shadow:none}
         .shared-asset-market-pill{display:inline-flex;align-items:center;align-self:flex-start;gap:5px;min-height:17px;padding:2px 7px;box-sizing:border-box;border-radius:9px;border:1px solid rgba(255,255,255,.028);background:rgba(255,255,255,.045);white-space:nowrap}
         @media(max-width:820px){.shared-asset-hero-row{zoom:1}.shared-asset-hero-grid{grid-template-columns:minmax(0,1fr) minmax(180px,.75fr);height:auto;row-gap:18px}.shared-asset-hero-status{grid-column:1 / 3;border-left:0!important;border-top:1px solid rgba(255,255,255,.1);padding:16px 0 0!important;flex-direction:row!important;align-items:center;justify-content:space-between!important}}
       ` }} />
@@ -268,10 +229,8 @@ export default function AssetHeroCard({
                   )}
                   {exchange && !isCrypto && (
                     <span className="shared-asset-meta-pill" style={{ color: "rgba(255,255,255,0.58)", fontWeight: 500 }}>
-                      {EXCHANGE_LABELS[exchange] ?? exchange}
-                      {EXCHANGE_FLAGS[exchange] && (
-                        <img className="shared-asset-exchange-flag" src={`/drapeaux/${EXCHANGE_FLAGS[exchange]}.svg`} alt="" />
-                      )}
+                      {libellePlace(exchange) ?? exchange}
+                      <DrapeauPlace place={exchange} />
                     </span>
                   )}
                 </div>
