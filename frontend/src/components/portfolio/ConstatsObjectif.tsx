@@ -1,6 +1,6 @@
 "use client";
+import Cadre from "@/components/ui/Cadre";
 import { observations, type Objectif } from "@/lib/objectifs";
-import { RAYONS } from "@/lib/palette";
 import { FONT } from "@/lib/typography";
 
 /**
@@ -66,23 +66,20 @@ export default function ConstatsObjectif({
     ? observations(objectif, valeurPortefeuille, medianeProjection) : [];
 
   return (
-    // ⚠️ Le panneau porte lui-même sa surface, sans passer par `Cadre` : le dégradé doit
-    // atteindre les bords, et l'anneau du cadre l'aurait bordé d'un liseré sombre. Le rayon
-    // reprend celui de l'anneau extérieur des panneaux voisins, pour que la rangée reste
-    // d'aplomb.
+    // ⚠️ **Le cadre commun de la page, et non une surface à part.** Le dégradé remplace le
+    // seul fond de la carte intérieure : l'anneau extérieur, son voile sombre, le liseré gris
+    // et les deux rayons concentriques restent ceux des panneaux voisins. C'est `Cadre` qui
+    // trie les clés de style — `background` et `padding` habillent le contenu, `flexShrink`
+    // place le panneau — donc rien n'est à recopier ici.
     //
     // ⚠️ Typographie resserrée plutôt que contenu caché. La carte laissait 141 pixels
     // pour 207 de constats, donc deux des cinq derrière un défilement interne — ce qui
     // est le défaut qu'on cherche à supprimer, en plus petit.
-    <div style={{
-      display: "flex", flexDirection: "column", gap: 7, minHeight: 0, flex: 1,
+    <Cadre style={{
+      flexShrink: 0,
+      display: "flex", flexDirection: "column", gap: 7, minHeight: 0,
       background: DEGRADE,
-      borderRadius: RAYONS.xl,
       padding: "13px 15px",
-      boxSizing: "border-box",
-      // Un liseré clair très ténu : sans lui, le dégradé flotte sur le fond sombre sans
-      // arête, et la carte perd son bord au coin supérieur droit où elle est la plus foncée.
-      boxShadow: "inset 0 0 0 1px rgba(255,255,255,0.09)",
     }}>
       <div style={{ display: "flex", alignItems: "center", gap: 7, flexWrap: "wrap" }}>
         <svg width="17" height="17" viewBox="0 0 24 24" fill="currentColor"
@@ -132,6 +129,6 @@ export default function ConstatsObjectif({
           </span>
         </>
       )}
-    </div>
+    </Cadre>
   );
 }

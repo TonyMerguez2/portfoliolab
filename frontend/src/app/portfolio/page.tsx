@@ -2044,22 +2044,21 @@ function PortfolioPageInner() {
               flexDirection: "column", flexShrink: 0 }}>
               <ProgressionGlobale objectifs={listeObjectifs} />
             </Cadre>
-            {/* ⚠️ **Sans `Cadre`, contrairement à ses deux voisins.** Le panneau porte
-                désormais son propre dégradé, et l'anneau du cadre l'aurait bordé d'un liseré
-                sombre qui coupe le dégradé de ses bords. Il reprend en revanche le rayon de
-                l'anneau extérieur, pour que la colonne reste d'aplomb.
+            {/* ⚠️ **Le panneau porte son propre `Cadre`**, contrairement à ses deux voisins
+                qui reçoivent le leur ici. Son dégradé remplace le fond de la carte
+                intérieure, et il ne peut le faire qu'en ayant la main sur le cadre. Le
+                résultat est identique de l'extérieur : mêmes rayons, même anneau, même
+                liseré gris.
 
                 ⚠️ Seule carte à défiler, et c'est un arbitrage assumé : les constats sont
                 du texte, leur nombre varie avec les paramètres saisis, et les laisser
                 pousser la rangée ferait défiler la page entière. Un panneau qui défile
                 vaut mieux qu'un écran qui défile. */}
-            <div style={{ display: "flex", flexDirection: "column", flexShrink: 0 }}>
-              <ConstatsObjectif
-                objectif={listeObjectifs.find(o => o.id === projeteEffectif) ?? null}
-                valeurPortefeuille={objectifs.donnees?.valeur_portefeuille ?? null}
-                medianeProjection={projection.projection?.possible
-                  ? projection.projection.mediane : null} />
-            </div>
+            <ConstatsObjectif
+              objectif={listeObjectifs.find(o => o.id === projeteEffectif) ?? null}
+              valeurPortefeuille={objectifs.donnees?.valeur_portefeuille ?? null}
+              medianeProjection={projection.projection?.possible
+                ? projection.projection.mediane : null} />
           </div>
         </div>
 
