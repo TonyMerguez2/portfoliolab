@@ -155,6 +155,7 @@ describe("agregat", () => {
     mois_pour_atteindre: null,
     verse_deja: null, verse_mesure: null, verse_retenu: null, sur_versements: false,
     sensibilites: [], versement_requis: null,
+    rendement_requis: null, part_du_gain: null, stress: [],
     ...kw,
   });
 
@@ -204,6 +205,7 @@ describe("observations", () => {
     mois_pour_atteindre: 240,
     verse_deja: null, verse_mesure: null, verse_retenu: null, sur_versements: false,
     sensibilites: [], versement_requis: null,
+    rendement_requis: null, part_du_gain: null, stress: [],
   };
 
   const riche: Objectif = { ...base, versement_requis: 2_782, sensibilites: [
@@ -347,6 +349,7 @@ describe("cohérence de la médiane citée", () => {
     mois_pour_atteindre: 397,
     verse_deja: null, verse_mesure: null, verse_retenu: null, sur_versements: false,
     sensibilites: [], versement_requis: null,
+    rendement_requis: null, part_du_gain: null, stress: [],
   };
 
   it("cite la médiane des tirages quand elle est fournie", () => {
@@ -433,6 +436,7 @@ describe("plafond de versements", () => {
     projetee_en_euros_constants: null, mois_pour_atteindre: 182,
     verse_deja: null, verse_mesure: 5_000, verse_retenu: 5_000, sur_versements: true,
     sensibilites: [], versement_requis: null,
+    rendement_requis: null, part_du_gain: null, stress: [],
     ...kw,
   });
 
@@ -713,6 +717,7 @@ describe("virgule décimale des constats", () => {
       valeur_projetee: null, projetee_en_euros_constants: null, mois_pour_atteindre: 397,
       verse_deja: null, verse_mesure: null, verse_retenu: null, sur_versements: false,
       sensibilites: [], versement_requis: null,
+    rendement_requis: null, part_du_gain: null, stress: [],
     };
     const riche: Objectif = { ...o, inflation: 2.9, taux_attendu: 7.2,
       valeur_projetee: 373_234, projetee_en_euros_constants: 259_604,
@@ -787,7 +792,7 @@ describe("phraseMarginale", () => {
     montant_actuel: 100_000, avancement: 10, atteint: false, mois_restants: 220,
     valeur_projetee: null, projetee_en_euros_constants: null, mois_pour_atteindre: 240,
     verse_deja: null, verse_mesure: null, verse_retenu: null, sur_versements: false,
-    versement_requis: null,
+    versement_requis: null, rendement_requis: null, part_du_gain: null, stress: [],
     sensibilites: [
       { quoi: "versement_marginal", versement: 900, taux: 7.2, mois: 219, ecart_mois: -21 },
     ],

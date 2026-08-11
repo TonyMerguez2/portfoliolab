@@ -59,6 +59,30 @@ export type Objectif = {
    * voulue, quel rythme ? ». Tout le reste répond à la question opposée.
    */
   versement_requis: number | null;
+  /**
+   * Le rendement annuel qu'il faudrait, à versement inchangé.
+   *
+   * ⚠️ Le pendant de `versement_requis` : l'un fixe la date et cherche le rythme, l'autre
+   * fixe le rythme et cherche le rendement. Ensemble ils disent de quel côté l'objectif est
+   * tenable — et un rendement requis de 18 % l'an répond mieux que n'importe quel avertissement.
+   */
+  rendement_requis: number | null;
+  /**
+   * De quoi est faite la valeur projetée : ce qu'on met, ce que ça rapporte.
+   *
+   * ⚠️ La distinction décide de la nature de l'objectif. Un objectif dont 69 % de la valeur
+   * finale vient du rendement composé ne se pilote pas comme son inverse : le premier dépend
+   * d'une hypothèse de marché, le second d'une discipline d'épargne.
+   */
+  part_du_gain: { apport: number; gain: number; part_gain: number } | null;
+  /** Ce que chaque secousse ferait à la date d'atteinte, ou au pouvoir d'achat. */
+  stress: {
+    cle: string;
+    libelle: string;
+    mois: number | null;
+    ecart_mois: number | null;
+    pouvoir_achat_perdu: number | null;
+  }[];
   taux_attendu: number | null;
   inflation: number | null;
   taux_retrait: number | null;

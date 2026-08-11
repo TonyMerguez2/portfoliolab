@@ -2,8 +2,12 @@
 import { useEffect, useState } from "react";
 
 import Cadre from "@/components/ui/Cadre";
-import { observations, type Objectif } from "@/lib/objectifs";
-import { FONT } from "@/lib/typography";
+import {
+  aideALaDecision, confianceEnClair, type Contexte, type Insight, type Priorite,
+} from "@/lib/aideDecision";
+import { type Objectif } from "@/lib/objectifs";
+import { JETONS } from "@/lib/palette";
+import { FONT, NUM } from "@/lib/typography";
 
 /**
  * Des interprétations chiffrées sur l'objectif projeté — jamais des conseils.
@@ -82,6 +86,19 @@ const CIEL = (() => {
 const FOND_ESPACE = "#05060B";
 
 /**
+ * La couleur d'une priorité.
+ *
+ * ⚠️ Discrète, et appliquée au seul titre. La priorité se lit d'abord dans les mots : un
+ * panneau qui crie en rouge à chaque visite finit par n'être plus lu du tout.
+ */
+const TEINTE: Record<Priorite, string> = {
+  critique: JETONS.negatif,
+  warning: JETONS.attention,
+  positive: JETONS.positif,
+  info: JETONS.accent,
+};
+
+/**
  * La navigation entre les aides, en points.
  *
  * ⚠️ Des boutons et non des pastilles décoratives : chacun porte son intitulé pour un lecteur
@@ -118,6 +135,7 @@ function Points({ nombre, courant, onChoisir }: {
 
 export default function ConstatsObjectif({
   objectif, valeurPortefeuille, medianeProjection, tousLesObjectifs,
+  sommeDesParts, volatilite, volatiliteSource, seancesMesurees,
 }: {
   objectif: Objectif | null;
   valeurPortefeuille: number | null;
@@ -137,9 +155,18 @@ export default function ConstatsObjectif({
    * fait naît de la rencontre de deux cartes, donc aucune ne peut le porter seule.
    */
   tousLesObjectifs?: Objectif[];
+  /** La somme des parts affectées, qui décide de l'insight de chevauchement. */
+  sommeDesParts?: number | null;
+  /** La volatilité mesurée du portefeuille, qui décide des insights de risque. */
+  volatilite?: number | null;
+  volatiliteSource?: string | null;
+  seancesMesurees?: number | null;
 }) {
-  const constats = objectif
-    ? observations(objectif, valeurPortefeuille, medianeProjection, tousLesObjectifs) : [];
+  const contexte: Contexte = {
+    valeurPortefeuille, sommeDesParts, autres: tousLesObjectifs,
+    volatilite, volatiliteSource, seancesMesurees, mediane: medianeProjection,
+  };
+  const aides: Insight[] = aideALaDecision(objectif, contexte);
 
   const [page, setPage] = useState(0);
 
@@ -148,8 +175,8 @@ export default function ConstatsObjectif({
   // basculant vers le plafond laisserait un panneau vide. Le `Math.min` ci-dessous couvre le
   // même risque pendant le rendu, avant que l'effet ne s'exécute.
   useEffect(() => { setPage(0); }, [objectif?.id]);
-  const index = Math.min(page, Math.max(0, constats.length - 1));
-  const courant = constats.length > 0 ? constats[index] : null;
+  const index = Math.min(page, Math.max(0, aides.length - 1));
+  const aide = aides.length > 0 ? aides[index] : null;
 
   return (
     // ⚠️ **Le cadre commun de la page, bord compris.** Un rebord de verre a été essayé ici —
@@ -180,12 +207,12 @@ export default function ConstatsObjectif({
             {objectif.nom}
           </span>
         )}
-        {constats.length > 1 && (
-          <Points nombre={constats.length} courant={index} onChoisir={setPage} />
+        {aides.length > 1 && (
+          <Points nombre={aides.length} courant={index} onChoisir={setPage} />
         )}
       </div>
 
-      {courant == null ? (
+      {aide == null ? (
         <p style={{ margin: 0, fontFamily: FONT, fontSize: 12.5, lineHeight: 1.55,
           color: "rgba(255,255,255,0.80)" }}>
           {objectif
@@ -194,16 +221,55 @@ export default function ConstatsObjectif({
             : "Choisissez un objectif pour voir ce que vos chiffres impliquent."}
         </p>
       ) : (
-        // ⚠️ Une hauteur minimale, pour que le panneau ne saute pas d'une aide à l'autre :
-        // les phrases font de deux à quatre lignes selon les montants, et toute la colonne se
+        // ⚠️ Une hauteur minimale, pour que le panneau ne saute pas d'une aide à l'autre : les
+        // phrases font de deux à quatre lignes selon les montants, et toute la colonne se
         // décalerait à chaque changement de page.
-        // 62 et non 60 : mesuré aux quatre pages, la plus longue tient sur trois lignes de
-        // 20,25 pixels, soit 60,75 — le panneau gagnait un pixel sur cette page-là.
-        <p style={{ margin: 0, minHeight: 62, fontFamily: FONT, fontSize: 13.5,
-          lineHeight: 1.5, fontWeight: 500, color: "rgba(255,255,255,0.94)" }}>
-          {courant}
-        </p>
+        <div style={{ display: "flex", gap: 14, minHeight: 84, minWidth: 0 }}>
+          <div style={{ display: "flex", flexDirection: "column", gap: 4, minWidth: 0,
+            flex: 1 }}>
+            <span style={{ fontFamily: FONT, fontSize: 13.5, fontWeight: 650,
+              lineHeight: 1.35, color: TEINTE[aide.priorite] }}>
+              {aide.titre}
+            </span>
+            <span style={{ fontFamily: FONT, fontSize: 11.5, lineHeight: 1.5,
+              color: "rgba(255,255,255,0.86)" }}>
+              {aide.description}
+            </span>
+          </div>
+
+          {/* ⚠️ Le chiffre fort à droite, et une seule fois : c'est ce qu'on retient de la
+              carte. Sans lui, la phrase doit être relue pour retrouver le nombre. */}
+          {aide.metrique && (
+            <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end",
+              justifyContent: "center", flexShrink: 0, maxWidth: 132 }}>
+              <span style={{ ...NUM, fontSize: 17, fontWeight: 700, lineHeight: 1.1,
+                color: "rgba(255,255,255,0.96)", textAlign: "right" }}>
+                {aide.metrique.valeur}
+              </span>
+              <span style={{ fontFamily: FONT, fontSize: 9.5, lineHeight: 1.3,
+                color: "rgba(255,255,255,0.55)", textAlign: "right" }}>
+                {aide.metrique.libelle}
+              </span>
+            </div>
+          )}
+        </div>
       )}
+
+      {/* ⚠️ **Les hypothèses et la confiance, sous chaque aide.** Un chiffre sans ses entrées
+          n'est pas vérifiable : « atteint en 2043 » ne veut rien dire sans « à 800 €/mois et
+          7 %/an ». Et la confiance s'écrit en mots, non en pourcentage : c'est la complétude
+          des données et non une probabilité de réalisation, et un « 0,54 » se lirait comme la
+          seconde. Le détail des motifs est au survol, pour ne pas alourdir la carte. */}
+      {aide != null && (
+        <span title={aide.motifs.join(" · ")}
+          style={{ marginTop: "auto", fontFamily: FONT, fontSize: 9.5, lineHeight: 1.45,
+            color: "rgba(255,255,255,0.5)", overflow: "hidden", textOverflow: "ellipsis",
+            whiteSpace: "nowrap" }}>
+          {confianceEnClair(aide.confiance)}
+          {aide.hypotheses.length > 0 && ` · ${aide.hypotheses.join(" · ")}`}
+        </span>
+      )}
+
     </Cadre>
   );
 }

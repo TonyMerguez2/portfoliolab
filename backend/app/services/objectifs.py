@@ -346,3 +346,133 @@ def euros_constants(montant: float, inflation: float, mois: int) -> float:
     if mois <= 0 or inflation <= 0:
         return montant
     return montant / ((1.0 + inflation / 100.0) ** (mois / 12.0))
+
+
+# ── Ce qui alimente l'aide à la décision ─────────────────────────────────────
+#
+# ⚠️ **Tout est déterministe et vit ici, avec le reste des mathématiques.** L'interprétation
+# — quelle phrase, quelle priorité, quel ordre — est une affaire de présentation et se fait
+# côté écran. La frontière est celle qui vaut depuis le début de ce module : le calcul se
+# recompte, la phrase se relit.
+
+
+@dataclass(frozen=True)
+class PartDuGain:
+    """De quoi est faite la valeur projetée : ce qu'on a mis, et ce que ça a rapporté."""
+
+    #: Le capital de départ plus la somme des versements, sans aucun rendement.
+    apport: float
+    #: La valeur projetée moins l'apport.
+    gain: float
+    #: La part du gain dans la valeur finale, en pourcentage.
+    part_gain: float
+
+
+def part_du_gain(
+    depart: float, versement_mensuel: float | None, taux_annuel: float, mois: int,
+) -> PartDuGain | None:
+    """
+    Ce que la capitalisation apporte, face à ce que l'épargnant verse.
+
+    ⚠️ **La distinction décide de la nature de l'objectif.** Un objectif dont 69 % de la
+    valeur finale vient du rendement composé et 31 % des versements ne se pilote pas comme
+    son inverse : le premier dépend d'une hypothèse de marché, le second d'une discipline
+    d'épargne. C'est le même montant final et deux situations sans rapport.
+
+    ⚠️ L'apport comprend le capital de départ, qui n'est pas un versement futur mais n'est
+    pas non plus un gain. Le ranger avec les versements est le choix le moins trompeur : la
+    question posée est « quelle part de l'arrivée n'est pas due aux marchés ».
+    """
+    if mois <= 0:
+        return None
+    finale = valeur_projetee(depart, versement_mensuel or 0.0, taux_annuel, mois)
+    apport = max(0.0, depart) + max(0.0, versement_mensuel or 0.0) * mois
+    gain = finale - apport
+    if finale <= 0:
+        return None
+    return PartDuGain(apport=round(apport, 2), gain=round(gain, 2),
+                      part_gain=round(max(0.0, gain) / finale * 100, 1))
+
+
+#: Les secousses éprouvées, et pourquoi celles-là.
+#:
+#: ⚠️ Des chocs **nommés et fixes**, non un tirage : « une baisse de vingt pour cent » se
+#: compare à ce qu'on a vécu, là où un centile de simulation ne se compare à rien. Vingt pour
+#: cent est l'ordre de grandeur d'une correction ordinaire ; deux points de rendement en moins
+#: est l'écart entre une décennie faste et une décennie banale ; douze mois sans verser est ce
+#: qu'un changement de situation provoque.
+CHOCS: tuple[tuple[str, str], ...] = (
+    ("rendement_moins_2", "Rendement inférieur de 2 points"),
+    ("rendement_plus_2", "Rendement supérieur de 2 points"),
+    ("baisse_10", "Baisse immédiate de 10 %"),
+    ("baisse_20", "Baisse immédiate de 20 %"),
+    ("pause_12_mois", "Douze mois sans versement"),
+    ("inflation_plus_1", "Inflation supérieure de 1 point"),
+)
+
+#: Combien de mois durerait l'interruption de versement éprouvée.
+PAUSE_MOIS = 12
+
+
+def scenarios_stress(
+    depart: float, versement_mensuel: float | None, taux_annuel: float, requis: float,
+    reference_mois: int | None, inflation: float | None = None,
+    mois_restants: int | None = None,
+) -> list[dict]:
+    """
+    Ce que chaque secousse ferait à la date d'atteinte, ou au pouvoir d'achat.
+
+    ⚠️ **`ecart_mois` se compte contre la référence, pas dans l'absolu.** « L'objectif serait
+    atteint en 2047 » ne dit rien sans « au lieu de 2042 » : c'est l'écart qui informe, et
+    c'est lui que l'écran affiche.
+
+    ⚠️ **La secousse d'inflation ne déplace aucune date**, et la ranger avec les autres serait
+    une faute de raisonnement : elle ne change pas le moment où le capital est atteint, elle
+    change ce que ce capital achètera. Elle rend donc `pouvoir_achat_perdu` et non
+    `ecart_mois`.
+
+    ⚠️ Un scénario dont la cible devient hors de portée rend `mois: None` — une réponse, pas
+    un trou. Rendre le plafond de quatre-vingts ans se lirait comme une estimation.
+    """
+    versement = max(0.0, versement_mensuel or 0.0)
+    sorties: list[dict] = []
+    for cle, libelle in CHOCS:
+        mois: int | None = None
+        ecart: int | None = None
+        perte_pouvoir_achat: float | None = None
+
+        if cle == "inflation_plus_1":
+            # Le seul choc qui ne touche pas la date : il touche ce que la somme vaudra.
+            if inflation is None or not mois_restants:
+                continue
+            finale = valeur_projetee(depart, versement, taux_annuel, mois_restants)
+            avant = euros_constants(finale, inflation, mois_restants)
+            apres = euros_constants(finale, inflation + 1.0, mois_restants)
+            if avant <= 0:
+                continue
+            perte_pouvoir_achat = round((avant - apres) / avant * 100, 1)
+        elif cle == "pause_12_mois":
+            # Douze mois sans verser, puis reprise au même rythme.
+            apres_pause = valeur_projetee(depart, 0.0, taux_annuel, PAUSE_MOIS)
+            suite = mois_pour_atteindre(apres_pause, versement, taux_annuel, requis)
+            mois = None if suite is None else suite + PAUSE_MOIS
+        else:
+            depart_choque = depart
+            taux_choque = taux_annuel
+            if cle == "rendement_moins_2":
+                taux_choque = taux_annuel - 2.0
+            elif cle == "rendement_plus_2":
+                taux_choque = taux_annuel + 2.0
+            elif cle == "baisse_10":
+                depart_choque = depart * 0.90
+            elif cle == "baisse_20":
+                depart_choque = depart * 0.80
+            mois = mois_pour_atteindre(depart_choque, versement, taux_choque, requis)
+
+        if mois is not None and reference_mois is not None:
+            ecart = mois - reference_mois
+        sorties.append({
+            "cle": cle, "libelle": libelle, "mois": mois, "ecart_mois": ecart,
+            "pouvoir_achat_perdu": perte_pouvoir_achat,
+        })
+    return sorties

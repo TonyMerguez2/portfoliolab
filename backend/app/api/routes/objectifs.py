@@ -36,9 +36,10 @@ from app.models.user import User
 from app.services.objectifs import (
     GENRES, PLAFONDS_CONNUS, annee_de_l_age, avancement_verse, capital_requis,
     echeance_en_mois, euros_constants, mois_pour_atteindre, mois_pour_verser,
-    progression, se_mesure_sur_les_versements, valeur_projetee, verse_projete,
-    versement_requis,
+    part_du_gain, progression, scenarios_stress, se_mesure_sur_les_versements,
+    valeur_projetee, verse_projete, versement_requis,
 )
+from app.services.projection import taux_implicite
 from app.services.parametres_objectif import (
     ANNEES_MINIMALES_REFERENCE, INFLATION_CIBLE_BCE, INFLATION_RELEVEE_LE,
     INFLATION_ZONE_EURO, INFLATION_ZONE_EURO_COEUR, REFERENCES_LONGUES,
@@ -340,6 +341,29 @@ def _en_dict(o: Objectif, valeur: float | None, user: User,
     elif (prog is not None and requis and o.taux_attendu is not None and mois):
         requis_par_mois = versement_requis(prog.actuel, o.taux_attendu, mois, requis)
 
+    # ── Ce qui alimente l'aide à la décision ──────────────────────────────────
+    #
+    # ⚠️ **Trois grandeurs de plus, aucune projection dupliquée.** Le rendement requis passe
+    # par `taux_implicite`, qui résolvait déjà ce problème par dichotomie pour les centiles ;
+    # la part du gain et les secousses réutilisent `valeur_projetee` et `mois_pour_atteindre`.
+    # Rien de neuf n'est calculé ici, seulement demandé à ce qui existe.
+    rendement_requis = part_gain = None
+    stress: list[dict] = []
+    if (not sur_versements and prog is not None and requis
+            and o.taux_attendu is not None and mois):
+        # ⚠️ Le rendement qu'il faudrait, à versement inchangé. C'est le pendant de
+        # `versement_requis` : l'un fixe la date et cherche le rythme, l'autre fixe le rythme
+        # et cherche le rendement. Ensemble ils disent de quel côté l'objectif est tenable.
+        rendement_requis = taux_implicite(
+            prog.actuel, o.versement_mensuel or 0.0, requis, mois)
+        pg = part_du_gain(prog.actuel, o.versement_mensuel, o.taux_attendu, mois)
+        part_gain = None if pg is None else {
+            "apport": pg.apport, "gain": pg.gain, "part_gain": pg.part_gain}
+        if atteinte_mois is not None:
+            stress = scenarios_stress(
+                prog.actuel, o.versement_mensuel, o.taux_attendu, requis,
+                atteinte_mois, inflation=o.inflation, mois_restants=mois)
+
     return {
         "id": o.id, "nom": o.nom, "genre": o.genre, "cible": o.cible,
         "echeance_annee": an_echeance, "age_cible": o.age_cible,
@@ -382,6 +406,9 @@ def _en_dict(o: Objectif, valeur: float | None, user: User,
         "verse_retenu": round(verse, 2) if sur_versements else None,
         "sensibilites": sensibilites,
         "versement_requis": requis_par_mois,
+        "rendement_requis": rendement_requis,
+        "part_du_gain": part_gain,
+        "stress": stress,
     }
 
 

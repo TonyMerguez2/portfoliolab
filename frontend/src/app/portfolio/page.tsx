@@ -2086,12 +2086,23 @@ function PortfolioPageInner() {
                 du texte, leur nombre varie avec les paramètres saisis, et les laisser
                 pousser la rangée ferait défiler la page entière. Un panneau qui défile
                 vaut mieux qu'un écran qui défile. */}
+            {/* ⚠️ Le contexte du portefeuille descend jusqu'ici : la somme des parts décide de
+                l'insight de chevauchement, la volatilité mesurée de ceux de risque. Sans eux,
+                deux familles sur neuf se taisent — et c'est justement celles qui portent les
+                priorités « critique ». */}
             <ConstatsObjectif
               objectif={listeObjectifs.find(o => o.id === projeteEffectif) ?? null}
               valeurPortefeuille={objectifs.donnees?.valeur_portefeuille ?? null}
               medianeProjection={projection.projection?.possible
                 ? projection.projection.mediane : null}
-              tousLesObjectifs={listeObjectifs} />
+              tousLesObjectifs={listeObjectifs}
+              sommeDesParts={objectifs.donnees?.somme_des_parts ?? null}
+              volatilite={projection.projection?.possible
+                ? projection.projection.volatilite : null}
+              volatiliteSource={projection.projection?.possible
+                ? projection.projection.volatilite_source : null}
+              seancesMesurees={projection.projection?.possible
+                ? projection.projection.seances_mesurees : null} />
           </div>
         </div>
 
