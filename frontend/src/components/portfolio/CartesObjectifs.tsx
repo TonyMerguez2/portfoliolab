@@ -399,13 +399,20 @@ export default function CartesObjectifs({
   onModifier?: (o: Objectif) => void;
 }) {
   return (
-    <div style={{
-      // ⚠️ **Une rangée en flex et non une grille, et ce choix vient d'une mesure.** Avec
-      // `grid-template-columns: repeat(auto-fill, …)`, toutes les colonnes ont la même
-      // largeur : la tuile « Ajouter » occupait donc une pleine colonne de carte, et le
-      // quatrième objectif la renvoyait à la ligne — 136 pixels de plus, et l'onglet
-      // recommençait à défiler. En flex, elle prend la largeur qu'elle mérite.
-      display: "flex", flexWrap: "wrap", gap: 10, alignItems: "stretch",
+    <div className="novac-rail" style={{
+      // ⚠️ **Une seule rangée, qui se resserre au lieu de passer à la ligne.** Avec
+      // `flex-wrap: wrap`, une ligne se remplit d'après la largeur *souhaitée* des éléments
+      // et jamais d'après leur largeur réduite : à quatre objectifs plus la tuile
+      // « Ajouter », la rangée débordait de trente-quatre pixels et se dédoublait — 402 de
+      // haut au lieu de 196, mesuré, soit la moitié de ce qui empêchait l'onglet de tenir
+      // sur un écran.
+      //
+      // En `nowrap`, les cinq restent sur une ligne et se partagent la place : 241 pixels
+      // chacun au lieu de 248, un écart qui ne se voit pas. Le défilement horizontal ne sert
+      // qu'au-delà de ce que la largeur minimale permet — le même repli que le rail
+      // d'actifs, dont cette rangée reprend la classe pour masquer la barre.
+      display: "flex", flexWrap: "nowrap", gap: 10, alignItems: "stretch",
+      overflowX: "auto", overflowY: "hidden",
     }}>
       {objectifs.map(o => <Carte key={o.id} o={o} onModifier={onModifier} />)}
 

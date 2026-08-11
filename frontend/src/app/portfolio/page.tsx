@@ -50,7 +50,6 @@ import CartesObjectifs from "@/components/portfolio/CartesObjectifs";
 import ProjectionObjectif from "@/components/portfolio/ProjectionObjectif";
 import ProgressionGlobale from "@/components/portfolio/ProgressionGlobale";
 import ConstatsObjectif from "@/components/portfolio/ConstatsObjectif";
-import ScenariosObjectif from "@/components/portfolio/ScenariosObjectif";
 import FormulaireObjectif from "@/components/portfolio/FormulaireObjectif";
 import EvenementsAVenir from "@/components/portfolio/EvenementsAVenir";
 import { HistoriqueEvenements, ImpactPotentiel } from "@/components/portfolio/ImpactEvenements";
@@ -1881,7 +1880,8 @@ function PortfolioPageInner() {
           partage la hauteur, et aucune carte ne dépend du contenu de ses voisines.
           Les échéances passent du coup à droite du calendrier, comme demandé. */}
       <div style={{ display: dashView === "evenements" ? "flex" : "none", height: "100%",
-        flexDirection: "column", padding: "14px 14px 10px", gap: 12, overflow: "hidden" }}>
+        // ⚠️ Rembourrage bas à zéro, comme « Vue générale » — il valait dix.
+        flexDirection: "column", padding: "14px 14px 0", gap: 12, overflow: "hidden" }}>
 
         {/* ── Rangée haute : quand, quoi, combien ─────────────────────────── */}
         <div style={{ display: "flex", flex: 1, minHeight: 0, gap: 12 }}>
@@ -1969,7 +1969,11 @@ function PortfolioPageInner() {
         // ⚠️ Écarts à 8 pixels et non 10 : les trois interstices rendent six pixels, soit
         // exactement ce qui manquait aux constats. Le dernier réglage d'un ajustement où
         // chaque panneau se disputait la même hauteur.
-        flexDirection: "column", height: "100%", padding: "12px 14px 8px", gap: 8,
+        // ⚠️ **Rembourrage bas à zéro, comme « Vue générale ».** Mesuré sur les cinq
+        // onglets : Vue générale et Analyse finissent à zéro, Événements à dix, Objectifs à
+        // huit. Trois marges différentes pour la même page, dont aucune ne s'était décidée —
+        // chacune venait d'un réglage local. C'est celle de Vue générale qui fait foi.
+        flexDirection: "column", height: "100%", padding: "12px 14px 0", gap: 8,
         overflowY: "auto", overflowX: "hidden" }}>
 
         {/* ── Rangée 1 : les objectifs ──────────────────────────────────────── */}
@@ -2015,7 +2019,14 @@ function PortfolioPageInner() {
         )}
 
         {/* ── Rangée 2 : projection à gauche, deux cartes à droite ──────────── */}
-        <div style={{ display: "grid", gap: 10, flexShrink: 0,
+        {/* ⚠️ **La rangée absorbe toute la hauteur restante, au lieu de la subir.** Elle
+            était en `flexShrink: 0` : chaque panneau prenait sa hauteur naturelle et leur
+            somme décidait s'il fallait défiler — d'où les réglages au pixel de tout cet
+            onglet, refaits à chaque changement de contenu. En `flex: 1` avec `minHeight: 0`,
+            c'est la fenêtre qui décide et la courbe qui s'adapte : elle mesure déjà son
+            conteneur et refuse de descendre sous 150 pixels. L'onglet tient donc par
+            construction, à n'importe quelle hauteur d'écran. */}
+        <div style={{ display: "grid", gap: 10, flex: 1, minHeight: 0,
           // ⚠️ 1,7 pour 1 et non 2 pour 1 : chaque retour à la ligne évité dans la
           // colonne de droite lui rend une quinzaine de pixels, et c'est là que le
           // contenu manquait de place. La courbe y perd quarante pixels de large, ce
@@ -2065,11 +2076,13 @@ function PortfolioPageInner() {
           </div>
         </div>
 
-        {/* ── Rangée 3 : la dispersion des tirages ──────────────────────────── */}
-        <Cadre style={{ padding: "12px 16px", display: "flex", flexDirection: "column",
-          flexShrink: 0 }}>
-          <ScenariosObjectif projection={projection.projection} />
-        </Cadre>
+        {/* ⚠️ **La rangée « Dispersion des tirages » a été retirée.** Elle détaillait les
+            trois centiles en trois cartes, ce que la courbe au-dessus dessine déjà avec sa
+            bande et sa légende ; elle coûtait cent cinquante-cinq pixels, soit la moitié de
+            ce qui manquait pour que l'onglet tienne sur un écran. Le composant
+            `ScenariosObjectif` reste dans le dépôt : c'est lui qui portait aussi la
+            comparaison des rythmes de versement pour un plafond, et l'y remettre demandera
+            de décider où, non de le réécrire. */}
 
       </div>{/* fin Vue Objectifs */}
 
