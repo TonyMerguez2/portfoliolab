@@ -36,6 +36,7 @@ const ICONS = {
   map:       "M9 4 3 6.5v13L9 17l6 2.5 6-2.5v-13L15 6.5zM9 4v13m6-10.5v13",
   analysis:  "M12 3a9 9 0 1 0 9 9h-9z M13 3.5A8.5 8.5 0 0 1 20.5 11H13z",
   simulation:"M6 20V10m6 10V4m6 16v-7",
+  reglages:  "M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-2.8 1.17V21a2 2 0 1 1-4 0v-.1A1.65 1.65 0 0 0 7.9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 3 15.1a1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 8.9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 8.9 4.6h.1A1.65 1.65 0 0 0 10 3.09V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V10a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1",
   sun:       "M12 4V2m0 20v-2m8-8h2M2 12h2m13.7-5.7 1.4-1.4M4.9 19.1l1.4-1.4m0-11.4L4.9 4.9m14.2 14.2-1.4-1.4M16 12a4 4 0 1 1-8 0 4 4 0 0 1 8 0",
   moon:      "M20 14.5A8.5 8.5 0 0 1 9.5 4a8.5 8.5 0 1 0 10.5 10.5",
 };
@@ -223,6 +224,30 @@ export default function SideNav() {
           Tout ce qui touche au compte est réuni ici — il était auparavant
           coupé en deux, avatar dans le bandeau et thème dans le panneau. */}
       <div style={{ padding: "10px", borderTop: "1px solid var(--nv-bord)", flexShrink: 0 }}>
+        {(() => {
+          const actif = pathname.startsWith("/parametres");
+          return (
+            <Link href="/parametres"
+              title={collapsed ? "Paramètres" : undefined}
+              aria-current={actif ? "page" : undefined}
+              style={{
+                display: "flex", alignItems: "center", gap: 12,
+                height: 40, padding: "0 12px", borderRadius: 10, marginBottom: 4,
+                textDecoration: "none", whiteSpace: "nowrap",
+                color: actif ? "var(--nv-texte)" : "var(--nv-texte-secondaire)",
+                background: actif ? "var(--nv-barre-actif)" : "transparent",
+                boxShadow: actif ? "inset 0 0 0 1px var(--nv-barre-actif-bord)" : "none",
+                fontSize: 13, fontWeight: actif ? 600 : 500,
+                transition: "background 160ms, color 160ms",
+              }}
+              onMouseEnter={e => { if (!actif) e.currentTarget.style.background = "var(--nv-barre-survol)"; }}
+              onMouseLeave={e => { if (!actif) e.currentTarget.style.background = "transparent"; }}
+            >
+              <span style={{ flexShrink: 0, display: "flex" }}>{icon(ICONS.reglages)}</span>
+              <span style={{ opacity: collapsed ? 0 : 1, transition: "opacity 160ms" }}>Paramètres</span>
+            </Link>
+          );
+        })()}
         {user && (
           <button
             type="button"

@@ -46,6 +46,8 @@ class LoginInput(BaseModel):
 class UpdateProfileInput(BaseModel):
     username: str | None = None
     avatar_url: str | None = None
+    #: Code ISO de la devise d'affichage — voir `services/devises.py`.
+    devise: str | None = None
 
 @router.post("/register")
 def register(data: RegisterInput, db: Session = Depends(get_db)):
@@ -87,6 +89,9 @@ def me(user: User = Depends(require_auth)):
         "email":      user.email,
         "username":   user.username,
         "avatar_url": user.avatar_url,
+        # ⚠️ Rendue ici aussi : sans cela l'interface ne peut relire la préférence au
+        # chargement et retomberait sur le dollar à chaque visite.
+        "devise":     user.devise,
     }
 
 @router.put("/profile")
@@ -107,9 +112,21 @@ def update_profile(data: UpdateProfileInput, authorization: str = Header(None), 
         raise HTTPException(status_code=404, detail="Utilisateur non trouvé")
     if data.username is not None: user.username = data.username
     if data.avatar_url is not None: user.avatar_url = data.avatar_url
+    if data.devise is not None:
+        # ⚠️ Validé à l'écriture, comme la tolérance de risque et les frais courants. Un
+        # code inconnu entré une fois ferait retomber tous les affichages sur le dollar
+        # sans que rien ne signale la cause.
+        from app.services.devises import DEVISES, est_connue
+        if not est_connue(data.devise):
+            raise HTTPException(
+                status_code=422,
+                detail="devise doit valoir l'un de "
+                       + ", ".join(d.code for d in DEVISES))
+        user.devise = data.devise.upper()
     db.commit()
     db.refresh(user)
-    return {"id": user.id, "email": user.email, "username": user.username, "avatar_url": user.avatar_url}
+    return {"id": user.id, "email": user.email, "username": user.username,
+            "avatar_url": user.avatar_url, "devise": user.devise}
 
 @router.post("/avatar")
 async def upload_avatar(file: UploadFile = File(...), authorization: str = Header(None), db: Session = Depends(get_db)):
@@ -135,3 +152,39 @@ async def upload_avatar(file: UploadFile = File(...), authorization: str = Heade
     user.avatar_url = url
     db.commit()
     return {"avatar_url": url}
+
+
+@router.get("/devises")
+def lister_devises():
+    """
+    Les devises d'affichage proposées.
+
+    ⚠️ Servie par le serveur plutôt que recopiée dans l'interface. La liste porte les
+    symboles, le nombre de décimales — le yen n'a pas de centimes — et la paire de change
+    de chacune ; trois choses qu'une copie côté client aurait fait diverger dès le premier
+    ajout.
+    """
+    from app.services.change import formuler, taux_courants
+    from app.services.devises import DEVISE_PAR_DEFAUT, DEVISES
+
+    # ⚠️ Le taux du jour accompagne chaque devise, et il est vérifiable d'un coup d'œil.
+    # Un réglage qui ne montre rien de mesuré ne se contrôle pas : « 1 $ = 0,86 € » se
+    # compare à n'importe quelle source en deux secondes, là où un simple nom de devise
+    # laisserait une paire inversée passer inaperçue.
+    taux = taux_courants()
+    return {
+        "devises": [
+            {"code": d.code, "symbole": d.symbole, "nom": d.nom,
+             "decimales": d.decimales,
+             # ⚠️ Dit lesquelles impliquent une conversion : le dollar n'en demande
+             # aucune, ce qui explique qu'il soit le défaut.
+             "conversion": d.paire_depuis_usd is not None,
+             "taux": (t.valeur if (t := taux.get(d.code)) else None),
+             # La date du relevé : le marché des changes ferme, et un taux de vendredi
+             # affiché un dimanche doit se présenter comme tel.
+             "taux_date": (t.date if (t := taux.get(d.code)) else None),
+             "taux_clair": formuler(d.code, taux.get(d.code))}
+            for d in DEVISES
+        ],
+        "defaut": DEVISE_PAR_DEFAUT,
+    }

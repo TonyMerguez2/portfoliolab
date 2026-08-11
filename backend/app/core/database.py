@@ -146,6 +146,7 @@ for table, col, typedef in [
     ("portfolios",   "tolerance",      "TEXT"),
     ("portfolios",   "frais_lignes",   "JSON"),
     ("transactions", "note",          "TEXT"),
+    ("users",        "devise",         "TEXT"),
 ]:
     try:
         with engine.connect() as conn:

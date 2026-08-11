@@ -44,7 +44,13 @@ def client_fixture():
 
     # Un compte de test : les portefeuilles appartiennent désormais à
     # quelqu'un, une dépendance renvoyant None ne suffit plus.
-    compte = SimpleNamespace(id="user-test", email="test@novac.local", username="Test")
+    # ⚠️ Le double doit porter les mêmes attributs que `User`, sinon il fait échouer les
+    # routes pour une raison qui n'existe pas en production : `/me` rend désormais la devise
+    # d'affichage, et un faux compte sans ce champ lève un AttributeError. Compléter le
+    # double plutôt que rendre la route tolérante — un `getattr` de complaisance dans le
+    # code de production masquerait le jour où le champ disparaît pour de bon.
+    compte = SimpleNamespace(id="user-test", email="test@novac.local", username="Test",
+                             avatar_url=None, devise=None)
 
     app.dependency_overrides[get_db] = get_db_test
     app.dependency_overrides[require_auth] = lambda: compte
@@ -306,12 +312,16 @@ def test_me_renvoie_le_compte(client):
     from app.main import app
     from app.core.auth import require_auth
 
-    compte = SimpleNamespace(id="u1", email="a@b.c", username="Sacha", avatar_url="/uploads/u1.jpg")
+    compte = SimpleNamespace(id="u1", email="a@b.c", username="Sacha",
+                             avatar_url="/uploads/u1.jpg", devise="EUR")
     app.dependency_overrides[require_auth] = lambda: compte
 
     d = client.get("/api/v1/auth/me").json()
     assert d["username"] == "Sacha"
     assert d["avatar_url"] == "/uploads/u1.jpg"
+    # La devise d'affichage voyage avec le compte : c'est cette réponse que l'interface lit
+    # au chargement pour retrouver la préférence.
+    assert d["devise"] == "EUR"
     assert "message" not in d
 
 
