@@ -35,6 +35,8 @@ from app.services.objectifs import (
     GENRES, annee_de_l_age, capital_requis, echeance_en_mois, euros_constants,
     mois_pour_atteindre, progression, valeur_projetee,
 )
+from app.services.projection import projeter
+from app.services.volatilite import JOURS_MINIMAUX, volatilite_mesuree
 from app.utils.positions import compute_positions, fetch_current_prices
 
 router = APIRouter(prefix="/api/v1/portfolios", tags=["Objectifs"])
@@ -272,3 +274,80 @@ def supprimer(portfolio_id: str, objectif_id: str,
     db.delete(o)
     db.commit()
     return {"supprime": objectif_id}
+
+
+#: Un point par an sur la courbe : au-delà, la ligne ne se voit plus.
+PAS_PROJECTION = 12
+
+
+@router.get("/{portfolio_id}/objectifs/{objectif_id}/projection")
+async def projection(portfolio_id: str, objectif_id: str,
+                     db: Session = Depends(get_db), user: User = Depends(require_auth)):
+    """
+    Les enveloppes de quantiles d'un objectif, avec l'origine de chaque entrée.
+
+    ⚠️ **Deux entrées de nature opposée.** Le rendement attendu est une hypothèse de
+    l'épargnant ; la volatilité est mesurée sur la courbe du portefeuille. La réponse
+    rend `volatilite_source` pour que l'écran ne les présente pas du même ton.
+
+    ⚠️ **Sans volatilité mesurable, ni intervalle ni probabilité.** La courbe médiane
+    reste calculable — c'est de la capitalisation — mais toute dispersion serait inventée.
+    Trois causes distinctes sont rendues telles quelles : « mesuree »,
+    « echantillon_court » et « indisponible » ne se corrigent pas de la même façon.
+
+    ⚠️ **Ce ne sont pas trois scénarios.** Les courbes sont les 5ᵉ, 50ᵉ et 95ᵉ centiles
+    des tirages à chaque mois. Aucune n'est une trajectoire qu'un portefeuille suivrait.
+    """
+    p = _portefeuille(portfolio_id, user, db)
+    o = (db.query(Objectif)
+         .filter(Objectif.id == objectif_id, Objectif.portfolio_id == p.id).first())
+    if not o:
+        raise HTTPException(404, "Objectif introuvable")
+
+    v = await valeur_courante(p, db)
+    detail = _en_dict(o, v.valeur, user)
+    mois = detail["mois_restants"]
+    requis = detail["capital_requis"]
+    depart = detail["montant_actuel"]
+
+    # ⚠️ Trois refus explicites, plutôt qu'une courbe vide sans explication.
+    if depart is None:
+        return {"possible": False, "raison": "valeur_inconnue", "objectif": detail}
+    if not mois:
+        return {"possible": False, "raison": "sans_echeance", "objectif": detail}
+    if o.taux_attendu is None:
+        return {"possible": False, "raison": "sans_rendement_attendu", "objectif": detail}
+
+    txs = db.query(Transaction).filter(Transaction.portfolio_id == p.id).all()
+    vol, source_vol, seances = volatilite_mesuree(txs)
+
+    proj = projeter(
+        depart=depart, versement_mensuel=o.versement_mensuel or 0.0,
+        taux_annuel=o.taux_attendu, volatilite_annuelle=vol, mois=mois,
+        requis=requis,
+        # ⚠️ La graine dérive de l'identifiant : deux affichages du même objectif donnent
+        # la même probabilité. Sans cela, 71 % puis 73 %, et plus rien de crédible.
+        cle=o.id, pas=PAS_PROJECTION,
+    )
+
+    return {
+        "possible": True,
+        "objectif": detail,
+        "mois": proj.mois,
+        "enveloppes": {str(c): proj.enveloppes[c] for c in proj.enveloppes},
+        "mediane": proj.mediane,
+        # ⚠️ 90 % et non 95 : c'est ce que les centiles 5 et 95 délimitent. La maquette
+        # annonçait « intervalle de confiance (95 %) » au-dessus de bornes qui n'en
+        # couvrent que quatre-vingt-dix.
+        "intervalle": proj.intervalle,
+        "niveau_intervalle": 90,
+        "probabilite": proj.probabilite,
+        "taux_implicites": {str(c): t for c, t in proj.taux_implicites.items()},
+        "requis": requis,
+        "volatilite": vol,
+        "volatilite_source": source_vol,
+        "seances_mesurees": seances,
+        "seances_minimales": JOURS_MINIMAUX,
+        "valeur_portefeuille": v.valeur,
+        "source_valeur": v.source,
+    }
