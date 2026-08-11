@@ -385,3 +385,65 @@ describe("le rythme requis, longtemps mort-né", () => {
     expect(v?.titre).toContain("dépasse le minimum requis");
   });
 });
+
+// ── L'objectif sans échéance, cas réel qui ne rendait que deux aides ─────────
+
+describe("objectif sans échéance", () => {
+  /**
+   * ⚠️ **Un seul champ vide faisait taire six familles sur neuf.** Sur un objectif de capital
+   * sans année cible — 500 000 €, 300 €/mois, 9,5 %/an, 2,9 % d'inflation — la carte ne
+   * proposait que deux aides. Or trois des six familles muettes n'avaient nul besoin d'une
+   * *échéance* : elles ont besoin d'un *horizon*, et la date d'arrivée au rythme actuel en est
+   * un parfaitement valable. Le serveur les alimente désormais dans ce cas.
+   */
+  const sansDate = (kw: Partial<Objectif> = {}): Objectif => objectif({
+    cible: 500_000, capital_requis: 500_000, montant_actuel: 5_000, avancement: 1,
+    versement_mensuel: 300, taux_attendu: 9.5, inflation: 2.9,
+    echeance_annee: null, mois_restants: null, mois_pour_atteindre: 396,
+    versement_requis: null, rendement_requis: null,
+    part_du_gain: { apport: 123_800, gain: 376_200, part_gain: 75.2 },
+    stress: [{ cle: "rendement_moins_2", libelle: "Un rendement inférieur de 2 points",
+      mois: 468, ecart_mois: 72, pouvoir_achat_perdu: null }],
+    sensibilites: [{ quoi: "versement_marginal", versement: 400, taux: 9.5,
+      mois: 360, ecart_mois: -36 }],
+    ...kw,
+  });
+
+  it("remplit les quatre places sans échéance", () => {
+    const tous = aideALaDecision(sansDate(), contexte());
+    expect(tous).toHaveLength(MAXIMUM_AFFICHE);
+  });
+
+  it("ne redit pas la durée que la carte affiche déjà", () => {
+    // ⚠️ La carte de l'objectif porte « reste 33 ans » : un insight qui répéterait cette durée
+    // serait une reformulation, pas une interprétation. La famille « calendrier » se taît donc
+    // faute d'échéance à comparer.
+    const tous = aideALaDecision(sansDate(), contexte());
+    expect(tous.some(i => i.famille === "calendrier")).toBe(false);
+  });
+
+  it("mesure l’inflation sur l’horizon projeté", () => {
+    const inf = aideALaDecision(sansDate(), contexte())
+      .find(i => i.famille === "inflation");
+    expect(inf).toBeDefined();
+    // 500 000 € à 2,9 % sur 396 mois — l'horizon d'arrivée, faute d'échéance.
+    expect(inf!.metrique?.valeur).toBe(euros(500_000 / 1.029 ** (396 / 12)));
+    expect(inf!.description).toContain("33 ans");
+  });
+
+  it("mesure la dépendance au rendement sur le même horizon", () => {
+    const d = aideALaDecision(sansDate(), contexte())
+      .find(i => i.famille === "rendement_requis");
+    expect(d).toBeDefined();
+    expect(d!.titre).toContain("dépend surtout de la capitalisation");
+    expect(d!.metrique?.valeur).toBe("75 %");
+  });
+
+  it("se taît toujours sur ce qui exige une date choisie", () => {
+    // ⚠️ « Quel rendement pour y être en 2044 » n'a pas de sens sans 2044, et le calculer sur
+    // l'horizon projeté rendrait mécaniquement le rendement déjà retenu — une tautologie.
+    const tous = aideALaDecision(sansDate(), contexte());
+    expect(tous.some(i => i.famille === "versement")).toBe(false);
+    expect(tous.some(i => i.titre.includes("rendement hors de portée"))).toBe(false);
+  });
+});

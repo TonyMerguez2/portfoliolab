@@ -349,20 +349,28 @@ def _en_dict(o: Objectif, valeur: float | None, user: User,
     # Rien de neuf n'est calculé ici, seulement demandé à ce qui existe.
     rendement_requis = part_gain = None
     stress: list[dict] = []
-    if (not sur_versements and prog is not None and requis
-            and o.taux_attendu is not None and mois):
-        # ⚠️ Le rendement qu'il faudrait, à versement inchangé. C'est le pendant de
-        # `versement_requis` : l'un fixe la date et cherche le rythme, l'autre fixe le rythme
-        # et cherche le rendement. Ensemble ils disent de quel côté l'objectif est tenable.
-        rendement_requis = taux_implicite(
-            prog.actuel, o.versement_mensuel or 0.0, requis, mois)
-        pg = part_du_gain(prog.actuel, o.versement_mensuel, o.taux_attendu, mois)
-        part_gain = None if pg is None else {
-            "apport": pg.apport, "gain": pg.gain, "part_gain": pg.part_gain}
+    if not sur_versements and prog is not None and requis and o.taux_attendu is not None:
+        # ⚠️ **Le rendement requis, lui, exige une échéance saisie.** « Quel rendement pour y
+        # être à cette date » n'a pas de sens sans la date : la calculer sur l'horizon projeté
+        # rendrait mécaniquement le rendement déjà retenu, une tautologie.
+        if mois:
+            rendement_requis = taux_implicite(
+                prog.actuel, o.versement_mensuel or 0.0, requis, mois)
+
+        # ⚠️ **Ces deux-là n'ont besoin que d'un horizon, pas d'une échéance choisie**, et les
+        # avoir liés à `mois` était une erreur de ma part : sur un objectif sans date — cas
+        # réel de l'utilisateur — six familles d'insights sur neuf se taisaient d'un coup pour
+        # un seul champ vide. La part du gain et les secousses se mesurent aussi bien sur la
+        # date où l'on arrive au rythme actuel.
+        horizon = mois or atteinte_mois
+        if horizon:
+            pg = part_du_gain(prog.actuel, o.versement_mensuel, o.taux_attendu, horizon)
+            part_gain = None if pg is None else {
+                "apport": pg.apport, "gain": pg.gain, "part_gain": pg.part_gain}
         if atteinte_mois is not None:
             stress = scenarios_stress(
                 prog.actuel, o.versement_mensuel, o.taux_attendu, requis,
-                atteinte_mois, inflation=o.inflation, mois_restants=mois)
+                atteinte_mois, inflation=o.inflation, mois_restants=horizon)
 
     return {
         "id": o.id, "nom": o.nom, "genre": o.genre, "cible": o.cible,

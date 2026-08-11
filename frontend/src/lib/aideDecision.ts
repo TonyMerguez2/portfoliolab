@@ -178,10 +178,17 @@ const RETARD_CRITIQUE = 0.5;
 
 function calendrier(o: Objectif, c: Contexte): Insight | null {
   const { mois_restants: reste, mois_pour_atteindre: besoin } = o;
-  if (reste == null) return null;
   const conf = confiance(o, c);
   const base = { id: `${o.id}:calendrier`, famille: "calendrier" as const,
     confiance: conf.valeur, motifs: conf.motifs, hypotheses: hypotheses(o) };
+
+  // ⚠️ **Sans échéance, cette famille se taît — et j'ai essayé le contraire.** J'avais ajouté
+  // « au rythme actuel, la cible tomberait en mars 2051 » pour remplir une place : or la carte
+  // de l'objectif affiche déjà « reste 33 ans » juste au-dessus. C'était une reformulation,
+  // exactement ce que ce panneau doit éviter. Les quatre places se remplissent sans elle, avec
+  // l'inflation sur l'horizon projeté, la part du gain, une secousse et le pas de cent euros —
+  // qui, eux, ne se lisent nulle part ailleurs.
+  if (reste == null) return null;
 
   if (besoin == null) {
     return {
@@ -314,7 +321,10 @@ const GAIN_DOMINANT = 60;
 
 function dependanceAuRendement(o: Objectif, c: Contexte): Insight | null {
   const pg = o.part_du_gain;
-  if (pg == null || !o.mois_restants) return null;
+  // ⚠️ L'horizon projeté suffit : la part du gain se mesure sur une durée, pas sur une date
+  // choisie. La condition sur `mois_restants` faisait taire cette famille sur tout objectif
+  // sans échéance, alors que le serveur en fournit désormais la valeur.
+  if (pg == null || !(o.mois_restants ?? o.mois_pour_atteindre)) return null;
   const conf = confiance(o, c);
   const base = { id: `${o.id}:dependance`, famille: "rendement_requis" as const,
     confiance: conf.valeur, motifs: conf.motifs, hypotheses: hypotheses(o) };
@@ -344,14 +354,19 @@ function dependanceAuRendement(o: Objectif, c: Contexte): Insight | null {
 const HORIZON_INFLATION_MOIS = 120;
 
 function inflation(o: Objectif, c: Contexte): Insight | null {
-  if (o.inflation == null || !o.mois_restants || o.mois_restants < HORIZON_INFLATION_MOIS) {
+  // ⚠️ **L'horizon projeté fait office d'échéance quand il n'y en a pas.** L'inflation ronge
+  // le pouvoir d'achat sur une durée, non jusqu'à une date choisie : se taire faute
+  // d'échéance privait de cet insight les objectifs les plus lointains, qui sont justement
+  // ceux que l'inflation déforme le plus.
+  const horizon = o.mois_restants ?? o.mois_pour_atteindre;
+  if (o.inflation == null || !horizon || horizon < HORIZON_INFLATION_MOIS) {
     return null;
   }
   // ⚠️ **La cible, et non la valeur projetée.** Ramener la projection en euros constants est
   // déjà fait sous la médiane du panneau voisin ; ce qui n'est dit nulle part, c'est ce que
   // vaudra *l'objectif lui-même* — le nombre que l'épargnant a choisi comme suffisant.
   const cible = o.capital_requis ?? o.cible;
-  const constants = cible / (1 + o.inflation / 100) ** (o.mois_restants / 12);
+  const constants = cible / (1 + o.inflation / 100) ** (horizon / 12);
   if (constants >= cible) return null;
   const conf = confiance(o, c);
   const perte = (1 - constants / cible) * 100;
@@ -360,7 +375,7 @@ function inflation(o: Objectif, c: Contexte): Insight | null {
     confiance: conf.valeur, motifs: conf.motifs, hypotheses: hypotheses(o),
     titre: `${euros(cible)} ne vaudra pas ${euros(cible)} d’aujourd’hui`,
     description: `À ${pourcent(o.inflation, 1)} % d’inflation sur `
-      + `${dureeEnClair(o.mois_restants)}, votre cible correspondrait à environ `
+      + `${dureeEnClair(horizon)}, votre cible correspondrait à environ `
       + `${euros(constants)} en euros d’aujourd’hui, soit ${pourcent(perte, 0)} % de pouvoir `
       + "d’achat en moins.",
     metrique: { libelle: "en euros d’aujourd’hui", valeur: euros(constants) },
