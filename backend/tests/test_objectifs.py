@@ -284,3 +284,62 @@ class TestSourceDeLaValeur:
         from app.api.routes.objectifs import valeur_courante
         src = inspect.getsource(valeur_courante)
         assert "lignes_valorisees" in src and "lignes_totales" in src
+
+
+class TestVersementRequis:
+    """
+    Le versement qu'il faudrait pour tenir l'échéance — l'inverse de `valeur_projetee`.
+
+    ⚠️ **C'est le chiffre que le panneau d'aide n'avait pas.** Il répondait « à votre rythme,
+    voilà quand vous y serez », jamais « pour y être à la date voulue, voilà le rythme ». La
+    seconde question est celle qu'on se pose devant une échéance.
+    """
+
+    def test_est_l_inverse_exact_de_la_projection(self):
+        """
+        ⚠️ Le test qui compte : le versement rendu, réinjecté dans `valeur_projetee`, doit
+        retomber sur le requis. Une formule fermée fausse d'un facteur `(1+r)` passerait
+        inaperçue sans cette boucle — l'écart ne se voit pas sur un seul chiffre.
+
+        ⚠️ **La tolérance est calculée, pas choisie.** Mon premier essai exigeait un euro près
+        et échouait : le versement est arrondi au centime, et ce demi-centime d'arrondi se
+        capitalise. Sur 264 mois à 7,2 %, il vaut 2,85 € à l'arrivée. Desserrer la marge « au
+        pif » jusqu'à ce que le test passe aurait masqué le jour où la formule serait vraiment
+        fausse ; on borne donc par l'arrondi lui-même, majoré d'un euro de marge numérique.
+        """
+        for taux in (0.0, 2.0, 7.2, 12.0):
+            for mois in (12, 120, 264):
+                for depart in (0.0, 5_000.0, 200_000.0):
+                    v = ob.versement_requis(depart, taux, mois, 1_000_000.0)
+                    assert v is not None
+                    atteint = ob.valeur_projetee(depart, v, taux, mois)
+                    # ⚠️ **L'identité ne vaut que si un versement est nécessaire.** Seconde
+                    # prémisse fausse de ce test : à 12 % sur vingt-deux ans, 200 000 € de
+                    # départ deviennent 2 420 062 € tout seuls. `versement_requis` rend alors
+                    # zéro, à juste titre, et la projection **dépasse** le requis au lieu de
+                    # l'égaler. Exiger l'égalité partout revenait à exiger que le capital de
+                    # départ tombe pile sur la cible.
+                    if v == 0.0:
+                        assert atteint >= 1_000_000.0, (
+                            f"aucun versement requis, mais {atteint} < le requis")
+                        continue
+                    r = (1 + taux / 100) ** (1 / 12) - 1
+                    facteur = mois if abs(r) < 1e-12 else ((1 + r) ** mois - 1) / r
+                    marge = 0.005 * facteur + 1.0
+                    assert abs(atteint - 1_000_000.0) <= marge, (
+                        f"taux={taux} mois={mois} depart={depart} v={v} → {atteint} "
+                        f"(marge {marge:.2f})")
+
+    def test_zero_quand_le_capital_suffit_seul(self):
+        # 900 000 € à 7,2 % pendant 20 ans dépassent le million sans aucun versement.
+        assert ob.versement_requis(900_000, 7.2, 240, 1_000_000) == 0.0
+
+    def test_division_simple_a_taux_nul(self):
+        # ⚠️ La formule générale divise par r : le cas r = 0 doit être traité à part, sinon
+        # elle lève au lieu de rendre la division évidente.
+        assert ob.versement_requis(0.0, 0.0, 100, 100_000) == 1_000.0
+        assert ob.versement_requis(50_000.0, 0.0, 100, 100_000) == 500.0
+
+    def test_rend_none_sans_horizon(self):
+        assert ob.versement_requis(0.0, 7.0, 0, 100_000) is None
+        assert ob.versement_requis(0.0, 7.0, -5, 100_000) is None

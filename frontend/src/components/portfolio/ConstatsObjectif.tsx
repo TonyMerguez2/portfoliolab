@@ -52,10 +52,18 @@ const ETINCELLE = "M16.999 21.744c-1.24-.066-2.862-.835-4.963-2.289l-.039-.026-.
   + ".054.173c1.321 4.386 1.018 6.937-1.523 7.037l-.159.003z";
 
 export default function ConstatsObjectif({
-  objectif, valeurPortefeuille, medianeProjection,
+  objectif, valeurPortefeuille, medianeProjection, tousLesObjectifs,
 }: {
   objectif: Objectif | null;
   valeurPortefeuille: number | null;
+  /**
+   * Les autres objectifs du portefeuille.
+   *
+   * ⚠️ Nécessaires à la seule interprétation qui ne tient pas dans un objectif : un plafond
+   * de versements qui saturerait avant que les objectifs qu'il finance n'aboutissent. Ce
+   * fait naît de la rencontre de deux cartes, donc aucune ne peut le porter seule.
+   */
+  tousLesObjectifs?: Objectif[];
   /**
    * La médiane que le panneau de projection affiche.
    *
@@ -66,7 +74,7 @@ export default function ConstatsObjectif({
   medianeProjection?: number | null;
 }) {
   const constats = objectif
-    ? observations(objectif, valeurPortefeuille, medianeProjection) : [];
+    ? observations(objectif, valeurPortefeuille, medianeProjection, tousLesObjectifs) : [];
 
   return (
     // ⚠️ **Le cadre commun de la page, et non une surface à part.** Le dégradé remplace le

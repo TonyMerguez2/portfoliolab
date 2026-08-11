@@ -52,6 +52,13 @@ export type Objectif = {
   sur_versements: boolean;
   /** Ce que changerait un autre rythme, ou un autre rendement. */
   sensibilites: Sensibilite[];
+  /**
+   * Le versement mensuel qu'il faudrait pour tenir l'échéance.
+   *
+   * ⚠️ L'inverse de la projection, et la seule réponse de l'écran à « pour y être à la date
+   * voulue, quel rythme ? ». Tout le reste répond à la question opposée.
+   */
+  versement_requis: number | null;
   taux_attendu: number | null;
   inflation: number | null;
   taux_retrait: number | null;
@@ -434,44 +441,68 @@ export function phraseVersements(
     + `à ${euros(haut.versement)}, ${partie(haut)}.`;
 }
 
+/**
+ * Ce que l'écran montre déjà ailleurs, et qu'il ne faut donc pas redire ici.
+ *
+ * ⚠️ **La critique qui a fait réécrire ce panneau.** Il alignait « Il manque 1 247 738 € »
+ * quand la carte affiche « 2 282 € / 1 250 000 € », et « la cible serait atteinte en 2059
+ * (15 ans de retard) » quand la même carte porte « reste 33 ans » et l'étiquette « 15 ans de
+ * retard ». C'était de la reformulation, pas de l'interprétation : le lecteur relisait ce
+ * qu'il venait de voir. Le critère est désormais celui de `score/insights.py` — chiffrer une
+ * **conséquence** que rien d'autre ne calcule, et citer la mesure qui la fonde.
+ *
+ * Sont donc partis d'ici : le montant manquant (la carte donne les deux termes), la date au
+ * rythme actuel (la carte donne la durée restante et l'écart à l'échéance), et la lecture en
+ * euros constants (le panneau de projection la porte sous sa médiane).
+ */
+
+/**
+ * Des interprétations chiffrées sur l'objectif projeté — jamais des conseils.
+ *
+ * ⚠️ **Ce panneau occupe l'emplacement des « Recommandations IA » de la maquette**, qui
+ * proposait « augmenter votre investissement mensuel à 1 000 € ». C'est du conseil en
+ * investissement personnalisé, que ce logiciel ne produit pas. Ce qui suit est arithmétique,
+ * et chaque ligne se recompte à la main.
+ *
+ * ⚠️ **Trois lignes au plus, et chacune doit apprendre quelque chose.** Le nombre n'est pas
+ * une contrainte de place : au-delà, plus rien n'est lu, et une ligne de trop dévalue les
+ * autres. Les candidates sont classées par ce qu'elles apportent, non par l'ordre du calcul.
+ */
 export function observations(
   o: Objectif, valeurPortefeuille?: number | null,
-  medianeProjection?: number | null,
+  medianeProjection?: number | null, autres?: Objectif[],
 ): string[] {
-  // ⚠️ Un aiguillage, et non des conditions ajoutées au fil du texte : les constats de
-  // capital parlent de patrimoine, de trajectoire médiane et de pouvoir d'achat, trois
-  // notions qui n'ont aucun sens pour un cumul de versements.
-  if (o.sur_versements) return constatsPlafond(o);
-
   // ⚠️ **La médiane vient de la projection quand elle existe, et c'est un correctif.**
   // Vu à l'écran : le panneau de projection annonçait 373 261 € — la médiane des tirages —
   // tandis que le constat parlait de 362 986 €, la capitalisation déterministe. Deux
   // calculs de la même grandeur, à dix centimètres l'un de l'autre, tous deux justes et
-  // dont l'écart de 2,8 % ne se justifie par rien aux yeux du lecteur. Les tests
-  // garantissaient qu'ils se rejoignent à 5 % près ; ils ne garantissaient pas qu'on
-  // n'affiche pas les deux.
+  // dont l'écart de 2,8 % ne se justifie par rien aux yeux du lecteur.
   const mediane = medianeProjection ?? o.valeur_projetee;
   const sortie: string[] = [];
   const requis = o.capital_requis;
 
-  if (requis != null && o.montant_actuel != null && o.montant_actuel < requis) {
-    sortie.push(`Il manque ${euros(requis - o.montant_actuel)} pour atteindre la cible.`);
+  // ── 1. Le rythme qu'exigerait l'échéance ──────────────────────────────────
+  //
+  // La ligne la plus utile du panneau, et la seule à répondre « pour y être à la date
+  // voulue, quel rythme ? ». Elle est en tête parce que c'est la question qu'on se pose
+  // devant une échéance qu'on ne tient pas.
+  if (o.versement_requis != null && o.versement_requis > 0 && o.echeance_annee) {
+    const rapport = o.versement_mensuel && o.versement_mensuel > 0
+      ? o.versement_requis / o.versement_mensuel : null;
+    const compare = rapport == null ? ""
+      : rapport >= 1.05
+        ? `, soit ${pourcent(rapport, 1)} fois votre rythme actuel`
+        : rapport <= 0.95
+          ? `, soit moins que votre rythme actuel`
+          : `, soit votre rythme actuel`;
+    sortie.push(`Tenir ${o.echeance_annee} demanderait ${euros(o.versement_requis)} `
+      + `par mois${compare}.`);
   }
 
-  // ⚠️ **« La cible représente 276,3 fois votre patrimoine actuel » a été retirée.** Elle
-  // redisait la première ligne dans une unité moins parlante — un rapport là où l'épargnant
-  // pense en euros manquants — et n'aidait aucune décision. Un panneau tenu à six lignes
-  // utiles vaut mieux qu'un panneau de huit dont deux se répètent.
-
-  // Le rythme, comparé à l'échéance : une soustraction de mois, pas une consigne.
-  const rythme = ecartAuRythme(o);
-  if (rythme && o.mois_pour_atteindre != null) {
-    const annee = new Date().getFullYear()
-      + Math.floor((new Date().getMonth() + o.mois_pour_atteindre) / 12);
-    sortie.push(`Au rythme actuel — ${o.versement_mensuel ? euros(o.versement_mensuel) : "0 €"} `
-      + `par mois — la cible serait atteinte en ${annee} (${rythme.texte}).`);
-  }
-
+  // ── 2. Ce qu'il manquerait à l'échéance ───────────────────────────────────
+  //
+  // Une conséquence, non une mesure : l'écran montre la médiane et la cible, pas leur
+  // différence à la date choisie.
   if (mediane != null && requis != null && o.mois_restants) {
     const ecart = mediane - requis;
     sortie.push(ecart >= 0
@@ -479,39 +510,160 @@ export function observations(
       : `À l’échéance, la trajectoire médiane reste ${euros(-ecart)} sous la cible.`);
   }
 
-  // ⚠️ Le pouvoir d'achat se recalcule sur la médiane affichée, et non sur la valeur
-  // déterministe du serveur : sinon la phrase citerait un montant qui n'apparaît nulle
-  // part ailleurs à l'écran.
-  if (mediane != null && o.inflation != null && o.mois_restants) {
-    const constants = mediane / (1 + o.inflation / 100) ** (o.mois_restants / 12);
-    if (mediane - constants > 0) {
-      // ⚠️ `pourcent` et non l'interpolation directe : `2.9` s'écrivait « 2.9 % » avec un
-      // point décimal. Trouvé par le test qui interdit `\d\.\d` dans tout constat, écrit en
-      // remplacement d'un test devenu caduc — un cas où le filet a rapporté plus que ce
-      // qu'il remplaçait, et sur un objectif réel de l'utilisateur, dont l'inflation vaut
-      // justement 2,9.
-      sortie.push(`À ${pourcent(o.inflation, 1)} % d’inflation, ces ${euros(mediane)} `
-        + `vaudront ${euros(constants)} d’aujourd’hui.`);
-    }
+  // ── 3. Lequel des deux leviers pèse le plus ───────────────────────────────
+  const levier = phraseLevier(o);
+  if (levier) sortie.push(levier);
+
+  // ── Ce que le plafond implique pour les autres objectifs ───────────────────
+  const croise = phraseCroisee(o, autres);
+  if (croise) sortie.push(croise);
+
+  // ── La plus-value qui n'entame pas le plafond, chiffrée ────────────────────
+  const gain = phraseGainHorsPlafond(o, valeurPortefeuille);
+  if (gain) sortie.push(gain);
+
+  // ⚠️ **Un repli, et un seul.** Sans échéance ni rendement, aucune des interprétations
+  // ci-dessus n'existe, et un panneau vide n'aide personne. Le montant restant est alors dit
+  // — c'est une soustraction que la carte laisse faire, donc le plus faible des constats,
+  // mais il vaut mieux que le silence.
+  if (sortie.length === 0 && requis != null && o.montant_actuel != null
+      && o.montant_actuel < requis) {
+    sortie.push(o.sur_versements
+      ? `Il reste ${euros(requis - o.montant_actuel)} à verser avant le plafond de `
+        + `${euros(requis)}.`
+      : `Il manque ${euros(requis - o.montant_actuel)} pour atteindre la cible.`);
   }
 
-  // ⚠️ **En dernier, et c'est un choix de hiérarchie.** Les constats précédents disent où
-  // l'on en est ; ceux-ci disent ce que changerait une autre décision. L'ordre suit celui
-  // dans lequel on se pose les questions : d'abord où j'en suis, ensuite quoi si.
-  //
-  // ⚠️ **Les deux variantes de versement tiennent en une phrase.** Séparées, elles donnaient
-  // deux lignes de forme identique — « À 400 € par mois…, À 1 600 € par mois… » — que l'œil
-  // lisait deux fois pour en tirer une comparaison. Réunies, la comparaison est faite.
-  const versements = (o.sensibilites ?? []).filter(s => s.quoi === "versement");
-  const autres = (o.sensibilites ?? []).filter(s => s.quoi !== "versement");
-  const fusion = phraseVersements(versements, o.versement_mensuel);
-  if (fusion) sortie.push(fusion);
-  for (const s of autres) {
-    const phrase = phraseSensibilite(s, o.versement_mensuel);
-    if (phrase) sortie.push(phrase);
+  // ⚠️ L'écart entre le relevé et les transactions saisies est un signal, pas un détail : un
+  // cumul déclaré très supérieur au net des transactions veut dire qu'il manque des
+  // écritures — et l'avancement de tous les autres objectifs est alors faux lui aussi.
+  if (o.sur_versements && o.verse_deja != null && o.verse_mesure != null
+      && Math.abs(o.verse_deja - o.verse_mesure) > Math.max(50, o.verse_deja * 0.05)) {
+    sortie.push(`Vos transactions saisies totalisent ${euros(o.verse_mesure)}, contre `
+      + `${euros(o.verse_deja)} déclarés : il manque probablement des transactions.`);
   }
 
   return sortie;
+}
+
+/**
+ * Lequel du rythme ou du rendement pèse le plus sur la date d'atteinte.
+ *
+ * ⚠️ **C'est une interprétation, et c'est ce qui manquait au panneau.** Les deux
+ * sensibilités brutes disaient « doubler avance de 8 ans » et « un point de rendement en
+ * moins recule de 3 ans » ; les mettre en regard dit *lequel des deux leviers commande*, ce
+ * que le lecteur devait déduire seul. Rien n'est prescrit : on ne dit pas d'actionner le
+ * levier, on dit lequel bouge le résultat.
+ */
+/** Vrai quand cette variante est au-dessus du rythme actuel — la hypothèse « et si plus ? ». */
+function actuelSuperieur(s: Sensibilite, o: Objectif): boolean {
+  return o.versement_mensuel != null && s.versement > o.versement_mensuel;
+}
+
+export function phraseLevier(o: Objectif): string | null {
+  const versements = (o.sensibilites ?? [])
+    .filter(s => s.quoi === "versement" && s.mois != null && s.ecart_mois != null);
+  const rendement = (o.sensibilites ?? [])
+    .find(s => s.quoi === "rendement" && s.mois != null && s.ecart_mois != null);
+  if (!rendement || versements.length === 0) return null;
+
+  // ⚠️ **La variante à la hausse est préférée, quand elle existe.** Mon premier jet prenait
+  // celle des deux qui bouge le plus, et citait donc la baisse — 109 mois contre 101 : la
+  // phrase démontrait que le rythme commande en montrant ce qu'on perd, là où la question
+  // que l'on se pose est ce qu'on gagne. Les deux prouvent la même chose ; l'une se lit.
+  const fort = versements.find(v => actuelSuperieur(v, o)) ?? versements[0];
+  const parVersement = Math.abs(fort.ecart_mois!);
+  const parRendement = Math.abs(rendement.ecart_mois!);
+  const dv = dureeEnClair(parVersement);
+  const dr = dureeEnClair(parRendement);
+  if (!dv || !dr) return null;
+
+  const tete = parVersement > parRendement
+    ? "Le rythme pèse plus que le rendement ici"
+    : "Le rendement pèse plus que le rythme ici";
+  // ⚠️ « déplace » et non « avance » ou « recule » : on compare deux **amplitudes**, l'une
+  // vers le haut et l'autre vers le bas. Un verbe orienté ferait croire que les deux vont
+  // dans le même sens.
+  const levier = actuelSuperieur(fort, o)
+    ? "doubler vos versements"
+    : `passer à ${euros(fort.versement)} par mois`;
+  return `${tete} : ${levier} déplace la cible de ${dv}, `
+    + `un point de rendement de ${dr}.`;
+}
+
+/**
+ * La plus-value qui ne consomme pas le plafond, en euros.
+ *
+ * ⚠️ **La version chiffrée d'une explication que j'avais d'abord écrite, puis retirée.** Le
+ * panneau portait « les plus-values ne consomment pas ce plafond : seuls vos versements le
+ * remplissent » — vrai, important, et pourtant du décor : la phrase ne dépendait d'aucune
+ * donnée et se répétait à l'identique. Ici la même idée porte trois chiffres du portefeuille,
+ * et elle grandit avec lui : cinq cents euros de plus-value aujourd'hui, cent vingt mille
+ * dans vingt ans. C'est le critère de `score/insights.py` — chiffrer, et citer la mesure.
+ *
+ * ⚠️ Seuil sur la **part** et non sur le montant seul : cinquante euros de gain sur cinq
+ * mille versés est du bruit de marché, la même somme sur trois cents versés est un fait.
+ */
+export function phraseGainHorsPlafond(
+  o: Objectif, valeurPortefeuille?: number | null,
+): string | null {
+  if (!o.sur_versements) return null;
+  const verse = o.verse_retenu ?? o.montant_actuel;
+  if (verse == null || verse <= 0 || valeurPortefeuille == null) return null;
+  const gain = valeurPortefeuille - verse;
+  if (gain <= 0 || gain / verse < 0.02) return null;
+  return `Vos ${euros(verse)} versés valent ${euros(valeurPortefeuille)} aujourd’hui — `
+    + `${euros(gain)} de plus-value, qui n’entament pas le plafond.`;
+}
+
+/**
+ * Ce qu'un plafond de versements implique pour les autres objectifs du portefeuille.
+ *
+ * ⚠️ **La seule interprétation qui demande de regarder au-delà d'un objectif**, et la plus
+ * utile sur un plafond : une enveloppe qui sature avant que les objectifs qu'elle finance
+ * n'aboutissent est un fait qu'aucune carte ne montre, puisqu'il naît de la rencontre de
+ * deux d'entre elles.
+ *
+ * ⚠️ Aucune conclusion n'est tirée. On date les deux échéances et on donne l'écart ;
+ * « il faudra ouvrir une autre enveloppe » serait un conseil, et n'apparaît pas.
+ */
+export function phraseCroisee(o: Objectif, autres?: Objectif[]): string | null {
+  if (!o.sur_versements || o.mois_pour_atteindre == null || o.mois_pour_atteindre <= 0) {
+    return null;
+  }
+  const candidats = (autres ?? []).filter(a => a.id !== o.id && !a.sur_versements);
+
+  // ⚠️ **Une échéance choisie passe devant un horizon projeté, et l'écart de solidité est
+  // grand.** Vu à l'écran : la phrase se comparait à « Liberté financière », dont les 48 ans
+  // ne sont pas une date mais le résultat d'une division par 400 € de versement mensuel —
+  // un chiffre qui bouge si l'épargnant change d'avis. Une année saisie, elle, est un
+  // engagement : c'est à elle qu'une date de saturation mérite d'être comparée.
+  const dates = candidats
+    .filter(a => a.echeance_annee != null && a.mois_restants != null)
+    .sort((a, b) => b.mois_restants! - a.mois_restants!);
+  const projetes = candidats
+    .filter(a => a.mois_pour_atteindre != null)
+    .sort((a, b) => b.mois_pour_atteindre! - a.mois_pour_atteindre!);
+
+  const cible = dates[0] ?? projetes[0];
+  if (!cible) return null;
+  const surEcheance = dates.length > 0;
+  const horizon = surEcheance ? cible.mois_restants! : cible.mois_pour_atteindre!;
+
+  const ecart = horizon - o.mois_pour_atteindre;
+  // Sous un an d'écart, les deux dates se confondent et la phrase n'apprend rien.
+  if (Math.abs(ecart) < 12) return null;
+  const duree = dureeEnClair(Math.abs(ecart));
+  if (!duree) return null;
+
+  const repere = surEcheance
+    ? `l’échéance de « ${cible.nom} » (${cible.echeance_annee})`
+    : `que « ${cible.nom} » n’aboutisse au rythme actuel`;
+  const quand = moisEnClair(o.mois_pour_atteindre);
+  return ecart > 0
+    ? `Le plafond serait atteint en ${quand}, ${duree} avant ${repere}.`
+    : `Le plafond serait atteint en ${quand}, ${duree} après ${
+      surEcheance ? repere : `que « ${cible.nom} » aboutisse au rythme actuel`}.`;
 }
 
 /**

@@ -154,7 +154,7 @@ describe("agregat", () => {
     valeur_projetee: null, projetee_en_euros_constants: null,
     mois_pour_atteindre: null,
     verse_deja: null, verse_mesure: null, verse_retenu: null, sur_versements: false,
-    sensibilites: [],
+    sensibilites: [], versement_requis: null,
     ...kw,
   });
 
@@ -203,17 +203,64 @@ describe("observations", () => {
     valeur_projetee: 900_000, projetee_en_euros_constants: 600_000,
     mois_pour_atteindre: 240,
     verse_deja: null, verse_mesure: null, verse_retenu: null, sur_versements: false,
-    sensibilites: [],
+    sensibilites: [], versement_requis: null,
   };
 
-  it("dit ce qui manque et l'écart à la cible", () => {
-    const obs = observations(base, 100_000);
-    expect(obs.some(t => /Il manque/.test(t))).toBe(true);
-    expect(obs.some(t => /sous la cible/.test(t))).toBe(true);
+  const riche: Objectif = { ...base, versement_requis: 2_782, sensibilites: [
+    { quoi: "versement", versement: 400, taux: 7.2, mois: 349, ecart_mois: 109 },
+    { quoi: "versement", versement: 1_600, taux: 7.2, mois: 139, ecart_mois: -101 },
+    { quoi: "rendement", versement: 800, taux: 6.2, mois: 277, ecart_mois: 37 },
+  ] };
+
+  it("met en tête le rythme qu'exigerait l'échéance", () => {
+    // ⚠️ La seule ligne qui répond « pour y être à la date voulue, quel rythme ? ». Tout le
+    // reste de l'écran répond à la question opposée, d'où sa place en tête.
+    const obs = observations(riche, 100_000);
+    expect(obs[0]).toContain("Tenir 2044 demanderait");
+    expect(obs[0]).toContain(euros(2_782));
+    expect(obs[0]).toContain("3,5 fois votre rythme actuel");
   });
 
-  it("ramène la projection en euros d'aujourd'hui", () => {
-    expect(observations(base, 100_000).some(t => /d’aujourd’hui/.test(t))).toBe(true);
+  it("ne redit pas ce que la carte affiche déjà", () => {
+    // ⚠️ **La critique qui a fait réécrire ce panneau.** « Il manque 1 247 738 € » quand la
+    // carte porte « 2 282 € / 1 250 000 € », « atteinte en 2059 (15 ans de retard) » quand
+    // elle porte « reste 33 ans » et l'étiquette du retard, « soit X d'aujourd'hui » quand
+    // le panneau de projection le met sous sa médiane. Trois reformulations sur cinq lignes.
+    const joint = observations(riche, 100_000).join(" ");
+    expect(joint).not.toMatch(/Il manque/);
+    expect(joint).not.toMatch(/serait atteinte en/);
+    expect(joint).not.toMatch(/d’aujourd’hui/);
+  });
+
+  it("classe le rythme et le rendement au lieu de les juxtaposer", () => {
+    const t = observations(riche, 100_000).find(x => /pèse plus/.test(x));
+    expect(t).toBeDefined();
+    // 101 mois contre 37 : le rythme commande. Et c'est la variante **à la hausse** qui est
+    // citée — celle qui répond à « et si je mettais plus ? ».
+    expect(t).toContain("Le rythme pèse plus que le rendement");
+    expect(t).toContain("doubler vos versements déplace la cible de 8 ans 5 mois");
+    expect(t).toContain("un point de rendement de 3 ans 1 mois");
+  });
+
+  it("tient en trois lignes pour un objectif de capital", () => {
+    // ⚠️ Le nombre n'est pas une contrainte de place : au-delà, plus rien n'est lu, et une
+    // ligne de trop dévalue les autres.
+    expect(observations(riche, 100_000)).toHaveLength(3);
+  });
+
+  it("chaque ligne porte un chiffre", () => {
+    for (const t of observations(riche, 100_000)) expect(t).toMatch(/\d/);
+  });
+
+  it("se replie sur le montant manquant quand rien d'autre n'est calculable", () => {
+    // ⚠️ Sans échéance ni rendement, aucune interprétation n'existe — et un panneau vide
+    // n'aide personne. Le repli est le plus faible des constats, et n'apparaît qu'alors.
+    const nu: Objectif = { ...base, echeance_annee: null, mois_restants: null,
+      taux_attendu: null, versement_requis: null, valeur_projetee: null,
+      sensibilites: [] };
+    const obs = observations(nu, 100_000);
+    expect(obs).toHaveLength(1);
+    expect(obs[0]).toContain("Il manque");
   });
 
   it("ne formule jamais de conseil", () => {
@@ -281,7 +328,7 @@ describe("cohérence de la médiane citée", () => {
     valeur_projetee: 362_986, projetee_en_euros_constants: 245_000,
     mois_pour_atteindre: 397,
     verse_deja: null, verse_mesure: null, verse_retenu: null, sur_versements: false,
-    sensibilites: [],
+    sensibilites: [], versement_requis: null,
   };
 
   it("cite la médiane des tirages quand elle est fournie", () => {
@@ -295,22 +342,18 @@ describe("cohérence de la médiane citée", () => {
     // groupe les milliers avec une espace fine insécable (U+202F), et non l'espace du
     // clavier. C'est exactement le piège déjà noté plus haut dans ce fichier, et j'y
     // suis retombé.
+    // ⚠️ **Le panneau ne cite plus la médiane mais l'écart qui en dérive** — « reste X sous
+    // la cible ». La garantie reste la même et se teste de la même façon : cet écart doit
+    // être calculé sur la médiane *affichée* par la projection, sinon les deux panneaux
+    // décrivent la même trajectoire avec deux chiffres différents.
     const avec = observations(base, 4_545, 373_261).join(" ").replace(/\s/g, " ");
-    expect(avec).toContain("373 261 €");
-    expect(avec).not.toContain("362 986");
+    expect(avec).toContain(euros(1_250_000 - 373_261).replace(/\s/g, " "));
+    expect(avec).not.toContain(euros(1_250_000 - 362_986).replace(/\s/g, " "));
   });
 
   it("retombe sur la valeur du serveur sans médiane fournie", () => {
     const sans = observations(base, 4_545).join(" ").replace(/\s/g, " ");
-    expect(sans).toContain("362 986");
-  });
-
-  it("recalcule le pouvoir d'achat sur la médiane citée", () => {
-    // Sinon la phrase citerait un montant absent partout ailleurs à l'écran.
-    const t = (observations(base, 4_545, 373_261).find(x => /inflation/.test(x)) ?? "")
-      .replace(/\s/g, " ");
-    expect(t).toContain("373 261 €");
-    expect(t).not.toContain("245 000");
+    expect(sans).toContain(euros(1_250_000 - 362_986).replace(/\s/g, " "));
   });
 });
 
@@ -371,7 +414,7 @@ describe("plafond de versements", () => {
     atteint: false, mois_restants: null, valeur_projetee: null,
     projetee_en_euros_constants: null, mois_pour_atteindre: 182,
     verse_deja: null, verse_mesure: 5_000, verse_retenu: 5_000, sur_versements: true,
-    sensibilites: [],
+    sensibilites: [], versement_requis: null,
     ...kw,
   });
 
@@ -385,17 +428,68 @@ describe("plafond de versements", () => {
       .toBe("Plafond de versements");
   });
 
-  it("dit ce qu'il reste à verser et quand le plafond tombe", () => {
+  it("dit ce que le plafond implique pour les autres objectifs", () => {
+    // ⚠️ **La seule interprétation d'un plafond qui n'existe nulle part ailleurs**, parce
+    // qu'elle naît de la rencontre de deux objectifs : une enveloppe qui sature avant que
+    // ceux qu'elle finance n'aboutissent. Aucune carte ne peut la montrer seule.
+    const retraite: Objectif = { ...plafond(), id: "r", nom: "Retraite", genre: "capital",
+      sur_versements: false, mois_pour_atteindre: 397, echeance_annee: null,
+      mois_restants: null };
+    const c = observations(plafond(), null, null, [retraite]);
+    const t = c.find(x => /plafond serait atteint/.test(x));
+    expect(t).toBeDefined();
+    // 397 − 182 = 215 mois = 17 ans 11 mois.
+    expect(t).toContain("17 ans 11 mois avant");
+    expect(t).toContain("« Retraite »");
+  });
+
+  it("préfère une échéance choisie à un horizon projeté", () => {
+    // ⚠️ **L'écart de solidité entre les deux est grand.** Vu à l'écran, la phrase se
+    // comparait à un objectif dont les 48 ans ne sont pas une date mais le résultat d'une
+    // division par le versement mensuel — un chiffre qui bouge si l'épargnant change d'avis.
+    // Une année saisie est un engagement.
+    const mou: Objectif = { ...plafond(), id: "m", nom: "Lointain", genre: "capital",
+      sur_versements: false, mois_pour_atteindre: 580, echeance_annee: null,
+      mois_restants: null };
+    const ferme: Objectif = { ...plafond(), id: "f", nom: "Appartement", genre: "achat",
+      sur_versements: false, mois_pour_atteindre: 300, echeance_annee: 2032,
+      mois_restants: 76 };
+    const t = observations(plafond(), null, null, [mou, ferme])
+      .find(x => /plafond serait atteint/.test(x));
+    expect(t).toContain("« Appartement » (2032)");
+    expect(t).not.toContain("Lointain");
+    // 182 − 76 = 106 mois = 8 ans 10 mois, et le plafond tombe *après* l'échéance.
+    expect(t).toContain("8 ans 10 mois après l’échéance");
+  });
+
+  it("chiffre la plus-value qui n'entame pas le plafond", () => {
+    // ⚠️ **La version chiffrée de l'explication retirée.** « Les plus-values ne consomment
+    // pas ce plafond » ne dépendait d'aucune donnée et se répétait à l'identique ; la même
+    // idée portant trois chiffres du portefeuille grandit avec lui, et se vérifie.
+    const t = observations(plafond(), 6_200)
+      .find(x => /n’entament pas le plafond/.test(x));
+    expect(t).toBeDefined();
+    expect(t).toContain(euros(5_000));      // versés
+    expect(t).toContain(euros(6_200));      // valeur
+    expect(t).toContain(euros(1_200));      // plus-value
+  });
+
+  it("se taît sur une plus-value insignifiante", () => {
+    // ⚠️ Le seuil porte sur la **part** : cinquante euros sur cinq mille versés est du bruit
+    // de marché, pas un fait sur lequel raisonner.
+    const c = observations(plafond(), 5_050);
+    expect(c.some(x => /plus-value/.test(x))).toBe(false);
+  });
+
+  it("se replie sur le reste à verser quand il n'y a rien à croiser", () => {
+    // ⚠️ Le repli, et lui seul, redit une soustraction que la carte laisse faire. Il
+    // n'apparaît que faute de mieux : un panneau vide n'aide personne.
     const c = observations(plafond());
+    expect(c).toHaveLength(1);
     // ⚠️ Le montant attendu est **construit par le formateur**, jamais recopié à la main :
     // `Intl` sépare les milliers par une espace fine insécable (U+202F) et non par celle du
-    // clavier. Une comparaison littérale échoue alors sur deux chaînes visuellement
-    // identiques — piège dans lequel je suis retombé en écrivant ce test, après l'avoir
-    // documenté plus haut dans ce même fichier.
-    expect(c.some(t => t.includes(`reste ${euros(145_000)} à verser`))).toBe(true);
-    // 182 mois = 15 ans et 2 mois.
-    expect(c.some(t => /15 ans et 2 mois/.test(t))).toBe(true);
-    expect(c.some(t => /800 € par mois/.test(t))).toBe(true);
+    // clavier. Piège dans lequel je suis retombé quatre fois dans ce fichier.
+    expect(c[0]).toContain(`reste ${euros(145_000)} à verser`);
   });
 
   it("ne contient aucune ligne d'explication sans chiffre", () => {
@@ -416,18 +510,13 @@ describe("plafond de versements", () => {
     expect(texte).not.toMatch(/médiane|rendement|pouvoir d’achat|d’aujourd’hui/i);
   });
 
-  it("annonce le plafond atteint plutôt qu'un reste négatif", () => {
+  it("ne dit rien plutôt qu'un reste négatif quand le plafond est dépassé", () => {
+    // ⚠️ Le repli ne s'applique qu'en dessous du plafond : au-delà, « il reste −10 000 € à
+    // verser » serait absurde. Le panneau se taît, et la carte porte déjà « 100 % ».
     const c = observations(plafond({ verse_retenu: 160_000, montant_actuel: 160_000,
       atteint: true, mois_pour_atteindre: 0 }));
-    expect(c.some(t => /plafond est atteint/.test(t))).toBe(true);
     expect(c.join(" ")).not.toMatch(/-\s?10 000/);
-  });
-
-  it("dit la cause quand aucune date n'est calculable", () => {
-    // ⚠️ « Sans versement mensuel renseigné » plutôt que « jamais » : l'absence de réponse
-    // n'est pas une réponse négative.
-    const c = observations(plafond({ versement_mensuel: null, mois_pour_atteindre: null }));
-    expect(c.some(t => /aucune date ne peut être calculée/.test(t))).toBe(true);
+    expect(c.join(" ")).not.toMatch(/reste/);
   });
 
   it("signale un écart entre le relevé saisi et les transactions", () => {
@@ -605,22 +694,30 @@ describe("virgule décimale des constats", () => {
       montant_actuel: 4_524, avancement: 0.36, atteint: false, mois_restants: 220,
       valeur_projetee: null, projetee_en_euros_constants: null, mois_pour_atteindre: 397,
       verse_deja: null, verse_mesure: null, verse_retenu: null, sur_versements: false,
-      sensibilites: [],
+      sensibilites: [], versement_requis: null,
     };
     const riche: Objectif = { ...o, inflation: 2.9, taux_attendu: 7.2,
       valeur_projetee: 373_234, projetee_en_euros_constants: 259_604,
+      // 2 782 / 800 = 3,4775 → « 3,5 fois », la décimale que le filet doit surveiller.
+      versement_requis: 2_782,
       sensibilites: [
         { quoi: "versement", versement: 400, taux: 7.2, mois: 506, ecart_mois: 109 },
         { quoi: "versement", versement: 1_600, taux: 7.2, mois: 296, ecart_mois: -101 },
         { quoi: "rendement", versement: 800, taux: 6.2, mois: 434, ecart_mois: 37 },
       ] };
     const lignes = observations(riche, 4_524, 373_234);
-    expect(lignes.length).toBeGreaterThan(3);
+    // ⚠️ Deux ou trois, désormais : le panneau est borné et n'aligne plus huit lignes. Ce
+    // que ce test garde n'est pas leur nombre mais leur écriture.
+    expect(lignes.length).toBeGreaterThan(1);
     for (const t of lignes) {
       expect(t, `« ${t} » porte un point décimal`).not.toMatch(/\d\.\d/);
     }
-    // Et le taux d'inflation est bien là, à la française.
-    expect(lignes.some(t => t.includes("2,9 %"))).toBe(true);
+    // ⚠️ **La ligne d'inflation a disparu du panneau** — le panneau de projection porte
+    // « soit X € d'aujourd'hui » sous sa médiane, et la redire ici était une des trois
+    // reformulations reprochées. Le correctif de son point décimal est donc devenu sans
+    // objet : c'est le rapport au rythme actuel qui porte désormais une décimale, et c'est
+    // sur lui que le filet doit mordre.
+    expect(lignes.some(t => t.includes("3,5 fois"))).toBe(true);
   });
 });
 

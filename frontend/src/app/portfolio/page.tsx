@@ -2058,7 +2058,8 @@ function PortfolioPageInner() {
               objectif={listeObjectifs.find(o => o.id === projeteEffectif) ?? null}
               valeurPortefeuille={objectifs.donnees?.valeur_portefeuille ?? null}
               medianeProjection={projection.projection?.possible
-                ? projection.projection.mediane : null} />
+                ? projection.projection.mediane : null}
+              tousLesObjectifs={listeObjectifs} />
           </div>
         </div>
 

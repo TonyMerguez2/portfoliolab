@@ -37,6 +37,7 @@ from app.services.objectifs import (
     GENRES, PLAFONDS_CONNUS, annee_de_l_age, avancement_verse, capital_requis,
     echeance_en_mois, euros_constants, mois_pour_atteindre, mois_pour_verser,
     progression, se_mesure_sur_les_versements, valeur_projetee, verse_projete,
+    versement_requis,
 )
 from app.services.parametres_objectif import (
     ANNEES_MINIMALES_REFERENCE, INFLATION_CIBLE_BCE, INFLATION_RELEVEE_LE,
@@ -300,6 +301,19 @@ def _en_dict(o: Objectif, valeur: float | None, user: User,
                 "ecart_mois": (m - atteinte_mois) if m is not None else None,
             })
 
+    # ⚠️ **Le versement qu'il faudrait pour tenir l'échéance.** Tout le reste de l'écran
+    # répond « à votre rythme, voilà quand vous y serez » ; ce chiffre répond à l'autre
+    # question, celle qu'on se pose devant une date : « pour y être en 2044, quel rythme ? ».
+    # Il ne se lit nulle part ailleurs, et c'est ce qui le distingue d'une reformulation.
+    requis_par_mois = None
+    if sur_versements and mois and requis:
+        # Pour un plafond, aucun rendement n'intervient : c'est une division. La même
+        # question — « pour y être à cette date, quel rythme ? » — a donc une réponse ici
+        # aussi, et elle est exacte.
+        requis_par_mois = versement_requis(verse, 0.0, mois, requis)
+    elif (prog is not None and requis and o.taux_attendu is not None and mois):
+        requis_par_mois = versement_requis(prog.actuel, o.taux_attendu, mois, requis)
+
     return {
         "id": o.id, "nom": o.nom, "genre": o.genre, "cible": o.cible,
         "echeance_annee": an_echeance, "age_cible": o.age_cible,
@@ -341,6 +355,7 @@ def _en_dict(o: Objectif, valeur: float | None, user: User,
         "verse_mesure": (round(verse_mesure, 2) if verse_mesure is not None else None),
         "verse_retenu": round(verse, 2) if sur_versements else None,
         "sensibilites": sensibilites,
+        "versement_requis": requis_par_mois,
     }
 
 

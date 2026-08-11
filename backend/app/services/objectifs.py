@@ -299,6 +299,42 @@ def verse_projete(verse: float, versement_mensuel: float | None, mois: int) -> f
     return max(0.0, verse) + max(0.0, versement_mensuel or 0.0) * mois
 
 
+def versement_requis(
+    depart: float, taux_annuel: float, mois: int, requis: float,
+) -> float | None:
+    """
+    Le versement mensuel qu'il faudrait pour tenir l'échéance.
+
+    ⚠️ **C'est l'inverse de `valeur_projetee`, et c'est le chiffre que l'écran n'avait pas.**
+    Tout le panneau répondait « à votre rythme, voilà quand vous y serez » ; personne ne
+    répondait « pour y être à la date voulue, voilà le rythme ». La seconde question est celle
+    qu'on se pose devant une échéance, et sa réponse ne se lit nulle part ailleurs.
+
+    ⚠️ **Un constat, pas une consigne.** « Tenir 2044 demanderait 2 340 € par mois » énonce ce
+    que l'arithmétique exige ; « versez 2 340 € » serait une recommandation d'investissement.
+    L'écran garde la première forme.
+
+    Forme fermée, versement en fin de mois pour rester cohérent avec `valeur_projetee` :
+
+        requis = depart·(1+r)ⁿ + v·((1+r)ⁿ − 1)/r
+
+    Rend `0` quand le capital de départ suffit à lui seul — aucun versement n'est nécessaire —
+    et `None` si l'horizon est nul.
+    """
+    if mois <= 0 or requis <= 0:
+        return None
+    r = (1.0 + taux_annuel / 100.0) ** (1.0 / 12.0) - 1.0
+    depart = max(0.0, depart)
+    if abs(r) < 1e-12:
+        # Taux nul : la formule générale divise par zéro, la réponse est une division simple.
+        return max(0.0, round((requis - depart) / mois, 2))
+    facteur = (1.0 + r) ** mois
+    manque = requis - depart * facteur
+    if manque <= 0:
+        return 0.0
+    return round(manque * r / (facteur - 1.0), 2)
+
+
 def euros_constants(montant: float, inflation: float, mois: int) -> float:
     """
     Un montant futur ramené au pouvoir d'achat d'aujourd'hui.
