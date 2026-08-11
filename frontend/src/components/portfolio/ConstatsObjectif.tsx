@@ -1,8 +1,8 @@
 "use client";
 import { useEffect, useState } from "react";
 
+import Cadre from "@/components/ui/Cadre";
 import { observations, type Objectif } from "@/lib/objectifs";
-import { RAYONS } from "@/lib/palette";
 import { FONT } from "@/lib/typography";
 
 /**
@@ -146,24 +146,16 @@ export default function ConstatsObjectif({
   const courant = constats.length > 0 ? constats[index] : null;
 
   return (
-    // ⚠️ **Une seule couche, et le liseré de verre *remplace* le bord sombre.** Le panneau
-    // passait par `Cadre`, dont l'anneau extérieur foncé et l'intervalle voilé encadraient le
-    // rebord de métal : on voyait un bord sombre, un creux, puis le verre. Le rebord est
-    // maintenant le bord.
-    //
-    // ⚠️ **L'empreinte reste celle des panneaux voisins** : le rayon 24 est celui de leur
-    // anneau extérieur, et la boîte occupe la même place dans la colonne. C'est ce qui
-    // permet de retirer le cadre sans que la rangée se décale.
-    <div className="novac-verre" style={{
+    // ⚠️ **Le cadre commun de la page, bord compris.** Un rebord de verre a été essayé ici —
+    // un anneau conique de gris métalliques, à l'épaisseur exacte du bord composite des
+    // voisins — puis retiré : l'effet ne convainquait pas sur ce panneau. Le seul écart avec
+    // les autres conteneurs est désormais le fond, qui porte le ciel ; l'anneau extérieur, son
+    // voile, le liseré gris et les deux rayons concentriques sont les leurs, sans surcharge.
+    <Cadre style={{
       flexShrink: 0,
       display: "flex", flexDirection: "column", gap: 10, minHeight: 0,
       background: `${CIEL}, ${FOND_ESPACE}`,
-      borderRadius: RAYONS.xl,
-      boxSizing: "border-box",
-      // Le rembourrage tient compte des huit pixels du rebord : il en reste douze au-dessus
-      // du texte et quatorze sur les côtés, soit à peu près ce dont disposent les panneaux
-      // voisins à l'intérieur de leur cadre.
-      padding: "20px 22px",
+      padding: "14px 16px",
     }}>
       <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
         <svg width="19" height="19" viewBox="0 0 24 24" fill="currentColor"
@@ -217,6 +209,6 @@ export default function ConstatsObjectif({
           Un calcul que vous pouvez refaire. Le choix reste le vôtre.
         </span>
       )}
-    </div>
+    </Cadre>
   );
 }
