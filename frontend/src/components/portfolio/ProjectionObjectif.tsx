@@ -4,6 +4,7 @@ import {
   anneeDuMois, bande, bornes, chemin, echelles, graduations, montantCourt,
 } from "@/lib/courbeProjection";
 import { echeanceEnClair, euros, pourcentageLisible, type Objectif } from "@/lib/objectifs";
+import { useTaille } from "@/lib/useTaille";
 import { CLAIR, JETONS, RAYONS } from "@/lib/palette";
 import { FONT, NUM } from "@/lib/typography";
 
@@ -23,8 +24,20 @@ import { FONT, NUM } from "@/lib/typography";
  * panne.
  */
 
-const CADRE = { largeur: 620, hauteur: 240,
-  marge: { haut: 14, bas: 26, gauche: 52, droite: 12 } };
+const MARGE = { haut: 12, bas: 22, gauche: 50, droite: 10 };
+
+/** Sous cette hauteur, une courbe cesse d'être lisible : on ne la comprime pas plus. */
+const HAUTEUR_MINIMALE = 150;
+
+/**
+ * Combien de graduations pour une hauteur donnée.
+ *
+ * ⚠️ Un nombre fixe de repères entassait quatre étiquettes dans quarante pixels — un pâté
+ * illisible, vu sur un écran plus court que le mien. Un repère par quarante-cinq pixels
+ * environ, deux au minimum.
+ */
+const nombreDeGraduations = (hauteur: number) =>
+  Math.max(2, Math.min(6, Math.floor((hauteur - MARGE.haut - MARGE.bas) / 45)));
 
 const COURBES: { centile: string; libelle: string; couleur: string; tirets?: string }[] = [
   { centile: "95", libelle: "95ᵉ centile", couleur: JETONS.positif, tirets: "5 4" },
@@ -89,6 +102,9 @@ export default function ProjectionObjectif({
   onParametres?: (o: Objectif) => void;
 }) {
   const o = objectifs.find(x => x.id === choisi) ?? null;
+  // ⚠️ Le conteneur est mesuré pour que le `viewBox` vaille sa taille en pixels : une
+  // unité de dessin par pixel, donc aucune mise à l'échelle et un texte jamais déformé.
+  const zone = useTaille<HTMLDivElement>();
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 12, minHeight: 0, flex: 1 }}>
@@ -145,7 +161,12 @@ export default function ProjectionObjectif({
         const p = projection;
         const toutes = Object.values(p.enveloppes).flat().concat(p.requis ?? []);
         const { bas, haut } = bornes(toutes);
-        const { x, y } = echelles(p.mois, bas, haut, CADRE);
+        const cadre = {
+          largeur: Math.max(240, zone.largeur || 600),
+          hauteur: Math.max(HAUTEUR_MINIMALE, zone.hauteur || HAUTEUR_MINIMALE),
+          marge: MARGE,
+        };
+        const { x, y } = echelles(p.mois, bas, haut, cadre);
         const ans = Math.round((p.objectif.mois_restants ?? 0) / 12);
         const sansDispersion = p.volatilite == null;
 
@@ -198,31 +219,31 @@ export default function ProjectionObjectif({
             {/* ── La courbe ────────────────────────────────────────────────── */}
             <div style={{ flex: 1, minWidth: 260, display: "flex",
               flexDirection: "column", minHeight: 0 }}>
-              {/* ⚠️ `preserveAspectRatio="none"` et une hauteur en pourcentage : la courbe
-                  doit remplir la place qu'on lui laisse, et cette place varie avec la
-                  fenêtre. Avec `height: auto`, le SVG imposait sa proportion — 240 sur
-                  620, soit 340 pixels de haut dans un panneau de 880 de large — et
-                  poussait la page à défiler.
+              {/* Le conteneur mesuré : c'est lui qui donne ses dimensions au dessin. */}
+              <div ref={zone.ref} style={{ flex: 1, minHeight: HAUTEUR_MINIMALE }}>
+              {/* ⚠️ **Plus d'étirement.** J'avais posé `preserveAspectRatio="none"` pour
+                  que la courbe remplisse sa place : sur mon écran elle avait 186 pixels et
+                  la déformation ne se voyait pas, sur un écran plus court elle en avait
+                  quarante et l'écrasement de 6 pour 1 rendait **le texte illisible** — le
+                  SVG n'étire pas que les traits, il écrase aussi les lettres.
 
-                  L'étirement non uniforme est acceptable ici : les deux axes d'un
-                  graphique sont indépendants et gradués, la proportion n'y porte aucune
-                  information. Les tracés portent `vector-effect: non-scaling-stroke`,
-                  sans quoi l'étirement épaissirait les traits dans un seul sens. */}
-              <svg viewBox={`0 0 ${CADRE.largeur} ${CADRE.hauteur}`}
-                preserveAspectRatio="none"
-                style={{ width: "100%", height: "100%", flex: 1, minHeight: 0,
-                  display: "block" }}
+                  Le `viewBox` vaut désormais la taille mesurée du conteneur : une unité de
+                  dessin par pixel, aucune mise à l'échelle, et un plancher de 150 pixels
+                  sous lequel on refuse de comprimer. Si la fenêtre est trop courte, la page
+                  défile — une courbe illisible est pire qu'une barre de défilement. */}
+              <svg viewBox={`0 0 ${cadre.largeur} ${cadre.hauteur}`}
+                style={{ width: "100%", height: cadre.hauteur, display: "block" }}
                 role="img"
                 // ⚠️ Le nom entre guillemets, pour éviter l'élision. « Projection de
                 // Indépendance financière » se lisait à l'écran ; l'apostrophe dépend du
                 // nom que l'épargnant a choisi, donc on ne la devine pas.
                 aria-label={`Projection de « ${p.objectif.nom} » sur ${ans} ans`}>
-                {graduations(bas, haut).map(v => (
+                {graduations(bas, haut, nombreDeGraduations(cadre.hauteur)).map(v => (
                   <g key={v}>
-                    <line x1={CADRE.marge.gauche} x2={CADRE.largeur - CADRE.marge.droite}
+                    <line x1={cadre.marge.gauche} x2={cadre.largeur - cadre.marge.droite}
                       y1={y(v)} y2={y(v)} stroke={CLAIR.bord} strokeWidth="1"
-                      vectorEffect="non-scaling-stroke" />
-                    <text x={CADRE.marge.gauche - 6} y={y(v) + 3} textAnchor="end"
+                      />
+                    <text x={cadre.marge.gauche - 6} y={y(v) + 3} textAnchor="end"
                       style={{ ...NUM, fontSize: 8.5, fill: CLAIR.texteFaible }}>
                       {montantCourt(v)}
                     </text>
@@ -239,10 +260,10 @@ export default function ProjectionObjectif({
                 {/* La cible : une ligne horizontale, pointillée pour ne pas être prise
                     pour une trajectoire. */}
                 {p.requis != null && p.requis <= haut && (
-                  <line x1={CADRE.marge.gauche} x2={CADRE.largeur - CADRE.marge.droite}
+                  <line x1={cadre.marge.gauche} x2={cadre.largeur - cadre.marge.droite}
                     y1={y(p.requis)} y2={y(p.requis)} stroke={CLAIR.texteSecondaire}
                     strokeWidth="1.2" strokeDasharray="3 3"
-                    vectorEffect="non-scaling-stroke" />
+                    />
                 )}
 
                 {COURBES.filter(c => !sansDispersion || c.centile === "50").map(c => (
@@ -250,18 +271,19 @@ export default function ProjectionObjectif({
                     d={chemin(p.mois, p.enveloppes[c.centile], x, y)}
                     fill="none" stroke={c.couleur} strokeWidth="1.8"
                     strokeDasharray={c.tirets} strokeLinejoin="round"
-                    vectorEffect="non-scaling-stroke" />
+                    />
                 ))}
 
                 {[p.mois[0], p.mois[Math.floor(p.mois.length / 2)],
                   p.mois[p.mois.length - 1]].map((m, i) => (
-                  <text key={i} x={x(m)} y={CADRE.hauteur - 8}
+                  <text key={i} x={x(m)} y={cadre.hauteur - 7}
                     textAnchor={i === 0 ? "start" : i === 2 ? "end" : "middle"}
                     style={{ ...NUM, fontSize: 8.5, fill: CLAIR.texteFaible }}>
                     {anneeDuMois(m)}
                   </text>
                 ))}
               </svg>
+              </div>
 
               <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 5,
                 flexShrink: 0 }}>

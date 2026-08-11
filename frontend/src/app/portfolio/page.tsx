@@ -1974,17 +1974,22 @@ function PortfolioPageInner() {
           ⚠️ « Meilleurs contributeurs » et « Répartition par classe » ont quitté cet
           onglet : la maquette ne les y met pas, et la vue générale liste déjà chaque
           ligne avec sa performance. Ils y restaient d'un état antérieur de la page. */}
-      {/* ⚠️ **Aucun défilement : tout doit tenir d'un coup d'œil.** La maquette regroupe
-          l'information sur un écran, et une page qui défile cache ce qu'on est venu
-          comparer. Mesuré avant correction : 1 044 pixels de contenu pour 765 de
-          disponibles. Les deux rangées de bord gardent leur hauteur naturelle, la
-          projection absorbe le reste, et ses panneaux rétrécissent avec elle. */}
+      {/* ⚠️ **Tout tient d'un coup d'œil sur un écran de taille courante, et la page
+          défile en dernier recours.** La maquette regroupe l'information sur un écran, et
+          une page qui défile cache ce qu'on est venu comparer : les quatre rangées ont donc
+          été resserrées jusqu'à tenir dans 765 pixels, contre 1 044 au départ.
+
+          Mais **comprimer sans plancher a produit pire** : en laissant la courbe absorber
+          tout ce qui restait, elle est tombée à quarante pixels sur un écran plus court que
+          celui où j'ai réglé — illisible, étiquettes en pâté. Chaque panneau garde donc une
+          hauteur minimale, et si la fenêtre ne suffit pas, on défile. Une courbe illisible
+          est pire qu'une barre de défilement. */}
       <div style={{ display: dashView === "objectifs" ? "flex" : "none",
         // ⚠️ Écarts à 8 pixels et non 10 : les trois interstices rendent six pixels, soit
         // exactement ce qui manquait aux constats. Le dernier réglage d'un ajustement où
         // chaque panneau se disputait la même hauteur.
         flexDirection: "column", height: "100%", padding: "12px 14px 8px", gap: 8,
-        overflow: "hidden" }}>
+        overflowY: "auto", overflowX: "hidden" }}>
 
         {/* ── Rangée 1 : les objectifs ──────────────────────────────────────── */}
         <div style={{ display: "flex", alignItems: "center",
@@ -2035,7 +2040,7 @@ function PortfolioPageInner() {
         )}
 
         {/* ── Rangée 2 : projection à gauche, deux cartes à droite ──────────── */}
-        <div style={{ display: "grid", gap: 10, flex: 1, minHeight: 0,
+        <div style={{ display: "grid", gap: 10, flexShrink: 0,
           // ⚠️ 1,7 pour 1 et non 2 pour 1 : chaque retour à la ligne évité dans la
           // colonne de droite lui rend une quinzaine de pixels, et c'est là que le
           // contenu manquait de place. La courbe y perd quarante pixels de large, ce
@@ -2070,7 +2075,7 @@ function PortfolioPageInner() {
                 pousser la rangée ferait défiler la page entière. Un panneau qui défile
                 vaut mieux qu'un écran qui défile. */}
             <Cadre style={{ padding: "14px 16px", display: "flex",
-              flexDirection: "column", flex: 1, minHeight: 0, overflowY: "auto" }}>
+              flexDirection: "column", flexShrink: 0 }}>
               <ConstatsObjectif
                 objectif={listeObjectifs.find(o => o.id === projeteEffectif) ?? null}
                 valeurPortefeuille={objectifs.donnees?.valeur_portefeuille ?? null}
