@@ -40,11 +40,13 @@ import ImagePortefeuille from "@/components/portfolio/ImagePortefeuille";
 import { useAnalyseEvenements } from "@/hooks/useAnalyseEvenements";
 import { useImpactTitre } from "@/hooks/useImpactTitre";
 import { useObjectifs, type Saisie } from "@/hooks/useObjectifs";
+import { useProjection } from "@/hooks/useProjection";
 import { alerteRepartition, avertissementValeur, type Objectif } from "@/lib/objectifs";
 import { useTransparence } from "@/hooks/useTransparence";
 import { DividendesAVenir, ProchainsResultats } from "@/components/portfolio/TablesEvenements";
 import CalendrierEvenements from "@/components/portfolio/CalendrierEvenements";
 import CartesObjectifs from "@/components/portfolio/CartesObjectifs";
+import ProjectionObjectif from "@/components/portfolio/ProjectionObjectif";
 import FormulaireObjectif from "@/components/portfolio/FormulaireObjectif";
 import EvenementsAVenir from "@/components/portfolio/EvenementsAVenir";
 import { HistoriqueEvenements, ImpactPotentiel } from "@/components/portfolio/ImpactEvenements";
@@ -505,6 +507,21 @@ function PortfolioPageInner() {
   const objectifs = useObjectifs(portfolio?.id);
   const [saisieObjectif, setSaisieObjectif] =
     useState<{ mode: "creation" } | { mode: "edition"; o: Objectif } | null>(null);
+
+  /**
+   * L'objectif dont la projection est affichée.
+   *
+   * ⚠️ Retenu ici et non dans le panneau : le premier objectif fait office de défaut, et
+   * il n'existe qu'une fois la liste chargée. Un état interne au panneau serait resté
+   * vide au premier rendu, donc sans projection jusqu'à ce qu'on touche au menu.
+   */
+  const [objectifProjete, setObjectifProjete] = useState<string | null>(null);
+  const listeObjectifs = objectifs.donnees?.objectifs ?? [];
+  const projeteEffectif = objectifProjete
+    && listeObjectifs.some(o => o.id === objectifProjete)
+      ? objectifProjete
+      : (listeObjectifs[0]?.id ?? null);
+  const projection = useProjection(portfolio?.id, projeteEffectif);
 
   /** Écriture désignée en cliquant un repère du graphique. */
   const [operationVisee, setOperationVisee] = useState<number | null>(null);
@@ -1945,9 +1962,14 @@ function PortfolioPageInner() {
           ne porte que des dates. Ils restent affichés dans la vue Résumé. */}
 
       {/* ══ VUE OBJECTIFS ═══════════════════════════════════════════════════════ */}
-      <div style={{ display: dashView === "objectifs" ? "grid" : "none", height: "100%", padding: "14px 14px 10px",
-        gridTemplateColumns: "1fr 1fr 1fr", gap: 12, overflow: "hidden" }}>
-        <Cadre style={{ padding: "16px 18px", display: "flex", flexDirection: "column", gap: 12 }}>
+      <div style={{ display: dashView === "objectifs" ? "grid" : "none", height: "100%",
+        padding: "14px 14px 10px", gridTemplateColumns: "1fr 1fr 1fr", gap: 12,
+        // ⚠️ La première rangée se dimensionne sur son contenu, les suivantes se
+        // partagent le reste. Sans `auto`, la rangée de cartes recevait un tiers de la
+        // hauteur et ses jauges se faisaient écraser.
+        gridTemplateRows: "auto minmax(0, 1fr)", overflowY: "auto", overflowX: "hidden" }}>
+        <Cadre style={{ gridColumn: "1 / -1", padding: "16px 18px",
+          display: "flex", flexDirection: "column", gap: 12 }}>
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10 }}>
             <SectionLabel>MES OBJECTIFS</SectionLabel>
             {objectifs.donnees && objectifs.donnees.objectifs.length > 0 && (
@@ -2014,6 +2036,20 @@ function PortfolioPageInner() {
             </div>
           </>}
         </Cadre>
+        {/* ⚠️ Sur deux colonnes : la projection porte une courbe, trois mesures et une
+            légende. Dans une colonne de tiers d'écran, la courbe tombait à moins de
+            deux cents pixels de large et ses vingt points devenaient illisibles. */}
+        <Cadre style={{ gridColumn: "span 2", padding: "16px 18px",
+          display: "flex", flexDirection: "column", minHeight: 0 }}>
+          <ProjectionObjectif
+            objectifs={listeObjectifs}
+            choisi={projeteEffectif}
+            onChoisir={setObjectifProjete}
+            projection={projection.projection}
+            etat={projection.etat}
+            onParametres={o => setSaisieObjectif({ mode: "edition", o })} />
+        </Cadre>
+
         <Cadre style={{ padding: "16px 18px", display: "flex", flexDirection: "column" }}>
           <SectionLabel>MEILLEURS CONTRIBUTEURS</SectionLabel>
           <div style={{ display: "flex", flexDirection: "column", gap: 0 }}>
