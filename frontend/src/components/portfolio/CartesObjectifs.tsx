@@ -1,19 +1,27 @@
 "use client";
+import TileCard from "@/components/TileCard";
 import type { Objectif } from "@/lib/objectifs";
 import {
-  echeanceEnClair, ecartAuRythme, euros, libelleCible, montantCible,
+  echeanceEnClair, ecartAuRythme, euros, libelleCible, montantCible, pourcentageLisible,
 } from "@/lib/objectifs";
 import { CLAIR, JETONS, RAYONS } from "@/lib/palette";
 import { FONT, NUM } from "@/lib/typography";
 
 /**
- * La rangée de cartes d'objectifs, comme la maquette la dessine.
+ * La rangée de cartes d'objectifs.
  *
  * ⚠️ **Remplace trois objectifs écrits dans le code.** L'onglet affichait « Retraite
  * 2035 », « Achat immobilier » et « Indépendance financière » avec des cibles choisies
  * au hasard et un montant courant calculé en multipliant la valeur du portefeuille par
  * 0,42 et 0,28. Ici, aucune carte n'existe si l'épargnant n'a pas saisi l'objectif, et
  * chaque chiffre vient du serveur.
+ *
+ * ⚠️ **L'habillage est celui des cartes d'actifs de la vue générale, et non une
+ * imitation.** Même composant `TileCard`, même rayon de 18, même hauteur de 196, même
+ * grain, même bord dégradé. Réécrire cette peau à côté l'aurait fait diverger : c'est
+ * exactement ce qui était arrivé à `Cadre`, recopié trois fois avec trois rayons et trois
+ * liserés différents. La seule différence assumée est la **couleur** : un actif prend celle
+ * de sa marque, un objectif celle que l'épargnant a choisie.
  *
  * ⚠️ **Aucun conseil.** La carte dit où l'on en est et, quand les hypothèses le
  * permettent, si le rythme actuel tient l'échéance. Elle ne dit jamais quoi faire.
@@ -34,14 +42,104 @@ const GLYPHE: Record<Objectif["genre"], string> = {
   plafond_versements: "M4 4h16M12 20V8m0 0-4 4m4-4 4 4",
 };
 
-function Jauge({ part, couleur }: { part: number; couleur: string }) {
+/** Le côté du logement du glyphe, aligné sur celui du logo d'un actif. */
+const COTE_GLYPHE = 30;
+
+/**
+ * Le glyphe du genre, gravé dans la carte.
+ *
+ * ⚠️ **Un creux, pas une pastille posée dessus.** Le logement porte une ombre interne en
+ * haut et un filet clair en bas — l'œil lit une lumière venant du haut, donc une matière
+ * enfoncée. Le tracé reprend le même principe à son échelle : une copie décalée d'un pixel
+ * en blanc translucide passe **sous** le trait coloré, et c'est ce liseré du dessous qui
+ * fait le relief.
+ *
+ * ⚠️ **Deux tracés et non un filtre.** `filter: drop-shadow` aurait donné le même relief,
+ * mais un filtre SVG est rastérisé à la taille de sa boîte : sur une carte que la rangée
+ * redimensionne, le contour devenait mou. Deux `<path>` restent vectoriels à tout
+ * grossissement — et cette application se regarde à fort zoom.
+ */
+function GlypheGrave({ genre, couleur }: { genre: Objectif["genre"]; couleur: string }) {
+  const d = GLYPHE[genre];
   return (
-    <div style={{ height: 5, borderRadius: RAYONS.plein, background: CLAIR.carteCreuse,
-      overflow: "hidden" }}>
-      <div style={{
-        height: "100%", borderRadius: RAYONS.plein, background: couleur,
-        width: `${Math.max(0, Math.min(100, part))}%`, transition: "width 600ms ease",
-      }} />
+    <span aria-hidden="true" style={{
+      width: COTE_GLYPHE, height: COTE_GLYPHE, flexShrink: 0, borderRadius: 9,
+      display: "flex", alignItems: "center", justifyContent: "center",
+      // Le logement : creusé dans la surface de la carte plutôt que posé dessus.
+      background: "rgba(0,0,0,0.22)",
+      boxShadow: [
+        "inset 0 1.5px 2.5px rgba(0,0,0,0.55)",
+        "inset 0 -1px 0 rgba(255,255,255,0.07)",
+        "0 1px 0 rgba(255,255,255,0.06)",
+      ].join(", "),
+    }}>
+      <svg width="17" height="17" viewBox="0 0 24 24" fill="none" strokeWidth={1.8}
+        strokeLinecap="round" strokeLinejoin="round">
+        {/* La lumière du dessous : c'est elle qui creuse. Décalée d'un pixel seulement —
+            au-delà, le tracé se dédouble au lieu de s'enfoncer. */}
+        <path d={d} stroke="rgba(255,255,255,0.30)" transform="translate(0 1)" />
+        {/* Le tracé lui-même. Légèrement transparent : un trait pleinement saturé
+            remonterait à la surface au lieu d'habiter le creux. */}
+        <path d={d} stroke={couleur} opacity={0.92} />
+      </svg>
+    </span>
+  );
+}
+
+/** Combien de barreaux compose la jauge. */
+const SEGMENTS = 34;
+
+/**
+ * L'avancement en barreaux, valeur à gauche et cible à droite.
+ *
+ * ⚠️ **Au moins un barreau allumé dès qu'un euro est placé.** Trois pour cent de
+ * trente-quatre barreaux font 1,02 : arrondi à l'entier inférieur, un objectif entamé
+ * paraîtrait entièrement vide. C'est le même défaut que « 0 % » affiché pour 0,11 %, déjà
+ * corrigé dans `pourcentageLisible` — un avancement réel ne doit pas se lire comme un départ
+ * non pris. On arrondit donc **vers le haut**, sauf à zéro exact.
+ *
+ * ⚠️ **Et jamais jusqu'au bout : le dernier barreau n'est réservé qu'à cent pour cent.**
+ * Arrondir vers le haut sans borne ferait paraître pleine une jauge à 99 %, ce qui est le
+ * symétrique exact du même mensonge.
+ */
+function Jauge({
+  part, couleur, valeur, cible,
+}: {
+  part: number | null;
+  couleur: string;
+  valeur: string;
+  cible: string;
+}) {
+  const p = Math.max(0, Math.min(100, part ?? 0));
+  const allumes = p <= 0 ? 0
+    : p >= 100 ? SEGMENTS
+      : Math.max(1, Math.min(SEGMENTS - 1, Math.ceil((p / 100) * SEGMENTS)));
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
+      <div style={{ display: "flex", alignItems: "baseline",
+        justifyContent: "space-between", gap: 8 }}>
+        <span style={{ ...NUM, fontSize: 12, fontWeight: 700,
+          color: "rgba(255,255,255,0.88)", whiteSpace: "nowrap" }}>
+          {valeur}
+        </span>
+        <span style={{ ...NUM, fontSize: 12, fontWeight: 600,
+          color: "rgba(255,255,255,0.42)", whiteSpace: "nowrap" }}>
+          {cible}
+        </span>
+      </div>
+      <div style={{ display: "flex", gap: 2.5, height: 13, alignItems: "stretch" }}>
+        {Array.from({ length: SEGMENTS }, (_, i) => (
+          <span key={i} style={{
+            flex: 1, borderRadius: 1,
+            background: i < allumes ? couleur : "rgba(255,255,255,0.09)",
+            // Les barreaux allumés s'estompent vers la droite : le dernier marque la
+            // position atteinte au lieu de la faire passer pour un plateau.
+            opacity: i < allumes ? 0.55 + 0.45 * (1 - i / Math.max(1, allumes)) : 1,
+            transition: "background 500ms, opacity 500ms",
+          }} />
+        ))}
+      </div>
     </div>
   );
 }
@@ -52,94 +150,106 @@ function Carte({ o, onModifier }: { o: Objectif; onModifier?: (o: Objectif) => v
   const echeance = echeanceEnClair(o.mois_restants);
 
   return (
-    <div
+    <TileCard
+      ticker={o.id}
+      radius={18}
+      // ⚠️ Zéro, comme sur les cartes d'actifs. Les halos flous de `TileCard` sont peints
+      // depuis la couleur du *ticker*, qui n'existe pas pour un objectif : les couper évite
+      // d'en inventer une, et la teinte vient déjà des lavis d'angle de `colorHex`.
+      glowStrength={0}
+      className="novac-tile"
+      colorHex={couleur}
       onClick={onModifier ? () => onModifier(o) : undefined}
-      style={{
-        display: "flex", flexDirection: "column", gap: 8,
-        // ⚠️ Un peu plus d'air qu'avant : le titre « MES OBJECTIFS » et son bouton, retirés
-        // au-dessus, rendaient une trentaine de pixels à la rangée. Ils reviennent ici
-        // plutôt qu'à un panneau du bas, dont aucun ne les réclamait — et l'onglet tient
-        // toujours en un écran, ce qui était la contrainte de départ.
-        padding: "13px 15px", borderRadius: RAYONS.sm,
-        border: `1px solid ${CLAIR.bord}`, background: CLAIR.carteCreuse,
-        cursor: onModifier ? "pointer" : "default", minWidth: 0,
-      }}>
-      <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-        <span style={{
-          width: 28, height: 28, borderRadius: RAYONS.xs, flexShrink: 0,
-          display: "flex", alignItems: "center", justifyContent: "center",
-          background: couleur + "1E", border: `1px solid ${couleur}33`,
-        }}>
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke={couleur}
-            strokeWidth={1.7} strokeLinecap="round" strokeLinejoin="round"
-            aria-hidden="true">
-            <path d={GLYPHE[o.genre]} />
-          </svg>
-        </span>
-        <span style={{ fontFamily: FONT, fontSize: 12, fontWeight: 600,
-          color: CLAIR.texte, minWidth: 0, overflow: "hidden",
+      containerStyle={{
+        height: 196,
+        // ⚠️ **248 comme borne haute, non comme largeur figée.** C'est la largeur exacte
+        // d'une carte d'actif — mais celles-ci vivent dans un rail qui défile, là où les
+        // objectifs vivent dans une rangée qui doit tenir en un écran. Une largeur figée
+        // renvoyait la tuile « Ajouter » à la ligne dès le quatrième objectif, et l'onglet
+        // recommençait à défiler. Les cartes peuvent donc se resserrer, jamais s'étirer :
+        // à l'aise elles font 248 comme les actifs, à l'étroit elles rétrécissent au lieu
+        // de pousser la rangée.
+        flex: "0 1 248px", minWidth: 186,
+        // C'est `currentColor` que lit le bord dégradé de `.novac-tile` — voir globals.css.
+        // Le poser ici est ce qui donne à chaque carte le bord de sa propre couleur.
+        color: couleur,
+      }}
+      style={{ height: "100%", display: "flex", flexDirection: "column",
+        padding: "14px 15px", boxSizing: "border-box" }}>
+
+      {/* Identité */}
+      <div style={{ display: "flex", alignItems: "center", gap: 9 }}>
+        <GlypheGrave genre={o.genre} couleur={couleur} />
+        <span style={{ fontFamily: FONT, fontSize: 14, fontWeight: 700,
+          color: "rgba(255,255,255,0.94)", minWidth: 0, flex: 1, overflow: "hidden",
           textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
           {o.nom}
         </span>
-        <span style={{ width: 6, height: 6, borderRadius: "50%", background: couleur,
-          flexShrink: 0 }} />
+        <span style={{ width: 7, height: 7, borderRadius: "50%", background: couleur,
+          flexShrink: 0, boxShadow: `0 0 8px ${couleur}` }} />
       </div>
 
+      {/* ⚠️ La cible est **centrée** dans la hauteur restante, non collée sous le nom. À
+          196 pixels — la hauteur d'une carte d'actif, où une courbe occupe le milieu — un
+          bloc aligné en haut laissait un vide franc au centre de la carte, qui se lisait
+          comme un contenu manquant. Un ressort de part et d'autre fait du blanc une
+          respiration voulue. */}
+      <div style={{ flex: 1, minHeight: 0 }} />
+
+      {/* La cible, au corps du cours d'un actif : c'est le chiffre qu'on vient lire. */}
       <div>
-        <div style={{ ...NUM, fontSize: 18, fontWeight: 700, color: CLAIR.texte,
-          lineHeight: 1.15 }}>
+        <div style={{ ...NUM, fontSize: 20, fontWeight: 700, lineHeight: 1.1,
+          color: "rgba(255,255,255,0.94)" }}>
           {montantCible(o)}
         </div>
-        <div style={{ fontFamily: FONT, fontSize: 10, color: CLAIR.texteFaible }}>
+        <div style={{ fontFamily: FONT, fontSize: 11, fontWeight: 550, lineHeight: 1.2,
+          color: "rgba(255,255,255,0.45)", overflow: "hidden", textOverflow: "ellipsis",
+          whiteSpace: "nowrap" }}>
           {libelleCible(o)}
         </div>
       </div>
 
+      <div style={{ flex: 1, minHeight: 0 }} />
+
       {/* ⚠️ Sans avancement, pas de jauge : le serveur rend `null` quand la valeur du
           portefeuille est inconnue — cours indisponibles. Une jauge à zéro se lirait
           comme un objectif intouché, ce qui est faux et découragerait pour rien. */}
-      {o.avancement != null ? (
-        <>
-          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            <div style={{ flex: 1 }}><Jauge part={o.avancement} couleur={couleur} /></div>
-            <span style={{ ...NUM, fontSize: 11, fontWeight: 700, color: couleur }}>
-              {Math.round(o.avancement)} %
-            </span>
-          </div>
-          <div style={{ display: "flex", alignItems: "baseline",
-            justifyContent: "space-between", gap: 8 }}>
-            {/* ⚠️ « versés » pour un plafond : le même « 3 000 € / 150 000 € » se lirait
-                sinon comme un patrimoine, alors que c'est un cumul d'apports. */}
-            <span style={{ ...NUM, fontSize: 10, color: CLAIR.texteFaible }}>
-              {o.montant_actuel != null && o.capital_requis != null
-                ? `${euros(o.montant_actuel)} / ${euros(o.capital_requis)}`
-                  + (o.sur_versements ? " versés" : "")
-                : "—"}
-            </span>
-            <span style={{ fontFamily: FONT, fontSize: 10, color: CLAIR.texteFaible,
-              whiteSpace: "nowrap" }}>
-              {echeance ?? "sans échéance"}
-            </span>
-          </div>
-        </>
+      {o.avancement != null && o.montant_actuel != null && o.capital_requis != null ? (
+        <Jauge part={o.avancement} couleur={couleur}
+          valeur={euros(o.montant_actuel)} cible={euros(o.capital_requis)} />
       ) : (
-        <span style={{ fontFamily: FONT, fontSize: 10, color: CLAIR.texteFaible }}>
+        <span style={{ fontFamily: FONT, fontSize: 10.5,
+          color: "rgba(255,255,255,0.38)" }}>
           Avancement indisponible
         </span>
       )}
 
-      {/* Le constat de rythme, quand les hypothèses le permettent. Jamais une consigne. */}
-      {rythme && (
-        <span style={{
-          alignSelf: "flex-start", fontFamily: FONT, fontSize: 9.5, fontWeight: 600,
-          padding: "2px 7px", borderRadius: RAYONS.xs,
-          color: rythme.tenable ? JETONS.positif : JETONS.attention,
-          background: (rythme.tenable ? JETONS.positif : JETONS.attention) + "1E",
-        }}>
-          {rythme.texte}
+      {/* Le pied : l'avancement, l'échéance, le constat de rythme. Jamais une consigne. */}
+      <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 7,
+        paddingTop: 6, borderTop: "1px solid rgba(255,255,255,0.07)", minWidth: 0 }}>
+        {o.avancement != null && (
+          <span style={{ ...NUM, fontSize: 11, fontWeight: 700, color: couleur,
+            flexShrink: 0 }}>
+            {pourcentageLisible(o.avancement)}
+          </span>
+        )}
+        <span style={{ fontFamily: FONT, fontSize: 9.5, color: "rgba(255,255,255,0.38)",
+          overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+          {echeance ?? "sans échéance"}
         </span>
-      )}
-    </div>
+        {rythme && (
+          <span style={{
+            marginLeft: "auto", flexShrink: 0,
+            fontFamily: FONT, fontSize: 9, fontWeight: 600,
+            padding: "2px 6px", borderRadius: RAYONS.xs,
+            color: rythme.tenable ? JETONS.positif : JETONS.attention,
+            background: (rythme.tenable ? JETONS.positif : JETONS.attention) + "22",
+          }}>
+            {rythme.texte}
+          </span>
+        )}
+      </div>
+    </TileCard>
   );
 }
 
@@ -152,33 +262,41 @@ export default function CartesObjectifs({
 }) {
   return (
     <div style={{
-      display: "grid", gap: 12,
-      // Autant de colonnes que la largeur en autorise, sans jamais descendre sous une
-      // largeur lisible : c'est ce qui fait tenir une carte comme cinq.
-      //
-      // ⚠️ **205 et non 228, et ce chiffre vient d'une mesure.** À 228, quatre colonnes
-      // seulement tenaient dans les 1 134 pixels de la grille : le quatrième objectif
-      // renvoyait la tuile « Ajouter » à la ligne, ajoutant 136 pixels et faisant **défiler
-      // l'onglet** — 923 pixels de contenu pour 645 de hauteur utile. Or tenir en un écran
-      // est la contrainte qui commande toute cette page. Cinq colonnes tiennent à 205, les
-      // cartes gardent 214 pixels de large, et la rangée de la tuile disparaît : c'est plus
-      // de place gagnée que les quelques pixels de largeur cédés.
-      gridTemplateColumns: "repeat(auto-fill, minmax(205px, 1fr))",
+      // ⚠️ **Une rangée en flex et non une grille, et ce choix vient d'une mesure.** Avec
+      // `grid-template-columns: repeat(auto-fill, …)`, toutes les colonnes ont la même
+      // largeur : la tuile « Ajouter » occupait donc une pleine colonne de carte, et le
+      // quatrième objectif la renvoyait à la ligne — 136 pixels de plus, et l'onglet
+      // recommençait à défiler. En flex, elle prend la largeur qu'elle mérite.
+      display: "flex", flexWrap: "wrap", gap: 10, alignItems: "stretch",
     }}>
       {objectifs.map(o => <Carte key={o.id} o={o} onModifier={onModifier} />)}
 
+      {/* ⚠️ **Mince quand la rangée est peuplée, large quand elle est vide.** Ce n'est pas
+          une coquetterie : avec `flex-wrap`, une ligne se remplit d'après la largeur
+          *souhaitée* des éléments, jamais d'après leur largeur réduite. Une tuile de 132
+          pixels débordait donc de trente pixels à quatre objectifs et passait à la ligne
+          entière — 206 pixels de plus, et l'onglet recommençait à défiler. À 56 pixels,
+          quatre cartes de 248 et la tuile tiennent sur une ligne. Sans aucun objectif, la
+          place ne manque pas et la tuile reprend sa taille pleine, avec son texte : c'est
+          alors le seul élément de l'écran, il doit se dire. */}
       {onAjouter && (
         <button type="button" onClick={onAjouter}
+          title="Ajouter un objectif" aria-label="Ajouter un objectif"
           style={{
             display: "flex", flexDirection: "column", alignItems: "center",
-            justifyContent: "center", gap: 5, minHeight: 124, cursor: "pointer",
-            borderRadius: RAYONS.sm, border: `1px dashed ${CLAIR.bord}`,
+            justifyContent: "center", gap: 5, cursor: "pointer",
+            height: 196,
+            flex: objectifs.length === 0 ? "0 0 248px" : "0 0 56px",
+            borderRadius: 18, border: `1px dashed ${CLAIR.bord}`,
             background: "transparent", color: CLAIR.texteFaible, fontFamily: FONT,
+            boxSizing: "border-box",
           }}>
-          <span style={{ fontSize: 20, lineHeight: 1 }}>+</span>
-          <span style={{ fontSize: 11 }}>
-            {objectifs.length === 0 ? "Créer un objectif" : "Ajouter un objectif"}
-          </span>
+          <span style={{ fontSize: 22, lineHeight: 1 }}>+</span>
+          {objectifs.length === 0 && (
+            <span style={{ fontSize: 11, textAlign: "center", padding: "0 10px" }}>
+              Créer un objectif
+            </span>
+          )}
         </button>
       )}
     </div>
