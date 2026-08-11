@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   agregat, alerteRepartition, avertissementValeur, dureeEnClair, echeanceEnClair, ecartAuRythme,
-  phraseSensibilite,
+  phraseSensibilite, phraseVersements,
   euros, libelleCible, moisEnClair, montantCible, observations, pourcent,
   pourcentageLisible, surVersements, type Objectif,
 } from "./objectifs";
@@ -398,11 +398,15 @@ describe("plafond de versements", () => {
     expect(c.some(t => /800 € par mois/.test(t))).toBe(true);
   });
 
-  it("rappelle que les plus-values ne consomment pas le plafond", () => {
-    // ⚠️ Le constat le plus important de l'écran : sans lui, un épargnant dont le PEA vaut
-    // plus que ses versements peut croire qu'il approche de la limite.
-    expect(observations(plafond()).some(t => /plus-values ne consomment pas/.test(t)))
-      .toBe(true);
+  it("ne contient aucune ligne d'explication sans chiffre", () => {
+    // ⚠️ « Les plus-values ne consomment pas ce plafond » a été retirée : c'était une
+    // explication, non un constat — elle ne dépendait d'aucune donnée et se répétait à
+    // l'identique à chaque affichage. Ce test garde la règle : chaque ligne du panneau doit
+    // porter un chiffre, sinon elle est du décor. L'explication vit dans le formulaire, là
+    // où l'on choisit cette sorte d'objectif.
+    for (const t of observations(plafond())) {
+      expect(t, `« ${t} » ne porte aucun chiffre`).toMatch(/\d/);
+    }
   });
 
   it("ne parle jamais de rendement, de médiane ni de pouvoir d'achat", () => {
@@ -589,10 +593,11 @@ describe("phraseSensibilite", () => {
 
 
 describe("virgule décimale des constats", () => {
-  it("écrit le rapport à la cible avec une virgule", () => {
-    // ⚠️ Vu à l'écran : « La cible représente 276.3 fois votre patrimoine actuel » — un
-    // point décimal au milieu d'une interface en français. `toFixed` ne connaît pas la
-    // locale ; ce défaut avait déjà été corrigé sur les taux, il était resté ici.
+  it("n'écrit jamais un point décimal, sur aucune ligne", () => {
+    // ⚠️ **Un filet posé sur tout le panneau, et non sur une ligne.** Il remplace un test qui
+    // ne visait que « La cible représente 276.3 fois… », ligne depuis retirée — et il a
+    // aussitôt attrapé un second cas vivant : « À 2.9 % d'inflation », où le taux était
+    // interpolé tel quel. C'est exactement l'objectif de l'utilisateur qui portait 2,9.
     const o: Objectif = {
       id: "x", nom: "R", genre: "capital", cible: 1_250_000, echeance_annee: 2044,
       age_cible: null, part_affectee: 100, versement_mensuel: 800, taux_attendu: 7.2,
@@ -602,9 +607,58 @@ describe("virgule décimale des constats", () => {
       verse_deja: null, verse_mesure: null, verse_retenu: null, sur_versements: false,
       sensibilites: [],
     };
-    const t = observations(o, 4_524).find(x => x.includes("fois votre patrimoine"));
-    expect(t).toBeDefined();
-    expect(t).not.toMatch(/\d\.\d/);
-    expect(t).toMatch(/\d,\d/);
+    const riche: Objectif = { ...o, inflation: 2.9, taux_attendu: 7.2,
+      valeur_projetee: 373_234, projetee_en_euros_constants: 259_604,
+      sensibilites: [
+        { quoi: "versement", versement: 400, taux: 7.2, mois: 506, ecart_mois: 109 },
+        { quoi: "versement", versement: 1_600, taux: 7.2, mois: 296, ecart_mois: -101 },
+        { quoi: "rendement", versement: 800, taux: 6.2, mois: 434, ecart_mois: 37 },
+      ] };
+    const lignes = observations(riche, 4_524, 373_234);
+    expect(lignes.length).toBeGreaterThan(3);
+    for (const t of lignes) {
+      expect(t, `« ${t} » porte un point décimal`).not.toMatch(/\d\.\d/);
+    }
+    // Et le taux d'inflation est bien là, à la française.
+    expect(lignes.some(t => t.includes("2,9 %"))).toBe(true);
+  });
+});
+
+describe("phraseVersements", () => {
+  const s = (versement: number, ecart: number) =>
+    ({ quoi: "versement" as const, versement, taux: 7.2, mois: 400, ecart_mois: ecart });
+
+  it("réunit les deux variantes en une comparaison", () => {
+    // ⚠️ Deux phrases de forme identique obligeaient le lecteur à faire le rapprochement
+    // lui-même. Réunies, l'encadrement est donné.
+    const t = phraseVersements([s(400, 109), s(1_600, -101)], 800);
+    // ⚠️ **Les montants sont construits par le formateur, jamais recopiés.** `Intl` sépare
+    // les milliers par une espace fine insécable (U+202F), et « à 1 600 € » tapé au clavier
+    // ne correspond pas à « à 1 600 € » produit par `euros`. C'est la **quatrième** fois que
+    // ce piège se referme sur moi dans ce fichier, malgré deux commentaires l'annonçant :
+    // écrire un montant à la main dans une attente est le réflexe à ne plus avoir.
+    expect(t).toContain(`À ${euros(400)} par mois`);
+    expect(t).toContain("elle reculerait de 9 ans 1 mois");
+    expect(t).toContain(`à ${euros(1_600)}`);
+    expect(t).toContain("elle avancerait de 8 ans 5 mois");
+    // Une seule phrase, donc un seul point final.
+    expect((t!.match(/\./g) || []).length).toBe(1);
+  });
+
+  it("retombe sur la phrase unitaire s'il n'y en a qu'une", () => {
+    const t = phraseVersements([s(400, 109)], 800);
+    expect(t).toContain("(la moitié de votre rythme)");
+  });
+
+  it("écarte les variantes sans écart et rend null s'il n'en reste aucune", () => {
+    expect(phraseVersements([s(400, 0), s(1_600, 0)], 800)).toBeNull();
+    expect(phraseVersements([], 800)).toBeNull();
+  });
+
+  it("dit l'inatteignable au milieu d'une comparaison", () => {
+    const t = phraseVersements(
+      [{ ...s(400, 0), mois: null, ecart_mois: null }, s(1_600, -101)], 800);
+    expect(t).toContain("ne serait plus atteignable");
+    expect(t).toContain("avancerait");
   });
 });

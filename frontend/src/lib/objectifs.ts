@@ -351,11 +351,12 @@ function constatsPlafond(o: Objectif): string[] {
     sortie.push("Sans versement mensuel renseigné, aucune date ne peut être calculée.");
   }
 
-  // ⚠️ Le fait qui distingue ce plafond de tous les autres chiffres de l'écran. Sans cette
-  // phrase, un épargnant voyant son PEA valoir plus que ses versements pourrait croire qu'il
-  // approche de la limite, alors que la performance ne l'entame pas.
-  sortie.push("Les plus-values ne consomment pas ce plafond : seuls vos versements le "
-    + "remplissent.");
+  // ⚠️ **« Les plus-values ne consomment pas ce plafond » a été retirée d'ici.** C'était une
+  // explication, non un constat : elle ne dépendait d'aucun chiffre et se répétait à
+  // l'identique à chaque affichage — la définition du bruit sur un panneau qu'on consulte
+  // souvent. Elle n'est pas perdue : le formulaire la donne au moment où l'on choisit cette
+  // sorte d'objectif, c'est-à-dire là où elle s'apprend, et la carte dit « versés » sous son
+  // montant.
 
   // ⚠️ L'écart entre le relevé et les transactions saisies est un signal, pas un détail. Un
   // cumul déclaré très supérieur au net des transactions veut dire qu'il manque des
@@ -406,6 +407,33 @@ export function phraseSensibilite(s: Sensibilite, actuel: number | null): string
   return `À ${euros(s.versement)} par mois${repere}, la cible ${sens}.`;
 }
 
+/**
+ * Les deux variantes de versement, réunies en une phrase comparative.
+ *
+ * ⚠️ **Une ligne et non deux.** « À 400 € par mois, la cible reculerait de 9 ans » suivie de
+ * « À 1 600 € par mois, la cible avancerait de 8 ans » sont deux phrases de même forme, que
+ * le lecteur doit rapprocher lui-même pour en tirer l'encadrement. Réunies, l'encadrement est
+ * donné : on lit l'effet d'un rythme deux fois moindre et deux fois plus fort d'un seul coup.
+ *
+ * Retombe sur la phrase unitaire s'il n'y en a qu'une, et rend `null` s'il n'y en a aucune.
+ */
+export function phraseVersements(
+  liste: Sensibilite[], actuel: number | null,
+): string | null {
+  const utiles = liste.filter(s => s.mois == null || (s.ecart_mois ?? 0) !== 0);
+  if (utiles.length === 0) return null;
+  if (utiles.length === 1) return phraseSensibilite(utiles[0], actuel);
+
+  const [bas, haut] = [...utiles].sort((a, b) => a.versement - b.versement);
+  const partie = (s: Sensibilite): string => {
+    if (s.mois == null) return "elle ne serait plus atteignable";
+    const d = dureeEnClair(Math.abs(s.ecart_mois ?? 0));
+    return (s.ecart_mois ?? 0) > 0 ? `elle reculerait de ${d}` : `elle avancerait de ${d}`;
+  };
+  return `À ${euros(bas.versement)} par mois, ${partie(bas)} ; `
+    + `à ${euros(haut.versement)}, ${partie(haut)}.`;
+}
+
 export function observations(
   o: Objectif, valeurPortefeuille?: number | null,
   medianeProjection?: number | null,
@@ -430,15 +458,10 @@ export function observations(
     sortie.push(`Il manque ${euros(requis - o.montant_actuel)} pour atteindre la cible.`);
   }
 
-  if (requis != null && valeurPortefeuille != null && valeurPortefeuille > 0) {
-    const fois = requis / valeurPortefeuille;
-    // ⚠️ `pourcent` et non `toFixed`, qui rend un **point** décimal : « 276.3 fois » se
-    // lisait à l'écran au milieu d'une interface entièrement en français. Le même défaut que
-    // les taux du serveur interpolés tels quels, déjà corrigé — il était resté ici.
-    sortie.push(fois >= 1.05
-      ? `La cible représente ${pourcent(fois, 1)} fois votre patrimoine actuel.`
-      : `La cible est du même ordre que votre patrimoine actuel.`);
-  }
+  // ⚠️ **« La cible représente 276,3 fois votre patrimoine actuel » a été retirée.** Elle
+  // redisait la première ligne dans une unité moins parlante — un rapport là où l'épargnant
+  // pense en euros manquants — et n'aidait aucune décision. Un panneau tenu à six lignes
+  // utiles vaut mieux qu'un panneau de huit dont deux se répètent.
 
   // Le rythme, comparé à l'échéance : une soustraction de mois, pas une consigne.
   const rythme = ecartAuRythme(o);
@@ -462,7 +485,12 @@ export function observations(
   if (mediane != null && o.inflation != null && o.mois_restants) {
     const constants = mediane / (1 + o.inflation / 100) ** (o.mois_restants / 12);
     if (mediane - constants > 0) {
-      sortie.push(`À ${o.inflation} % d’inflation, ces ${euros(mediane)} `
+      // ⚠️ `pourcent` et non l'interpolation directe : `2.9` s'écrivait « 2.9 % » avec un
+      // point décimal. Trouvé par le test qui interdit `\d\.\d` dans tout constat, écrit en
+      // remplacement d'un test devenu caduc — un cas où le filet a rapporté plus que ce
+      // qu'il remplaçait, et sur un objectif réel de l'utilisateur, dont l'inflation vaut
+      // justement 2,9.
+      sortie.push(`À ${pourcent(o.inflation, 1)} % d’inflation, ces ${euros(mediane)} `
         + `vaudront ${euros(constants)} d’aujourd’hui.`);
     }
   }
@@ -470,7 +498,15 @@ export function observations(
   // ⚠️ **En dernier, et c'est un choix de hiérarchie.** Les constats précédents disent où
   // l'on en est ; ceux-ci disent ce que changerait une autre décision. L'ordre suit celui
   // dans lequel on se pose les questions : d'abord où j'en suis, ensuite quoi si.
-  for (const s of o.sensibilites ?? []) {
+  //
+  // ⚠️ **Les deux variantes de versement tiennent en une phrase.** Séparées, elles donnaient
+  // deux lignes de forme identique — « À 400 € par mois…, À 1 600 € par mois… » — que l'œil
+  // lisait deux fois pour en tirer une comparaison. Réunies, la comparaison est faite.
+  const versements = (o.sensibilites ?? []).filter(s => s.quoi === "versement");
+  const autres = (o.sensibilites ?? []).filter(s => s.quoi !== "versement");
+  const fusion = phraseVersements(versements, o.versement_mensuel);
+  if (fusion) sortie.push(fusion);
+  for (const s of autres) {
     const phrase = phraseSensibilite(s, o.versement_mensuel);
     if (phrase) sortie.push(phrase);
   }
