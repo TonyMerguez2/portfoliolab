@@ -743,38 +743,43 @@ canvas + div {
      largeur de la carte. */
   padding: 3px;
   pointer-events: none;
+  /* ⚠️ **Des gris opaques, et non du blanc translucide.** Premier essai : du blanc
+     de 0,06 à 0,92 d'opacité. Sur un fond noir, un blanc à 0,92 est du blanc pur et
+     un blanc à 0,06 est du noir — le liseré se lisait comme une lueur, pas comme une
+     matière. La référence montre autre chose : une rampe de gris, du gris moyen au
+     presque blanc en passant par le gris foncé, c'est-à-dire du métal poli. Aucun
+     arrêt ne dépasse #D6D3CE, et les deux reflets sont à cent soixante degrés l'un de
+     l'autre comme sur le concept — un en haut à gauche, un en bas à droite. */
   background: conic-gradient(from 205deg at 50% 50%,
-    rgba(255, 255, 255, 0.62) 0deg,
-    rgba(255, 255, 255, 0.10) 34deg,
-    rgba(255, 255, 255, 0.92) 88deg,
-    rgba(255, 255, 255, 0.34) 132deg,
-    rgba(255, 255, 255, 0.06) 186deg,
-    rgba(255, 255, 255, 0.52) 250deg,
-    rgba(255, 255, 255, 0.14) 300deg,
-    rgba(255, 255, 255, 0.62) 360deg);
+    #8E8B87 0deg,
+    #4A4845 42deg,
+    #D6D3CE 92deg,
+    #7C7975 140deg,
+    #35332F 192deg,
+    #A9A6A1 252deg,
+    #55524E 306deg,
+    #8E8B87 360deg);
   -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
   -webkit-mask-composite: xor;
   mask-composite: exclude;
 }
 
-/* Un second anneau, d'un pixel, juste en dedans du premier : c'est lui qui donne
-   l'arête. Sans cette ligne, le liseré épais se lit comme un aplati gris ; avec
-   elle, l'œil voit une tranche de matière et non une bande peinte. */
+/* Un second anneau d'un pixel, juste en dedans du premier : l'ombre qui sépare le
+   métal du fond noir, et qui donne son épaisseur au rebord. Uniquement du noir —
+   ajouter des reflets clairs ici doublait le liseré au lieu de l'épaissir. */
 .novac-verre::after {
   content: '';
   position: absolute;
   z-index: 3;
   inset: 3px;
   box-sizing: border-box;
-  border-radius: 15px;
+  /* 21 = le rayon extérieur (24) moins l'épaisseur de l'anneau (3), pour que les deux
+     restent concentriques. Une valeur approchée décale l'arête dans les angles, là où
+     l'œil la repère le mieux. */
+  border-radius: 21px;
   padding: 1px;
   pointer-events: none;
-  background: conic-gradient(from 205deg at 50% 50%,
-    rgba(0, 0, 0, 0.55) 0deg,
-    rgba(255, 255, 255, 0.16) 88deg,
-    rgba(0, 0, 0, 0.45) 186deg,
-    rgba(255, 255, 255, 0.10) 250deg,
-    rgba(0, 0, 0, 0.55) 360deg);
+  background: rgba(0, 0, 0, 0.55);
   -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
   -webkit-mask-composite: xor;
   mask-composite: exclude;

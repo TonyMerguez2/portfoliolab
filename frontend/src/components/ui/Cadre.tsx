@@ -49,26 +49,16 @@ export function repartir(style?: CSSProperties): { cadre: CSSProperties; carte: 
 }
 
 export default function Cadre({
-  children, style, classeCarte,
+  children, style,
 }: {
   children: ReactNode;
   /** Réparti automatiquement entre les deux couches. */
   style?: CSSProperties;
-  /**
-   * Une classe posée sur la **carte intérieure**.
-   *
-   * ⚠️ Elle existe pour ce qu'un style en ligne ne peut pas exprimer : un pseudo-élément.
-   * Le liseré de verre du panneau d'aide est un anneau dégradé peint par `::before` et
-   * découpé au masque — impossible à écrire dans un objet de style, et hors de question de
-   * dupliquer `Cadre` pour cela. La carte, et non le cadre extérieur : c'est elle qui porte
-   * le bord.
-   */
-  classeCarte?: string;
 }) {
   const { cadre, carte } = repartir(style);
   return (
     <div style={{ ...styleCadreExterieur(), ...cadre }}>
-      <div className={classeCarte} style={{ ...styleCarteInterieure(), ...carte }}>
+      <div style={{ ...styleCarteInterieure(), ...carte }}>
         {children}
       </div>
     </div>

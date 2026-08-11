@@ -1,8 +1,8 @@
 "use client";
 import { useEffect, useState } from "react";
 
-import Cadre from "@/components/ui/Cadre";
 import { observations, type Objectif } from "@/lib/objectifs";
+import { RAYONS } from "@/lib/palette";
 import { FONT } from "@/lib/typography";
 
 /**
@@ -146,18 +146,22 @@ export default function ConstatsObjectif({
   const courant = constats.length > 0 ? constats[index] : null;
 
   return (
-    // ⚠️ **Le cadre commun de la page.** Le ciel remplace le seul fond de la carte
-    // intérieure ; l'anneau extérieur, son voile et les deux rayons concentriques restent
-    // ceux des panneaux voisins. Seul le liseré change : un blanc translucide au lieu du gris
-    // opaque, pour que le bord se lise sur un fond noir sans le trancher.
-    <Cadre classeCarte="novac-verre" style={{
+    // ⚠️ **Une seule couche, et le liseré de verre *remplace* le bord sombre.** Le panneau
+    // passait par `Cadre`, dont l'anneau extérieur foncé et l'intervalle voilé encadraient le
+    // rebord de métal : on voyait un bord sombre, un creux, puis le verre. Le rebord est
+    // maintenant le bord.
+    //
+    // ⚠️ **L'empreinte reste celle des panneaux voisins** : le rayon 24 est celui de leur
+    // anneau extérieur, et la boîte occupe la même place dans la colonne. C'est ce qui
+    // permet de retirer le cadre sans que la rangée se décale.
+    <div className="novac-verre" style={{
       flexShrink: 0,
       display: "flex", flexDirection: "column", gap: 10, minHeight: 0,
       background: `${CIEL}, ${FOND_ESPACE}`,
-      // ⚠️ Pas de bordure : le liseré de verre est peint par `.novac-verre::before`, et une
-      // bordure par-dessus l'aurait doublé d'un trait plat. Le rembourrage compense les
-      // trois pixels que l'anneau occupe, pour que le texte ne vienne pas s'y coller.
-      border: "none",
+      borderRadius: RAYONS.xl,
+      boxSizing: "border-box",
+      // Le rembourrage tient compte des trois pixels du rebord, pour que le texte ne vienne
+      // pas s'y coller.
       padding: "16px 18px",
     }}>
       <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
@@ -212,6 +216,6 @@ export default function ConstatsObjectif({
           Un calcul que vous pouvez refaire. Le choix reste le vôtre.
         </span>
       )}
-    </Cadre>
+    </div>
   );
 }
