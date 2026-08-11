@@ -19,6 +19,12 @@ import { FONT } from "@/lib/typography";
  * puisqu'aucune ne dit quoi faire ; « Insight IA » le serait autrement, puisque rien ici
  * n'est produit par un modèle.
  *
+ * ⚠️ **La mention « un calcul que vous pouvez refaire » a été retirée du panneau**, sur
+ * demande, l'avertissement de non-conseil devant vivre dans les conditions d'utilisation du
+ * site. Ce qui la remplaçait n'était de toute façon pas elle : ce sont le titre — « Aide à la
+ * décision », et non « Recommandations » — et la forme conditionnelle des phrases, tenue par
+ * un test qui échoue sur tout impératif. Ne pas la remettre ici en croyant combler un oubli.
+ *
  * ⚠️ **Une aide à la fois, et non une liste.** Quatre phrases empilées se lisent en diagonale
  * et se valent toutes ; une seule, en grand, se lit. La navigation par points rend le nombre
  * visible sans occuper de place, et laisse l'épargnant parcourir à son rythme. Aucun
@@ -197,17 +203,6 @@ export default function ConstatsObjectif({
           lineHeight: 1.5, fontWeight: 500, color: "rgba(255,255,255,0.94)" }}>
           {courant}
         </p>
-      )}
-
-      {/* ⚠️ **Une invitation plutôt qu'une dénégation**, et au singulier depuis qu'une seule
-          aide s'affiche. La formule précédente — « ce sont des calculs, pas des
-          recommandations » — disait le vrai mais en creux, et sous un titre parlant de
-          décision elle sonnait comme un dégagement de responsabilité. */}
-      {courant != null && (
-        <span style={{ marginTop: "auto", fontFamily: FONT, fontSize: 10,
-          lineHeight: 1.45, color: "rgba(255,255,255,0.52)" }}>
-          Un calcul que vous pouvez refaire. Le choix reste le vôtre.
-        </span>
       )}
     </Cadre>
   );
