@@ -1,11 +1,13 @@
 "use client";
+import { useState } from "react";
+
 import TileCard from "@/components/TileCard";
 import type { Objectif } from "@/lib/objectifs";
 import {
   dureeEnClair, echeanceEnClair, ecartAuRythme, euros, libelleCible, montantCible,
   pourcentageLisible,
 } from "@/lib/objectifs";
-import { CLAIR, JETONS, RAYONS } from "@/lib/palette";
+import { JETONS, RAYONS } from "@/lib/palette";
 import { FONT, NUM } from "@/lib/typography";
 
 /**
@@ -331,6 +333,64 @@ function Carte({ o, onModifier }: { o: Objectif; onModifier?: (o: Objectif) => v
   );
 }
 
+/**
+ * La carte vide qui ferme la rangée, et par laquelle on ajoute un objectif.
+ *
+ * ⚠️ **Une carte de plein format, et non la bande étroite qu'elle était.** Cette bande de
+ * 56 pixels répondait à une contrainte de place : avec `flex-wrap`, une ligne se remplit
+ * d'après la largeur *souhaitée* des éléments et jamais d'après leur largeur réduite, si
+ * bien qu'une tuile large renvoie tout à la ligne dès que la rangée est pleine. Le compromis
+ * a été tranché dans l'autre sens : une carte se lit comme un emplacement libre à remplir,
+ * une bande se lit comme un bouton de barre d'outils.
+ *
+ * ⚠️ **Conséquence assumée, et mesurée** : à partir de quatre objectifs sur une rangée de
+ * 1 134 pixels, cette carte passe à la ligne suivante et l'onglet se met à défiler. C'est le
+ * prix du plein format, et il ne se paie qu'au-delà de quatre objectifs.
+ *
+ * ⚠️ **Discrète, donc aucune peau de tuile.** Pas de `TileCard` ici : ses lavis de couleur
+ * et son liseré dégradé donneraient à un emplacement vide autant de présence qu'à un objectif
+ * réel. Un trait pointillé et un signe suffisent — et le pointillé dit à lui seul « rien
+ * encore ici ».
+ */
+function CarteAjout({ vide, onAjouter }: { vide: boolean; onAjouter: () => void }) {
+  const [survol, setSurvol] = useState(false);
+
+  return (
+    <button type="button" onClick={onAjouter}
+      title="Ajouter un objectif" aria-label="Ajouter un objectif"
+      onMouseEnter={() => setSurvol(true)}
+      onMouseLeave={() => setSurvol(false)}
+      style={{
+        display: "flex", flexDirection: "column", alignItems: "center",
+        justifyContent: "center", gap: 8, cursor: "pointer",
+        // Les dimensions d'une carte d'objectif, au pixel près.
+        height: 196, flex: "0 0 248px",
+        borderRadius: 18, boxSizing: "border-box",
+        border: `1px dashed rgba(255,255,255,${survol ? 0.22 : 0.11})`,
+        background: survol ? "rgba(255,255,255,0.022)" : "transparent",
+        color: "rgba(255,255,255,0.42)", fontFamily: FONT,
+        transition: "border-color 200ms, background 200ms",
+      }}>
+      {/* Un signe tracé plutôt que le caractère « + » : la croix d'une police est calée sur
+          une ligne de base et n'est pas centrée dans sa boîte, ce qui la posait deux pixels
+          haut. Deux segments sont centrés par construction, et leur épaisseur se règle. */}
+      <svg width="30" height="30" viewBox="0 0 24 24" fill="none"
+        stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" aria-hidden="true"
+        style={{ opacity: survol ? 1 : 0.72, transition: "opacity 200ms" }}>
+        <path d="M12 6v12M6 12h12" />
+      </svg>
+
+      {/* ⚠️ Un intitulé au seul écran vide. La demande est « juste un plus », et elle a
+          raison dès qu'une carte voisine montre de quoi il s'agit : le signe se comprend par
+          contagion. Sans aucun objectif, il n'y a rien alentour dont il puisse tenir son
+          sens, et une carte pointillée muette laisserait deviner. */}
+      {vide && (
+        <span style={{ fontSize: 11.5, letterSpacing: "0.01em" }}>Créer un objectif</span>
+      )}
+    </button>
+  );
+}
+
 export default function CartesObjectifs({
   objectifs, onAjouter, onModifier,
 }: {
@@ -349,34 +409,7 @@ export default function CartesObjectifs({
     }}>
       {objectifs.map(o => <Carte key={o.id} o={o} onModifier={onModifier} />)}
 
-      {/* ⚠️ **Mince quand la rangée est peuplée, large quand elle est vide.** Ce n'est pas
-          une coquetterie : avec `flex-wrap`, une ligne se remplit d'après la largeur
-          *souhaitée* des éléments, jamais d'après leur largeur réduite. Une tuile de 132
-          pixels débordait donc de trente pixels à quatre objectifs et passait à la ligne
-          entière — 206 pixels de plus, et l'onglet recommençait à défiler. À 56 pixels,
-          quatre cartes de 248 et la tuile tiennent sur une ligne. Sans aucun objectif, la
-          place ne manque pas et la tuile reprend sa taille pleine, avec son texte : c'est
-          alors le seul élément de l'écran, il doit se dire. */}
-      {onAjouter && (
-        <button type="button" onClick={onAjouter}
-          title="Ajouter un objectif" aria-label="Ajouter un objectif"
-          style={{
-            display: "flex", flexDirection: "column", alignItems: "center",
-            justifyContent: "center", gap: 5, cursor: "pointer",
-            height: 196,
-            flex: objectifs.length === 0 ? "0 0 248px" : "0 0 56px",
-            borderRadius: 18, border: `1px dashed ${CLAIR.bord}`,
-            background: "transparent", color: CLAIR.texteFaible, fontFamily: FONT,
-            boxSizing: "border-box",
-          }}>
-          <span style={{ fontSize: 22, lineHeight: 1 }}>+</span>
-          {objectifs.length === 0 && (
-            <span style={{ fontSize: 11, textAlign: "center", padding: "0 10px" }}>
-              Créer un objectif
-            </span>
-          )}
-        </button>
-      )}
+      {onAjouter && <CarteAjout vide={objectifs.length === 0} onAjouter={onAjouter} />}
     </div>
   );
 }
