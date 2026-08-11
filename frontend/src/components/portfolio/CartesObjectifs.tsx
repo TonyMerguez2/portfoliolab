@@ -2,7 +2,8 @@
 import TileCard from "@/components/TileCard";
 import type { Objectif } from "@/lib/objectifs";
 import {
-  echeanceEnClair, ecartAuRythme, euros, libelleCible, montantCible, pourcentageLisible,
+  dureeEnClair, echeanceEnClair, ecartAuRythme, euros, libelleCible, montantCible,
+  pourcentageLisible,
 } from "@/lib/objectifs";
 import { CLAIR, JETONS, RAYONS } from "@/lib/palette";
 import { FONT, NUM } from "@/lib/typography";
@@ -128,17 +129,34 @@ function Jauge({
           {cible}
         </span>
       </div>
-      <div style={{ display: "flex", gap: 2.5, height: 13, alignItems: "stretch" }}>
-        {Array.from({ length: SEGMENTS }, (_, i) => (
-          <span key={i} style={{
-            flex: 1, borderRadius: 1,
-            background: i < allumes ? couleur : "rgba(255,255,255,0.09)",
-            // Les barreaux allumés s'estompent vers la droite : le dernier marque la
-            // position atteinte au lieu de la faire passer pour un plateau.
-            opacity: i < allumes ? 0.55 + 0.45 * (1 - i / Math.max(1, allumes)) : 1,
-            transition: "background 500ms, opacity 500ms",
-          }} />
-        ))}
+      {/* ⚠️ Les barreaux emplis **dépassent** de deux pixels en haut et en bas. Deux hauteurs
+          plutôt qu'un simple changement de couleur : la partie acquise se distingue alors même
+          à couleur pâlie ou à faible contraste, et la limite se repère sans compter les
+          barreaux. Le conteneur garde la hauteur du plus grand, donc rien ne se déplace quand
+          l'avancement change. */}
+      <div style={{ display: "flex", gap: 2.5, height: 15, alignItems: "center" }}>
+        {Array.from({ length: SEGMENTS }, (_, i) => {
+          const empli = i < allumes;
+          return (
+            <span key={i} style={{
+              flex: 1, borderRadius: 1.5,
+              height: empli ? 15 : 11,
+              // ⚠️ **Le dégradé est ancré à la barre, non au remplissage.** Un barreau donné
+              // garde donc la même teinte que la jauge soit à dix ou à quatre-vingt-dix pour
+              // cent : sa couleur encode sa *position*, ce qui est vérifiable, là où un
+              // dégradé étiré sur la seule part acquise ferait varier les teintes sans qu'aucune
+              // grandeur ne varie.
+              //
+              // ⚠️ `color-mix` et non une concaténation d'alpha : `couleur` peut valoir
+              // « var(--nv-accent) », et `${couleur}80` serait une déclaration invalide
+              // silencieusement ignorée — le défaut qui privait les cartes de leur teinte.
+              background: empli
+                ? `color-mix(in srgb, ${couleur}, white ${(i / SEGMENTS * 30).toFixed(0)}%)`
+                : "rgba(255,255,255,0.09)",
+              transition: "background 500ms, height 300ms",
+            }} />
+          );
+        })}
       </div>
     </div>
   );
@@ -148,6 +166,12 @@ function Carte({ o, onModifier }: { o: Objectif; onModifier?: (o: Objectif) => v
   const couleur = o.couleur || JETONS.accent;
   const rythme = ecartAuRythme(o);
   const echeance = echeanceEnClair(o.mois_restants);
+  // ⚠️ **Le temps restant au rythme actuel, qui est la réponse qu'on vient chercher.** Le
+  // serveur le calcule déjà pour les deux familles d'objectifs : par capitalisation au
+  // rendement attendu pour un capital, par division pour un plafond de versements. La carte
+  // n'affichait que l'échéance *saisie* — donc rien du tout sur un objectif sans date, alors
+  // que la durée était disponible.
+  const reste = dureeEnClair(o.mois_pour_atteindre);
 
   return (
     <TileCard
@@ -185,8 +209,10 @@ function Carte({ o, onModifier }: { o: Objectif; onModifier?: (o: Objectif) => v
           textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
           {o.nom}
         </span>
-        <span style={{ width: 7, height: 7, borderRadius: "50%", background: couleur,
-          flexShrink: 0, boxShadow: `0 0 8px ${couleur}` }} />
+        {/* ⚠️ **Plus de pastille lumineuse ici.** Elle datait d'un temps où la carte était
+            gris uni : le point était alors le seul porteur de la couleur de l'objectif.
+            Depuis que le fond, le liseré et la jauge la portent tous, il ne redit rien — et
+            son halo était le seul élément franchement brillant de la carte. */}
       </div>
 
       {/* ⚠️ La cible est **centrée** dans la hauteur restante, non collée sous le nom. À
@@ -223,6 +249,28 @@ function Carte({ o, onModifier }: { o: Objectif; onModifier?: (o: Objectif) => v
           Avancement indisponible
         </span>
       )}
+
+      {/* ⚠️ Le versement et le temps restant, côte à côte : l'un est la cause de l'autre.
+          Séparés, le lecteur devait ouvrir le formulaire pour savoir à quel rythme la durée
+          affichée correspondait — et une durée sans son rythme n'est pas vérifiable. */}
+      <div style={{ display: "flex", alignItems: "baseline",
+        justifyContent: "space-between", gap: 8, marginTop: 6, minWidth: 0 }}>
+        <span style={{ ...NUM, fontSize: 10.5, color: "rgba(255,255,255,0.52)",
+          whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+          {o.versement_mensuel
+            ? `${euros(o.versement_mensuel)} / mois`
+            : "sans versement"}
+        </span>
+        {/* ⚠️ Une durée absente se dit, plutôt que de laisser un blanc : elle manque toujours
+            pour une raison — pas de versement, ou pas de rendement attendu sur un objectif de
+            capital — et c'est cette raison que l'épargnant doit pouvoir corriger. */}
+        <span style={{ ...NUM, fontSize: 10.5, fontWeight: 700, whiteSpace: "nowrap",
+          color: reste ? "rgba(255,255,255,0.80)" : "rgba(255,255,255,0.38)" }}
+          title={reste ? undefined
+            : "Renseignez un versement mensuel — et un rendement attendu pour un objectif de capital."}>
+          {reste === "atteint" ? "atteint" : reste ? `reste ${reste}` : "durée inconnue"}
+        </span>
+      </div>
 
       {/* Le pied : l'avancement, l'échéance, le constat de rythme. Jamais une consigne. */}
       <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 7,

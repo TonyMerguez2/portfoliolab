@@ -265,6 +265,25 @@ export function agregat(objectifs: Objectif[]): Agregat {
  * une hypothèse par défaut.
  */
 /**
+ * Une durée en clair : « 18 ans 6 mois », « 8 mois », « atteint ».
+ *
+ * ⚠️ **Les années **et** les mois, contrairement à `echeanceEnClair`.** Celle-ci arrondit à
+ * l'année parce qu'elle exprime une échéance lointaine et vague ; celle-ci exprime le temps
+ * qui reste *au rythme actuel*, qui est le résultat d'un calcul et non un horizon choisi.
+ * Arrondir « 18 ans 6 mois » à « 19 ans » y jetterait la moitié de la précision disponible,
+ * et sur un plafond de versements — une simple division — toute la précision.
+ */
+export function dureeEnClair(mois: number | null | undefined): string | null {
+  if (mois == null || !Number.isFinite(mois)) return null;
+  if (mois <= 0) return "atteint";
+  if (mois < 12) return `${mois} mois`;
+  const ans = Math.floor(mois / 12);
+  const reste = mois % 12;
+  const partAns = `${ans} an${ans > 1 ? "s" : ""}`;
+  return reste === 0 ? partAns : `${partAns} ${reste} mois`;
+}
+
+/**
  * Le mois où l'on sera dans `mois` mois, en clair : « mars 2041 ».
  *
  * ⚠️ Le **mois** et pas seulement l'année. Pour un plafond de versements, la réponse est une

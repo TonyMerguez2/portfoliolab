@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
-  agregat, alerteRepartition, avertissementValeur, echeanceEnClair, ecartAuRythme,
+  agregat, alerteRepartition, avertissementValeur, dureeEnClair, echeanceEnClair, ecartAuRythme,
   euros, libelleCible, moisEnClair, montantCible, observations, pourcent,
   pourcentageLisible, surVersements, type Objectif,
 } from "./objectifs";
@@ -466,5 +466,44 @@ describe("moisEnClair", () => {
 
   it("rend le mois courant pour zéro", () => {
     expect(moisEnClair(0, new Date(2026, 7, 11))).toBe("août 2026");
+  });
+});
+
+
+describe("dureeEnClair", () => {
+  it("donne les années et les mois", () => {
+    // ⚠️ Contrairement à `echeanceEnClair`, qui arrondit à l'année. Celle-ci exprime le
+    // résultat d'un calcul — le temps restant au rythme actuel — et arrondir « 18 ans
+    // 6 mois » à « 19 ans » y jetterait la moitié de la précision disponible.
+    expect(dureeEnClair(222)).toBe("18 ans 6 mois");
+    expect(dureeEnClair(182)).toBe("15 ans 2 mois");
+  });
+
+  it("omet les mois quand ils tombent juste", () => {
+    expect(dureeEnClair(24)).toBe("2 ans");
+    expect(dureeEnClair(12)).toBe("1 an");
+  });
+
+  it("reste en mois sous un an", () => {
+    expect(dureeEnClair(8)).toBe("8 mois");
+    expect(dureeEnClair(11)).toBe("11 mois");
+  });
+
+  it("dit « atteint » plutôt que « 0 mois »", () => {
+    expect(dureeEnClair(0)).toBe("atteint");
+    expect(dureeEnClair(-3)).toBe("atteint");
+  });
+
+  it("rend null quand la durée est inconnue", () => {
+    // ⚠️ `null` et non « jamais » : le serveur rend `null` quand aucune durée ne convient —
+    // sans versement, par exemple. La carte doit alors dire ce qui manque, pas trancher.
+    expect(dureeEnClair(null)).toBeNull();
+    expect(dureeEnClair(undefined)).toBeNull();
+    expect(dureeEnClair(Number.NaN)).toBeNull();
+  });
+
+  it("accorde le pluriel des années", () => {
+    expect(dureeEnClair(13)).toBe("1 an 1 mois");
+    expect(dureeEnClair(25)).toBe("2 ans 1 mois");
   });
 });
