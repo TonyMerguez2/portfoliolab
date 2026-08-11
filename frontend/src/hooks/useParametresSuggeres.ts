@@ -24,7 +24,19 @@ export type ParametresSuggeres = {
     debut: string; fin: string; seances: number; couverture: number;
     sans_historique: string[];
   } | null;
-  inflation: { valeur: number; source: string };
+  /**
+   * Deux valeurs, volontairement.
+   *
+   * ⚠️ `valeur` est la **cible** de la BCE, 2 % ; `observee` est le dernier niveau
+   * **constaté** — 2,9 % en juillet 2026 selon Eurostat, 2,5 % hors énergie et
+   * alimentation. Sur vingt-quatre ans, un million d'euros vaut 622 000 € d'aujourd'hui
+   * à 2 % et 504 000 à 2,9 %. N'en montrer qu'une serait trompeur.
+   */
+  inflation: {
+    valeur: number; source: string;
+    observee: number; observee_coeur: number;
+    observee_mois: string; observee_source: string;
+  };
 };
 
 /** Ce que le portefeuille permet de proposer pour préparer un objectif. */

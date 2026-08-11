@@ -213,8 +213,15 @@ export default function FormulaireObjectif({
               )}
             </Champ>
             <Champ etiquette="Rendement attendu (% / an)">
+              {/* ⚠️ **Plus de « 7,2 » en filigrane.** Ce nombre venait de la maquette et de
+                  rien d'autre : aucune donnée ne le soutenait. Un exemple affiché dans un
+                  champ vide se lit comme la réponse attendue — un défaut par défaut, en
+                  plus discret qu'une valeur pré-remplie mais du même ordre. Le champ dit
+                  ce qu'il attend, les mesures en dessous situent l'ordre de grandeur, et
+                  le chiffre reste celui de l'épargnant. */}
               <input value={taux} onChange={e => setTaux(e.target.value)}
-                inputMode="decimal" style={styleSaisie} placeholder="7,2" />
+                inputMode="decimal" style={styleSaisie}
+                placeholder="votre hypothèse" />
               {/* ⚠️ **Aucun bouton pour reprendre ces chiffres, volontairement.** Ils
                   mesurent le passé de votre allocation, sur une période — 2014 à 2026 —
                   qui fut exceptionnelle pour les actions. Un clic les transformerait en
@@ -237,10 +244,29 @@ export default function FormulaireObjectif({
             <Champ etiquette="Inflation estimée (% / an)"
               aide={suggestions
                 ? `Pré-rempli sur la ${suggestions.inflation.source} — une cible publiée, `
-                  + "pas une prévision. Pour lire la projection en euros d’aujourd’hui."
+                  + "pas une prévision, et une banque centrale y ramène l’inflation sur un "
+                  + "horizon long. Sert à lire la projection en euros d’aujourd’hui."
                 : "Pour lire la projection en euros d’aujourd’hui."}>
               <input value={inflation} onChange={e => setInflation(e.target.value)}
                 inputMode="decimal" style={styleSaisie} placeholder="2" />
+              {/* ⚠️ Le niveau **constaté** est proposé à côté de la cible, parce qu'il en
+                  diffère aujourd'hui de près d'un point — et qu'un point d'inflation sur
+                  vingt-quatre ans change de dix-neuf pour cent le pouvoir d'achat projeté.
+                  Cacher l'écart aurait laissé croire que 2 % est le niveau actuel. */}
+              {typeof suggestions?.inflation?.observee === "number" && (
+                <button type="button"
+                  onClick={() => setInflation(String(suggestions.inflation.observee))}
+                  style={{ alignSelf: "flex-start", marginTop: 3, padding: "2px 7px",
+                    borderRadius: RAYONS.xs, cursor: "pointer", background: "transparent",
+                    border: `1px solid ${CLAIR.bord}`, color: CLAIR.accent,
+                    fontFamily: FONT, fontSize: 9.5, fontWeight: 600, textAlign: "left" }}>
+                  reprendre {pourcent(suggestions.inflation.observee, 1)} %, constaté en{" "}
+                  {new Date(suggestions.inflation.observee_mois + "-01T12:00:00")
+                    .toLocaleDateString("fr-FR", { month: "long", year: "numeric" })}
+                  {" "}({pourcent(suggestions.inflation.observee_coeur, 1)} % hors énergie
+                  et alimentation)
+                </button>
+              )}
             </Champ>
             {enRevenu && (
               <Champ etiquette="Taux de retrait (% / an)"

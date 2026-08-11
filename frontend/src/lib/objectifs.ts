@@ -297,7 +297,18 @@ export function pourcentageLisible(part: number): string {
  * formatés correctement. Le défaut est petit et partout à la fois, donc il se corrige à un
  * seul endroit.
  */
-export function pourcent(v: number, decimales = 2): string {
+export function pourcent(v: number | null | undefined, decimales = 2): string {
+  // ⚠️ **Tolérant à l'absence, et ce garde vient d'un écran blanc.** Le formulaire tenait
+  // une réponse d'API antérieure à l'ajout d'un champ ; `pourcent(undefined)` a levé sur
+  // `toLocaleString` et fait tomber **toute la page** derrière une erreur globale. C'est
+  // ce qui arrive à chaque déploiement, quand un client garde en mémoire une réponse de la
+  // version précédente. Un formateur ne doit pas pouvoir emporter une application : il
+  // rend un tiret et laisse le reste s'afficher.
+  //
+  // ⚠️ Et la leçon est plus large : mon type TypeScript **affirmait** que le champ était
+  // un nombre. Un type sur une réponse d'API est une déclaration sur une donnée qu'on ne
+  // maîtrise pas, pas une vérification.
+  if (v == null || !Number.isFinite(v)) return "—";
   return v.toLocaleString("fr-FR", { minimumFractionDigits: 0,
                                      maximumFractionDigits: decimales });
 }

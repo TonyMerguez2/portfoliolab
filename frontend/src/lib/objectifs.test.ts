@@ -325,3 +325,23 @@ describe("pourcent", () => {
     expect(pourcent(18.0839, 1)).toBe("18,1");
   });
 });
+
+describe("pourcent, face à une donnée absente", () => {
+  it("rend un tiret plutôt que de lever", () => {
+    /**
+     * ⚠️ Ce test vient d'un écran blanc. Le formulaire tenait une réponse d'API
+     * antérieure à l'ajout d'un champ ; `pourcent(undefined)` a levé sur
+     * `toLocaleString` et fait tomber toute la page derrière une erreur globale. C'est
+     * ce qui arrive à chaque déploiement, quand un client garde en mémoire une réponse de
+     * la version précédente.
+     */
+    expect(pourcent(undefined)).toBe("—");
+    expect(pourcent(null)).toBe("—");
+    expect(pourcent(NaN)).toBe("—");
+    expect(pourcent(Infinity)).toBe("—");
+  });
+
+  it("continue de formater un nombre valide", () => {
+    expect(pourcent(2.9, 1)).toBe("2,9");
+  });
+});

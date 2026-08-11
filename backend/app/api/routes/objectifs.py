@@ -37,7 +37,8 @@ from app.services.objectifs import (
     mois_pour_atteindre, progression, valeur_projetee,
 )
 from app.services.parametres_objectif import (
-    INFLATION_CIBLE_BCE, annualiser, versement_observe,
+    INFLATION_CIBLE_BCE, INFLATION_RELEVEE_LE, INFLATION_ZONE_EURO,
+    INFLATION_ZONE_EURO_COEUR, annualiser, versement_observe,
 )
 from app.services.projection import projeter
 from app.services.volatilite import JOURS_MINIMAUX, volatilite_mesuree
@@ -443,6 +444,16 @@ async def parametres_suggeres(portfolio_id: str, db: Session = Depends(get_db),
         # « rendement_suggere » aurait invité l'interface à le pré-remplir.
         "rendements_passes": rendements,
         "periode_mesuree": periode,
-        "inflation": {"valeur": INFLATION_CIBLE_BCE,
-                      "source": "cible de la Banque centrale européenne"},
+        # ⚠️ Deux valeurs, et n'en rendre qu'une serait trompeur. La cible est proposée
+        # parce qu'une banque centrale y ramène l'inflation sur un horizon long ; le
+        # relevé est affiché parce qu'il en diffère aujourd'hui de près d'un point, ce qui
+        # change de dix-neuf pour cent le pouvoir d'achat projeté sur vingt-quatre ans.
+        "inflation": {
+            "valeur": INFLATION_CIBLE_BCE,
+            "source": "cible de la Banque centrale européenne",
+            "observee": INFLATION_ZONE_EURO,
+            "observee_coeur": INFLATION_ZONE_EURO_COEUR,
+            "observee_mois": INFLATION_RELEVEE_LE,
+            "observee_source": "estimation rapide d’Eurostat",
+        },
     }

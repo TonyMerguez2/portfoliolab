@@ -13,8 +13,13 @@ pareil serait la faute.**
   Les glisser dans le champ rendrait chaque projection délirante — et l'épargnant y
   croirait *parce que le chiffre vient de ses données*. C'est précisément le mécanisme
   qu'on veut empêcher.
-- L'**inflation** n'est pas mesurable ici, mais une **référence publiée** existe : la
-  cible de la Banque centrale européenne, deux pour cent. Proposée en le disant.
+- L'**inflation** a deux valeurs, et n'en montrer qu'une serait trompeur : la **cible**
+  de la Banque centrale européenne, deux pour cent, et le **dernier relevé**, 2,9 % en
+  juillet 2026. Sur vingt-quatre ans, l'écart n'est pas anodin : un million d'euros vaut
+  622 000 € d'aujourd'hui à 2 %, et 504 000 à 2,9 % — dix-neuf pour cent de différence
+  sur le chiffre qui décide si l'objectif suffit. On propose la cible, parce qu'une
+  banque centrale ramène l'inflation vers elle sur un horizon long, et on affiche le
+  relevé pour que le choix soit éclairé.
 
 Autrement dit : on automatise ce qui s'observe, on documente ce qui s'assume.
 """
@@ -31,6 +36,23 @@ from datetime import date
 #: l'annonce publiquement — « 2 % à moyen terme » — ce qui en fait une référence
 #: vérifiable, à la différence d'un chiffre choisi par ce logiciel.
 INFLATION_CIBLE_BCE = 2.0
+
+#: Le dernier niveau d'inflation **constaté** en zone euro, relevé à la source.
+#:
+#: Estimation rapide d'Eurostat publiée le 31 juillet 2026 pour le mois de juillet :
+#: 2,9 % en glissement annuel, contre 2,8 % en juin ; hors énergie, alimentation, alcool
+#: et tabac, 2,5 %. L'énergie contribuait alors pour dix pour cent.
+#: https://ec.europa.eu/eurostat/web/products-euro-indicators/w/2-31072026-ap
+#:
+#: ⚠️ **Ce relevé vieillit, et il le dit.** `INFLATION_RELEVEE_LE` porte sa date pour que
+#: l'écran puisse annoncer « juillet 2026 » plutôt que de laisser croire à une valeur du
+#: jour. Eurostat publie une estimation rapide par mois — voir `CALENDRIER_MACRO` — et
+#: l'adresse de chaque publication change, ce qui interdit de la suivre sans lire la liste
+#: des communiqués. Tant que ce n'est pas fait, une date affichée vaut mieux qu'une
+#: fraîcheur supposée.
+INFLATION_ZONE_EURO = 2.9
+INFLATION_ZONE_EURO_COEUR = 2.5
+INFLATION_RELEVEE_LE = "2026-07"
 
 #: Au-delà de cette part des versements concentrée sur un seul mois, parler d'un rythme
 #: mensuel n'a plus de sens.

@@ -95,3 +95,19 @@ class TestInflation:
     def test_la_reference_est_la_cible_de_la_bce(self):
         # ⚠️ Une cible de politique monétaire publiée, pas une prévision de ce logiciel.
         assert po.INFLATION_CIBLE_BCE == 2.0
+
+    def test_le_releve_est_distingue_de_la_cible(self):
+        """
+        ⚠️ Deux valeurs, et les confondre serait trompeur. La cible de la BCE vaut 2 % ;
+        l'inflation constatée en zone euro était de 2,9 % en juillet 2026 — 2,5 % hors
+        énergie et alimentation. Sur vingt-quatre ans, un million d'euros vaut 622 000 €
+        d'aujourd'hui à 2 % et 504 000 à 2,9 %.
+        """
+        assert po.INFLATION_CIBLE_BCE == 2.0
+        assert po.INFLATION_ZONE_EURO > po.INFLATION_CIBLE_BCE
+        assert po.INFLATION_ZONE_EURO_COEUR < po.INFLATION_ZONE_EURO
+
+    def test_le_releve_porte_sa_date(self):
+        # ⚠️ Un niveau d'inflation sans date se lit comme la valeur du jour ; celui-ci
+        # vieillit d'un mois à chaque publication d'Eurostat.
+        assert po.INFLATION_RELEVEE_LE.startswith("2026-")
