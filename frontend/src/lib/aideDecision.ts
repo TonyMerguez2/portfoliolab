@@ -449,8 +449,9 @@ function stress(o: Objectif, c: Contexte): Insight | null {
     priorite: pire.ecart_mois! > 60 ? "warning" : "info",
     confiance: conf.valeur, motifs: conf.motifs, hypotheses: hypotheses(o),
     titre: `${pire.libelle} repousserait l’échéance`,
-    description: `${pire.libelle} porterait la date d’atteinte à `
-      + `${moisEnClair(pire.mois!)}, soit ${duree} plus tard qu’au rythme actuel.`,
+    // La seconde phrase reprend le libellé sans son article, pour ne pas le répéter en tête.
+    description: `La date d’atteinte passerait à ${moisEnClair(pire.mois!)}, `
+      + `soit ${duree} plus tard qu’au rythme actuel.`,
     metrique: { libelle: "de retard", valeur: duree ?? "—" },
   };
 }
@@ -644,8 +645,15 @@ const RANG_FAMILLE: Record<FamilleInsight, number> = {
   affectation: 9,
 };
 
-/** Combien d'insights la carte montre. Au-delà, plus rien n'est lu. */
-export const MAXIMUM_AFFICHE = 3;
+/**
+ * Combien d'insights la carte montre.
+ *
+ * ⚠️ Quatre depuis que la somme des parts a cessé de crier au chevauchement sur des données
+ * justes : cette alerte occupait la première place de chaque carte, et les familles utiles
+ * étaient repoussées d'un cran. Quatre points de navigation restent lisibles d'un coup d'œil ;
+ * au-delà, ils deviennent une frise qu'on ne compte plus.
+ */
+export const MAXIMUM_AFFICHE = 4;
 
 /**
  * Les insights d'un objectif, classés et bornés.

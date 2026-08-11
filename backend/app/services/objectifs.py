@@ -401,13 +401,17 @@ def part_du_gain(
 #: cent est l'ordre de grandeur d'une correction ordinaire ; deux points de rendement en moins
 #: est l'écart entre une décennie faste et une décennie banale ; douze mois sans verser est ce
 #: qu'un changement de situation provoque.
+#: ⚠️ Les libellés portent leur **article**, et c'est le serveur qui doit le fournir : lui seul
+#: connaît le genre du mot. L'écran s'en sert comme sujet de phrase — « Un rendement inférieur
+#: de 2 points repousserait l'échéance » — et « Rendement inférieur de 2 points repousserait »
+#: se lisait comme une note de télégramme.
 CHOCS: tuple[tuple[str, str], ...] = (
-    ("rendement_moins_2", "Rendement inférieur de 2 points"),
-    ("rendement_plus_2", "Rendement supérieur de 2 points"),
-    ("baisse_10", "Baisse immédiate de 10 %"),
-    ("baisse_20", "Baisse immédiate de 20 %"),
+    ("rendement_moins_2", "Un rendement inférieur de 2 points"),
+    ("rendement_plus_2", "Un rendement supérieur de 2 points"),
+    ("baisse_10", "Une baisse immédiate de 10 %"),
+    ("baisse_20", "Une baisse immédiate de 20 %"),
     ("pause_12_mois", "Douze mois sans versement"),
-    ("inflation_plus_1", "Inflation supérieure de 1 point"),
+    ("inflation_plus_1", "Une inflation supérieure de 1 point"),
 )
 
 #: Combien de mois durerait l'interruption de versement éprouvée.

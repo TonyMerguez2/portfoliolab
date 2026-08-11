@@ -49,8 +49,9 @@ describe("classement et sélection", () => {
         mois: 190, ecart_mois: -24 }],
     });
     const tous = aideALaDecision(riche, contexte({ sommeDesParts: 200, volatilite: 31 }));
-    expect(tous.length).toBeLessThanOrEqual(MAXIMUM_AFFICHE);
-    expect(tous.length).toBe(3);
+    // ⚠️ Comparé à la constante et non à un littéral : le jour où le nombre change, c'est la
+    // constante qu'on modifie, et ce test doit suivre sans devenir faux.
+    expect(tous.length).toBe(MAXIMUM_AFFICHE);
   });
 
   it("met l’incohérence critique avant un jalon positif", () => {

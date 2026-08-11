@@ -380,3 +380,38 @@ def test_une_reference_hors_de_portee_ne_produit_aucune_variante(client):
     o = r.json()
     assert o["mois_pour_atteindre"] is None
     assert o["sensibilites"] == []
+
+
+def test_un_plafond_ne_compte_pas_dans_la_somme_des_parts(client):
+    """
+    ⚠️ **Une alerte fausse en tête de chaque carte, sur des données justes.**
+
+    Un plafond de versements n'a pas de part affectée : répartir un versement déjà effectué
+    entre deux enveloppes ne veut rien dire, et le formulaire masque le champ. Sa part valant
+    `None`, le repli à cent pour cent la comptait comme un objectif de plein patrimoine. Sur un
+    portefeuille dont les parts font exactement 50 + 30 + 20 = 100, la somme sortait à 200 et
+    l'écran annonçait un chevauchement inexistant.
+
+    ⚠️ L'incohérence était déjà décelable : `agregat`, côté écran, écarte ces mêmes objectifs du
+    total « déjà constitué ». Deux endroits, deux règles, dont une fausse.
+    """
+    pid = _portefeuille(client)
+    for nom, part in (("Retraite", 50.0), ("Appartement", 30.0), ("Rente", 20.0)):
+        r = client.post(f"/api/v1/portfolios/{pid}/objectifs", json={
+            "nom": nom, "genre": "capital", "cible": 100_000.0, "part_affectee": part})
+        assert r.status_code in (200, 201), r.text
+    _creer(client, pid)  # le plafond, sans part
+
+    somme = client.get(f"/api/v1/portfolios/{pid}/objectifs").json()["somme_des_parts"]
+    assert somme == 100.0, f"les parts font 50 + 30 + 20, la somme dit {somme}"
+
+
+def test_la_somme_signale_toujours_un_vrai_chevauchement(client):
+    """Le garde en sens inverse : la correction ne doit pas éteindre l'alerte utile."""
+    pid = _portefeuille(client)
+    for nom in ("Retraite", "Appartement"):
+        client.post(f"/api/v1/portfolios/{pid}/objectifs", json={
+            "nom": nom, "genre": "capital", "cible": 100_000.0, "part_affectee": 100.0})
+    _creer(client, pid)
+    somme = client.get(f"/api/v1/portfolios/{pid}/objectifs").json()["somme_des_parts"]
+    assert somme == 200.0, "deux objectifs à 100 % se chevauchent bel et bien"

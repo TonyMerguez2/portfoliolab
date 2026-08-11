@@ -420,7 +420,20 @@ async def lister(portfolio_id: str, db: Session = Depends(get_db),
     objectifs = (db.query(Objectif)
                  .filter(Objectif.portfolio_id == portfolio_id)
                  .order_by(Objectif.cree_le).all())
-    parts = [o.part_affectee if o.part_affectee is not None else 100.0 for o in objectifs]
+    # ⚠️ **Les plafonds de versements sont exclus de cette somme, et leur inclusion était un
+    # défaut de ma main.** Un plafond n'a pas de part affectée — répartir un versement déjà
+    # effectué entre deux enveloppes ne veut rien dire, et le formulaire masque le champ pour
+    # cette raison. Sa part valant donc `None`, le repli à cent pour cent la comptait comme un
+    # objectif de plein patrimoine : sur un portefeuille dont les parts font exactement
+    # 50 + 30 + 20 = 100, la somme sortait à 200 et l'écran criait au chevauchement. Une alerte
+    # fausse, en tête de chaque carte, sur des données justes.
+    #
+    # ⚠️ L'incohérence était déjà visible ailleurs : `agregat`, côté écran, écarte ces mêmes
+    # objectifs du total « déjà constitué » — les versements sont dans le patrimoine, les
+    # additionner compterait deux fois le même argent. Deux endroits, deux règles, dont une
+    # fausse.
+    parts = [o.part_affectee if o.part_affectee is not None else 100.0
+             for o in objectifs if not se_mesure_sur_les_versements(o.genre)]
     verse = _verse_mesure(p, db)
     return {
         "objectifs": [_en_dict(o, v.valeur, user, verse) for o in objectifs],
