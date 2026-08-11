@@ -1,6 +1,6 @@
 "use client";
 import type { Projection } from "@/hooks/useProjection";
-import { euros } from "@/lib/objectifs";
+import { euros, pourcent } from "@/lib/objectifs";
 import { CLAIR, JETONS, RAYONS } from "@/lib/palette";
 import { FONT, NUM } from "@/lib/typography";
 
@@ -87,7 +87,7 @@ export default function ScenariosObjectif({ projection }: { projection: Projecti
                   {p.taux_implicites[c.centile] != null && (
                     <span style={{ ...NUM, marginLeft: "auto", fontSize: 10.5,
                       fontWeight: 700, color: c.couleur }}>
-                      {p.taux_implicites[c.centile]} %/an
+                      {pourcent(p.taux_implicites[c.centile])} %/an
                     </span>
                   )}
                 </div>

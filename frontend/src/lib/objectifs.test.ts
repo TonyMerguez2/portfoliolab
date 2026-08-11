@@ -2,7 +2,8 @@ import { describe, expect, it } from "vitest";
 
 import {
   agregat, alerteRepartition, avertissementValeur, echeanceEnClair, ecartAuRythme,
-  euros, libelleCible, montantCible, observations, pourcentageLisible, type Objectif,
+  euros, libelleCible, montantCible, observations, pourcent, pourcentageLisible,
+  type Objectif,
 } from "./objectifs";
 
 describe("libelleCible", () => {
@@ -302,5 +303,25 @@ describe("cohérence de la médiane citée", () => {
       .replace(/\s/g, " ");
     expect(t).toContain("373 261 €");
     expect(t).not.toContain("245 000");
+  });
+});
+
+describe("pourcent", () => {
+  it("emploie la virgule décimale", () => {
+    // ⚠️ L'écran affichait « 17.9 % », « 7.47 %/an », « 18.08 % par an » — un point
+    // décimal au milieu d'une interface en français, alors que les montants étaient
+    // déjà formatés correctement.
+    expect(pourcent(17.9)).toBe("17,9");
+    expect(pourcent(7.47)).toBe("7,47");
+  });
+
+  it("n'ajoute pas de décimale inutile", () => {
+    expect(pourcent(7)).toBe("7");
+    expect(pourcent(100, 1)).toBe("100");
+  });
+
+  it("arrondit au nombre de décimales demandé", () => {
+    expect(pourcent(18.0839, 2)).toBe("18,08");
+    expect(pourcent(18.0839, 1)).toBe("18,1");
   });
 });

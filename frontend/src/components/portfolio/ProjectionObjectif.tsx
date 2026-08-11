@@ -3,7 +3,7 @@ import type { Projection } from "@/hooks/useProjection";
 import {
   anneeDuMois, bande, bornes, chemin, echelles, graduations, montantCourt,
 } from "@/lib/courbeProjection";
-import { echeanceEnClair, euros, pourcentageLisible, type Objectif } from "@/lib/objectifs";
+import { echeanceEnClair, euros, pourcent, pourcentageLisible, type Objectif } from "@/lib/objectifs";
 import { useTaille } from "@/lib/useTaille";
 import { CLAIR, JETONS, RAYONS } from "@/lib/palette";
 import { FONT, NUM } from "@/lib/typography";
@@ -206,7 +206,7 @@ export default function ProjectionObjectif({
               <span style={{ fontFamily: FONT, fontSize: 9, lineHeight: 1.5,
                 color: sansDispersion ? JETONS.attention : CLAIR.texteFaible }}>
                 {p.volatilite_source === "mesuree"
-                  ? `Volatilité mesurée sur votre portefeuille : ${p.volatilite} % par an, `
+                  ? `Volatilité mesurée sur votre portefeuille : ${pourcent(p.volatilite!)} % par an, `
                     + `sur ${p.seances_mesurees} séances.`
                   : p.volatilite_source === "echantillon_court"
                     ? `Historique trop court pour mesurer la volatilité `
@@ -293,7 +293,7 @@ export default function ProjectionObjectif({
                     <span style={{ width: 12, height: 2, background: c.couleur }} />
                     {c.libelle}
                     {p.taux_implicites[c.centile] != null && (
-                      <span style={{ ...NUM }}> ({p.taux_implicites[c.centile]} %/an)</span>
+                      <span style={{ ...NUM }}> ({pourcent(p.taux_implicites[c.centile])} %/an)</span>
                     )}
                   </span>
                 ))}
@@ -335,12 +335,12 @@ export default function ProjectionObjectif({
                       ? `${euros(p.objectif.versement_mensuel)} / mois` : null },
                   { titre: "Rendement attendu",
                     valeur: p.objectif.taux_attendu != null
-                      ? `${p.objectif.taux_attendu} % / an` : null },
+                      ? `${pourcent(p.objectif.taux_attendu)} % / an` : null },
                   { titre: "Inflation estimée",
                     valeur: p.objectif.inflation != null
-                      ? `${p.objectif.inflation} % / an` : null },
+                      ? `${pourcent(p.objectif.inflation)} % / an` : null },
                   { titre: "Part du portefeuille",
-                    valeur: `${p.objectif.part_affectee ?? 100} %` },
+                    valeur: `${pourcent(p.objectif.part_affectee ?? 100, 1)} %` },
                 ].map(m => (
                   <div key={m.titre} style={{ display: "flex", flexDirection: "column" }}>
                     <span style={{ fontFamily: FONT, fontSize: 9,

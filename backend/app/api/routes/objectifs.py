@@ -20,6 +20,7 @@ division ; « augmentez à 1 000 € » serait une recommandation d'investisseme
 
 from __future__ import annotations
 
+import logging
 import uuid
 from dataclasses import dataclass
 from datetime import date
@@ -35,9 +36,14 @@ from app.services.objectifs import (
     GENRES, annee_de_l_age, capital_requis, echeance_en_mois, euros_constants,
     mois_pour_atteindre, progression, valeur_projetee,
 )
+from app.services.parametres_objectif import (
+    INFLATION_CIBLE_BCE, annualiser, versement_observe,
+)
 from app.services.projection import projeter
 from app.services.volatilite import JOURS_MINIMAUX, volatilite_mesuree
 from app.utils.positions import compute_positions, fetch_current_prices
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/v1/portfolios", tags=["Objectifs"])
 
@@ -350,4 +356,93 @@ async def projection(portfolio_id: str, objectif_id: str,
         "seances_minimales": JOURS_MINIMAUX,
         "valeur_portefeuille": v.valeur,
         "source_valeur": v.source,
+    }
+
+
+#: Les fenêtres de rendement passé qu'on montre, en années.
+FENETRES_RENDEMENT = (3, 5, 10)
+
+
+@router.get("/{portfolio_id}/objectifs/parametres")
+async def parametres_suggeres(portfolio_id: str, db: Session = Depends(get_db),
+                              user: User = Depends(require_auth)):
+    """
+    Ce que le portefeuille permet de proposer pour préparer un objectif.
+
+    ⚠️ **Trois paramètres, trois statuts, et les confondre serait la faute.**
+
+    - `versement` est une **mesure** des transactions : on le propose, et on dit s'il est
+      trompeur — un apport unique divisé par six mois ressemble à une habitude qui
+      n'existe pas.
+    - `rendements_passes` est **montré, jamais pré-rempli**. Mesuré sur un vrai
+      portefeuille : 17,90 % par an sur trois ans, 14,71 % sur dix. Exact, et décrivant
+      une décennie exceptionnelle. Le glisser dans le champ rendrait chaque projection
+      délirante, et l'épargnant y croirait *parce que le chiffre vient de ses données*.
+    - `inflation` propose la cible publiée de la BCE, en le disant.
+    """
+    p = _portefeuille(portfolio_id, user, db)
+    txs = db.query(Transaction).filter(Transaction.portfolio_id == p.id).all()
+    v = versement_observe(txs)
+
+    # ── Le passé de l'allocation, à titre de repère ───────────────────────────
+    rendements: list[dict] = []
+    periode = None
+    poids = {a["ticker"]: float(a.get("weight") or 0) / 100
+             for a in (p.assets or []) if a.get("ticker")}
+    if poids:
+        try:
+            import numpy as np
+            import yfinance as yf
+            brut = yf.download(list(poids), start="2005-01-01", progress=False,
+                               auto_adjust=True, threads=True)["Close"]
+            if brut is not None and len(brut):
+                if len(poids) == 1:
+                    brut = brut.to_frame(list(poids)[0])
+                # ⚠️ **Les lignes sans historique sont écartées, et l'allocation
+                # renormalisée sur celles qui restent.** Sans cela, l'intersection des
+                # colonnes se vide dès qu'un seul titre n'a pas de cours : mesuré sur un
+                # vrai PEA, PAEJ.PA ne renvoie rien et les trois autres lignes — 90 % de
+                # l'allocation — devenaient inexploitables. Un chiffre sur 90 % de
+                # l'allocation, présenté comme tel, vaut mieux que pas de chiffre.
+                vides = [c for c in brut.columns if brut[c].dropna().empty]
+                sans_historique = sorted(vides)
+                brut = brut.drop(columns=vides).dropna()
+                retenus = [c for c in brut.columns]
+                somme = sum(poids[c] for c in retenus) or 1.0
+                couverture = round(somme * 100, 1)
+                if len(brut) > 260 and retenus:
+                    periode = {"debut": str(brut.index[0].date()),
+                               "fin": str(brut.index[-1].date()),
+                               "seances": int(len(brut)),
+                               "couverture": couverture,
+                               "sans_historique": sans_historique}
+                    quotidiens = np.log(brut / brut.shift(1)).dropna()
+                    # Les poids sont ramenés à cent sur les lignes mesurables : sinon un
+                    # portefeuille couvert à 90 % afficherait un rendement rabaissé de
+                    # dix pour cent sans que rien ne l'explique.
+                    part = np.array([poids[c] / somme for c in retenus])
+                    porte = (quotidiens * part).sum(axis=1).tolist()
+                    for ans in FENETRES_RENDEMENT:
+                        fenetre = porte[-min(len(porte), ans * 252):]
+                        taux = annualiser(fenetre)
+                        if taux is None:
+                            continue
+                        vol = float(np.std(fenetre, ddof=1) * np.sqrt(252) * 100)
+                        rendements.append({"annees": ans, "rendement": taux,
+                                           "volatilite": round(vol, 2)})
+        except Exception as e:                                  # pragma: no cover
+            logger.warning("rendements passés indisponibles (%s)", type(e).__name__)
+
+    return {
+        "versement": None if v is None else {
+            "par_mois": v.par_mois, "net": v.net, "mois": v.mois,
+            "operations": v.operations, "concentration": v.concentration,
+            "trompeur": v.trompeur,
+        },
+        # ⚠️ Rendu sous une clé qui dit ce que c'est. Un champ nommé
+        # « rendement_suggere » aurait invité l'interface à le pré-remplir.
+        "rendements_passes": rendements,
+        "periode_mesuree": periode,
+        "inflation": {"valeur": INFLATION_CIBLE_BCE,
+                      "source": "cible de la Banque centrale européenne"},
     }

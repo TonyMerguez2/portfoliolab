@@ -40,6 +40,7 @@ import ImagePortefeuille from "@/components/portfolio/ImagePortefeuille";
 import { useAnalyseEvenements } from "@/hooks/useAnalyseEvenements";
 import { useImpactTitre } from "@/hooks/useImpactTitre";
 import { useObjectifs, type Saisie } from "@/hooks/useObjectifs";
+import { useParametresSuggeres } from "@/hooks/useParametresSuggeres";
 import { useProjection } from "@/hooks/useProjection";
 import { alerteRepartition, avertissementValeur, type Objectif } from "@/lib/objectifs";
 import { useTransparence } from "@/hooks/useTransparence";
@@ -525,6 +526,8 @@ function PortfolioPageInner() {
       ? objectifProjete
       : (listeObjectifs[0]?.id ?? null);
   const projection = useProjection(portfolio?.id, projeteEffectif);
+  /** Ce que le portefeuille permet de proposer au formulaire — mesures seulement. */
+  const suggestions = useParametresSuggeres(portfolio?.id);
 
   /** Écriture désignée en cliquant un repère du graphique. */
   const [operationVisee, setOperationVisee] = useState<number | null>(null);
@@ -2100,6 +2103,7 @@ function PortfolioPageInner() {
         <FormulaireObjectif
           initial={saisieObjectif.mode === "edition" ? saisieObjectif.o : null}
           anneeNaissanceConnue={objectifs.donnees.annee_naissance_connue}
+          suggestions={suggestions}
           erreur={objectifs.erreurEcriture}
           onFermer={() => setSaisieObjectif(null)}
           onEnregistrer={async (saisie: Saisie) => {

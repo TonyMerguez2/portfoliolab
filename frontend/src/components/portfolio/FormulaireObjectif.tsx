@@ -1,8 +1,9 @@
 "use client";
 import { useState } from "react";
 
+import type { ParametresSuggeres } from "@/hooks/useParametresSuggeres";
 import type { Saisie } from "@/hooks/useObjectifs";
-import type { Genre, Objectif } from "@/lib/objectifs";
+import { pourcent, type Genre, type Objectif } from "@/lib/objectifs";
 import { CLAIR, JETONS, RAYONS } from "@/lib/palette";
 import { FONT, NUM } from "@/lib/typography";
 
@@ -57,7 +58,8 @@ const styleSaisie: React.CSSProperties = {
 const nombre = (v: string): number | null => (v.trim() === "" ? null : Number(v));
 
 export default function FormulaireObjectif({
-  initial, anneeNaissanceConnue, erreur, onEnregistrer, onSupprimer, onFermer,
+  initial, anneeNaissanceConnue, suggestions, erreur,
+  onEnregistrer, onSupprimer, onFermer,
 }: {
   /** L'objectif à modifier, ou rien pour une création. */
   initial?: Objectif | null;
@@ -67,6 +69,16 @@ export default function FormulaireObjectif({
    * saisie que laisser une carte muette.
    */
   anneeNaissanceConnue: boolean;
+  /**
+   * Ce que le portefeuille permet de proposer.
+   *
+   * ⚠️ **Le versement est repris d'un clic, le rendement ne l'est jamais.** Le premier est
+   * une mesure des transactions ; le second serait une mesure du passé présentée comme
+   * une attente. Sur un vrai portefeuille, la dernière décennie donne 13,17 % par an :
+   * le pré-remplir rendrait la projection délirante, et l'épargnant y croirait parce que
+   * le chiffre vient de ses propres données. On le montre, il choisit.
+   */
+  suggestions?: ParametresSuggeres | null;
   erreur?: string | null;
   onEnregistrer: (s: Saisie) => void;
   onSupprimer?: () => void;
@@ -85,7 +97,8 @@ export default function FormulaireObjectif({
   const [taux, setTaux] = useState(
     initial?.taux_attendu != null ? String(initial.taux_attendu) : "");
   const [inflation, setInflation] = useState(
-    initial?.inflation != null ? String(initial.inflation) : "");
+    initial?.inflation != null ? String(initial.inflation)
+      : String(suggestions?.inflation.valeur ?? ""));
   const [retrait, setRetrait] = useState(
     initial?.taux_retrait != null ? String(initial.taux_retrait) : "4");
   const [couleur, setCouleur] = useState(initial?.couleur ?? JETONS.accent);
@@ -177,16 +190,55 @@ export default function FormulaireObjectif({
           </span>
 
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
-            <Champ etiquette="Versement mensuel (€)">
+            <Champ etiquette="Versement mensuel (€)"
+              aide={suggestions?.versement?.trompeur
+                ? `Vos apports sont concentrés (${suggestions.versement.concentration} % sur un seul mois) : `
+                  + "ce rythme ne décrit pas une habitude."
+                : undefined}>
               <input value={versement} onChange={e => setVersement(e.target.value)}
                 inputMode="decimal" style={styleSaisie} placeholder="800" />
+              {/* ⚠️ Une mesure, donc reprise d'un clic — mais jamais glissée d'office :
+                  c'est l'épargnant qui décide de ce qu'il versera demain, pas ce qu'il a
+                  versé hier. */}
+              {suggestions?.versement?.par_mois != null && (
+                <button type="button"
+                  onClick={() => setVersement(String(Math.round(suggestions.versement!.par_mois!)))}
+                  style={{ alignSelf: "flex-start", marginTop: 3, padding: "2px 7px",
+                    borderRadius: RAYONS.xs, cursor: "pointer", background: "transparent",
+                    border: `1px solid ${CLAIR.bord}`, color: CLAIR.accent,
+                    fontFamily: FONT, fontSize: 9.5, fontWeight: 600 }}>
+                  reprendre {Math.round(suggestions.versement.par_mois)} €/mois observés
+                  sur {suggestions.versement.mois} mois
+                </button>
+              )}
             </Champ>
             <Champ etiquette="Rendement attendu (% / an)">
               <input value={taux} onChange={e => setTaux(e.target.value)}
                 inputMode="decimal" style={styleSaisie} placeholder="7,2" />
+              {/* ⚠️ **Aucun bouton pour reprendre ces chiffres, volontairement.** Ils
+                  mesurent le passé de votre allocation, sur une période — 2014 à 2026 —
+                  qui fut exceptionnelle pour les actions. Un clic les transformerait en
+                  attente, et la projection en promesse. Ils sont là pour situer un ordre
+                  de grandeur, pas pour être recopiés. */}
+              {suggestions && suggestions.rendements_passes.length > 0 && (
+                <span style={{ marginTop: 3, fontFamily: FONT, fontSize: 9,
+                  lineHeight: 1.45, color: CLAIR.texteFaible }}>
+                  Votre allocation a rendu{" "}
+                  {suggestions.rendements_passes
+                    .map(r => `${pourcent(r.rendement, 1)} % sur ${r.annees} ans`).join(", ")}.
+                  {suggestions.periode_mesuree
+                    && suggestions.periode_mesuree.couverture < 99.5
+                    && ` Mesuré sur ${pourcent(suggestions.periode_mesuree.couverture, 1)} % de l’allocation.`}
+                  {" "}Ce sont des mesures du passé, sur une période favorable aux actions —
+                  pas une prévision.
+                </span>
+              )}
             </Champ>
             <Champ etiquette="Inflation estimée (% / an)"
-              aide="Pour lire la projection en euros d’aujourd’hui.">
+              aide={suggestions
+                ? `Pré-rempli sur la ${suggestions.inflation.source} — une cible publiée, `
+                  + "pas une prévision. Pour lire la projection en euros d’aujourd’hui."
+                : "Pour lire la projection en euros d’aujourd’hui."}>
               <input value={inflation} onChange={e => setInflation(e.target.value)}
                 inputMode="decimal" style={styleSaisie} placeholder="2" />
             </Champ>

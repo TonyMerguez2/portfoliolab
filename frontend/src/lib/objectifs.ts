@@ -287,3 +287,17 @@ export function pourcentageLisible(part: number): string {
   if (part >= 99.5 && part < 100) return "> 99 %";
   return `${Math.round(part)} %`;
 }
+
+/**
+ * Un taux en pourcentage, à la française.
+ *
+ * ⚠️ **Virgule décimale.** Les taux venaient du serveur en nombres et étaient interpolés
+ * tels quels : l'écran affichait « 17.9 % », « 7.47 %/an », « 18.08 % par an » — un point
+ * décimal au milieu d'une interface entièrement en français, où les montants sont pourtant
+ * formatés correctement. Le défaut est petit et partout à la fois, donc il se corrige à un
+ * seul endroit.
+ */
+export function pourcent(v: number, decimales = 2): string {
+  return v.toLocaleString("fr-FR", { minimumFractionDigits: 0,
+                                     maximumFractionDigits: decimales });
+}
