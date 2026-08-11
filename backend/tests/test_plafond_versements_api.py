@@ -267,17 +267,23 @@ def test_les_plafonds_connus_sont_proposes(client):
 
 # ── Les sensibilités : ce que changerait une autre décision ──────────────────
 
-def test_un_plafond_n_a_pas_de_sensibilites(client):
+def test_un_plafond_ne_recoit_que_la_variante_marginale(client):
     """
-    ⚠️ Le panneau « Selon le rythme de versement » montre déjà ces trois dates pour un
-    plafond. Les répéter dans les constats donnerait deux endroits pour la même chose, qui
-    finiraient par se contredire — c'est le défaut de la médiane affichée deux fois, déjà
-    corrigé une fois dans ce projet.
+    ⚠️ **Une seule sensibilité pour un plafond, et c'est un choix de non-duplication.** Le
+    panneau « Selon le rythme de versement » montre déjà la moitié, le rythme et le double ;
+    les répéter ici donnerait deux endroits pour la même chose, qui finiraient par se
+    contredire — le défaut de la médiane affichée deux fois, déjà corrigé une fois dans ce
+    projet. Le pas de cent euros, lui, ne figure nulle part ailleurs.
     """
     pid = _portefeuille(client)
     _versements(client, pid, [(2025, 1)], 1_000.0)
     o = _creer(client, pid, echeance_annee=2040)
-    assert o["sensibilites"] == []
+    s = o["sensibilites"]
+    assert len(s) == 1, s
+    assert s[0]["quoi"] == "versement_marginal"
+    assert s[0]["versement"] == 900.0, "800 € versés + 100 €"
+    # Verser cent euros de plus rapproche le plafond : l'écart est négatif.
+    assert s[0]["ecart_mois"] < 0
 
 
 def test_un_capital_recoit_ses_sensibilites(client):
@@ -298,9 +304,13 @@ def test_un_capital_recoit_ses_sensibilites(client):
     assert r.status_code in (200, 201), r.text
     o = r.json()
     s = o["sensibilites"]
-    assert len(s) == 3, s
+    assert len(s) == 4, s
 
-    moitie, double, rendement = s
+    marginal, moitie, double, rendement = s
+    # ⚠️ La variante marginale d'abord : c'est la seule qui corresponde à une décision qu'on
+    # prend réellement, et l'interface la met en tête du panneau.
+    assert marginal["quoi"] == "versement_marginal" and marginal["versement"] == 900.0
+    assert marginal["ecart_mois"] < 0, "cent euros de plus doivent rapprocher la cible"
     assert moitie["quoi"] == "versement" and moitie["versement"] == 400.0
     assert double["quoi"] == "versement" and double["versement"] == 1_600.0
     assert rendement["quoi"] == "rendement" and rendement["taux"] == 6.0

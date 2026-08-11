@@ -83,7 +83,11 @@ export type Objectif = {
  * toute la différence, et un test le garde.
  */
 export type Sensibilite = {
-  quoi: "versement" | "rendement";
+  /**
+   * `versement_marginal` est le pas de cent euros — la seule variante qui corresponde à une
+   * décision qu'on prend réellement, et celle que le panneau met en tête.
+   */
+  quoi: "versement" | "versement_marginal" | "rendement";
   versement: number;
   taux: number;
   /** Les mois nécessaires dans ce cas, ou `null` si la cible devient hors de portée. */
@@ -481,7 +485,17 @@ export function observations(
   const sortie: string[] = [];
   const requis = o.capital_requis;
 
-  // ── 1. Le rythme qu'exigerait l'échéance ──────────────────────────────────
+  // ── 1. Ce que vaut un pas de cent euros, en années ────────────────────────
+  //
+  // ⚠️ **La ligne la plus actionnable du panneau, et c'est pourquoi elle passe en premier.**
+  // Elle donne un taux de change entre des euros et des années : personne ne « double ses
+  // versements » d'un trait de plume, tout le monde peut mettre cent euros de plus. Les
+  // variantes par moitié et par double restent utiles pour situer une amplitude, pas pour
+  // décider.
+  const marginal = phraseMarginale(o);
+  if (marginal) sortie.push(marginal);
+
+  // ── 2. Le rythme qu'exigerait l'échéance ──────────────────────────────────
   //
   // La ligne la plus utile du panneau, et la seule à répondre « pour y être à la date
   // voulue, quel rythme ? ». Elle est en tête parce que c'est la question qu'on se pose
@@ -499,7 +513,7 @@ export function observations(
       + `par mois${compare}.`);
   }
 
-  // ── 2. Ce qu'il manquerait à l'échéance ───────────────────────────────────
+  // ── 3. Ce qu'il manquerait à l'échéance ───────────────────────────────────
   //
   // Une conséquence, non une mesure : l'écran montre la médiane et la cible, pas leur
   // différence à la date choisie.
@@ -510,7 +524,7 @@ export function observations(
       : `À l’échéance, la trajectoire médiane reste ${euros(-ecart)} sous la cible.`);
   }
 
-  // ── 3. Lequel des deux leviers pèse le plus ───────────────────────────────
+  // ── 4. Lequel des deux leviers pèse le plus ───────────────────────────────
   const levier = phraseLevier(o);
   if (levier) sortie.push(levier);
 
@@ -547,6 +561,40 @@ export function observations(
 }
 
 /**
+ * Ce que cent euros de plus par mois déplacent, en années.
+ *
+ * ⚠️ **Le taux de change entre des euros et des années**, et c'est exactement l'insight qui
+ * manquait. Les variantes par moitié et par double situent une amplitude ; celle-ci chiffre
+ * une décision. « Cent euros de plus par mois rapprocheraient la cible de trois ans » se
+ * compare à ce qu'on est prêt à mettre de côté, ce que « doubler vos versements » ne permet
+ * pas.
+ *
+ * ⚠️ **Aucun verbe à la deuxième personne.** « Cent euros de plus par mois » est un fait
+ * conditionnel ; « augmentez de cent euros » serait une consigne. La formule évite le verbe
+ * d'action plutôt que de le mettre au conditionnel, ce qui la met hors de portée de la dérive
+ * — on ne peut pas glisser vers l'impératif un texte qui n'a pas de sujet à qui l'adresser.
+ */
+export function phraseMarginale(o: Objectif): string | null {
+  const s = (o.sensibilites ?? []).find(x => x.quoi === "versement_marginal");
+  if (!s) return null;
+  const rythme = o.versement_mensuel;
+  const pas = rythme != null ? s.versement - rythme : null;
+  if (pas == null || pas <= 0) return null;
+
+  if (s.mois == null) {
+    // Un pas de cent euros qui ne suffit toujours pas : le dire vaut mieux que se taire.
+    return `${euros(pas)} de plus par mois ne suffiraient pas à rendre la cible atteignable.`;
+  }
+  if (s.ecart_mois == null || s.ecart_mois === 0) return null;
+  const duree = dureeEnClair(Math.abs(s.ecart_mois));
+  if (!duree) return null;
+  const sens = s.ecart_mois < 0 ? "rapprocheraient" : "repousseraient";
+  const quoi = o.sur_versements ? "le plafond" : "la cible";
+  return `${euros(pas)} de plus par mois — ${euros(s.versement)} au lieu de `
+    + `${euros(rythme!)} — ${sens} ${quoi} de ${duree}.`;
+}
+
+/**
  * Lequel du rythme ou du rendement pèse le plus sur la date d'atteinte.
  *
  * ⚠️ **C'est une interprétation, et c'est ce qui manquait au panneau.** Les deux
@@ -561,6 +609,8 @@ function actuelSuperieur(s: Sensibilite, o: Objectif): boolean {
 }
 
 export function phraseLevier(o: Objectif): string | null {
+  // ⚠️ La variante marginale est écartée d'ici : elle a sa propre phrase, en tête, et la
+  // reprendre dans le classement la citerait deux fois.
   const versements = (o.sensibilites ?? [])
     .filter(s => s.quoi === "versement" && s.mois != null && s.ecart_mois != null);
   const rendement = (o.sensibilites ?? [])

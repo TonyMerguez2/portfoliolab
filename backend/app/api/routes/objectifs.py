@@ -90,6 +90,13 @@ BORNES = {
 }
 
 
+#: Le pas de la variante marginale : cent euros de plus par mois.
+#:
+#: ⚠️ **Une somme humaine, non une proportion.** C'est ce qui distingue « cent euros de plus
+#: rapprocheraient la cible de trois ans » — une décision qu'on peut prendre — de « doubler
+#: vos versements », qui n'en est pas une. La valeur est fixe pour cette raison même.
+PAS_MARGINAL = 100.0
+
 def _valider(e: ObjectifEntree) -> None:
     if e.genre not in GENRES:
         raise HTTPException(422, f"genre doit valoir l'un de {', '.join(GENRES)}")
@@ -278,17 +285,36 @@ def _en_dict(o: Objectif, valeur: float | None, user: User,
     # finissent par se contredire — c'est le défaut de la médiane affichée deux fois, déjà
     # corrigé.
     sensibilites: list[dict] = []
-    if (not sur_versements and prog is not None and requis
+    rythme = o.versement_mensuel or 0.0
+    if atteinte_mois is not None and sur_versements and rythme > 0:
+        # ⚠️ **Pour un plafond, seule la variante marginale est calculée.** Le panneau « Selon
+        # le rythme de versement » montre déjà la moitié, le rythme et le double ; le pas de
+        # cent euros n'y figure pas, donc il n'est pas un doublon.
+        m = mois_pour_verser(o.cible, verse, rythme + PAS_MARGINAL)
+        sensibilites.append({
+            "quoi": "versement_marginal", "versement": rythme + PAS_MARGINAL, "taux": None,
+            "mois": m, "ecart_mois": (m - atteinte_mois) if m is not None else None,
+        })
+    elif (not sur_versements and prog is not None and requis
             and o.taux_attendu is not None and atteinte_mois is not None):
-        verse = o.versement_mensuel or 0.0
         essais: list[tuple[str, float, float]] = []
-        if verse > 0:
+        if rythme > 0:
+            # ⚠️ **Cent euros de plus, en tête.** C'est le seul écart qui corresponde à une
+            # décision qu'on prend réellement : personne ne « double ses versements » d'un
+            # trait de plume, tout le monde peut mettre cent euros de plus. La variante dit
+            # alors le taux de change entre des euros et des années.
+            #
+            # ⚠️ Un pas **fixe** et non une proportion, à dessein : une proportion redonne un
+            # écart abstrait — « dix pour cent de plus » — quand c'est justement le montant
+            # concret qui rend la comparaison utile. Sur un rythme très élevé l'effet
+            # paraîtra faible, ce qui est une information juste.
+            essais.append(("versement_marginal", rythme + PAS_MARGINAL, o.taux_attendu))
             # La moitié et le double : deux écarts que l'épargnant reconnaît sans calculer.
-            essais.append(("versement", round(verse / 2, 2), o.taux_attendu))
-            essais.append(("versement", round(verse * 2, 2), o.taux_attendu))
+            essais.append(("versement", round(rythme / 2, 2), o.taux_attendu))
+            essais.append(("versement", round(rythme * 2, 2), o.taux_attendu))
         # Un point de rendement en moins : l'hypothèse la plus fragile de la projection, et
         # celle dont l'épargnant mesure le moins l'effet.
-        essais.append(("rendement", verse, round(o.taux_attendu - 1.0, 2)))
+        essais.append(("rendement", rythme, round(o.taux_attendu - 1.0, 2)))
         for quoi, v, taux in essais:
             m = mois_pour_atteindre(prog.actuel, v, taux, requis)
             sensibilites.append({

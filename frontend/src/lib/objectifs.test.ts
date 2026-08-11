@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   agregat, alerteRepartition, avertissementValeur, dureeEnClair, echeanceEnClair, ecartAuRythme,
-  phraseSensibilite, phraseVersements,
+  phraseMarginale, phraseSensibilite, phraseVersements,
   euros, libelleCible, moisEnClair, montantCible, observations, pourcent,
   pourcentageLisible, surVersements, type Objectif,
 } from "./objectifs";
@@ -207,18 +207,27 @@ describe("observations", () => {
   };
 
   const riche: Objectif = { ...base, versement_requis: 2_782, sensibilites: [
+    { quoi: "versement_marginal", versement: 900, taux: 7.2, mois: 219, ecart_mois: -21 },
     { quoi: "versement", versement: 400, taux: 7.2, mois: 349, ecart_mois: 109 },
     { quoi: "versement", versement: 1_600, taux: 7.2, mois: 139, ecart_mois: -101 },
     { quoi: "rendement", versement: 800, taux: 6.2, mois: 277, ecart_mois: 37 },
   ] };
 
-  it("met en tête le rythme qu'exigerait l'échéance", () => {
-    // ⚠️ La seule ligne qui répond « pour y être à la date voulue, quel rythme ? ». Tout le
-    // reste de l'écran répond à la question opposée, d'où sa place en tête.
+  it("met en tête ce que valent cent euros de plus", () => {
+    // ⚠️ **Le taux de change entre des euros et des années.** C'est la ligne la plus
+    // actionnable du panneau : personne ne double ses versements d'un trait de plume, tout le
+    // monde peut mettre cent euros de plus. D'où sa première place.
     const obs = observations(riche, 100_000);
-    expect(obs[0]).toContain("Tenir 2044 demanderait");
-    expect(obs[0]).toContain(euros(2_782));
-    expect(obs[0]).toContain("3,5 fois votre rythme actuel");
+    expect(obs[0]).toContain(`${euros(100)} de plus par mois`);
+    expect(obs[0]).toContain(`${euros(900)} au lieu de ${euros(800)}`);
+    expect(obs[0]).toContain("rapprocheraient la cible de 1 an 9 mois");
+  });
+
+  it("dit ensuite le rythme qu'exigerait l'échéance", () => {
+    const obs = observations(riche, 100_000);
+    expect(obs[1]).toContain("Tenir 2044 demanderait");
+    expect(obs[1]).toContain(euros(2_782));
+    expect(obs[1]).toContain("3,5 fois votre rythme actuel");
   });
 
   it("ne redit pas ce que la carte affiche déjà", () => {
@@ -242,10 +251,19 @@ describe("observations", () => {
     expect(t).toContain("un point de rendement de 3 ans 1 mois");
   });
 
-  it("tient en trois lignes pour un objectif de capital", () => {
+  it("tient en quatre lignes au plus pour un objectif de capital", () => {
     // ⚠️ Le nombre n'est pas une contrainte de place : au-delà, plus rien n'est lu, et une
-    // ligne de trop dévalue les autres.
-    expect(observations(riche, 100_000)).toHaveLength(3);
+    // ligne de trop dévalue les autres. Quatre questions distinctes — ce que valent cent
+    // euros, ce qu'exigerait l'échéance, ce qu'il manquerait à cette date, quel levier
+    // commande — et pas une de plus.
+    expect(observations(riche, 100_000)).toHaveLength(4);
+  });
+
+  it("ne cite pas deux fois la variante marginale", () => {
+    // ⚠️ Elle a sa propre phrase en tête ; la reprendre dans le classement des leviers la
+    // ferait apparaître deux fois sous deux formes.
+    const lignes = observations(riche, 100_000);
+    expect(lignes.filter(t => t.includes(euros(900))).length).toBe(1);
   });
 
   it("chaque ligne porte un chiffre", () => {
@@ -757,5 +775,61 @@ describe("phraseVersements", () => {
       [{ ...s(400, 0), mois: null, ecart_mois: null }, s(1_600, -101)], 800);
     expect(t).toContain("ne serait plus atteignable");
     expect(t).toContain("avancerait");
+  });
+});
+
+
+describe("phraseMarginale", () => {
+  const base = (kw: Partial<Objectif> = {}): Objectif => ({
+    id: "x", nom: "R", genre: "capital", cible: 1_000_000, echeance_annee: 2044,
+    age_cible: null, part_affectee: 100, versement_mensuel: 800, taux_attendu: 7.2,
+    inflation: null, taux_retrait: null, couleur: null, capital_requis: 1_000_000,
+    montant_actuel: 100_000, avancement: 10, atteint: false, mois_restants: 220,
+    valeur_projetee: null, projetee_en_euros_constants: null, mois_pour_atteindre: 240,
+    verse_deja: null, verse_mesure: null, verse_retenu: null, sur_versements: false,
+    versement_requis: null,
+    sensibilites: [
+      { quoi: "versement_marginal", versement: 900, taux: 7.2, mois: 219, ecart_mois: -21 },
+    ],
+    ...kw,
+  });
+
+  it("donne le pas, le nouveau rythme et l'effet en années", () => {
+    const t = phraseMarginale(base());
+    expect(t).toContain(`${euros(100)} de plus par mois`);
+    expect(t).toContain(`${euros(900)} au lieu de ${euros(800)}`);
+    expect(t).toContain("rapprocheraient la cible de 1 an 9 mois");
+  });
+
+  it("dit « le plafond » pour un objectif de versements", () => {
+    const t = phraseMarginale(base({ sur_versements: true, genre: "plafond_versements" }));
+    expect(t).toContain("rapprocheraient le plafond de");
+  });
+
+  it("n'emploie aucun verbe à la deuxième personne", () => {
+    // ⚠️ **La formule évite le verbe d'action plutôt que de le mettre au conditionnel.** On
+    // ne peut pas glisser vers l'impératif un texte qui n'a pas de sujet à qui l'adresser :
+    // « cent euros de plus par mois » n'a pas d'impératif possible, « augmentez » en est un.
+    const interdits = /augment|réduis|devriez|il faut|conseill|recommand|placez|activez|versez/i;
+    for (const o of [base(), base({ sur_versements: true }),
+      base({ sensibilites: [{ quoi: "versement_marginal", versement: 900, taux: 7.2,
+        mois: null, ecart_mois: null }] })]) {
+      const t = phraseMarginale(o);
+      if (t) expect(t).not.toMatch(interdits);
+    }
+  });
+
+  it("dit qu'un pas insuffisant ne suffit pas, plutôt que de se taire", () => {
+    const t = phraseMarginale(base({ sensibilites: [
+      { quoi: "versement_marginal", versement: 900, taux: 7.2, mois: null, ecart_mois: null },
+    ] }));
+    expect(t).toContain("ne suffiraient pas");
+  });
+
+  it("se taît quand l'effet est nul ou la variante absente", () => {
+    expect(phraseMarginale(base({ sensibilites: [] }))).toBeNull();
+    expect(phraseMarginale(base({ sensibilites: [
+      { quoi: "versement_marginal", versement: 900, taux: 7.2, mois: 240, ecart_mois: 0 },
+    ] }))).toBeNull();
   });
 });
