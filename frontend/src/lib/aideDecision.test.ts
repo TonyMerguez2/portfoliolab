@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
 
 import {
-  MAXIMUM_AFFICHE, aideALaDecision, confiance, confianceEnClair, hypotheses,
-  type Contexte,
+  MAXIMUM_AFFICHE, MAXIMUM_PAR_SUJET, aideALaDecision, confiance, confianceEnClair,
+  hypotheses, type Contexte,
 } from "./aideDecision";
 import { euros, type Objectif } from "./objectifs";
 
@@ -57,7 +57,10 @@ describe("classement et sélection", () => {
   it("met l’incohérence critique avant un jalon positif", () => {
     // ⚠️ Le piège du premier générateur qui gagne : l'ordre d'évaluation n'est pas l'ordre
     // d'affichage. Un chevauchement critique doit passer devant tout le reste.
-    const tous = aideALaDecision(objectif(), contexte({ sommeDesParts: 200 }));
+    const tous = aideALaDecision(objectif(), contexte({ sommeDesParts: 200, autres: [
+      objectif({ id: "a", nom: "Retraite", part_affectee: 100 }),
+      objectif({ id: "b", nom: "Appartement", part_affectee: 100 }),
+    ] }));
     expect(tous[0].famille).toBe("chevauchement");
     expect(tous[0].priorite).toBe("critique");
   });
@@ -172,14 +175,27 @@ describe("situations", () => {
     expect(cal?.titre).toContain("ne serait pas tenue");
   });
 
-  it("chevauchement au-delà de cent pour cent : critique et objectifs liés", () => {
-    const autre = objectif({ id: "o2", nom: "Achat immobilier" });
-    const tous = aideALaDecision(objectif(),
-      contexte({ sommeDesParts: 200, autres: [autre] }));
+  it("chevauchement : les objectifs sont nommés, pas seulement comptés", () => {
+    // ⚠️ **Nommer, et non répéter la somme.** « Progression globale » affiche déjà « vos
+    // objectifs se partagent 200 % du portefeuille » à dix centimètres de là. Ce que ce
+    // panneau peut ajouter, c'est **lesquels** — le total ne dit pas où regarder.
+    const tous = aideALaDecision(objectif(), contexte({ sommeDesParts: 200, autres: [
+      objectif({ id: "o2", nom: "Achat immobilier", part_affectee: 100 }),
+      objectif({ id: "o3", nom: "Retraite", part_affectee: 100 }),
+    ] }));
     const ch = tous.find(i => i.famille === "chevauchement");
     expect(ch?.priorite).toBe("critique");
-    expect(ch?.objectifsLies).toContain("o2");
-    expect(ch?.description).toContain("le même euro");
+    expect(ch?.objectifsLies).toEqual(expect.arrayContaining(["o2", "o3"]));
+    expect(ch?.description).toContain("« Achat immobilier »");
+    expect(ch?.description).toContain("« Retraite »");
+  });
+
+  it("se taît sur le chevauchement quand un seul objectif est gourmand", () => {
+    // Une somme au-dessus de cent peut venir d'un seul objectif à 100 % plus un plafond mal
+    // compté : sans deux objectifs qui se disputent le capital, il n'y a rien à nommer.
+    const tous = aideALaDecision(objectif(),
+      contexte({ sommeDesParts: 200, autres: [objectif({ id: "o2", part_affectee: 20 })] }));
+    expect(tous.some(i => i.famille === "chevauchement")).toBe(false);
   });
 
   it("rendement irréaliste : critique, et le chiffre est cité", () => {
@@ -445,5 +461,53 @@ describe("objectif sans échéance", () => {
     const tous = aideALaDecision(sansDate(), contexte());
     expect(tous.some(i => i.famille === "versement")).toBe(false);
     expect(tous.some(i => i.titre.includes("rendement hors de portée"))).toBe(false);
+  });
+});
+
+// ── La répétition, désamorcée ────────────────────────────────────────────────
+
+describe("répétition", () => {
+  /**
+   * ⚠️ **Le défaut : quatre fois la même mauvaise nouvelle.** Sur un objectif en retard, trois
+   * familles distinctes décrivent un seul fait — l'échéance non tenue, le rythme requis trop
+   * haut, le rendement requis invraisemblable. Le classement par famille ne le voyait pas,
+   * chacune étant bien distincte, et la carte les alignait toutes.
+   */
+  const enRetard = objectif({
+    mois_restants: 220, mois_pour_atteindre: 396,      // 14 ans 8 mois de retard
+    versement_requis: 2_800, rendement_requis: 18.5,   // deux autres angles du même fait
+    part_du_gain: { apport: 180_000, gain: 190_000, part_gain: 51.3 },
+    stress: [{ cle: "rendement_moins_2", libelle: "Un rendement inférieur de 2 points",
+      mois: 475, ecart_mois: 79, pouvoir_achat_perdu: null }],
+    sensibilites: [{ quoi: "versement_marginal", versement: 900, taux: 7,
+      mois: 375, ecart_mois: -21 }],
+  });
+
+  it("garde deux angles du même fait, pas trois", () => {
+    const tous = aideALaDecision(enRetard, contexte());
+    const horsTrajectoire = tous.filter(i => i.sujet === "hors_trajectoire");
+    expect(horsTrajectoire).toHaveLength(MAXIMUM_PAR_SUJET);
+  });
+
+  it("libère les places restantes pour ce qui dit autre chose", () => {
+    // ⚠️ C'est le but : sans la borne par sujet, les quatre places partaient dans le même
+    // constat. Avec elle, la secousse et le pas de cent euros entrent.
+    const familles = aideALaDecision(enRetard, contexte()).map(i => i.famille);
+    expect(familles).toHaveLength(MAXIMUM_AFFICHE);
+    expect(new Set(familles).size).toBe(MAXIMUM_AFFICHE);
+    expect(familles).toContain("stress");
+  });
+
+  it("s’applique aussi à la bonne nouvelle", () => {
+    // ⚠️ Le symétrique compte autant : « en avance », « rythme au-dessus du requis » et
+    // « rendement requis sous votre hypothèse » disent aussi une seule chose.
+    const enAvance = objectif({
+      mois_restants: 300, mois_pour_atteindre: 214,
+      versement_requis: 600, rendement_requis: 5,
+      part_du_gain: null,
+    });
+    const sur = aideALaDecision(enAvance, contexte())
+      .filter(i => i.sujet === "sur_trajectoire");
+    expect(sur.length).toBeLessThanOrEqual(MAXIMUM_PAR_SUJET);
   });
 });

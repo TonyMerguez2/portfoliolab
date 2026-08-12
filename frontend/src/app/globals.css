@@ -709,3 +709,75 @@ canvas + div {
    voiles de bord, qui disent la même chose sans occuper 6 px sous les cartes.
    `scrollbar-width` couvre Firefox, ce sélecteur couvre WebKit. */
 .novac-rail::-webkit-scrollbar { height: 0; width: 0; }
+
+/* ─────────────────────────────────────────────────────────────
+   Liseré défilant — autour du chiffre fort de l'aide à la décision.
+
+   Un anneau conique qui tourne, découpé au masque pour ne peindre que le bord.
+   La rotation porte sur un pseudo-élément carré plus grand que la boîte : sans
+   cela, ses coins sortiraient du cadre pendant le tour et le liseré clignoterait
+   aux angles.
+
+   ⚠️ **Le mouvement s'arrête pour qui demande à le réduire.** Une animation en
+   boucle infinie est exactement ce que `prefers-reduced-motion` désigne, et le
+   liseré garde tout son sens à l'arrêt : il entoure toujours le chiffre. Ce
+   n'est pas une faveur, c'est la seule façon de ne pas rendre l'écran pénible à
+   une partie des lecteurs.
+   ───────────────────────────────────────────────────────────── */
+.novac-liseré-defilant {
+  position: relative;
+  isolation: isolate;
+  /* ⚠️ **Le rognage n'est pas optionnel, et son absence se voyait tout de suite.** Le
+     pseudo-élément qui tourne est un carré de 210 % — il faut qu'il couvre la
+     diagonale pour que ses coins ne rentrent pas dans le cadre pendant le tour —
+     et sans `overflow: hidden` il débordait du panneau en un large coin clair
+     balayant l'écran. `isolation` contient l'empilement, pas la géométrie. */
+  overflow: hidden;
+}
+
+.novac-liseré-defilant::before {
+  content: '';
+  position: absolute;
+  z-index: -1;
+  /* Un carré qui couvre la diagonale de la boîte, centré : c'est lui qui tourne. */
+  top: 50%;
+  left: 50%;
+  width: 210%;
+  aspect-ratio: 1;
+  translate: -50% -50%;
+  background: conic-gradient(from 0deg,
+    transparent 0deg,
+    transparent 210deg,
+    rgba(255, 255, 255, 0.10) 268deg,
+    rgba(255, 255, 255, 0.85) 320deg,
+    rgba(255, 255, 255, 0.10) 350deg,
+    transparent 360deg);
+  animation: novac-tour 3.6s linear infinite;
+}
+
+/* La couche qui rétablit le fond, ne laissant du dégradé que le pourtour.
+   Un masque `xor` ferait le même office, mais sur un élément qui tourne il
+   tournerait avec lui. Deux couches : l'une bouge, l'autre couvre. */
+.novac-liseré-defilant::after {
+  content: '';
+  position: absolute;
+  z-index: -1;
+  inset: 1px;
+  border-radius: inherit;
+  /* Le noir du panneau. La couche ne peut pas être transparente : elle sert
+     précisément à masquer le centre de l'anneau. */
+  background: #05060B;
+}
+
+@keyframes novac-tour {
+  to { rotate: 360deg; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .novac-liseré-defilant::before {
+    animation: none;
+    /* Arrêté, l'anneau est figé sur son éclat : le liseré reste visible et garde
+       son rôle, sans mouvement. */
+    rotate: 40deg;
+  }
+}

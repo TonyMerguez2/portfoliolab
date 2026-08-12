@@ -237,17 +237,30 @@ export default function ConstatsObjectif({
             </span>
           </div>
 
-          {/* ⚠️ Le chiffre fort à droite, et une seule fois : c'est ce qu'on retient de la
-              carte. Sans lui, la phrase doit être relue pour retrouver le nombre. */}
+          {/* ⚠️ **Le chiffre fort, plus large et plus gros qu'avant.** Il ne bougeait pas de
+              place : c'est le paragraphe qui a rendu de la largeur, sa marge gauche inchangée.
+              Le texte enroule donc un peu plus tôt, et le nombre — ce qu'on retient de la
+              carte — passe de 17 à 24 pixels.
+
+              ⚠️ Le liseré tourne autour de lui pour marquer son importance, et **s'arrête pour
+              qui demande à réduire les animations** : voir `.novac-liseré-defilant` dans
+              globals.css. Une boucle infinie est précisément ce que cette préférence désigne, et
+              l'anneau garde son sens à l'arrêt puisqu'il entoure toujours le chiffre. */}
           {aide.metrique && (
-            <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end",
-              justifyContent: "center", flexShrink: 0, maxWidth: 132 }}>
-              <span style={{ ...NUM, fontSize: 17, fontWeight: 700, lineHeight: 1.1,
-                color: "rgba(255,255,255,0.96)", textAlign: "right" }}>
+            <div className="novac-liseré-defilant"
+              style={{ display: "flex", flexDirection: "column", alignItems: "center",
+                // ⚠️ **Comprimable, et non figé à 168.** Vu à l'écran sur un panneau resserré
+                // à 144 pixels : un bloc de largeur fixe débordait et le chiffre sortait du
+                // cadre. `flex: 0 1` lui laisse céder ce qu'il faut sans jamais s'étirer.
+                justifyContent: "center", flex: "0 1 168px", minWidth: 92, borderRadius: 14,
+                padding: "8px 10px", boxSizing: "border-box", alignSelf: "center" }}>
+              <span style={{ ...NUM, fontSize: 24, fontWeight: 700, lineHeight: 1.05,
+                color: "rgba(255,255,255,0.97)", textAlign: "center",
+                letterSpacing: "-0.02em" }}>
                 {aide.metrique.valeur}
               </span>
-              <span style={{ fontFamily: FONT, fontSize: 9.5, lineHeight: 1.3,
-                color: "rgba(255,255,255,0.55)", textAlign: "right" }}>
+              <span style={{ fontFamily: FONT, fontSize: 9.5, lineHeight: 1.3, marginTop: 2,
+                color: "rgba(255,255,255,0.58)", textAlign: "center" }}>
                 {aide.metrique.libelle}
               </span>
             </div>

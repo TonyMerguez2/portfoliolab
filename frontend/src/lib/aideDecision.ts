@@ -45,9 +45,23 @@ export type FamilleInsight =
  */
 export type Priorite = "positive" | "info" | "warning" | "critique";
 
+/**
+ * Le fait dont l'insight parle, par-delà sa famille.
+ *
+ * ⚠️ **Trois familles peuvent décrire la même chose.** Sur un objectif en retard, « l'échéance
+ * ne serait pas tenue », « le rythme requis dépasse le vôtre » et « l'objectif suppose un
+ * rendement hors de portée » sont trois angles d'un seul fait : la trajectoire ne mène pas à la
+ * cible. Le classement par famille ne le voyait pas — chacune est distincte — et la carte
+ * affichait donc quatre fois la même mauvaise nouvelle sous quatre formulations. Le sujet est ce
+ * qui permet d'en garder deux et de laisser la place à ce qui dit autre chose.
+ */
+export type Sujet = "hors_trajectoire" | "sur_trajectoire" | "portefeuille";
+
 export type Insight = {
   id: string;
   famille: FamilleInsight;
+  /** `undefined` quand l'insight ne partage son fait avec aucun autre. */
+  sujet?: Sujet;
   priorite: Priorite;
   /** Une phrase courte, qui tient sur une ligne. */
   titre: string;
@@ -193,7 +207,7 @@ function calendrier(o: Objectif, c: Contexte): Insight | null {
   if (besoin == null) {
     return {
       ...base, priorite: "critique",
-      titre: "L’échéance ne serait pas tenue",
+      titre: "L’échéance ne serait pas tenue", sujet: "hors_trajectoire",
       description: `Au rythme actuel, la cible de ${euros(o.capital_requis ?? o.cible)} `
         + "n’est atteinte à aucun horizon calculable : sans rendement ni versement, aucune "
         + "durée ne convient.",
@@ -204,7 +218,7 @@ function calendrier(o: Objectif, c: Contexte): Insight | null {
   if (Math.abs(ecart) < ECART_SIGNIFICATIF_MOIS) {
     return {
       ...base, priorite: "positive",
-      titre: "Votre trajectoire est compatible avec l’échéance",
+      titre: "Votre trajectoire est compatible avec l’échéance", sujet: "sur_trajectoire",
       description: `Au rythme actuel, la cible tomberait en ${moisEnClair(besoin)}, `
         + `soit à moins de six mois de l’échéance de ${o.echeance_annee}.`,
       metrique: { libelle: "écart à l’échéance", valeur: `${Math.abs(ecart)} mois` },
@@ -214,7 +228,7 @@ function calendrier(o: Objectif, c: Contexte): Insight | null {
     const duree = dureeEnClair(-ecart);
     return {
       ...base, priorite: "positive",
-      titre: "Votre trajectoire est en avance",
+      titre: "Votre trajectoire est en avance", sujet: "sur_trajectoire",
       description: `Au rythme actuel, la cible de ${euros(o.capital_requis ?? o.cible)} `
         + `pourrait être atteinte en ${moisEnClair(besoin)}, avant l’échéance de `
         + `${o.echeance_annee}.`,
@@ -225,7 +239,7 @@ function calendrier(o: Objectif, c: Contexte): Insight | null {
   return {
     ...base,
     priorite: ecart > reste * RETARD_CRITIQUE ? "critique" : "warning",
-    titre: "L’échéance ne serait pas tenue au rythme actuel",
+    titre: "L’échéance ne serait pas tenue au rythme actuel", sujet: "hors_trajectoire",
     description: `La cible tomberait en ${moisEnClair(besoin)}, alors que l’échéance est `
       + `fixée à ${o.echeance_annee}.`,
     metrique: { libelle: "de retard estimé", valeur: duree ?? "—" },
@@ -255,7 +269,7 @@ function versement(o: Objectif, c: Contexte): Insight | null {
   if (rapport > MULTIPLE_NOTABLE) {
     return {
       ...base, priorite: rapport >= 2 ? "warning" : "info",
-      titre: "Le rythme requis dépasse le vôtre",
+      titre: "Le rythme requis dépasse le vôtre", sujet: "hors_trajectoire",
       description: `Tenir ${o.echeance_annee} demanderait environ `
         + `${euros(o.versement_requis)} par mois, soit ${pourcent(rapport, 1)} fois `
         + `les ${euros(actuel)} versés aujourd’hui.`,
@@ -265,7 +279,7 @@ function versement(o: Objectif, c: Contexte): Insight | null {
   const marge = (actuel / o.versement_requis - 1) * 100;
   return {
     ...base, priorite: "positive",
-    titre: "Votre rythme dépasse le minimum requis",
+    titre: "Votre rythme dépasse le minimum requis", sujet: "sur_trajectoire",
     description: `Tenir ${o.echeance_annee} demanderait environ `
       + `${euros(o.versement_requis)} par mois ; vous en versez ${euros(actuel)}.`,
     metrique: { libelle: "au-dessus du requis", valeur: `${pourcent(marge, 0)} %` },
@@ -289,7 +303,7 @@ function rendementRequis(o: Objectif, c: Contexte): Insight | null {
   if (requis >= RENDEMENT_INVRAISEMBLABLE) {
     return {
       ...base, priorite: "critique",
-      titre: "L’objectif suppose un rendement hors de portée",
+      titre: "L’objectif suppose un rendement hors de portée", sujet: "hors_trajectoire",
       description: `Atteindre la cible en ${o.echeance_annee} avec vos versements actuels `
         + `demanderait ${pourcent(requis, 1)} % par an. Aucune allocation large n’a tenu ce `
         + "rythme sur une longue période.",
@@ -299,7 +313,7 @@ function rendementRequis(o: Objectif, c: Contexte): Insight | null {
   if (ecart > ECART_RENDEMENT_TENDU) {
     return {
       ...base, priorite: "warning",
-      titre: "L’objectif suppose plus que votre hypothèse",
+      titre: "L’objectif suppose plus que votre hypothèse", sujet: "hors_trajectoire",
       description: `Atteindre la cible en ${o.echeance_annee} demanderait `
         + `${pourcent(requis, 1)} % par an, contre ${pourcent(o.taux_attendu, 1)} % retenus `
         + "dans vos paramètres.",
@@ -308,7 +322,7 @@ function rendementRequis(o: Objectif, c: Contexte): Insight | null {
   }
   return {
     ...base, priorite: "positive",
-    titre: "Le rendement requis reste sous votre hypothèse",
+    titre: "Le rendement requis reste sous votre hypothèse", sujet: "sur_trajectoire",
     description: `Atteindre la cible en ${o.echeance_annee} demanderait `
       + `${pourcent(requis, 1)} % par an, soit moins que les `
       + `${pourcent(o.taux_attendu, 1)} % que vous avez posés.`,
@@ -477,18 +491,27 @@ const SOMME_PARTS_LIMITE = 100.5;
 function chevauchement(o: Objectif, c: Contexte): Insight | null {
   const somme = c.sommeDesParts;
   if (somme == null || somme <= SOMME_PARTS_LIMITE) return null;
-  const concernes = (c.autres ?? [])
-    .filter(a => !a.sur_versements && (a.part_affectee ?? 100) > 0);
+  // ⚠️ **Nommer les objectifs, et non répéter la somme.** « Progression globale », juste
+  // au-dessus, affiche déjà « vos objectifs se partagent 200 % du portefeuille ». Redire ce
+  // pourcentage ici serait la même phrase à dix centimètres d'elle-même. Ce que ce panneau peut
+  // ajouter, c'est **lesquels** : le total ne dit pas où regarder.
+  const gourmands = (c.autres ?? [])
+    .filter(a => !a.sur_versements && (a.part_affectee ?? 100) >= 50)
+    .sort((a, b) => (b.part_affectee ?? 100) - (a.part_affectee ?? 100));
+  if (gourmands.length < 2) return null;
   const conf = confiance(o, c);
+  const nommes = gourmands.slice(0, 2)
+    .map(a => `« ${a.nom} » (${pourcent(a.part_affectee ?? 100, 0)} %)`).join(" et ");
   return {
     id: `${o.id}:chevauchement`, famille: "chevauchement", priorite: "critique",
+    sujet: "portefeuille",
     confiance: conf.valeur, motifs: conf.motifs, hypotheses: hypotheses(o),
-    objectifsLies: concernes.map(a => a.id),
-    titre: "Vos objectifs se chevauchent",
-    description: `La somme des parts affectées atteint ${pourcent(somme, 0)} % : `
-      + "plusieurs objectifs comptent donc le même euro. Ce ne sont pas des patrimoines "
-      + "séparés, et le total déjà constitué en est d’autant gonflé.",
-    metrique: { libelle: "du portefeuille affecté", valeur: `${pourcent(somme, 0)} %` },
+    objectifsLies: gourmands.map(a => a.id),
+    titre: "Deux objectifs se disputent le même capital",
+    description: `${nommes} y puisent tous deux. Les parts totalisent `
+      + `${pourcent(somme, 0)} % : ce ne sont pas des patrimoines séparés, et le total déjà `
+      + "constitué en est d’autant gonflé.",
+    metrique: { libelle: "objectifs concernés", valeur: `${gourmands.length}` },
   };
 }
 
@@ -671,6 +694,15 @@ const RANG_FAMILLE: Record<FamilleInsight, number> = {
 export const MAXIMUM_AFFICHE = 4;
 
 /**
+ * Combien d'insights peuvent partager le même sujet.
+ *
+ * ⚠️ Deux, parce qu'un fait s'établit mieux sous deux angles que sous un seul — « 14 ans de
+ * retard » et « 18,5 % par an nécessaires » se complètent — mais qu'un troisième n'ajoute plus
+ * qu'une reformulation. C'est ce qui empêche la carte de dire quatre fois la même chose.
+ */
+export const MAXIMUM_PAR_SUJET = 2;
+
+/**
  * Les insights d'un objectif, classés et bornés.
  *
  * ⚠️ **Toutes les familles sont évaluées, puis triées, puis coupées.** L'ordre d'évaluation
@@ -701,11 +733,24 @@ export function aideALaDecision(o: Objectif | null, c: Contexte = {}): Insight[]
 
   // ⚠️ Une seule entrée par famille : deux insights de rendement à la suite disent deux fois
   // la même chose sous deux angles, et occupent la place d'une famille absente.
-  const vues = new Set<FamilleInsight>();
+  //
+  // ⚠️ **Et deux au plus par sujet, ce qui est la vraie défense contre la répétition.** Sur un
+  // objectif en retard, trois familles distinctes décrivent le même fait : l'échéance non tenue,
+  // le rythme requis trop haut, le rendement requis invraisemblable. Le tri par famille ne le
+  // voyait pas et la carte affichait quatre fois la même mauvaise nouvelle. Deux angles
+  // suffisent à l'établir ; les places restantes vont à ce qui dit autre chose — une secousse,
+  // l'inflation, le pas de cent euros.
+  const vuesFamille = new Set<FamilleInsight>();
+  const parSujet = new Map<Sujet, number>();
   const retenus: Insight[] = [];
   for (const i of trouves) {
-    if (vues.has(i.famille)) continue;
-    vues.add(i.famille);
+    if (vuesFamille.has(i.famille)) continue;
+    if (i.sujet) {
+      const deja = parSujet.get(i.sujet) ?? 0;
+      if (deja >= MAXIMUM_PAR_SUJET) continue;
+      parSujet.set(i.sujet, deja + 1);
+    }
+    vuesFamille.add(i.famille);
     retenus.push(i);
     if (retenus.length >= MAXIMUM_AFFICHE) break;
   }
