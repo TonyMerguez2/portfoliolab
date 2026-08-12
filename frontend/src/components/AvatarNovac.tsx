@@ -2,7 +2,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import {
-  RAYON_TETE, type Orientation, cheminOeil,
+  RAYON_TETE, type Orientation, cheminOeil, cheminSvg, contourSilhouette,
+  exposantSilhouette,
 } from "@/lib/avatarSpherique";
 import { type EtatVie, VIE_AU_REPOS, creerVie } from "@/lib/avatarVie";
 import { COULEUR_PAR_DEFAUT, couleurDesYeux } from "@/lib/avatarCouleur";
@@ -39,6 +40,14 @@ const ECART = 27;
 const ECHANTILLONS = 96;
 
 /**
+ * L'arrondi de la silhouette carrée — celui des icônes d'application.
+ *
+ * ⚠️ Fixé ici plutôt qu'exposé en propriété : à cette taille, deux arrondis voisins ne
+ * diffèrent pas d'un pixel. Un réglage de plus n'aurait donné que l'illusion d'un choix.
+ */
+const ARRONDI_CARRE = 0.42;
+
+/**
  * La vie du visage à cette taille.
  *
  * ⚠️ **La dérive est bien plus ample qu'au banc d'essai, et ce n'est pas un caprice.**
@@ -70,6 +79,7 @@ export default function AvatarNovac({
   couleurYeux,
   suivi = true,
   amplitude = 17,
+  forme = "sphere",
   titre,
   style,
 }: {
@@ -97,6 +107,14 @@ export default function AvatarNovac({
   suivi?: boolean;
   /** Débattement du suivi, en degrés. */
   amplitude?: number;
+  /**
+   * La silhouette : sphère, ou cube aux arêtes arrondies.
+   *
+   * ⚠️ Ce n'est pas un habillage plaqué par-dessus mais la surface elle-même : les yeux
+   * sont peints dessus et suivent son galbe. Sur le cube, la face avant est plate, donc
+   * un œil vu de face n'y est pas courbé — cela se voit même à trente-huit pixels.
+   */
+  forme?: "sphere" | "carre";
   titre?: string;
   style?: React.CSSProperties;
 }) {
@@ -109,6 +127,15 @@ export default function AvatarNovac({
    */
   const teteRendue = couleur ?? COULEUR_PAR_DEFAUT;
   const yeuxRendus = couleurYeux ?? couleurDesYeux(teteRendue);
+
+  /**
+   * ⚠️ **Un exposant, pas deux formes.** La sphère est la superellipsoïde d'exposant 2 :
+   * il n'y a donc qu'un seul chemin de rendu, et rien à tenir en double.
+   */
+  const exposant = useMemo(
+    () => exposantSilhouette(forme === "carre" ? ARRONDI_CARRE : 1), [forme]);
+  const contourTete = useMemo(
+    () => cheminSvg(contourSilhouette(exposant, RAYON_TETE, 180)), [exposant]);
 
   const [vie, setVie] = useState<EtatVie>(VIE_AU_REPOS);
   const [pose, setPose] = useState({ lacet: 0, tangage: 0 });
@@ -198,7 +225,7 @@ export default function AvatarNovac({
     })(),
     inclinaison: rad(vie.inclinaison),
     courbure: vie.courbure,
-  }, orientation, cote, RAYON_TETE, ECHANTILLONS), [vie, orientation]);
+  }, orientation, cote, RAYON_TETE, ECHANTILLONS, exposant), [vie, orientation, exposant]);
 
   return (
     <svg
@@ -213,7 +240,7 @@ export default function AvatarNovac({
       {/* L'échelle est une transformation du rendu, pas de la géométrie : la sphère
           reste une sphère, et c'est son image qu'on comprime le temps d'un rebond. */}
       <g transform={`scale(${vie.echelleX.toFixed(4)} ${vie.echelleY.toFixed(4)})`}>
-        <circle cx={0} cy={0} r={RAYON_TETE} fill={teteRendue} />
+        <path d={contourTete} fill={teteRendue} />
         <path d={oeil(vie.fermetureGauche, -1)} fill={yeuxRendus} />
         <path d={oeil(vie.fermetureDroite, 1)} fill={yeuxRendus} />
       </g>

@@ -5,6 +5,7 @@ import { createPortal } from "react-dom";
 import AvatarNovac from "@/components/AvatarNovac";
 import PastilleCouleur, { PastillePlus } from "@/components/portfolio/PastilleCouleur";
 import { COULEURS_AVATAR } from "@/lib/avatarCouleur";
+import type { FormeAvatar } from "@/lib/useCouleurAvatar";
 import { useAvatar } from "@/lib/AvatarContext";
 
 /**
@@ -29,12 +30,15 @@ import { useAvatar } from "@/lib/AvatarContext";
  */
 
 export default function AvatarPortefeuille({
-  portefeuille, couleur, onCouleur, taille = 63,
+  portefeuille, couleur, onCouleur, forme, onForme, taille = 63,
 }: {
   portefeuille: { id: string | number; name?: string; color?: string | null };
   /** La couleur portée — celle que la page tient, et donne aussi à la courbe. */
   couleur: string;
   onCouleur: (hex: string) => void;
+  /** La silhouette portée : sphère, ou cube aux arêtes arrondies. */
+  forme: FormeAvatar;
+  onForme: (v: FormeAvatar) => void;
   taille?: number;
 }) {
   const { expression } = useAvatar();
@@ -91,6 +95,7 @@ export default function AvatarPortefeuille({
         <AvatarNovac
           taille={taille}
           couleur={couleur}
+          forme={forme}
           etat={expression.cle}
           impulsion={expression.jeton}
           titre={portefeuille.name ?? "Novac"}
@@ -133,6 +138,44 @@ export default function AvatarPortefeuille({
                   retenue={c.hex.toLowerCase() === couleur.toLowerCase()}
                   onClick={() => onCouleur(c.hex)} />
               ))}
+            </div>
+
+            {/**
+              * La silhouette, sous les couleurs et séparée d'un trait.
+              *
+              * ⚠️ **Deux vignettes qui dessinent la forme, et non deux mots.** « Sphère »
+              * et « carré arrondi » ne se distinguent qu'une fois vus ; et la vignette
+              * prend la couleur en cours, ce qui montre du même coup les deux réglages
+              * ensemble — c'est bien la même tête qu'on habille.
+              */}
+            <div style={{
+              marginTop: 16, paddingTop: 14,
+              borderTop: "1px solid rgba(18,20,28,0.10)",
+              display: "flex", gap: 10,
+            }}>
+              {(["sphere", "carre"] as const).map(cle => {
+                const retenue = forme === cle;
+                return (
+                  <button key={cle} type="button" onClick={() => onForme(cle)}
+                    aria-pressed={retenue}
+                    aria-label={cle === "sphere" ? "Silhouette ronde" : "Silhouette carrée"}
+                    title={cle === "sphere" ? "Ronde" : "Carrée"}
+                    style={{
+                      width: 34, height: 34, padding: 0, borderRadius: 10, cursor: "pointer",
+                      display: "flex", alignItems: "center", justifyContent: "center",
+                      background: retenue ? "rgba(18,20,28,0.06)" : "transparent",
+                      borderWidth: 1.5, borderStyle: "solid",
+                      borderColor: retenue ? "rgba(20,22,30,0.55)" : "rgba(18,20,28,0.12)",
+                      transition: "background 120ms, border-color 120ms",
+                    }}>
+                    <svg width={20} height={20} viewBox="0 0 20 20" aria-hidden="true">
+                      <rect x={1.5} y={1.5} width={17} height={17}
+                        rx={cle === "sphere" ? 8.5 : 5.4} ry={cle === "sphere" ? 8.5 : 5.4}
+                        fill={couleur} />
+                    </svg>
+                  </button>
+                );
+              })}
             </div>
           </div>
         </>,

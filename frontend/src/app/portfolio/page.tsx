@@ -40,7 +40,7 @@ import { useCoursCrypto, symboleBinance } from "@/lib/coursCrypto";
 import Cadre from "@/components/ui/Cadre";
 import ChiffresRoulants from "@/components/ui/ChiffresRoulants";
 import AvatarPortefeuille from "@/components/portfolio/AvatarPortefeuille";
-import { useCouleurAvatar } from "@/lib/useCouleurAvatar";
+import { useCouleurAvatar, useFormeAvatar } from "@/lib/useCouleurAvatar";
 import { useAvatar } from "@/lib/AvatarContext";
 import { etatSelonEcartCourbe } from "@/lib/avatarEtats";
 import { useAnalyseEvenements } from "@/hooks/useAnalyseEvenements";
@@ -272,6 +272,9 @@ function PortfolioPageInner() {
    * comme un défaut, et deux états séparés auraient fini par diverger.
    */
   const [couleurAvatar, choisirCouleurAvatar] = useCouleurAvatar(portfolio);
+  // ⚠️ La forme ne va qu'à l'avatar, là où la couleur va aussi à la courbe : une courbe
+  // ne peut pas être carrée, et rien d'autre sur la page ne porte de silhouette.
+  const [formeAvatar, choisirFormeAvatar] = useFormeAvatar(portfolio);
 
   const [prices,        setPrices]        = useState<Record<string, PriceData>>({});
   const [loading,       setLoading]       = useState(true);
@@ -1199,7 +1202,8 @@ function PortfolioPageInner() {
                   d'image, recadrage compris. Le composant reste entier dans le code —
                   rien ne l'appelle plus ici, c'est tout. */}
               <AvatarPortefeuille portefeuille={portfolio} taille={63}
-                couleur={couleurAvatar} onCouleur={choisirCouleurAvatar} />
+                couleur={couleurAvatar} onCouleur={choisirCouleurAvatar}
+                forme={formeAvatar} onForme={choisirFormeAvatar} />
             </span>
             <div style={{ minWidth: 0 }}>
               {/* Le nom seul. Une pastille de la couleur du portefeuille le
