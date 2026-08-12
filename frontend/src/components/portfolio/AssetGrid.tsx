@@ -1,17 +1,11 @@
 "use client";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import TileCard from "@/components/TileCard";
-import AssetLogo from "@/components/AssetLogo";
 import ReactionAvatar from "@/components/ReactionAvatar";
-import TileSparkline from "@/components/charts/TileSparkline";
-import { brandHex } from "@/lib/tileStyle";
-import { assetName } from "@/lib/assets";
+import CarteActif from "@/components/portfolio/CarteActif";
 import { arrange, assetClass, type GridAsset, type SortKey } from "@/lib/portfolio";
 import { FONT, NUM } from "@/lib/typography";
 import { CLAIR, RAYONS } from "@/lib/palette";
 import Segments from "@/components/ui/Segments";
-import ChiffresRoulants from "@/components/ui/ChiffresRoulants";
-import { useClignotement, styleClignotement } from "@/lib/clignotement";
 
 export type { GridAsset, SortKey };
 
@@ -33,29 +27,6 @@ export type { GridAsset, SortKey };
 const TRIS: Record<SortKey, string> = {
   poids: "Poids", perf: "Performance", valeur: "Valeur", alpha: "Nom",
 };
-
-/**
- * Le cours d'une ligne, qui marque le sens de sa dernière variation.
- *
- * Composant à part, et non quelques lignes dans la boucle : le clignotement
- * garde une mémoire propre à chaque actif, et un crochet ne s'appelle pas
- * dans un `map`. Deux cartes qui partageraient cet état clignoteraient
- * ensemble à chaque mouvement de l'une d'elles.
- */
-function Cours({ prix }: { prix: number | null }) {
-  const sens = useClignotement(prix);
-  return (
-    <div style={{
-      ...NUM, fontSize: 20, fontWeight: 700, lineHeight: 1.1,
-      ...styleClignotement(sens, "rgba(255,255,255,0.94)"),
-    }}>
-      {prix != null ? <ChiffresRoulants texte={eur(prix)} /> : "—"}
-    </div>
-  );
-}
-
-const eur = (v: number, dec = 2) =>
-  v.toLocaleString("fr-FR", { minimumFractionDigits: dec, maximumFractionDigits: dec }) + " €";
 
 export default function AssetGrid({
   assets, onAssetClick, view, titre = "Vos actifs",
@@ -248,7 +219,6 @@ export default function AssetGrid({
         scrollbarWidth: "none", paddingBottom: 2,
       }}>
         {shown.map(a => {
-          const up = (a.change ?? 0) >= 0;
           /**
            * ⚠️ **L'avatar réagit à l'écart au portefeuille, pas à la variation brute.**
            * `change` est la variation sur la **période affichée** : sur la fenêtre Max
@@ -260,103 +230,10 @@ export default function AssetGrid({
            */
           const ecart = a.change != null && moyenneChange != null
             ? a.change - moyenneChange : null;
-          const chg = up ? "var(--nv-positif)" : "var(--nv-negatif)";
-          const name = assetName(a.ticker);
           return (
             <ReactionAvatar key={a.ticker} variation={ecart}>
-            <TileCard ticker={a.ticker} radius={18} glowStrength={0}
-      reflet={false}
-              className="novac-tile"
-              colorHex={brandHex(a.ticker)}
-              onClick={onAssetClick ? () => onAssetClick(a.ticker) : undefined}
-              containerStyle={{ height: 196, width: 248, flexShrink: 0, color: brandHex(a.ticker) }}
-              style={{ height: "100%", display: "flex", flexDirection: "column", padding: "14px 15px" }}>
-
-              {/* Identité */}
-              <div style={{ display: "flex", alignItems: "center", gap: 9 }}>
-                <AssetLogo ticker={a.ticker} type={a.type || "EQUITY"} size={32} radius={8}
-                  fallbackBg="rgba(255,255,255,0.10)" fallbackBorder="rgba(255,255,255,0.16)"
-                  fallbackTextColor="#fff" bare />
-                <div style={{ minWidth: 0, flex: 1 }}>
-                  <div style={{ fontFamily: FONT, fontSize: 15, fontWeight: 700, color: "rgba(255,255,255,0.94)",
-                    lineHeight: 1.15, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                    {a.ticker.replace(/-USD$/, "")}
-                  </div>
-                  {name && (
-                    <div style={{ fontFamily: FONT, fontSize: 11.5, fontWeight: 550, color: "rgba(255,255,255,0.45)",
-                      lineHeight: 1.2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                      {name}
-                    </div>
-                  )}
-                </div>
-                <span style={{ ...NUM, fontSize: 11, fontWeight: 700, color: "rgba(255,255,255,0.50)", flexShrink: 0 }}>
-                  {a.weight.toFixed(a.weight < 10 ? 1 : 0)}%
-                </span>
-              </div>
-
-              {/* Cours et variation */}
-              <div style={{ marginTop: 10 }}>
-                <Cours prix={a.price ?? null} />
-                {/* Ce que la ligne a rapporté depuis son achat, et non la
-                    variation du cours sur la période affichée. Sur la fenêtre
-                    Max, un ETF né en 2021 annonçait « +520 % · +2 992 € » sur
-                    une position ouverte en février, qui n'a jamais rapporté
-                    cela. On retombe sur la variation quand le prix de revient
-                    est inconnu — portefeuilles sans transactions. */}
-                {a.pnlEur != null ? (() => {
-                  const gagne = a.pnlEur >= 0;
-                  const col = gagne ? "var(--nv-positif)" : "var(--nv-negatif)";
-                  return (
-                    <div style={{ ...NUM, fontSize: 12.5, fontWeight: 600, color: col, marginTop: 3 }}>
-                      {gagne ? "+" : ""}{Math.round(a.pnlEur).toLocaleString("fr-FR")} €
-                      {a.pnlPct != null && (
-                        <span style={{ opacity: 0.62, marginLeft: 5 }}>
-                          {gagne ? "+" : ""}{a.pnlPct.toFixed(1)} %
-                        </span>
-                      )}
-                      {a.avgCost != null && (
-                        <span style={{ opacity: 0.42, marginLeft: 5, fontWeight: 500 }}>
-                          · PRU {eur(a.avgCost)}
-                        </span>
-                      )}
-                    </div>
-                  );
-                })() : (
-                  <div style={{ ...NUM, fontSize: 12.5, fontWeight: 600, color: chg, marginTop: 3 }}>
-                    {a.change != null ? `${up ? "+" : ""}${a.change.toFixed(2)} %` : "—"}
-                    {a.perfEur != null && (
-                      <span style={{ opacity: 0.62, marginLeft: 5 }}>
-                        {up ? "+" : ""}{Math.round(a.perfEur).toLocaleString("fr-FR")} €
-                      </span>
-                    )}
-                  </div>
-                )}
-              </div>
-
-              {/* Courbe sur toute la largeur, comme au concept : rangée à
-                  droite sur la moitié de la carte, elle laissait un vide à
-                  gauche que rien ne venait occuper. */}
-              <div style={{ flex: 1, display: "flex", alignItems: "flex-end", minHeight: 0, marginLeft: -2 }}>
-                {a.spark && a.spark.length > 1 && (
-                  <TileSparkline pts={a.spark} color={chg} w={222} h={42} updatedAt={a.updatedAt} />
-                )}
-              </div>
-
-              {/* Valeur détenue. Masquée faute de valeur totale au portefeuille :
-                  une ligne « Valeur — » répétée sur chaque carte n'apprend rien
-                  et occupe la place d'un trait de séparation utile. */}
-              {a.value != null && (
-                <div style={{
-                  display: "flex", alignItems: "baseline", justifyContent: "space-between",
-                  marginTop: 8, paddingTop: 7, borderTop: "1px solid rgba(255,255,255,0.07)",
-                }}>
-                  <span style={{ fontFamily: FONT, fontSize: 10, color: "rgba(255,255,255,0.38)" }}>Valeur</span>
-                  <span style={{ ...NUM, fontSize: 12, fontWeight: 700, color: "rgba(255,255,255,0.88)" }}>
-                    {eur(a.value, 0)}
-                  </span>
-                </div>
-              )}
-            </TileCard>
+            <CarteActif a={a}
+              onClick={onAssetClick ? () => onAssetClick(a.ticker) : undefined} />
             </ReactionAvatar>
           );
         })}

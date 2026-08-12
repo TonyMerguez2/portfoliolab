@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useState, useMemo, useRef, useId, Suspense } from "react";
+import { useCallback, useEffect, useState, useMemo, useRef, useId, Suspense } from "react";
 import type { ReactNode } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { useApp } from "@/lib/AppContext";
@@ -16,12 +16,13 @@ import {
 import { bandeDuScore, pilierLePlusFaible } from "@/lib/portfolio-score/types";
 import PerformanceChart from "@/components/portfolio/PerformanceChart";
 import AssetGrid from "@/components/portfolio/AssetGrid";
-import CarteCompte from "@/components/portfolio/CarteCompte";
+import CarteCompte, { CARTE_COMPTE } from "@/components/portfolio/CarteCompte";
+import CarteActif from "@/components/portfolio/CarteActif";
 import AllocationDonut from "@/components/portfolio/AllocationDonut";
 import RecentActivity from "@/components/portfolio/RecentActivity";
 import PortfolioTabs from "@/components/portfolio/PortfolioTabs";
 import { donutArcs } from "@/lib/donut";
-import { compteInfere, valoriser, type Enveloppe } from "@/lib/portfolio";
+import { compteInfere, valoriser, type Enveloppe, type GridAsset } from "@/lib/portfolio";
 import { assetExchange } from "@/lib/assets";
 import RadarChart from "@/components/charts/RadarChart";
 import { enTetesAuth } from "@/lib/session";
@@ -1052,6 +1053,26 @@ function PortfolioPageInner() {
     return map;
   }, [enriched]);
 
+  /**
+   * Une ligne du portefeuille, telle qu'une carte d'actif l'attend.
+   *
+   * ⚠️ Sortie de la boucle de la grille parce que l'aperçu des dossiers montre les
+   * mêmes cartes : deux conversions séparées auraient fini par afficher deux valeurs
+   * différentes pour la même ligne.
+   */
+  const versCarte = useCallback((a: typeof enriched[number]): GridAsset => ({
+    ticker: a.ticker, weight: a.weight,
+    change: a.change, type: a.type, price: a.price,
+    spark:     sparkHistory[a.ticker] ?? assetSparks[a.ticker],
+    updatedAt: priceUpdatedAt[a.ticker],
+    value:     a.value,
+    perfEur:   a.perfEur,
+    pnlEur:    a.pnlEur,
+    pnlPct:    a.invested && a.pnlEur != null ? (a.pnlEur / a.invested) * 100 : null,
+    avgCost:   a.avgCost,
+    quantity:  a.quantity,
+  }), [sparkHistory, assetSparks, priceUpdatedAt]);
+
   const saveTotalValue = async () => {
     if (!portfolio) return;
     const v = parseFloat(valueInput.replace(/\s/g, "").replace(",", "."));
@@ -1567,30 +1588,25 @@ function PortfolioPageInner() {
                 ⚠️ **Un compte vide n'est pas affiché.** Un dossier « Crypto » à zéro
                 ligne sur un portefeuille qui n'en contient pas promettrait un rangement
                 qui n'existe pas. */}
-            <div style={{ display: "grid", gap: 14, flexShrink: 0, marginBottom: 14,
-              gridTemplateColumns: "repeat(auto-fill, minmax(210px, 1fr))" }}>
+            {/* ⚠️ Colonnes de largeur **fixe** : la découpe du dossier est un tracé en
+                pixels, qu'une colonne élastique déformerait. */}
+            <div style={{ display: "grid", gap: 16, flexShrink: 0, marginBottom: 16,
+              gridTemplateColumns: `repeat(auto-fill, ${CARTE_COMPTE.largeur}px)` }}>
               {comptes.map(c => (
                 <CarteCompte key={c.cle} nom={c.cle} couleur={c.couleur} icone={c.icone}
                   compte={`${c.lignes.length} actif${c.lignes.length > 1 ? "s" : ""}`}
                   nombre={c.lignes.length}
+                  apercu={[...c.lignes]
+                    .sort((a, b) => b.weight - a.weight)
+                    .slice(0, APERCUS_PAR_DOSSIER)
+                    .map(a => <CarteActif key={a.ticker} a={versCarte(a)} inerte />)}
                   ouvert={compteOuvert === c.cle}
                   onClick={() => setCompteOuvert(v => (v === c.cle ? null : c.cle))} />
               ))}
             </div>
             <div style={{ flexShrink: 0 }}>
               <AssetGrid
-                assets={lignesMontrees.map(a => ({
-                  ticker: a.ticker, weight: a.weight,
-                  change: a.change, type: a.type, price: a.price,
-                  spark:     sparkHistory[a.ticker] ?? assetSparks[a.ticker],
-                  updatedAt: priceUpdatedAt[a.ticker],
-                  value:     a.value,
-                  perfEur:   a.perfEur,
-                  pnlEur:    a.pnlEur,
-                  pnlPct:    a.invested && a.pnlEur != null ? (a.pnlEur / a.invested) * 100 : null,
-                  avgCost:   a.avgCost,
-                  quantity:  a.quantity,
-                }))}
+                assets={lignesMontrees.map(versCarte)}
                 onAssetClick={ticker => router.push(`/chart?ticker=${encodeURIComponent(ticker)}`)}
                 view={view}
                 titre={compteOuvert ?? "Vos actifs"}
@@ -2319,6 +2335,14 @@ const HABILLAGE_COMPTES: Record<Enveloppe, { couleur: string; icone: React.React
     ),
   },
 };
+
+/**
+ * Combien de cartes le dossier laisse voir.
+ *
+ * Trois : au-delà, les tranches empilées se confondent en une masse, et la troisième
+ * ne dépasse déjà que de sept pixels. Le compte exact reste sur la pastille.
+ */
+const APERCUS_PAR_DOSSIER = 3;
 
 /** L'ordre d'affichage, indicatif : ce qui n'y figure pas passe en queue, pas à la trappe. */
 const ORDRE_COMPTES: Enveloppe[] = ["PEA", "CTO", "Crypto"];

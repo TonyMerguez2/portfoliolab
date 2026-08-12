@@ -1,25 +1,92 @@
 import { decalerClarte } from "@/lib/couleur";
+import { CARTE_ACTIF } from "@/components/portfolio/CarteActif";
 
 /**
- * Un compte, dessiné comme un dossier.
+ * Un compte, dessiné comme un dossier, avec un aperçu de ce qu'il contient.
  *
- * ⚠️ **La forme fait tout le travail, et elle tient à un seul tracé.** Un rectangle
- * arrondi avec un titre ne dit pas « dossier » ; ce qui le dit, c'est la **languette** —
- * le décrochement en haut à gauche, et la pochette claire qui dépasse derrière. Sans
- * elle, la carte se lit comme n'importe quelle tuile de l'application, et l'utilisateur
- * n'a aucune raison de penser qu'elle s'ouvre.
+ * ⚠️ **Une seule découpe, et non une languette posée sur un rectangle.** C'est là que
+ * se joue toute la ressemblance au concept : entre la languette et le plan du dossier,
+ * le contour ne fait pas un angle droit mais une **double courbure** — un quart de tour
+ * convexe puis un quart de tour concave. Deux éléments empilés donnaient un décrochement
+ * net, qui se lit comme une barre collée au-dessus d'une carte. Le contour est donc un
+ * `clip-path` d'un seul tenant, dans lequel le dégradé passe sans raccord.
  *
- * ⚠️ **Le contour est une découpe, pas une bordure.** La languette se décrit par un
- * `path` en coordonnées relatives, ce qui laisse la carte prendre n'importe quelle
- * taille sans que les rayons se déforment — un `clip-path` en pourcentages aurait
- * étiré les angles dès que la largeur et la hauteur cessent d'être égales.
+ * ⚠️ **La conséquence : les dimensions sont en pixels, pas en pourcentages.** Un
+ * `path()` ne s'exprime qu'en unités absolues. La carte a donc une taille fixe — ce
+ * qui tombe bien, puisqu'elle doit de toute façon être taillée pour contenir des cartes
+ * d'actifs à leur vraie taille. Une grille en `1fr` étirerait la découpe hors de sa
+ * boîte : les dossiers se posent en colonnes de `CARTE_COMPTE.largeur`.
+ *
+ * ⚠️ **L'ombre est un `drop-shadow`, pas un `box-shadow`.** Un `box-shadow` suit la
+ * boîte, que le `clip-path` vient justement de tailler : l'ombre débordait dans
+ * l'encoche. Le filtre, lui, suit la silhouette réelle.
  */
 
-/** Le rayon des angles, en pixels, commun au dossier et à sa pochette. */
-const RAYON = 20;
+/**
+ * La taille du dossier, déduite de la carte d'actif qu'il doit contenir.
+ *
+ * ⚠️ **`apercu` se mesure sur la ligne d'identité de la carte, pas au jugé.** La bande
+ * réellement dégagée sur toute la largeur ne vaut que `apercu − languette.hauteur` : la
+ * languette recouvre le reste sur sa moitié gauche, c'est-à-dire précisément là où se
+ * trouvent le logo et le nom. Réglé à 54, il n'en dépassait que le pourcentage de poids,
+ * à droite — un aperçu qui n'apprenait rien. Il faut donc de quoi loger les 46 pixels de
+ * la ligne d'identité **au-dessus** de la languette.
+ */
+export const CARTE_COMPTE = {
+  /** De quoi loger une carte d'actif, le décalage du paquet et une marge à droite. */
+  largeur: CARTE_ACTIF.largeur + 56,
+  /** Ce qu'on laisse voir des cartes rangées dedans, au-dessus du plan. */
+  apercu: 74,
+  /** Le plan de devant, celui qui porte le nom. */
+  panneau: 158,
+};
+const HAUTEUR = CARTE_COMPTE.apercu + CARTE_COMPTE.panneau;
+
+/**
+ * Le fondu des cartes d'aperçu : net jusqu'au bas de la ligne d'identité, éteint au plan.
+ *
+ * ⚠️ Trois arrêts et non deux : la chute est brutale sur les dix pixels où commencent
+ * les chiffres du cours, puis lente jusqu'au plan. Un fondu régulier y laissait un
+ * fantôme encore lisible — « 0 € ». Et il s'éteint exactement à la hauteur du plan,
+ * sans quoi un liseré de fond s'ouvrirait entre la carte et lui.
+ */
+const FONDU = "linear-gradient(to bottom, #000 0, #000 46px, rgba(0,0,0,0.22) 56px, transparent 74px)";
+
+/** Le rayon des angles. */
+const RAYON = 22;
+/** La languette : sa hauteur au-dessus du plan, sa largeur, et le rayon de la double courbure. */
+const LANGUETTE = { hauteur: 26, largeur: 118, courbure: 13 };
+
+/**
+ * Le contour du dossier, languette comprise.
+ *
+ * Décrit une fois pour toutes puisque la taille est fixe. Le sens de parcours est
+ * horaire ; seul le raccord de la languette tourne dans l'autre sens (`sweep` à 0),
+ * ce qui est exactement ce qui le rend concave.
+ */
+const CONTOUR = (() => {
+  const l = CARTE_COMPTE.largeur;
+  const h = CARTE_COMPTE.panneau + LANGUETTE.hauteur;
+  const { hauteur: hl, largeur: ll, courbure: c } = LANGUETTE;
+  return [
+    `M ${RAYON},0`,
+    `L ${ll - c},0`,
+    `A ${c},${c} 0 0 1 ${ll},${c}`,          // le coin de la languette, bombé
+    `A ${c},${c} 0 0 0 ${ll + c},${hl}`,     // son raccord au plan, creusé
+    `L ${l - RAYON},${hl}`,
+    `A ${RAYON},${RAYON} 0 0 1 ${l},${hl + RAYON}`,
+    `L ${l},${h - RAYON}`,
+    `A ${RAYON},${RAYON} 0 0 1 ${l - RAYON},${h}`,
+    `L ${RAYON},${h}`,
+    `A ${RAYON},${RAYON} 0 0 1 0,${h - RAYON}`,
+    `L 0,${RAYON}`,
+    `A ${RAYON},${RAYON} 0 0 1 ${RAYON},0`,
+    "Z",
+  ].join(" ");
+})();
 
 export default function CarteCompte({
-  nom, compte, couleur, icone, nombre, ouvert = false, onClick,
+  nom, compte, couleur, icone, nombre, apercu, ouvert = false, onClick,
 }: {
   nom: string;
   /** Ce que la carte annonce sous le nom — « 4 actifs ». */
@@ -28,11 +95,22 @@ export default function CarteCompte({
   icone: React.ReactNode;
   /** Le nombre porté par la pastille de droite, quand il y a lieu. */
   nombre?: number;
+  /**
+   * Les cartes rangées dans le dossier, la première devant.
+   *
+   * ⚠️ **De vraies cartes d'actifs, à leur taille.** Des vignettes réduites auraient
+   * demandé une seconde mise en page à tenir à jour, et n'auraient plus rien annoncé
+   * de fidèle. Le dossier n'en laisse voir que le haut — le logo et le nom — ce qui
+   * suffit à savoir ce qu'il contient sans l'ouvrir.
+   */
+  apercu?: React.ReactNode[];
   ouvert?: boolean;
   onClick?: () => void;
 }) {
-  const clair = decalerClarte(couleur, 0.1);
-  const sombre = decalerClarte(couleur, -0.1);
+  const clair = decalerClarte(couleur, 0.12);
+  const sombre = decalerClarte(couleur, -0.12);
+  const cartes = apercu ?? [];
+
   return (
     <button
       type="button"
@@ -40,7 +118,7 @@ export default function CarteCompte({
       aria-expanded={ouvert}
       aria-label={`${nom} — ${compte}`}
       style={{
-        position: "relative", width: "100%", minWidth: 210, height: 148,
+        position: "relative", width: CARTE_COMPTE.largeur, height: HAUTEUR,
         padding: 0, border: 0, background: "none", cursor: "pointer",
         textAlign: "left", flexShrink: 0,
         // La carte se soulève d'un cheveu quand elle est ouverte : c'est le seul
@@ -49,97 +127,97 @@ export default function CarteCompte({
         transition: "transform 160ms ease",
       }}
     >
-      {/* La pochette, derrière : elle ne dépasse qu'en haut et à droite, comme une
-          feuille glissée dans le dossier. C'est elle qui donne la profondeur.
+      {/* Le paquet de cartes, décalé vers la droite.
+          ⚠️ Rendu à l'envers : la première du tableau doit passer *devant* les autres,
+          et rien n'ordonne l'empilement ici sinon l'ordre du document.
 
-          ⚠️ **Teintée, pas blanche.** La référence est posée sur un fond clair, où une
-          feuille blanche se lit comme du papier ; sur le fond sombre de l'application,
-          le même blanc à 92 % devenait la zone la plus lumineuse de tout l'écran — une
-          barre qui attirait l'œil avant le nom du compte. Une clarté prise sur la
-          couleur du dossier garde la feuille lisible sans la faire crier. */}
-      <div style={{
-        position: "absolute", left: 10, right: 0, top: 0, height: 96,
-        borderRadius: RAYON, background: decalerClarte(couleur, 0.42),
-        boxShadow: `0 2px 10px ${couleur}33`,
-      }} />
-      {/* Le halo de la couleur, tout autour : la référence en porte un, et c'est lui
-          qui empêche les quatre cartes de se lire comme des aplats posés côte à côte. */}
-      <div style={{
-        position: "absolute", inset: -6, borderRadius: RAYON + 6,
-        background: couleur, opacity: 0.16, filter: "blur(6px)", pointerEvents: "none",
-      }} />
+          ⚠️ Décalage latéral et non vertical : les cartes sont alignées en haut pour que
+          leur ligne d'identité tombe dans la bande dégagée, celle qui échappe à la
+          languette. Décalées vers le bas, elles auraient enfoncé le logo derrière elle.
+          Ce sont donc leurs tranches de droite qui dépassent — et c'est ce dépassement,
+          pas un compteur, qui dit qu'il y en a plusieurs. */}
+      {cartes.map((c, i) => i).reverse().map(i => (
+        <div key={i} aria-hidden="true" style={{
+          position: "absolute", left: 16 + i * 14, top: 0,
+          pointerEvents: "none",
+          /**
+           * ⚠️ **La carte s'éteint avant d'atteindre le plan du dossier.** Sous la ligne
+           * d'identité vient le cours, en gros chiffres : la bande qui longe la
+           * languette n'en montrait que la fin, « 3 € » pour 63 493,38 €. Un nombre
+           * tronqué est pire que pas de nombre. Le fondu s'achève là où le plan
+           * commence, si bien que la carte paraît glisser dedans.
+           */
+          maskImage: FONDU, WebkitMaskImage: FONDU,
+          // Les cartes du fond s'effacent : à pleine opacité, trois tranches
+          // empilées font une masse aussi contrastée que le dossier lui-même.
+          opacity: i === 0 ? 1 : 0.72 - i * 0.14,
+        }}>
+          {cartes[i]}
+        </div>
+      ))}
 
-      {/* La languette : le bloc qui remonte à gauche, au-dessus du plan du dossier.
-
-          ⚠️ **Frère du dossier, et non son enfant.** Elle y était, en `top: -22` — et
-          l'`overflow: hidden` du dossier en rognait les 22 pixels qui dépassent, c'est-à-dire
-          exactement ceux qui font la languette : mesuré, 8 pixels visibles sur 30. La carte
-          se lisait comme un rectangle arrondi surmonté d'une barre claire. Ici elle est
-          dessinée avant le dossier, qui vient en recouvrir le bas. */}
+      {/* Le dossier : le filtre porte l'ombre, l'enfant porte la découpe. */}
       <div style={{
-        position: "absolute", left: 0, top: 0, width: "52%", height: 40,
-        borderTopLeftRadius: RAYON, borderTopRightRadius: RAYON,
-        background: clair,
-      }} />
-
-      {/* Le dossier lui-même : le plan de devant, qui recouvre la pochette et la
-          languette et donne au tout son épaisseur. */}
-      <div style={{
-        position: "absolute", inset: 0, top: 22,
-        borderRadius: RAYON,
-        background: `linear-gradient(155deg, ${clair} 0%, ${couleur} 46%, ${sombre} 100%)`,
-        boxShadow: `0 10px 22px ${couleur}47`,
-        overflow: "hidden",
+        position: "absolute", left: 0, top: CARTE_COMPTE.apercu - LANGUETTE.hauteur,
+        width: CARTE_COMPTE.largeur, height: CARTE_COMPTE.panneau + LANGUETTE.hauteur,
+        filter: `drop-shadow(0 10px 18px ${couleur}4D) drop-shadow(0 2px 3px rgba(4,10,24,0.35))`,
       }}>
         <div style={{
-          position: "relative", height: "100%", padding: "12px 14px 12px",
-          display: "flex", flexDirection: "column", justifyContent: "space-between",
+          width: "100%", height: "100%",
+          clipPath: `path("${CONTOUR}")`,
+          background: `linear-gradient(150deg, ${clair} 0%, ${couleur} 48%, ${sombre} 100%)`,
         }}>
-          <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between" }}>
-            <span style={{
-              width: 38, height: 38, borderRadius: 11, flexShrink: 0,
-              background: "rgba(255,255,255,0.92)", color: sombre,
-              display: "flex", alignItems: "center", justifyContent: "center",
-            }}>
-              {icone}
-            </span>
-            {/* La pastille de droite : pleine quand le dossier porte quelque chose,
-                creuse quand il est vide — comme la coche de la référence. */}
-            <span style={{
-              width: 30, height: 30, borderRadius: "50%", flexShrink: 0,
-              display: "flex", alignItems: "center", justifyContent: "center",
-              background: nombre ? "rgba(255,255,255,0.94)" : "transparent",
-              border: nombre ? "none" : "1.5px solid rgba(255,255,255,0.55)",
-              color: sombre, fontSize: 12, fontWeight: 700,
-            }}>
-              {nombre ? nombre : ""}
-            </span>
-          </div>
-
-          <div>
-            <div style={{
-              fontSize: 16, fontWeight: 700, color: "#FFFFFF", lineHeight: 1.15,
-              letterSpacing: "-0.01em",
-            }}>
-              {nom}
+          <div style={{
+            position: "relative", height: "100%",
+            padding: `${LANGUETTE.hauteur + 14}px 16px 14px`,
+            display: "flex", flexDirection: "column", justifyContent: "space-between",
+          }}>
+            <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between" }}>
+              <span style={{
+                width: 40, height: 40, borderRadius: 12, flexShrink: 0,
+                background: "rgba(255,255,255,0.94)", color: sombre,
+                display: "flex", alignItems: "center", justifyContent: "center",
+              }}>
+                {icone}
+              </span>
+              {/* La pastille de droite : pleine quand le dossier porte quelque chose,
+                  creuse quand il est vide — comme la coche de la référence. */}
+              <span style={{
+                width: 30, height: 30, borderRadius: "50%", flexShrink: 0,
+                display: "flex", alignItems: "center", justifyContent: "center",
+                background: nombre ? "rgba(255,255,255,0.94)" : "transparent",
+                border: nombre ? "none" : "1.5px solid rgba(255,255,255,0.55)",
+                color: sombre, fontSize: 12.5, fontWeight: 700,
+              }}>
+                {nombre ? nombre : ""}
+              </span>
             </div>
-            <div style={{
-              display: "flex", alignItems: "center", justifyContent: "space-between",
-              marginTop: 3,
-            }}>
-              <span style={{ fontSize: 12, color: "rgba(255,255,255,0.82)" }}>{compte}</span>
-              {/* Le chevron pivote à l'ouverture : sur la référence il pointe à droite
-                  parce qu'il mène ailleurs ; ici le contenu se déroule en dessous, et
-                  un chevron qui ne bouge pas mentirait sur ce qui va se passer. */}
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none"
-                stroke="rgba(255,255,255,0.9)" strokeWidth={2.4} strokeLinecap="round"
-                strokeLinejoin="round" aria-hidden="true"
-                style={{
-                  transform: ouvert ? "rotate(90deg)" : "none",
-                  transition: "transform 180ms ease",
-                }}>
-                <path d="m9 18 6-6-6-6" />
-              </svg>
+
+            <div>
+              <div style={{
+                fontSize: 19, fontWeight: 700, color: "#FFFFFF", lineHeight: 1.15,
+                letterSpacing: "-0.01em",
+              }}>
+                {nom}
+              </div>
+              <div style={{
+                display: "flex", alignItems: "center", justifyContent: "space-between",
+                marginTop: 3,
+              }}>
+                <span style={{ fontSize: 13, color: "rgba(255,255,255,0.82)" }}>{compte}</span>
+                {/* Le chevron pivote à l'ouverture : sur la référence il pointe à droite
+                    parce qu'il mène ailleurs ; ici le contenu se déroule en dessous, et
+                    un chevron qui ne bouge pas mentirait sur ce qui va se passer. */}
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none"
+                  stroke="rgba(255,255,255,0.9)" strokeWidth={2.4} strokeLinecap="round"
+                  strokeLinejoin="round" aria-hidden="true"
+                  style={{
+                    transform: ouvert ? "rotate(90deg)" : "none",
+                    transition: "transform 180ms ease",
+                  }}>
+                  <path d="m9 18 6-6-6-6" />
+                </svg>
+              </div>
             </div>
           </div>
         </div>
