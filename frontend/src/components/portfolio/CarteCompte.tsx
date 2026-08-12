@@ -37,8 +37,15 @@ export const CARTE_COMPTE = {
   largeur: CARTE_ACTIF.largeur + 56,
   /** Ce qu'on laisse voir des cartes rangées dedans, au-dessus du plan. */
   apercu: 74,
-  /** Le plan de devant, celui qui porte le nom. */
-  panneau: 158,
+  /**
+   * Le plan de devant, celui qui porte le nom.
+   *
+   * ⚠️ Réglé au plus juste : le dossier occupe la place qu'occupaient les cartes, et
+   * chaque pixel qu'il prend au-delà est un pixel retiré à la courbe au-dessus. Mesuré,
+   * le contenu — languette, rembourrage, pictogramme, nom et sous-titre — en demande
+   * 137 ; le reste n'est que de l'air entre le pictogramme et le nom.
+   */
+  panneau: 146,
 };
 const HAUTEUR = CARTE_COMPTE.apercu + CARTE_COMPTE.panneau;
 
@@ -86,7 +93,7 @@ const CONTOUR = (() => {
 })();
 
 export default function CarteCompte({
-  nom, compte, couleur, icone, nombre, apercu, ouvert = false, onClick,
+  nom, compte, couleur, icone, nombre, apercu, onClick,
 }: {
   nom: string;
   /** Ce que la carte annonce sous le nom — « 4 actifs ». */
@@ -104,7 +111,6 @@ export default function CarteCompte({
    * suffit à savoir ce qu'il contient sans l'ouvrir.
    */
   apercu?: React.ReactNode[];
-  ouvert?: boolean;
   onClick?: () => void;
 }) {
   const clair = decalerClarte(couleur, 0.12);
@@ -115,16 +121,14 @@ export default function CarteCompte({
     <button
       type="button"
       onClick={onClick}
-      aria-expanded={ouvert}
-      aria-label={`${nom} — ${compte}`}
+      // ⚠️ Pas d'`aria-expanded` : le dossier ne se déplie pas sous lui-même, il
+      // remplace la vue. Annoncer un dépliement ferait attendre un contenu juste en
+      // dessous, alors que c'est toute la zone qui change.
+      aria-label={`Ouvrir ${nom}, ${compte}`}
       style={{
         position: "relative", width: CARTE_COMPTE.largeur, height: HAUTEUR,
         padding: 0, border: 0, background: "none", cursor: "pointer",
         textAlign: "left", flexShrink: 0,
-        // La carte se soulève d'un cheveu quand elle est ouverte : c'est le seul
-        // retour qui dise « c'est celle-ci que vous regardez » sans ajouter de cerne.
-        transform: ouvert ? "translateY(-2px)" : "none",
-        transition: "transform 160ms ease",
       }}
     >
       {/* Le paquet de cartes, décalé vers la droite.
@@ -205,16 +209,11 @@ export default function CarteCompte({
                 marginTop: 3,
               }}>
                 <span style={{ fontSize: 13, color: "rgba(255,255,255,0.82)" }}>{compte}</span>
-                {/* Le chevron pivote à l'ouverture : sur la référence il pointe à droite
-                    parce qu'il mène ailleurs ; ici le contenu se déroule en dessous, et
-                    un chevron qui ne bouge pas mentirait sur ce qui va se passer. */}
+                {/* Le chevron pointe à droite, comme sur la référence, et ne pivote
+                    plus : il ne déplie rien sous la carte, il mène dans le dossier. */}
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none"
                   stroke="rgba(255,255,255,0.9)" strokeWidth={2.4} strokeLinecap="round"
-                  strokeLinejoin="round" aria-hidden="true"
-                  style={{
-                    transform: ouvert ? "rotate(90deg)" : "none",
-                    transition: "transform 180ms ease",
-                  }}>
+                  strokeLinejoin="round" aria-hidden="true">
                   <path d="m9 18 6-6-6-6" />
                 </svg>
               </div>

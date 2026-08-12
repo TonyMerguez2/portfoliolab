@@ -18,6 +18,8 @@ import PerformanceChart from "@/components/portfolio/PerformanceChart";
 import AssetGrid from "@/components/portfolio/AssetGrid";
 import CarteCompte, { CARTE_COMPTE } from "@/components/portfolio/CarteCompte";
 import CarteActif from "@/components/portfolio/CarteActif";
+import FilAriane from "@/components/portfolio/FilAriane";
+import RailHorizontal from "@/components/portfolio/RailHorizontal";
 import AllocationDonut from "@/components/portfolio/AllocationDonut";
 import RecentActivity from "@/components/portfolio/RecentActivity";
 import PortfolioTabs from "@/components/portfolio/PortfolioTabs";
@@ -840,11 +842,22 @@ function PortfolioPageInner() {
    * filtre appliqué à la seule grille aurait fait mentir la bascule — on ouvre un
    * dossier, on passe en liste, et les autres comptes reviennent sans prévenir.
    */
+  /**
+   * Le dossier réellement ouvert.
+   *
+   * ⚠️ **Dérivé, parce que les comptes se recalculent sous lui.** Vendre la dernière
+   * ligne d'un compte le fait disparaître de la liste ; l'état, lui, continuerait de
+   * le désigner, et la page afficherait un chemin vers un dossier qui n'existe plus,
+   * au-dessus d'une grille vide. On retombe alors sur la vue des dossiers.
+   */
+  const compteActif = compteOuvert != null && comptes.some(c => c.cle === compteOuvert)
+    ? compteOuvert : null;
+
   const lignesMontrees = useMemo(
-    () => (compteOuvert
-      ? (comptes.find(c => c.cle === compteOuvert)?.lignes ?? [])
+    () => (compteActif
+      ? (comptes.find(c => c.cle === compteActif)?.lignes ?? [])
       : enriched),
-    [comptes, compteOuvert, enriched],
+    [comptes, compteActif, enriched],
   );
 
   const [survolCourbe, setSurvolCourbe] =
@@ -1587,30 +1600,54 @@ function PortfolioPageInner() {
 
                 ⚠️ **Un compte vide n'est pas affiché.** Un dossier « Crypto » à zéro
                 ligne sur un portefeuille qui n'en contient pas promettrait un rangement
-                qui n'existe pas. */}
-            {/* ⚠️ Colonnes de largeur **fixe** : la découpe du dossier est un tracé en
-                pixels, qu'une colonne élastique déformerait. */}
-            <div style={{ display: "grid", gap: 16, flexShrink: 0, marginBottom: 16,
-              gridTemplateColumns: `repeat(auto-fill, ${CARTE_COMPTE.largeur}px)` }}>
-              {comptes.map(c => (
-                <CarteCompte key={c.cle} nom={c.cle} couleur={c.couleur} icone={c.icone}
-                  compte={`${c.lignes.length} actif${c.lignes.length > 1 ? "s" : ""}`}
-                  nombre={c.lignes.length}
-                  apercu={[...c.lignes]
-                    .sort((a, b) => b.weight - a.weight)
-                    .slice(0, APERCUS_PAR_DOSSIER)
-                    .map(a => <CarteActif key={a.ticker} a={versCarte(a)} inerte />)}
-                  ouvert={compteOuvert === c.cle}
-                  onClick={() => setCompteOuvert(v => (v === c.cle ? null : c.cle))} />
-              ))}
-            </div>
+                qui n'existe pas.
+
+                ⚠️ **Les dossiers occupent la place des cartes, ils ne s'y ajoutent pas.**
+                Empilés au-dessus d'elles, ils prenaient 230 pixels de haut à un écran qui
+                les retirait à la courbe, pour montrer deux fois la même chose : le dossier
+                d'un côté, son contenu déjà déplié de l'autre. On navigue donc comme dans
+                un explorateur de fichiers — les dossiers, puis leur contenu à leur place,
+                le chemin servant de retour. Le prix à connaître : sans dossier ouvert, il
+                n'y a plus d'écran qui montre toutes les lignes ensemble. */}
             <div style={{ flexShrink: 0 }}>
-              <AssetGrid
-                assets={lignesMontrees.map(versCarte)}
-                onAssetClick={ticker => router.push(`/chart?ticker=${encodeURIComponent(ticker)}`)}
-                view={view}
-                titre={compteOuvert ?? "Vos actifs"}
-              />
+              {compteActif == null ? (
+                <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                  <span style={{ fontFamily: FONT, fontSize: 12.5, fontWeight: 600, color: CLAIR.surFond }}>
+                    Vos comptes
+                  </span>
+                  {/**
+                    * ⚠️ **Un rail sur une seule ligne, et non une grille qui se replie.**
+                    * Les dossiers ont une largeur fixe — la découpe est un tracé en pixels
+                    * qu'une colonne élastique déformerait — si bien qu'à trois comptes sur
+                    * cette largeur, la grille passait à la ligne : mesuré, 485 pixels de
+                    * haut au lieu de 248, et une courbe réduite à 66 pixels. Les cartes
+                    * d'actifs défilent déjà ainsi, à la même place.
+                    */}
+                  <RailHorizontal pasMinimal={CARTE_COMPTE.largeur + 16}>
+                    {comptes.map(c => (
+                      <CarteCompte key={c.cle} nom={c.cle} couleur={c.couleur} icone={c.icone}
+                        compte={`${c.lignes.length} actif${c.lignes.length > 1 ? "s" : ""}`}
+                        nombre={c.lignes.length}
+                        apercu={[...c.lignes]
+                          .sort((a, b) => b.weight - a.weight)
+                          .slice(0, APERCUS_PAR_DOSSIER)
+                          .map(a => <CarteActif key={a.ticker} a={versCarte(a)} inerte />)}
+                        onClick={() => setCompteOuvert(c.cle)} />
+                    ))}
+                  </RailHorizontal>
+                </div>
+              ) : (
+                <AssetGrid
+                  assets={lignesMontrees.map(versCarte)}
+                  onAssetClick={ticker => router.push(`/chart?ticker=${encodeURIComponent(ticker)}`)}
+                  view={view}
+                  titre={
+                    <FilAriane racine="Vos comptes" courant={compteActif}
+                      couleur={comptes.find(c => c.cle === compteActif)?.couleur}
+                      onRacine={() => setCompteOuvert(null)} />
+                  }
+                />
+              )}
             </div>
             {/* Liste — toujours monté */}
             <div style={{ overflowY: "auto", flex: 1, borderRadius: RAYONS.sm, border: `1px solid ${CLAIR.bord}`, display: view === "liste" ? "block" : "none" }}>

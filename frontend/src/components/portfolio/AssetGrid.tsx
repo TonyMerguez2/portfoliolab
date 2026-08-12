@@ -2,6 +2,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import ReactionAvatar from "@/components/ReactionAvatar";
 import CarteActif from "@/components/portfolio/CarteActif";
+import RailHorizontal from "@/components/portfolio/RailHorizontal";
 import { arrange, assetClass, type GridAsset, type SortKey } from "@/lib/portfolio";
 import { FONT, NUM } from "@/lib/typography";
 import { CLAIR, RAYONS } from "@/lib/palette";
@@ -39,12 +40,12 @@ export default function AssetGrid({
   /**
    * Ce que la grille annonce à sa gauche.
    *
-   * ⚠️ **Prop, et non chaîne fixe, parce que la grille peut ne plus tout montrer.**
-   * Un dossier ouvert au-dessus filtre ces cartes : laisser « Vos actifs » ferait lire
-   * une grille amputée comme le portefeuille entier. Le seul autre indice — le dossier
-   * soulevé — sort du champ dès qu'on descend.
+   * ⚠️ **Un nœud et non une chaîne, parce que la grille ne montre pas toujours tout.**
+   * Quand elle affiche le contenu d'un dossier, ce n'est plus un titre qui va là mais
+   * le chemin — avec de quoi remonter. Laisser « Vos actifs » ferait lire une grille
+   * amputée comme le portefeuille entier, et n'offrirait aucun retour.
    */
-  titre?: string;
+  titre?: React.ReactNode;
 }) {
   const [filter, setFilter] = useState("Tous");
   const [sort, setSort] = useState<SortKey>("poids");
@@ -69,57 +70,6 @@ export default function AssetGrid({
   const filtreActif = classes.indexOf(filter) >= 0 ? filter : "Tous";
 
   const shown = useMemo(() => arrange(assets, filtreActif, sort), [assets, filtreActif, sort]);
-
-  // Un rail horizontal cache ses éléments sur un axe qu'on ne pense pas à
-  // explorer. On mesure donc ce qui dépasse de chaque côté, pour l'annoncer :
-  // sans ce repère, un portefeuille de douze lignes en montre sept et laisse
-  // croire qu'il n'en a que sept.
-  const railRef = useRef<HTMLDivElement>(null);
-  const [debord, setDebord] = useState({ gauche: false, droite: false });
-
-  const mesurer = useCallback(() => {
-    const el = railRef.current;
-    if (!el) return;
-    setDebord({
-      gauche: el.scrollLeft > 2,
-      droite: el.scrollLeft + el.clientWidth < el.scrollWidth - 2,
-    });
-  }, []);
-
-  useEffect(() => {
-    const el = railRef.current;
-    if (!el) return;
-    mesurer();
-    // Le panneau latéral se replie sans que la fenêtre change de taille : il
-    // faut observer le rail lui-même, pas l'évènement resize.
-    const ro = new ResizeObserver(mesurer);
-    ro.observe(el);
-    return () => ro.disconnect();
-  }, [mesurer, shown.length]);
-
-  const glisser = (sens: -1 | 1) => {
-    const el = railRef.current;
-    if (!el) return;
-    el.scrollBy({ left: sens * Math.max(258, el.clientWidth * 0.8), behavior: "smooth" });
-  };
-
-  const Fleche = ({ sens }: { sens: -1 | 1 }) => (
-    <button type="button" aria-label={sens < 0 ? "Actifs précédents" : "Actifs suivants"}
-      onClick={() => glisser(sens)}
-      style={{
-        position: "absolute", top: "50%", transform: "translateY(-50%)",
-        [sens < 0 ? "left" : "right"]: 2, zIndex: 3,
-        width: 28, height: 28, borderRadius: "50%", cursor: "pointer",
-        display: "flex", alignItems: "center", justifyContent: "center",
-        background: "rgba(8,20,42,0.88)", border: "1px solid rgba(255,255,255,0.14)",
-        color: "rgba(255,255,255,0.75)", backdropFilter: "blur(8px)",
-      }}>
-      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-        strokeWidth={2.2} strokeLinecap="round" strokeLinejoin="round">
-        <path d={sens < 0 ? "M15 18l-6-6 6-6" : "M9 18l6-6-6-6"} />
-      </svg>
-    </button>
-  );
 
   /**
    * La variation moyenne des lignes montrées, qui sert de repère à l'avatar.
@@ -202,22 +152,9 @@ export default function AssetGrid({
         </div>
       </div>
 
-      {/* Rail horizontal. Les cartes gardent une largeur fixe — c'est ce qui
-          les maintient toutes à la même taille — et le rail défile. */}
-      <div style={{ position: "relative", minWidth: 0 }}>
-        {view !== "liste" && debord.gauche && <Fleche sens={-1} />}
-        {view !== "liste" && debord.droite && <Fleche sens={1} />}
-        {/* Voiles de bord : ils coupent les cartes en lisière plutôt que de les
-            laisser finir net, ce qui signale la continuation même à l'arrêt. */}
-        {view !== "liste" && debord.gauche && <div style={{ position:"absolute", left:0, top:0, bottom:0, width:44, zIndex:2, pointerEvents:"none",
-          background:`linear-gradient(to right, ${CLAIR.fond}, transparent)` }} />}
-        {view !== "liste" && debord.droite && <div style={{ position:"absolute", right:0, top:0, bottom:0, width:44, zIndex:2, pointerEvents:"none",
-          background:`linear-gradient(to left, ${CLAIR.fond}, transparent)` }} />}
-      <div ref={railRef} className="novac-rail" onScroll={mesurer} style={{
-        display: view === "liste" ? "none" : "flex",
-        gap: 10, overflowX: "auto", overflowY: "hidden",
-        scrollbarWidth: "none", paddingBottom: 2,
-      }}>
+      {/* Les cartes gardent une largeur fixe — c'est ce qui les maintient toutes à la
+          même taille — et le rail défile. */}
+      <RailHorizontal cache={view === "liste"}>
         {shown.map(a => {
           /**
            * ⚠️ **L'avatar réagit à l'écart au portefeuille, pas à la variation brute.**
@@ -237,8 +174,7 @@ export default function AssetGrid({
             </ReactionAvatar>
           );
         })}
-      </div>
-      </div>
+      </RailHorizontal>
 
     </div>
   );
