@@ -49,16 +49,26 @@ export function repartir(style?: CSSProperties): { cadre: CSSProperties; carte: 
 }
 
 export default function Cadre({
-  children, style,
+  children, style, classeCarte,
 }: {
   children: ReactNode;
   /** Réparti automatiquement entre les deux couches. */
   style?: CSSProperties;
+  /**
+   * Une classe pour la couche **intérieure**, celle qui porte le fond, le liseré
+   * et le rayon.
+   *
+   * Le nom dit explicitement laquelle des deux couches la reçoit : un simple
+   * `className` laisserait à deviner, et se tromper de couche est silencieux —
+   * un effet de bord posé sur l'anneau extérieur habillerait le vide entre les
+   * deux cadres au lieu du liseré qu'on visait.
+   */
+  classeCarte?: string;
 }) {
   const { cadre, carte } = repartir(style);
   return (
     <div style={{ ...styleCadreExterieur(), ...cadre }}>
-      <div style={{ ...styleCarteInterieure(), ...carte }}>
+      <div className={classeCarte} style={{ ...styleCarteInterieure(), ...carte }}>
         {children}
       </div>
     </div>

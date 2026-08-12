@@ -179,12 +179,13 @@ export default function ConstatsObjectif({
   const aide = aides.length > 0 ? aides[index] : null;
 
   return (
-    // ⚠️ **Le cadre commun de la page, bord compris.** Un rebord de verre a été essayé ici —
-    // un anneau conique de gris métalliques, à l'épaisseur exacte du bord composite des
-    // voisins — puis retiré : l'effet ne convainquait pas sur ce panneau. Le seul écart avec
-    // les autres conteneurs est désormais le fond, qui porte le ciel ; l'anneau extérieur, son
-    // voile, le liseré gris et les deux rayons concentriques sont les leurs, sans surcharge.
-    <Cadre style={{
+    // ⚠️ **Le cadre commun de la page, liseré sombre compris.** Un rebord de verre a été
+    // essayé ici — un anneau conique de gris métalliques, à l'épaisseur exacte du bord
+    // composite des voisins — puis retiré : il *remplaçait* le liseré, et singularisait le
+    // panneau en permanence. Ce qui court dessus maintenant est un arc court : le bord reste
+    // celui des voisins la plus grande partie du temps, et l'éclat ne fait que passer. Voir
+    // `.novac-bord-defilant` dans globals.css, où tient toute la mécanique.
+    <Cadre classeCarte="novac-bord-defilant" style={{
       flexShrink: 0,
       display: "flex", flexDirection: "column", gap: 10, minHeight: 0,
       background: `${CIEL}, ${FOND_ESPACE}`,
@@ -242,17 +243,20 @@ export default function ConstatsObjectif({
               Le texte enroule donc un peu plus tôt, et le nombre — ce qu'on retient de la
               carte — passe de 17 à 24 pixels.
 
-              ⚠️ Le liseré tourne autour de lui pour marquer son importance, et **s'arrête pour
-              qui demande à réduire les animations** : voir `.novac-liseré-defilant` dans
-              globals.css. Une boucle infinie est précisément ce que cette préférence désigne, et
-              l'anneau garde son sens à l'arrêt puisqu'il entoure toujours le chiffre. */}
+              ⚠️ **Aucun anneau autour de lui.** Il en a porté un, qui tournait ; à cette taille
+              de bloc le tour se lisait comme un indicateur de chargement, et une ligne claire à
+              huit pixels des chiffres les concurrençait plus qu'elle ne les désignait. L'éclat
+              est passé sur le bord du panneau. Ce qui distingue ce nombre est ce qui doit le
+              distinguer : sa taille, sa graisse, et le blanc presque pur. */}
           {aide.metrique && (
-            <div className="novac-liseré-defilant"
+            <div
               style={{ display: "flex", flexDirection: "column", alignItems: "center",
                 // ⚠️ **Comprimable, et non figé à 168.** Vu à l'écran sur un panneau resserré
                 // à 144 pixels : un bloc de largeur fixe débordait et le chiffre sortait du
                 // cadre. `flex: 0 1` lui laisse céder ce qu'il faut sans jamais s'étirer.
-                justifyContent: "center", flex: "0 1 168px", minWidth: 92, borderRadius: 14,
+                // Le rayon a suivi l'anneau : plus rien n'est peint ici, une valeur d'angle
+                // n'y décrirait aucune forme.
+                justifyContent: "center", flex: "0 1 168px", minWidth: 92,
                 padding: "8px 10px", boxSizing: "border-box", alignSelf: "center" }}>
               <span style={{ ...NUM, fontSize: 24, fontWeight: 700, lineHeight: 1.05,
                 color: "rgba(255,255,255,0.97)", textAlign: "center",
