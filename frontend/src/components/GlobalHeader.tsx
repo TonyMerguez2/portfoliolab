@@ -408,37 +408,36 @@ export default function GlobalHeader() {
 
       {/* Le salut a été retiré : il occupait la moitié gauche du bandeau pour
           répéter un prénom déjà lisible en bas de la barre latérale. Le
-          sous-titre reste sur la page portefeuille, lui seul disant quelque
-          chose de la page regardée. */}
-      {pathname.startsWith("/portfolio") && (
-        <div style={{
-          position:"fixed", top:"18px", left:"calc(var(--novac-nav-w, 232px) + 20px)", zIndex:50,
-          lineHeight:1.25, transition:"left 220ms cubic-bezier(0.4,0,0.2,1)",
-        }}>
-          <p style={{ margin:0, fontSize:"12px", color:JETONS.texteSecondaire, whiteSpace:"nowrap" }}>
-            Voici la performance de votre portefeuille
-          </p>
-        </div>
-      )}
+          sous-titre de la page portefeuille — « Voici la performance de votre
+          portefeuille » — l'a suivi : il occupait à son tour cette moitié gauche
+          pour énoncer ce que les chiffres juste en dessous montrent déjà. C'est
+          la recherche qui prend la place, et elle a de quoi la remplir. */}
 
       {/* La navigation vit désormais dans SideNav, en panneau latéral. */}
 
       {showDropdown && <div style={{ position:"fixed", inset:0, zIndex:49 }} onClick={() => setShowDropdown(false)}/>}
 
 
-      {/* Recherche globale.
+      {/* Recherche globale, à gauche du bandeau.
           Elle n'existait que repliée dans le menu du portefeuille, et sur la
           page portefeuille ce menu ne montre que les portefeuilles : il n'y
-          avait donc aucun moyen de chercher un actif depuis cette page. */}
-      <div style={{ position:"fixed", top:"12px", right:"20px", zIndex:50, display:"flex", alignItems:"flex-start", gap:"8px" }}>
-        {/* Le sélecteur de portefeuille vivait ici. Retiré à la demande : il
-            encombrait le bandeau à gauche de la recherche.
-            Conséquence à connaître — c'était le seul moyen de passer d'un
-            portefeuille à l'autre. La page prend désormais celui du contexte,
-            ou le premier de la liste à défaut. */}
+          avait donc aucun moyen de chercher un actif depuis cette page.
 
+          ⚠️ **Le calage part de la largeur de la barre latérale, pas d'une
+          constante.** `--novac-nav-w` vaut 232 dépliée et bien moins repliée ;
+          un `left: 252px` figé ferait chevaucher le champ et le menu au repli.
+          La transition reprend celle de `.novac-shell` — même durée, même
+          courbe — pour que le champ glisse avec le panneau au lieu de sauter
+          quand il se termine.
 
-        <div style={{ position:"relative", width:"320px" }}>
+          ⚠️ Le conteneur est `fixed`, ce qui suffit à ancrer le panneau de
+          résultats en dessous : un `position: relative` intermédiaire, qu'il y
+          avait ici, ne servait plus à rien. */}
+      <div style={{
+        position:"fixed", top:"12px", left:"calc(var(--novac-nav-w, 232px) + 20px)",
+        zIndex:50, width:"320px",
+        transition:"left 220ms cubic-bezier(0.4,0,0.2,1)",
+      }}>
         <div style={{
           display:"flex", alignItems:"center", gap:"8px", height:"36px", padding:"0 12px",
           borderRadius:RAYONS.md, boxSizing:"border-box",
@@ -484,8 +483,13 @@ export default function GlobalHeader() {
         </div>
 
         {showSearch && (
+          // ⚠️ **Ancré à gauche, et ce n'est pas un détail de symétrie.** Le panneau
+          // fait 420 de large pour un champ de 320 ; accroché à droite comme avant, il
+          // débordait de cent pixels *vers la gauche* — donc sous la barre latérale,
+          // qu'il recouvrait. À droite du bandeau ce dépassement tombait dans le vide et
+          // ne se voyait pas. Déplacer le champ a rendu l'ancrage faux.
           <div style={{
-            position:"absolute", top:"calc(100% + 6px)", right:0, width:"420px",
+            position:"absolute", top:"calc(100% + 6px)", left:0, width:"420px",
             background:"rgba(4,17,36,0.97)", border:"1px solid rgba(255,255,255,0.1)",
             borderRadius:"12px", overflow:"hidden", boxShadow:"0 16px 48px rgba(0,0,0,0.5)", zIndex:60,
           }} onMouseDown={e => e.preventDefault()}>
@@ -524,10 +528,16 @@ export default function GlobalHeader() {
         )}
         </div>
 
-        {/* Cloche. Pas de pastille de notification : il n'existe aucune source
-            d'alertes dans le projet, et un point coloré promettrait du contenu
-            qui n'arriverait jamais. Elle dit ce qu'elle sait. */}
-        <div style={{ position:"relative" }}>
+      {/* Cloche. Pas de pastille de notification : il n'existe aucune source
+          d'alertes dans le projet, et un point coloré promettrait du contenu
+          qui n'arriverait jamais. Elle dit ce qu'elle sait.
+
+          ⚠️ **Elle reste à droite, seule dans son bloc.** Le champ et elle
+          partageaient un conteneur `flex` collé au bord droit ; la recherche étant
+          partie à gauche, ce conteneur n'avait plus qu'un enfant. Deux blocs
+          `fixed` indépendants disent mieux ce qui se passe : l'un suit la barre
+          latérale, l'autre le bord droit, et rien ne les lie. */}
+      <div style={{ position:"fixed", top:"12px", right:"20px", zIndex:50 }}>
           <button type="button" onClick={() => setShowNotifs(v => !v)}
             aria-label="Réglages" title="Réglages"
             /* L'état courant du visage, lisible depuis l'extérieur. Sert aux
@@ -575,7 +585,6 @@ export default function GlobalHeader() {
               </span>
             </div>
           )}
-        </div>
       </div>
       {(showSearch || showNotifs) && (
         <div style={{ position:"fixed", inset:0, zIndex:49 }}
