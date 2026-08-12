@@ -3,7 +3,9 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import {
   RAYON_TETE, type Orientation, type ReglagesOeil, cheminOeil, cheminsSurLaTete,
+  projeter, tournerTete, traitSurLaTete,
 } from "@/lib/avatarSpherique";
+import { grilleSpherique } from "@/lib/avatarGrille";
 import { PRESETS, SKINS, type Palette, skinParCle } from "@/lib/avatarSkins";
 import { type EtatVie, VIE_AU_REPOS, creerVie } from "@/lib/avatarVie";
 import { ETATS } from "@/lib/avatarEtats";
@@ -34,6 +36,23 @@ import { ETATS } from "@/lib/avatarEtats";
  * système de couleurs vient ensuite — sans quoi on ne saurait plus, en regardant
  * l'écran, ce qui vient de la maquette et ce qui vient du thème.
  */
+
+/**
+ * Le maillage de la sphère, calculé une fois pour la vie du module.
+ *
+ * ⚠️ Hors du composant, et pas dans un `useMemo` : il ne dépend d'aucun état. Placé
+ * dedans, il serait refait à chaque montage pour rendre exactement la même chose.
+ */
+const GRILLE = grilleSpherique();
+
+/**
+ * Les couleurs des trois axes, dans la convention universelle X rouge, Y vert, Z bleu.
+ *
+ * ⚠️ Ne pas la réinventer : quiconque a déjà ouvert un logiciel 3D lit ces trois
+ * couleurs sans légende, et les intervertir coûterait plus cher que tout ce qu'un choix
+ * plus joli pourrait rapporter.
+ */
+const COULEUR_AXE = { x: "#F87171", y: "#4ADE80", z: "#60A5FA" } as const;
 
 const ACCENT = "#6366F1";
 const ENCRE = "#121214";
@@ -82,6 +101,8 @@ function identiques(a: EtatVie, b: EtatVie): boolean {
 export default function AvatarProceduralPage() {
   const [lacet, setLacet] = useState(-2);
   const [tangage, setTangage] = useState(0);
+  const [roulis, setRoulis] = useState(0);
+  const [grille, setGrille] = useState(true);
   const [vie, setVie] = useState<EtatVie>(VIE_AU_REPOS);
   const [expression, setExpression] = useState<CleExpression>("neutre");
   const [largeur, setLargeur] = useState(19);
@@ -119,8 +140,40 @@ export default function AvatarProceduralPage() {
   const orientation: Orientation = useMemo(() => ({
     lacet: rad(lacet + vie.lacet),
     tangage: rad(tangage + vie.tangage),
-    roulis: rad(vie.roulis),
-  }), [lacet, tangage, vie]);
+    roulis: rad(roulis + vie.roulis),
+  }), [lacet, tangage, roulis, vie]);
+
+  /**
+   * Le maillage projeté : parallèles, méridiens et axes, séparés avant/arrière.
+   *
+   * ⚠️ **L'arrière se dessine, il ne se jette pas.** C'est lui qui donne le volume :
+   * sur une sphère opaque vue en orthographique, la seule chose qui distingue un
+   * quart de tour d'un trois-quarts de tour, c'est la façon dont les lignes cachées
+   * se resserrent. Tracé en pâle par-dessus la sphère, comme un globe filaire.
+   */
+  const maillage = useMemo(() => {
+    if (!grille) return null;
+    const devant: string[] = [], derriere: string[] = [];
+    const ajouter = (courbe: { x: number; y: number; z: number }[]) => {
+      const t = traitSurLaTete(courbe, orientation);
+      if (t.devant) devant.push(t.devant);
+      if (t.derriere) derriere.push(t.derriere);
+    };
+    for (let i = 1; i < GRILLE.meridiens.length; i++) ajouter(GRILLE.meridiens[i]);
+    for (const p of GRILLE.paralleles) ajouter(p);
+    return {
+      devant: devant.join(" "),
+      derriere: derriere.join(" "),
+      // L'équateur et le méridien du visage portent le repère : accentués, ils disent
+      // d'un coup d'œil où passent l'horizon de la tête et son plan de symétrie.
+      equateur: traitSurLaTete(GRILLE.equateur, orientation),
+      median: traitSurLaTete(GRILLE.meridiens[0], orientation),
+      axes: GRILLE.axes.map(a => {
+        const p = tournerTete(a.pointe, orientation.lacet, orientation.tangage, orientation.roulis ?? 0);
+        return { cle: a.cle, signe: a.signe, devant: p.z >= 0, bout: projeter(p, RAYON_TETE) };
+      }),
+    };
+  }, [grille, orientation]);
 
   const cheminsMotifs = useMemo(
     () => motifs.map(m => ({
@@ -306,8 +359,8 @@ export default function AvatarProceduralPage() {
   const bouger = useCallback((e: React.PointerEvent) => {
     const prise = saisie.current;
     if (prise) {
-      const l = borner(prise.lacet + (e.clientX - prise.x) * 0.22, -55, 55);
-      const t = borner(prise.tangage + (e.clientY - prise.y) * 0.22, -42, 42);
+      const l = borner(prise.lacet + (e.clientX - prise.x) * 0.35, -180, 180);
+      const t = borner(prise.tangage + (e.clientY - prise.y) * 0.35, -180, 180);
       poser(l, t);
       return;
     }
@@ -319,10 +372,16 @@ export default function AvatarProceduralPage() {
     // ⚠️ Lu dans une référence et non dans l'état : `bouger` est mémorisé, et le
     // faire dépendre de la vie le recréerait soixante fois par seconde.
     const force = amplitude * suiviRef.current;
+    /**
+     * ⚠️ **L'écart est borné, pas la pose.** Les bornes valaient ±55° et ±42° en
+     * absolu : dès que la tête pouvait faire un tour complet, elles ramenaient de
+     * force une pose de dos vers le trois-quarts, et le curseur reculait tout seul
+     * sous la souris. Ce qu'il faut brider, c'est ce que la souris *ajoute*.
+     */
     cible.current = {
-      lacet: borner(repos.current.lacet + dx * force, -55, 55),
+      lacet: repos.current.lacet + dx * force,
       // Moins d'amplitude en vertical : une tête bascule moins haut qu'elle ne pivote.
-      tangage: borner(repos.current.tangage + dy * force * 0.62, -42, 42),
+      tangage: repos.current.tangage + dy * force * 0.62,
     };
   }, [suivi, amplitude, poser]);
 
@@ -364,8 +423,9 @@ export default function AvatarProceduralPage() {
             onPointerUp={relacher}
             onPointerCancel={relacher}
             role="img"
-            aria-label={`Visage orienté de ${lacet.toFixed(0)} degrés horizontalement `
-              + `et ${tangage.toFixed(0)} degrés verticalement`}
+            aria-label={`Visage orienté de ${lacet.toFixed(0)} degrés horizontalement, `
+              + `${tangage.toFixed(0)} degrés verticalement et ${roulis.toFixed(0)} degrés `
+              + "d’inclinaison"}
             style={{ width: "min(72%, 520px)", height: "auto", display: "block", flexShrink: 0 }}
           >
             {/* ⚠️ **Le squash est une échelle du rendu, pas une déformation de la
@@ -384,6 +444,75 @@ export default function AvatarProceduralPage() {
                   stroke={m.trait ?? "none"} strokeWidth={m.epaisseur ?? 0}
                   strokeLinejoin="round" />
               ))}
+              {/**
+                * Le maillage, entre les motifs et les yeux.
+                *
+                * ⚠️ **Par-dessus la sphère, y compris pour sa face cachée.** Un fil de
+                * fer se dessine normalement *à travers* le volume ; ici la sphère est
+                * un aplat opaque, et les lignes de derrière seraient purement et
+                * simplement effacées. On les peint donc au-dessus, en très pâle : la
+                * lecture reste celle d'un globe transparent, sans avoir à rendre la
+                * tête translucide.
+                *
+                * ⚠️ `vectorEffect` fixe l'épaisseur du trait **à l'écran**, alors que
+                * tout le SVG est mis à l'échelle par la largeur du panneau. Sans lui,
+                * la grille s'épaissit avec la fenêtre et finit par manger la sphère.
+                */}
+              {maillage && (
+                <g fill="none" strokeLinecap="round" strokeLinejoin="round"
+                  vectorEffect="non-scaling-stroke" pointerEvents="none">
+                  <path d={maillage.derriere} stroke="rgba(255,255,255,0.13)" strokeWidth={1} />
+                  <path d={maillage.equateur.derriere} stroke="rgba(255,255,255,0.22)" strokeWidth={1.4} />
+                  <path d={maillage.median.derriere} stroke="rgba(255,255,255,0.22)" strokeWidth={1.4} />
+                  <path d={maillage.devant} stroke="rgba(255,255,255,0.34)" strokeWidth={1} />
+                  <path d={maillage.equateur.devant} stroke="rgba(255,255,255,0.62)" strokeWidth={1.6} />
+                  <path d={maillage.median.devant} stroke="rgba(255,255,255,0.62)" strokeWidth={1.6} />
+                  {/* Les axes de la tête. Celui qui pointe vers l'avant est l'axe du
+                      regard : c'est lui qu'on suit pour savoir où le visage est tourné. */}
+                  {maillage.axes.map((a, i) => (
+                    <line key={i} x1={0} y1={0} x2={a.bout.x} y2={a.bout.y}
+                      stroke={COULEUR_AXE[a.cle]} strokeWidth={a.devant ? 1.8 : 1.2}
+                      strokeDasharray={a.devant ? undefined : "3 4"}
+                      opacity={a.devant ? 0.9 : 0.34} />
+                  ))}
+                  {/**
+                    * ⚠️ **Un axe pointé vers l'observateur se projette en un point, et
+                    * il faut le dire autrement.** En orthographique, l'axe du regard
+                    * de face n'a aucune longueur à l'écran : la ligne disparaît et
+                    * l'étiquette vient se poser au milieu du visage. On reprend donc
+                    * la notation des schémas — un cercle pointé quand l'axe sort vers
+                    * nous, un cercle barré quand il s'enfonce — et l'étiquette se
+                    * décale d'une distance fixe plutôt que de suivre une longueur nulle.
+                    */}
+                  {maillage.axes.filter(a => a.signe === 1).map((a, i) => {
+                    const longueur = Math.hypot(a.bout.x, a.bout.y);
+                    const deFace = longueur < 20;
+                    const couleur = COULEUR_AXE[a.cle];
+                    const opacite = a.devant ? 0.95 : 0.42;
+                    const x = deFace ? a.bout.x + 15 : a.bout.x * 1.12;
+                    const y = deFace ? a.bout.y + 15 : a.bout.y * 1.12;
+                    return (
+                      <g key={i} opacity={opacite}>
+                        {deFace && (<>
+                          <circle cx={a.bout.x} cy={a.bout.y} r={5.5}
+                            stroke={couleur} strokeWidth={1.6} fill="none" />
+                          {a.devant ? (
+                            <circle cx={a.bout.x} cy={a.bout.y} r={1.8} fill={couleur} stroke="none" />
+                          ) : (
+                            <path d={`M ${a.bout.x - 3.6} ${a.bout.y - 3.6} L ${a.bout.x + 3.6} ${a.bout.y + 3.6}`
+                              + ` M ${a.bout.x + 3.6} ${a.bout.y - 3.6} L ${a.bout.x - 3.6} ${a.bout.y + 3.6}`}
+                              stroke={couleur} strokeWidth={1.5} />
+                          )}
+                        </>)}
+                        <text x={x} y={y} fill={couleur} stroke="none"
+                          fontSize={11} fontWeight={700} textAnchor="middle" dominantBaseline="middle">
+                          {a.cle.toUpperCase()}
+                        </text>
+                      </g>
+                    );
+                  })}
+                </g>
+              )}
               <path d={oeilGauche} fill={palette.yeux} />
               <path d={oeilDroit} fill={palette.yeux} />
             </g>
@@ -580,14 +709,48 @@ export default function AvatarProceduralPage() {
 
           <Carte
             titre="Rotation de la tête"
-            note="Ce sont les deux entrées de la projection sphérique. Elles peuvent plus tard venir d'un geste, du regard ou d'un moteur IA."
+            note="Les trois entrées de la projection sphérique, sur un tour complet chacune. Elles peuvent plus tard venir d’un geste, du regard ou d’un moteur IA."
           >
-            <Curseur libelle="Rotation horizontale Y" valeur={lacet} affichage={`${lacet.toFixed(0)}°`}
-              min={-55} max={55} pas={1}
+            {/**
+              * ⚠️ **Bornées à ±180°, et non repliées.** Un repli ferait sauter la valeur
+              * de 179 à −179 ; l'amorti du suivi, qui interpole vers la cible, prendrait
+              * alors le tour long — 358° de rotation pour un degré demandé. Bornées, les
+              * trois plages couvrent déjà toutes les orientations atteignables.
+              */}
+            <Curseur libelle="Lacet — autour de Y" valeur={lacet} affichage={`${lacet.toFixed(0)}°`}
+              min={-180} max={180} pas={1}
               onChange={v => { poser(v, repos.current.tangage); setLacet(v); }} />
-            <Curseur libelle="Rotation verticale X" valeur={tangage} affichage={`${tangage.toFixed(0)}°`}
-              min={-42} max={42} pas={1}
+            <Curseur libelle="Tangage — autour de X" valeur={tangage} affichage={`${tangage.toFixed(0)}°`}
+              min={-180} max={180} pas={1}
               onChange={v => { poser(repos.current.lacet, v); setTangage(v); }} />
+            {/* Le roulis ne passe pas par le repos : il n'entre ni dans le glisser ni
+                dans le suivi de la souris, qui n'ont que deux degrés de liberté. */}
+            <Curseur libelle="Roulis — autour de Z" valeur={roulis} affichage={`${roulis.toFixed(0)}°`}
+              min={-180} max={180} pas={1} onChange={setRoulis} />
+            <div style={{ display: "flex", gap: 10, marginTop: 4 }}>
+              <button type="button"
+                onClick={() => { poser(0, 0); setLacet(0); setTangage(0); setRoulis(0); }}
+                style={{
+                  flex: 1, padding: "9px 8px", borderRadius: 9, cursor: "pointer",
+                  fontSize: 12.5, fontWeight: 600, fontFamily: "inherit",
+                  border: `1px solid ${BORD}`, background: "#FFFFFF", color: "#33333D",
+                }}>
+                Remettre de face
+              </button>
+            </div>
+          </Carte>
+
+          <Carte
+            titre="Géométrie de la sphère"
+            note="Le maillage montre la surface sur laquelle tout est peint : parallèles, méridiens, et les trois axes de la tête. Les lignes pâles passent derrière."
+          >
+            <Bascule libelle="Afficher la grille" actif={grille} onChange={setGrille} />
+            <p style={{ margin: "14px 0 0", color: DOUX, fontSize: 12, lineHeight: 1.55 }}>
+              L’axe <b style={{ color: COULEUR_AXE.z }}>Z</b> est celui du regard,
+              {" "}<b style={{ color: COULEUR_AXE.y }}>Y</b> l’axe des pôles,
+              {" "}<b style={{ color: COULEUR_AXE.x }}>X</b> celui des oreilles. En
+              pointillé quand ils pointent vers l’arrière.
+            </p>
           </Carte>
 
           <Carte

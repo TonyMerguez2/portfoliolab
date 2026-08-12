@@ -410,6 +410,152 @@ export function cheminSvg(points: Point2[]): string {
 }
 
 /**
+ * Écrit une polyligne **ouverte**, pour un trait qu'on ne referme pas.
+ *
+ * ⚠️ Deux points suffisent, là où `cheminSvg` en exige trois : un contour à deux
+ * sommets n'enferme aucune surface, mais un trait à deux sommets est un segment. La
+ * grille en produit à foison, dès qu'un méridien ne fait qu'effleurer la silhouette.
+ */
+export function cheminOuvert(points: Point2[]): string {
+  if (points.length < 2) return "";
+  const bout = (p: Point2) => `${p.x.toFixed(2)} ${p.y.toFixed(2)}`;
+  let d = `M ${bout(points[0])}`;
+  for (let i = 1; i < points.length; i++) d += ` L ${bout(points[i])}`;
+  return d;
+}
+
+/**
+ * Un **parallèle** : le cercle de la sphère à une latitude donnée.
+ *
+ * ⚠️ **Ce n'est pas un grand cercle, et c'est justement pourquoi il fallait l'écrire.**
+ * `grandCercle` ne rend que les cercles de rayon 1, ceux dont le plan passe par le
+ * centre ; un parallèle a le rayon `cos(latitude)` et flotte à la hauteur `sin(latitude)`.
+ * Seul l'équateur appartient aux deux familles.
+ */
+export function cercleDeLatitude(latitude: number, echantillons: number = 96): Vec3[] {
+  const r = Math.cos(latitude), y = Math.sin(latitude);
+  const points: Vec3[] = [];
+  for (let i = 0; i < echantillons; i++) {
+    const t = (i / echantillons) * TAU;
+    points.push({ x: r * Math.cos(t), y, z: r * Math.sin(t) });
+  }
+  return points;
+}
+
+/**
+ * Sépare une courbe en tronçons visibles et tronçons cachés.
+ *
+ * ⚠️ **Ce n'est pas `couperHemisphere`, et les confondre serait une faute.** Celui-là
+ * découpe une **surface** : il jette l'arrière et referme ce qui reste en longeant la
+ * silhouette, parce qu'un aplat doit border la tête. Ici on découpe un **trait** : il
+ * n'y a rien à refermer, et l'arrière ne se jette pas — c'est même lui qui donne le
+ * volume, tracé en clair derrière la sphère comme sur un globe filaire. Refermer ces
+ * tronçons aurait peint des lunes pleines à la place des lignes.
+ *
+ * Les points de traversée sont renormalisés et **partagés** par les deux côtés : sans
+ * quoi le trait laisserait un trou d'un demi-échantillon à chaque passage du bord.
+ */
+export function couperParProfondeur(
+  courbe: Vec3[], ferme: boolean = true,
+): { devant: Vec3[][]; derriere: Vec3[][] } {
+  const n = courbe.length;
+  if (n < 2) return { devant: [], derriere: [] };
+
+  let haut = -Infinity, bas = Infinity;
+  for (let i = 0; i < n; i++) {
+    haut = Math.max(haut, courbe[i].z);
+    bas = Math.min(bas, courbe[i].z);
+  }
+  // ⚠️ **Les cas d'un seul côté sont traités d'abord, et pas par économie.** Sur une
+  // courbe fermée entièrement visible, le parcours général rendrait deux tronçons —
+  // celui qui part du premier point et celui qui y revient — donc deux traits au lieu
+  // d'un. Invisible à l'écran, faux à la mesure.
+  if (bas >= 0) return { devant: [courbe], derriere: [] };
+  if (haut < 0) return { devant: [], derriere: [courbe] };
+
+  const traversee = (a: Vec3, b: Vec3): Vec3 => {
+    const t = a.z / (a.z - b.z);
+    return normaliser({
+      x: a.x + (b.x - a.x) * t,
+      y: a.y + (b.y - a.y) * t,
+      z: 0,
+    });
+  };
+
+  /**
+   * ⚠️ Sur une courbe fermée, le parcours démarre sur une traversée. Démarré n'importe
+   * où, il couperait un tronçon en deux au point de départ.
+   */
+  let depart = 0;
+  if (ferme) {
+    for (let i = 0; i < n; i++) {
+      if ((courbe[i].z >= 0) !== (courbe[(i - 1 + n) % n].z >= 0)) { depart = i; break; }
+    }
+  }
+
+  const devant: Vec3[][] = [];
+  const derriere: Vec3[][] = [];
+  const segments = ferme ? n : n - 1;
+  let visible = courbe[depart].z >= 0;
+  /**
+   * ⚠️ **Sur une courbe fermée, le premier tronçon s'ouvre sur la traversée qui le
+   * précède, pas sur le sommet de départ.** Ouvert au sommet, il lui manquait le
+   * morceau compris entre la silhouette et ce sommet — un morceau que le parcours
+   * rendait à la toute fin, en un second tronçon du même côté. Mesuré sur un équateur
+   * vu de face : deux traits devant au lieu d'un, aboutés au même endroit, donc
+   * rigoureusement invisibles et rigoureusement faux.
+   */
+  let morceau: Vec3[] = ferme
+    ? [traversee(courbe[(depart - 1 + n) % n], courbe[depart]), courbe[depart]]
+    : [courbe[depart]];
+
+  for (let k = 0; k < segments; k++) {
+    const a = courbe[(depart + k) % n];
+    const b = courbe[(depart + k + 1) % n];
+    if ((a.z >= 0) === (b.z >= 0)) { morceau.push(b); continue; }
+    const p = traversee(a, b);
+    morceau.push(p);
+    (visible ? devant : derriere).push(morceau);
+    visible = !visible;
+    morceau = [p, b];
+  }
+  // Le tour bouclé, ce qui reste en main n'est que la reprise du premier tronçon :
+  // la dernière traversée est celle sur laquelle on avait ouvert. Une courbe ouverte,
+  // elle, n'a pas de reprise — son dernier tronçon est bien à rendre.
+  if (!ferme && morceau.length >= 2) (visible ? devant : derriere).push(morceau);
+  return { devant, derriere };
+}
+
+/**
+ * Le `d` d'un trait posé sur la sphère, séparé selon qu'il passe devant ou derrière.
+ *
+ * Le pendant de `cheminSurLaTete` pour les lignes. Deux attributs plutôt qu'un, parce
+ * que les deux faces ne se dessinent pas pareil : l'avant en plein, l'arrière en pâle.
+ */
+export function traitSurLaTete(
+  courbe: Vec3[], orientation: Orientation, rayon: number = RAYON_TETE,
+  ferme: boolean = true,
+): { devant: string; derriere: string } {
+  const tourne: Vec3[] = [];
+  for (let i = 0; i < courbe.length; i++) {
+    tourne.push(tournerTete(
+      courbe[i], orientation.lacet, orientation.tangage, orientation.roulis ?? 0));
+  }
+  const coupe = couperParProfondeur(tourne, ferme);
+  const ecrire = (morceaux: Vec3[][]) => {
+    const bouts: string[] = [];
+    for (let i = 0; i < morceaux.length; i++) {
+      const ecran: Point2[] = [];
+      for (let j = 0; j < morceaux[i].length; j++) ecran.push(projeter(morceaux[i][j], rayon));
+      const d = cheminOuvert(ecran);
+      if (d) bouts.push(d);
+    }
+    return bouts.join(" ");
+  };
+  return { devant: ecrire(coupe.devant), derriere: ecrire(coupe.derriere) };
+}
+
+/**
  * Un **fuseau** : la portion de sphère comprise entre deux demi-grands-cercles qui
  * partagent le même axe — un quartier d'orange.
  *
