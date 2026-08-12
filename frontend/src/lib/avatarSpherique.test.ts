@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   RAYON_TETE, type Point2, type Vec3,
-  ancrageOeil, cheminOeil, contourCapsule, couperHemisphere,
+  ancrageOeil, cheminOeil, contourArrondi, contourCapsule, couperHemisphere,
   projeter, surLaSphere, tournerTete,
 } from "./avatarSpherique";
 
@@ -81,6 +81,112 @@ describe("contourCapsule", () => {
     const pts = contourCapsule(30, 30, 240);
     for (const p of pts) {
       expect(Math.sqrt(p.x * p.x + p.y * p.y)).toBeCloseTo(15, 1);
+    }
+  });
+});
+
+/** L'encombrement d'un contour, la mesure dont dépendent la plupart des invariants. */
+function boite(pts: Point2[]) {
+  let xMin = Infinity, xMax = -Infinity, yMin = Infinity, yMax = -Infinity;
+  for (const p of pts) {
+    xMin = Math.min(xMin, p.x); xMax = Math.max(xMax, p.x);
+    yMin = Math.min(yMin, p.y); yMax = Math.max(yMax, p.y);
+  }
+  return { l: xMax - xMin, h: yMax - yMin };
+}
+
+describe("contourArrondi", () => {
+  it("rend exactement la capsule quand l'arrondi est maximal", () => {
+    // ⚠️ L'invariant qui autorise la capsule à déléguer : si les deux tracés
+    // divergeaient d'un cheveu, tous les avatars existants changeraient de forme
+    // sans que personne n'ait rien demandé.
+    const a = contourCapsule(24, 70, 160);
+    const b = contourArrondi(24, 70, 1, 160);
+    expect(b.length).toBe(a.length);
+    for (let i = 0; i < a.length; i++) {
+      expect(b[i].x).toBeCloseTo(a[i].x, 12);
+      expect(b[i].y).toBeCloseTo(a[i].y, 12);
+    }
+  });
+
+  it("garde la largeur et la hauteur demandées, quel que soit l'arrondi", () => {
+    for (const arrondi of [0, 0.25, 0.5, 0.85, 1]) {
+      const b = boite(contourArrondi(48, 44, arrondi, 480));
+      expect(b.l).toBeCloseTo(48, 1);
+      expect(b.h).toBeCloseTo(44, 1);
+    }
+  });
+
+  it("porte quatre coins ronds du rayon demandé", () => {
+    /**
+     * La vérification tient en une propriété : sur un rectangle arrondi, les points
+     * du quart supérieur droit sont soit sur un des deux côtés, soit à la distance
+     * `r` du centre du coin. Un tracé qui n'arrondirait que deux coins — la faute
+     * qu'on ferait en partant de la capsule — y échouerait sur deux quadrants.
+     */
+    const demiL = 30, demiH = 22, arrondi = 0.5;
+    const r = Math.min(demiL, demiH) * arrondi;
+    const pts = contourArrondi(2 * demiL, 2 * demiH, arrondi, 600);
+    for (const q of [[1, 1], [-1, 1], [-1, -1], [1, -1]]) {
+      const cx = q[0] * (demiL - r), cy = q[1] * (demiH - r);
+      // ⚠️ Le seuil se compare **dans le repère du quadrant**, pas au centre signé :
+      // écrit `q[0] * p.x > cx`, il retenait au quadrant gauche tout le côté droit.
+      const surLArc = pts.filter(p => q[0] * p.x > demiL - r && q[1] * p.y > demiH - r);
+      expect(surLArc.length).toBeGreaterThan(10);
+      for (const p of surLArc) {
+        expect(Math.hypot(p.x - cx, p.y - cy)).toBeCloseTo(r, 6);
+      }
+    }
+  });
+
+  it("donne un rectangle à angles vifs quand l'arrondi est nul", () => {
+    const pts = contourArrondi(40, 26, 0, 400);
+    for (const p of pts) {
+      // Tout point est sur un des quatre bords : l'une des deux coordonnées est
+      // exactement au bord, l'autre à l'intérieur.
+      const auBordX = Math.abs(Math.abs(p.x) - 20) < 1e-9;
+      const auBordY = Math.abs(Math.abs(p.y) - 13) < 1e-9;
+      expect(auBordX || auBordY).toBe(true);
+      expect(Number.isNaN(p.x) || Number.isNaN(p.y)).toBe(false);
+    }
+    // Les quatre angles vifs sont approchés d'aussi près que l'échantillonnage le
+    // permet — un pas vaut ici 0,33 unité, donc jamais plus d'un demi-pas.
+    for (const q of [[1, 1], [-1, 1], [-1, -1], [1, -1]]) {
+      const distances = pts.map(p => Math.hypot(p.x - q[0] * 20, p.y - q[1] * 13));
+      expect(Math.min(...distances)).toBeLessThan(0.25);
+    }
+  });
+
+  it("se ferme en fente sans jamais rogner l'arrondi", () => {
+    /**
+     * ⚠️ **La raison pour laquelle l'arrondi est une fraction et non une longueur.**
+     * Un rayon en unités absolues devrait être rogné dès que la demi-hauteur passe
+     * dessous — donc à chaque clignement —, et la forme changerait de proportions en
+     * plein mouvement. Pris sur la plus petite dimension, il ne peut jamais dépasser :
+     * une fois l'œil plus plat que large, la part des coins dans sa hauteur vaut
+     * exactement `arrondi`, de la mi-fermeture à la fente.
+     *
+     * ⚠️ La mesure **encadre** au lieu d'approcher. La partie droite se lit sur des
+     * points échantillonnés, dont le dernier tombe jusqu'à un pas avant la fin réelle
+     * du segment : une comparaison à une tolérance choisie à la main aurait été trop
+     * lâche sur l'œil ouvert et trop stricte sur la fente. L'encadrement, lui, vaut à
+     * toutes les hauteurs — et un rayon rogné en sortirait de très loin.
+     */
+    const arrondi = 0.4;
+    for (const h of [24, 18, 9, 3, 1]) {
+      const pts = contourArrondi(24, h, arrondi, 600);
+      const b = boite(pts);
+      let pas = 0;
+      for (let i = 0; i < pts.length; i++) {
+        const q = pts[(i + 1) % pts.length];
+        pas = Math.max(pas, Math.hypot(q.x - pts[i].x, q.y - pts[i].y));
+      }
+      // Le côté strictement vertical : ce qui reste de la hauteur, les coins ôtés.
+      const droit = pts.filter(p => Math.abs(p.x - b.l / 2) < 1e-9);
+      const mesure = Math.max(...droit.map(p => p.y)) - Math.min(...droit.map(p => p.y));
+      const attendu = h * (1 - arrondi);
+      expect(attendu).toBeGreaterThanOrEqual(mesure - 1e-9);
+      expect(attendu).toBeLessThanOrEqual(mesure + 2 * pas + 1e-9);
     }
   });
 });

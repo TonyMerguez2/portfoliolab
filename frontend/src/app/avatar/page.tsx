@@ -104,10 +104,22 @@ type Oeil = {
    * d'expression de ne porter qu'un nombre.
    */
   inclinaison: number;
+  /**
+   * La forme du contour.
+   *
+   * ⚠️ **Deux champs et non un seul.** L'arrondi suffirait à décrire les deux formes —
+   * la capsule est l'arrondi maximal — mais alors revenir à « Capsule » écraserait la
+   * valeur réglée pour le carré, et l'on ne la retrouverait plus en revenant. Le choix
+   * de forme et le réglage du carré vivent donc séparément.
+   */
+  forme: "capsule" | "carre";
+  /** Arrondi des quatre coins du carré, de 0 (angles vifs) à 1 (capsule). */
+  arrondi: number;
 };
 
 const OEIL_PAR_DEFAUT: Oeil = {
   largeur: 19, hauteur: 66, ecart: 18, elevation: 0, inclinaison: 0,
+  forme: "capsule", arrondi: 0.42,
 };
 
 
@@ -275,6 +287,7 @@ export default function AvatarProceduralPage() {
        */
       inclinaison: rad(oeil.inclinaison + inclinaison + vie.inclinaison),
       courbure: vie.courbure,
+      arrondi: oeil.forme === "capsule" ? 1 : oeil.arrondi,
     };
   }, [taille, inclinaison, vie]);
 
@@ -293,7 +306,7 @@ export default function AvatarProceduralPage() {
    * c'est le prochain réglage qui les réunit. Un lien qui égaliserait à l'instant où on
    * le rétablit ferait perdre un travail sans prévenir.
    */
-  const reglerOeil = useCallback((champ: keyof Oeil, valeur: number) => {
+  const reglerOeil = useCallback((champ: keyof Oeil, valeur: number | Oeil["forme"]) => {
     setYeux(y => (lies
       ? { gauche: { ...y.gauche, [champ]: valeur }, droit: { ...y.droit, [champ]: valeur } }
       : { ...y, [oeilRegle]: { ...y[oeilRegle], [champ]: valeur } }));
@@ -832,6 +845,47 @@ export default function AvatarProceduralPage() {
                     {libelle}
                   </button>
                 ))}
+              </div>
+            )}
+
+            {/**
+              * Le choix de forme, avant les dimensions : c'est lui qui décide de ce
+              * que « largeur » et « hauteur » dessinent.
+              */}
+            <div style={{ display: "flex", gap: 10, margin: "16px 0 0" }}>
+              {([["capsule", "Capsule"], ["carre", "Carré arrondi"]] as const).map(([cle, libelle]) => (
+                <button key={cle} type="button" onClick={() => reglerOeil("forme", cle)}
+                  aria-pressed={oeilCourant.forme === cle}
+                  style={{
+                    flex: 1, padding: "10px 8px", borderRadius: 9, cursor: "pointer",
+                    fontSize: 12.5, fontWeight: 600, fontFamily: "inherit",
+                    display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
+                    border: `1px solid ${oeilCourant.forme === cle ? ACCENT : BORD}`,
+                    background: oeilCourant.forme === cle ? ACCENT : "#FFFFFF",
+                    color: oeilCourant.forme === cle ? "#FFFFFF" : "#33333D",
+                  }}>
+                  {/* La vignette dessine la forme au lieu de la nommer : « capsule » et
+                      « carré arrondi » ne se distinguent qu'une fois vus. */}
+                  <svg width="14" height="18" viewBox="0 0 14 18" aria-hidden="true">
+                    <rect x={1} y={1} width={12} height={16}
+                      rx={cle === "capsule" ? 6 : 3.4} ry={cle === "capsule" ? 6 : 3.4}
+                      fill="currentColor" />
+                  </svg>
+                  {libelle}
+                </button>
+              ))}
+            </div>
+
+            {oeilCourant.forme === "carre" && (
+              <div style={{ marginTop: 14 }}>
+                <Curseur libelle="Arrondi des coins"
+                  valeur={oeilCourant.arrondi}
+                  affichage={`${Math.round(oeilCourant.arrondi * 100)} %`}
+                  min={0} max={1} pas={0.01} onChange={v => reglerOeil("arrondi", v)} />
+                <p style={{ margin: "2px 0 0", color: DOUX, fontSize: 12, lineHeight: 1.5 }}>
+                  En part du rayon maximal, pris sur la plus petite dimension : la forme
+                  garde donc le même galbe quand l’œil se ferme. À 100 %, c’est la capsule.
+                </p>
               </div>
             )}
 

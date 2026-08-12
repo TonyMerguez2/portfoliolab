@@ -72,10 +72,35 @@ function normaliser(v: Vec3): Vec3 {
 export function contourCapsule(
   largeur: number, hauteur: number, echantillons: number, courbure: number = 0,
 ): Point2[] {
+  return contourArrondi(largeur, hauteur, 1, echantillons, courbure);
+}
+
+/**
+ * La même forme, mais dont on choisit l'arrondi des quatre coins.
+ *
+ * ⚠️ **La capsule n'était qu'un cas particulier de cette fonction, et le code le disait
+ * déjà.** Le parcours interne suivait un rectangle à coins ronds — quatre côtés, quatre
+ * quarts de cercle — dont seul le rayon était imposé : le plus grand possible. Ajouter
+ * une « forme carrée » n'a donc rien demandé de neuf, seulement de rendre ce rayon
+ * réglable. Une seconde fonction, avec son propre échantillonnage et sa propre cambrure,
+ * aurait doublé le chemin par lequel un œil peut se tromper.
+ *
+ * ⚠️ **L'arrondi est une *fraction*, pas une longueur.** Le rayon maximal vaut la moitié
+ * de la plus petite dimension, et cette dimension change en permanence — c'est par elle
+ * que passe le clignement. Un rayon en unités absolues devrait être rogné à chaque
+ * image dès que l'œil se ferme, et l'on verrait la forme changer de proportions au
+ * milieu du clignement. Une fraction garde le même galbe de l'œil ouvert à la fente.
+ *
+ * `arrondi` vaut 1 pour la capsule, 0 pour un rectangle à angles vifs.
+ */
+export function contourArrondi(
+  largeur: number, hauteur: number, arrondi: number,
+  echantillons: number, courbure: number = 0,
+): Point2[] {
   const demiL = Math.max(0.001, largeur / 2);
   const demiH = Math.max(0.001, hauteur / 2);
-  const r = Math.min(demiL, demiH);
-  // Les parties droites : l'une des deux est toujours nulle, sauf pour un carré.
+  const r = Math.min(demiL, demiH) * Math.min(1, Math.max(0, arrondi));
+  // Les parties droites : avec l'arrondi maximal, l'une des deux est toujours nulle.
   const plat = 2 * (demiL - r);
   const dressé = 2 * (demiH - r);
   const perimetre = 2 * plat + 2 * dressé + TAU * r;
@@ -102,7 +127,12 @@ function cambrer(p: Point2, demiLargeur: number, courbure: number): Point2 {
   return { x: p.x, y: p.y + courbure * (1 - t * t) * demiLargeur };
 }
 
-/** Le point à l'abscisse curviligne `s`, en partant du milieu du côté droit. */
+/**
+ * Le point à l'abscisse curviligne `s`, en partant du milieu du côté droit.
+ *
+ * Le parcours est celui d'un rectangle à coins ronds : côté, coin, côté, coin… `r` est
+ * le rayon des coins, `plat` et `dressé` les longueurs des parties droites.
+ */
 function pointSurCapsule(s: number, r: number, plat: number, dressé: number): Point2 {
   const cx = plat / 2, cy = dressé / 2;
   const quart = (Math.PI / 2) * r;
@@ -115,6 +145,9 @@ function pointSurCapsule(s: number, r: number, plat: number, dressé: number): P
     etape++;
   }
   const coin = (centreX: number, centreY: number, depart: number) => {
+    // ⚠️ Sans arrondi, le coin n'a plus de longueur : `reste / r` y vaudrait l'infini
+    // et le point partirait en NaN. Il ne reste alors que l'angle lui-même.
+    if (r <= 0) return { x: centreX, y: centreY };
     const t = depart + reste / r;
     return { x: centreX + r * Math.cos(t), y: centreY + r * Math.sin(t) };
   };
@@ -802,6 +835,12 @@ export type ReglagesOeil = {
   inclinaison: number;
   /** Cambrure de l'œil : positif pour un arc « ⌒ », l'œil des mimiques heureuses. */
   courbure?: number;
+  /**
+   * Arrondi des quatre coins, de 0 pour des angles vifs à 1 pour la capsule.
+   *
+   * Absent, il vaut 1 : c'est la forme d'origine, et rien de ce qui existait ne change.
+   */
+  arrondi?: number;
 };
 
 /** L'orientation de la tête, en radians. */
@@ -838,8 +877,9 @@ export function cheminOeil(
   );
   const cos = Math.cos(reglages.inclinaison), sin = Math.sin(reglages.inclinaison);
 
-  const contour = contourCapsule(
-    reglages.largeur, reglages.hauteur, echantillons, reglages.courbure ?? 0);
+  const contour = contourArrondi(
+    reglages.largeur, reglages.hauteur, reglages.arrondi ?? 1,
+    echantillons, reglages.courbure ?? 0);
   const surface: Vec3[] = [];
   for (let i = 0; i < contour.length; i++) {
     const u = cote * (contour[i].x * cos - contour[i].y * sin);
