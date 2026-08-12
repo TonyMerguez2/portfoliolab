@@ -80,6 +80,36 @@ const EXPRESSIONS = [
 
 type CleExpression = (typeof EXPRESSIONS)[number]["cle"];
 
+/**
+ * Ce qui appartient en propre à **un** œil.
+ *
+ * ⚠️ **Un jeu par œil, et non un jeu commun plus des écarts.** La tentation était de
+ * garder les réglages partagés et d'y ajouter une différence par œil : c'est le même
+ * nombre de curseurs, mais la valeur affichée ne serait plus celle de l'œil qu'on
+ * regarde, et régler le gauche déplacerait le droit d'un même geste. Deux jeux
+ * complets, un lien qui les recopie quand on veut la symétrie.
+ *
+ * `taille` reste dehors : c'est l'échelle de tout le regard, pas d'un œil.
+ */
+type Oeil = {
+  largeur: number;
+  hauteur: number;
+  /** Distance géodésique à l'axe du visage : chaque œil a la sienne. */
+  ecart: number;
+  /** Hauteur de l'ancre sur la sphère, vers le haut si positive. */
+  elevation: number;
+  /**
+   * Inclinaison propre, en degrés, **en miroir** d'un œil à l'autre — la même valeur
+   * des deux côtés produit une expression symétrique. C'est ce qui permet aux boutons
+   * d'expression de ne porter qu'un nombre.
+   */
+  inclinaison: number;
+};
+
+const OEIL_PAR_DEFAUT: Oeil = {
+  largeur: 19, hauteur: 66, ecart: 18, elevation: 0, inclinaison: 0,
+};
+
 
 /** Constante de temps de l'amorti du regard : le suivi glisse, il ne saute pas. */
 const AMORTI = 95;
@@ -105,10 +135,12 @@ export default function AvatarProceduralPage() {
   const [grille, setGrille] = useState(true);
   const [vie, setVie] = useState<EtatVie>(VIE_AU_REPOS);
   const [expression, setExpression] = useState<CleExpression>("neutre");
-  const [largeur, setLargeur] = useState(19);
-  const [hauteur, setHauteur] = useState(66);
   const [taille, setTaille] = useState(1.23);
-  const [ecart, setEcart] = useState(18);
+  const [yeux, setYeux] = useState<{ gauche: Oeil; droit: Oeil }>(
+    { gauche: OEIL_PAR_DEFAUT, droit: OEIL_PAR_DEFAUT });
+  /** Tant que le lien tient, un curseur touche les deux yeux à la fois. */
+  const [lies, setLies] = useState(true);
+  const [oeilRegle, setOeilRegle] = useState<"gauche" | "droit">("gauche");
   const [suivi, setSuivi] = useState(true);
   const [amplitude, setAmplitude] = useState(13);
   const [clignement, setClignement] = useState(true);
@@ -193,6 +225,9 @@ export default function AvatarProceduralPage() {
 
   const inclinaison = EXPRESSIONS.filter(e => e.cle === expression)[0].inclinaison;
 
+  /** L'œil dont les curseurs montrent les valeurs — le gauche tant que le lien tient. */
+  const oeilCourant = lies ? yeux.gauche : yeux[oeilRegle];
+
   /**
    * La pose visée, et la pose de repos.
    *
@@ -223,26 +258,46 @@ export default function AvatarProceduralPage() {
    * deux yeux partageaient les mêmes réglages, ils ne pouvaient que se fermer ensemble
    * — un clin d'œil n'était qu'un clignement lent.
    */
-  const reglagesOeil = useCallback((fermeture: number): ReglagesOeil => {
-    const largeurRendue = largeur * taille * vie.largeur;
-    const ouverte = hauteur * taille * vie.hauteur;
+  const reglagesOeil = useCallback((oeil: Oeil, fermeture: number): ReglagesOeil => {
+    const largeurRendue = oeil.largeur * taille * vie.largeur;
+    const ouverte = oeil.hauteur * taille * vie.hauteur;
     const fente = Math.max(1.5, largeurRendue * 0.12);
     return {
-      ecart: ecart * taille * vie.ecart,
-      elevation: 0,
+      ecart: oeil.ecart * taille * vie.ecart,
+      elevation: oeil.elevation * taille,
       largeur: largeurRendue,
       hauteur: ouverte + (fente - ouverte) * fermeture,
-      inclinaison: rad(inclinaison + vie.inclinaison),
+      /**
+       * ⚠️ **L'expression s'*ajoute* au réglage de l'œil, elle ne le remplace pas.**
+       * Sans quoi choisir « fâché » effacerait un regard asymétrique qu'on vient de
+       * composer, et les deux réglages se battraient — le symptôme classique des
+       * valeurs qui prétendent commander la même chose.
+       */
+      inclinaison: rad(oeil.inclinaison + inclinaison + vie.inclinaison),
       courbure: vie.courbure,
     };
-  }, [ecart, taille, largeur, hauteur, inclinaison, vie]);
+  }, [taille, inclinaison, vie]);
 
   const oeilGauche = useMemo(
-    () => cheminOeil(reglagesOeil(vie.fermetureGauche), orientation, -1),
-    [reglagesOeil, vie.fermetureGauche, orientation]);
+    () => cheminOeil(reglagesOeil(yeux.gauche, vie.fermetureGauche), orientation, -1),
+    [reglagesOeil, yeux.gauche, vie.fermetureGauche, orientation]);
   const oeilDroit = useMemo(
-    () => cheminOeil(reglagesOeil(vie.fermetureDroite), orientation, 1),
-    [reglagesOeil, vie.fermetureDroite, orientation]);
+    () => cheminOeil(reglagesOeil(yeux.droit, vie.fermetureDroite), orientation, 1),
+    [reglagesOeil, yeux.droit, vie.fermetureDroite, orientation]);
+
+  /**
+   * Écrit un réglage sur l'œil courant, ou sur les deux si le lien tient.
+   *
+   * ⚠️ **Le lien recopie, il ne synchronise pas.** Rompre le lien laisse donc les deux
+   * yeux exactement là où ils étaient, et le rétablir ne les ramène pas de force :
+   * c'est le prochain réglage qui les réunit. Un lien qui égaliserait à l'instant où on
+   * le rétablit ferait perdre un travail sans prévenir.
+   */
+  const reglerOeil = useCallback((champ: keyof Oeil, valeur: number) => {
+    setYeux(y => (lies
+      ? { gauche: { ...y.gauche, [champ]: valeur }, droit: { ...y.droit, [champ]: valeur } }
+      : { ...y, [oeilRegle]: { ...y[oeilRegle], [champ]: valeur } }));
+  }, [lies, oeilRegle]);
 
   // ── La boucle de vie ────────────────────────────────────────────────────────
   /**
@@ -754,17 +809,82 @@ export default function AvatarProceduralPage() {
           </Carte>
 
           <Carte
-            titre="Forme commune"
-            note="Les deux yeux partagent la même capsule de base. On peut l'allonger, l'épaissir, l'écarter et redimensionner tout le regard."
+            titre="Forme des yeux"
+            note="Chaque œil a son propre jeu de réglages. Le lien les recopie l’un sur l’autre tant qu’on veut un regard symétrique ; rompu, chaque œil se règle seul. Gauche et droit s’entendent à l’écran, pas du point de vue du personnage."
           >
-            <Curseur libelle="Largeur" valeur={largeur} affichage={`${largeur.toFixed(0)} u`}
-              min={8} max={44} pas={1} onChange={setLargeur} />
-            <Curseur libelle="Hauteur" valeur={hauteur} affichage={`${hauteur.toFixed(0)} u`}
-              min={16} max={96} pas={1} onChange={setHauteur} />
-            <Curseur libelle="Taille globale" valeur={taille} affichage={`${taille.toFixed(2)}×`}
-              min={0.6} max={1.6} pas={0.01} onChange={setTaille} />
-            <Curseur libelle="Écart des yeux" valeur={ecart} affichage={`${ecart.toFixed(0)} u`}
-              min={4} max={40} pas={1} onChange={setEcart} />
+            <Bascule libelle="Régler les deux yeux ensemble" actif={lies} onChange={setLies} />
+
+            {/* ⚠️ Le sélecteur n'apparaît que le lien rompu : affiché en permanence, il
+                laisserait croire qu'on règle un seul œil alors qu'on les touche tous
+                les deux. */}
+            {!lies && (
+              <div style={{ display: "flex", gap: 10, margin: "16px 0 4px" }}>
+                {([["gauche", "Œil gauche"], ["droit", "Œil droit"]] as const).map(([cle, libelle]) => (
+                  <button key={cle} type="button" onClick={() => setOeilRegle(cle)}
+                    aria-pressed={oeilRegle === cle}
+                    style={{
+                      flex: 1, padding: "10px 8px", borderRadius: 9, cursor: "pointer",
+                      fontSize: 12.5, fontWeight: 600, fontFamily: "inherit",
+                      border: `1px solid ${oeilRegle === cle ? ACCENT : BORD}`,
+                      background: oeilRegle === cle ? ACCENT : "#FFFFFF",
+                      color: oeilRegle === cle ? "#FFFFFF" : "#33333D",
+                    }}>
+                    {libelle}
+                  </button>
+                ))}
+              </div>
+            )}
+
+            <div style={{ marginTop: 14 }}>
+              <Curseur libelle="Largeur" valeur={oeilCourant.largeur}
+                affichage={`${oeilCourant.largeur.toFixed(0)} u`}
+                min={8} max={44} pas={1} onChange={v => reglerOeil("largeur", v)} />
+              <Curseur libelle="Hauteur" valeur={oeilCourant.hauteur}
+                affichage={`${oeilCourant.hauteur.toFixed(0)} u`}
+                min={16} max={96} pas={1} onChange={v => reglerOeil("hauteur", v)} />
+              <Curseur libelle="Écart à l’axe du visage" valeur={oeilCourant.ecart}
+                affichage={`${oeilCourant.ecart.toFixed(0)} u`}
+                min={4} max={40} pas={1} onChange={v => reglerOeil("ecart", v)} />
+              <Curseur libelle="Élévation" valeur={oeilCourant.elevation}
+                affichage={`${oeilCourant.elevation > 0 ? "+" : ""}${oeilCourant.elevation.toFixed(0)} u`}
+                min={-24} max={24} pas={1} onChange={v => reglerOeil("elevation", v)} />
+              <Curseur libelle="Inclinaison propre" valeur={oeilCourant.inclinaison}
+                affichage={`${oeilCourant.inclinaison > 0 ? "+" : ""}${oeilCourant.inclinaison.toFixed(0)}°`}
+                min={-40} max={40} pas={1} onChange={v => reglerOeil("inclinaison", v)} />
+            </div>
+
+            <div style={{ display: "flex", gap: 10, marginTop: 14 }}>
+              <button type="button"
+                onClick={() => setYeux(y => (oeilRegle === "gauche"
+                  ? { gauche: y.gauche, droit: { ...y.gauche } }
+                  : { gauche: { ...y.droit }, droit: y.droit }))}
+                disabled={lies}
+                style={{
+                  flex: 1, padding: "9px 8px", borderRadius: 9,
+                  cursor: lies ? "not-allowed" : "pointer", opacity: lies ? 0.45 : 1,
+                  fontSize: 12.5, fontWeight: 600, fontFamily: "inherit",
+                  border: `1px solid ${BORD}`, background: "#FFFFFF", color: "#33333D",
+                }}>
+                Copier sur l’autre œil
+              </button>
+              <button type="button"
+                onClick={() => setYeux({ gauche: OEIL_PAR_DEFAUT, droit: OEIL_PAR_DEFAUT })}
+                style={{
+                  flex: 1, padding: "9px 8px", borderRadius: 9, cursor: "pointer",
+                  fontSize: 12.5, fontWeight: 600, fontFamily: "inherit",
+                  border: `1px solid ${BORD}`, background: "#FFFFFF", color: "#33333D",
+                }}>
+                Réinitialiser
+              </button>
+            </div>
+
+            <div style={{ marginTop: 16, paddingTop: 16, borderTop: `1px solid ${BORD}` }}>
+              {/* La taille reste commune : c'est l'échelle de tout le regard, et elle
+                  multiplie aussi l'écart — ne redimensionner que les capsules aurait
+                  resserré le regard à mesure qu'il grandit. */}
+              <Curseur libelle="Taille globale" valeur={taille} affichage={`${taille.toFixed(2)}×`}
+                min={0.6} max={1.6} pas={0.01} onChange={setTaille} />
+            </div>
           </Carte>
         </div>
       </div>
