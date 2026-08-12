@@ -201,17 +201,25 @@ export default function ConstatsObjectif({
       flex: "1 0 auto",
       // ⚠️ **Un plancher mesuré, parce que « grandir » ne suffisait pas.** Sur une fenêtre
       // assez haute, la croissance fixe la hauteur et la longueur de la phrase n'y change
-      // rien : 260 pixels pour les quatorze combinaisons d'objectif et d'aide, vérifié. Mais
-      // sur une fenêtre courte il n'y a plus de place à prendre, la hauteur retombe sur le
-      // contenu — et là elle sautait de 171 à 229 pixels selon l'aide, la description faisant
-      // d'une à quatre lignes. Un panneau qui change de taille quand on passe d'une aide à la
-      // suivante est exactement ce qu'on cherchait à éviter.
+      // rien : 274 pixels pour les quatorze combinaisons d'objectif et d'aide, vérifié une à
+      // une. Mais sur une fenêtre courte il n'y a plus de place à prendre, la hauteur retombe
+      // sur le contenu — et le contenu, lui, varie : la rangée fait de 84 à 162 pixels selon
+      // que la description tient en une ligne ou en six. Un panneau qui change de taille quand
+      // on passe d'une aide à la suivante est exactement ce qu'on cherchait à éviter.
       //
-      // 264 est le maximum mesuré sur les quatorze combinaisons, à 446 pixels de large — et
-      // **c'est bien la hauteur du cadre extérieur**, non celle de la carte. `minHeight` est une
-      // clé de placement : `Cadre` la pose sur l'anneau, qui ajoute son rembourrage de 6 et son
-      // liseré de 1 de chaque côté. Un plancher de 232 pris sur la carte laissait le panneau
-      // grandir jusqu'à 243, et le saut restait — vu à l'écran avant d'être corrigé.
+      // 264 vient d'une addition, pas d'un tâtonnement : 101 pixels de partie fixe — les deux
+      // rembourrages, les deux liserés, l'en-tête, le pied, les deux interlignes — plus la
+      // rangée la plus haute, 162. Soit 263, et un pixel au-dessus. **C'est bien la hauteur du
+      // cadre extérieur**, non celle de la carte : `minHeight` est une clé de placement, que
+      // `Cadre` pose sur l'anneau, lequel ajoute 7 pixels de chaque côté. Un plancher de 232
+      // pris sur la carte laissait le panneau grandir jusqu'à 243, et le saut restait — vu à
+      // l'écran avant d'être corrigé.
+      //
+      // ⚠️ **La marge est d'un pixel, donc la règle à retenir est celle-ci** : une description
+      // d'aide qui gagnerait une ligne porterait le contenu à 282 et repasserait au-dessus du
+      // plancher, ramenant le saut. Si une famille d'insight s'allonge, c'est ce nombre qu'il
+      // faut recalculer — la partie fixe plus la rangée la plus haute — et non ajouter du jeu
+      // au hasard, qui se paierait en hauteur volée à la voisine.
       //
       // ⚠️ **Ce plancher a un prix, et il faut le connaître.** Sous 830 pixels de fenêtre
       // environ, la colonne n'a plus de quoi le payer sans rogner sa voisine : « Progression
@@ -255,13 +263,17 @@ export default function ConstatsObjectif({
             : "Choisissez un objectif pour voir ce que vos chiffres impliquent."}
         </p>
       ) : (
-        // ⚠️ **La rangée prend toute la hauteur restante, et le texte s'y centre.** Le panneau
-        // a désormais une hauteur dictée par la colonne, non par la phrase ; sans `flex: 1`
-        // ici, le surplus s'accumulerait en un vide entre le texte et le pied de carte. La
-        // hauteur minimale reste : elle sert le cas où la colonne, elle, serait courte.
-        <div style={{ display: "flex", gap: 14, minHeight: 84, minWidth: 0, flex: 1 }}>
+        // ⚠️ **La rangée ne prend que sa hauteur, et reste ancrée sous le titre.** Elle a été
+        // centrée verticalement un temps, quand le panneau a gagné 90 pixels : le texte
+        // flottait alors au milieu, et sa position bougeait avec le nombre de lignes — une
+        // phrase courte se posait plus bas qu'une longue. Ancré en haut, le point de départ ne
+        // dépend plus de rien : la phrase commence toujours au même endroit et s'allonge vers
+        // le bas. Le vide restant passe sous elle, absorbé par la marge automatique du pied.
+        //
+        // La hauteur minimale reste : elle tient la rangée quand une aide n'a qu'une ligne.
+        <div style={{ display: "flex", gap: 14, minHeight: 84, minWidth: 0 }}>
           <div style={{ display: "flex", flexDirection: "column", gap: 5, minWidth: 0,
-            flex: 1, justifyContent: "center" }}>
+            flex: 1 }}>
             <span style={{ fontFamily: FONT, fontSize: 15, fontWeight: 650,
               lineHeight: 1.35, color: TEINTE[aide.priorite] }}>
               {aide.titre}
