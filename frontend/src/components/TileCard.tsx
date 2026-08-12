@@ -11,11 +11,19 @@ interface Props {
   containerStyle?: CSSProperties;
   onClick?: () => void;
   glowStrength?: number;
+  /**
+   * Le reflet qui suit le curseur sur la tuile.
+   *
+   * ⚠️ Réglable et non retiré partout : il fait le verre des cartes de la page
+   * graphique, où il est voulu. C'est sur les grilles — actifs, objectifs — qu'il
+   * devient une agitation, chaque carte s'allumant au passage de la souris.
+   */
+  reflet?: boolean;
   /** Overrides the brand colour — for pages that extract one from the logo. */
   colorHex?: string;
 }
 
-export default function TileCard({ ticker, children, className, radius = 12, style, containerStyle, onClick, glowStrength = 1, colorHex }: Props) {
+export default function TileCard({ ticker, children, className, radius = 12, style, containerStyle, onClick, glowStrength = 1, colorHex, reflet = true }: Props) {
   const { rgb, b1cx, b1cy, b2cx, b2cy } = tileData(ticker);
   const [r, g, b] = rgb;
   const id = `tc-${ticker.replace(/[^a-z0-9]/gi, "")}`;
@@ -24,8 +32,8 @@ export default function TileCard({ ticker, children, className, radius = 12, sty
     <div
       className={className}
       onClick={onClick}
-      onPointerMove={trackSpecular}
-      onPointerLeave={releaseSpecular}
+      onPointerMove={reflet ? trackSpecular : undefined}
+      onPointerLeave={reflet ? releaseSpecular : undefined}
       style={{
         ...tileSurface(ticker, radius, colorHex),
         position: "relative",

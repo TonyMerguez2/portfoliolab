@@ -96,7 +96,11 @@ const COULEURS_PART = ["#50A2FF", "#a78bfa", "#FF8904", "#00D492", JETONS.negati
 
 function Carte({ children, style }: { children: React.ReactNode; style?: React.CSSProperties }) {
   return (
-    <Cadre style={{ padding: "14px 18px", display: "flex", flexDirection: "column", minHeight: 0, ...style }}>
+    // ⚠️ L'attribut est posé sur la carte, pas sur chaque ligne : `closest` remonte
+    // l'arbre, donc un seul suffit à rendre tout le panneau expressif. Un attribut par
+    // ligne aurait été autant d'occasions d'en oublier une.
+    <Cadre data-avatar="reflexion"
+      style={{ padding: "14px 18px", display: "flex", flexDirection: "column", minHeight: 0, ...style }}>
       {children}
     </Cadre>
   );

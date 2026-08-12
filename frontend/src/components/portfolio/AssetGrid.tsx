@@ -130,6 +130,18 @@ export default function AssetGrid({
     </button>
   );
 
+  /**
+   * La variation moyenne des lignes montrées, qui sert de repère à l'avatar.
+   *
+   * Simple moyenne et non moyenne pondérée : on compare des **lignes** entre elles,
+   * pas leur contribution au portefeuille. Une petite ligne qui s'envole doit
+   * surprendre autant qu'une grosse.
+   */
+  const moyenneChange = useMemo(() => {
+    const v = shown.map(a => a.change).filter((c): c is number => typeof c === "number");
+    return v.length ? v.reduce((s, c) => s + c, 0) / v.length : null;
+  }, [shown]);
+
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
       {/* Une seule ligne : titre, filtres, puis le tri à droite — comme au
@@ -217,11 +229,23 @@ export default function AssetGrid({
       }}>
         {shown.map(a => {
           const up = (a.change ?? 0) >= 0;
+          /**
+           * ⚠️ **L'avatar réagit à l'écart au portefeuille, pas à la variation brute.**
+           * `change` est la variation sur la **période affichée** : sur la fenêtre Max
+           * elle atteint des centaines de pour cent, si bien que toutes les lignes
+           * franchissaient le seuil de l'étonnement — le visage était surpris en
+           * permanence, donc ne disait plus rien, et sursautait à chaque carte
+           * survolée. Comparée à la moyenne des lignes, la même donnée redevient
+           * lisible : cette ligne fait-elle mieux ou moins bien que les autres ?
+           */
+          const ecart = a.change != null && moyenneChange != null
+            ? a.change - moyenneChange : null;
           const chg = up ? "var(--nv-positif)" : "var(--nv-negatif)";
           const name = assetName(a.ticker);
           return (
-            <ReactionAvatar key={a.ticker} variation={a.change}>
+            <ReactionAvatar key={a.ticker} variation={ecart}>
             <TileCard ticker={a.ticker} radius={18} glowStrength={0}
+      reflet={false}
               className="novac-tile"
               colorHex={brandHex(a.ticker)}
               onClick={onAssetClick ? () => onAssetClick(a.ticker) : undefined}

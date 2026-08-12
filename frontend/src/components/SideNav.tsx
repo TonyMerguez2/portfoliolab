@@ -128,6 +128,7 @@ export default function SideNav() {
     <>
     <nav
       aria-label="Navigation principale"
+      data-avatar="curieux"
       style={{
         position: "fixed", left: 0, top: 0, bottom: 0, width, zIndex: 60,
         display: "flex", flexDirection: "column",

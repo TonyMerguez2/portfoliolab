@@ -6,6 +6,7 @@ import { gaugeArc } from "@/lib/donut";
 import type { GridAsset } from "@/lib/portfolio";
 import { FONT, NUM } from "@/lib/typography";
 import { API_URL as API } from "@/lib/api";
+import { etatSelonVariation } from "@/lib/avatarEtats";
 
 /**
  * Bande basse : ce qui mérite l'attention, les repères de marché, le sentiment.
@@ -64,6 +65,7 @@ export default function WatchBand({
           <div style={{ display: "flex", alignItems: "center", flexShrink: 0 }}>
             {notables.slice(0, 3).map((a, i) => (
               <div key={a.ticker} title={`${a.ticker} ${a.change! >= 0 ? "+" : ""}${a.change!.toFixed(2)} %`}
+                data-avatar={etatSelonVariation(a.change)}
                 style={{
                   width: 26, height: 26, borderRadius: "50%", overflow: "hidden",
                   marginLeft: i ? -8 : 0, zIndex: 3 - i, flexShrink: 0,

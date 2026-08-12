@@ -74,6 +74,15 @@ export type Etat = {
   anime?: (ecoule: number) => Partial<Pose>;
   /** Multiplicateur de la cadence des clignements. Grand = rare. */
   clignement?: number;
+  /**
+   * Combien l'état tolère de gestes spontanés par-dessus lui. 0 les interdit.
+   *
+   * ⚠️ Tous n'en veulent pas autant : « Focus » réduit le mouvement par définition, et
+   * un dormeur qui jette des coups d'œil ne dort pas. Le neutre, lui, en a besoin —
+   * c'est là que le visage passe le plus clair de son temps, et c'est là qu'un avatar
+   * immobile se met à ressembler à une icône.
+   */
+  spontaneite?: number;
 };
 
 /**
@@ -109,6 +118,7 @@ export const ETATS: Etat[] = [
     // lit comme un écran gelé, pas comme de la concentration.
     pose: { largeur: 0.74, hauteur: 0.92, derive: 0.22, suivi: 0.35 },
     clignement: 2.2,
+    spontaneite: 0.25,
     anime: e => ({ lacet: 1.6 * Math.sin(e / 900) }),
   },
   {
@@ -146,9 +156,17 @@ export const ETATS: Etat[] = [
     // Yeux ronds : largeur et hauteur se rapprochent l'une de l'autre.
     pose: { largeur: 1.55, hauteur: 0.62, ecart: 1.14, tangage: -4 },
     clignement: 3,
-    // Le micro-recul : la tête se retire d'un cheveu, très vite, puis revient. C'est le
-    // sursaut — il doit être passé avant qu'on ait eu le temps de le lire.
-    anime: e => ({ echelleX: 1 - 0.055 * Math.exp(-e / 260), echelleY: 1 - 0.055 * Math.exp(-e / 260) }),
+    /**
+     * Le micro-recul — le sursaut, qui doit être passé avant qu'on ait eu le temps de
+     * le lire.
+     *
+     * ⚠️ **Il passe par le tangage, plus par l'échelle.** Réduire la tête de 5,5 %
+     * devait figurer un retrait ; sur un objet plat et sans perspective, cela se lit
+     * simplement comme « le rond a rétréci ». Signalé à l'usage, et à raison : rien
+     * dans le dessin ne dit qu'un cercle plus petit est un cercle plus loin. Un
+     * mouvement de tête, lui, se lit comme un mouvement.
+     */
+    anime: e => ({ tangage: 5 * Math.exp(-e / 240), roulis: -2.5 * Math.exp(-e / 300) }),
   },
   {
     cle: "preoccupe",
@@ -176,6 +194,7 @@ export const ETATS: Etat[] = [
     // Le regard part en haut à droite — la direction que prend un regard qui cherche.
     pose: { lacet: 19, tangage: -14, hauteur: 0.86, derive: 0.5, suivi: 0.15 },
     clignement: 1.8,
+    spontaneite: 0.4,
     anime: e => ({ lacet: 2.4 * Math.sin(e / 1800), tangage: 1.6 * Math.sin(e / 2400 + 1) }),
   },
   {
@@ -185,6 +204,7 @@ export const ETATS: Etat[] = [
     nature: "soutenu",
     pose: { hauteur: 0.94, derive: 0.35, suivi: 0 },
     clignement: 1.5,
+    spontaneite: 0,
     /**
      * ⚠️ **Une onde carrée adoucie, pas un sinus.** Un regard qui compare deux choses
      * s'**arrête** sur chacune : un aller-retour sinusoïdal passe son temps entre les
@@ -199,14 +219,28 @@ export const ETATS: Etat[] = [
     quand: "longue inactivité",
     nature: "soutenu",
     amorti: 900,
+    /**
+     * ⚠️ **La tête tombe, elle ne se contente pas de fermer les yeux.** Des paupières
+     * basses sur une tête droite se lisent comme un regard méfiant, pas comme
+     * l'assoupissement : c'est l'inclinaison qui fait la différence. Le menton descend
+     * de treize degrés et la tête roule de onze sur le côté — le mouvement de celui qui
+     * pique du nez.
+     */
     pose: {
-      fermeture: 0.52, hauteur: 0.8, courbure: 0.12,
-      tangage: 6, derive: 0.55, suivi: 0.25,
-    },
+      fermeture: 0.58, hauteur: 0.74, courbure: 0.12,
+      tangage: 13, roulis: -11, derive: 0.5, suivi: 0.2,
+  },
     // Un clignement rare et la dérive ralentie : c'est le rythme qui dit la somnolence,
     // autant que les paupières.
     clignement: 2.6,
-    anime: e => ({ roulis: 3.5 * Math.sin(e / 5200), tangage: 2 * Math.sin(e / 4100) }),
+    spontaneite: 0.15,
+    // Le balancement lent de la tête qui dodeline, et la paupière qui remonte à peine
+    // avant de retomber : deux périodes longues, sans rapport entre elles.
+    anime: e => ({
+      roulis: 4 * Math.sin(e / 5200),
+      tangage: 3 * Math.sin(e / 4100),
+      fermeture: 0.06 * Math.sin(e / 6300),
+    }),
   },
   {
     cle: "reveil",
@@ -276,6 +310,29 @@ export function etatSelonVariation(pourcentage: number | null | undefined): stri
   return "curieux";
 }
 
+/**
+ * L'état d'un point de courbe, à partir de son écart à la performance du jour.
+ *
+ * ⚠️ **Des paliers bien plus larges que ceux d'une variation de cours, et un de moins.**
+ * Signalé à l'usage : en promenant le curseur, le visage changeait sans arrêt de
+ * mimique. Une courbe se parcourt en continu — chaque pixel déplace la valeur — là où
+ * l'on passe d'une carte à l'autre par sauts. Avec les seuils d'`etatSelonVariation`,
+ * un simple glissement traversait quatre bandes, et la tête n'avait le temps de se
+ * poser dans aucune.
+ *
+ * ⚠️ **« Sceptique » n'y figure pas.** Un œil plus fermé que l'autre exprime un doute
+ * sur une hypothèse ; il ne veut rien dire sur un point de mesure. Le retirer d'ici,
+ * c'est une bande de moins à traverser, et une mimique qui garde son sens là où elle
+ * en a un.
+ */
+export function etatSelonEcartCourbe(ecart: number | null | undefined): string {
+  if (typeof ecart !== "number" || !isFinite(ecart)) return "curieux";
+  if (ecart >= 20) return "surpris";
+  if (ecart >= 4) return "content";
+  if (ecart <= -10) return "preoccupe";
+  return "curieux";
+}
+
 export function etatParCle(cle: string): Etat {
   for (let i = 0; i < ETATS.length; i++) if (ETATS[i].cle === cle) return ETATS[i];
   return ETATS[0];
@@ -285,3 +342,77 @@ export function etatParCle(cle: string): Etat {
 export function poseDeLEtat(etat: Etat): Pose {
   return { ...POSE_NEUTRE, ...etat.pose };
 }
+
+/**
+ * Les gestes que le visage se donne tout seul, par-dessus l'état en cours.
+ *
+ * ⚠️ **Ils manquaient, et leur absence se voyait.** La machine à états les avait
+ * remplacés : hors d'une réaction de l'application, le visage ne faisait plus que
+ * dériver et cligner. Or c'est en « neutre » qu'il passe le plus clair de son temps —
+ * et un neutre sans initiative propre se lit comme une icône, si soignées que soient
+ * les mimiques qu'on ne voit jamais.
+ *
+ * ⚠️ **Ce sont des ponctuels ordinaires**, donc ils rendent la main à l'état de fond
+ * comme les autres. Ils ne le remplacent pas : un coup d'œil pendant « Préoccupé »
+ * revient sur « Préoccupé ». Ils sont tenus à part d'`ETATS` parce que le répertoire
+ * V1 décrit ce que l'**application** demande ; ceux-ci ne sont demandés par personne.
+ */
+export const GESTES_SPONTANES: Etat[] = [
+  {
+    cle: "coup-oeil",
+    libelle: "Coup d'œil",
+    quand: "de lui-même, au repos",
+    nature: "ponctuel",
+    duree: 1150,
+    amorti: 75,
+    pose: {},
+    // Le regard part ailleurs et revient. Le geste le plus court du lot, et celui qui
+    // donne le plus l'impression d'une attention propre.
+    anime: e => {
+      const f = e < 130 ? e / 130 : e > 870 ? Math.max(0, 1 - (e - 870) / 280) : 1;
+      return { lacet: 17 * f * (e % 2 === 0 ? 1 : 1), tangage: -6 * f };
+    },
+  },
+  {
+    cle: "coup-oeil-gauche",
+    libelle: "Coup d'œil à gauche",
+    quand: "de lui-même, au repos",
+    nature: "ponctuel",
+    duree: 1150,
+    amorti: 75,
+    pose: {},
+    anime: e => {
+      const f = e < 130 ? e / 130 : e > 870 ? Math.max(0, 1 - (e - 870) / 280) : 1;
+      return { lacet: -19 * f, tangage: 4 * f };
+    },
+  },
+  {
+    cle: "penchement",
+    libelle: "Penchement",
+    quand: "de lui-même, au repos",
+    nature: "ponctuel",
+    duree: 1600,
+    amorti: 230,
+    // Le geste de la curiosité, et le seul qui emploie franchement le roulis.
+    pose: { roulis: 13, lacet: 5, inclinaison: 2 },
+  },
+  {
+    cle: "plissement",
+    libelle: "Plissement",
+    quand: "de lui-même, au repos",
+    nature: "ponctuel",
+    duree: 1250,
+    amorti: 150,
+    pose: { hauteur: 0.52, largeur: 1.12, inclinaison: 5 },
+  },
+  {
+    cle: "etirement",
+    libelle: "Étirement",
+    quand: "de lui-même, au repos",
+    nature: "ponctuel",
+    duree: 1300,
+    amorti: 110,
+    // Les yeux s'ouvrent grand un instant, comme on se déraidit.
+    pose: { hauteur: 1.2, largeur: 1.08, tangage: -4 },
+  },
+];

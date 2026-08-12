@@ -1,4 +1,6 @@
-import { ETATS, type Etat, type Pose, POSE_NEUTRE, etatParCle, poseDeLEtat } from "./avatarEtats";
+import {
+  ETATS, GESTES_SPONTANES, type Etat, type Pose, POSE_NEUTRE, etatParCle, poseDeLEtat,
+} from "./avatarEtats";
 
 /**
  * Ce qui fait qu'un visage a l'air vivant.
@@ -57,6 +59,10 @@ export type ReglagesVie = {
   clignement: boolean;
   /** Intervalle moyen entre deux clignements, en secondes. */
   cadenceClignement: number;
+  /** Les gestes que le visage se donne tout seul, par-dessus l'état courant. */
+  spontane?: boolean;
+  /** Intervalle moyen entre deux gestes spontanés, en secondes. */
+  cadenceSpontane?: number;
 };
 
 export const VIE_AU_REPOS: EtatVie = {
@@ -112,6 +118,7 @@ export function creerVie(alea: () => number = Math.random): Vie {
   let prochainClin = -1;
   let debutClin: number | null = null;
   let doubleClin = false;
+  let prochainGeste = -1;
 
   const actif = () => ponctuel ?? etatFond;
 
@@ -135,6 +142,29 @@ export function creerVie(alea: () => number = Math.random): Vie {
       if (ponctuel && t - debutEtat >= (ponctuel.duree ?? 1000)) {
         ponctuel = null;
         debutEtat = t;
+      }
+
+      /**
+       * ⚠️ **Les gestes spontanés se jouent *par-dessus* l'état, ils ne le remplacent
+       * pas.** Ce sont des ponctuels ordinaires : un coup d'œil pendant « Préoccupé »
+       * revient sur « Préoccupé ». Sans eux, hors réaction de l'application, le visage
+       * ne faisait plus que dériver et cligner — et c'est en « neutre » qu'il passe le
+       * plus clair de son temps.
+       *
+       * L'état de fond décide s'il en tolère : un dormeur qui jette des coups d'œil ne
+       * dort pas, et « Observation » a déjà son mouvement propre.
+       */
+      const tolerance = etatFond.spontaneite ?? 1;
+      const spontane = reglages.spontane !== false && tolerance > 0;
+      const attendreGeste = () =>
+        t + ((reglages.cadenceSpontane ?? 5) * 1000 / tolerance) * (0.55 + alea() * 0.9);
+      if (prochainGeste < 0) prochainGeste = attendreGeste();
+      if (!spontane) prochainGeste = attendreGeste();
+      else if (!ponctuel && t >= prochainGeste) {
+        ponctuel = GESTES_SPONTANES[Math.floor(alea() * GESTES_SPONTANES.length)]
+          ?? GESTES_SPONTANES[0];
+        debutEtat = t;
+        prochainGeste = attendreGeste();
       }
       const etat = actif();
       const ecoule = t - debutEtat;

@@ -45,7 +45,8 @@ export default function PortfolioTabs({
   const [survole, setSurvole] = useState<TabId | null>(null);
 
   return (
-    <nav aria-label="Sections du portefeuille" style={{
+    <nav aria-label="Sections du portefeuille"
+      data-avatar="curieux" style={{
       display: "flex", alignItems: "stretch", gap: 4,
       // Le filet est porté par la barre, pas par chaque onglet : il reste
       // continu sous les intervalles, et le soulignement actif s'y pose.

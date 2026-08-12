@@ -1104,7 +1104,13 @@ function ChartContent() {
                 {/* ── Row 1: back · [logo + compact identity+price] · NOVAC ── */}
                 <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", gap:16 }}>
 
-                  <div className="asset-hero-row" style={{ display:"flex", alignItems:"stretch", gap:10, minWidth:0, width:"100%", flexWrap:"wrap" }}>
+                  {/* ⚠️ La carte la plus visible de l'écran, et donc celle qui compte le
+                      plus pour l'avatar : le visage du bandeau s'accorde à la variation
+                      du titre affiché. Posé sur la rangée entière — `closest` remonte
+                      l'arbre, un attribut suffit à couvrir la carte et son comparatif. */}
+                  <div className="asset-hero-row"
+                    data-avatar={etatSelonVariation(currentPrice?.change)}
+                    style={{ display:"flex", alignItems:"stretch", gap:10, minWidth:0, width:"100%", flexWrap:"wrap" }}>
                     {ticker && (
                       <TileCard ticker={ticker} className="asset-hero-card novac-tile" radius={18} glowStrength={0} colorHex={color}
                         containerStyle={{                          flex:"0 0 auto", width:"fit-content", maxWidth:"100%", minWidth:0,

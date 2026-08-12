@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import TileSparkline from "@/components/charts/TileSparkline";
 import { FONT, NUM } from "@/lib/typography";
 import { API_URL as API } from "@/lib/api";
+import { etatSelonVariation } from "@/lib/avatarEtats";
 
 /**
  * Repères de marché : indice, crypto, devise.
@@ -63,7 +64,11 @@ export default function MarketPulse({ period = "1J" }: { period?: string }) {
         const up = (c?.change ?? 0) >= 0;
         const col = up ? "#4ade80" : "#f87171";
         return (
-          <div key={r.ticker} style={{
+          <div key={r.ticker}
+            // Le visage du bandeau s'accorde au marché survolé : content sur une
+            // hausse, préoccupé sur une baisse franche.
+            data-avatar={etatSelonVariation(c?.change)}
+            style={{
             display: "flex", alignItems: "center", gap: 10, flex: 1, minWidth: 0,
             paddingLeft: i ? 16 : 0,
             borderLeft: i ? "1px solid rgba(255,255,255,0.06)" : "none",

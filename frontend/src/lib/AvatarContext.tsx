@@ -37,6 +37,16 @@ type AvatarContexte = {
   expression: Expression;
   /** Demande un état — soutenu ou ponctuel, le répertoire décide. */
   exprimer: (cle: string) => void;
+  /**
+   * Ce que dit la valeur précisément pointée — un point de courbe, une cellule.
+   *
+   * ⚠️ **Un canal à part, et non `exprimer`.** Les deux écrivaient le même état que le
+   * survol par attribut : un relevé de courbe qui retombe à « neutre » effaçait alors
+   * la mimique de la carte qu'on survolait. Deux sources sur une même variable finissent
+   * toujours par se contredire, et ici la contradiction passait inaperçue parce qu'elle
+   * n'apparaît qu'au moment où les deux parlent ensemble.
+   */
+  pointer: (cle: string | null) => void;
   /** Déclare un travail en cours ; rend la fonction qui le termine. */
   travaille: () => () => void;
 };
@@ -44,6 +54,7 @@ type AvatarContexte = {
 const RIEN: AvatarContexte = {
   expression: { cle: "neutre", jeton: 0 },
   exprimer: () => {},
+  pointer: () => {},
   travaille: () => () => {},
 };
 
@@ -67,15 +78,40 @@ const CHARGEMENT_MAX = 20000;
 export function AvatarProvider({ children }: { children: ReactNode }) {
   const [ponctuel, setPonctuel] = useState<Expression | null>(null);
   const [survole, setSurvole] = useState<string | null>(null);
+  const [pointe, setPointe] = useState<string | null>(null);
   const [travaux, setTravaux] = useState(0);
   const [endormi, setEndormi] = useState(false);
   const jeton = useRef(0);
-
   const exprimer = useCallback((cle: string) => {
     const etat = etatParCle(cle);
     jeton.current += 1;
     if (etat.nature === "ponctuel") setPonctuel({ cle: etat.cle, jeton: jeton.current });
     else setSurvole(etat.cle === "neutre" ? null : etat.cle);
+  }, []);
+
+  /**
+   * ⚠️ **La valeur pointée attend que le curseur se pose.** Sans ce délai, promener la
+   * souris le long d'une courbe faisait défiler les mimiques : chaque pixel parcouru
+   * déplace la valeur, donc franchit des seuils, et la tête repartait en transition
+   * avant d'avoir fini la précédente. Signalé à l'usage — « il change plein
+   * d'expressions, ce n'est pas fluide ».
+   *
+   * Deux cent vingt millisecondes : assez pour absorber un balayage, assez peu pour que
+   * l'arrêt sur un point paraisse immédiat. Le retour au repos, lui, n'attend pas —
+   * quitter la courbe doit rendre la main tout de suite.
+   */
+  const attentePointe = useRef<number | null>(null);
+  const pointer = useCallback((cle: string | null) => {
+    if (attentePointe.current !== null) window.clearTimeout(attentePointe.current);
+    if (cle === null) {
+      attentePointe.current = null;
+      setPointe(null);
+      return;
+    }
+    attentePointe.current = window.setTimeout(() => {
+      attentePointe.current = null;
+      setPointe(precedent => (precedent === cle ? precedent : cle));
+    }, 220);
   }, []);
 
   const travaille = useCallback(() => {
@@ -182,11 +218,14 @@ export function AvatarProvider({ children }: { children: ReactNode }) {
    */
   const expression = useMemo<Expression>(() => {
     if (ponctuel) return ponctuel;
+    // La valeur pointée passe devant le survol : elle est plus précise que la zone qui
+    // la contient, et c'est elle que l'utilisateur est en train de lire.
+    if (pointe) return { cle: pointe, jeton: 0 };
     if (survole) return { cle: survole, jeton: 0 };
     if (travaux > 0) return { cle: "focus", jeton: 0 };
     if (endormi) return { cle: "somnolent", jeton: 0 };
     return { cle: "neutre", jeton: 0 };
-  }, [ponctuel, survole, travaux, endormi]);
+  }, [ponctuel, pointe, survole, travaux, endormi]);
 
   /**
    * Un ponctuel se retire de lui-même une fois joué.
@@ -202,7 +241,8 @@ export function AvatarProvider({ children }: { children: ReactNode }) {
   }, [ponctuel]);
 
   const valeur = useMemo(
-    () => ({ expression, exprimer, travaille }), [expression, exprimer, travaille]);
+    () => ({ expression, exprimer, pointer, travaille }),
+    [expression, exprimer, pointer, travaille]);
 
   return <Contexte.Provider value={valeur}>{children}</Contexte.Provider>;
 }

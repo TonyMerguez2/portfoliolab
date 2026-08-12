@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
 
 import {
-  ETATS, POSE_NEUTRE, etatParCle, etatSelonVariation, poseDeLEtat,
+  ETATS, POSE_NEUTRE, etatParCle, etatSelonEcartCourbe, etatSelonVariation,
+  poseDeLEtat,
 } from "./avatarEtats";
 import { type EtatVie, type ReglagesVie, VIE_AU_REPOS, creerVie } from "./avatarVie";
 
@@ -18,8 +19,20 @@ import { type EtatVie, type ReglagesVie, VIE_AU_REPOS, creerVie } from "./avatar
  * finit par être ignoré.
  */
 
-const REGLAGES: ReglagesVie = { derive: 3, clignement: true, cadenceClignement: 4 };
-const CALME: ReglagesVie = { derive: 0, clignement: false, cadenceClignement: 4 };
+const REGLAGES: ReglagesVie = {
+  derive: 3, clignement: true, cadenceClignement: 4, spontane: true, cadenceSpontane: 5,
+};
+/**
+ * Tout coupé.
+ *
+ * ⚠️ **`spontane: false` en fait partie**, et l'oublier a fait tomber un test : les
+ * gestes que le visage se donne tout seul sont, par définition, du mouvement que
+ * personne n'a demandé. Un régime dit « calme » qui les laisserait passer ne mesurerait
+ * plus l'état qu'on croit isoler.
+ */
+const CALME: ReglagesVie = {
+  derive: 0, clignement: false, cadenceClignement: 4, spontane: false,
+};
 const FIGE = (v: number) => () => v;
 
 /** Fait tourner la vie à 60 images par seconde et rend toutes les images. */
@@ -290,7 +303,7 @@ describe("dérive et clignement", () => {
     // ⚠️ C'est *la* différence entre un visage et une icône. Un avatar strictement figé
     // se lit comme une image, quelle que soit la qualité des mimiques.
     const vie = creerVie(FIGE(0.99));
-    const images = simuler(vie, 20, { derive: 3, clignement: false, cadenceClignement: 4 });
+    const images = simuler(vie, 20, { derive: 3, clignement: false, cadenceClignement: 4, spontane: false });
     const distincts = new Set(images.map(i => i.lacet.toFixed(4)));
     expect(distincts.size).toBeGreaterThan(images.length * 0.9);
   });
@@ -304,7 +317,7 @@ describe("dérive et clignement", () => {
   it("ralentit les clignements du focus et les espace pour le somnolent", () => {
     const compter = (cle: string) => {
       const vie = demanderEt(cle);
-      const images = simuler(vie, 120, { derive: 0, clignement: true, cadenceClignement: 4 });
+      const images = simuler(vie, 120, { ...CALME, clignement: true });
       let n = 0;
       for (let i = 1; i < images.length; i++) {
         if (images[i - 1].fermetureGauche < images[i].fermetureGauche
@@ -319,7 +332,7 @@ describe("dérive et clignement", () => {
 
   it("ferme les deux yeux ensemble sur un clignement ordinaire", () => {
     const vie = creerVie(FIGE(0.99));
-    const images = simuler(vie, 40, { derive: 0, clignement: true, cadenceClignement: 3 });
+    const images = simuler(vie, 40, { ...CALME, clignement: true, cadenceClignement: 3 });
     expect(images.some(i => i.fermetureGauche > 0.9)).toBe(true);
     for (const i of images) expect(i.fermetureGauche).toBe(i.fermetureDroite);
   });
@@ -359,6 +372,140 @@ describe("etatSelonVariation", () => {
     for (const v of [50, 9, 3, 0, -0.5, -3, -12, -80]) {
       expect({ [v]: etatParCle(etatSelonVariation(v)).cle })
         .toEqual({ [v]: etatSelonVariation(v) });
+    }
+  });
+});
+
+describe("gestes spontanés", () => {
+  it("bouge de lui-même en neutre, au lieu de seulement dériver", () => {
+    /**
+     * ⚠️ **La régression que ce test fige.** En passant à la machine à états, les gestes
+     * spontanés avaient disparu : hors réaction de l'application, le visage ne faisait
+     * plus que dériver et cligner. Or c'est en « neutre » qu'il passe le plus clair de
+     * son temps — et un neutre sans initiative propre se lit comme une icône, si
+     * soignées que soient les mimiques qu'on ne voit jamais.
+     */
+    const vie = creerVie(Math.random);
+    const sansDerive = { ...CALME, spontane: true, cadenceSpontane: 3 };
+    const images = simuler(vie, 60, sansDerive);
+    const bouge = images.filter(i =>
+      Math.abs(i.lacet) > 3 || Math.abs(i.roulis) > 3
+      || i.hauteur < 0.8 || i.hauteur > 1.1);
+    expect(bouge.length).toBeGreaterThan(images.length * 0.15);
+  });
+
+  it("rend la main à l'état de fond, sans le remplacer", () => {
+    // Un coup d'œil pendant « Préoccupé » revient sur « Préoccupé ». Un geste qui
+    // écraserait l'état effacerait ce que l'application vient d'annoncer.
+    const vie = creerVie(Math.random);
+    const avec = { ...CALME, spontane: true, cadenceSpontane: 1 };
+    vie.avancer(0, avec);
+    vie.demander("preoccupe", 0);
+    for (let t = 0; t <= 40000; t += 16) vie.avancer(t, avec);
+    expect(vie.fond()).toBe("preoccupe");
+  });
+
+  it("laisse le dormeur dormir et le concentré travailler", () => {
+    // ⚠️ Un dormeur qui jette des coups d'œil ne dort pas. La tolérance de l'état décide,
+    // et « Observation » — qui a déjà son mouvement propre — n'en accepte aucun.
+    const compter = (cle: string) => {
+      const vie = creerVie(Math.random);
+      const avec = { ...CALME, spontane: true, cadenceSpontane: 2 };
+      vie.avancer(0, avec);
+      vie.demander(cle, 0);
+      let gestes = 0;
+      let precedent = "";
+      for (let t = 0; t <= 120000; t += 16) {
+        vie.avancer(t, avec);
+        const c = vie.courant();
+        if (c !== precedent && c !== cle) gestes++;
+        precedent = c;
+      }
+      return gestes;
+    };
+    const neutre = compter("neutre");
+    expect(neutre).toBeGreaterThan(4);
+    expect(compter("somnolent")).toBeLessThan(neutre);
+    expect(compter("observation")).toBe(0);
+  });
+
+  it("s'arrête net quand on les coupe", () => {
+    const vie = creerVie(Math.random);
+    for (const i of simuler(vie, 90, CALME)) expect(i).toEqual(VIE_AU_REPOS);
+  });
+});
+
+describe("somnolent", () => {
+  it("penche la tête au lieu de seulement fermer les yeux", () => {
+    /**
+     * ⚠️ **Des paupières basses sur une tête droite se lisent comme un regard méfiant**,
+     * pas comme l'assoupissement. C'est l'inclinaison qui fait la différence : le menton
+     * descend, la tête roule sur le côté — le mouvement de celui qui pique du nez.
+     */
+    const e = poser("somnolent");
+    expect(e.fermetureGauche).toBeGreaterThan(0.45);
+    expect(e.tangage).toBeGreaterThan(8);
+    expect(Math.abs(e.roulis)).toBeGreaterThan(6);
+  });
+});
+
+describe("etatSelonEcartCourbe", () => {
+  it("emploie des paliers bien plus larges qu'une variation de cours", () => {
+    /**
+     * ⚠️ **Le défaut que ce test fige, signalé à l'usage.** Une courbe se parcourt en
+     * continu — chaque pixel déplace la valeur — là où l'on passe d'une carte à l'autre
+     * par sauts. Avec les seuils d'`etatSelonVariation`, un simple glissement traversait
+     * quatre bandes et le visage changeait sans arrêt de mimique.
+     */
+    // ⚠️ Ce qui compte n'est pas le nombre d'états atteignables — ma première version
+    // les comptait, et trouvait quatre dans les deux cas — mais le nombre de fois où
+    // le visage **change** quand le curseur balaie la courbe. C'est cela qu'on voit.
+    const changements = (f: (v: number) => string) => {
+      let n = 0, precedent = f(-40);
+      for (let v = -40; v <= 40; v += 0.25) {
+        const c = f(v);
+        if (c !== precedent) n++;
+        precedent = c;
+      }
+      return n;
+    };
+    expect(changements(etatSelonEcartCourbe))
+      .toBeLessThan(changements(etatSelonVariation));
+  });
+
+  it("ne dit rien de neuf tant que l'écart reste modeste", () => {
+    for (const v of [-9, -4, 0, 2, 3.9]) {
+      expect({ [v]: etatSelonEcartCourbe(v) }).toEqual({ [v]: "curieux" });
+    }
+  });
+
+  it("s'éclaire sur un sommet et s'assombrit dans un creux", () => {
+    expect(etatSelonEcartCourbe(6)).toBe("content");
+    expect(etatSelonEcartCourbe(30)).toBe("surpris");
+    expect(etatSelonEcartCourbe(-14)).toBe("preoccupe");
+  });
+
+  it("n'emploie jamais « sceptique » sur un point de mesure", () => {
+    // ⚠️ Un œil plus fermé que l'autre exprime un doute sur une hypothèse ; il ne veut
+    // rien dire sur une valeur relevée.
+    // ⚠️ Un tableau et non un `Set` étalé : la cible de compilation du projet n'itère
+    // pas un itérateur sans drapeau supplémentaire — le calendrier a déjà buté dessus.
+    const vus: string[] = [];
+    for (let v = -80; v <= 80; v += 0.5) {
+      const c = etatSelonEcartCourbe(v);
+      if (vus.indexOf(c) < 0) vus.push(c);
+    }
+    expect(vus.indexOf("sceptique")).toBe(-1);
+    expect(vus.slice().sort()).toEqual(["content", "curieux", "preoccupe", "surpris"]);
+  });
+
+  it("ne nomme que des états qui existent, et reste calme sans donnée", () => {
+    for (const v of [-100, -10, 0, 10, 100]) {
+      expect(etatParCle(etatSelonEcartCourbe(v)).cle).toBe(etatSelonEcartCourbe(v));
+    }
+    for (const v of [null, undefined, NaN, Infinity]) {
+      expect({ [String(v)]: etatSelonEcartCourbe(v as number) })
+        .toEqual({ [String(v)]: "curieux" });
     }
   });
 });

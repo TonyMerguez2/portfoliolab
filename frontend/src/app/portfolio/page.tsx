@@ -20,9 +20,7 @@ import AllocationDonut from "@/components/portfolio/AllocationDonut";
 import RecentActivity from "@/components/portfolio/RecentActivity";
 import PortfolioTabs from "@/components/portfolio/PortfolioTabs";
 import { donutArcs } from "@/lib/donut";
-import { enveloppe, infobulleEnveloppe, valoriser } from "@/lib/portfolio";
-import { assetExchange } from "@/lib/assets";
-import PastilleEnveloppe from "@/components/portfolio/PastilleEnveloppe";
+import { valoriser } from "@/lib/portfolio";
 import RadarChart from "@/components/charts/RadarChart";
 import { enTetesAuth } from "@/lib/session";
 import { typesParOperation, COULEUR_OP, LIBELLE_OP, type Tx } from "@/lib/journal";
@@ -36,7 +34,10 @@ import { CADENCE_COURS_MS } from "@/lib/cadence";
 import { useCoursCrypto, symboleBinance } from "@/lib/coursCrypto";
 import Cadre from "@/components/ui/Cadre";
 import ChiffresRoulants from "@/components/ui/ChiffresRoulants";
-import ImagePortefeuille from "@/components/portfolio/ImagePortefeuille";
+import AvatarPortefeuille from "@/components/portfolio/AvatarPortefeuille";
+import { useCouleurAvatar } from "@/lib/useCouleurAvatar";
+import { useAvatar } from "@/lib/AvatarContext";
+import { etatSelonEcartCourbe } from "@/lib/avatarEtats";
 import { useAnalyseEvenements } from "@/hooks/useAnalyseEvenements";
 import { useImpactTitre } from "@/hooks/useImpactTitre";
 import { useObjectifs, type Saisie } from "@/hooks/useObjectifs";
@@ -258,6 +259,15 @@ function PortfolioPageInner() {
   const router       = useRouter();
 
   const [portfolio,     setPortfolio]     = useState<PortfolioData | null>(null);
+  /**
+   * La couleur de l'avatar, tenue par la page.
+   *
+   * ⚠️ **Une seule source pour deux usages** : la tête du personnage et la courbe de
+   * performance. Deux couleurs pour un même portefeuille sur un même écran se liraient
+   * comme un défaut, et deux états séparés auraient fini par diverger.
+   */
+  const [couleurAvatar, choisirCouleurAvatar] = useCouleurAvatar(portfolio);
+
   const [prices,        setPrices]        = useState<Record<string, PriceData>>({});
   const [loading,       setLoading]       = useState(true);
   const [view,          setView]          = useState<"carte" | "liste">("carte");
@@ -791,10 +801,33 @@ function PortfolioPageInner() {
   const [survolCourbe, setSurvolCourbe] =
     useState<{ valeur: number; date: string; investi?: number } | null>(null);
 
-  /** L'enveloppe déduite du contenu. Voir `enveloppe`, et sa mise en garde. */
-  const enveloppePortefeuille = useMemo(
-    () => enveloppe(enriched.map(a => a.ticker), assetExchange),
-    [enriched]);
+  /**
+   * L'avatar réagit au point de la courbe qu'on survole.
+   *
+   * ⚠️ **À l'écart avec la performance du jour, pas à la performance absolue.** Sur une
+   * fenêtre longue, tout point vaut des dizaines de pour cent : mesurée dans l'absolu,
+   * la courbe serait « étonnante » d'un bout à l'autre et le visage ne distinguerait
+   * plus rien. Comparé à là où le portefeuille en est aujourd'hui, le même chiffre
+   * redevient parlant — le regard s'éclaire sur les sommets et s'assombrit dans les
+   * creux, ce qui est précisément ce qu'on cherche en promenant le curseur.
+   *
+   * ⚠️ Passe par `pointer` et non par un attribut `data-avatar` : celui-ci n'est relu
+   * qu'à l'**entrée** dans un élément, alors qu'ici le pointeur reste sur le même
+   * graphique pendant que la valeur change sous lui. Et par un canal distinct de
+   * `exprimer`, pour ne pas effacer la mimique d'une carte survolée en même temps.
+   */
+  const { pointer } = useAvatar();
+
+  useEffect(() => {
+    if (!survolCourbe || survolCourbe.investi == null || survolCourbe.investi <= 0) {
+      pointer(null);
+      return;
+    }
+    const pctSurvol = (survolCourbe.valeur - survolCourbe.investi) / survolCourbe.investi * 100;
+    const pctActuel = prixDeRevient != null && prixDeRevient > 0 && valeurTotale != null
+      ? (valeurTotale - prixDeRevient) / prixDeRevient * 100 : 0;
+    pointer(etatSelonEcartCourbe(pctSurvol - pctActuel));
+  }, [survolCourbe, valeurTotale, prixDeRevient, pointer]);
 
   const weightedChange = enriched.reduce((s, a) => {
     if (a.change === null) return s;
@@ -1071,17 +1104,20 @@ function PortfolioPageInner() {
 
                 ⚠️ À revoir si le bloc de la valeur totale change de hauteur :
                 c'est lui qui fixe désormais celle de la bande. */}
-            {/* Le conteneur relatif n'existe que pour la pastille d'enveloppe,
-                qui chevauche l'angle haut-droit de la vignette. Elle vit ici et
-                non dans `ImagePortefeuille` : ce composant sert aussi le menu
-                déroulant et la page de construction, où l'enveloppe n'a rien à
-                faire — et il n'a pas à connaître la fiscalité. */}
-            <span style={{ position: "relative", display: "inline-flex", flexShrink: 0 }}>
-              <ImagePortefeuille portefeuille={portfolio} actifs={enriched} taille={63} onChange={setPortfolio} />
-              {enveloppePortefeuille && (
-                <PastilleEnveloppe enveloppe={enveloppePortefeuille}
-                  infobulle={infobulleEnveloppe(enveloppePortefeuille)} />
-              )}
+            {/* ⚠️ **La pastille d'enveloppe est retirée de l'avatar.** Elle chevauchait
+                son angle haut-droit ; sur une tête ronde et bombée, un jeton clair posé
+                dessus se lisait comme un défaut de dessin plutôt que comme une mention.
+                Le calcul lui-même reste entier dans `lib/portfolio` — `enveloppe()` et
+                `infobulleEnveloppe()` — et `PastilleEnveloppe` sert encore le menu
+                déroulant du bandeau. La remettre ailleurs est donc une affaire de deux
+                lignes, le jour où on lui trouve une place qui ne morde pas le visage. */}
+            <span style={{ display: "inline-flex", flexShrink: 0 }}>
+              {/* ⚠️ **L'avatar remplace la vignette du portefeuille.** Ce qu'on perd,
+                  et il faut le savoir : `ImagePortefeuille` était aussi le téléverseur
+                  d'image, recadrage compris. Le composant reste entier dans le code —
+                  rien ne l'appelle plus ici, c'est tout. */}
+              <AvatarPortefeuille portefeuille={portfolio} taille={63}
+                couleur={couleurAvatar} onCouleur={choisirCouleurAvatar} />
             </span>
             <div style={{ minWidth: 0 }}>
               {/* Le nom seul. Une pastille de la couleur du portefeuille le
@@ -1447,7 +1483,10 @@ function PortfolioPageInner() {
               totalValue={valeurTotale}
               period={period}
               onPeriodChange={setPeriod}
-              color={portfolio?.color || "var(--nv-accent)"}
+              // ⚠️ La courbe prend la couleur de l'avatar, pas celle que l'API garde :
+              // c'est la seule que l'utilisateur a choisie, et deux couleurs pour un
+              // même portefeuille sur un même écran se liraient comme un défaut.
+              color={couleurAvatar}
               portfolioId={portfolio?.id}
               surTransactions={surTransactions}
               operations={reperesOperations}

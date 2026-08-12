@@ -195,6 +195,7 @@ function Carte({ o, onModifier }: { o: Objectif; onModifier?: (o: Objectif) => v
 
   return (
     <TileCard
+      reflet={false}
       ticker={o.id}
       radius={18}
       // ⚠️ Zéro, comme sur les cartes d'actifs. Les halos flous de `TileCard` sont peints

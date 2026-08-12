@@ -5,6 +5,7 @@ import {
   RAYON_TETE, type Orientation, cheminOeil,
 } from "@/lib/avatarSpherique";
 import { type EtatVie, VIE_AU_REPOS, creerVie } from "@/lib/avatarVie";
+import { COULEUR_PAR_DEFAUT, couleurDesYeux } from "@/lib/avatarCouleur";
 
 /**
  * Le visage de Novac, prêt à poser n'importe où.
@@ -37,6 +38,27 @@ const ECART = 27;
  */
 const ECHANTILLONS = 96;
 
+/**
+ * La vie du visage à cette taille.
+ *
+ * ⚠️ **La dérive est bien plus ample qu'au banc d'essai, et ce n'est pas un caprice.**
+ * À trente-huit pixels, la tête a dix-neuf pixels de rayon : deux degrés de lacet
+ * déplacent les yeux de moins d'un pixel, donc de rien du tout. Ce qui se voyait sur
+ * une tête de cinq cents pixels disparaît ici. Sept degrés rendent le même effet visible
+ * — un visage qui ne tient pas en place — sans que la tête parte pour autant.
+ *
+ * ⚠️ **Les gestes spontanés sont plus fréquents qu'ils ne le seraient sur un grand
+ * format.** Un avatar de coin d'écran n'est regardé que par intermittence : espacés de
+ * dix secondes, ses gestes tomberaient presque toujours pendant qu'on regarde ailleurs.
+ */
+const REGLAGES = {
+  derive: 7,
+  clignement: true,
+  cadenceClignement: 3.6,
+  spontane: true,
+  cadenceSpontane: 4.5,
+};
+
 const rad = (d: number) => (d * Math.PI) / 180;
 const borner = (v: number, min: number, max: number) => Math.min(max, Math.max(min, v));
 
@@ -44,8 +66,8 @@ export default function AvatarNovac({
   taille = 38,
   etat = "neutre",
   impulsion = 0,
-  couleur = "#6366F1",
-  couleurYeux = "#101828",
+  couleur,
+  couleurYeux,
   suivi = true,
   amplitude = 17,
   titre,
@@ -63,6 +85,12 @@ export default function AvatarNovac({
    * classique des animations pilotées par un état.
    */
   impulsion?: number;
+  /**
+   * La couleur de la tête. Omise, elle vient du choix de l'utilisateur.
+   *
+   * ⚠️ Les yeux ne s'imposent qu'avec elle : seuls, ils pourraient devenir invisibles
+   * sur la tête. Voir `couleurDesYeux`, qui les déduit en garantissant le contraste.
+   */
   couleur?: string;
   couleurYeux?: string;
   /** Le regard suit-il le curseur dans la fenêtre ? */
@@ -72,6 +100,16 @@ export default function AvatarNovac({
   titre?: string;
   style?: React.CSSProperties;
 }) {
+  /**
+   * ⚠️ **Les yeux se déduisent de la tête *effectivement rendue*.** Ma première version
+   * ne les déduisait que lorsque la couleur venait du contexte : dès qu'un appelant
+   * passait la sienne — le cas de chaque portefeuille — les yeux retombaient sur un
+   * bleu-noir figé. Sur une tête sombre ils s'y seraient effacés, c'est-à-dire
+   * exactement la panne que `couleurDesYeux` existe pour empêcher.
+   */
+  const teteRendue = couleur ?? COULEUR_PAR_DEFAUT;
+  const yeuxRendus = couleurYeux ?? couleurDesYeux(teteRendue);
+
   const [vie, setVie] = useState<EtatVie>(VIE_AU_REPOS);
   const [pose, setPose] = useState({ lacet: 0, tangage: 0 });
   const vieRef = useRef(creerVie());
@@ -109,9 +147,7 @@ export default function AvatarNovac({
         tangage: p.tangage + (cible.current.tangage - p.tangage) * part,
       }));
       setVie(precedente => {
-        const suivante = vieRef.current.avancer(t, {
-          derive: 2.4, clignement: true, cadenceClignement: 4.5,
-        });
+        const suivante = vieRef.current.avancer(t, REGLAGES);
         suiviRef.current = suivante.suivi;
         return identiques(precedente, suivante) ? precedente : suivante;
       });
@@ -177,9 +213,9 @@ export default function AvatarNovac({
       {/* L'échelle est une transformation du rendu, pas de la géométrie : la sphère
           reste une sphère, et c'est son image qu'on comprime le temps d'un rebond. */}
       <g transform={`scale(${vie.echelleX.toFixed(4)} ${vie.echelleY.toFixed(4)})`}>
-        <circle cx={0} cy={0} r={RAYON_TETE} fill={couleur} />
-        <path d={oeil(vie.fermetureGauche, -1)} fill={couleurYeux} />
-        <path d={oeil(vie.fermetureDroite, 1)} fill={couleurYeux} />
+        <circle cx={0} cy={0} r={RAYON_TETE} fill={teteRendue} />
+        <path d={oeil(vie.fermetureGauche, -1)} fill={yeuxRendus} />
+        <path d={oeil(vie.fermetureDroite, 1)} fill={yeuxRendus} />
       </g>
     </svg>
   );

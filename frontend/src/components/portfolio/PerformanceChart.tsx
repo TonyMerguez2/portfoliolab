@@ -670,8 +670,6 @@ export default function PerformanceChart({
   const boxRef = useRef<HTMLDivElement>(null);
   const plotRef = useRef<HTMLDivElement>(null);
   const glowRef = useRef<HTMLCanvasElement>(null);
-  /** Canevas des lueurs d'extrême, distinct de celui du survol. */
-  const lueurRef = useRef<HTMLCanvasElement>(null);
   const chartRef = useRef<IChartApi | null>(null);
   const serieRef = useRef<ISeriesApi<"Area"> | null>(null);
   const bougieRef = useRef<ISeriesApi<"Candlestick"> | null>(null);
@@ -1215,35 +1213,6 @@ export default function PerformanceChart({
     return () => { cancelled = true; };
   }, [key, portfolioId, surTransactions]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  /**
-   * Le meilleur et le pire moment de la fenêtre, au sens du gain.
-   *
-   * `(valeur − investi) / investi` : le rendement de l'argent réellement mis,
-   * c'est-à-dire ce qu'on entend quand on dit « mon investissement est à +9 % ».
-   *
-   * ⚠️ Cette mesure se dilue à chaque versement — de l'argent frais entre à 0 %
-   * de gain et tire le rapport vers le bas. Le pire moment pourrait donc n'être
-   * que le lendemain d'un virement. Vérifié sur un portefeuille réel avant de
-   * poser ces repères : ses six versements ne tombent sur aucun des deux
-   * extrêmes, le plus proche restant à quatre jours. La dilution est de toute
-   * façon ce que l'épargnant vit — son pourcentage global baisse bel et bien
-   * quand il verse — donc en marquer les extrêmes ne trompe personne.
-   *
-   * Rien en dessous de dix points, ni quand les deux tombent au même endroit :
-   * sur une fenêtre de 24 h, « le meilleur moment » ne veut rien dire.
-   */
-  const extremes = useMemo(() => {
-    const g = points
-      .filter(p => typeof p.invested === "number" && (p.invested as number) > 0)
-      .map(p => ({ p, pct: (p.value - (p.invested as number)) / (p.invested as number) * 100 }));
-    if (g.length < 10) return null;
-    let haut = g[0], bas = g[0];
-    for (const x of g) {
-      if (x.pct > haut.pct) haut = x;
-      if (x.pct < bas.pct) bas = x;
-    }
-    return haut.p.date === bas.p.date ? null : { haut, bas };
-  }, [points]);
 
   /**
    * Les jours de la série, dans l'ordre où elle est tracée.
@@ -1331,11 +1300,6 @@ export default function PerformanceChart({
     const chart = chartRef.current, serie = serieRef.current, el = plotRef.current;
     if (!chart || !serie || !el || !points.length || !ordonnee || !cadrePret) {
       setPastilles([]);
-      // Le canevas des lueurs s'efface aussi : sans cela, celle de la période
-      // précédente resterait peinte pendant tout le recadrage de la suivante,
-      // posée sur une courbe qui n'est plus la sienne.
-      const toile = lueurRef.current;
-      toile?.getContext("2d")?.clearRect(0, 0, toile.width, toile.height);
       return;
     }
 
@@ -1417,80 +1381,11 @@ export default function PerformanceChart({
       // viennent d'être écrites dans le DOM : on ne réveille pas React pour rien.
       setPastilles(p => (memeListe(p, out, cléPastille) ? p : out));
 
-      /**
-       * Les deux extrêmes, marqués par une lueur **sur la courbe** elle-même.
-       *
-       * ⚠️ C'étaient deux anneaux creux posés en surcouche. Ils désignaient bien
-       * l'endroit, mais ils le désignaient comme un objet ajouté : deux pastilles
-       * de plus sur un tracé qui en portait déjà — opérations, stickers — et dont
-       * la silhouette devait justement se distinguer des autres pour ne pas se
-       * lire comme la même chose. La lueur ne s'ajoute pas au dessin, elle
-       * l'éclaire : le meilleur moment devient un endroit où la courbe est verte,
-       * le pire un endroit où elle est rouge.
-       *
-       * Peinte sur un canevas séparé de celui du survol : ce dernier s'effface à
-       * chaque mouvement du curseur, alors que les lueurs ne changent qu'avec le
-       * cadrage. Les mêler aurait obligé à les repeindre à chaque pixel parcouru.
-       */
-      const cv = lueurRef.current;
-      const ctx = cv?.getContext("2d");
-      if (!cv || !ctx) return;
-      // Le canevas suit la taille du cadre, en pixels physiques.
-      if (cv.width !== el.clientWidth || cv.height !== el.clientHeight) {
-        cv.width = el.clientWidth; cv.height = el.clientHeight;
-      }
-      ctx.clearRect(0, 0, cv.width, cv.height);
-      if (!extremes) return;
-
-      for (const [sens, e] of [["haut", extremes.haut], ["bas", extremes.bas]] as const) {
-        const t = Math.floor(new Date(e.p.date).getTime() / 1000) as UTCTimestamp;
-        const cx = chart.timeScale().timeToCoordinate(t);
-        if (cx == null || !isFinite(cx)) continue;
-        const seg = segmentAutour(chart, serie, cx, LUEUR);
-        if (!seg.length) continue;
-
-        const teinte = teinteHexadecimale(
-          sens === "haut" ? "--nv-positif" : "--nv-negatif",
-          sens === "haut" ? "#00D492" : "#FF6467");
-
-        /**
-         * Le dégradé est **dans le trait**, et non appliqué après coup.
-         *
-         * ⚠️ Le halo de survol estompe ses bords par un `destination-in` sur tout
-         * le canevas — ce qui lui va, puisqu'il est seul et repeint à chaque
-         * mouvement. Ici il y a deux lueurs sur le même canevas : estomper la
-         * seconde aurait effacé la première, qui tombe hors de sa bande.
-         *
-         * Un trait dont la couleur s'éteint à ses extrémités règle cela sans
-         * composition : chaque lueur est indépendante, et l'ordre de peinture n'a
-         * plus d'importance.
-         */
-        const bande = (alpha: string) => {
-          const g = ctx.createLinearGradient(cx - LUEUR, 0, cx + LUEUR, 0);
-          g.addColorStop(0, teinte + "00");
-          g.addColorStop(0.5, teinte + alpha);
-          g.addColorStop(1, teinte + "00");
-          return g;
-        };
-
-        ctx.save();
-        // Deux passes, la large d'abord : elle donne la lueur, la fine redonne au
-        // trait sa netteté au milieu du flou. Un seul passage épais aurait épaissi
-        // la courbe à cet endroit, ce qui se lit comme un défaut de tracé plutôt
-        // que comme un éclairage.
-        ctx.lineCap = "round"; ctx.lineJoin = "round";
-        ctx.filter = "blur(3px)";
-        tracer(ctx, seg);
-        ctx.strokeStyle = bande("AA");
-        ctx.lineWidth = 7;
-        ctx.stroke();
-        ctx.filter = "none";
-        tracer(ctx, seg);
-        ctx.strokeStyle = bande("FF");
-        ctx.lineWidth = 2;
-        ctx.stroke();
-        ctx.restore();
-      }
+      // ⚠️ **Les lueurs verte et rouge des extrêmes sont retirées, à la demande.**
+      // Elles éclairaient la courbe au meilleur et au pire moment de la période. Ce
+      // qui disparaît avec elles : le seul repère qui situait ces deux instants sans
+      // survoler le tracé. `LUEUR` sert encore au halo de survol, et `segmentAutour`
+      // reste employé par lui.
     };
 
     /**
@@ -1584,7 +1479,7 @@ export default function PerformanceChart({
       if (trame) cancelAnimationFrame(trame);
       ro.disconnect();
     };
-  }, [operations, points, joursSerie, totalValue, mode, ordonnee, extremes, cadrePret, stickers, echelle, tempsSerie]);
+  }, [operations, points, joursSerie, totalValue, mode, ordonnee, cadrePret, stickers, echelle, tempsSerie]);
 
   // ── Création du graphique ──────────────────────────────────────────────────
   useEffect(() => {
@@ -2472,14 +2367,6 @@ export default function PerformanceChart({
             la courbe descendait l'axe à −1 000 €, une valeur que le
             portefeuille n'a jamais eue. Positionnées ici à la main, elles
             flottent au-dessus du tracé sans rien déformer. */}
-        {/* Les deux extrêmes de la période, en lueur sur la courbe.
-            Peints sur un canevas, sous les pastilles : voir la passe de peinture.
-            Il y avait ici deux anneaux creux, de silhouette délibérément
-            différente des pastilles pour ne pas se lire comme elles ; la lueur n'a
-            plus ce problème puisqu'elle n'ajoute aucun objet au tracé. */}
-        <canvas ref={lueurRef} aria-hidden="true" style={{
-          position: "absolute", inset: 0, pointerEvents: "none", zIndex: 4,
-        }} />
         {/* Stickers posés à la main.
             Sous les pastilles d'opération dans l'empilement, comme les anneaux
             d'extrême : quand un sticker tombe sur une opération, c'est l'opération

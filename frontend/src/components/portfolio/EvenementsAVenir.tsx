@@ -290,7 +290,8 @@ export default function EvenementsAVenir({
   const retenu = (e: Evenement) => selectionnable(e) && e.ticker === tickerChoisi;
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 12, minHeight: 0, flex: 1 }}>
+    <div data-avatar="curieux"
+      style={{ display: "flex", flexDirection: "column", gap: 12, minHeight: 0, flex: 1 }}>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10 }}>
         <span style={{ fontFamily: FONT, fontSize: 13, fontWeight: 600, color: CLAIR.texte }}>
           Événements à venir

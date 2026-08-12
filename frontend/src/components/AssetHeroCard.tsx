@@ -7,6 +7,7 @@ import { LIBELLE_CADENCE } from "@/lib/cadence";
 import TileCard from "@/components/TileCard";
 import { BRAND_COLORS, TRENDING } from "@/lib/assets";
 import { libellePlace } from "@/lib/placesBoursieres";
+import { etatSelonVariation } from "@/lib/avatarEtats";
 import { API_URL } from "@/lib/api";
 
 
@@ -165,7 +166,9 @@ export default function AssetHeroCard({
         @media(max-width:820px){.shared-asset-hero-row{zoom:1}.shared-asset-hero-grid{grid-template-columns:minmax(0,1fr) minmax(180px,.75fr);height:auto;row-gap:18px}.shared-asset-hero-status{grid-column:1 / 3;border-left:0!important;border-top:1px solid rgba(255,255,255,.1);padding:16px 0 0!important;flex-direction:row!important;align-items:center;justify-content:space-between!important}}
       ` }} />
 
-      <div className="shared-asset-hero-row" style={{ display: "flex", alignItems: "stretch", minWidth: 0 }}>
+      <div className="shared-asset-hero-row"
+        data-avatar={etatSelonVariation(price?.change)}
+        style={{ display: "flex", alignItems: "stretch", minWidth: 0 }}>
         <TileCard
           ticker={ticker}
           className="shared-asset-hero-card"
