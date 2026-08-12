@@ -72,10 +72,19 @@ export default function CarteActif({
   const chg = up ? "var(--nv-positif)" : "var(--nv-negatif)";
   const name = useMemo(() => assetName(a.ticker), [a.ticker]);
 
+  /**
+   * ⚠️ **`novac-tile` est portée aussi par les cartes d'aperçu.** Ce n'est pas un simple
+   * nom : la classe porte le **bord** de la tuile — un dégradé peint sur un pixel par un
+   * pseudo-élément masqué, que rien d'inline ne peut exprimer — et le tramage qui empêche
+   * les lavis du fond de se lire en anneaux. Je l'avais retirée en mode aperçu pour garder
+   * mes comptages d'éléments propres : les cartes des dossiers se retrouvaient sans
+   * liseré, mêmes dimensions mais pas la même arête. Entre une commodité de mesure et la
+   * fidélité du rendu, c'est la mesure qui cède.
+   */
   return (
     <TileCard ticker={a.ticker} radius={18} glowStrength={0}
       reflet={false}
-      className={inerte ? undefined : "novac-tile"}
+      className="novac-tile"
       colorHex={brandHex(a.ticker)}
       onClick={inerte ? undefined : onClick}
       containerStyle={{
