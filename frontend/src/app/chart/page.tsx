@@ -27,6 +27,7 @@ import {
 import { useModeTheme } from "@/lib/theme";
 import { styleCadreExterieur, styleCarteInterieure } from "@/lib/palette";
 import { libellePlace } from "@/lib/placesBoursieres";
+import { etatSelonVariation } from "@/lib/avatarEtats";
 import { API_URL } from "@/lib/api";
 
 
@@ -2313,6 +2314,9 @@ function ChartContent() {
                                   type="button"
                                   className="asset-hero-card similar-asset-card"
                                   data-border=""
+                                  // Le visage du bandeau s'accorde au résultat survolé :
+                                  // content sur une hausse, préoccupé sur une baisse.
+                                  data-avatar={etatSelonVariation(s.change)}
                                   onClick={() => {
                                     const url = new URL(window.location.href);
                                     url.searchParams.set("ticker", s.ticker);

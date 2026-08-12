@@ -2,6 +2,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import TileCard from "@/components/TileCard";
 import AssetLogo from "@/components/AssetLogo";
+import ReactionAvatar from "@/components/ReactionAvatar";
 import TileSparkline from "@/components/charts/TileSparkline";
 import { brandHex } from "@/lib/tileStyle";
 import { assetName } from "@/lib/assets";
@@ -219,7 +220,8 @@ export default function AssetGrid({
           const chg = up ? "var(--nv-positif)" : "var(--nv-negatif)";
           const name = assetName(a.ticker);
           return (
-            <TileCard key={a.ticker} ticker={a.ticker} radius={18} glowStrength={0}
+            <ReactionAvatar key={a.ticker} variation={a.change}>
+            <TileCard ticker={a.ticker} radius={18} glowStrength={0}
               className="novac-tile"
               colorHex={brandHex(a.ticker)}
               onClick={onAssetClick ? () => onAssetClick(a.ticker) : undefined}
@@ -311,6 +313,7 @@ export default function AssetGrid({
                 </div>
               )}
             </TileCard>
+            </ReactionAvatar>
           );
         })}
       </div>

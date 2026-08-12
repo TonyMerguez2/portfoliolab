@@ -7,6 +7,8 @@ import { surModification } from "@/lib/portefeuilleModifie";
 import { TRENDING } from "@/lib/assets";
 import AssetLogo from "@/components/AssetLogo";
 import PocheActifs, { RAYON_CORPS } from "@/components/portfolio/PocheActifs";
+import AvatarNovac from "@/components/AvatarNovac";
+import { useAvatar } from "@/lib/AvatarContext";
 import PastilleEnveloppe from "@/components/portfolio/PastilleEnveloppe";
 import { enveloppe, infobulleEnveloppe } from "@/lib/portfolio";
 import { assetExchange } from "@/lib/assets";
@@ -173,6 +175,7 @@ const typeColor = (type: string) => ({
 });
 
 export default function GlobalHeader() {
+  const { expression } = useAvatar();
   const pathname = usePathname();
   const router = useRouter();
   const { mode, setMode, activePortfolio, setActivePortfolio, activeAsset, setActiveAsset, displayMode, toggleDisplayMode } = useApp();
@@ -527,6 +530,9 @@ export default function GlobalHeader() {
         <div style={{ position:"relative" }}>
           <button type="button" onClick={() => setShowNotifs(v => !v)}
             aria-label="Réglages" title="Réglages"
+            /* L'état courant du visage, lisible depuis l'extérieur. Sert aux
+               vérifications : une mimique ne se relève pas dans une capture. */
+            data-avatar-actif={expression.cle}
             style={{
               width:36, height:36, borderRadius:RAYONS.md, flexShrink:0, cursor:"pointer",
               display:"flex", alignItems:"center", justifyContent:"center",
@@ -534,28 +540,28 @@ export default function GlobalHeader() {
               // concept — et comme les segments de la page, dont c'est déjà la
               // langue. Le verre translucide qu'elle portait la faisait
               // disparaître dans le bandeau.
-              background:JETONS.segmentActif,
+              // ⚠️ **Plus de pastille claire sous l'avatar.** Elle existait pour
+              // porter une icône au trait ; le visage est lui-même une pastille
+              // pleine, et l'empiler sur une seconde donnait un macaron cerné qui
+              // écrasait la tête et lui volait deux pixels de chaque côté.
+              background:"transparent",
               border:"none", color:JETONS.segmentEncre,
-              boxShadow:JETONS.segmentOmbre,
+              padding:0,
               transition:"opacity 150ms",
               opacity: showNotifs ? 0.86 : 1,
             }}>
-            {/* La roue du concept, reprise telle quelle.
-                Six lobes reliés par des congés, et le moyeu dessiné dans le
-                même tracé — d'où l'absence de <circle> séparé.
+            {/* ⚠️ **Le visage remplace la roue de réglages**, à la demande. Ce qui se
+                perd : une roue dit « réglages » à qui la voit, un visage ne le dit
+                pas. Le libellé et l'infobulle portent donc seuls cette information —
+                c'est peu, et il faudra sans doute que ce bouton finisse par ouvrir
+                autre chose qu'un panneau de notifications vide.
 
-                Mes trois tentatives précédentes reconstruisaient cette forme
-                de mémoire : d'abord un polygone à angles vifs, puis des dents
-                courbées qui donnaient une fleur, puis un engrenage à huit
-                dents. Aucune ne valait le tracé d'origine.
-
-                Même boîte et même trait que la loupe : voir le commentaire
-                là-bas. Les deux tracés occupent 18 unités sur 24 à partir de
-                (3,3), donc deux boîtes égales suffisent à les accorder. */}
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-              strokeWidth={2.0} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-              <path d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 0 0 2.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 0 0 1.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 0 0-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 0 0-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.723 1.723 0 0 0-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 0 0-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 0 0 1.066-2.573c-.94-1.543.826-3.31 2.37-2.37 1 .608 2.296.07 2.572-1.065M9 12a3 3 0 1 0 6 0 3 3 0 0 0-6 0" />
-            </svg>
+                ⚠️ Trente-huit pixels : deux de plus que le champ de recherche à
+                côté. Mesuré à l'œil sur les deux — à trente-six il se lit comme une
+                pastille de couleur et les yeux disparaissent, au-delà de quarante il
+                prend le pas sur la recherche, qui est la fonction du bandeau. */}
+            <AvatarNovac taille={38} titre="Novac — réglages"
+              etat={expression.cle} impulsion={expression.jeton} />
           </button>
           {showNotifs && (
             <div style={{

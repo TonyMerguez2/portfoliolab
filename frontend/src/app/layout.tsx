@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { AppProvider } from "@/lib/AppContext";
+import { AvatarProvider } from "@/lib/AvatarContext";
 import { Inter } from "next/font/google";
 import "./globals.css";
 import GlobalHeader from "@/components/GlobalHeader";
@@ -45,11 +46,15 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <body className={inter.className}>
         <PointsFond />
         <AppProvider>
-          <SideNav/>
-          <div className="novac-shell">
-            <GlobalHeader/>
-            {children}
-          </div>
+          {/* L'avatar vit dans le bandeau, mais ce qu'il exprime vient des pages :
+              le fournisseur doit donc envelopper les deux. */}
+          <AvatarProvider>
+            <SideNav/>
+            <div className="novac-shell">
+              <GlobalHeader/>
+              {children}
+            </div>
+          </AvatarProvider>
         </AppProvider>
       </body>
     </html>
