@@ -58,13 +58,22 @@ const eur = (v: number, dec = 2) =>
   v.toLocaleString("fr-FR", { minimumFractionDigits: dec, maximumFractionDigits: dec }) + " €";
 
 export default function AssetGrid({
-  assets, onAssetClick, view,
+  assets, onAssetClick, view, titre = "Vos actifs",
 }: {
   assets: GridAsset[];
   onAssetClick?: (ticker: string) => void;
   /** Vue courante. La bascule visible est retirée ; le rail se masque encore
    *  si le parent bascule en liste par un autre chemin. */
   view?: "carte" | "liste";
+  /**
+   * Ce que la grille annonce à sa gauche.
+   *
+   * ⚠️ **Prop, et non chaîne fixe, parce que la grille peut ne plus tout montrer.**
+   * Un dossier ouvert au-dessus filtre ces cartes : laisser « Vos actifs » ferait lire
+   * une grille amputée comme le portefeuille entier. Le seul autre indice — le dossier
+   * soulevé — sort du champ dès qu'on descend.
+   */
+  titre?: string;
 }) {
   const [filter, setFilter] = useState("Tous");
   const [sort, setSort] = useState<SortKey>("poids");
@@ -77,7 +86,18 @@ export default function AssetGrid({
     return ["Tous", ...(["Actions", "ETF", "Crypto"] as const).filter(c => present.has(c))];
   }, [assets]);
 
-  const shown = useMemo(() => arrange(assets, filter, sort), [assets, filter, sort]);
+  /**
+   * Le filtre réellement appliqué.
+   *
+   * ⚠️ **Dérivé, parce que la liste des classes bouge sous lui.** Un dossier ouvert
+   * au-dessus rétrécit `assets`, donc `classes` : choisir « Actions » puis ouvrir
+   * « Crypto » laissait une grille vide, sans onglet marqué, sans rien qui explique
+   * pourquoi — mesuré, 0 carte pour 3 attendues. On retombe sur « Tous » tant que le
+   * choix n'a plus de sens, sans l'effacer : refermer le dossier le rend.
+   */
+  const filtreActif = classes.indexOf(filter) >= 0 ? filter : "Tous";
+
+  const shown = useMemo(() => arrange(assets, filtreActif, sort), [assets, filtreActif, sort]);
 
   // Un rail horizontal cache ses éléments sur un axe qu'on ne pense pas à
   // explorer. On mesure donc ce qui dépasse de chaque côté, pour l'annoncer :
@@ -150,10 +170,10 @@ export default function AssetGrid({
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, flexShrink: 0 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
           <span style={{ fontFamily: FONT, fontSize: 12.5, fontWeight: 600, color: CLAIR.surFond, whiteSpace: "nowrap" }}>
-            Vos actifs
+            {titre}
           </span>
         <Segments taille="sm" ariaLabel="Filtrer par classe d'actif"
-          valeur={filter} onChange={setFilter}
+          valeur={filtreActif} onChange={setFilter}
           options={classes.map(c => ({ valeur: c, libelle: c }))} />
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 6, position: "relative", flexShrink: 0 }}>

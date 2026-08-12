@@ -16,11 +16,13 @@ import {
 import { bandeDuScore, pilierLePlusFaible } from "@/lib/portfolio-score/types";
 import PerformanceChart from "@/components/portfolio/PerformanceChart";
 import AssetGrid from "@/components/portfolio/AssetGrid";
+import CarteCompte from "@/components/portfolio/CarteCompte";
 import AllocationDonut from "@/components/portfolio/AllocationDonut";
 import RecentActivity from "@/components/portfolio/RecentActivity";
 import PortfolioTabs from "@/components/portfolio/PortfolioTabs";
 import { donutArcs } from "@/lib/donut";
-import { valoriser } from "@/lib/portfolio";
+import { compteInfere, valoriser, type Enveloppe } from "@/lib/portfolio";
+import { assetExchange } from "@/lib/assets";
 import RadarChart from "@/components/charts/RadarChart";
 import { enTetesAuth } from "@/lib/session";
 import { typesParOperation, COULEUR_OP, LIBELLE_OP, type Tx } from "@/lib/journal";
@@ -798,6 +800,52 @@ function PortfolioPageInner() {
    * en dessous. Sans elle, on ne saurait pas si le nombre lu est celui de
    * l'instant ou celui d'un mardi de juin.
    */
+  /** Le dossier déplié, ou `null` quand la grille montre tout. */
+  const [compteOuvert, setCompteOuvert] = useState<string | null>(null);
+
+  /**
+   * Les comptes qui portent réellement quelque chose.
+   *
+   * ⚠️ **Déduits des lignes, jamais déclarés** — voir `compteInfere` et sa mise en garde.
+   * L'avantage est qu'ils sont peuplés dès le premier chargement, sans une saisie ; le
+   * prix est que le rangement est une supposition, et qu'il faudra pouvoir le corriger.
+   *
+   * Les vides ne sont pas rendus : un dossier « Crypto » à zéro ligne promettrait un
+   * rangement qui n'existe pas.
+   */
+  const comptes = useMemo(() => {
+    const par: Partial<Record<Enveloppe, typeof enriched>> = {};
+    for (const a of enriched) {
+      const c = compteInfere(a.ticker, assetExchange);
+      (par[c] ??= []).push(a);
+    }
+    // Le tri suit `ORDRE_COMPTES` ; un compte absent de cette liste garde un rang au-delà
+    // du dernier, ce qui le met en queue sans jamais l'écarter. Aucune ligne ne peut
+    // ainsi quitter la page à la faveur d'un oubli.
+    const rang = (c: Enveloppe) => {
+      const i = ORDRE_COMPTES.indexOf(c);
+      return i < 0 ? ORDRE_COMPTES.length : i;
+    };
+    return (Object.keys(par) as Enveloppe[])
+      .sort((a, b) => rang(a) - rang(b))
+      .map(cle => ({ cle, ...HABILLAGE_COMPTES[cle], lignes: par[cle] ?? [] }));
+  }, [enriched]);
+
+  /**
+   * Les lignes que la page montre : le dossier ouvert, ou tout.
+   *
+   * ⚠️ **Calculé une fois, pas à chaque endroit qui affiche des lignes.** La grille en
+   * cartes et le tableau en liste montrent le même portefeuille sous deux formes ; le
+   * filtre appliqué à la seule grille aurait fait mentir la bascule — on ouvre un
+   * dossier, on passe en liste, et les autres comptes reviennent sans prévenir.
+   */
+  const lignesMontrees = useMemo(
+    () => (compteOuvert
+      ? (comptes.find(c => c.cle === compteOuvert)?.lignes ?? [])
+      : enriched),
+    [comptes, compteOuvert, enriched],
+  );
+
   const [survolCourbe, setSurvolCourbe] =
     useState<{ valeur: number; date: string; investi?: number } | null>(null);
 
@@ -1509,9 +1557,29 @@ function PortfolioPageInner() {
                 par la surface : les petites lignes en devenaient illisibles,
                 et deux rectangles de proportions différentes se comparent mal.
                 Le poids se lit maintenant en chiffres sur chaque carte. */}
+            {/* ⚠️ **Les comptes sont *déduits*, pas déclarés.** Chaque ligne est rangée
+                par `compteInfere`, la même inférence qu'`enveloppe` prise titre par
+                titre. Cela peuple les dossiers dès le premier chargement, sans rien à
+                saisir — mais une action parisienne détenue en compte-titres ordinaire
+                ira dans « PEA » et rien ne le dira. Le jour où une route acceptera de
+                ranger un titre à la main, c'est ici que la correction se branchera.
+
+                ⚠️ **Un compte vide n'est pas affiché.** Un dossier « Crypto » à zéro
+                ligne sur un portefeuille qui n'en contient pas promettrait un rangement
+                qui n'existe pas. */}
+            <div style={{ display: "grid", gap: 14, flexShrink: 0, marginBottom: 14,
+              gridTemplateColumns: "repeat(auto-fill, minmax(210px, 1fr))" }}>
+              {comptes.map(c => (
+                <CarteCompte key={c.cle} nom={c.cle} couleur={c.couleur} icone={c.icone}
+                  compte={`${c.lignes.length} actif${c.lignes.length > 1 ? "s" : ""}`}
+                  nombre={c.lignes.length}
+                  ouvert={compteOuvert === c.cle}
+                  onClick={() => setCompteOuvert(v => (v === c.cle ? null : c.cle))} />
+              ))}
+            </div>
             <div style={{ flexShrink: 0 }}>
               <AssetGrid
-                assets={enriched.map(a => ({
+                assets={lignesMontrees.map(a => ({
                   ticker: a.ticker, weight: a.weight,
                   change: a.change, type: a.type, price: a.price,
                   spark:     sparkHistory[a.ticker] ?? assetSparks[a.ticker],
@@ -1525,6 +1593,7 @@ function PortfolioPageInner() {
                 }))}
                 onAssetClick={ticker => router.push(`/chart?ticker=${encodeURIComponent(ticker)}`)}
                 view={view}
+                titre={compteOuvert ?? "Vos actifs"}
               />
             </div>
             {/* Liste — toujours monté */}
@@ -1538,7 +1607,7 @@ function PortfolioPageInner() {
                     color: CLAIR.texteFaible, letterSpacing: "0.10em",
                     borderBottom: `1px solid ${CLAIR.bord}` }}>{h}</div>
                 ))}
-                {[...enriched].sort((a, b) => b.weight - a.weight).flatMap(a => [
+                {[...lignesMontrees].sort((a, b) => b.weight - a.weight).flatMap(a => [
                   <div key={`${a.ticker}-n`} style={{ display: "flex", alignItems: "center", gap: 9, padding: "9px 14px", borderBottom: `1px solid ${CLAIR.bord}` }}>
                     <AssetLogo ticker={a.ticker} type="EQUITY" size={22} radius={5}
                       fallbackBg={CLAIR.carteCreuse} fallbackBorder={CLAIR.bord} fallbackTextColor={CLAIR.texteSecondaire}
@@ -2207,6 +2276,52 @@ function PortfolioPageInner() {
     </div>
   );
 }
+
+/**
+ * Les comptes, dans l'ordre où on les montre, avec leur couleur et leur pictogramme.
+ *
+ * ⚠️ **L'ordre est fiscal, pas alphabétique** : le PEA d'abord parce que c'est
+ * l'enveloppe contrainte — celle dont on veut vérifier le contenu — puis le
+ * compte-titres qui accepte tout, puis la crypto qui n'est ni l'un ni l'autre.
+ *
+ * ⚠️ **Un `Record` sur `Enveloppe`, et non une liste de clés libres.** Une quatrième
+ * enveloppe ajoutée à `compteInfere` sans dossier ici ferait *disparaître* des actifs
+ * de la page sans rien signaler ; le `Record` refuse de compiler tant qu'elle n'a pas
+ * sa couleur et son pictogramme. L'ordre, lui, reste indicatif — voir `comptes`, qui
+ * range en queue tout compte que cette liste aurait oublié plutôt que de le perdre.
+ */
+const HABILLAGE_COMPTES: Record<Enveloppe, { couleur: string; icone: React.ReactNode }> = {
+  PEA: {
+    couleur: "#5B6CF0",
+    icone: (
+      <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+        strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+        <path d="M3 21h18M5 21V8l7-5 7 5v13M9 21v-6h6v6" />
+      </svg>
+    ),
+  },
+  CTO: {
+    couleur: "#9B5BD6",
+    icone: (
+      <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+        strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+        <path d="M3 17l6-6 4 4 7-7M21 8v5h-5" />
+      </svg>
+    ),
+  },
+  Crypto: {
+    couleur: "#E0A23C",
+    icone: (
+      <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+        strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+        <circle cx="12" cy="12" r="9" /><path d="M9 9h5a2.5 2.5 0 0 1 0 5H9m0 0h5.5a2.5 2.5 0 0 1 0 5H9m0-10V6m0 12v-2m3-10V6m0 12v-2" />
+      </svg>
+    ),
+  },
+};
+
+/** L'ordre d'affichage, indicatif : ce qui n'y figure pas passe en queue, pas à la trappe. */
+const ORDRE_COMPTES: Enveloppe[] = ["PEA", "CTO", "Crypto"];
 
 export default function PortfolioPage() {
   return (

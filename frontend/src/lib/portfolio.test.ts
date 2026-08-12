@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { assetExchange } from "./assets";
-import { arrange, assetClass, enveloppe, relativeDay, valoriser, gainPeriode,
+import { arrange, assetClass, compteInfere, enveloppe, relativeDay, valoriser, gainPeriode,
   type GridAsset, type Position } from "./portfolio";
 
 const a = (ticker: string, o: Partial<GridAsset> = {}): GridAsset => ({
@@ -247,5 +247,45 @@ describe("assetExchange", () => {
   it("et un compte-titres dès qu'une ligne cote hors EEE", () => {
     expect(enveloppe(["ESE.PA", "AAPL"], assetExchange)).toBe("CTO");
     expect(enveloppe(["VOD.L"], assetExchange)).toBe("CTO");
+  });
+});
+
+describe("compteInfere", () => {
+  it("range chaque ligne dans le compte où elle est vraisemblablement détenue", () => {
+    expect(compteInfere("MC.PA", assetExchange)).toBe("PEA");
+    expect(compteInfere("AAPL", assetExchange)).toBe("CTO");
+    expect(compteInfere("BTC-USD", assetExchange)).toBe("Crypto");
+  });
+
+  it("met la crypto à part avant de regarder la place", () => {
+    /**
+     * ⚠️ `assetExchange` rend « US » pour une paire crypto — le tiret de « BTC-USD »
+     * n'étant pas un suffixe de place. Sans ce passage en premier, les cryptos
+     * tomberaient dans le compte-titres, où elles ne peuvent pas être détenues.
+     */
+    for (const t of ["BTC-USD", "ETH-USD", "SOL-USD"]) {
+      expect({ [t]: compteInfere(t, assetExchange) }).toEqual({ [t]: "Crypto" });
+    }
+  });
+
+  it("range au compte-titres ce dont la place est inconnue", () => {
+    // Le doute va au fourre-tout, jamais au compte fiscalement contraint : classer à
+    // tort dans le PEA laisserait croire à une éligibilité qu'on n'a pas vérifiée.
+    expect(compteInfere("XYZ.ZZ", () => null)).toBe("CTO");
+    expect(compteInfere("XYZ.ZZ", () => "ZZZ")).toBe("CTO");
+  });
+
+  it("ne rend jamais de compte hors des trois dossiers de la page", () => {
+    /**
+     * ⚠️ L'invariant qui tient la vue en dossiers : le tableau de bord range chaque
+     * ligne par cette fonction. Une quatrième valeur rendue ici sans dossier
+     * correspondant ferait disparaître des actifs de la page — silencieusement, car
+     * une ligne sans dossier n'est plus affichée nulle part.
+     */
+    const dossiers = ["PEA", "CTO", "Crypto"];
+    const tickers = ["MC.PA", "AAPL", "BTC-USD", "AIR.PA", "VWCE.DE", "7203.T",
+      "0700.HK", "NESN.SW", "SHOP.TO", "XYZ.ZZ", "", "ETH-USD"];
+    const rendus = tickers.map(t => compteInfere(t, assetExchange));
+    expect(rendus.filter(c => dossiers.indexOf(c) < 0)).toEqual([]);
   });
 });

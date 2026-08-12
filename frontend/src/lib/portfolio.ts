@@ -51,6 +51,27 @@ const PLACES_PEA = new Set(["PAR", "GER", "AMS", "BRU", "LIS", "MIL", "MCE", "ST
 export type Enveloppe = "PEA" | "CTO" | "Crypto";
 
 /**
+ * Le compte où une ligne est **vraisemblablement** détenue.
+ *
+ * ⚠️ **C'est la même inférence qu'`enveloppe`, ligne par ligne — donc la même mise en
+ * garde, en plus exposée.** Sur un portefeuille entier, une seule place inconnue
+ * suffisait à retirer l'étiquette : le doute se voyait. Ici chaque titre reçoit un
+ * compte, y compris quand rien ne le justifie — une action parisienne détenue en
+ * compte-titres ordinaire ira dans « PEA » et personne ne le saura.
+ *
+ * C'est acceptable tant que ce classement n'est qu'un **rangement proposé**, que
+ * l'utilisateur voit et pourra corriger. Cela cesserait de l'être le jour où un calcul
+ * fiscal s'appuierait dessus.
+ */
+export function compteInfere(
+  ticker: string, place: (t: string) => string | null,
+): Enveloppe {
+  if (assetClass(ticker) === "Crypto") return "Crypto";
+  const p = place(ticker);
+  return p != null && PLACES_PEA.has(p) ? "PEA" : "CTO";
+}
+
+/**
  * L'enveloppe que le contenu d'un portefeuille laisse déduire.
  *
  * ⚠️ **C'est une inférence, pas une donnée.** Aucun champ ne dit dans quel
