@@ -2,8 +2,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import {
-  RAYON_TETE, type Orientation, type ReglagesOeil, cheminOeil, cheminsSurLaTete,
-  projeter, tournerTete, traitSurLaTete,
+  RAYON_TETE, type Orientation, type ReglagesOeil, cheminOeil, cheminSvg,
+  cheminsSurLaTete, contourSilhouette, projeter, tournerTete, traitSurLaTete,
 } from "@/lib/avatarSpherique";
 import { grilleSpherique } from "@/lib/avatarGrille";
 import { PRESETS, SKINS, type Palette, skinParCle } from "@/lib/avatarSkins";
@@ -145,6 +145,16 @@ export default function AvatarProceduralPage() {
   const [tangage, setTangage] = useState(0);
   const [roulis, setRoulis] = useState(0);
   const [grille, setGrille] = useState(true);
+  /**
+   * L'arrondi de la silhouette : 1 pour la sphère, moins pour le carré à coins ronds.
+   *
+   * ⚠️ Un seul nombre, et non une liste de formes. Le disque et le carré sont les deux
+   * bouts d'un même réglage, ce qui rend toutes les valeurs intermédiaires disponibles
+   * — et surtout animables, le jour où la tête devra passer de l'une à l'autre.
+   */
+  const [silhouette, setSilhouette] = useState(1);
+  const [formeTete, setFormeTete] = useState<"sphere" | "carre">("sphere");
+  const arrondiTete = formeTete === "sphere" ? 1 : silhouette;
   const [vie, setVie] = useState<EtatVie>(VIE_AU_REPOS);
   const [expression, setExpression] = useState<CleExpression>("neutre");
   const [taille, setTaille] = useState(1.23);
@@ -199,7 +209,7 @@ export default function AvatarProceduralPage() {
     if (!grille) return null;
     const devant: string[] = [], derriere: string[] = [];
     const ajouter = (courbe: { x: number; y: number; z: number }[]) => {
-      const t = traitSurLaTete(courbe, orientation);
+      const t = traitSurLaTete(courbe, orientation, RAYON_TETE, true, arrondiTete);
       if (t.devant) devant.push(t.devant);
       if (t.derriere) derriere.push(t.derriere);
     };
@@ -210,24 +220,31 @@ export default function AvatarProceduralPage() {
       derriere: derriere.join(" "),
       // L'équateur et le méridien du visage portent le repère : accentués, ils disent
       // d'un coup d'œil où passent l'horizon de la tête et son plan de symétrie.
-      equateur: traitSurLaTete(GRILLE.equateur, orientation),
-      median: traitSurLaTete(GRILLE.meridiens[0], orientation),
+      equateur: traitSurLaTete(GRILLE.equateur, orientation, RAYON_TETE, true, arrondiTete),
+      median: traitSurLaTete(GRILLE.meridiens[0], orientation, RAYON_TETE, true, arrondiTete),
       axes: GRILLE.axes.map(a => {
         const p = tournerTete(a.pointe, orientation.lacet, orientation.tangage, orientation.roulis ?? 0);
-        return { cle: a.cle, signe: a.signe, devant: p.z >= 0, bout: projeter(p, RAYON_TETE) };
+        return {
+          cle: a.cle, signe: a.signe, devant: p.z >= 0,
+          bout: projeter(p, RAYON_TETE, arrondiTete),
+        };
       }),
     };
-  }, [grille, orientation]);
+  }, [grille, orientation, arrondiTete]);
+
+  /** Le contour de la tête, tracé par la fonction même qui déforme tout le reste. */
+  const contourTete = useMemo(
+    () => cheminSvg(contourSilhouette(arrondiTete, RAYON_TETE)), [arrondiTete]);
 
   const cheminsMotifs = useMemo(
     () => motifs.map(m => ({
-      d: cheminsSurLaTete(m.morceaux, orientation),
+      d: cheminsSurLaTete(m.morceaux, orientation, RAYON_TETE, arrondiTete),
       couleur: m.couleur,
       trait: m.trait,
       epaisseur: m.epaisseur,
     })),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [motifs, orientation]);
+    [motifs, orientation, arrondiTete]);
 
   /** Choisir un skin **propose** sa palette ; elle reste modifiable ensuite. */
   const choisirSkin = useCallback((cle: string) => {
@@ -292,11 +309,13 @@ export default function AvatarProceduralPage() {
   }, [taille, inclinaison, vie]);
 
   const oeilGauche = useMemo(
-    () => cheminOeil(reglagesOeil(yeux.gauche, vie.fermetureGauche), orientation, -1),
-    [reglagesOeil, yeux.gauche, vie.fermetureGauche, orientation]);
+    () => cheminOeil(reglagesOeil(yeux.gauche, vie.fermetureGauche), orientation, -1,
+      RAYON_TETE, 220, arrondiTete),
+    [reglagesOeil, yeux.gauche, vie.fermetureGauche, orientation, arrondiTete]);
   const oeilDroit = useMemo(
-    () => cheminOeil(reglagesOeil(yeux.droit, vie.fermetureDroite), orientation, 1),
-    [reglagesOeil, yeux.droit, vie.fermetureDroite, orientation]);
+    () => cheminOeil(reglagesOeil(yeux.droit, vie.fermetureDroite), orientation, 1,
+      RAYON_TETE, 220, arrondiTete),
+    [reglagesOeil, yeux.droit, vie.fermetureDroite, orientation, arrondiTete]);
 
   /**
    * Écrit un réglage sur l'œil courant, ou sur les deux si le lien tient.
@@ -503,7 +522,7 @@ export default function AvatarProceduralPage() {
                 l'hémisphère et la silhouette n'auraient plus de sens. Ici la géométrie
                 reste sphérique et c'est l'image qu'on comprime. */}
             <g transform={`scale(${vie.echelleX.toFixed(4)} ${vie.echelleY.toFixed(4)})`}>
-              <circle cx={0} cy={0} r={RAYON_TETE} fill={palette.tete} />
+              <path d={contourTete} fill={palette.tete} />
               {/* Les aplats du skin, peints sur la sphère et non plaqués par-dessus :
                   ils tournent avec la tête et s'affinent près du bord. Dessinés avant
                   les yeux, pour que le regard passe devant la couture qu'il croise. */}
@@ -806,6 +825,45 @@ export default function AvatarProceduralPage() {
                 Remettre de face
               </button>
             </div>
+          </Carte>
+
+          <Carte
+            titre="Forme du personnage"
+            note="La silhouette passe du disque au carré à coins ronds. Ce n’est pas un autre volume : la sphère reste la sphère — c’est l’image qu’on étire, au seul endroit que tout traverse."
+          >
+            <div style={{ display: "flex", gap: 10 }}>
+              {([["sphere", "Sphère"], ["carre", "Carré arrondi"]] as const).map(([cle, libelle]) => (
+                <button key={cle} type="button" onClick={() => setFormeTete(cle)}
+                  aria-pressed={formeTete === cle}
+                  style={{
+                    flex: 1, padding: "10px 8px", borderRadius: 9, cursor: "pointer",
+                    fontSize: 12.5, fontWeight: 600, fontFamily: "inherit",
+                    display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
+                    border: `1px solid ${formeTete === cle ? ACCENT : BORD}`,
+                    background: formeTete === cle ? ACCENT : "#FFFFFF",
+                    color: formeTete === cle ? "#FFFFFF" : "#33333D",
+                  }}>
+                  <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true">
+                    <rect x={1} y={1} width={14} height={14}
+                      rx={cle === "sphere" ? 7 : 4} ry={cle === "sphere" ? 7 : 4}
+                      fill="currentColor" />
+                  </svg>
+                  {libelle}
+                </button>
+              ))}
+            </div>
+            {formeTete === "carre" && (
+              <div style={{ marginTop: 16 }}>
+                <Curseur libelle="Arrondi de la silhouette" valeur={silhouette}
+                  affichage={`${Math.round(silhouette * 100)} %`}
+                  min={0} max={1} pas={0.01} onChange={setSilhouette} />
+                <p style={{ margin: "2px 0 0", color: DOUX, fontSize: 12, lineHeight: 1.5 }}>
+                  À 100 %, c’est le disque. Le carré reste inscrit : il touche le cercle
+                  aux quatre milieux et ne pousse que vers les coins, si bien que la tête
+                  ne change pas de taille en changeant de forme.
+                </p>
+              </div>
+            )}
           </Carte>
 
           <Carte
