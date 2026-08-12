@@ -203,31 +203,37 @@ export default function ConstatsObjectif({
       // assez haute, la croissance fixe la hauteur et la longueur de la phrase n'y change
       // rien : 274 pixels pour les quatorze combinaisons d'objectif et d'aide, vérifié une à
       // une. Mais sur une fenêtre courte il n'y a plus de place à prendre, la hauteur retombe
-      // sur le contenu — et le contenu, lui, varie : la rangée fait de 84 à 162 pixels selon
-      // que la description tient en une ligne ou en six. Un panneau qui change de taille quand
+      // sur le contenu — et le contenu, lui, varie : la rangée fait de 84 à 142 pixels selon
+      // que la description tient en une ligne ou en cinq. Un panneau qui change de taille quand
       // on passe d'une aide à la suivante est exactement ce qu'on cherchait à éviter.
       //
-      // 264 vient d'une addition, pas d'un tâtonnement : 101 pixels de partie fixe — les deux
+      // 244 vient d'une addition, pas d'un tâtonnement : 101 pixels de partie fixe — les deux
       // rembourrages, les deux liserés, l'en-tête, le pied, les deux interlignes — plus la
-      // rangée la plus haute, 162. Soit 263, et un pixel au-dessus. **C'est bien la hauteur du
+      // rangée la plus haute, 142. Soit 243, et un pixel au-dessus. **C'est bien la hauteur du
       // cadre extérieur**, non celle de la carte : `minHeight` est une clé de placement, que
       // `Cadre` pose sur l'anneau, lequel ajoute 7 pixels de chaque côté. Un plancher de 232
       // pris sur la carte laissait le panneau grandir jusqu'à 243, et le saut restait — vu à
       // l'écran avant d'être corrigé.
       //
-      // ⚠️ **La marge est d'un pixel, donc la règle à retenir est celle-ci** : une description
-      // d'aide qui gagnerait une ligne porterait le contenu à 282 et repasserait au-dessus du
-      // plancher, ramenant le saut. Si une famille d'insight s'allonge, c'est ce nombre qu'il
-      // faut recalculer — la partie fixe plus la rangée la plus haute — et non ajouter du jeu
-      // au hasard, qui se paierait en hauteur volée à la voisine.
+      // ⚠️ **Il valait 264, et l'élargissement de la colonne de texte l'a fait baisser.** Ce
+      // n'est pas un ajustement cosmétique : chaque pixel de plancher est un pixel pris à
+      // « Progression globale », qui défile déjà sur une fenêtre de 854. Le laisser à 264 aurait
+      // gardé vingt pixels d'air ici pendant que la voisine rognait son contenu. Un plancher
+      // doit valoir le contenu le plus haut, jamais davantage — donc il se recalcule chaque
+      // fois que la mise en page du contenu change.
       //
-      // ⚠️ **Ce plancher a un prix, et il faut le connaître.** Sous 830 pixels de fenêtre
+      // ⚠️ **La rangée la plus haute dépend de la largeur de la carte**, puisque le texte
+      // enroule : 123 pixels à 446 de large, 142 à 439. La valeur retenue est celle du cas le
+      // plus étroit mesuré. Sur une carte plus étroite encore, le contenu passera au-dessus du
+      // plancher et le panneau grandira : la progression absorbe, rien n'est rogné, on perd
+      // seulement la constance.
+      //
+      // ⚠️ **Ce plancher a un prix, et il faut le connaître.** Sous 870 pixels de fenêtre
       // environ, la colonne n'a plus de quoi le payer sans rogner sa voisine : « Progression
-      // globale » tombe alors à son titre et défile. C'est l'arbitrage déjà inscrit à côté —
-      // l'aide qu'on vient lire reste entière, la progression cède — poussé à son terme. Si
-      // l'on préférait l'inverse, c'est ce nombre qu'il faut baisser, au prix d'un saut de
-      // dix-huit pixels d'une aide à l'autre sur les fenêtres courtes.
-      minHeight: 264,
+      // globale » défile alors. C'est l'arbitrage déjà inscrit à côté — l'aide qu'on vient lire
+      // reste entière, la progression cède — poussé à son terme. Si l'on préférait l'inverse,
+      // c'est ce nombre qu'il faut baisser, au prix d'un saut d'une aide à l'autre.
+      minHeight: 244,
       display: "flex", flexDirection: "column", gap: 10,
       background: `${CIEL}, ${FOND_ESPACE}`,
       padding: "14px 16px",
@@ -306,14 +312,20 @@ export default function ConstatsObjectif({
                 // Le rayon a suivi l'anneau : plus rien n'est peint ici, une valeur d'angle
                 // n'y décrirait aucune forme.
                 //
-                // ⚠️ **200 et non 168, et la valeur est mesurée, pas estimée.** À 168 le
-                // contenu disposait de 148 pixels alors que la plus longue métrique du moteur
-                // — « 6 301 € / mois », relevée au canevas dans la police exacte — en réclame
-                // 165, et « 14 ans 8 mois » 156. D'où deux coupures successives à l'écran :
-                // « 14 ans 8 / mois », puis « 14 / ans 8 mois ». 200 laisse 180 pixels utiles,
-                // de quoi tenir jusqu'à un rythme à cinq chiffres. Au-delà, le report se fait
-                // au bon endroit grâce au `nowrap` du groupe discret.
-                justifyContent: "center", flex: "0 1 200px", minWidth: 92,
+                // ⚠️ **La largeur vient du nombre, elle n'est plus imposée — et c'est la
+                // correction d'une faute d'agencement.** Une base fixe de 200 pixels donnait
+                // ceci, mesuré : bloc du chiffre 200, colonne de texte 198. « 93 % » réservait
+                // autant de place que le paragraphe entier, qui enroulait alors sur six lignes
+                // pendant que les deux tiers du bloc restaient vides. Le déséquilibre venait
+                // de la conjonction des deux réglages : le texte est en `flex: 1`, base zéro,
+                // donc il ne prend que ce qui *reste* une fois le chiffre servi.
+                //
+                // En base automatique, le bloc vaut son contenu : environ 90 pixels pour
+                // « 93 % », 176 pour « 14 ans 8 mois ». Le texte récupère la différence.
+                // `maxWidth` borne le cas d'une métrique inhabituellement longue, et le
+                // `flex-shrink` à 1 reste indispensable — c'est un bloc infusible qui avait
+                // fait sortir le chiffre du cadre sur un panneau resserré à 144 pixels.
+                justifyContent: "center", flex: "0 1 auto", maxWidth: 200, minWidth: 76,
                 padding: "8px 10px", boxSizing: "border-box", alignSelf: "center" }}>
               <span style={{ ...NUM, fontSize: 30, fontWeight: 700, lineHeight: 1.08,
                 color: "rgba(255,255,255,0.97)", textAlign: "center",
