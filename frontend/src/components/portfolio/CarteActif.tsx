@@ -23,8 +23,15 @@ import { useClignotement, styleClignotement } from "@/lib/clignotement";
  * le rail, et c'est sur elle que le dossier se dimensionne.
  */
 
-/** Les dimensions de la carte, dont le dossier a besoin pour se tailler. */
-export const CARTE_ACTIF = { largeur: 248, hauteur: 196 };
+/**
+ * Les dimensions de la carte, dont le dossier a besoin pour se tailler.
+ *
+ * ⚠️ `identite` est la hauteur de la ligne du haut — rembourrage plus logo, 14 + 32.
+ * C'est la seule partie que le dossier laisse voir de ses cartes, et c'est elle qui
+ * fixe sa hauteur d'aperçu. Changer le rembourrage ou la taille du logo ci-dessous
+ * sans la corriger ici couperait le nom en deux dans les dossiers.
+ */
+export const CARTE_ACTIF = { largeur: 248, hauteur: 196, identite: 46 };
 
 const eur = (v: number, dec = 2) =>
   v.toLocaleString("fr-FR", { minimumFractionDigits: dec, maximumFractionDigits: dec }) + " €";
@@ -102,68 +109,78 @@ export default function CarteActif({
         </span>
       </div>
 
+      {/**
+        * ⚠️ **L'aperçu s'arrête à la ligne d'identité.** Tout ce qui suit est caché par
+        * le plan du dossier, sauf une bande de vingt pixels le long de la languette, où
+        * n'apparaissait que la fin du cours : « 3 € » pour 63 493,38 €. On a d'abord
+        * éteint la carte en fondu à cet endroit ; c'était troquer un nombre tronqué
+        * contre une carte qui paraît translucide. Ne rien dessiner sous le nom règle les
+        * deux, et épargne au passage une courbe par carte d'aperçu.
+        */}
+      {!inerte && (<>
       {/* Cours et variation */}
-      <div style={{ marginTop: 10 }}>
-        <Cours prix={a.price ?? null} />
-        {/* Ce que la ligne a rapporté depuis son achat, et non la
-            variation du cours sur la période affichée. Sur la fenêtre
-            Max, un ETF né en 2021 annonçait « +520 % · +2 992 € » sur
-            une position ouverte en février, qui n'a jamais rapporté
-            cela. On retombe sur la variation quand le prix de revient
-            est inconnu — portefeuilles sans transactions. */}
-        {a.pnlEur != null ? (() => {
-          const gagne = a.pnlEur >= 0;
-          const col = gagne ? "var(--nv-positif)" : "var(--nv-negatif)";
-          return (
-            <div style={{ ...NUM, fontSize: 12.5, fontWeight: 600, color: col, marginTop: 3 }}>
-              {gagne ? "+" : ""}{Math.round(a.pnlEur).toLocaleString("fr-FR")} €
-              {a.pnlPct != null && (
+        <div style={{ marginTop: 10 }}>
+          <Cours prix={a.price ?? null} />
+          {/* Ce que la ligne a rapporté depuis son achat, et non la
+              variation du cours sur la période affichée. Sur la fenêtre
+              Max, un ETF né en 2021 annonçait « +520 % · +2 992 € » sur
+              une position ouverte en février, qui n'a jamais rapporté
+              cela. On retombe sur la variation quand le prix de revient
+              est inconnu — portefeuilles sans transactions. */}
+          {a.pnlEur != null ? (() => {
+            const gagne = a.pnlEur >= 0;
+            const col = gagne ? "var(--nv-positif)" : "var(--nv-negatif)";
+            return (
+              <div style={{ ...NUM, fontSize: 12.5, fontWeight: 600, color: col, marginTop: 3 }}>
+                {gagne ? "+" : ""}{Math.round(a.pnlEur).toLocaleString("fr-FR")} €
+                {a.pnlPct != null && (
+                  <span style={{ opacity: 0.62, marginLeft: 5 }}>
+                    {gagne ? "+" : ""}{a.pnlPct.toFixed(1)} %
+                  </span>
+                )}
+                {a.avgCost != null && (
+                  <span style={{ opacity: 0.42, marginLeft: 5, fontWeight: 500 }}>
+                    · PRU {eur(a.avgCost)}
+                  </span>
+                )}
+              </div>
+            );
+          })() : (
+            <div style={{ ...NUM, fontSize: 12.5, fontWeight: 600, color: chg, marginTop: 3 }}>
+              {a.change != null ? `${up ? "+" : ""}${a.change.toFixed(2)} %` : "—"}
+              {a.perfEur != null && (
                 <span style={{ opacity: 0.62, marginLeft: 5 }}>
-                  {gagne ? "+" : ""}{a.pnlPct.toFixed(1)} %
-                </span>
-              )}
-              {a.avgCost != null && (
-                <span style={{ opacity: 0.42, marginLeft: 5, fontWeight: 500 }}>
-                  · PRU {eur(a.avgCost)}
+                  {up ? "+" : ""}{Math.round(a.perfEur).toLocaleString("fr-FR")} €
                 </span>
               )}
             </div>
-          );
-        })() : (
-          <div style={{ ...NUM, fontSize: 12.5, fontWeight: 600, color: chg, marginTop: 3 }}>
-            {a.change != null ? `${up ? "+" : ""}${a.change.toFixed(2)} %` : "—"}
-            {a.perfEur != null && (
-              <span style={{ opacity: 0.62, marginLeft: 5 }}>
-                {up ? "+" : ""}{Math.round(a.perfEur).toLocaleString("fr-FR")} €
-              </span>
-            )}
+          )}
+        </div>
+
+        {/* Courbe sur toute la largeur, comme au concept : rangée à
+            droite sur la moitié de la carte, elle laissait un vide à
+            gauche que rien ne venait occuper. */}
+        <div style={{ flex: 1, display: "flex", alignItems: "flex-end", minHeight: 0, marginLeft: -2 }}>
+          {a.spark && a.spark.length > 1 && (
+            <TileSparkline pts={a.spark} color={chg} w={222} h={42} updatedAt={a.updatedAt} />
+          )}
+        </div>
+
+        {/* Valeur détenue. Masquée faute de valeur totale au portefeuille :
+            une ligne « Valeur — » répétée sur chaque carte n'apprend rien
+            et occupe la place d'un trait de séparation utile. */}
+        {a.value != null && (
+          <div style={{
+            display: "flex", alignItems: "baseline", justifyContent: "space-between",
+            marginTop: 8, paddingTop: 7, borderTop: "1px solid rgba(255,255,255,0.07)",
+          }}>
+            <span style={{ fontFamily: FONT, fontSize: 10, color: "rgba(255,255,255,0.38)" }}>Valeur</span>
+            <span style={{ ...NUM, fontSize: 12, fontWeight: 700, color: "rgba(255,255,255,0.88)" }}>
+              {eur(a.value, 0)}
+            </span>
           </div>
         )}
-      </div>
-
-      {/* Courbe sur toute la largeur, comme au concept : rangée à
-          droite sur la moitié de la carte, elle laissait un vide à
-          gauche que rien ne venait occuper. */}
-      <div style={{ flex: 1, display: "flex", alignItems: "flex-end", minHeight: 0, marginLeft: -2 }}>
-        {a.spark && a.spark.length > 1 && (
-          <TileSparkline pts={a.spark} color={chg} w={222} h={42} updatedAt={a.updatedAt} />
-        )}
-      </div>
-
-      {/* Valeur détenue. Masquée faute de valeur totale au portefeuille :
-          une ligne « Valeur — » répétée sur chaque carte n'apprend rien
-          et occupe la place d'un trait de séparation utile. */}
-      {a.value != null && (
-        <div style={{
-          display: "flex", alignItems: "baseline", justifyContent: "space-between",
-          marginTop: 8, paddingTop: 7, borderTop: "1px solid rgba(255,255,255,0.07)",
-        }}>
-          <span style={{ fontFamily: FONT, fontSize: 10, color: "rgba(255,255,255,0.38)" }}>Valeur</span>
-          <span style={{ ...NUM, fontSize: 12, fontWeight: 700, color: "rgba(255,255,255,0.88)" }}>
-            {eur(a.value, 0)}
-          </span>
-        </div>
-      )}
+      </>)}
     </TileCard>
 );
 }

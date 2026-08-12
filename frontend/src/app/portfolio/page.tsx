@@ -1612,9 +1612,15 @@ function PortfolioPageInner() {
             <div style={{ flexShrink: 0 }}>
               {compteActif == null ? (
                 <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-                  <span style={{ fontFamily: FONT, fontSize: 12.5, fontWeight: 600, color: CLAIR.surFond }}>
-                    Vos comptes
-                  </span>
+                  {/* ⚠️ Même hauteur que l'en-tête de la grille — 26 pixels, ceux de son
+                      bouton de tri. Un simple libellé en fait 18, et la courbe au-dessus
+                      gagnait huit pixels à la vue des dossiers pour les reperdre à
+                      l'ouverture de l'un d'eux. */}
+                  <div style={{ height: 26, display: "flex", alignItems: "center", flexShrink: 0 }}>
+                    <span style={{ fontFamily: FONT, fontSize: 12.5, fontWeight: 600, color: CLAIR.surFond }}>
+                      Vos comptes
+                    </span>
+                  </div>
                   {/**
                     * ⚠️ **Un rail sur une seule ligne, et non une grille qui se replie.**
                     * Les dossiers ont une largeur fixe — la découpe est un tracé en pixels

@@ -22,47 +22,47 @@ import { CARTE_ACTIF } from "@/components/portfolio/CarteActif";
  * l'encoche. Le filtre, lui, suit la silhouette réelle.
  */
 
+/** Le rayon des angles. */
+const RAYON = 22;
+/** La languette : sa hauteur au-dessus du plan, sa largeur, et le rayon de la double courbure. */
+const LANGUETTE = { hauteur: 22, largeur: 118, courbure: 11 };
+
 /**
  * La taille du dossier, déduite de la carte d'actif qu'il doit contenir.
  *
- * ⚠️ **`apercu` se mesure sur la ligne d'identité de la carte, pas au jugé.** La bande
- * réellement dégagée sur toute la largeur ne vaut que `apercu − languette.hauteur` : la
- * languette recouvre le reste sur sa moitié gauche, c'est-à-dire précisément là où se
- * trouvent le logo et le nom. Réglé à 54, il n'en dépassait que le pourcentage de poids,
- * à droite — un aperçu qui n'apprenait rien. Il faut donc de quoi loger les 46 pixels de
- * la ligne d'identité **au-dessus** de la languette.
+ * ⚠️ **La bande dégagée n'est pas la hauteur d'aperçu.** La languette recouvre celle-ci
+ * sur sa moitié gauche, c'est-à-dire précisément là où se trouvent le logo et le nom de
+ * la carte : ce qui échappe vraiment au dossier vaut `apercu − languette.hauteur`. Réglé
+ * à 54, il n'en dépassait que le pourcentage de poids, tout à droite — un aperçu qui
+ * n'apprenait rien.
+ *
+ * ⚠️ **Et la hauteur totale n'est pas libre** : elle doit valoir celle d'une carte
+ * d'actif, sans quoi la courbe au-dessus change de taille selon qu'on regarde les
+ * dossiers ou leur contenu.
  */
 export const CARTE_COMPTE = {
   /** De quoi loger une carte d'actif, le décalage du paquet et une marge à droite. */
   largeur: CARTE_ACTIF.largeur + 56,
-  /** Ce qu'on laisse voir des cartes rangées dedans, au-dessus du plan. */
-  apercu: 74,
+  /**
+   * Ce qu'on laisse voir des cartes rangées dedans, au-dessus du plan.
+   *
+   * ⚠️ Ni plus ni moins que la languette plus les 46 pixels de la ligne d'identité :
+   * c'est le minimum pour que le logo et le nom échappent à la languette, et tout
+   * excédent se prend sur la courbe, au-dessus.
+   */
+  apercu: LANGUETTE.hauteur + CARTE_ACTIF.identite,
   /**
    * Le plan de devant, celui qui porte le nom.
    *
-   * ⚠️ Réglé au plus juste : le dossier occupe la place qu'occupaient les cartes, et
-   * chaque pixel qu'il prend au-delà est un pixel retiré à la courbe au-dessus. Mesuré,
-   * le contenu — languette, rembourrage, pictogramme, nom et sous-titre — en demande
-   * 137 ; le reste n'est que de l'air entre le pictogramme et le nom.
+   * ⚠️ **Ce n'est pas un réglage libre : c'est le complément.** Le dossier doit faire
+   * exactement la hauteur d'une carte d'actif, faute de quoi la courbe au-dessus change
+   * de taille selon qu'on regarde les dossiers ou leur contenu — un écran qui se réajuste
+   * à chaque va-et-vient. Le plan prend donc ce que l'aperçu laisse. Mesuré, son contenu
+   * en demande 123 ; en dessous, le nom viendrait toucher le pictogramme.
    */
-  panneau: 146,
+  panneau: CARTE_ACTIF.hauteur - (LANGUETTE.hauteur + CARTE_ACTIF.identite),
 };
 const HAUTEUR = CARTE_COMPTE.apercu + CARTE_COMPTE.panneau;
-
-/**
- * Le fondu des cartes d'aperçu : net jusqu'au bas de la ligne d'identité, éteint au plan.
- *
- * ⚠️ Trois arrêts et non deux : la chute est brutale sur les dix pixels où commencent
- * les chiffres du cours, puis lente jusqu'au plan. Un fondu régulier y laissait un
- * fantôme encore lisible — « 0 € ». Et il s'éteint exactement à la hauteur du plan,
- * sans quoi un liseré de fond s'ouvrirait entre la carte et lui.
- */
-const FONDU = "linear-gradient(to bottom, #000 0, #000 46px, rgba(0,0,0,0.22) 56px, transparent 74px)";
-
-/** Le rayon des angles. */
-const RAYON = 22;
-/** La languette : sa hauteur au-dessus du plan, sa largeur, et le rayon de la double courbure. */
-const LANGUETTE = { hauteur: 26, largeur: 118, courbure: 13 };
 
 /**
  * Le contour du dossier, languette comprise.
@@ -131,6 +131,22 @@ export default function CarteCompte({
         textAlign: "left", flexShrink: 0,
       }}
     >
+      {/**
+        * L'ombre du dossier, dessinée **avant** les cartes.
+        *
+        * ⚠️ Portée par le plan lui-même, elle se peignait par-dessus l'aperçu : un halo
+        * de la couleur du compte, étalé sur les cartes, qui les faisait paraître
+        * translucides. L'ordre de peinture suit l'ordre du document, et un filtre
+        * s'applique après le contenu de son élément — il fallait donc séparer les deux.
+        * Ce double, de forme identique, est entièrement recouvert par le vrai plan.
+        */}
+      <div aria-hidden="true" style={{
+        position: "absolute", left: 0, top: CARTE_COMPTE.apercu - LANGUETTE.hauteur,
+        width: CARTE_COMPTE.largeur, height: CARTE_COMPTE.panneau + LANGUETTE.hauteur,
+        clipPath: `path("${CONTOUR}")`, background: couleur,
+        filter: `drop-shadow(0 10px 18px ${couleur}4D) drop-shadow(0 2px 3px rgba(4,10,24,0.35))`,
+      }} />
+
       {/* Le paquet de cartes, décalé vers la droite.
           ⚠️ Rendu à l'envers : la première du tableau doit passer *devant* les autres,
           et rien n'ordonne l'empilement ici sinon l'ordre du document.
@@ -144,27 +160,15 @@ export default function CarteCompte({
         <div key={i} aria-hidden="true" style={{
           position: "absolute", left: 16 + i * 14, top: 0,
           pointerEvents: "none",
-          /**
-           * ⚠️ **La carte s'éteint avant d'atteindre le plan du dossier.** Sous la ligne
-           * d'identité vient le cours, en gros chiffres : la bande qui longe la
-           * languette n'en montrait que la fin, « 3 € » pour 63 493,38 €. Un nombre
-           * tronqué est pire que pas de nombre. Le fondu s'achève là où le plan
-           * commence, si bien que la carte paraît glisser dedans.
-           */
-          maskImage: FONDU, WebkitMaskImage: FONDU,
-          // Les cartes du fond s'effacent : à pleine opacité, trois tranches
-          // empilées font une masse aussi contrastée que le dossier lui-même.
-          opacity: i === 0 ? 1 : 0.72 - i * 0.14,
         }}>
           {cartes[i]}
         </div>
       ))}
 
-      {/* Le dossier : le filtre porte l'ombre, l'enfant porte la découpe. */}
+      {/* Le plan du dossier, par-dessus les cartes. */}
       <div style={{
         position: "absolute", left: 0, top: CARTE_COMPTE.apercu - LANGUETTE.hauteur,
         width: CARTE_COMPTE.largeur, height: CARTE_COMPTE.panneau + LANGUETTE.hauteur,
-        filter: `drop-shadow(0 10px 18px ${couleur}4D) drop-shadow(0 2px 3px rgba(4,10,24,0.35))`,
       }}>
         <div style={{
           width: "100%", height: "100%",
@@ -173,12 +177,12 @@ export default function CarteCompte({
         }}>
           <div style={{
             position: "relative", height: "100%",
-            padding: `${LANGUETTE.hauteur + 14}px 16px 14px`,
+            padding: `${LANGUETTE.hauteur + 12}px 16px 12px`,
             display: "flex", flexDirection: "column", justifyContent: "space-between",
           }}>
             <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between" }}>
               <span style={{
-                width: 40, height: 40, borderRadius: 12, flexShrink: 0,
+                width: 36, height: 36, borderRadius: 11, flexShrink: 0,
                 background: "rgba(255,255,255,0.94)", color: sombre,
                 display: "flex", alignItems: "center", justifyContent: "center",
               }}>
@@ -187,7 +191,7 @@ export default function CarteCompte({
               {/* La pastille de droite : pleine quand le dossier porte quelque chose,
                   creuse quand il est vide — comme la coche de la référence. */}
               <span style={{
-                width: 30, height: 30, borderRadius: "50%", flexShrink: 0,
+                width: 28, height: 28, borderRadius: "50%", flexShrink: 0,
                 display: "flex", alignItems: "center", justifyContent: "center",
                 background: nombre ? "rgba(255,255,255,0.94)" : "transparent",
                 border: nombre ? "none" : "1.5px solid rgba(255,255,255,0.55)",
@@ -199,7 +203,7 @@ export default function CarteCompte({
 
             <div>
               <div style={{
-                fontSize: 19, fontWeight: 700, color: "#FFFFFF", lineHeight: 1.15,
+                fontSize: 18, fontWeight: 700, color: "#FFFFFF", lineHeight: 1.15,
                 letterSpacing: "-0.01em",
               }}>
                 {nom}
@@ -208,7 +212,7 @@ export default function CarteCompte({
                 display: "flex", alignItems: "center", justifyContent: "space-between",
                 marginTop: 3,
               }}>
-                <span style={{ fontSize: 13, color: "rgba(255,255,255,0.82)" }}>{compte}</span>
+                <span style={{ fontSize: 12.5, color: "rgba(255,255,255,0.82)" }}>{compte}</span>
                 {/* Le chevron pointe à droite, comme sur la référence, et ne pivote
                     plus : il ne déplie rien sous la carte, il mène dans le dossier. */}
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none"
