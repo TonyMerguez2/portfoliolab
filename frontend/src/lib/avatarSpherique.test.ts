@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   RAYON_TETE, type Point2, type Vec3,
   ancrageOeil, cheminOeil, contourArrondi, contourCapsule, contourSilhouette,
-  couperHemisphere, etirementSilhouette,
+  couperHemisphere, exposantSilhouette, versSuperellipsoide,
   projeter, surLaSphere, tournerTete,
 } from "./avatarSpherique";
 
@@ -456,134 +456,111 @@ describe("projeter", () => {
   });
 });
 
-describe("etirementSilhouette", () => {
-  it("ne touche à rien quand la silhouette est le disque", () => {
+describe("versSuperellipsoide", () => {
+  it("ne touche à rien quand l'exposant est celui de la sphère", () => {
     // ⚠️ L'invariant qui protège tout l'existant : tant que personne ne demande de
-    // carré, la déformation doit être rigoureusement l'identité — pas « presque ».
+    // cube, la transformation doit être rigoureusement l'identité — pas « presque ».
     for (let a = 0; a < 40; a++) {
       const t = (a / 40) * Math.PI * 2;
-      expect(etirementSilhouette(Math.cos(t), Math.sin(t), 1)).toBe(1);
+      const p = { x: Math.cos(t) * 0.6, y: Math.sin(t) * 0.6, z: 0.8 };
+      expect(versSuperellipsoide(p, 2)).toEqual(p);
     }
   });
 
-  it("mène le cercle sur un carré exact quand l'arrondi est nul", () => {
-    // Un carré de demi-côté 1 : le point poussé a toujours une coordonnée à ±1,
-    // et l'autre en deçà.
-    for (let a = 0; a < 200; a++) {
-      const t = (a / 200) * Math.PI * 2;
-      const c = Math.cos(t), s = Math.sin(t);
-      const k = etirementSilhouette(c, s, 0);
-      expect(Math.max(Math.abs(c * k), Math.abs(s * k))).toBeCloseTo(1, 12);
-      expect(Math.min(Math.abs(c * k), Math.abs(s * k))).toBeLessThanOrEqual(1 + 1e-12);
-    }
-  });
-
-  it("place les quatre coins arrondis là où ils doivent être", () => {
+  it("pose chaque point sur la superellipsoïde, à la direction près", () => {
     /**
-     * Sur la diagonale, le bord d'un carré arrondi de demi-côté 1 et de rayon `r`
-     * passe à `(1 − r)·√2 + r` du centre : le centre du quart de cercle, plus son
-     * rayon. C'est la mesure qui distingue un vrai congé d'un simple mélange entre
-     * le cercle et le carré, lequel tomberait ailleurs.
+     * La définition même du solide : |x|ⁿ + |y|ⁿ + |z|ⁿ = 1. Et la transformation est
+     * **radiale**, donc la direction ne bouge pas — c'est ce qui garantit qu'elle ne
+     * change pas le signe de `z`, donc qu'elle laisse la coupe de l'hémisphère valide.
      */
-    for (const r of [0.2, 0.45, 0.8]) {
-      const d = Math.SQRT1_2;
-      const attendu = (1 - r) * Math.SQRT2 + r;
-      expect(etirementSilhouette(d, d, r)).toBeCloseTo(attendu, 12);
-      expect(etirementSilhouette(-d, d, r)).toBeCloseTo(attendu, 12);
-      expect(etirementSilhouette(-d, -d, r)).toBeCloseTo(attendu, 12);
-      expect(etirementSilhouette(d, -d, r)).toBeCloseTo(attendu, 12);
-    }
-  });
-
-  it("garde les milieux des côtés au rayon d'origine", () => {
-    // Le carré arrondi est inscrit : il touche le cercle aux quatre milieux, et ne
-    // dépasse que vers les coins. Sans quoi la tête grossirait en changeant de forme.
-    for (const r of [0, 0.3, 0.7, 1]) {
-      expect(etirementSilhouette(1, 0, r)).toBeCloseTo(1, 12);
-      expect(etirementSilhouette(0, 1, r)).toBeCloseTo(1, 12);
-      expect(etirementSilhouette(-1, 0, r)).toBeCloseTo(1, 12);
-      expect(etirementSilhouette(0, -1, r)).toBeCloseTo(1, 12);
-    }
-  });
-
-  it("laisse le centre du visage intact et ne déforme qu'en s'éloignant", () => {
-    /**
-     * ⚠️ **Le défaut que ce test attrape, et qui s'est vu à l'écran.** Un facteur qui
-     * ne dépend que de l'angle s'applique aussi violemment au centre qu'au bord — et
-     * près du centre, une petite forme couvre la plus large plage d'angles qui soit.
-     * Les yeux en devenaient des blobs ondulés. L'étirement doit donc être nul au
-     * centre, entier au bord, et croissant entre les deux.
-     */
-    const dir = [Math.SQRT1_2, Math.SQRT1_2];
-    let precedent = 0;
-    for (const rho of [0, 0.1, 0.3, 0.5, 0.8, 1]) {
-      const k = etirementSilhouette(dir[0] * rho, dir[1] * rho, 0.35);
-      // Ce que le point parcourt réellement : le rayon poussé.
-      const pousse = rho * k;
-      expect(pousse).toBeGreaterThanOrEqual(precedent - 1e-12);
-      precedent = pousse;
-      if (rho === 0) expect(k).toBe(1);
-    }
-    // Au centre, un petit voisinage reste quasiment lui-même.
-    for (const t of [0, 0.7, 1.6, 3.9]) {
-      const k = etirementSilhouette(0.05 * Math.cos(t), 0.05 * Math.sin(t), 0.35);
-      expect(k).toBeLessThan(1.02);
-    }
-  });
-
-  it("ne replie jamais le disque sur lui-même", () => {
-    /**
-     * ⚠️ La propriété qui rend la déformation utilisable : le facteur ne dépend que de
-     * la direction, donc l'ordre des points le long d'un rayon est conservé et deux
-     * rayons voisins ne se croisent pas. Un facteur qui dépendrait aussi du rayon
-     * pourrait retourner la forme — et un contour retourné se peint à l'envers.
-     */
-    for (const r of [0, 0.35, 0.9]) {
-      for (let a = 0; a < 90; a++) {
-        const t = (a / 90) * Math.PI * 2;
-        const k = etirementSilhouette(Math.cos(t), Math.sin(t), r);
-        expect(k).toBeGreaterThanOrEqual(1 - 1e-12);
-        expect(k).toBeLessThanOrEqual(Math.SQRT2 + 1e-12);
+    for (const n of [3, 4, 8]) {
+      for (const p of [
+        { x: 0.6, y: 0.3, z: Math.sqrt(1 - 0.36 - 0.09) },
+        { x: -0.2, y: 0.9, z: Math.sqrt(1 - 0.04 - 0.81) },
+        { x: Math.SQRT1_2, y: Math.SQRT1_2, z: 0 },
+        { x: 0, y: 0, z: 1 },
+      ]) {
+        const q = versSuperellipsoide(p, n);
+        const norme = Math.pow(Math.abs(q.x), n) + Math.pow(Math.abs(q.y), n)
+          + Math.pow(Math.abs(q.z), n);
+        expect(norme).toBeCloseTo(1, 9);
+        // Même direction : le produit vectoriel est nul, et `z` garde son signe.
+        expect(q.x * p.y - q.y * p.x).toBeCloseTo(0, 9);
+        expect(Math.sign(q.z) || 0).toBe(Math.sign(p.z) || 0);
       }
     }
   });
-});
 
-describe("contourSilhouette", () => {
-  it("reste un cercle du bon rayon quand l'arrondi est maximal", () => {
-    for (const p of contourSilhouette(1, 100, 128)) {
-      expect(Math.hypot(p.x, p.y)).toBeCloseTo(100, 9);
+  it("reste inscrite dans le carré de la tête, et le touche", () => {
+    // Le bord vaut 1 sur les axes : la tête ne grossit pas en devenant cube. Il
+    // pousse vers les coins, mais chaque coordonnée y reste sous 1.
+    for (const n of [3, 4, 8, 16]) {
+      for (const [x, y] of [[1, 0], [0, 1], [-1, 0], [0, -1]]) {
+        const q = versSuperellipsoide({ x, y, z: 0 }, n);
+        expect(Math.hypot(q.x, q.y)).toBeCloseTo(1, 12);
+      }
+      for (let a = 0; a < 180; a++) {
+        const t = (a / 180) * Math.PI * 2;
+        const q = versSuperellipsoide({ x: Math.cos(t), y: Math.sin(t), z: 0 }, n);
+        expect(Math.abs(q.x)).toBeLessThanOrEqual(1 + 1e-9);
+        expect(Math.abs(q.y)).toBeLessThanOrEqual(1 + 1e-9);
+      }
     }
   });
 
-  it("tient dans le carré de la tête, et le touche", () => {
-    const pts = contourSilhouette(0.35, 100, 360);
-    let max = 0;
-    for (const p of pts) {
-      expect(Math.abs(p.x)).toBeLessThanOrEqual(100.0001);
-      expect(Math.abs(p.y)).toBeLessThanOrEqual(100.0001);
-      max = Math.max(max, Math.abs(p.x), Math.abs(p.y));
-    }
-    expect(max).toBeCloseTo(100, 6);
+  it("aplatit la face avant à mesure que l'exposant monte", () => {
+    /**
+     * ⚠️ **Ce que la grille montrait, et que l'ancienne déformation ne faisait pas.**
+     * Un cube arrondi a une face plate : à égale distance de l'axe du regard, la cote
+     * doit rester proche de 1 pour un grand exposant, alors qu'elle chute en √(1−r²)
+     * sur la sphère. C'est cette platitude qui empêche les yeux d'onduler.
+     */
+    const cote = (n: number) => {
+      const r = 0.35;
+      const p = { x: r, y: 0, z: Math.sqrt(1 - r * r) };
+      return versSuperellipsoide(p, n).z;
+    };
+    expect(cote(2)).toBeCloseTo(Math.sqrt(1 - 0.1225), 9);
+    expect(cote(4)).toBeGreaterThan(cote(2));
+    expect(cote(8)).toBeGreaterThan(cote(4));
+    expect(cote(16)).toBeGreaterThan(0.99);
   });
 });
 
-describe("projeter avec silhouette", () => {
-  it("pousse le contour d'un œil jusqu'au bord du carré, jamais au-delà", () => {
+describe("exposantSilhouette", () => {
+  it("rend la sphère à un arrondi plein, et un cube franc au bout de la course", () => {
+    expect(exposantSilhouette(1)).toBe(2);
+    expect(exposantSilhouette(0.5)).toBe(4);
+    expect(exposantSilhouette(0.25)).toBe(8);
+    expect(exposantSilhouette(0)).toBe(24);
+  });
+});
+
+describe("projeter sur la superellipsoïde", () => {
+  it("garde le contour d'un œil dans la silhouette, jamais au-delà", () => {
     /**
      * ⚠️ Le seul invariant qui compte à l'écran : rien ne sort de la tête. Il valait
      * pour le disque ; il doit valoir pour la nouvelle silhouette, avec la même
      * exigence — sans quoi un œil rasant le bord déborderait dans le vide.
+     *
+     * Le bord se calcule ici **indépendamment** du code testé : pour une direction
+     * donnée, le rayon de la superellipse est celui qui ramène |x|ⁿ + |y|ⁿ à 1.
      */
+    const bord = (x: number, y: number, n: number) => {
+      const d = Math.hypot(x, y);
+      if (d === 0) return 1;
+      const ux = Math.abs(x) / d, uy = Math.abs(y) / d;
+      return 1 / Math.pow(Math.pow(ux, n) + Math.pow(uy, n), 1 / n);
+    };
     for (const arrondi of [0, 0.3, 0.6, 1]) {
+      const n = exposantSilhouette(arrondi);
       for (const lacet of [-140, -60, 0, 75, 175]) {
         for (const tangage of [-50, 0, 35]) {
           const d = cheminOeil(
             { ecart: 30, elevation: 4, largeur: 30, hauteur: 70, inclinaison: 0.2 },
-            { lacet: deg(lacet), tangage: deg(tangage) }, -1, 100, 160, arrondi);
+            { lacet: deg(lacet), tangage: deg(tangage) }, -1, 100, 160, n);
           for (const p of pointsDuChemin(d)) {
-            const k = etirementSilhouette(p.x, p.y, arrondi);
-            expect(Math.hypot(p.x, p.y)).toBeLessThanOrEqual(100 * k + 0.05);
+            expect(Math.hypot(p.x, p.y)).toBeLessThanOrEqual(100 * bord(p.x, p.y, n) + 0.05);
           }
         }
       }

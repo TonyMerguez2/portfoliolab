@@ -3,7 +3,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import {
   RAYON_TETE, type Orientation, type ReglagesOeil, cheminOeil, cheminSvg,
-  cheminsSurLaTete, contourSilhouette, projeter, tournerTete, traitSurLaTete,
+  cheminsSurLaTete, contourSilhouette, exposantSilhouette, projeter, tournerTete,
+  traitSurLaTete,
 } from "@/lib/avatarSpherique";
 import { grilleSpherique } from "@/lib/avatarGrille";
 import { PRESETS, SKINS, type Palette, skinParCle } from "@/lib/avatarSkins";
@@ -152,9 +153,10 @@ export default function AvatarProceduralPage() {
    * bouts d'un même réglage, ce qui rend toutes les valeurs intermédiaires disponibles
    * — et surtout animables, le jour où la tête devra passer de l'une à l'autre.
    */
-  const [silhouette, setSilhouette] = useState(1);
+  const [silhouette, setSilhouette] = useState(0.5);
   const [formeTete, setFormeTete] = useState<"sphere" | "carre">("sphere");
-  const arrondiTete = formeTete === "sphere" ? 1 : silhouette;
+  /** L'exposant de la superellipsoïde : 2 pour la sphère, davantage vers le cube. */
+  const exposantTete = exposantSilhouette(formeTete === "sphere" ? 1 : silhouette);
   const [vie, setVie] = useState<EtatVie>(VIE_AU_REPOS);
   const [expression, setExpression] = useState<CleExpression>("neutre");
   const [taille, setTaille] = useState(1.23);
@@ -209,7 +211,7 @@ export default function AvatarProceduralPage() {
     if (!grille) return null;
     const devant: string[] = [], derriere: string[] = [];
     const ajouter = (courbe: { x: number; y: number; z: number }[]) => {
-      const t = traitSurLaTete(courbe, orientation, RAYON_TETE, true, arrondiTete);
+      const t = traitSurLaTete(courbe, orientation, RAYON_TETE, true, exposantTete);
       if (t.devant) devant.push(t.devant);
       if (t.derriere) derriere.push(t.derriere);
     };
@@ -220,31 +222,31 @@ export default function AvatarProceduralPage() {
       derriere: derriere.join(" "),
       // L'équateur et le méridien du visage portent le repère : accentués, ils disent
       // d'un coup d'œil où passent l'horizon de la tête et son plan de symétrie.
-      equateur: traitSurLaTete(GRILLE.equateur, orientation, RAYON_TETE, true, arrondiTete),
-      median: traitSurLaTete(GRILLE.meridiens[0], orientation, RAYON_TETE, true, arrondiTete),
+      equateur: traitSurLaTete(GRILLE.equateur, orientation, RAYON_TETE, true, exposantTete),
+      median: traitSurLaTete(GRILLE.meridiens[0], orientation, RAYON_TETE, true, exposantTete),
       axes: GRILLE.axes.map(a => {
         const p = tournerTete(a.pointe, orientation.lacet, orientation.tangage, orientation.roulis ?? 0);
         return {
           cle: a.cle, signe: a.signe, devant: p.z >= 0,
-          bout: projeter(p, RAYON_TETE, arrondiTete),
+          bout: projeter(p, RAYON_TETE, exposantTete),
         };
       }),
     };
-  }, [grille, orientation, arrondiTete]);
+  }, [grille, orientation, exposantTete]);
 
   /** Le contour de la tête, tracé par la fonction même qui déforme tout le reste. */
   const contourTete = useMemo(
-    () => cheminSvg(contourSilhouette(arrondiTete, RAYON_TETE)), [arrondiTete]);
+    () => cheminSvg(contourSilhouette(exposantTete, RAYON_TETE)), [exposantTete]);
 
   const cheminsMotifs = useMemo(
     () => motifs.map(m => ({
-      d: cheminsSurLaTete(m.morceaux, orientation, RAYON_TETE, arrondiTete),
+      d: cheminsSurLaTete(m.morceaux, orientation, RAYON_TETE, exposantTete),
       couleur: m.couleur,
       trait: m.trait,
       epaisseur: m.epaisseur,
     })),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [motifs, orientation, arrondiTete]);
+    [motifs, orientation, exposantTete]);
 
   /** Choisir un skin **propose** sa palette ; elle reste modifiable ensuite. */
   const choisirSkin = useCallback((cle: string) => {
@@ -310,12 +312,12 @@ export default function AvatarProceduralPage() {
 
   const oeilGauche = useMemo(
     () => cheminOeil(reglagesOeil(yeux.gauche, vie.fermetureGauche), orientation, -1,
-      RAYON_TETE, 220, arrondiTete),
-    [reglagesOeil, yeux.gauche, vie.fermetureGauche, orientation, arrondiTete]);
+      RAYON_TETE, 220, exposantTete),
+    [reglagesOeil, yeux.gauche, vie.fermetureGauche, orientation, exposantTete]);
   const oeilDroit = useMemo(
     () => cheminOeil(reglagesOeil(yeux.droit, vie.fermetureDroite), orientation, 1,
-      RAYON_TETE, 220, arrondiTete),
-    [reglagesOeil, yeux.droit, vie.fermetureDroite, orientation, arrondiTete]);
+      RAYON_TETE, 220, exposantTete),
+    [reglagesOeil, yeux.droit, vie.fermetureDroite, orientation, exposantTete]);
 
   /**
    * Écrit un réglage sur l'œil courant, ou sur les deux si le lien tient.
@@ -829,7 +831,7 @@ export default function AvatarProceduralPage() {
 
           <Carte
             titre="Forme du personnage"
-            note="La silhouette passe du disque au carré à coins ronds. Ce n’est pas un autre volume : la sphère reste la sphère — c’est l’image qu’on étire, au seul endroit que tout traverse."
+            note="La tête devient une superellipsoïde — un cube aux arêtes arrondies. C’est un vrai volume : la face avant s’aplatit, et la grille le montre. Sa silhouette reste stable en tournant, comme un logo."
           >
             <div style={{ display: "flex", gap: 10 }}>
               {([["sphere", "Sphère"], ["carre", "Carré arrondi"]] as const).map(([cle, libelle]) => (
@@ -858,9 +860,9 @@ export default function AvatarProceduralPage() {
                   affichage={`${Math.round(silhouette * 100)} %`}
                   min={0} max={1} pas={0.01} onChange={setSilhouette} />
                 <p style={{ margin: "2px 0 0", color: DOUX, fontSize: 12, lineHeight: 1.5 }}>
-                  À 100 %, c’est le disque. Le carré reste inscrit : il touche le cercle
-                  aux quatre milieux et ne pousse que vers les coins, si bien que la tête
-                  ne change pas de taille en changeant de forme.
+                  À 100 %, c’est la sphère. La forme reste inscrite dans le même carré :
+                  elle touche le cercle aux quatre milieux et ne pousse que vers les
+                  coins, si bien que la tête ne change pas de taille en changeant de forme.
                 </p>
               </div>
             )}

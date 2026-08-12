@@ -429,79 +429,76 @@ function poserArcDeBord(
  *
  * `y` change de signe : la surface compte vers le haut, le SVG vers le bas.
  */
-export function projeter(p: Vec3, rayon: number, silhouette: number = 1): Point2 {
-  const k = rayon * etirementSilhouette(p.x, -p.y, silhouette);
-  return { x: p.x * k, y: -p.y * k };
+export function projeter(p: Vec3, rayon: number, exposant: number = 2): Point2 {
+  const q = versSuperellipsoide(p, exposant);
+  return { x: q.x * rayon, y: -q.y * rayon };
 }
 
 /**
- * De combien il faut pousser un point vers le bord pour que le disque devienne un
- * carré à coins ronds.
+ * De la sphère au cube arrondi : la **superellipsoïde** |x|ⁿ + |y|ⁿ + |z|ⁿ = 1.
  *
- * ⚠️ **C'est une déformation de l'image, pas une autre géométrie.** La sphère reste une
- * sphère : c'est elle qui porte les yeux, les motifs et le maillage, et c'est d'elle que
- * dépendent la carte exponentielle, la coupe de l'hémisphère et le sens de parcours des
- * silhouettes. Tout cela s'effondrerait sur un solide quelconque. Le même raisonnement
- * que pour l'écrasement d'un rebond, qui est déjà une échelle du rendu : on garde une
- * géométrie sur laquelle on sait raisonner, et l'on comprime l'image à la fin.
+ * ⚠️ **C'est un vrai solide, et c'était nécessaire.** J'avais d'abord étiré l'image dans
+ * le plan de l'écran, sans tenir compte de la profondeur : le contour était bien un carré
+ * arrondi, mais la grille le disait — les parallèles se bombaient en tonneau et les yeux
+ * ondulaient, parce qu'une déformation qui ignore `z` traite de la même façon le sommet
+ * du visage et son bord. Le résultat se lisait comme une sphère tordue, pas comme un
+ * volume. Ici la sphère est projetée **radialement sur la superellipsoïde**, en trois
+ * dimensions : la face avant devient réellement plate, les arêtes se rassemblent, et
+ * c'est le maillage qui le montre.
  *
- * ⚠️ **Appliquée dans `projeter`, donc au seul endroit que *tout* traverse.** Yeux,
- * motifs de skin, maillage, axes : rien ne peut échapper à la déformation ni s'en
- * décaler d'un pixel, puisqu'il n'existe qu'un chemin de la sphère à l'écran. Une
- * déformation posée sur le seul contour de la tête aurait laissé les yeux flotter à
- * l'intérieur d'une forme qui n'est plus la leur.
+ * ⚠️ **Tout le reste du module continue de travailler sur la sphère, et c'est voulu.**
+ * La carte exponentielle, la coupe de l'hémisphère et le sens de parcours des contours
+ * ne savent raisonner que sur une sphère. Le passage au solide se fait tout à la fin, à
+ * la projection — et il est *compatible* avec la coupe, puisqu'il ne fait que multiplier
+ * le point par un facteur positif : le signe de `z` ne change pas, donc ce qui était
+ * devant reste devant. La silhouette `z = 0` devient exactement la superellipse
+ * |x|ⁿ + |y|ⁿ = 1, c'est-à-dire le carré à coins ronds cherché.
  *
- * ⚠️ **L'étirement croît avec la distance au centre, il n'est pas uniforme le long du
- * rayon.** Vu à l'écran, un facteur constant par direction déformait les yeux en blobs
- * ondulés : près du centre, une petite forme couvre une **large plage d'angles** — c'est
- * même là que cette plage est maximale — si bien qu'un facteur qui ne dépend que de
- * l'angle varie fortement d'un bord de l'œil à l'autre. En le faisant croître avec le
- * rayon, le centre du visage reste intact, le bord atteint exactement le carré, et la
- * tête se lit comme une sphère gonflée vers un cube plutôt que comme une image tordue.
- *
- * Le facteur reste croissant en fonction du rayon — `ρ + (R−1)ρ²` a pour dérivée
- * `1 + 2(R−1)ρ`, toujours positive —, donc aucun repli, aucun contour retourné.
- *
- * `arrondi` vaut 1 pour le disque d'origine, 0 pour un carré à angles vifs.
+ * ⚠️ **Inscrite dans le même carré que le disque.** Le bord vaut 1 sur les axes et
+ * 2^(1/n) ≈ 1,19 sur la diagonale, mais la diagonale culmine à 0,84 sur chaque axe : la
+ * forme touche donc le cercle aux quatre milieux et ne pousse que vers les coins. La
+ * tête ne change pas de taille en changeant de forme.
  */
-export function etirementSilhouette(x: number, y: number, arrondi: number): number {
-  const r = Math.min(1, Math.max(0, arrondi));
-  if (r >= 1) return 1;
-  const n = Math.sqrt(x * x + y * y);
-  if (n === 0) return 1;
-  const ux = Math.abs(x) / n, uy = Math.abs(y) / n;
-  const b = 1 - r;
-  const grand = Math.max(ux, uy), petit = Math.min(ux, uy);
-  // Sortie par un côté droit : la coordonnée dominante atteint le bord la première.
-  const plat = 1 / grand;
-  if (plat * petit <= b) return 1 + (plat - 1) * Math.min(1, n);
-  /**
-   * Sortie par un coin : on cherche `t` tel que `|t·u − c| = r`, avec `c` le centre du
-   * quart de cercle. La racine positive est la bonne — l'autre est le point où le rayon
-   * *entrerait* dans le cercle du coin s'il venait de derrière.
-   */
-  const d = (ux + uy) * b;
-  const sous = d * d - (2 * b * b - r * r);
-  return 1 + (d + Math.sqrt(Math.max(0, sous)) - 1) * Math.min(1, n);
+export function versSuperellipsoide(p: Vec3, exposant: number): Vec3 {
+  if (exposant <= 2 + 1e-9) return p;
+  const n = Math.pow(
+    Math.pow(Math.abs(p.x), exposant)
+    + Math.pow(Math.abs(p.y), exposant)
+    + Math.pow(Math.abs(p.z), exposant),
+    1 / exposant,
+  );
+  if (n <= 1e-12) return p;
+  return { x: p.x / n, y: p.y / n, z: p.z / n };
 }
 
 /**
- * Le contour de la tête, du disque au carré arrondi.
+ * L'exposant qui correspond à un arrondi donné, de 1 (la sphère) à 0 (le cube).
  *
- * ⚠️ **Tracé par la même fonction que la déformation, et non par un `rect` arrondi.**
- * Un rectangle SVG donnerait la forme exacte, mais rien ne garantirait qu'elle coïncide
- * au pixel près avec le bord que subissent les yeux et le maillage : deux définitions de
- * la même silhouette finissent toujours par se décoller quelque part.
+ * ⚠️ **Le réglage exposé est l'arrondi, pas l'exposant.** L'exposant est la grandeur
+ * naturelle du calcul, mais il se comporte mal comme réglage : tout se joue entre 2 et
+ * 6, et au-delà de 12 plus rien ne bouge. `2 / arrondi` étale ces valeurs sur une course
+ * régulière — un curseur à mi-chemin donne l'exposant 4, le cube arrondi des icônes.
+ */
+export function exposantSilhouette(arrondi: number): number {
+  const a = Math.min(1, Math.max(0.001, arrondi));
+  return Math.min(24, 2 / a);
+}
+
+/**
+ * Le contour de la tête : la silhouette du solide, vue de face.
+ *
+ * ⚠️ **Tracé par la même transformation que tout le reste, et non par un `rect` arrondi.**
+ * C'est l'image du cercle `z = 0` — celui-là même sur lequel la coupe de l'hémisphère
+ * referme les contours. Deux définitions de la silhouette finiraient par se décoller, et
+ * l'on verrait un liseré de fond entre un œil rasant le bord et le bord lui-même.
  */
 export function contourSilhouette(
-  arrondi: number, rayon: number = RAYON_TETE, echantillons: number = 360,
+  exposant: number, rayon: number = RAYON_TETE, echantillons: number = 360,
 ): Point2[] {
   const points: Point2[] = [];
   for (let i = 0; i < echantillons; i++) {
     const t = (i / echantillons) * TAU;
-    const c = Math.cos(t), s = Math.sin(t);
-    const k = rayon * etirementSilhouette(c, s, arrondi);
-    points.push({ x: c * k, y: s * k });
+    points.push(projeter({ x: Math.cos(t), y: Math.sin(t), z: 0 }, rayon, exposant));
   }
   return points;
 }
@@ -640,7 +637,7 @@ export function couperParProfondeur(
  */
 export function traitSurLaTete(
   courbe: Vec3[], orientation: Orientation, rayon: number = RAYON_TETE,
-  ferme: boolean = true, silhouette: number = 1,
+  ferme: boolean = true, exposant: number = 2,
 ): { devant: string; derriere: string } {
   const tourne: Vec3[] = [];
   for (let i = 0; i < courbe.length; i++) {
@@ -652,7 +649,7 @@ export function traitSurLaTete(
     const bouts: string[] = [];
     for (let i = 0; i < morceaux.length; i++) {
       const ecran: Point2[] = [];
-      for (let j = 0; j < morceaux[i].length; j++) ecran.push(projeter(morceaux[i][j], rayon, silhouette));
+      for (let j = 0; j < morceaux[i].length; j++) ecran.push(projeter(morceaux[i][j], rayon, exposant));
       const d = cheminOuvert(ecran);
       if (d) bouts.push(d);
     }
@@ -853,23 +850,23 @@ export function carreauCube(
  */
 export function cheminSurLaTete(
   polygone: Vec3[], orientation: Orientation, rayon: number = RAYON_TETE,
-  silhouette: number = 1,
+  exposant: number = 2,
 ): string {
   const tourne: Vec3[] = [];
   for (let i = 0; i < polygone.length; i++) {
     tourne.push(tournerTete(
       polygone[i], orientation.lacet, orientation.tangage, orientation.roulis ?? 0));
   }
-  return cheminDesMorceaux(couperHemisphere(tourne), rayon, silhouette);
+  return cheminDesMorceaux(couperHemisphere(tourne), rayon, exposant);
 }
 
 /** Projette et écrit une liste de contours en un seul `d`, un sous-tracé par morceau. */
-function cheminDesMorceaux(morceaux: Vec3[][], rayon: number, silhouette: number = 1): string {
+function cheminDesMorceaux(morceaux: Vec3[][], rayon: number, exposant: number = 2): string {
   const bouts: string[] = [];
   for (let i = 0; i < morceaux.length; i++) {
     const ecran: Point2[] = [];
     for (let j = 0; j < morceaux[i].length; j++) {
-      ecran.push(projeter(morceaux[i][j], rayon, silhouette));
+      ecran.push(projeter(morceaux[i][j], rayon, exposant));
     }
     const d = cheminSvg(ecran);
     if (d) bouts.push(d);
@@ -888,11 +885,11 @@ function cheminDesMorceaux(morceaux: Vec3[][], rayon: number, silhouette: number
  */
 export function cheminsSurLaTete(
   morceaux: Vec3[][], orientation: Orientation, rayon: number = RAYON_TETE,
-  silhouette: number = 1,
+  exposant: number = 2,
 ): string {
   const bouts: string[] = [];
   for (let i = 0; i < morceaux.length; i++) {
-    const d = cheminSurLaTete(morceaux[i], orientation, rayon, silhouette);
+    const d = cheminSurLaTete(morceaux[i], orientation, rayon, exposant);
     if (d) bouts.push(d);
   }
   return bouts.join(" ");
@@ -945,7 +942,7 @@ export function cheminOeil(
   cote: -1 | 1,
   rayon: number = RAYON_TETE,
   echantillons: number = 220,
-  silhouette: number = 1,
+  exposant: number = 2,
 ): string {
   const ancrage = ancrageOeil(
     (cote * reglages.ecart) / rayon,
@@ -966,5 +963,5 @@ export function cheminOeil(
     ));
   }
 
-  return cheminDesMorceaux(couperHemisphere(surface), rayon, silhouette);
+  return cheminDesMorceaux(couperHemisphere(surface), rayon, exposant);
 }
