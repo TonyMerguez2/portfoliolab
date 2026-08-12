@@ -121,12 +121,17 @@ export default function ProgressionGlobale({ objectifs, sommeDesParts }: {
             </p>
           )}
 
-          <p style={{ margin: 0, fontFamily: FONT, fontSize: 9, lineHeight: 1.5,
-            color: CLAIR.texteFaible }}>
-            {/* Resserré à une ligne : la mise en garde reste, sans manger la place des
-                constats voisins. */}
-            Cibles d’échéances différentes : un euro futur vaut moins qu’aujourd’hui.
-          </p>
+          {/* ⚠️ **Une mise en garde a été retirée d'ici, et ce n'était pas une décoration.**
+              Elle disait : « Cibles d'échéances différentes : un euro futur vaut moins
+              qu'aujourd'hui » — car `agregat` additionne des cibles situées à des horizons
+              différents, ce qui est une somme d'unités inégales. Retirée sur demande, au
+              profit de l'aide à la décision juste en dessous.
+
+              Ce qui la remplace n'est pas rien : la famille « inflation » de l'aide dit la
+              même chose en chiffres, sur l'objectif projeté, avec sa métrique « en euros
+              d'aujourd'hui ». La garde générale a donc cédé la place à une garde chiffrée.
+              Ne pas remettre la phrase ici en croyant combler un oubli ; si le besoin
+              revient, c'est à cette famille-là qu'il faut s'adresser. */}
         </>
       )}
     </div>

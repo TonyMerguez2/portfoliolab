@@ -3,7 +3,8 @@ import { useEffect, useState } from "react";
 
 import Cadre from "@/components/ui/Cadre";
 import {
-  aideALaDecision, confianceEnClair, type Contexte, type Insight, type Priorite,
+  aideALaDecision, confianceEnClair, couperMetrique,
+  type Contexte, type Insight, type Priorite,
 } from "@/lib/aideDecision";
 import { type Objectif } from "@/lib/objectifs";
 import { JETONS } from "@/lib/palette";
@@ -186,8 +187,40 @@ export default function ConstatsObjectif({
     // celui des voisins la plus grande partie du temps, et l'éclat ne fait que passer. Voir
     // `.novac-bord-defilant` dans globals.css, où tient toute la mécanique.
     <Cadre classeCarte="novac-bord-defilant" style={{
-      flexShrink: 0,
-      display: "flex", flexDirection: "column", gap: 10, minHeight: 0,
+      // ⚠️ **`1 0 auto` : il grandit, il ne rétrécit jamais.** Les trois termes comptent.
+      // *Grandir* prend la place laissée libre au bas de la colonne — mesurée à 70 pixels
+      // avant même le retrait de la mise en garde voisine, donc du vide qui ne servait à
+      // personne. *Ne pas rétrécir* garde le comportement documenté d'à côté : sur une
+      // fenêtre courte, c'est « Progression globale » qui absorbe, pas l'aide qu'on vient
+      // lire. Et *base automatique* laisse le contenu décider du plancher.
+      //
+      // ⚠️ C'est aussi ce qui fixe la hauteur d'une aide à l'autre : dès lors qu'elle est
+      // dictée par la colonne et non par le texte, elle ne dépend plus de la longueur de
+      // la phrase affichée. Une hauteur en dur ferait la même chose au prix d'un débordement
+      // sur les fenêtres courtes.
+      flex: "1 0 auto",
+      // ⚠️ **Un plancher mesuré, parce que « grandir » ne suffisait pas.** Sur une fenêtre
+      // assez haute, la croissance fixe la hauteur et la longueur de la phrase n'y change
+      // rien : 260 pixels pour les quatorze combinaisons d'objectif et d'aide, vérifié. Mais
+      // sur une fenêtre courte il n'y a plus de place à prendre, la hauteur retombe sur le
+      // contenu — et là elle sautait de 171 à 229 pixels selon l'aide, la description faisant
+      // d'une à quatre lignes. Un panneau qui change de taille quand on passe d'une aide à la
+      // suivante est exactement ce qu'on cherchait à éviter.
+      //
+      // 264 est le maximum mesuré sur les quatorze combinaisons, à 446 pixels de large — et
+      // **c'est bien la hauteur du cadre extérieur**, non celle de la carte. `minHeight` est une
+      // clé de placement : `Cadre` la pose sur l'anneau, qui ajoute son rembourrage de 6 et son
+      // liseré de 1 de chaque côté. Un plancher de 232 pris sur la carte laissait le panneau
+      // grandir jusqu'à 243, et le saut restait — vu à l'écran avant d'être corrigé.
+      //
+      // ⚠️ **Ce plancher a un prix, et il faut le connaître.** Sous 830 pixels de fenêtre
+      // environ, la colonne n'a plus de quoi le payer sans rogner sa voisine : « Progression
+      // globale » tombe alors à son titre et défile. C'est l'arbitrage déjà inscrit à côté —
+      // l'aide qu'on vient lire reste entière, la progression cède — poussé à son terme. Si
+      // l'on préférait l'inverse, c'est ce nombre qu'il faut baisser, au prix d'un saut de
+      // dix-huit pixels d'une aide à l'autre sur les fenêtres courtes.
+      minHeight: 264,
+      display: "flex", flexDirection: "column", gap: 10,
       background: `${CIEL}, ${FOND_ESPACE}`,
       padding: "14px 16px",
     }}>
@@ -222,53 +255,81 @@ export default function ConstatsObjectif({
             : "Choisissez un objectif pour voir ce que vos chiffres impliquent."}
         </p>
       ) : (
-        // ⚠️ Une hauteur minimale, pour que le panneau ne saute pas d'une aide à l'autre : les
-        // phrases font de deux à quatre lignes selon les montants, et toute la colonne se
-        // décalerait à chaque changement de page.
-        <div style={{ display: "flex", gap: 14, minHeight: 84, minWidth: 0 }}>
-          <div style={{ display: "flex", flexDirection: "column", gap: 4, minWidth: 0,
-            flex: 1 }}>
-            <span style={{ fontFamily: FONT, fontSize: 13.5, fontWeight: 650,
+        // ⚠️ **La rangée prend toute la hauteur restante, et le texte s'y centre.** Le panneau
+        // a désormais une hauteur dictée par la colonne, non par la phrase ; sans `flex: 1`
+        // ici, le surplus s'accumulerait en un vide entre le texte et le pied de carte. La
+        // hauteur minimale reste : elle sert le cas où la colonne, elle, serait courte.
+        <div style={{ display: "flex", gap: 14, minHeight: 84, minWidth: 0, flex: 1 }}>
+          <div style={{ display: "flex", flexDirection: "column", gap: 5, minWidth: 0,
+            flex: 1, justifyContent: "center" }}>
+            <span style={{ fontFamily: FONT, fontSize: 15, fontWeight: 650,
               lineHeight: 1.35, color: TEINTE[aide.priorite] }}>
               {aide.titre}
             </span>
-            <span style={{ fontFamily: FONT, fontSize: 11.5, lineHeight: 1.5,
+            <span style={{ fontFamily: FONT, fontSize: 12.5, lineHeight: 1.55,
               color: "rgba(255,255,255,0.86)" }}>
               {aide.description}
             </span>
           </div>
 
-          {/* ⚠️ **Le chiffre fort, plus large et plus gros qu'avant.** Il ne bougeait pas de
-              place : c'est le paragraphe qui a rendu de la largeur, sa marge gauche inchangée.
-              Le texte enroule donc un peu plus tôt, et le nombre — ce qu'on retient de la
-              carte — passe de 17 à 24 pixels.
+          {/* ⚠️ **Le chiffre fort, 30 pixels, et les mois à 18.** Il est passé de 17 à 24 puis
+              à 30, chaque fois en prenant de la place qui ne servait à rien : d'abord la largeur
+              rendue par le paragraphe, ensuite la hauteur qui dormait au bas de la colonne.
+              La coupe entre « 14 ans » et « 8 mois » vient de `couperMetrique`, qui explique
+              pourquoi « 6 mois » seul, lui, reste entier.
 
               ⚠️ **Aucun anneau autour de lui.** Il en a porté un, qui tournait ; à cette taille
               de bloc le tour se lisait comme un indicateur de chargement, et une ligne claire à
               huit pixels des chiffres les concurrençait plus qu'elle ne les désignait. L'éclat
               est passé sur le bord du panneau. Ce qui distingue ce nombre est ce qui doit le
               distinguer : sa taille, sa graisse, et le blanc presque pur. */}
-          {aide.metrique && (
+          {aide.metrique && (() => {
+            const { fort, discret } = couperMetrique(aide.metrique.valeur);
+            return (
             <div
               style={{ display: "flex", flexDirection: "column", alignItems: "center",
-                // ⚠️ **Comprimable, et non figé à 168.** Vu à l'écran sur un panneau resserré
-                // à 144 pixels : un bloc de largeur fixe débordait et le chiffre sortait du
+                // ⚠️ **Comprimable, et non figé.** Vu à l'écran sur un panneau resserré à
+                // 144 pixels : un bloc de largeur fixe débordait et le chiffre sortait du
                 // cadre. `flex: 0 1` lui laisse céder ce qu'il faut sans jamais s'étirer.
                 // Le rayon a suivi l'anneau : plus rien n'est peint ici, une valeur d'angle
                 // n'y décrirait aucune forme.
-                justifyContent: "center", flex: "0 1 168px", minWidth: 92,
+                //
+                // ⚠️ **200 et non 168, et la valeur est mesurée, pas estimée.** À 168 le
+                // contenu disposait de 148 pixels alors que la plus longue métrique du moteur
+                // — « 6 301 € / mois », relevée au canevas dans la police exacte — en réclame
+                // 165, et « 14 ans 8 mois » 156. D'où deux coupures successives à l'écran :
+                // « 14 ans 8 / mois », puis « 14 / ans 8 mois ». 200 laisse 180 pixels utiles,
+                // de quoi tenir jusqu'à un rythme à cinq chiffres. Au-delà, le report se fait
+                // au bon endroit grâce au `nowrap` du groupe discret.
+                justifyContent: "center", flex: "0 1 200px", minWidth: 92,
                 padding: "8px 10px", boxSizing: "border-box", alignSelf: "center" }}>
-              <span style={{ ...NUM, fontSize: 24, fontWeight: 700, lineHeight: 1.05,
+              <span style={{ ...NUM, fontSize: 30, fontWeight: 700, lineHeight: 1.08,
                 color: "rgba(255,255,255,0.97)", textAlign: "center",
                 letterSpacing: "-0.02em" }}>
-                {aide.metrique.valeur}
+                {fort}
+                {/* ⚠️ **Les mois en retrait, dans le même flux et non sur une ligne à part.**
+                    Imbriqués, ils partagent la ligne de base et enroulent d'eux-mêmes quand la
+                    largeur manque — « 14 ans » au-dessus, « 8 mois » en dessous. Un second bloc
+                    forcerait ce retour même quand tout tient, comme pour « 18,5 % / an ».
+
+                    ⚠️ **`nowrap` sur le retrait, et il a fallu le voir pour le comprendre.** Sans
+                    lui, la coupure tombait à l'espace *intérieure* du groupe : l'écran affichait
+                    « 14 ans 8 » puis « mois » à la ligne. Insécable, le groupe est reporté
+                    entier et la coupure remonte là où elle a un sens. */}
+                {discret && (
+                  <span style={{ fontSize: 18, fontWeight: 650, whiteSpace: "nowrap",
+                    color: "rgba(255,255,255,0.62)", letterSpacing: "-0.01em" }}>
+                    {" "}{discret}
+                  </span>
+                )}
               </span>
-              <span style={{ fontFamily: FONT, fontSize: 9.5, lineHeight: 1.3, marginTop: 2,
+              <span style={{ fontFamily: FONT, fontSize: 10, lineHeight: 1.3, marginTop: 3,
                 color: "rgba(255,255,255,0.58)", textAlign: "center" }}>
                 {aide.metrique.libelle}
               </span>
             </div>
-          )}
+            );
+          })()}
         </div>
       )}
 

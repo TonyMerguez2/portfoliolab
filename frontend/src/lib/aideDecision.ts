@@ -157,6 +157,41 @@ export function confianceEnClair(valeur: number): string {
   return "Estimation indicative";
 }
 
+// ── Le chiffre fort, coupé ───────────────────────────────────────────────────
+
+/**
+ * Le chiffre fort d'un insight, séparé en ce qui porte le sens et ce qui le qualifie.
+ *
+ * « 14 ans 8 mois » se lit d'un coup si les mois cèdent le pas aux années ; à la même
+ * taille, les deux nombres se disputent l'œil et la ligne enroule pour rien. Deux formes
+ * seulement sont reconnues, et ce sont celles que produit le moteur :
+ *
+ * - une durée composée — « 14 ans 8 mois » → « 14 ans » et « 8 mois » ;
+ * - un rythme — « 6 301 € / mois », « 18,5 % / an » → le montant, puis « / mois ».
+ *
+ * ⚠️ **Tout le reste ressort entier, et c'est le comportement voulu.** « 6 mois » seul,
+ * « 60 % », « 600 000 € », « atteint » : là, l'unité *est* le sens, et la rapetisser
+ * effacerait ce que le nombre mesure. Une règle qui rétrécirait toute occurrence du mot
+ * « mois » ferait exactement cette faute.
+ *
+ * ⚠️ Découper une chaîne d'affichage est fragile par nature — la parade propre serait une
+ * métrique structurée à la source. Elle ne vaut pas ici le remaniement de vingt-trois points
+ * d'appel : chacune des deux formes naît d'un seul endroit, et un test les couvre. Si une
+ * troisième apparaît, elle passera *entière* — un échec lisible, et non une coupe fautive.
+ */
+export function couperMetrique(valeur: string): { fort: string; discret: string | null } {
+  // ⚠️ `\s` couvre l'espace fine insécable U+202F que `Intl.NumberFormat("fr-FR")` place
+  // dans « 6 301 € ». Un espace littéral ne l'attraperait pas, et le rythme ressortirait
+  // entier sans que rien ne le signale — le piège de cette base de code, quatre fois déjà.
+  const duree = valeur.match(/^(\d+\s*ans?)\s+(\d+\s*mois)$/);
+  if (duree) return { fort: duree[1], discret: duree[2] };
+
+  const rythme = valeur.match(/^(.+?)\s*\/\s*(mois|an)$/);
+  if (rythme) return { fort: rythme[1], discret: `/ ${rythme[2]}` };
+
+  return { fort: valeur, discret: null };
+}
+
 // ── Hypothèses ───────────────────────────────────────────────────────────────
 
 /**

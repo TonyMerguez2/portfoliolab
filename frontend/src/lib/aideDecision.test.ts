@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   MAXIMUM_AFFICHE, MAXIMUM_PAR_SUJET, aideALaDecision, confiance, confianceEnClair,
+  couperMetrique,
   hypotheses, type Contexte,
 } from "./aideDecision";
 import { euros, type Objectif } from "./objectifs";
@@ -509,5 +510,63 @@ describe("répétition", () => {
     const sur = aideALaDecision(enAvance, contexte())
       .filter(i => i.sujet === "sur_trajectoire");
     expect(sur.length).toBeLessThanOrEqual(MAXIMUM_PAR_SUJET);
+  });
+});
+
+// ── La coupe du chiffre fort ─────────────────────────────────────────────────
+
+describe("couperMetrique", () => {
+  it("détache les mois d’une durée composée", () => {
+    expect(couperMetrique("14 ans 8 mois")).toEqual({ fort: "14 ans", discret: "8 mois" });
+    expect(couperMetrique("1 an 3 mois")).toEqual({ fort: "1 an", discret: "3 mois" });
+  });
+
+  it("détache le rythme, espace fine insécable comprise", () => {
+    // ⚠️ Le vrai piège de cette base de code : `euros()` produit « 6 301 € » avec un U+202F.
+    // Un test écrit avec une espace ordinaire passerait ici tout en échouant à l'écran.
+    const valeur = `${euros(6301)} / mois`;
+    expect(valeur).toContain(" ");
+    expect(couperMetrique(valeur)).toEqual({ fort: euros(6301), discret: "/ mois" });
+    expect(couperMetrique("18,5 % / an")).toEqual({ fort: "18,5 %", discret: "/ an" });
+  });
+
+  it("laisse entier tout ce dont l’unité porte le sens", () => {
+    // ⚠️ Le cœur de la règle. Rapetisser « mois » dans « 6 mois » effacerait ce que le
+    // nombre mesure : il ne resterait qu'un « 6 » de 30 pixels ne voulant rien dire.
+    for (const v of ["6 mois", "60 %", "100 %", "atteint", "—", "3", euros(600000)]) {
+      expect(couperMetrique(v)).toEqual({ fort: v, discret: null });
+    }
+  });
+
+  it("ne coupe aucune métrique du moteur ailleurs qu’aux deux formes prévues", () => {
+    // ⚠️ Le garde-fou de la fragilité assumée : on balaie les insights réellement produits
+    // et on vérifie que toute coupe se recolle en la valeur d'origine. Une expression
+    // gourmande qui mangerait un caractère se ferait prendre ici, sur données réelles.
+    const cas: Objectif[] = [
+      objectif(),
+      objectif({ mois_restants: 300, mois_pour_atteindre: 100 }),
+      objectif({ rendement_requis: 18, part_affectee: 20 }),
+      objectif({ echeance_annee: null, mois_restants: null, versement_requis: null,
+        rendement_requis: null, part_du_gain: null }),
+      objectif({ genre: "plafond_versements", sur_versements: true, verse_retenu: 4000,
+        echeance_annee: null, mois_restants: null, mois_pour_atteindre: 182,
+        part_affectee: null, versement_requis: null, rendement_requis: null,
+        part_du_gain: null }),
+    ];
+    let vues = 0;
+    for (const o of cas) {
+      for (const i of aideALaDecision(o, contexte())) {
+        if (!i.metrique) continue;
+        vues++;
+        const { fort, discret } = couperMetrique(i.metrique.valeur);
+        // ⚠️ **Égalité stricte, espaces compris.** Ma première version normalisait les blancs
+        // des deux côtés avant de comparer — et contenait un `.replace` sans effet. Elle
+        // aurait laissé passer une coupe qui perd ou double une espace fine, c'est-à-dire
+        // exactement la faute redoutée. La recomposition rend la chaîne au caractère près.
+        expect(discret ? `${fort} ${discret}` : fort).toBe(i.metrique.valeur);
+      }
+    }
+    // ⚠️ Sans cette borne, un moteur devenu muet ferait passer le test à vide.
+    expect(vues).toBeGreaterThan(8);
   });
 });
