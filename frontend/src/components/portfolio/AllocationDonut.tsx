@@ -73,7 +73,19 @@ export default function AllocationDonut({
     [slices]);
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 10, minHeight: 0 }}>
+    /**
+     * ⚠️ **L'attribut est posé sur le bloc entier, pas sur chaque part.** L'écouteur du
+     * contexte remonte l'arbre depuis la cible ; une seule déclaration couvre donc l'anneau,
+     * sa légende et son titre, et l'on évite d'en semer une par tracé — qu'un ajout de part
+     * aurait tôt fait d'oublier. Regarder une répartition, c'est comparer : d'où
+     * « observation » plutôt que « curieux ».
+     *
+     * ⚠️ **Mimique seule, aucun mot.** Le personnage ne commente pas la répartition d'un
+     * portefeuille ; il regarde ce qu'on regarde. La frontière est celle qu'on tient partout :
+     * le visage peut réagir à des chiffres, la parole non.
+     */
+    <div data-avatar="observation"
+      style={{ display: "flex", flexDirection: "column", gap: 10, minHeight: 0 }}>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
         <span style={{ display: "flex", alignItems: "center", gap: 5, fontFamily: FONT, fontSize: 12.5, fontWeight: 600, color: CLAIR.texte }}>
           Répartition

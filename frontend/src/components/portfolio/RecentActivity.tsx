@@ -55,7 +55,15 @@ export default function RecentActivity({
   const shown = (txs ?? []).slice(0, limit);
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 8, minHeight: 0, height: "100%" }}>
+    /**
+     * ⚠️ **L'attribut est sur le panneau, pas sur la liste.** Posé sur la liste, il
+     * disparaissait avec elle : sans transaction, c'est l'état vide qui est rendu, et le
+     * personnage ne réagissait plus du tout — un câblage qu'on ne peut pas voir est un
+     * câblage qu'on croit fait. Survoler « Activité récente », c'est regarder son activité,
+     * qu'il y en ait ou non. Mimique seule, aucun mot : voir `CarteCompte`.
+     */
+    <div data-avatar="curieux"
+      style={{ display: "flex", flexDirection: "column", gap: 8, minHeight: 0, height: "100%" }}>
       <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between" }}>
         <span style={{ fontFamily: FONT, fontSize: 12.5, fontWeight: 600, color: CLAIR.texte }}>
           Activité récente

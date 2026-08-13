@@ -923,7 +923,7 @@ function PortfolioPageInner() {
    * graphique pendant que la valeur change sous lui. Et par un canal distinct de
    * `exprimer`, pour ne pas effacer la mimique d'une carte survolée en même temps.
    */
-  const { pointer, expression } = useAvatar();
+  const { pointer, expression, exprimer } = useAvatar();
   /**
    * ⚠️ **La parole attend que l'état se pose ; la mimique, non.** Le visage peut changer
    * vite — c'est ce qui le fait vivre. Des mots au même rythme se lisent comme un défaut :
@@ -1164,26 +1164,40 @@ function PortfolioPageInner() {
     quantity:  a.quantity,
   }), [sparkHistory, assetSparks, priceUpdatedAt]);
 
+  /**
+   * ⚠️ **Le personnage ne parle que de ce qui aboutit, et il faut donc savoir si ça aboutit.**
+   * L'appel avalait son échec — `.catch(() => {})` — et posait la valeur locale dans tous les
+   * cas. Branché tel quel, l'avatar aurait annoncé « C'est fait ! » sur un enregistrement
+   * refusé : la seule chose pire que se taire est de rassurer à tort. On lit donc `ok`.
+   *
+   * ⚠️ **Ce qui reste et qu'il faut savoir : la valeur locale est toujours posée, même en
+   * échec.** C'était le comportement d'avant, et le corriger demande de décider ce que
+   * l'écran montre entre-temps — ce n'est pas le sujet ici. En attendant, « Aïe. » est le
+   * seul endroit de l'interface qui dise que rien n'a été enregistré.
+   */
   const saveTotalValue = async () => {
     if (!portfolio) return;
     const v = parseFloat(valueInput.replace(/\s/g, "").replace(",", "."));
     if (isNaN(v) || v <= 0) { setEditingValue(false); return; }
-    await fetch(`${API_URL}/api/v1/portfolios/${portfolio.id}`, {
+    const ok = await fetch(`${API_URL}/api/v1/portfolios/${portfolio.id}`, {
       method: "PUT", headers: { "Content-Type": "application/json", ...enTetesAuth() },
       body: JSON.stringify({ total_value: v }),
-    }).catch(() => {});
+    }).then(r => r.ok).catch(() => false);
     setPortfolio(p => p ? { ...p, total_value: v } : p);
     setEditingValue(false);
+    exprimer(ok ? "succes" : "erreur");
   };
 
+  /** Même règle que pour la valeur totale : on lit le résultat avant de le dire. */
   const saveCostBasis = async () => {
     if (!portfolio) return;
     const v = parseFloat(costInput.replace(/\s/g, "").replace(",", "."));
     if (isNaN(v) || v <= 0) { setEditingCost(false); return; }
-    await fetch(`${API_URL}/api/v1/portfolios/${portfolio.id}`, {
+    const ok = await fetch(`${API_URL}/api/v1/portfolios/${portfolio.id}`, {
       method: "PUT", headers: { "Content-Type": "application/json", ...enTetesAuth() },
       body: JSON.stringify({ cost_basis: v }),
-    }).catch(() => {});
+    }).then(r => r.ok).catch(() => false);
+    exprimer(ok ? "succes" : "erreur");
     setPortfolio(p => p ? { ...p, cost_basis: v } : p);
     setEditingCost(false);
   };

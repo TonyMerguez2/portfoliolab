@@ -121,6 +121,12 @@ export default function CarteCompte({
     <button
       type="button"
       onClick={onClick}
+      /* ⚠️ **Le personnage se penche sur ce qu'on survole, et ne dit rien.** Un survol
+         change au rythme du curseur : c'est le bon registre pour une mimique, qu'on
+         remarque à peine, et le mauvais pour un mot, qui clignoterait. Mesuré une fois
+         déjà, sur « Je regarde ». L'attribut suffit — aucun abonnement, un seul écouteur
+         sur le document. Voir `AvatarContext`. */
+      data-avatar="curieux"
       // ⚠️ Pas d'`aria-expanded` : le dossier ne se déplie pas sous lui-même, il
       // remplace la vue. Annoncer un dépliement ferait attendre un contenu juste en
       // dessous, alors que c'est toute la zone qui change.
