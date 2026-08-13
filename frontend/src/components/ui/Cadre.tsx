@@ -49,7 +49,7 @@ export function repartir(style?: CSSProperties): { cadre: CSSProperties; carte: 
 }
 
 export default function Cadre({
-  children, style, classeCarte, teinte,
+  children, style, classeCarte, classeCadre, teinte,
 }: {
   children: ReactNode;
   /** Réparti automatiquement entre les deux couches. */
@@ -65,6 +65,16 @@ export default function Cadre({
    */
   classeCarte?: string;
   /**
+   * Une classe pour la couche **extérieure**, celle qui porte l'anneau.
+   *
+   * ⚠️ **Le pendant de `classeCarte`, et il manquait.** Un effet posé sur l'anneau — un
+   * reflet qui en fait le tour, par exemple — n'a rien à faire sur la carte intérieure :
+   * il s'y peindrait sur le fond au lieu de la bande. Le nom dit laquelle des deux couches
+   * le reçoit, parce que se tromper de couche est silencieux : on obtient un effet, mais
+   * pas celui qu'on visait.
+   */
+  classeCadre?: string;
+  /**
    * Les couleurs des deux anneaux, quand la carte ne prend pas celles du thème.
    *
    * ⚠️ **Passées ici plutôt que dans `style`, parce que `style` ne peut pas les
@@ -78,7 +88,7 @@ export default function Cadre({
 }) {
   const { cadre, carte } = repartir(style);
   return (
-    <div style={{
+    <div className={classeCadre} style={{
       ...styleCadreExterieur(),
       ...(teinte ? { background: teinte.voile, border: `1px solid ${teinte.cadre}` } : {}),
       ...cadre,

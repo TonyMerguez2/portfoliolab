@@ -813,7 +813,81 @@ canvas + div {
   to { --novac-arc: 360deg; }
 }
 
+/* ─────────────────────────────────────────────────────────────
+   Un reflet de verre sur l'anneau épais.
+
+   ⚠️ **Large et lent, là où le liseré fin porte une comète.** Ce sont deux
+   effets et non un seul réglé deux fois. Sur un pixel, seule une crête étroite
+   se voit : d'où les 52° et les huit secondes du liseré. Sur une bande de six
+   pixels, la même crête se lirait comme un objet qui court après quelque chose ;
+   ce qu'on veut est une lumière qui glisse, donc un demi-tour de dégradé très
+   doux et un tour bien plus lent. Copier les valeurs de l'autre aurait donné une
+   seconde comète, plus grosse.
+
+   ⚠️ **Le masque garde la bande de rembourrage, pas le bord.** `inset: 0` est
+   relatif à la boîte de rembourrage, donc il commence après le liseré d'un
+   pixel ; le `padding` du pseudo-élément vaut celui du cadre, et le `xor` ne
+   laisse que l'anneau. Le centre reste transparent, si bien que le reflet peut
+   se peindre au-dessus sans jamais toucher la carte qu'il entoure.
+
+   ⚠️ **Le mouvement s'arrête pour qui demande à le réduire**, comme son voisin.
+   À l'arrêt le reflet se fige sur le coin haut-gauche : la lumière du reste de
+   l'interface vient de là, et un verre immobile éclairé d'ailleurs se remarque.
+   ───────────────────────────────────────────────────────────── */
+@property --novac-verre {
+  syntax: '<angle>';
+  initial-value: 0deg;
+  inherits: false;
+}
+
+.novac-verre-defilant {
+  position: relative;
+  isolation: isolate;
+}
+
+.novac-verre-defilant::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  box-sizing: border-box;
+  border-radius: inherit;
+  /* La largeur de l'anneau du cadre. */
+  padding: 6px;
+  pointer-events: none;
+  /* Un demi-tour éclairé, sans arête : montée sur quarante degrés, crête large,
+     extinction symétrique. L'autre demi-tour laisse voir le voile teinté. */
+  background: conic-gradient(from var(--novac-verre) at 50% 50%,
+    rgba(255, 255, 255, 0) 0deg,
+    rgba(255, 255, 255, 0.05) 40deg,
+    rgba(255, 255, 255, 0.20) 90deg,
+    rgba(255, 255, 255, 0.05) 140deg,
+    rgba(255, 255, 255, 0) 180deg,
+    rgba(255, 255, 255, 0) 360deg);
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  mask-composite: exclude;
+  /* Redéclaré : `inherits: false`, et repli là où `@property` manque — sans lui le
+     dégradé serait invalide et l'anneau resterait uni, ce qui est le bon échec. */
+  --novac-verre: 0deg;
+  /* Dix-huit secondes : le reflet doit traîner. À huit, comme le liseré, il se
+     lit comme une attente ; à dix-huit on le surprend en passant. */
+  animation: novac-verre 18s linear infinite;
+}
+
+@keyframes novac-verre {
+  to { --novac-verre: 360deg; }
+}
+
 @media (prefers-reduced-motion: reduce) {
+  .novac-verre-defilant::after {
+    animation: none;
+    /* ⚠️ **207° et non une valeur ronde.** Sur la carte mesurée, 460 × 230, la
+       direction du coin haut-gauche est à 297° du nord, et la crête du reflet se
+       trouve à 90° du début du dégradé — d'où 297 − 90. Immobile, la lumière tombe
+       donc sur ce coin, d'où vient déjà l'éclairage du reste de l'interface. */
+    --novac-verre: 207deg;
+  }
   .novac-bord-defilant::before {
     animation: none;
     /* ⚠️ **265° et non une valeur ronde**, et le calcul vaut d'être noté : sur une
