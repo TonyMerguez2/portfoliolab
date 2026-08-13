@@ -8,7 +8,8 @@ import {
   type Contexte, type Insight, type Priorite,
 } from "@/lib/aideDecision";
 import {
-  COULEUR_PAR_DEFAUT, bordCarte, couleurDesYeux, encre, lisible,
+  COULEUR_PAR_DEFAUT, OMBRES_CREUX, bordCarte, couleurDesYeux, encre, fondCreux,
+  lisible,
 } from "@/lib/avatarCouleur";
 import { hexVersRvb } from "@/lib/couleur";
 import { ARRONDI_REFERENCE, OEIL_REFERENCE, TAILLE_REFERENCE } from "@/lib/avatarReglages";
@@ -388,8 +389,10 @@ export default function ConstatsObjectif({
               lineHeight: 1.3, color: encre(fond, 1), letterSpacing: "-0.01em" }}>
               {aide.titre}
             </span>
-            <span style={{ fontFamily: FONT, fontSize: 12.5, lineHeight: 1.55,
-              color: encre(fond, 0.88) }}>
+            {/* ⚠️ Onze et demi, contre douze et demi : le paragraphe pesait autant que le
+                titre qu'il explique. Il commente un constat, il ne le répète pas. */}
+            <span style={{ fontFamily: FONT, fontSize: 11.5, lineHeight: 1.5,
+              color: encre(fond, 0.86) }}>
               {aide.description}
             </span>
           </div>
@@ -429,9 +432,18 @@ export default function ConstatsObjectif({
                 // `maxWidth` borne le cas d'une métrique inhabituellement longue, et le
                 // `flex-shrink` à 1 reste indispensable — c'est un bloc infusible qui avait
                 // fait sortir le chiffre du cadre sur un panneau resserré à 144 pixels.
-                justifyContent: "center", flex: "0 1 auto", maxWidth: 200, minWidth: 76,
+                justifyContent: "center", flex: "0 1 auto", maxWidth: 170, minWidth: 76,
                 padding: "8px 10px", boxSizing: "border-box", alignSelf: "center" }}>
-              <span style={{ ...NUM, fontSize: 30, fontWeight: 700, lineHeight: 1.08,
+              {/**
+                * ⚠️ **La taille suit la structure de la valeur, elle n'est pas fixe.** À
+                * quarante pixels, « 93 % » s'impose comme il faut ; mais « 14 ans 8 mois »
+                * porte deux parties, donc deux fois plus de signes, et le bloc gonflait
+                * jusqu'à réduire le paragraphe voisin à un ruban de six mots par ligne — vu
+                * à l'image. Une valeur en deux temps est longue **par construction** : elle
+                * reçoit donc trente pixels, ce qui la laisse tenir sans écraser son voisin.
+                */}
+              <span style={{ ...NUM, fontSize: discret ? 30 : 40, fontWeight: 700,
+                lineHeight: 1.04,
                 color: teintePriorite(aide.priorite), textAlign: "center",
                 letterSpacing: "-0.02em" }}>
                 {fort}
@@ -445,7 +457,7 @@ export default function ConstatsObjectif({
                     « 14 ans 8 » puis « mois » à la ligne. Insécable, le groupe est reporté
                     entier et la coupure remonte là où elle a un sens. */}
                 {discret && (
-                  <span style={{ fontSize: 18, fontWeight: 650, whiteSpace: "nowrap",
+                  <span style={{ fontSize: 19, fontWeight: 650, whiteSpace: "nowrap",
                     color: encre(fond, 0.78), letterSpacing: "-0.01em" }}>
                     {" "}{discret}
                   </span>

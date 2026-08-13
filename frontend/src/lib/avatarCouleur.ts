@@ -105,6 +105,29 @@ export function encre(fond: string, part: number): string {
 }
 
 /**
+ * Le fond d'un **creux** : la carte, enfoncée.
+ *
+ * ⚠️ **Un creux se fait plus sombre, pas plus contrasté.** L'encre part vers le noir sur
+ * une carte claire et vers le blanc sur une carte sombre — c'est ce qu'il faut pour du
+ * texte, et c'est l'inverse de ce qu'il faut ici : un renfoncement éclairci sur une carte
+ * sombre se lit comme une bosse. La lumière vient d'en haut, donc ce qui s'enfonce
+ * s'assombrit, quelle que soit la couleur. On mélange donc vers le noir, toujours.
+ *
+ * Le relief se termine par deux ombres internes, comme les pastilles de couleur le font
+ * déjà en sens inverse : une ombre portée depuis le bord haut, un liseré clair sur le bord
+ * bas. Sans elles, le creux n'est qu'un rectangle plus sombre.
+ */
+export function fondCreux(fond: string, part: number = 0.12): string {
+  const [r, v, b] = hexVersRvb(fond);
+  const m = (x: number) => Math.round(x * (1 - part));
+  return rvbVersHex([m(r), m(v), m(b)]);
+}
+
+/** Les deux ombres qui creusent : la lumière vient d'en haut. */
+export const OMBRES_CREUX =
+  "inset 0 2px 5px rgba(0,0,0,0.20), inset 0 -1px 0 rgba(255,255,255,0.10)";
+
+/**
  * Le liseré intérieur d'une carte teintée.
  *
  * ⚠️ **Le cadre extérieur n'a pas de fonction ici : il *est* la carte.** C'est la règle des
