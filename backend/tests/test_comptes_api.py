@@ -110,6 +110,28 @@ def test_un_compte_sans_titres_se_declare_aussi(client):
     assert r.json()["solde"] == 8400.0
 
 
+def test_la_date_de_saisie_est_rendue_et_suit_les_corrections(client):
+    """
+    ⚠️ **Un solde saisi à la main vieillit, et cette date est la seule chose qui le dise.**
+    Sur un livret, le montant *est* la valeur du compte : il entre dans les totaux comme
+    s'il était mesuré, alors qu'il a été tapé un jour donné. Sans elle, rien ne distingue
+    un solde d'hier d'un solde de l'an dernier.
+    """
+    from datetime import datetime
+
+    pid = creer_portefeuille(client)
+    c = client.post(f"/api/v1/portfolios/{pid}/comptes",
+                    json={"nom": "Livret A", "genre": "epargne",
+                          "couleur": "#F59E0B", "solde": 8400.0}).json()
+    assert c["mis_a_jour_le"], "aucune date de saisie rendue"
+    pose = datetime.fromisoformat(c["mis_a_jour_le"])
+
+    corrige = client.put(f"/api/v1/portfolios/{pid}/comptes/{c['id']}",
+                         json={"nom": "Livret A", "genre": "epargne",
+                               "couleur": "#F59E0B", "solde": 8600.0}).json()
+    assert datetime.fromisoformat(corrige["mis_a_jour_le"]) >= pose
+
+
 def test_le_rang_range_en_queue(client):
     """On déclare un compte de plus ; on ne réordonne pas ceux qu'on avait rangés."""
     pid = creer_portefeuille(client)

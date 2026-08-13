@@ -134,6 +134,7 @@ def _en_dict(c: Compte) -> dict:
         "logo_url": c.logo_url,
         "solde": c.solde,
         "rang": c.rang,
+        "mis_a_jour_le": c.mis_a_jour_le.isoformat() if c.mis_a_jour_le else None,
     }
 
 

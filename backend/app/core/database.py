@@ -178,6 +178,14 @@ class Compte(Base):
     #: Le rang d'affichage, choisi par l'épargnant.
     rang         = Column(Integer, nullable=False, default=0)
     cree_le      = Column(DateTime, default=datetime.utcnow)
+    #: Quand le compte a été déclaré ou corrigé pour la dernière fois.
+    #:
+    #: ⚠️ **Un solde saisi à la main vieillit, et c'est la seule chose qui le dise.** Sur
+    #: un livret, ce montant *est* la valeur du compte : il entre dans les totaux comme
+    #: s'il était mesuré, alors qu'il a été tapé un jour donné et qu'il n'a bougé depuis
+    #: que si quelqu'un y a repensé. Sans cette date, rien à l'écran ne distingue un solde
+    #: d'hier d'un solde de l'an dernier.
+    mis_a_jour_le = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
 
 class Transaction(Base):
@@ -227,6 +235,7 @@ for table, col, typedef in [
     ("users",        "devise",         "TEXT"),
     ("objectifs",    "verse_deja",     "REAL"),
     ("transactions", "compte_id",      "TEXT"),
+    ("comptes",      "mis_a_jour_le",  "TIMESTAMP"),
 ]:
     try:
         with engine.connect() as conn:

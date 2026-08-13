@@ -1,5 +1,9 @@
-import { API_URL } from "@/lib/api";
-import { enTetesAuth } from "@/lib/session";
+// ⚠️ Chemins relatifs et non l'alias « @/ » : Vitest tourne sans configuration et ne le
+// résout pas. Un import en alias ici rendrait tout le module intestable — y compris
+// `fraicheurDuSolde`, qui est pourtant du calcul pur et le seul endroit où une erreur ne
+// se verrait pas à l'écran.
+import { API_URL } from "./api";
+import { enTetesAuth } from "./session";
 
 /**
  * Les comptes **déclarés** d'un portefeuille, côté client.
@@ -31,7 +35,41 @@ export type Compte = {
   /** Les liquidités déclarées, ou `null` quand rien n'a été saisi. */
   solde: number | null;
   rang: number;
+  /** Quand le compte a été déclaré ou corrigé. ISO 8601. */
+  mis_a_jour_le: string | null;
 };
+
+/**
+ * Depuis quand ce solde est ce qu'on en dit.
+ *
+ * ⚠️ **Un solde tapé à la main n'est pas une mesure, et l'écran doit le laisser voir.**
+ * Sur un compte de trésorerie, ce montant *est* la valeur du compte : il entre dans les
+ * totaux comme s'il était relevé, alors qu'il date du jour où quelqu'un l'a saisi. Le mot
+ * « aujourd'hui » rassure à raison, « il y a 8 mois » prévient à raison ; l'absence de
+ * mention laisserait croire au premier dans tous les cas.
+ *
+ * ⚠️ **Rien en dessous d'un jour.** « Il y a 3 heures » sur un livret n'apporte rien : ce
+ * qu'on veut savoir, c'est si le chiffre a vieilli, et cela se compte en jours.
+ *
+ * ⚠️ **Le passage aux années se décide sur les jours, pas sur les mois — et c'est un test
+ * qui l'a imposé.** Les mois étaient arrondis et les années tronquées : à 345 jours,
+ * `round(345/30)` donne 12, ce qui sortait de la branche des mois, tandis que
+ * `floor(345/365)` donne 0. La fonction annonçait donc **« il y a 0 ans »** pendant trois
+ * semaines entières, entre 345 et 364 jours. Deux arithmétiques différentes ne se
+ * rejoignent pas d'elles-mêmes ; on borne les mois à onze et l'on ne bascule qu'à 365.
+ */
+export function fraicheurDuSolde(iso: string | null): string | null {
+  if (!iso) return null;
+  const quand = new Date(iso);
+  if (Number.isNaN(quand.getTime())) return null;
+  const jours = Math.floor((Date.now() - quand.getTime()) / 86_400_000);
+  if (jours <= 0) return "aujourd’hui";
+  if (jours === 1) return "hier";
+  if (jours < 30) return `il y a ${jours} jours`;
+  if (jours < 365) return `il y a ${Math.min(11, Math.round(jours / 30))} mois`;
+  const ans = Math.floor(jours / 365);
+  return ans === 1 ? "il y a un an" : `il y a ${ans} ans`;
+}
 
 export type CompteASoumettre = {
   nom: string;

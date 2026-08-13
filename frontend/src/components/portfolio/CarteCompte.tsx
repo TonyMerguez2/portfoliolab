@@ -93,7 +93,7 @@ const CONTOUR = (() => {
 })();
 
 export default function CarteCompte({
-  nom, compte, couleur, icone, nombre, apercu, onClick,
+  nom, compte, couleur, icone, nombre, apercu, contenu, sansPastille, onClick,
 }: {
   nom: string;
   /** Ce que la carte annonce sous le nom — « 4 actifs ». */
@@ -111,6 +111,23 @@ export default function CarteCompte({
    * suffit à savoir ce qu'il contient sans l'ouvrir.
    */
   apercu?: React.ReactNode[];
+  /**
+   * Ce que le dossier laisse voir quand il ne range pas de cartes.
+   *
+   * ⚠️ **Un compte de trésorerie ne contient pas *rien*, il contient une somme.** La zone
+   * au-dessus du plan est faite pour montrer ce qu'un dossier porte ; la laisser vide sur
+   * un livret disait « ce dossier attend qu'on le remplisse », alors qu'il ne recevra
+   * jamais de ligne. C'est la même place, occupée par ce qui, là, tient lieu de contenu.
+   */
+  contenu?: React.ReactNode;
+  /**
+   * ⚠️ **Trois états, pas deux.** La pastille est pleine quand le dossier porte quelque
+   * chose et creuse quand il est vide — mais « creuse » veut dire *pas encore*, et
+   * compter les lignes d'un livret n'a aucun sens, ni maintenant ni plus tard. Sans ce
+   * troisième cas, un compte de trésorerie affichait un cercle vide qui promettait un
+   * remplissage.
+   */
+  sansPastille?: boolean;
   onClick?: () => void;
 }) {
   const clair = decalerClarte(couleur, 0.12);
@@ -171,6 +188,19 @@ export default function CarteCompte({
         </div>
       ))}
 
+      {/* Le contenu de remplacement occupe exactement la bande dégagée : il s'arrête
+          où commence la languette, sinon le plan le recouvrirait par le bas. */}
+      {cartes.length === 0 && contenu && (
+        <div aria-hidden="true" style={{
+          position: "absolute", left: 16, top: 0, pointerEvents: "none",
+          width: CARTE_COMPTE.largeur - 32,
+          height: CARTE_COMPTE.apercu - LANGUETTE.hauteur,
+          display: "flex", flexDirection: "column", justifyContent: "center",
+        }}>
+          {contenu}
+        </div>
+      )}
+
       {/* Le plan du dossier, par-dessus les cartes. */}
       <div style={{
         position: "absolute", left: 0, top: CARTE_COMPTE.apercu - LANGUETTE.hauteur,
@@ -196,15 +226,17 @@ export default function CarteCompte({
               </span>
               {/* La pastille de droite : pleine quand le dossier porte quelque chose,
                   creuse quand il est vide — comme la coche de la référence. */}
-              <span style={{
-                width: 28, height: 28, borderRadius: "50%", flexShrink: 0,
-                display: "flex", alignItems: "center", justifyContent: "center",
-                background: nombre ? "rgba(255,255,255,0.94)" : "transparent",
-                border: nombre ? "none" : "1.5px solid rgba(255,255,255,0.55)",
-                color: sombre, fontSize: 12.5, fontWeight: 700,
-              }}>
-                {nombre ? nombre : ""}
-              </span>
+              {!sansPastille && (
+                <span style={{
+                  width: 28, height: 28, borderRadius: "50%", flexShrink: 0,
+                  display: "flex", alignItems: "center", justifyContent: "center",
+                  background: nombre ? "rgba(255,255,255,0.94)" : "transparent",
+                  border: nombre ? "none" : "1.5px solid rgba(255,255,255,0.55)",
+                  color: sombre, fontSize: 12.5, fontWeight: 700,
+                }}>
+                  {nombre ? nombre : ""}
+                </span>
+              )}
             </div>
 
             <div>

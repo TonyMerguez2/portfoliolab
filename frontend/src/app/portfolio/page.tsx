@@ -43,8 +43,8 @@ import AvatarPortefeuille from "@/components/portfolio/AvatarPortefeuille";
 import AvatarParole from "@/components/AvatarParole";
 import FormulaireCompte, { type SaisieCompte } from "@/components/portfolio/FormulaireCompte";
 import {
-  type Compte as CompteDeclare, type GenreCompte, creerCompte, lireComptes, lireGenres,
-  televerserLogo, urlDuLogo,
+  type Compte as CompteDeclare, type GenreCompte, creerCompte, fraicheurDuSolde,
+  lireComptes, lireGenres, televerserLogo, urlDuLogo,
 } from "@/lib/comptes";
 import { BASE_COMPACTE, PLACE_COMPACTE, parleEnContexteDense } from "@/lib/avatarDialogue";
 import { useParoleStable } from "@/lib/useParoleStable";
@@ -1945,11 +1945,44 @@ function PortfolioPageInner() {
                       */}
                     {comptesDeclares.map(c => {
                       const logo = urlDuLogo(c);
+                      const depuis = fraicheurDuSolde(c.mis_a_jour_le);
                       return (
                         <CarteCompte key={c.id} nom={c.nom} couleur={c.couleur}
-                          compte={c.solde != null
-                            ? `${c.libelle_genre} · ${euros(c.solde)}`
-                            : c.libelle_genre}
+                          compte={c.libelle_genre}
+                          /**
+                           * ⚠️ **Un compte de trésorerie ne compte pas ses lignes.** La
+                           * pastille est pleine quand le dossier porte quelque chose et
+                           * creuse quand il est vide — mais « creuse » promet un
+                           * remplissage, et un livret n'en attend aucun.
+                           */
+                          sansPastille={!c.porte_des_titres}
+                          /**
+                           * ⚠️ **La somme prend la place du contenu, parce qu'elle *est*
+                           * le contenu.** La bande au-dessus du plan montre ce qu'un
+                           * dossier porte ; vide sur un livret, elle disait « à
+                           * remplir ». La date en dessous n'est pas un ornement : ce
+                           * montant entre dans les totaux comme s'il était mesuré, alors
+                           * qu'il a été tapé un jour donné.
+                           */
+                          contenu={!c.porte_des_titres && c.solde != null ? (
+                            <>
+                              <span style={{
+                                fontFamily: FONT, fontSize: 26, fontWeight: 700,
+                                color: "#FFFFFF", letterSpacing: "-0.02em",
+                                lineHeight: 1.1, fontVariantNumeric: "tabular-nums",
+                              }}>
+                                {euros(c.solde)}
+                              </span>
+                              {depuis && (
+                                <span style={{
+                                  fontFamily: FONT, fontSize: 10.5, marginTop: 2,
+                                  color: "rgba(255,255,255,0.72)",
+                                }}>
+                                  Solde déclaré {depuis}
+                                </span>
+                              )}
+                            </>
+                          ) : undefined}
                           icone={logo
                             ? <img src={logo} alt="" width={19} height={19}
                                 style={{ borderRadius: 4, objectFit: "cover" }} />
