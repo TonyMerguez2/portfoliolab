@@ -674,7 +674,46 @@ function PortfolioPageInner() {
   }, [surTransactions, positions, prixCrypto]);
 
   const valeurTotaleBrute = surTransactions ? positions!.total_value : (portfolio?.total_value ?? null);
-  const valeurTotale = valeurTotaleBrute != null ? valeurTotaleBrute + ecartCrypto : null;
+  /**
+   * Ce que valent les **titres**, et rien d'autre.
+   *
+   * ⚠️ **C'est cette grandeur, et non le total, qui mesure une performance.** Le gain vaut
+   * « valeur moins prix de revient » : y verser les liquidités d'un livret ferait passer
+   * cinq mille euros d'épargne pour cinq mille euros de plus-value. La variation du jour a
+   * le même défaut à l'envers — des espèces ne varient pas, et les compter au dénominateur
+   * diluerait la performance des titres sans que rien ne le dise. Le nom porte donc la
+   * distinction : tout ce qui compare, escompte ou projette lit celle-ci.
+   */
+  const valeurTitres = valeurTotaleBrute != null ? valeurTotaleBrute + ecartCrypto : null;
+
+  /**
+   * Les liquidités déclarées sur les comptes de ce portefeuille.
+   *
+   * ⚠️ **Seulement celles qu'on a dites.** Un compte sans solde saisi n'en déclare pas
+   * zéro : il n'en déclare aucune, et le serveur distingue les deux. Les additionner comme
+   * des zéros reviendrait à affirmer qu'un PEA n'a pas d'espèces parce qu'on ne les a pas
+   * renseignées.
+   *
+   * ⚠️ **Aucun double compte.** Sur un compte à titres, le champ est explicitement les
+   * *espèces non investies* : elles ne sont dans aucune ligne, donc dans aucune
+   * valorisation. Sur un compte de trésorerie, il n'y a pas de ligne du tout.
+   */
+  const liquiditesDeclarees = useMemo(
+    () => comptesDeclares.reduce((s, c) => s + (c.solde ?? 0), 0),
+    [comptesDeclares],
+  );
+
+  /**
+   * Ce que vaut le patrimoine du portefeuille : les titres **plus** les liquidités.
+   *
+   * ⚠️ **Le grand chiffre de la bande, et lui seul.** C'est ce qu'on possède, ce qui est la
+   * question que pose « Valeur totale ». Tout le reste — gains, variation, projection —
+   * continue de lire `valeurTitres`, faute de quoi l'épargne se lirait comme un résultat.
+   */
+  const valeurTotale = valeurTitres != null
+    ? valeurTitres + liquiditesDeclarees
+    : (liquiditesDeclarees > 0 ? liquiditesDeclarees : null);
+
   /** Sens de la dernière variation de la valeur totale, pour le clignotement. */
   const clignoteValeur = useClignotement(valeurTotale);
   const prixDeRevient = surTransactions ? positions!.total_invested : (portfolio?.cost_basis  ?? null);
@@ -982,10 +1021,10 @@ function PortfolioPageInner() {
       return;
     }
     const pctSurvol = (survolCourbe.valeur - survolCourbe.investi) / survolCourbe.investi * 100;
-    const pctActuel = prixDeRevient != null && prixDeRevient > 0 && valeurTotale != null
-      ? (valeurTotale - prixDeRevient) / prixDeRevient * 100 : 0;
+    const pctActuel = prixDeRevient != null && prixDeRevient > 0 && valeurTitres != null
+      ? (valeurTitres - prixDeRevient) / prixDeRevient * 100 : 0;
     pointer(etatSelonEcartCourbe(pctSurvol - pctActuel));
-  }, [survolCourbe, valeurTotale, prixDeRevient, pointer]);
+  }, [survolCourbe, valeurTitres, prixDeRevient, pointer]);
 
   const weightedChange = enriched.reduce((s, a) => {
     if (a.change === null) return s;
@@ -1017,11 +1056,11 @@ function PortfolioPageInner() {
   const gainAffiche: { eur: number; pct: number | null } | null =
     surTransactions
       ? gain
-      : (valeurTotale != null && weightedChange != null
+      : (valeurTitres != null && weightedChange != null
           ? {
               eur: weightedChange > -100
-                ? valeurTotale - valeurTotale / (1 + weightedChange / 100)
-                : valeurTotale,
+                ? valeurTitres - valeurTitres / (1 + weightedChange / 100)
+                : valeurTitres,
               pct: weightedChange,
             }
           : null);
@@ -1534,6 +1573,22 @@ function PortfolioPageInner() {
             : <span style={{ fontSize: 13, color: CLAIR.texteFaible }}>Non défini</span>}
       </div>
     )}
+    {/**
+      * ⚠️ **Un total qui grossit sans dire pourquoi est un total qu'on ne croit plus.**
+      * Déclarer un livret de cinq mille euros ajoute cinq mille euros au grand chiffre :
+      * sans mention, l'écart avec la veille est inexplicable, et l'on se demande si
+      * l'application a compté deux fois. La composition est donc écrite dès qu'il y a des
+      * liquidités — et elle disparaît quand il n'y en a pas, plutôt que d'afficher un
+      * « dont 0 € » qui n'apprend rien.
+      *
+      * ⚠️ **Elle s'efface sous le curseur.** La courbe montre les titres à une date ; y
+      * laisser la composition d'aujourd'hui accolerait deux instants différents.
+      */}
+    {survolCourbe == null && !masque && liquiditesDeclarees > 0 && valeurTitres != null && (
+      <div style={{ fontSize: 10, fontFamily: FONT, color: CLAIR.texteAttenue, marginBottom: 3 }}>
+        {euros(valeurTitres)} de titres · {euros(liquiditesDeclarees)} de liquidités
+      </div>
+    )}
     {/* Sous la valeur : le capital engagé et depuis quand.
         Le gain figurait ici *et* dans « Gains / pertes », deux fois le même
         nombre à quatre centimètres d'écart. Ce qui manquait, c'était ce
@@ -1579,7 +1634,7 @@ function PortfolioPageInner() {
         <div style={{ minWidth: 150 }}>
           <p style={{ margin: "0 0 4px", fontSize: 11.5, fontWeight: 500, color: CLAIR.texteSecondaire }}>Gains / pertes</p>
     {/* P&L total depuis achat */}
-    {valeurTotale != null && (() => {
+    {valeurTitres != null && (() => {
       const cb = prixDeRevient;
       if (cb == null) {
         return (
@@ -1612,7 +1667,7 @@ function PortfolioPageInner() {
       const survolGain = survolCourbe != null && survolCourbe.investi != null
         ? { eur: survolCourbe.valeur - survolCourbe.investi, base: survolCourbe.investi }
         : null;
-      const plEur = survolGain ? survolGain.eur : valeurTotale - cb;
+      const plEur = survolGain ? survolGain.eur : valeurTitres - cb;
       const plPct = (plEur / (survolGain ? survolGain.base : cb)) * 100;
       const plCol = plEur >= 0 ? CLAIR.positif : CLAIR.negatif;
       return (
@@ -1724,7 +1779,7 @@ function PortfolioPageInner() {
                 </b>{" "}
                 au lieu de{" "}
                 <b style={{ color: CLAIR.texte }}>
-                  {valeurTotale != null ? Math.round(valeurTotale).toLocaleString("fr-FR") : "—"} €
+                  {valeurTitres != null ? Math.round(valeurTitres).toLocaleString("fr-FR") : "—"} €
                 </b>.
                 <br />
                 Le repère est libellé en dollars : le change n&apos;est pas neutralisé.
@@ -1818,7 +1873,10 @@ function PortfolioPageInner() {
             <div style={{ position: "relative", zIndex: 1, display: "flex", flexDirection: "column", flex: 1, minHeight: 0 }}>
             <PerformanceChart
               assets={enriched.map(a => ({ ticker: a.ticker, weight: a.weight }))}
-              totalValue={valeurTotale}
+              /* ⚠️ Les titres seuls : la courbe met une performance à l'échelle d'un
+                 montant, et des espèces ne performent pas. Le total y ferait monter et
+                 descendre une somme qui, elle, n'a pas bougé. */
+              totalValue={valeurTitres}
               period={period}
               onPeriodChange={setPeriod}
               // ⚠️ La courbe prend la couleur de l'avatar, pas celle que l'API garde :
@@ -2375,7 +2433,13 @@ function PortfolioPageInner() {
                 ticker: a.ticker, weight: a.weight, price: a.price,
                 change: a.change, value: a.value, perfEur: a.perfEur,
               }))}
-              totalValue={valeurTotale}
+              /* ⚠️ Les titres seuls, sinon les parts ne bouclent plus. Le donut divise
+                 chaque ligne par ce total : y ajouter les liquidités laisserait un
+                 manquant invisible — la somme des parts n'atteindrait plus cent pour cent
+                 et rien à l'écran ne dirait où est passé le reste. Le jour où les espèces
+                 méritent leur part, c'est une tranche qu'il faudra leur donner, pas un
+                 dénominateur. */
+              totalValue={valeurTitres}
               onSeeAll={() => setDashView("analyse")}
             />
           </Cadre>
