@@ -394,6 +394,36 @@ export default function ConstatsObjectif({
               distinguer : sa taille, sa graisse, et le blanc presque pur. */}
           {aide.metrique && (() => {
             const { fort, discret } = couperMetrique(aide.metrique.valeur);
+            const taille = discret ? 28 : 40;
+            /**
+             * ⚠️ **Une marge égale sur les quatre côtés ne donne pas un espace égal à
+             * l'œil, et l'écart se mesure.** Une ligne de texte est plus haute que ses
+             * lettres : au-dessus des capitales il reste la place des accents, en dessous
+             * celle des jambages. Relevé sur Inter au canevas — la seule façon d'obtenir
+             * les vraies extrémités d'encre plutôt que celles de la boîte de ligne — le
+             * chiffre laisse **6,1 pixels** de vide au-dessus de lui à quarante, et le
+             * libellé n'en laisse que **2,4** en dessous. Un rembourrage uniforme donnerait
+             * donc 3,7 pixels de plus en haut qu'en bas, ce qui se voit très bien sur un
+             * bloc de cette taille.
+             *
+             * Les deux coefficients viennent de cette mesure et valent pour toute taille :
+             * l'encre du chiffre commence à 0,152 fois son corps sous le haut de sa ligne,
+             * celle du libellé s'arrête à 0,24 fois le sien au-dessus du bas. On retranche
+             * donc ces hauteurs mortes du rembourrage, et l'espace vu devient le même.
+             *
+             * ⚠️ **Il reste l'approche latérale des glyphes, et elle ne se rattrape pas.**
+             * Mesurée de 0,5 à 3,6 pixels selon la chaîne — le « % » en laisse plus à sa
+             * droite que le « 9 » à sa gauche —, elle dépend de chaque caractère. Aucun
+             * rembourrage ne peut l'égaliser pour toutes les valeurs à la fois ; on retire
+             * sa moyenne, et le résidu reste sous deux pixels.
+             */
+            const VIDE = 14;
+            const marge = {
+              paddingTop: VIDE - 0.152 * taille,
+              paddingBottom: VIDE - 0.24 * 10,
+              paddingLeft: VIDE - 0.065 * taille,
+              paddingRight: VIDE - 0.065 * taille,
+            };
             return (
             <div
               style={{ display: "flex", flexDirection: "column", alignItems: "center",
@@ -417,7 +447,16 @@ export default function ConstatsObjectif({
                 // `flex-shrink` à 1 reste indispensable — c'est un bloc infusible qui avait
                 // fait sortir le chiffre du cadre sur un panneau resserré à 144 pixels.
                 justifyContent: "center", flex: "0 1 auto", maxWidth: 170, minWidth: 76,
-                padding: "10px 14px", boxSizing: "border-box", alignSelf: "center",
+                ...marge, boxSizing: "border-box",
+                /**
+                 * ⚠️ **Ancré en haut, et non centré sur la rangée.** Centré, le bloc se
+                 * déplaçait avec la longueur du paragraphe voisin : une aide en trois
+                 * lignes le posait plus bas qu'une aide en cinq, et d'une aide à l'autre le
+                 * chiffre sautait. Accroché au haut de la rangée, son bord supérieur ne
+                 * dépend plus que du titre, qui ne bouge pas — seule sa hauteur suit son
+                 * contenu.
+                 */
+                alignSelf: "flex-start",
                 /**
                  * ⚠️ **Le creux, et il a bien failli ne jamais exister.** Ces trois lignes
                  * ont été écrites une première fois, validées sur une maquette que j'avais
@@ -459,7 +498,7 @@ export default function ConstatsObjectif({
                 * sur le nombre le tirait vers l'alerte alors qu'il ne fait que mesurer. La
                 * priorité se lit dans les mots du titre, qui la disent mieux qu'une teinte.
                 */}
-              <span style={{ ...NUM, fontSize: discret ? 28 : 40, fontWeight: 700,
+              <span style={{ ...NUM, fontSize: taille, fontWeight: 700,
                 lineHeight: 1.06, whiteSpace: discret ? "nowrap" : "normal",
                 color: encre(fond, 1), textAlign: "center",
                 letterSpacing: "-0.02em" }}>
@@ -474,7 +513,7 @@ export default function ConstatsObjectif({
                     « 14 ans 8 » puis « mois » à la ligne. Insécable, le groupe est reporté
                     entier et la coupure remonte là où elle a un sens. */}
                 {discret && (
-                  <span style={{ fontSize: 19, fontWeight: 650, whiteSpace: "nowrap",
+                  <span style={{ fontSize: 15, fontWeight: 650, whiteSpace: "nowrap",
                     color: encre(fond, 0.78), letterSpacing: "-0.01em" }}>
                     {" "}{discret}
                   </span>
