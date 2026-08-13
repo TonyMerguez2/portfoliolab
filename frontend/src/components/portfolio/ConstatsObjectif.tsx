@@ -433,7 +433,27 @@ export default function ConstatsObjectif({
                 // `flex-shrink` à 1 reste indispensable — c'est un bloc infusible qui avait
                 // fait sortir le chiffre du cadre sur un panneau resserré à 144 pixels.
                 justifyContent: "center", flex: "0 1 auto", maxWidth: 170, minWidth: 76,
-                padding: "8px 10px", boxSizing: "border-box", alignSelf: "center" }}>
+                padding: "10px 14px", boxSizing: "border-box", alignSelf: "center",
+                /**
+                 * ⚠️ **Le creux, et il a bien failli ne jamais exister.** Ces trois lignes
+                 * ont été écrites une première fois, validées sur une maquette que j'avais
+                 * composée à la main — et jamais posées sur le composant : le remplacement
+                 * n'avait pas trouvé son ancre, et rien ne l'a dit. Le compilateur voyait
+                 * deux imports inutilisés, ce qu'il tolère. Signalé à l'usage, capture à
+                 * l'appui. Vérifier un rendu sur une reproduction, c'est vérifier la
+                 * reproduction.
+                 *
+                 * ⚠️ **Un creux se fait plus sombre, pas plus contrasté.** L'encre diluée
+                 * part vers le blanc sur une carte sombre : le bloc s'y lisait comme une
+                 * bosse. La lumière vient d'en haut, donc ce qui s'enfonce s'assombrit,
+                 * quelle que soit la couleur — on mélange vers le noir, toujours. Les deux
+                 * ombres internes achèvent le relief : une portée depuis le bord haut, un
+                 * liseré clair sur le bord bas.
+                 */
+                background: fondCreux(fond),
+                borderRadius: 14,
+                boxShadow: OMBRES_CREUX,
+                marginLeft: 4 }}>
               {/**
                 * ⚠️ **La taille suit la structure de la valeur, elle n'est pas fixe.** À
                 * quarante pixels, « 93 % » s'impose comme il faut ; mais « 14 ans 8 mois »
