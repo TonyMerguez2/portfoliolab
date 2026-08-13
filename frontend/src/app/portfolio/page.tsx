@@ -255,6 +255,16 @@ const PERIODS: Period[] = ["24h", "1S", "1M", "3M", "6M", "1A", "3A", "Max"];
 
 /** Retrait latéral commun à la bande, aux onglets et au contenu. */
 const MARGE = 10;
+
+/**
+ * L'écart entre le personnage, sa parole et le nom du portefeuille, en pixels.
+ *
+ * ⚠️ **Nommé parce qu'il sert deux fois et doit rester le même.** Il espace la rangée
+ * d'identité *et* il est le retrait intérieur de la case où la parole s'ouvre : sans quoi,
+ * cette case apparaîtrait collée à la tête ou décalerait le nom d'un pixel de plus qu'avant.
+ * Deux valeurs séparées auraient divergé au premier ajustement.
+ */
+const ECART_IDENTITE = 11;
 const PERIOD_MAP: Record<Period, string> = {
   "24h": "1d", "1S": "7d", "1M": "1mo", "3M": "3mo",
   "6M": "6mo", "1A": "1y", "3A": "3y", "Max": "max",
@@ -922,6 +932,8 @@ function PortfolioPageInner() {
    * fait patienter les soutenus.
    */
   const expressionParlee = useParoleStable(expression.cle);
+  /** Le personnage a-t-il quelque chose à dire, là, maintenant ? */
+  const parle = parleEnContexteDense(expressionParlee);
   /**
    * ⚠️ **Le thème est lu ici parce que la parole se corrige dans les deux sens.** La couleur
    * du personnage doit s'éclaircir sur un fond sombre et s'assombrir sur un fond clair ; et
@@ -1209,7 +1221,10 @@ function PortfolioPageInner() {
             bandeau, la bande n'indiquait plus de quel portefeuille il s'agit.
             Les logos empilés montrent en plus ce qu'il contient. */}
         {portfolio && (
-          <div style={{ display: "flex", alignItems: "center", gap: 11, minWidth: 0, flexShrink: 0 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: ECART_IDENTITE, minWidth: 0, flexShrink: 0 }}>
+            {/* Le personnage et ce qu'il dit ne font qu'une case pour la rangée : un seul
+                écart avant le nom, que la parole soit ouverte ou fermée. */}
+            <div style={{ display: "flex", alignItems: "center", flexShrink: 0 }}>
             {/* L'identité du portefeuille : son image, ou à défaut un
                 portefeuille de cuir portant une carte par actif, dans les
                 couleurs des cartes visibles plus bas. `enriched` et non
@@ -1253,6 +1268,91 @@ function PortfolioPageInner() {
                 forme={formeAvatar} onForme={choisirForme}
                 skin={skinAvatar} onSkin={choisirSkin} />
             </span>
+
+            {/**
+              * Ce que le personnage a à dire, quand il a quelque chose à dire.
+              *
+              * ⚠️ **Au repos, rien — et c'est ce qui la rend acceptable ici.** Sur le banc,
+              * toutes les expressions parlent : c'est une vitrine. Un « Bonjour » permanent
+              * posé contre le nom du portefeuille ferait un bandeau qui salue, pas un
+              * personnage qui parle. `parleEnContexteDense` écarte aussi les états du
+              * curseur — le défilement, le survol, la valeur pointée changent au rythme de la
+              * souris, et un texte branché dessus clignoterait à chaque mouvement. Restent le
+              * sommeil, le calcul en cours et les réactions ponctuelles.
+              *
+              * ⚠️ **Elle se tient contre le personnage, et pousse le nom.** Placée d'abord
+              * après le nom, elle en était détachée : rien ne la rattachait plus à la tête que
+              * sa couleur. Contre lui, elle lui appartient — au prix du décalage du nom et du
+              * décompte, qui est le comportement voulu.
+              *
+              * ⚠️ **Elle prend son rang dans la rangée au lieu de flotter par-dessus.** La
+              * géométrie de cette bande est mesurée au pixel — 19 en haut, 19 en bas, 19 à
+              * gauche, et c'est le bloc de la valeur totale qui en commande la hauteur. Une
+              * parole posée en absolu aurait recouvert le nom ; posée dans le flux, elle
+              * consomme le mou qui reste à droite (mesuré : plus de quatre cents pixels) et ne
+              * pousse rien hors du cadre. Elle ne peut pas non plus grandir la bande : deux
+              * lignes de 19/27,5 font 48 pixels, contre 63 à la vignette.
+              *
+              * ⚠️ **Un registre compact, mais jamais en dessous de la taille de lecture.**
+              * L'avatar mesure ici 63 pixels contre 390 au banc ; suivre sa taille aurait
+              * donné trois pixels et demi. C'est la densité typographique du bandeau qui
+              * décide — un nom en 13, une valeur en 32 —, pas la taille du personnage.
+              *
+              * ⚠️ **Elle s'ouvre en glissant plutôt que de réserver sa place.** Une largeur
+              * tenue en permanence laisserait, au repos, un trou de cent quatre pixels entre
+              * une tête et le nom qu'elle porte : cela se lit comme un défaut de mise en page,
+              * pas comme une réserve. Reste le défaut mesuré la première fois — apparue d'un
+              * coup, elle poussait « Valeur totale » et toute la suite d'un seul cran, sous
+              * les yeux de quelqu'un en train de lire un montant. Étalé sur deux cent soixante
+              * millisecondes, le même déplacement se lit comme quelque chose qui s'insère. Et
+              * il est devenu rare : `useParoleStable` a écarté le pouls des cours, qui le
+              * déclenchait toutes les quinze secondes.
+              *
+              * ⚠️ **Le retrait est porté par la case, pas par l'écart de la rangée.** Une case
+              * de largeur nulle dans une rangée espacée coûte quand même son écart : au repos,
+              * le nom se serait retrouvé onze pixels plus loin qu'avant l'ajout. Le personnage
+              * et sa parole forment donc leur propre rangée, sans écart, et le retrait vit
+              * dans le remplissage de la case — qu'`overflow: hidden` escamote avec le reste.
+              */}
+            <div
+              style={{
+                width: parle ? PLACE_COMPACTE + ECART_IDENTITE : 0,
+                /**
+                 * ⚠️ **Le retrait se referme avec la case, sinon il survit à zéro.** Sous
+                 * `border-box`, une largeur inférieure au remplissage ne le rogne pas : la
+                 * boîte s'arrête à la taille du remplissage. Mesuré, la case fermée occupait
+                 * donc onze pixels et le nom se tenait à vingt-deux du personnage au lieu de
+                 * onze — exactement le décalage que ce montage devait éviter.
+                 */
+                paddingLeft: parle ? ECART_IDENTITE : 0,
+                boxSizing: "border-box", flexShrink: 0,
+                /**
+                 * ⚠️ **On coupe les côtés, pas le haut — et `overflow` ne sait pas faire la
+                 * différence.** Il ferme les deux axes à la fois : la parole restait bien
+                 * dans sa case pendant le glissement, mais le grand « Z » du dodo, qui monte
+                 * de vingt-deux pixels au-dessus de sa ligne, y arrivait **tranché net**.
+                 * Vu à l'écran, mesuré à quatre pixels d'encre coupée.
+                 *
+                 * ⚠️ **Et rehausser la boîte n'y suffisait pas.** Un envol est une
+                 * `transform` : il déplace le dessin sans rien dire à la mise en page, donc
+                 * aucun remplissage calculé depuis la hauteur montée ne referme l'écart —
+                 * essayé, il restait quatre pixels. `clip-path` pose la question autrement :
+                 * on désigne la fenêtre, et on la laisse ouverte en haut et en bas.
+                 */
+                clipPath: "inset(-40px 0 -40px 0)",
+                transition: "width 260ms cubic-bezier(0.2, 0.7, 0.3, 1),"
+                  + " padding-left 260ms cubic-bezier(0.2, 0.7, 0.3, 1)",
+              }}
+            >
+              {parle && (
+                <AvatarParole
+                  etat={expressionParlee} couleur={couleurAvatar}
+                  fond={theme.surfaceSolid} clair={!theme.isDark}
+                  base={BASE_COMPACTE} place={`${PLACE_COMPACTE}px`}
+                />
+              )}
+            </div>
+            </div>
             <div style={{ minWidth: 0 }}>
               {/* Le nom seul. Une pastille de la couleur du portefeuille le
                   précédait ; elle est retirée. Elle était le dernier endroit du
@@ -1267,49 +1367,6 @@ function PortfolioPageInner() {
               <span style={{ fontSize: 10.5, color: CLAIR.texteAttenue }}>
                 {enriched.length} actif{enriched.length > 1 ? "s" : ""}
               </span>
-            </div>
-
-            {/**
-              * Ce que le personnage a à dire, quand il a quelque chose à dire.
-              *
-              * ⚠️ **Au repos, rien — et c'est ce qui la rend acceptable ici.** Sur le banc,
-              * toutes les expressions parlent : c'est une vitrine. Un « Bonjour » permanent
-              * posé contre le nom du portefeuille ferait un bandeau qui salue, pas un
-              * personnage qui parle. `parleEnContexteDense` écarte aussi les états du
-              * curseur — le défilement, le survol, la valeur pointée changent au rythme de la
-              * souris, et un texte branché dessus clignoterait à chaque mouvement. Restent le
-              * sommeil, le calcul en cours et les réactions ponctuelles.
-              *
-              * ⚠️ **Elle prend son rang dans la rangée au lieu de flotter par-dessus.** La
-              * géométrie de cette bande est mesurée au pixel — 19 en haut, 19 en bas, 19 à
-              * gauche, et c'est le bloc de la valeur totale qui en commande la hauteur. Une
-              * parole posée en absolu par-dessus aurait recouvert le nom ; posée dans le
-              * flux, elle consomme le mou qui reste à droite (mesuré : plus de quatre cents
-              * pixels) et ne pousse rien hors du cadre. Elle ne peut pas non plus grandir la
-              * bande : deux lignes de 16/23 font 40 pixels, contre 63 à la vignette.
-              *
-              * ⚠️ **Un registre compact, mais jamais en dessous de la taille de lecture.**
-              * L'avatar mesure ici 63 pixels contre 390 au banc ; suivre sa taille aurait
-              * donné trois pixels et demi. C'est la densité typographique du bandeau qui
-              * décide — un nom en 13, une valeur en 32 —, pas la taille du personnage.
-              */}
-            {/**
-              * ⚠️ **La place est réservée en permanence, même quand personne ne parle.**
-              * Mesuré : le bloc fait 33 pixels pour « zzZ » et 78 pour « Je regarde ». Rendu
-              * à la demande, il poussait « Valeur totale », « Gains » et toute la suite de
-              * quarante-cinq pixels **à chaque endormissement et à chaque chargement** —
-              * c'est-à-dire sans arrêt, et sous les yeux de quelqu'un en train de lire un
-              * montant. Une largeur fixe coûte quatre-vingt-seize pixels de mou, que la bande
-              * a largement (plus de quatre cents), et rend la rangée immobile.
-              */}
-            <div style={{ width: PLACE_COMPACTE, flexShrink: 0, marginLeft: 2 }}>
-              {parleEnContexteDense(expressionParlee) && (
-                <AvatarParole
-                  etat={expressionParlee} couleur={couleurAvatar}
-                  fond={theme.surfaceSolid} clair={!theme.isDark}
-                  base={BASE_COMPACTE} place={`${PLACE_COMPACTE}px`}
-                />
-              )}
             </div>
           </div>
         )}
