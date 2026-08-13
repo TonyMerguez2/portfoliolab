@@ -14,6 +14,9 @@ import {
   cheminOeilSolide, cheminsSurLeSolide, contourTeteSolide, normaleSolide,
   regardDansLeSolide, surLeSolide, traitSurLeSolide,
 } from "@/lib/avatarSolide";
+import {
+  ACCESSOIRES, CASQUETTE_REFERENCE, type FamilleAccessoire, cheminsCasquette, ombre,
+} from "@/lib/avatarAccessoires";
 import { PRESETS, SKINS, type Palette, skinParCle } from "@/lib/avatarSkins";
 import { type EtatVie, VIE_AU_REPOS, creerVie } from "@/lib/avatarVie";
 import { ETATS } from "@/lib/avatarEtats";
@@ -102,6 +105,25 @@ function VignetteVolume({ famille }: { famille: FamilleSolide }) {
     default:
       return <svg {...c}><circle cx={8} cy={8} r={7} {...f} /></svg>;
   }
+}
+
+/** Le pictogramme d'un accessoire, dans la couleur du bouton. */
+function VignetteAccessoire({ famille }: { famille: FamilleAccessoire }) {
+  const c = { width: 16, height: 16, viewBox: "0 0 16 16", "aria-hidden": true } as const;
+  if (famille === "casquette") {
+    return (
+      <svg {...c}>
+        <path d="M2.6 9.4a5.4 5.4 0 0 1 10.8 0z" fill="currentColor" />
+        <path d="M13.4 8.6c1.6 0 2.6.5 2.6 1.4h-3.6z" fill="currentColor" />
+      </svg>
+    );
+  }
+  return (
+    <svg {...c}>
+      <circle cx={8} cy={8} r={6} fill="none" stroke="currentColor" strokeWidth={1.6} />
+      <path d="M4 12 12 4" stroke="currentColor" strokeWidth={1.6} />
+    </svg>
+  );
 }
 
 const ACCENT = "#6366F1";
@@ -221,6 +243,17 @@ export default function AvatarProceduralPage() {
   const [cadence, setCadence] = useState(VIE_REFERENCE.cadenceClignement);
   const [etat, setEtat] = useState("neutre");
   const [derive, setDerive] = useState(VIE_REFERENCE.derive);
+  const [accessoire, setAccessoire] = useState<FamilleAccessoire>("aucun");
+  const [casquette, setCasquette] = useState(CASQUETTE_REFERENCE);
+  /**
+   * ⚠️ **Sa teinte à lui, hors de la palette.** L'accessoire a d'abord repris la couleur
+   * d'accent : sur le skin uni, où l'accent ne sert à rien d'autre, la casquette sortait
+   * du même violet que le crâne et ne se lisait plus. La palette décrit ce qui est
+   * *peint sur la surface* — tête, motifs, yeux ; un objet posé par-dessus n'en fait pas
+   * partie, et lui imposer d'y entrer aurait obligé les quatre skins à déclarer une
+   * couleur de chapeau qu'ils n'ont pas.
+   */
+  const [couleurCoiffe, setCouleurCoiffe] = useState("#F43F5E");
   const [skin, setSkin] = useState("uni");
   const [palette, setPalette] = useState<Palette>(skinParCle("uni").palette);
 
@@ -306,6 +339,20 @@ export default function AvatarProceduralPage() {
       ? contourTeteSolide(orientation, solideTete, RAYON_TETE)
       : cheminSvg(contourSilhouette(solideTete, RAYON_TETE))),
     [vraie3D, orientation, solideTete]);
+
+  /**
+   * La casquette, déduite de la silhouette réellement tracée.
+   *
+   * ⚠️ **Recalculée sur la forme, jamais sur l'orientation.** Un accessoire est posé, pas
+   * peint : il ne suit pas la tête. Le mettre dans les dépendances de l'orientation
+   * l'aurait refait soixante fois par seconde pour rien — et le contour qu'il mesure
+   * compte sept cent vingt points.
+   */
+  const coiffe = useMemo(
+    () => (accessoire === "casquette"
+      ? cheminsCasquette(solideTete, RAYON_TETE, casquette)
+      : null),
+    [accessoire, casquette, solideTete]);
 
   const cheminsMotifs = useMemo(
     () => motifs.map(m => ({
@@ -580,7 +627,16 @@ export default function AvatarProceduralPage() {
           <svg
             ref={svgRef}
             className="av-tete"
-            viewBox="-115 -115 230 230"
+            /**
+             * ⚠️ **Le cadre est plus large que la tête, et la tête n'a pas rétréci.**
+             * Un accessoire dépasse de la silhouette — la visière d'une casquette
+             * s'avance de cinquante-cinq unités là où le cadre n'en laissait que quinze,
+             * et elle arrivait tranchée net. On élargit donc le repère de 230 à 300
+             * unités, **et** la largeur à l'écran dans le même rapport : 200 unités de
+             * tête occupent exactement le même nombre de pixels qu'avant. Le cadre ne
+             * fait que gagner de la marge autour.
+             */
+            viewBox="-150 -150 300 300"
             onPointerDown={commencer}
             onPointerUp={relacher}
             onPointerCancel={relacher}
@@ -588,7 +644,9 @@ export default function AvatarProceduralPage() {
             aria-label={`Visage orienté de ${lacet.toFixed(0)} degrés horizontalement, `
               + `${tangage.toFixed(0)} degrés verticalement et ${roulis.toFixed(0)} degrés `
               + "d’inclinaison"}
-            style={{ width: "min(72%, 520px)", height: "auto", display: "block", flexShrink: 0 }}
+            style={{
+              width: "min(94%, 678px)", height: "auto", display: "block", flexShrink: 0,
+            }}
           >
             {/* ⚠️ **Le squash est une échelle du rendu, pas une déformation de la
                 sphère.** L'écrasement d'un rebond touche l'objet entier, motifs et yeux
@@ -677,6 +735,24 @@ export default function AvatarProceduralPage() {
               )}
               <path d={oeilGauche} fill={palette.yeux} />
               <path d={oeilDroit} fill={palette.yeux} />
+              {/**
+                * L'accessoire en dernier, et dans le même groupe que le reste.
+                *
+                * ⚠️ **Dans le groupe, donc écrasé avec la tête au rebond.** Une casquette
+                * posée hors du squash resterait rigide pendant que le crâne s'aplatit :
+                * elle décollerait au plus fort du rebond, exactement là où l'œil la
+                * regarde. ⚠️ **En dernier, donc elle couvre.** C'est ce qui la fait
+                * *poser* sur la tête plutôt que la border : la calotte cache le sommet du
+                * crâne, comme un vrai tissu.
+                */}
+              {coiffe && (
+                <g>
+                  <path d={coiffe.visiere} fill={ombre(couleurCoiffe)} />
+                  <path d={coiffe.calotte} fill={couleurCoiffe} />
+                  <circle cx={coiffe.bouton.x} cy={coiffe.bouton.y} r={4.6}
+                    fill={ombre(couleurCoiffe)} />
+                </g>
+              )}
             </g>
           </svg>
 
@@ -747,6 +823,72 @@ export default function AvatarProceduralPage() {
                 </button>
               ))}
             </div>
+          </Carte>
+
+          <Carte
+            titre="Accessoires"
+            note="Un accessoire est posé sur la tête, pas peint dessus : il ne tourne donc pas avec elle. Sa forme se déduit du contour mesuré, si bien que la même casquette coiffe les huit volumes sans qu'aucun soit dessiné à part."
+          >
+            <div style={{ display: "grid", gap: 8, gridTemplateColumns: "repeat(2, 1fr)" }}>
+              {ACCESSOIRES.map(([cle, libelle]) => (
+                <button key={cle} type="button" onClick={() => setAccessoire(cle)}
+                  aria-pressed={accessoire === cle}
+                  style={{
+                    padding: "9px 8px", borderRadius: 9, cursor: "pointer",
+                    fontSize: 12, fontWeight: 600, fontFamily: "inherit",
+                    display: "flex", alignItems: "center", gap: 8,
+                    border: `1px solid ${accessoire === cle ? ACCENT : BORD}`,
+                    background: accessoire === cle ? ACCENT : "#FFFFFF",
+                    color: accessoire === cle ? "#FFFFFF" : "#33333D",
+                  }}>
+                  <span style={{
+                    width: 16, height: 16, flexShrink: 0,
+                    display: "flex", alignItems: "center", justifyContent: "center",
+                  }}>
+                    <VignetteAccessoire famille={cle} />
+                  </span>
+                  {libelle}
+                </button>
+              ))}
+            </div>
+
+            {accessoire === "casquette" && (
+              <div style={{ marginTop: 18 }}>
+                <Curseur libelle="Assise sur le crâne"
+                  valeur={casquette.assise} affichage={`${(casquette.assise * 100).toFixed(0)} %`}
+                  min={0.12} max={0.48} pas={0.01}
+                  onChange={v => setCasquette(c => ({ ...c, assise: v }))} />
+                <Curseur libelle="Épaisseur du tissu"
+                  valeur={casquette.epaisseur} affichage={`${(casquette.epaisseur * 100).toFixed(1)} u`}
+                  min={0.01} max={0.12} pas={0.005}
+                  onChange={v => setCasquette(c => ({ ...c, epaisseur: v }))} />
+                <Curseur libelle="Longueur de la visière"
+                  valeur={casquette.visiere} affichage={`${(casquette.visiere * 100).toFixed(0)} %`}
+                  min={0} max={1.2} pas={0.02}
+                  onChange={v => setCasquette(c => ({ ...c, visiere: v }))} />
+                <Curseur libelle="Épaisseur de la visière"
+                  valeur={casquette.epaisseurVisiere}
+                  affichage={`${(casquette.epaisseurVisiere * 100).toFixed(0)} u`}
+                  min={0.05} max={0.34} pas={0.01}
+                  onChange={v => setCasquette(c => ({ ...c, epaisseurVisiere: v }))} />
+                <div style={{ display: "flex", gap: 12, marginTop: 16 }}>
+                  <Teinte libelle="Casquette" valeur={couleurCoiffe} onChange={setCouleurCoiffe} />
+                  <div style={{ flex: 1 }} />
+                </div>
+                <div style={{ marginTop: 14 }}>
+                  <Bascule libelle="Visière vers la gauche"
+                    actif={casquette.cote === -1}
+                    onChange={v => setCasquette(c => ({ ...c, cote: v ? -1 : 1 }))} />
+                </div>
+                <p style={{ margin: "12px 0 0", color: DOUX, fontSize: 12, lineHeight: 1.5 }}>
+                  L’assise se compte en part de la hauteur de la forme, et la visière en
+                  part de la largeur du bandeau — sans quoi une même valeur enfoncerait la
+                  casquette jusqu’aux yeux du coussin en effleurant le sommet du triangle.
+                  La visière et le bouton se déduisent de la teinte choisie : c’est la
+                  même, assombrie — deux réglages pourraient se contredire, un seul non.
+                </p>
+              </div>
+            )}
           </Carte>
 
           <Carte
