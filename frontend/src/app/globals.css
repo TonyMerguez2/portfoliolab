@@ -775,9 +775,15 @@ canvas + div {
   /* Redéclaré : `inherits: false`, et repli là où `@property` manque — sans lui le
      dégradé serait invalide et l'anneau resterait uni, ce qui est le bon échec. */
   --novac-verre: 0deg;
-  /* Dix-huit secondes : le reflet doit traîner. À huit, comme le liseré, il se
-     lit comme une attente ; à dix-huit on le surprend en passant. */
-  animation: novac-verre 18s linear infinite;
+  /* ⚠️ **Douze secondes, et le seuil du « ça charge » n'est pas une durée seule.**
+     Le réglage d'origine était à dix-huit, par crainte qu'un tour plus vif ne se
+     lise comme une attente — crainte héritée du liseré fin, qui bouclait en huit.
+     Mais ce liseré portait une crête étroite de cinquante-deux degrés : c'est la
+     *forme* qui faisait l'indicateur de chargement, un point net qui court, autant
+     que la vitesse. Un demi-tour éclairé sans arête ne désigne aucune position ;
+     il peut donc aller plus vite sans rien annoncer. Signalé à l'usage comme trop
+     lent, une fois le reflet devenu franc. */
+  animation: novac-verre 12s linear infinite;
 }
 
 @keyframes novac-verre {
