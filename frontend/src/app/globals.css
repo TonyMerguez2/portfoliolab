@@ -710,108 +710,6 @@ canvas + div {
    `scrollbar-width` couvre Firefox, ce sélecteur couvre WebKit. */
 .novac-rail::-webkit-scrollbar { height: 0; width: 0; }
 
-/* ─────────────────────────────────────────────────────────────
-   Bord défilant — un éclat qui parcourt le liseré de l'aide à la décision.
-
-   ⚠️ **Le liseré sombre reste la base, et ce n'est pas un détail.** Ce qui
-   défile est un arc court : sur les quatre cinquièmes de son tour, le bord du
-   panneau est exactement celui de ses voisins — même `var(--nv-bord)`, même
-   épaisseur d'un pixel, même rayon. Un anneau clair *remplaçant* le liseré a
-   déjà été essayé sur ce panneau, sous forme de verre, et rejeté : il singularisait
-   le conteneur en permanence. Un éclat qui passe attire l'œil sans changer
-   l'identité du cadre. Ne pas transformer ce dégradé en anneau continu.
-
-   ⚠️ **C'est l'angle du dégradé qui s'anime, pas l'élément.** La version
-   précédente faisait tourner un pseudo-élément carré autour du chiffre ; c'était
-   tenable sur un petit bloc, mais un masque posé sur un élément qui tourne
-   tourne avec lui, ce qui interdit de découper le bord d'un rectangle. En
-   déclarant `--novac-arc` comme un `<angle>`, la boîte reste immobile : le
-   masque `xor` peut donc ne garder qu'un pixel de pourtour, comme pour le cadre
-   des tuiles plus haut. Un fond opaque de rattrapage devient inutile, et c'est
-   heureux — celui du panneau est un ciel de trente-huit dégradés qu'aucune
-   couche ne saurait répliquer.
-
-   ⚠️ **Le mouvement s'arrête pour qui demande à le réduire.** Une animation en
-   boucle infinie est exactement ce que `prefers-reduced-motion` désigne. Ce
-   n'est pas une faveur, c'est la seule façon de ne pas rendre l'écran pénible à
-   une partie des lecteurs. À l'arrêt, l'arc se fige au sommet : le bord garde
-   son relief sans rien réclamer.
-   ───────────────────────────────────────────────────────────── */
-@property --novac-arc {
-  syntax: '<angle>';
-  initial-value: 0deg;
-  inherits: false;
-}
-
-.novac-bord-defilant {
-  position: relative;
-  /* Le pseudo-élément se place en `z-index: -1` pour passer sous le texte tout
-     en couvrant le fond ; encore faut-il que le panneau soit un contexte
-     d'empilement, sinon il remonte chercher un ancêtre et disparaît derrière. */
-  isolation: isolate;
-}
-
-.novac-bord-defilant::before {
-  content: '';
-  position: absolute;
-  z-index: -1;
-  /* ⚠️ **`-1px` et non `0`.** Le bloc conteneur d'un absolu est la boîte de
-     *rembourrage* du parent, donc l'intérieur du liseré : à `inset: 0` l'éclat se
-     peindrait un pixel en dedans, doublant le bord au lieu de le parcourir. */
-  inset: -1px;
-  box-sizing: border-box;
-  border-radius: inherit;
-  padding: 1px;
-  pointer-events: none;
-  /* Une comète de 52° : montée courte, crête, longue extinction. Le reste du
-     tour est transparent et laisse voir le liseré sombre. */
-  background: conic-gradient(from var(--novac-arc) at 50% 50%,
-    rgba(255, 255, 255, 0) 0deg,
-    rgba(255, 255, 255, 0.10) 14deg,
-    rgba(255, 255, 255, 0.72) 26deg,
-    rgba(255, 255, 255, 0.10) 40deg,
-    rgba(255, 255, 255, 0) 52deg,
-    rgba(255, 255, 255, 0) 360deg);
-  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
-  -webkit-mask-composite: xor;
-  mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
-  mask-composite: exclude;
-  /* Redéclaré ici parce que `inherits: false` : la valeur posée sur le parent ne
-     descendrait pas. Sert aussi de repli là où `@property` n'existe pas — sans
-     lui, `var(--novac-arc)` serait invalide et le dégradé entier disparaîtrait,
-     éclat compris. Le bord resterait alors sombre, ce qui est le bon échec. */
-  --novac-arc: 0deg;
-  /* Huit secondes pour le périmètre mesuré du panneau — 446 × 170, soit 1 233 px,
-     donc environ 150 px/s. C'est ce qui a motivé le déplacement : autour du
-     chiffre, le même tour parcourait un périmètre quatre fois plus court et se
-     lisait comme un indicateur de chargement, alors que rien ne charge. */
-  animation: novac-arc 8s linear infinite;
-}
-
-/* ⚠️ **En thème clair, l'éclat s'inverse — et il le faut.** Le panneau garde son
-   ciel noir dans les deux thèmes, mais le liseré, lui, suit le thème : mesuré à
-   `rgb(229, 231, 235)` en clair. Un éclat blanc y disparaîtrait — 1,24 pour 1
-   contre ce gris — et la fonctionnalité serait muette pour la moitié des lecteurs
-   sans que rien ne le signale. C'est donc une ombre qui parcourt le bord au lieu
-   d'une lumière : 4,6 pour 1, le même geste, visible.
-
-   L'autre issue serait de forcer le liseré sombre sur ce panneau dans les deux
-   thèmes — plus cohérent avec son fond, à vrai dire. Elle est écartée parce que ce
-   bord doit rester celui des conteneurs voisins : c'était la demande, après un
-   premier essai de bord singulier qui n'a pas convaincu. */
-[data-theme="clair"] .novac-bord-defilant::before {
-  background: conic-gradient(from var(--novac-arc) at 50% 50%,
-    rgba(17, 24, 39, 0) 0deg,
-    rgba(17, 24, 39, 0.12) 14deg,
-    rgba(17, 24, 39, 0.62) 26deg,
-    rgba(17, 24, 39, 0.12) 40deg,
-    rgba(17, 24, 39, 0) 52deg,
-    rgba(17, 24, 39, 0) 360deg);
-}
-
-@keyframes novac-arc {
-  to { --novac-arc: 360deg; }
-}
 
 /* ─────────────────────────────────────────────────────────────
    Un reflet de verre sur l'anneau épais.
@@ -855,12 +753,19 @@ canvas + div {
   padding: 6px;
   pointer-events: none;
   /* Un demi-tour éclairé, sans arête : montée sur quarante degrés, crête large,
-     extinction symétrique. L'autre demi-tour laisse voir le voile teinté. */
+     extinction symétrique. L'autre demi-tour laisse voir le voile teinté.
+
+     ⚠️ **La crête est à 0,40, et la valeur est comparée, pas choisie.** Balayée à
+     0,20 · 0,34 · 0,48 · 0,62 sur deux couleurs de carte : à 0,20 le reflet se
+     devine à peine — c'était le premier réglage, jugé trop timide à l'usage ; à
+     0,62 il durcit en éclat net et cesse de ressembler à du verre. Entre les deux,
+     0,40 se remarque en passant sans jamais accrocher l'œil. Les épaules suivent le
+     même rapport, sans quoi la montée deviendrait une arête. */
   background: conic-gradient(from var(--novac-verre) at 50% 50%,
     rgba(255, 255, 255, 0) 0deg,
-    rgba(255, 255, 255, 0.05) 40deg,
-    rgba(255, 255, 255, 0.20) 90deg,
-    rgba(255, 255, 255, 0.05) 140deg,
+    rgba(255, 255, 255, 0.11) 40deg,
+    rgba(255, 255, 255, 0.40) 90deg,
+    rgba(255, 255, 255, 0.11) 140deg,
     rgba(255, 255, 255, 0) 180deg,
     rgba(255, 255, 255, 0) 360deg);
   -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
@@ -887,16 +792,5 @@ canvas + div {
        trouve à 90° du début du dégradé — d'où 297 − 90. Immobile, la lumière tombe
        donc sur ce coin, d'où vient déjà l'éclairage du reste de l'interface. */
     --novac-verre: 207deg;
-  }
-  .novac-bord-defilant::before {
-    animation: none;
-    /* ⚠️ **265° et non une valeur ronde**, et le calcul vaut d'être noté : sur une
-       boîte de 446 × 170 la direction du coin haut-gauche est à 291° du nord, et la
-       crête se trouve à 26° du début du dégradé — d'où 291 − 26. Immobile, l'éclat
-       tombe donc exactement sur ce coin, ce qui le fait lire comme une lumière
-       rasante venue d'en haut à gauche, dans l'axe des liserés en 135° des tuiles.
-       Une valeur arrondie le poserait au milieu d'un bord, où il ressemble à une
-       animation interrompue. */
-    --novac-arc: 265deg;
   }
 }

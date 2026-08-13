@@ -230,8 +230,7 @@ export default function ConstatsObjectif({
     // panneau en permanence. Ce qui court dessus maintenant est un arc court : le bord reste
     // celui des voisins la plus grande partie du temps, et l'éclat ne fait que passer. Voir
     // `.novac-bord-defilant` dans globals.css, où tient toute la mécanique.
-    <Cadre classeCarte="novac-bord-defilant" classeCadre="novac-verre-defilant"
-      teinte={anneaux} style={{
+    <Cadre classeCadre="novac-verre-defilant" teinte={anneaux} style={{
       /**
        * ⚠️ **`0 0 auto` : il prend sa hauteur, ni plus ni moins — et il grandissait avant.**
        * En `1 0 auto` il absorbait toute la hauteur libre de sa colonne, ce qui avait un
