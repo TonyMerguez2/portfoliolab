@@ -40,7 +40,10 @@ import { useCoursCrypto, symboleBinance } from "@/lib/coursCrypto";
 import Cadre from "@/components/ui/Cadre";
 import ChiffresRoulants from "@/components/ui/ChiffresRoulants";
 import AvatarPortefeuille from "@/components/portfolio/AvatarPortefeuille";
-import { useCouleurAvatar, useFormeAvatar } from "@/lib/useCouleurAvatar";
+import { skinParCle } from "@/lib/avatarSkins";
+import {
+  type FormeAvatar, useCouleurAvatar, useFormeAvatar, useSkinAvatar,
+} from "@/lib/useCouleurAvatar";
 import { useAvatar } from "@/lib/AvatarContext";
 import { etatSelonEcartCourbe } from "@/lib/avatarEtats";
 import { useAnalyseEvenements } from "@/hooks/useAnalyseEvenements";
@@ -275,6 +278,31 @@ function PortfolioPageInner() {
   // ⚠️ La forme ne va qu'à l'avatar, là où la couleur va aussi à la courbe : une courbe
   // ne peut pas être carrée, et rien d'autre sur la page ne porte de silhouette.
   const [formeAvatar, choisirFormeAvatar] = useFormeAvatar(portfolio);
+  const [skinAvatar, choisirSkinAvatar] = useSkinAvatar(portfolio);
+
+  /**
+   * ⚠️ **Changer de forme retire l'habillage qui n'y survivrait pas.** La Terre est un
+   * dessin plat détouré par la silhouette : détourée par un triangle, elle n'est plus un
+   * globe. Le panneau la retire de ses choix, mais le réglage peut déjà être posé — il
+   * faut donc aussi le défaire, sinon la tête garderait une carte du monde impossible.
+   */
+  /**
+   * ⚠️ **Choisir un habillage *propose* sa couleur, comme sur le banc d'essai.** La
+   * pastille du panneau montre le globe dans son bleu ; sans cette proposition, on
+   * cliquerait une planète bleue pour obtenir une planète rose — la mer prenant la
+   * couleur du portefeuille. Ce n'est qu'une proposition : la palette reste ouverte
+   * juste au-dessus, et l'uni ne touche à rien puisqu'il n'habille pas.
+   */
+  const choisirSkin = useCallback((v: string) => {
+    choisirSkinAvatar(v);
+    const s = skinParCle(v);
+    if (v !== "uni") choisirCouleurAvatar(s.palette.tete);
+  }, [choisirSkinAvatar, choisirCouleurAvatar]);
+
+  const choisirForme = useCallback((v: FormeAvatar) => {
+    choisirFormeAvatar(v);
+    if (v !== "sphere" && skinParCle(skinAvatar).rond) choisirSkinAvatar("uni");
+  }, [choisirFormeAvatar, choisirSkinAvatar, skinAvatar]);
 
   const [prices,        setPrices]        = useState<Record<string, PriceData>>({});
   const [loading,       setLoading]       = useState(true);
@@ -1203,7 +1231,8 @@ function PortfolioPageInner() {
                   rien ne l'appelle plus ici, c'est tout. */}
               <AvatarPortefeuille portefeuille={portfolio} taille={63}
                 couleur={couleurAvatar} onCouleur={choisirCouleurAvatar}
-                forme={formeAvatar} onForme={choisirFormeAvatar} />
+                forme={formeAvatar} onForme={choisirForme}
+                skin={skinAvatar} onSkin={choisirSkin} />
             </span>
             <div style={{ minWidth: 0 }}>
               {/* Le nom seul. Une pastille de la couleur du portefeuille le

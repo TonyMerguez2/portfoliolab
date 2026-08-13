@@ -1,10 +1,11 @@
 "use client";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 
 import AvatarNovac from "@/components/AvatarNovac";
 import PastilleCouleur, { PastillePlus } from "@/components/portfolio/PastilleCouleur";
 import { COULEURS_AVATAR } from "@/lib/avatarCouleur";
+import { SKINS } from "@/lib/avatarSkins";
 import { FORMES_AVATAR, type FormeAvatar } from "@/lib/useCouleurAvatar";
 import { useAvatar } from "@/lib/AvatarContext";
 
@@ -100,7 +101,7 @@ function VignetteForme({ forme, couleur }: { forme: FormeAvatar; couleur: string
 }
 
 export default function AvatarPortefeuille({
-  portefeuille, couleur, onCouleur, forme, onForme, taille = 63,
+  portefeuille, couleur, onCouleur, forme, onForme, skin, onSkin, taille = 63,
 }: {
   portefeuille: { id: string | number; name?: string; color?: string | null };
   /** La couleur portée — celle que la page tient, et donne aussi à la courbe. */
@@ -109,9 +110,14 @@ export default function AvatarPortefeuille({
   /** La silhouette portée : sphère, ou cube aux arêtes arrondies. */
   forme: FormeAvatar;
   onForme: (v: FormeAvatar) => void;
+  /** L'habillage porté — détouré par la silhouette, immobile. */
+  skin: string;
+  onSkin: (v: string) => void;
   taille?: number;
 }) {
   const { expression } = useAvatar();
+  const skinsOfferts = useMemo(
+    () => SKINS.filter(s => !s.rond || forme === "sphere"), [forme]);
   const [ouvert, setOuvert] = useState(false);
   const bouton = useRef<HTMLButtonElement | null>(null);
   /** Où poser le panneau, relevé sur le bouton au moment de l'ouverture. */
@@ -166,6 +172,7 @@ export default function AvatarPortefeuille({
           taille={taille}
           couleur={couleur}
           forme={forme}
+          skin={skin}
           etat={expression.cle}
           impulsion={expression.jeton}
           titre={portefeuille.name ?? "Novac"}
@@ -250,6 +257,48 @@ export default function AvatarPortefeuille({
                         la seule différence entre les deux vignettes d'une même forme, et
                         aucun mot ne l'aurait montrée dans trente-quatre pixels. */}
                     <VignetteForme forme={cle} couleur={couleur} />
+                  </button>
+                );
+              })}
+            </div>
+
+            {/**
+              * L'habillage, en dernier — c'est le réglage le plus rare.
+              *
+              * ⚠️ **Une pastille qui montre l'habillage, pas son nom.** « Terre »,
+              * « basket » et « volley » ne se distinguent qu'une fois vus, et une vignette
+              * de trente-quatre pixels dessinée par la même mécanique que la tête montre
+              * exactement ce qu'on obtiendra — silhouette comprise.
+              *
+              * ⚠️ **Les habillages réservés à la sphère disparaissent au lieu de se
+              * griser.** Une carte du monde détourée par un triangle n'est pas un globe
+              * un peu déformé : c'est une image fausse, que rien dans le panneau ne
+              * rattraperait. Et comme la forme peut changer *après* l'habillage, le choix
+              * se retire aussi de lui-même.
+              */}
+            <div style={{
+              marginTop: 14, paddingTop: 14,
+              borderTop: "1px solid rgba(18,20,28,0.10)",
+              display: "flex", gap: 10, flexWrap: "wrap",
+            }}>
+              {skinsOfferts.map(s => {
+                const retenu = skin === s.cle;
+                return (
+                  <button key={s.cle} type="button" onClick={() => onSkin(s.cle)}
+                    aria-pressed={retenu}
+                    aria-label={`Habillage ${s.libelle.toLowerCase()}`}
+                    title={s.libelle}
+                    style={{
+                      width: 34, height: 34, padding: 0, borderRadius: 10, cursor: "pointer",
+                      display: "flex", alignItems: "center", justifyContent: "center",
+                      background: retenu ? "rgba(18,20,28,0.06)" : "transparent",
+                      borderWidth: 1.5, borderStyle: "solid",
+                      borderColor: retenu ? "rgba(20,22,30,0.55)" : "rgba(18,20,28,0.12)",
+                      transition: "background 120ms, border-color 120ms",
+                    }}>
+                    <AvatarNovac taille={22} forme={forme} skin={s.cle} suivi={false}
+                      couleur={s.cle === "uni" ? couleur : s.palette.tete}
+                      titre={s.libelle} />
                   </button>
                 );
               })}

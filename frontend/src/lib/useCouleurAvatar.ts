@@ -2,6 +2,7 @@
 import { useCallback, useEffect, useState } from "react";
 
 import { COULEUR_PAR_DEFAUT, estCouleurValide } from "@/lib/avatarCouleur";
+import { SKINS } from "@/lib/avatarSkins";
 
 /**
  * L'apparence d'un portefeuille, telle que son avatar la porte : sa couleur, sa forme.
@@ -22,6 +23,8 @@ import { COULEUR_PAR_DEFAUT, estCouleurValide } from "@/lib/avatarCouleur";
 export const cleCouleur = (id: string | number) => `novac-avatar-couleur:${id}`;
 /** Celle de sa silhouette. */
 export const cleForme = (id: string | number) => `novac-avatar-forme:${id}`;
+/** Celle de son habillage. */
+export const cleSkin = (id: string | number) => `novac-avatar-skin:${id}`;
 
 /**
  * Les silhouettes proposées.
@@ -118,6 +121,24 @@ export function useCouleurAvatar(
     portefeuille?.id, cleCouleur, estCouleurValide, COULEUR_PAR_DEFAUT,
     portefeuille?.color,
   );
+}
+
+/**
+ * Les habillages proposés dans l'application.
+ *
+ * ⚠️ **Tous ne valent pas pour toutes les formes, et le choix doit le savoir.** La Terre
+ * est un dessin plat détouré par la silhouette : détourée par un triangle, elle n'est
+ * plus un globe. Elle disparaît donc du panneau dès que la tête n'est plus ronde — et
+ * comme la forme peut changer *après* l'habillage, le réglage sait aussi se retirer.
+ */
+export const estSkinValide = (v: unknown): v is string =>
+  typeof v === "string" && SKINS.some(s => s.cle === v);
+
+/** L'habillage d'un portefeuille, gardé comme le reste. */
+export function useSkinAvatar(
+  portefeuille: { id: string | number } | null | undefined,
+): [string, (v: string) => void] {
+  return useChoixGarde<string>(portefeuille?.id, cleSkin, estSkinValide, "uni");
 }
 
 /** La silhouette d'un portefeuille : sphère, ou cube aux arêtes arrondies. */

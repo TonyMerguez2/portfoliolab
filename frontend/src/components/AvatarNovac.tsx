@@ -1,5 +1,5 @@
 "use client";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 
 import {
   RAYON_TETE, type Orientation, cheminOeil, cheminSvg, contourSilhouette,
@@ -10,6 +10,7 @@ import {
 } from "@/lib/avatarReglages";
 import { type EtatVie, VIE_AU_REPOS, creerVie } from "@/lib/avatarVie";
 import { COULEUR_PAR_DEFAUT, couleurDesYeux } from "@/lib/avatarCouleur";
+import { skinParCle } from "@/lib/avatarSkins";
 import type { FormeAvatar } from "@/lib/useCouleurAvatar";
 
 /**
@@ -120,6 +121,7 @@ export default function AvatarNovac({
   suivi = true,
   amplitude = VIE_REFERENCE.amplitude,
   forme = "sphere",
+  skin = "uni",
   titre,
   style,
 }: {
@@ -143,6 +145,16 @@ export default function AvatarNovac({
    */
   couleur?: string;
   couleurYeux?: string;
+  /**
+   * L'habillage peint sur la tête.
+   *
+   * ⚠️ **Il est immobile, contrairement au regard.** Un décor peint sur la surface
+   * tournerait juste sur la sphère et s'étirerait sur toutes les autres formes, qui ne
+   * se comportent pas comme elle sous la rotation. Ici il est **détouré par la
+   * silhouette** : un dessin plat, tranché par le bord de la tête, identique quoi que
+   * fasse le regard. Une seule règle pour les huit formes.
+   */
+  skin?: string;
   /** Le regard suit-il le curseur dans la fenêtre ? */
   suivi?: boolean;
   /** Débattement du suivi, en degrés. */
@@ -318,6 +330,22 @@ export default function AvatarNovac({
   const contourTete = useMemo(
     () => cheminSvg(contourSilhouette(solide, RAYON_TETE, 180)), [solide]);
 
+  /**
+   * Les aplats de l'habillage, et l'identifiant de leur détourage.
+   *
+   * ⚠️ **Un identifiant par instance, sinon les avatars se volent leur découpe.** Un
+   * `clipPath` vit dans le document entier, pas dans son SVG : deux avatars portant le
+   * même identifiant en partagent un seul, et la page en compte autant qu'il y a de
+   * portefeuilles. Le second prendrait la silhouette du premier — un globe détouré par
+   * un triangle.
+   */
+  const marque = useId().replace(/:/g, "");
+  const aplats = useMemo(() => {
+    const s = skinParCle(skin);
+    return s.plats ? s.plats({ tete: teteRendue, accent: s.palette.accent, yeux: yeuxRendus })
+      : [];
+  }, [skin, teteRendue, yeuxRendus]);
+
   const oeil = useCallback((fermeture: number, cote: -1 | 1) => {
     // ⚠️ La taille globale multiplie **aussi** l'écart : ne redimensionner que les
     // capsules resserrerait le regard à mesure qu'il grandit.
@@ -349,6 +377,20 @@ export default function AvatarNovac({
           reste une sphère, et c'est son image qu'on comprime le temps d'un rebond. */}
       <g transform={`scale(${vie.echelleX.toFixed(4)} ${vie.echelleY.toFixed(4)})`}>
         <path d={contourTete} fill={teteRendue} />
+        {aplats.length > 0 && (
+          <>
+            <defs>
+              <clipPath id={`tete-${marque}`}><path d={contourTete} /></clipPath>
+            </defs>
+            <g clipPath={`url(#tete-${marque})`}>
+              {aplats.map((m, i) => (
+                <path key={i} d={m.d} fill={m.couleur}
+                  stroke={m.trait ?? "none"} strokeWidth={m.epaisseur ?? 0}
+                  strokeLinejoin="round" strokeLinecap="round" />
+              ))}
+            </g>
+          </>
+        )}
         <path d={oeil(vie.fermetureGauche, -1)} fill={yeuxRendus} />
         <path d={oeil(vie.fermetureDroite, 1)} fill={yeuxRendus} />
       </g>
