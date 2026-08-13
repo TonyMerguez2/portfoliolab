@@ -85,7 +85,8 @@ function VignetteVolume({ famille }: { famille: FamilleSolide }) {
         </svg>
       );
     case "coussin":
-      return <svg {...c}><ellipse cx={8} cy={8} rx={4.8} ry={7.2} {...f} /></svg>;
+      // Couché : le pincement porte sur les pôles, donc la forme est plus large que haute.
+      return <svg {...c}><ellipse cx={8} cy={8} rx={7.2} ry={5.4} {...f} /></svg>;
     default:
       return <svg {...c}><circle cx={8} cy={8} r={7} {...f} /></svg>;
   }

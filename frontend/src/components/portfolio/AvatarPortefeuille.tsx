@@ -70,7 +70,10 @@ function VignetteForme({ forme, couleur }: { forme: FormeAvatar; couleur: string
         </svg>
       );
     case "coussin":
-      return <svg {...cadre}><ellipse cx={10} cy={10} rx={6.2} ry={9} {...plein} /></svg>;
+      // ⚠️ **Couché, pas debout.** Le coussin se pince aux pôles — le haut et le bas —,
+      // il est donc plus large que haut : mesuré, 1,34 fois. La vignette le dessinait
+      // dressé, ce qui promettait l'inverse de ce qu'on obtenait en le choisissant.
+      return <svg {...cadre}><ellipse cx={10} cy={10} rx={9} ry={6.7} {...plein} /></svg>;
     default:
       return <svg {...cadre}><circle cx={10} cy={10} r={9} {...plein} /></svg>;
   }
