@@ -53,8 +53,15 @@ import { useMorphose } from "@/lib/useMorphose";
 const ECHANTILLONS = 96;
 
 
-/** Le volume que porte chaque forme proposée. */
-const FAMILLE: Record<FormeAvatar, FamilleSolide> = {
+/**
+ * Le volume que porte chaque forme proposée.
+ *
+ * ⚠️ Exportée parce qu'un second endroit peint désormais des morceaux d'avatar — les yeux
+ * seuls, dans l'aide à la décision. Une seconde table aurait divergé de celle-ci au
+ * premier ajout de forme, et le défaut aurait été muet : un œil dessiné sur le mauvais
+ * volume reste un œil.
+ */
+export const FAMILLE_AVATAR: Record<FormeAvatar, FamilleSolide> = {
   sphere: "sphere",
   carre: "cube",
   etoile: "etoile",
@@ -75,7 +82,7 @@ const FAMILLE: Record<FormeAvatar, FamilleSolide> = {
  * un tracé et le pose.
  */
 export function contourDeForme(forme: FormeAvatar): string {
-  return cheminSvg(contourSilhouette(solideDepuis(FAMILLE[forme], ARRONDI_REFERENCE),
+  return cheminSvg(contourSilhouette(solideDepuis(FAMILLE_AVATAR[forme], ARRONDI_REFERENCE),
     RAYON_TETE, 180));
 }
 
@@ -235,10 +242,10 @@ export default function AvatarNovac({
    */
   const transition = useMorphose(forme, anime && vivant);
   const solide = useMemo(() => {
-    const arrivee = solideDepuis(FAMILLE[forme], ARRONDI_REFERENCE);
+    const arrivee = solideDepuis(FAMILLE_AVATAR[forme], ARRONDI_REFERENCE);
     if (!transition) return arrivee;
     return melangerSolides(
-      solideDepuis(FAMILLE[transition.de], ARRONDI_REFERENCE), arrivee, transition.part);
+      solideDepuis(FAMILLE_AVATAR[transition.de], ARRONDI_REFERENCE), arrivee, transition.part);
   }, [forme, transition]);
   /** Ce que le défilement ajoute au regard, et qui retombe tout seul. */
   const coupDOeil = useRef({ lacet: 0, tangage: 0 });

@@ -1,12 +1,17 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
-import AvatarNovac from "@/components/AvatarNovac";
+import { FAMILLE_AVATAR } from "@/components/AvatarNovac";
 import Cadre from "@/components/ui/Cadre";
 import {
   aideALaDecision, confianceEnClair, couperMetrique,
   type Contexte, type Insight, type Priorite,
 } from "@/lib/aideDecision";
+import { COULEUR_PAR_DEFAUT } from "@/lib/avatarCouleur";
+import { ARRONDI_REFERENCE, OEIL_REFERENCE, TAILLE_REFERENCE } from "@/lib/avatarReglages";
+import { RAYON_TETE, cheminOeil } from "@/lib/avatarSpherique";
+import { solideDepuis } from "@/lib/avatarVolume";
+import { hexVersRvb } from "@/lib/couleur";
 import { type Objectif } from "@/lib/objectifs";
 import { type FormeAvatar } from "@/lib/useCouleurAvatar";
 import { JETONS } from "@/lib/palette";
@@ -40,47 +45,35 @@ import { FONT, NUM } from "@/lib/typography";
 
 
 /**
- * Le ciel du panneau : un fond noir, deux nébuleuses très pâles, et des étoiles.
+ * Le voile qui teinte la carte de la couleur de l'avatar.
  *
- * ⚠️ **Les positions sortent d'un générateur à graine fixe, calculé une seule fois au
- * chargement du module.** Un `Math.random()` par rendu redistribuerait le ciel à chaque
- * changement de page, ce qui se verrait comme un scintillement ; un semis figé dans le code
- * serait quarante lignes de coordonnées à maintenir. Une graine constante donne les deux : un
- * ciel stable et une seule ligne à relire.
+ * ⚠️ **Un voile, et non la couleur pleine.** Le panneau est une carte parmi ses voisines
+ * — même cadre, même rayon, même liseré — et il doit le rester : la teinte le rattache au
+ * portefeuille sans le sortir du jeu. Posée pleine, elle en ferait un encart étranger et
+ * rouvrirait la question du contraste du texte, réglée une fois pour toutes par les
+ * jetons du thème.
  *
- * ⚠️ **Le dégradé de couleur qui occupait ce fond a disparu, et avec lui son calcul de
- * contraste.** Il avait fallu assombrir cinq arrêts pastel pour atteindre 5,6 pour 1 ; sur un
- * fond quasi noir, du texte blanc dépasse 15 pour 1 partout. Les nébuleuses restent sous 12 %
- * d'opacité pour ne pas rouvrir la question.
+ * ⚠️ **Le ciel étoilé a disparu avec elle.** Il tenait un fond presque noir, donc du texte
+ * blanc et une palette à part : dès que la carte redevient claire, chacun de ces choix
+ * doit être défait, sans quoi il reste du texte blanc sur fond blanc. C'est la partie du
+ * changement qui ne se voit pas dans la maquette et qu'il faut faire en entier.
  */
-const CIEL = (() => {
-  // Générateur congruentiel linéaire — suffisant pour semer des étoiles, et reproductible.
-  let graine = 20260811;
-  const suivant = () => {
-    graine = (graine * 1103515245 + 12345) % 2147483648;
-    return graine / 2147483648;
-  };
-  const couches: string[] = [];
-  for (let i = 0; i < 38; i++) {
-    const x = (suivant() * 100).toFixed(2);
-    const y = (suivant() * 100).toFixed(2);
-    // Des calibres inégaux : un ciel dont toutes les étoiles ont la même taille se lit comme
-    // une trame, pas comme un ciel.
-    const rayon = (0.5 + suivant() * 1.2).toFixed(2);
-    const alpha = (0.14 + suivant() * 0.52).toFixed(2);
-    couches.push(`radial-gradient(circle ${rayon}px at ${x}% ${y}%, `
-      + `rgba(255,255,255,${alpha}) 0%, rgba(255,255,255,0) 100%)`);
-  }
-  // Deux voiles larges sous les étoiles, pour que le noir ait de la profondeur.
-  couches.push("radial-gradient(ellipse 90% 120% at 12% 0%, rgba(96,132,255,0.11) 0%, "
-    + "rgba(96,132,255,0) 70%)");
-  couches.push("radial-gradient(ellipse 80% 110% at 92% 100%, rgba(186,110,255,0.09) 0%, "
-    + "rgba(186,110,255,0) 68%)");
-  return couches.join(", ");
-})();
+const VOILE_AVATAR = 0.1;
 
-/** Le noir de l'espace, sous le ciel. */
-const FOND_ESPACE = "#05060B";
+/**
+ * La hauteur des yeux dans le panneau, en pixels.
+ *
+ * ⚠️ Comparée à l'image sur trois valeurs. À dix, ils passent inaperçus ; à vingt-huit,
+ * ils dépassent la ligne de titre de l'aide et prennent le pas sur elle. À vingt, ils se
+ * lisent et s'alignent sur la première ligne du texte.
+ */
+const HAUTEUR_YEUX = 20;
+
+/** La couleur du portefeuille, diluée en voile. */
+const teinter = (hex: string, part: number) => {
+  const [r, v, b] = hexVersRvb(hex);
+  return `rgba(${r}, ${v}, ${b}, ${part})`;
+};
 
 /**
  * La couleur d'une priorité.
@@ -121,7 +114,7 @@ function Points({ nombre, courant, onChoisir }: {
               // repère alors du coin de l'œil, sans comparer des luminosités.
               width: actif ? 16 : 6, height: 6, borderRadius: 999,
               border: "none", padding: 0, cursor: "pointer",
-              background: actif ? "rgba(255,255,255,0.82)" : "rgba(255,255,255,0.26)",
+              background: actif ? JETONS.texteFort : JETONS.bordFort,
               transition: "width 220ms, background 220ms",
             }} />
         );
@@ -176,6 +169,49 @@ export default function ConstatsObjectif({
     volatilite, volatiliteSource, seancesMesurees, mediane: medianeProjection,
   };
   const aides: Insight[] = aideALaDecision(objectif, contexte);
+
+  /** Le voile de la carte : la couleur du portefeuille, très diluée. */
+  const voile = teinter(couleurAvatar ?? COULEUR_PAR_DEFAUT, VOILE_AVATAR);
+
+  /**
+   * Les deux yeux, seuls — sans tête.
+   *
+   * ⚠️ **Ce sont les vrais yeux, pas un pictogramme qui leur ressemble.** Ils sortent de
+   * la même chaîne que ceux de l'avatar : dessinés à plat, transportés sur le volume,
+   * reprojetés. Deux capsules écrites à la main auraient l'air juste au repos et
+   * dériveraient au premier réglage — l'écartement, l'arrondi et la hauteur de l'œil
+   * vivent dans `avatarReglages`, et c'est là qu'ils doivent continuer de vivre.
+   *
+   * ⚠️ **Et ils prennent la forme du portefeuille.** L'œil d'un cube n'est pas celui
+   * d'une sphère : il est peint sur une face plate, donc moins courbé. Le détail est
+   * ténu à cette taille, mais le contraire aurait été un second dessin à maintenir.
+   */
+  const yeux = useMemo(() => {
+    const s = solideDepuis(FAMILLE_AVATAR[formeAvatar ?? "sphere"], ARRONDI_REFERENCE);
+    const oeil = (cote: -1 | 1) => cheminOeil({
+      ecart: OEIL_REFERENCE.ecart * TAILLE_REFERENCE,
+      elevation: OEIL_REFERENCE.elevation * TAILLE_REFERENCE,
+      largeur: OEIL_REFERENCE.largeur * TAILLE_REFERENCE,
+      hauteur: OEIL_REFERENCE.hauteur * TAILLE_REFERENCE,
+      inclinaison: 0,
+      arrondi: 1,
+    }, { lacet: 0, tangage: 0 }, cote, RAYON_TETE, 96, s);
+    const traces = [oeil(-1), oeil(1)];
+    /**
+     * ⚠️ **Le cadre est recalé sur les yeux, pas sur la tête.** Gardé au repère de
+     * l'avatar, un carré de deux cents unités, la paire n'en occupe que quatre-vingts de
+     * haut : à vingt-six pixels de côté elle en rendait dix, deux traits perdus dans du
+     * vide. Recadrée sur son propre encombrement, elle se lit à la taille qu'on lui donne.
+     * Le cadre se mesure sur le tracé réel plutôt que sur les réglages, sinon il faudrait
+     * refaire le calcul à chaque changement d'écartement ou d'arrondi.
+     */
+    const n = traces.join(" ").match(/-?\d+(\.\d+)?/g)?.map(Number) ?? [0, 0];
+    const xs = n.filter((_, i) => i % 2 === 0), ys = n.filter((_, i) => i % 2 === 1);
+    const marge = 2;
+    const x = Math.min(...xs) - marge, y = Math.min(...ys) - marge;
+    const l = Math.max(...xs) - x + marge, h = Math.max(...ys) - y + marge;
+    return { traces, boite: `${x} ${y} ${l} ${h}`, rapport: l / h };
+  }, [formeAvatar]);
 
   const [page, setPage] = useState(0);
 
@@ -243,17 +279,24 @@ export default function ConstatsObjectif({
       // c'est ce nombre qu'il faut baisser, au prix d'un saut d'une aide à l'autre.
       minHeight: 244,
       display: "flex", flexDirection: "column", gap: 10,
-      background: `${CIEL}, ${FOND_ESPACE}`,
       padding: "14px 16px",
+      /**
+       * ⚠️ **La teinte se pose *par-dessus* le fond de la carte, elle ne le remplace pas.**
+       * Écrite en `background`, elle effacerait le fond du thème et la carte cesserait de
+       * suivre le mode clair ou sombre — un aplat opaque ne s'adapte à rien. Superposée en
+       * dégradé plat sur `JETONS.carte`, elle teinte les deux modes sans qu'aucun ne soit
+       * traité à part.
+       */
+      background: `linear-gradient(${voile}, ${voile}), ${JETONS.carte}`,
     }}>
       <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
         <span style={{ fontFamily: FONT, fontSize: 15, fontWeight: 700, flexShrink: 0,
-          color: "rgba(255,255,255,0.96)", letterSpacing: "-0.01em" }}>
+          color: JETONS.texteIntense, letterSpacing: "-0.01em" }}>
           Aide à la décision
         </span>
         {objectif && (
           <span style={{ fontFamily: FONT, fontSize: 10.5, minWidth: 0,
-            color: "rgba(255,255,255,0.62)", overflow: "hidden",
+            color: JETONS.texteFaible, overflow: "hidden",
             textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
             {objectif.nom}
           </span>
@@ -265,7 +308,7 @@ export default function ConstatsObjectif({
 
       {aide == null ? (
         <p style={{ margin: 0, fontFamily: FONT, fontSize: 12.5, lineHeight: 1.55,
-          color: "rgba(255,255,255,0.80)" }}>
+          color: JETONS.texteSecondaire }}>
           {objectif
             ? "Rien à interpréter sans échéance ni hypothèse de rendement : ce panneau ne "
               + "calcule que ce que vos paramètres permettent."
@@ -295,43 +338,31 @@ export default function ConstatsObjectif({
             * fermer le ciel derrière elle.
             */}
           {/**
-            * ⚠️ **L'avatar est descendu du titre pour venir contre la bulle, et c'est la
-            * seule position qui fasse lire une parole.** Posé dans le titre à dix-neuf
-            * pixels, il tenait la place de l'étincelle sans en dire plus : trop petit pour
-            * qu'on reconnaisse un visage, et trop loin de la phrase pour qu'on la lui
-            * attribue — la pointe de la bulle désignait un point du titre, pas quelqu'un.
-            * Comparé à l'image, c'est franc : à côté, à trente pixels, il parle ; au
-            * titre, il décore.
+            * ⚠️ **Les yeux seuls, sans tête et sans bulle.** L'avatar entier signait le
+            * panneau, la bulle lui attribuait la phrase : deux façons de dire que quelqu'un
+            * parle, alors que ce panneau ne fait que compter. Les yeux gardent la présence
+            * — on sait à qui appartient l'application — sans la promesse de parole que le
+            * titre refuse depuis toujours. C'est aussi la version la plus sobre : deux
+            * traits contre un cadre, une pointe et un visage.
             *
-            * ⚠️ **Il ne cligne pas et ne suit pas le curseur.** Ailleurs c'est ce qui le
-            * rend vivant ; ici il accompagne un texte qu'on lit, et un visage qui bouge à
-            * côté d'un paragraphe prend le regard qu'on venait donner au paragraphe.
-            *
-            * ⚠️ **Le prix est en largeur, et il est connu.** La colonne de texte perd une
-            * quarantaine de pixels sur un panneau dont l'équilibre est déjà réglé au plus
-            * juste — voir plus bas ce que le bloc du chiffre a coûté à réapprendre. La
-            * phrase enroule donc une ligne de plus, ce que le plancher de hauteur absorbe.
+            * ⚠️ **Ils sont plaqués contre le haut du texte.** Centrés, ils descendaient avec
+            * la longueur de la phrase et se retrouvaient au milieu du paragraphe, ce qui se
+            * lit comme une décoration posée là ; alignés sur la première ligne, ils
+            * regardent le titre de l'aide.
             */}
-          <span style={{ flexShrink: 0, paddingTop: 2 }}>
-            <AvatarNovac taille={30} couleur={couleurAvatar} forme={formeAvatar ?? "sphere"}
-              skin={skinAvatar ?? "uni"} suivi={false} vivant={false} titre="Novac" />
-          </span>
-          <div style={{ position: "relative", flex: 1, minWidth: 0,
-            display: "flex", flexDirection: "column", gap: 5,
-            background: "rgba(255,255,255,0.06)", borderRadius: 12,
-            padding: "10px 12px" }}>
-            {/* La pointe désigne l'avatar : sans elle, la bulle n'est qu'un cadre arrondi. */}
-            <span aria-hidden="true" style={{
-              position: "absolute", left: -5, top: 13, width: 8, height: 12,
-              background: "rgba(255,255,255,0.06)",
-              clipPath: "polygon(0 50%, 100% 0, 100% 100%)",
-            }} />
+          <svg viewBox={yeux.boite} height={HAUTEUR_YEUX}
+            width={(HAUTEUR_YEUX * yeux.rapport).toFixed(1)} aria-hidden="true"
+            style={{ display: "block", flexShrink: 0, marginTop: 3 }}>
+            {yeux.traces.map((d, i) => <path key={i} d={d} fill={JETONS.texteFort} />)}
+          </svg>
+          <div style={{ flex: 1, minWidth: 0, display: "flex",
+            flexDirection: "column", gap: 5 }}>
             <span style={{ fontFamily: FONT, fontSize: 15, fontWeight: 650,
               lineHeight: 1.35, color: TEINTE[aide.priorite] }}>
               {aide.titre}
             </span>
             <span style={{ fontFamily: FONT, fontSize: 12.5, lineHeight: 1.55,
-              color: "rgba(255,255,255,0.86)" }}>
+              color: JETONS.texte }}>
               {aide.description}
             </span>
           </div>
@@ -374,7 +405,7 @@ export default function ConstatsObjectif({
                 justifyContent: "center", flex: "0 1 auto", maxWidth: 200, minWidth: 76,
                 padding: "8px 10px", boxSizing: "border-box", alignSelf: "center" }}>
               <span style={{ ...NUM, fontSize: 30, fontWeight: 700, lineHeight: 1.08,
-                color: "rgba(255,255,255,0.97)", textAlign: "center",
+                color: JETONS.texteIntense, textAlign: "center",
                 letterSpacing: "-0.02em" }}>
                 {fort}
                 {/* ⚠️ **Les mois en retrait, dans le même flux et non sur une ligne à part.**
@@ -388,13 +419,13 @@ export default function ConstatsObjectif({
                     entier et la coupure remonte là où elle a un sens. */}
                 {discret && (
                   <span style={{ fontSize: 18, fontWeight: 650, whiteSpace: "nowrap",
-                    color: "rgba(255,255,255,0.62)", letterSpacing: "-0.01em" }}>
+                    color: JETONS.texteSecondaire, letterSpacing: "-0.01em" }}>
                     {" "}{discret}
                   </span>
                 )}
               </span>
               <span style={{ fontFamily: FONT, fontSize: 10, lineHeight: 1.3, marginTop: 3,
-                color: "rgba(255,255,255,0.58)", textAlign: "center" }}>
+                color: JETONS.texteFaible, textAlign: "center" }}>
                 {aide.metrique.libelle}
               </span>
             </div>
@@ -411,7 +442,7 @@ export default function ConstatsObjectif({
       {aide != null && (
         <span title={aide.motifs.join(" · ")}
           style={{ marginTop: "auto", fontFamily: FONT, fontSize: 9.5, lineHeight: 1.45,
-            color: "rgba(255,255,255,0.5)", overflow: "hidden", textOverflow: "ellipsis",
+            color: JETONS.texteFaible, overflow: "hidden", textOverflow: "ellipsis",
             whiteSpace: "nowrap" }}>
           {confianceEnClair(aide.confiance)}
           {aide.hypotheses.length > 0 && ` · ${aide.hypotheses.join(" · ")}`}
