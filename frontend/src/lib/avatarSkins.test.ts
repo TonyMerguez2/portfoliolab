@@ -125,8 +125,8 @@ describe("carreauCube", () => {
 });
 
 describe("skins", () => {
-  it("propose l'uni, le basket, le volley et le tennis", () => {
-    expect(SKINS.map(s => s.cle)).toEqual(["uni", "basket", "volley", "tennis"]);
+  it("propose l'uni, les trois ballons et la Terre", () => {
+    expect(SKINS.map(s => s.cle)).toEqual(["uni", "basket", "volley", "tennis", "terre"]);
   });
 
   it("retombe sur l'uni pour une clé inconnue, au lieu de lever", () => {

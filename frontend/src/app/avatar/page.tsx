@@ -255,6 +255,15 @@ export default function AvatarProceduralPage() {
    */
   const [couleurCoiffe, setCouleurCoiffe] = useState("#1E2340");
   const [skin, setSkin] = useState("uni");
+  /**
+   * ⚠️ **Les skins réservés à la sphère disparaissent des choix, ils ne s'y grisent pas.**
+   * Une carte du monde transportée sur un triangle n'est pas un globe un peu déformé :
+   * c'est une image fausse, que rien dans l'interface ne rattraperait. Et comme la forme
+   * peut changer *après* le choix du skin, la sélection doit aussi savoir se retirer.
+   */
+  const skinsOfferts = useMemo(
+    () => SKINS.filter(x => !x.rond || formeTete === "sphere"),
+    [formeTete]);
   const [palette, setPalette] = useState<Palette>(skinParCle("uni").palette);
 
   /**
@@ -370,6 +379,16 @@ export default function AvatarProceduralPage() {
   const choisirSkin = useCallback((cle: string) => {
     setSkin(cle);
     setPalette(skinParCle(cle).palette);
+  }, []);
+
+  /** Changer de forme retire le skin s'il ne valait que pour la sphère. */
+  const choisirForme = useCallback((cle: FamilleSolide) => {
+    setFormeTete(cle);
+    setSkin(courant => {
+      if (cle === "sphere" || !skinParCle(courant).rond) return courant;
+      setPalette(skinParCle("uni").palette);
+      return "uni";
+    });
   }, []);
 
   const inclinaison = EXPRESSIONS.filter(e => e.cle === expression)[0].inclinaison;
@@ -906,7 +925,7 @@ export default function AvatarProceduralPage() {
             note="Un skin n'est pas une image plaquée : chaque panneau est un quartier de sphère, peint sur la surface et repassé par la même projection que les yeux."
           >
             <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 8 }}>
-              {SKINS.map(s => (
+              {skinsOfferts.map(s => (
                 <button
                   key={s.cle}
                   type="button"
@@ -1062,7 +1081,7 @@ export default function AvatarProceduralPage() {
                 ligne les réduirait à des libellés illisibles. */}
             <div style={{ display: "grid", gap: 8, gridTemplateColumns: "repeat(2, 1fr)" }}>
               {FORMES.map(([cle, libelle]) => (
-                <button key={cle} type="button" onClick={() => setFormeTete(cle)}
+                <button key={cle} type="button" onClick={() => choisirForme(cle)}
                   aria-pressed={formeTete === cle}
                   style={{
                     padding: "9px 8px", borderRadius: 9, cursor: "pointer",
