@@ -1,6 +1,5 @@
 import {
-  type Tache, type Vec3, carreauCube, contourTache, dansLaTache, grandCercle, ruban,
-  tournerTete,
+  type Vec3, carreauCube, grandCercle, ruban, tournerTete,
 } from "./avatarSpherique";
 
 /**
@@ -29,15 +28,25 @@ import {
 export type Palette = { tete: string; accent: string; yeux: string };
 
 /**
- * Un skin réservé à la sphère le déclare.
+ * Un aplat **plat**, détouré par la silhouette et posé à l'endroit — il ne tourne pas.
  *
- * ⚠️ **Parce qu'un décor peut dépendre de la forme, alors que les autres n'en dépendent
- * pas.** Les coutures d'un ballon sont des grands cercles : transportées sur un cube ou
- * une goutte, elles restent des coutures, un peu tordues mais lisibles. Une carte du
- * monde, non — les continents s'étirent avec le volume et le globe cesse d'être un globe.
- * Le picker le retire donc des choix dès que la tête n'est plus ronde, plutôt que de
- * laisser produire une image fausse.
+ * ⚠️ **Toutes les décorations sont immobiles, et c'est une décision de cohérence.** Une
+ * découpe peinte sur la sphère tourne juste ; la même transportée sur un triangle ou une
+ * capsule s'y étire, parce que ces volumes ne se comportent pas comme une sphère sous la
+ * rotation. Puisque les autres formes recevront elles aussi des habillages et qu'ils
+ * devront y rester fixes, faire tourner celui de la sphère seul aurait produit deux
+ * règles pour une même famille de réglages. On fige donc tout : ce qu'on perd en réalisme
+ * sur une forme, on le gagne en unité sur les huit.
  */
+export type MotifPlat = {
+  /** Le tracé, en unités de surface sur une tête de rayon 100. */
+  d: string;
+  couleur: string;
+  trait?: string;
+  epaisseur?: number;
+};
+
+/** Un aplat découpé sur la sphère, éventuellement en plusieurs morceaux jointifs. */
 export type Motif = {
   morceaux: Vec3[][];
   couleur: string;
@@ -49,12 +58,22 @@ export type Motif = {
 export type Skin = {
   cle: string;
   libelle: string;
-  /** Vrai si le skin n'a de sens que sur la sphère. */
+  /**
+   * Vrai si le skin n'a de sens que sur la sphère.
+   *
+   * ⚠️ **Parce qu'un décor peut dépendre de la forme, alors que les autres n'en dépendent
+   * pas.** Les coutures d'un ballon restent des coutures sur n'importe quel volume, un
+   * peu tordues mais lisibles. Une carte du monde, non : détourée par un triangle, elle
+   * n'est plus un globe. Le picker le retire donc des choix dès que la tête n'est plus
+   * ronde, plutôt que de laisser produire une image fausse.
+   */
   rond?: boolean;
   /** La palette proposée au moment où l'on choisit ce skin. Ensuite, à la main. */
   palette: Palette;
-  /** Les aplats, du fond vers le dessus. Vide pour une tête unie. */
+  /** Les découpes posées sur la surface, du fond vers le dessus. Vide pour une tête unie. */
   motifs: (p: Palette) => Motif[];
+  /** Les aplats plats, détourés par la silhouette. */
+  plats?: (p: Palette) => MotifPlat[];
 };
 
 const rad = (d: number) => (d * Math.PI) / 180;
@@ -245,111 +264,136 @@ const TENNIS: Skin = {
 
 // ── Terre ─────────────────────────────────────────────────────────────────────
 
-/** Un point de la sphère depuis sa longitude et sa latitude, en degrés. */
-function surLeGlobe(longitude: number, latitude: number): Vec3 {
-  const lo = rad(longitude), la = rad(latitude);
-  return { x: Math.cos(la) * Math.sin(lo), y: Math.sin(la), z: Math.cos(la) * Math.cos(lo) };
-}
+/**
+ * ⚠️ **Un continent n'est pas une fonction, c'est un dessin — et il a fallu s'y
+ * reprendre.** La première Terre décrivait chaque terre par un rayon que des harmoniques
+ * cabossaient, dans l'esprit du reste du module. C'est élégant et cela ne ressemble à
+ * rien : on obtient des amibes régulières, jamais un continent, parce que ce qui fait
+ * lire une côte — un isthme étroit, un golfe profond, une île détachée juste à côté — ne
+ * s'écrit pas comme une somme de cosinus. Signalé à l'usage, sans détour.
+ *
+ * Les terres sont donc **composées**, sommet par sommet, et le code ne fait que lisser.
+ * On garde le bénéfice du procédural là où il sert — la marge du haut-fond s'obtient d'un
+ * trait épaissi, l'échelle est libre — sans prétendre déduire une forme qui relève du
+ * dessin.
+ */
+export type Terre = { sommets: [number, number][] };
 
 /**
- * Les continents.
+ * Les terres, en unités de surface sur une tête de rayon 100.
  *
- * ⚠️ **Ils font le tour complet, comme toutes les découpes de ce fichier.** Une carte
- * limitée à la face visible se trahirait au premier quart de tour — et celle-ci tourne
- * pour de bon, puisque chaque contour passe par la même chaîne que les yeux. Il en faut
- * donc derrière, et aux pôles.
- *
- * ⚠️ **Les harmoniques ne sont pas décoratives : ce sont elles qui font la côte.** Un
- * rayon constant donne des pastilles, et une planète en pastilles ne ressemble à rien.
- * Trois ordres suffisent — un pour la masse générale, un pour les golfes, un pour les
- * découpes fines — et il vaut mieux les déphaser d'un continent à l'autre, sans quoi ils
- * se ressemblent tous.
+ * ⚠️ **Plusieurs débordent volontairement du cercle.** Une carte dont toutes les terres
+ * flottent à l'intérieur se lit comme des taches posées sur un disque ; ce qui fait le
+ * globe, c'est que les continents *sortent du cadre* et sont tranchés par le bord. Le
+ * détourage s'en charge, il suffit de les laisser dépasser.
  */
-export const CONTINENTS: Tache[] = [
-  { centre: surLeGlobe(-28, 16), rayon: 0.62, bosses: [[2, 0.26, 0.5], [3, 0.17, 2.1], [5, 0.1, 0.9]] },
-  { centre: surLeGlobe(34, -30), rayon: 0.44, bosses: [[2, 0.3, 2.6], [3, 0.2, 0.4], [5, 0.11, 3.4]] },
-  { centre: surLeGlobe(96, 22), rayon: 0.5, bosses: [[2, 0.22, 1.3], [3, 0.24, 2.9], [4, 0.12, 0.2]] },
-  { centre: surLeGlobe(168, -12), rayon: 0.56, bosses: [[2, 0.28, 0.9], [3, 0.15, 1.7], [5, 0.13, 2.4]] },
-  { centre: surLeGlobe(-108, -20), rayon: 0.4, bosses: [[2, 0.24, 3.0], [3, 0.21, 0.8], [4, 0.1, 1.9]] },
-  { centre: surLeGlobe(-60, 66), rayon: 0.34, bosses: [[2, 0.27, 1.1], [3, 0.18, 2.5]] },
-  { centre: surLeGlobe(140, 62), rayon: 0.26, bosses: [[2, 0.3, 0.3], [3, 0.16, 1.4]] },
-  { centre: surLeGlobe(10, -74), rayon: 0.3, bosses: [[2, 0.2, 2.2], [3, 0.19, 0.6]] },
-  { centre: surLeGlobe(-152, 34), rayon: 0.16, bosses: [[2, 0.3, 1.8]] },
-  { centre: surLeGlobe(74, -62), rayon: 0.14, bosses: [[3, 0.28, 0.7]] },
+export const TERRES: Terre[] = [
+  // Le nord-ouest : une masse échancrée d'un golfe profond, qui sort par la gauche.
+  { sommets: [[-122, -54], [-98, -76], [-68, -82], [-46, -68], [-52, -50], [-28, -44],
+    [-20, -26], [-40, -22], [-34, -6], [-56, 0], [-64, -16], [-86, -8], [-98, -26],
+    [-120, -28]] },
+  // Le nord-est, qui s'échappe par le haut et se termine en presqu'île.
+  { sommets: [[16, -110], [46, -106], [68, -88], [78, -64], [64, -48], [48, -60],
+    [34, -44], [20, -58], [10, -82]] },
+  // L'austral : long, tordu, avec une pointe. C'est la forme la plus reconnaissable.
+  { sommets: [[2, 22], [26, 14], [44, 26], [52, 48], [46, 70], [30, 92], [14, 102],
+    [6, 86], [18, 68], [8, 52], [-10, 58], [-14, 36]] },
+  // Une côte à l'est, tranchée par le bord.
+  { sommets: [[82, 2], [102, 8], [112, 30], [104, 50], [86, 46], [80, 28], [88, 16]] },
+  // Le sud-ouest, qui sort par en bas.
+  { sommets: [[-102, 48], [-80, 52], [-64, 70], [-70, 92], [-92, 108], [-114, 96],
+    [-118, 70]] },
+  // Trois îles : ce sont elles qui donnent l'échelle de l'océan.
+  { sommets: [[-2, -20], [10, -24], [16, -14], [6, -6], [-4, -10]] },
+  { sommets: [[46, -20], [58, -24], [64, -14], [56, -6], [46, -10]] },
+  { sommets: [[-66, 24], [-54, 20], [-48, 30], [-58, 36]] },
 ];
 
-/**
- * La largeur du haut-fond qui borde chaque terre, en radians.
- *
- * ⚠️ **Une seconde tache plus large, et non un filet tracé.** Un trait suit bien le
- * contour, mais SVG le centre dessus : la moitié de son épaisseur mange la terre, et le
- * vert se retrouve rongé partout où la côte se découpe. En peignant la même tache
- * élargie *avant* la verte, le liseré tombe entièrement dans l'eau — ce qu'il est.
- */
-export const HAUT_FOND = 0.075;
 
-/** La moucheture : nombre de grains, et leur rayon. */
-const GRAINS = 190;
-export const RAYON_GRAIN = 0.016;
 
 /**
- * Les grains, répartis par l'angle d'or.
+ * La largeur du haut-fond qui borde chaque terre.
  *
- * ⚠️ **Une spirale plutôt qu'un tirage au sort.** Un semis aléatoire fait des paquets et
- * des trous, très visibles sur un aplat ; et il changerait à chaque rendu, ce qui
- * interdirait toute mesure. La spirale de Fibonacci répartit régulièrement sans jamais
- * s'aligner, et elle est reproductible.
+ * ⚠️ **Obtenu par un trait épaissi, et le sens du dessin en dépend.** SVG peint le
+ * remplissage puis le contour : un trait posé sur la terre verte lui mangerait la moitié
+ * de son épaisseur, et le vert serait rongé partout où la côte se découpe. On peint donc
+ * la **même courbe deux fois** — d'abord en clair, remplie *et* traitée, ce qui la
+ * grossit vers l'extérieur ; puis en vert, remplie seulement. Le liseré tombe alors
+ * entièrement dans l'eau, ce qu'il est.
  */
-export function grainsDuGlobe(): { terre: Vec3[][]; mer: Vec3[][] } {
-  const terre: Vec3[][] = [], mer: Vec3[][] = [];
-  const or = Math.PI * (3 - Math.sqrt(5));
-  for (let i = 0; i < GRAINS; i++) {
-    const y = 1 - (2 * (i + 0.5)) / GRAINS;
-    const r = Math.sqrt(Math.max(0, 1 - y * y));
-    const a = or * i;
-    const p: Vec3 = { x: Math.cos(a) * r, y, z: Math.sin(a) * r };
-    let surTerre = false;
-    for (let j = 0; j < CONTINENTS.length && !surTerre; j++) {
-      // Rentré d'un grain : un point posé pile sur la côte donnerait un grain à cheval.
-      if (dansLaTache(p, CONTINENTS[j], -RAYON_GRAIN * 2)) surTerre = true;
-    }
-    let dansLeHautFond = false;
-    for (let j = 0; j < CONTINENTS.length && !dansLeHautFond; j++) {
-      if (dansLaTache(p, CONTINENTS[j], HAUT_FOND + RAYON_GRAIN * 2)) dansLeHautFond = true;
-    }
-    const grain = contourTache({ centre: p, rayon: RAYON_GRAIN, bosses: [] }, 0, 10);
-    if (surTerre) terre.push(grain);
-    // ⚠️ Rien dans le haut-fond : le liseré est une bande étroite, un grain dessus se
-    // lirait comme une île et brouillerait la côte, seule ligne qui porte la lecture.
-    else if (!dansLeHautFond) mer.push(grain);
+export const HAUT_FOND = 7;
+
+/** Les deux teintes que l'utilisateur ne règle pas. */
+const COTE = "#6FD3E4";
+
+/**
+ * Une courbe fermée et lisse passant par tous les sommets.
+ *
+ * ⚠️ **Catmull-Rom, pour que les sommets soient des *points de passage*.** Écrire
+ * directement des Béziers demanderait de placer des poignées de contrôle, qui ne sont sur
+ * la courbe nulle part : on ne saurait plus où l'on dessine. Ici chaque sommet est sur la
+ * côte, et la tangente s'y déduit de ses deux voisins — on compose une forme en déplaçant
+ * des points qu'on voit.
+ */
+type Cubique = [number, number, number, number, number, number, number, number];
+
+/** Les cubiques de la côte — une par intervalle entre deux sommets. */
+function cubiquesDe(sommets: [number, number][]): Cubique[] {
+  const n = sommets.length;
+  const p = (i: number) => sommets[((i % n) + n) % n];
+  const sortie: Cubique[] = [];
+  for (let i = 0; i < n; i++) {
+    const [x0, y0] = p(i - 1), [x1, y1] = p(i), [x2, y2] = p(i + 1), [x3, y3] = p(i + 2);
+    sortie.push([x1, y1, x1 + (x2 - x0) / 6, y1 + (y2 - y0) / 6,
+      x2 - (x3 - x1) / 6, y2 - (y3 - y1) / 6, x2, y2]);
   }
-  return { terre, mer };
+  return sortie;
 }
 
-/** Les deux teintes que l'utilisateur ne règle pas : l'eau claire et les deux mouchetures. */
-const COTE = "#6FD3E4";
-const GRAIN_MER = "#6E9CC4";
-const GRAIN_TERRE = "#63A83A";
+function courbeLissee(sommets: [number, number][]): string {
+  const c = cubiquesDe(sommets);
+  let d = `M ${c[0][0].toFixed(2)} ${c[0][1].toFixed(2)}`;
+  for (const [, , c1x, c1y, c2x, c2y, x, y] of c) {
+    d += ` C ${c1x.toFixed(2)} ${c1y.toFixed(2)} ${c2x.toFixed(2)} ${c2y.toFixed(2)}`
+      + ` ${x.toFixed(2)} ${y.toFixed(2)}`;
+  }
+  return d + " Z";
+}
+
+/**
+ * La même côte, échantillonnée en polygone.
+ *
+ * ⚠️ **Rendue par le module et non refaite ailleurs.** Une mesure qui reconstruirait la
+ * courbe de son côté n'éprouverait que sa propre copie de la formule : elle passerait au
+ * vert le jour où le tracé changerait sans elle. Les deux sorties partent des mêmes
+ * cubiques, donc ce qu'on mesure est ce qu'on dessine.
+ */
+export function contourTerre(t: Terre, parSegment: number = 10): [number, number][] {
+  const points: [number, number][] = [];
+  for (const [x0, y0, c1x, c1y, c2x, c2y, x1, y1] of cubiquesDe(t.sommets)) {
+    for (let i = 0; i < parSegment; i++) {
+      const u = i / parSegment, v = 1 - u;
+      points.push([
+        v * v * v * x0 + 3 * v * v * u * c1x + 3 * v * u * u * c2x + u * u * u * x1,
+        v * v * v * y0 + 3 * v * v * u * c1y + 3 * v * u * u * c2y + u * u * u * y1,
+      ]);
+    }
+  }
+  return points;
+}
 
 const TERRE: Skin = {
   cle: "terre",
   libelle: "Terre",
   rond: true,
   palette: { tete: "#4A78A8", accent: "#7CC24A", yeux: "#1B2733" },
-  motifs: p => {
-    const bordures: Vec3[][] = [], terres: Vec3[][] = [];
-    for (let i = 0; i < CONTINENTS.length; i++) {
-      bordures.push(contourTache(CONTINENTS[i], HAUT_FOND));
-      terres.push(contourTache(CONTINENTS[i]));
-    }
-    const g = grainsDuGlobe();
-    // Un peu de biais : de face, l'axe des pôles tomberait pile entre les deux yeux.
-    const tourner = (m: Vec3[][]) => poseMorceaux(m, rad(-18), rad(-10));
+  motifs: () => [],
+  plats: p => {
+    const traces = TERRES.map(t => courbeLissee(t.sommets));
     return [
-      { morceaux: tourner(g.mer), couleur: GRAIN_MER },
-      { morceaux: tourner(bordures), couleur: COTE },
-      { morceaux: tourner(terres), couleur: p.accent },
-      { morceaux: tourner(g.terre), couleur: GRAIN_TERRE },
+      // Le haut-fond d'abord, grossi par son propre trait ; les terres par-dessus.
+      ...traces.map(d => ({ d, couleur: COTE, trait: COTE, epaisseur: HAUT_FOND * 2 })),
+      ...traces.map(d => ({ d, couleur: p.accent })),
     ];
   },
 };

@@ -1,142 +1,139 @@
 import { describe, expect, it } from "vitest";
 
-import { CONTINENTS, HAUT_FOND, RAYON_GRAIN, grainsDuGlobe, skinParCle } from "./avatarSkins";
-import { type Vec3, contourTache, dansLaTache, tournerTete } from "./avatarSpherique";
+import { HAUT_FOND, SKINS, TERRES, contourTerre, skinParCle } from "./avatarSkins";
 
 /**
- * La Terre est-elle une planète, ou seulement un décor de face ?
+ * La Terre se lit-elle comme une planète ?
  *
- * ⚠️ **C'est la question que ce fichier existe pour poser.** Un skin n'est pas une image
- * plaquée : chaque continent est une découpe **posée sur la sphère**, qui tourne avec la
- * tête et disparaît derrière la silhouette. Un décor dessiné pour la seule face visible
- * s'en tirerait très bien sur une capture d'écran, et se trahirait au premier quart de
- * tour — moitié de globe couverte de terres, moitié d'océan vide. Aucune image fixe ne
- * dit cela ; une mesure sur trente-six orientations, si.
+ * ⚠️ **Ce fichier existe parce que la première version ne se lisait pas.** Les terres
+ * étaient décrites par un rayon que des harmoniques cabossaient — élégant, dans l'esprit
+ * du reste du module, et parfaitement illisible : on obtenait des amibes régulières,
+ * jamais un continent. Ce qui fait lire une côte — un golfe profond, une pointe, une île
+ * détachée juste à côté — ne s'écrit pas comme une somme de cosinus. Les terres sont
+ * donc **composées**, sommet par sommet, et ce qui se mesure ici n'est plus la géométrie
+ * d'une formule mais les propriétés d'un dessin : la part d'océan, le débordement du
+ * cadre, la largeur du haut-fond, l'ordre des aplats.
  */
 
-const deg = (d: number) => (d * Math.PI) / 180;
+const RAYON = 100;
 
-/** Un semis régulier de la sphère, par l'angle d'or — le même partout dans ce fichier. */
-function semis(nombre: number): Vec3[] {
-  const points: Vec3[] = [];
-  const or = Math.PI * (3 - Math.sqrt(5));
-  for (let i = 0; i < nombre; i++) {
-    const y = 1 - (2 * (i + 0.5)) / nombre;
-    const r = Math.sqrt(Math.max(0, 1 - y * y));
-    points.push({ x: Math.cos(or * i) * r, y, z: Math.sin(or * i) * r });
+/** Le point est-il dans le polygone ? Parité des traversées. */
+function dedans(x: number, y: number, contour: [number, number][]): boolean {
+  let n = 0;
+  for (let i = 0; i < contour.length; i++) {
+    const [ax, ay] = contour[i], [bx, by] = contour[(i + 1) % contour.length];
+    if ((ay > y) !== (by > y) && x < ax + ((y - ay) / (by - ay)) * (bx - ax)) n++;
   }
-  return points;
+  return n % 2 === 1;
 }
 
-const surTerre = (p: Vec3, marge = 0) =>
-  CONTINENTS.some(c => dansLaTache(p, c, marge));
-
-describe("le globe fait le tour", () => {
-  it("montre des terres et de l'océan sous toutes les orientations", () => {
+describe("le globe", () => {
+  it("garde une part de terre qui laisse voir l'océan", () => {
     /**
-     * ⚠️ **La propriété qui distingue un globe d'un décor de face.** On échantillonne la
-     * sphère, on la tourne, on ne garde que l'hémisphère visible, et l'on compte la part
-     * de terre. Elle doit rester dans une fourchette franche partout : une orientation
-     * entièrement bleue se lirait comme une bille, une entièrement verte comme une balle
-     * de tennis. Mesuré sur trente-six orientations, la part de terre va de 27 à 52 %.
+     * ⚠️ **La mesure qui a rattrapé le défaut signalé.** Les terres couvraient d'abord
+     * les sept dixièmes du disque : l'océan se réduisait à des chenaux, et l'image se
+     * lisait comme un motif de camouflage plutôt que comme une planète. À l'autre bout,
+     * quelques taches sur du bleu donneraient une bille. On échantillonne donc le disque
+     * et l'on compte — mesuré, 42 % de terres, ce qui laisse l'eau majoritaire tout en
+     * gardant des masses franches.
      */
-    for (const lacet of [0, 40, 80, 120, 160, 200, 240, 280, 320]) {
-      for (const tangage of [-60, -20, 20, 60]) {
-        let visibles = 0, terres = 0;
-        for (const p of semis(2000)) {
-          const q = tournerTete(p, deg(lacet), deg(tangage));
-          if (q.z < 0) continue;
-          visibles++;
-          if (surTerre(p)) terres++;
+    const contours = TERRES.map(t => contourTerre(t));
+    let dansLeDisque = 0, surTerre = 0;
+    for (let i = -RAYON; i <= RAYON; i += 2) {
+      for (let j = -RAYON; j <= RAYON; j += 2) {
+        if (i * i + j * j > RAYON * RAYON) continue;
+        dansLeDisque++;
+        if (contours.some(c => dedans(i, j, c))) surTerre++;
+      }
+    }
+    const part = surTerre / dansLeDisque;
+    expect(part).toBeGreaterThan(0.3);
+    expect(part).toBeLessThan(0.55);
+  });
+
+  it("fait déborder les terres du cadre, sauf les îles", () => {
+    /**
+     * ⚠️ **C'est le débordement qui fait le globe.** Une carte dont toutes les terres
+     * flottent à l'intérieur du disque se lit comme des taches posées dessus ; ce qui
+     * donne le tour du monde, c'est que les continents *sortent* et sont tranchés par le
+     * bord. Les îles, elles, doivent rester dedans — une île à moitié coupée n'est plus
+     * une île, c'est un bout de continent.
+     */
+    let deborde = 0;
+    for (const t of TERRES) {
+      const contour = contourTerre(t);
+      const loin = contour.filter(([x, y]) => Math.hypot(x, y) > RAYON).length;
+      const dedansTout = contour.every(([x, y]) => Math.hypot(x, y) < RAYON - HAUT_FOND);
+      // Chaque terre est franchement de l'un des deux genres, jamais à cheval : elle sort
+      // pour de bon, ou elle tient tout entière au large du bord avec son haut-fond.
+      expect(loin > 3 || dedansTout).toBe(true);
+      if (loin > 3) deborde++;
+    }
+    expect(deborde).toBeGreaterThanOrEqual(4);
+  });
+
+  it("laisse partout la place du haut-fond entre deux terres", () => {
+    /**
+     * ⚠️ Le liseré clair est obtenu par un trait épaissi, donc il **grossit** chaque terre
+     * vers l'extérieur. Deux côtes trop proches verraient leurs haut-fonds se souder, et
+     * le bras de mer qui les sépare disparaîtrait sous une seule bande claire — on
+     * perdrait la lecture de deux terres distinctes. On éprouve donc que deux terres sont
+     * toujours séparées de plus de deux fois cette largeur.
+     */
+    const contours = TERRES.map(t => contourTerre(t));
+    for (let a = 0; a < contours.length; a++) {
+      for (let b = a + 1; b < contours.length; b++) {
+        let plusProche = Infinity;
+        for (const [x1, y1] of contours[a]) {
+          for (const [x2, y2] of contours[b]) {
+            plusProche = Math.min(plusProche, Math.hypot(x1 - x2, y1 - y2));
+          }
         }
-        const part = terres / visibles;
-        expect(part).toBeGreaterThan(0.2);
-        expect(part).toBeLessThan(0.6);
+        expect(plusProche).toBeGreaterThan(HAUT_FOND * 2);
       }
     }
-  });
-
-  it("garde chaque continent d'un seul tenant", () => {
-    /**
-     * ⚠️ Le rayon d'une tache est modulé par des harmoniques, et une amplitude trop forte
-     * le rendrait **négatif** : le contour se retournerait et se croiserait lui-même,
-     * donnant un continent en nœud papillon. La construction le borne ; ce test garde la
-     * borne utile en vérifiant qu'aucun bord ne repasse du mauvais côté du centre.
-     */
-    for (const c of CONTINENTS) {
-      for (const p of contourTache(c)) {
-        const d = Math.acos(Math.min(1, Math.max(-1,
-          p.x * c.centre.x + p.y * c.centre.y + p.z * c.centre.z)));
-        expect(d).toBeGreaterThan(0);
-        expect(d).toBeLessThan(Math.PI * 0.95);
-      }
-    }
-  });
-});
-
-describe("la côte", () => {
-  it("entoure chaque terre sans jamais la laisser déborder", () => {
-    /**
-     * ⚠️ **Le haut-fond est une seconde tache, pas un filet.** SVG centre un trait sur le
-     * contour qu'il suit : la moitié de son épaisseur mangerait la terre, et le vert se
-     * retrouverait rongé partout où la côte se découpe. En peignant la tache élargie
-     * *sous* la verte, le liseré tombe entièrement dans l'eau — ce qu'il est. On vérifie
-     * donc que la terre est strictement contenue dans son haut-fond, en tout point.
-     */
-    for (const c of CONTINENTS) {
-      for (const p of contourTache(c)) {
-        expect(dansLaTache(p, c, HAUT_FOND)).toBe(true);
-      }
-    }
-  });
-});
-
-describe("la moucheture", () => {
-  it("ne pose jamais un grain à cheval sur une côte", () => {
-    /**
-     * ⚠️ **Un grain à cheval se lit comme une île, et brouille la seule ligne qui porte
-     * la lecture.** Chaque grain est donc soit franchement à terre, soit franchement au
-     * large, jamais dans le haut-fond ni sur son bord. On l'éprouve avec la marge d'un
-     * rayon de grain, celle-là même qui a servi à les trier.
-     */
-    const { terre, mer } = grainsDuGlobe();
-    expect(terre.length).toBeGreaterThan(20);
-    expect(mer.length).toBeGreaterThan(20);
-
-    const centreDe = (grain: Vec3[]): Vec3 => {
-      const s = grain.reduce((a, p) => ({ x: a.x + p.x, y: a.y + p.y, z: a.z + p.z }),
-        { x: 0, y: 0, z: 0 });
-      const l = Math.hypot(s.x, s.y, s.z) || 1;
-      return { x: s.x / l, y: s.y / l, z: s.z / l };
-    };
-    for (const g of terre) expect(surTerre(centreDe(g), -RAYON_GRAIN)).toBe(true);
-    for (const g of mer) expect(surTerre(centreDe(g), HAUT_FOND + RAYON_GRAIN)).toBe(false);
   });
 });
 
 describe("le skin", () => {
-  it("se déclare réservé à la sphère", () => {
+  it("est immobile : ses aplats ne dépendent que de la palette", () => {
     /**
-     * ⚠️ Les coutures d'un ballon restent lisibles sur n'importe quel volume ; une carte
-     * du monde, non — les continents s'étirent avec la forme et le globe cesse d'en être
-     * un. Le drapeau est ce qui permet au picker de le retirer plutôt que de laisser
-     * produire une image fausse, et il est facile à perdre en refactorisant.
+     * ⚠️ **Toutes les décorations sont figées, et c'est une décision de cohérence.** Une
+     * découpe peinte sur la sphère tourne juste ; la même transportée sur un triangle ou
+     * une capsule s'y étire, parce que ces volumes ne se comportent pas comme une sphère
+     * sous la rotation. Les autres formes recevront des habillages et devront y rester
+     * fixes : faire tourner celui de la sphère seul aurait donné deux règles pour une même
+     * famille de réglages. La signature le garantit — un aplat plat ne reçoit pas
+     * d'orientation, donc il ne peut pas en dépendre — et ce test garde la Terre du côté
+     * plat, là où une refonte pourrait la ramener sur la surface sans qu'on y pense.
      */
-    expect(skinParCle("terre").rond).toBe(true);
-    for (const cle of ["uni", "basket", "volley", "tennis"]) {
-      expect(skinParCle(cle).rond).toBeFalsy();
+    const s = skinParCle("terre");
+    expect(s.motifs(s.palette)).toEqual([]);
+    expect(s.plats).toBeDefined();
+    expect(s.plats!(s.palette).length).toBe(TERRES.length * 2);
+  });
+
+  it("peint les haut-fonds sous les terres, jamais l'inverse", () => {
+    /**
+     * L'ordre des aplats **est** le dessin : peints après les terres, les haut-fonds les
+     * recouvriraient et il ne resterait que des anneaux clairs. Cet ordre ne se lit dans
+     * aucune propriété du rendu, il ne tient qu'à la position dans le tableau — donc il se
+     * garde ici. Le liseré se reconnaît à ce qu'il porte un trait, la terre à ce qu'elle
+     * n'en porte pas.
+     */
+    const s = skinParCle("terre");
+    const plats = s.plats!(s.palette);
+    const moitie = plats.length / 2;
+    for (let i = 0; i < moitie; i++) {
+      expect(plats[i].epaisseur).toBe(HAUT_FOND * 2);
+      expect(plats[i + moitie].epaisseur).toBeUndefined();
+      // Les deux moitiés tracent la même côte : seule la peinture diffère.
+      expect(plats[i].d).toBe(plats[i + moitie].d);
     }
   });
 
-  it("peint la mer sous les côtes, et les côtes sous les terres", () => {
-    /**
-     * L'ordre des aplats **est** le dessin : peintes après les terres, les côtes les
-     * recouvriraient et il ne resterait que des anneaux ; peints avant la mer, les grains
-     * du large disparaîtraient. Cet ordre-là ne se voit dans aucune propriété du rendu, il
-     * ne tient qu'à la position dans le tableau — donc il se garde ici.
-     */
-    const s = skinParCle("terre");
-    const couleurs = s.motifs(s.palette).map(m => m.couleur);
-    expect(couleurs).toEqual(["#6E9CC4", "#6FD3E4", s.palette.accent, "#63A83A"]);
+  it("se déclare réservé à la sphère, et reste le seul", () => {
+    expect(skinParCle("terre").rond).toBe(true);
+    expect(SKINS.filter(s => s.rond).map(s => s.cle)).toEqual(["terre"]);
   });
 });

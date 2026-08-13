@@ -126,6 +126,9 @@ function VignetteAccessoire({ famille }: { famille: FamilleAccessoire }) {
   );
 }
 
+/** L'orientation nulle — celle où les habillages sont figés. */
+const AU_REPOS: Orientation = { lacet: 0, tangage: 0, roulis: 0 };
+
 const ACCENT = "#6366F1";
 const ENCRE = "#121214";
 /** Le fond du panneau sombre, derrière la tête — distinct de la couleur des yeux. */
@@ -363,17 +366,32 @@ export default function AvatarProceduralPage() {
       : null),
     [accessoire, casquette, solideTete]);
 
+  /**
+   * ⚠️ **Les habillages ne tournent plus avec la tête, et c'est délibéré.** Une découpe
+   * peinte sur la sphère tourne juste ; la même sur un triangle ou une capsule s'y
+   * étire, parce que ces volumes ne se comportent pas comme une sphère sous la rotation.
+   * Les autres formes recevront elles aussi des habillages et devront y rester fixes :
+   * faire tourner celui de la sphère seul aurait donné deux règles pour une même famille
+   * de réglages. On les calcule donc **au repos**, une fois, et le regard seul s'anime.
+   * Ce qu'on perd en réalisme sur une forme, on le gagne en unité sur les huit — et en
+   * calcul, puisque plus rien ici ne dépend de l'image.
+   */
   const cheminsMotifs = useMemo(
     () => motifs.map(m => ({
       d: vraie3D
-        ? cheminsSurLeSolide(m.morceaux, orientation, RAYON_TETE, solideTete)
-        : cheminsSurLaTete(m.morceaux, orientation, RAYON_TETE, solideTete),
+        ? cheminsSurLeSolide(m.morceaux, AU_REPOS, RAYON_TETE, solideTete)
+        : cheminsSurLaTete(m.morceaux, AU_REPOS, RAYON_TETE, solideTete),
       couleur: m.couleur,
       trait: m.trait,
       epaisseur: m.epaisseur,
     })),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [motifs, orientation, solideTete, vraie3D]);
+    [motifs, solideTete, vraie3D]);
+
+  /** Les aplats plats du skin, détourés par la silhouette et jamais recalculés. */
+  const aplats = useMemo(() => {
+    const s = skinParCle(skin);
+    return s.plats ? s.plats(palette) : [];
+  }, [skin, palette]);
 
   /** Choisir un skin **propose** sa palette ; elle reste modifiable ensuite. */
   const choisirSkin = useCallback((cle: string) => {
@@ -675,14 +693,37 @@ export default function AvatarProceduralPage() {
                 reste sphérique et c'est l'image qu'on comprime. */}
             <g transform={`scale(${vie.echelleX.toFixed(4)} ${vie.echelleY.toFixed(4)})`}>
               <path d={contourTete} fill={palette.tete} />
-              {/* Les aplats du skin, peints sur la sphère et non plaqués par-dessus :
-                  ils tournent avec la tête et s'affinent près du bord. Dessinés avant
+              {/* Les découpes du skin, prises sur la surface au repos. Dessinées avant
                   les yeux, pour que le regard passe devant la couture qu'il croise. */}
               {cheminsMotifs.map((m, i) => (
                 <path key={i} d={m.d} fill={m.couleur}
                   stroke={m.trait ?? "none"} strokeWidth={m.epaisseur ?? 0}
                   strokeLinejoin="round" />
               ))}
+              {/**
+                * Les aplats plats, **détourés par la silhouette**.
+                *
+                * ⚠️ C'est le détourage qui fait la carte : les terres sont dessinées plus
+                * larges que la tête et tranchées par son bord. Sans lui, elles
+                * flotteraient à l'intérieur du disque et se liraient comme des taches
+                * posées dessus, jamais comme un globe.
+                */}
+              {aplats.length > 0 && (
+                <>
+                  <defs>
+                    <clipPath id="av-tete">
+                      <path d={contourTete} />
+                    </clipPath>
+                  </defs>
+                  <g clipPath="url(#av-tete)">
+                    {aplats.map((m, i) => (
+                      <path key={i} d={m.d} fill={m.couleur}
+                        stroke={m.trait ?? "none"} strokeWidth={m.epaisseur ?? 0}
+                        strokeLinejoin="round" strokeLinecap="round" />
+                    ))}
+                  </g>
+                </>
+              )}
               {/**
                 * Le maillage, entre les motifs et les yeux.
                 *
@@ -922,7 +963,7 @@ export default function AvatarProceduralPage() {
 
           <Carte
             titre="Habillage"
-            note="Un skin n'est pas une image plaquée : chaque panneau est un quartier de sphère, peint sur la surface et repassé par la même projection que les yeux."
+            note="Les habillages sont immobiles : seul le regard s’anime. Les autres formes en recevront aussi, et elles ne tournent pas comme une sphère — un décor qui suivrait la tête ici et pas ailleurs aurait donné deux règles pour un même réglage."
           >
             <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 8 }}>
               {skinsOfferts.map(s => (
