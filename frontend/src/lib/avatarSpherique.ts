@@ -366,7 +366,7 @@ export function couperHemisphere(contour: Vec3[], pasArc: number = 0.06): Vec3[]
  * l'image miroir l'un de l'autre et tournent donc en sens opposés, ce qu'une constante
  * posée à la main aurait tôt ou tard démenti.
  */
-function sensDeParcours(contour: Vec3[]): 1 | -1 {
+export function sensDeParcours(contour: Vec3[]): 1 | -1 {
   let nx = 0, ny = 0, nz = 0;
   let gx = 0, gy = 0, gz = 0;
   for (let i = 0; i < contour.length; i++) {
