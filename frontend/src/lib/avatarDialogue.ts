@@ -37,6 +37,29 @@ export const PSEUDO_PAR_DEFAUT = "vous";
 export const PLACE_PAROLE = 132;
 
 /**
+ * La largeur en deçà de laquelle une parole ne se laisse plus enrouler, en pixels.
+ *
+ * ⚠️ **C'est la largeur du plus large mot d'amorce, mesurée.** « Bonjour » occupe 84 pixels
+ * en 22 gras ; sous cette borne, il se couperait en son milieu et l'on n'aurait plus une
+ * parole mais des syllabes empilées. Un contenant plus étroit que cela n'a pas trop peu de
+ * place pour le texte : il a trop peu de place pour la parole, et c'est à lui de reculer.
+ */
+export const PLACE_MINIMALE = 88;
+
+/**
+ * ⚠️ **La taille de la parole ne suit PAS celle du personnage, et c'est délibéré.**
+ * L'avatar mesure environ 390 pixels sur le banc et **63** dans le bandeau du portefeuille :
+ * six fois moins. Une typographie exprimée en fraction de la tête — ou d'un cadre qui la
+ * suit — donnerait là-bas trois pixels et demi. Signalé à l'usage : « il faut pas que le
+ * texte soit trop petit ».
+ *
+ * La règle tient donc en une phrase : **le contenant décide de l'enroulement, jamais du
+ * corps.** Les tailles sont absolues et ne se déduisent que de `PLACE_PAROLE` ; un contenant
+ * étroit fait passer la parole à la ligne, et si elle ne tient toujours pas, elle déborde —
+ * ce qui se voit et se corrige. Elle ne rapetisse jamais en silence jusqu'à l'illisible.
+ */
+
+/**
  * La taille de base d'une parole, en pixels — toutes les échelles en sont des multiples.
  *
  * ⚠️ **Elle se déduit de la place, pas du goût.** L'appui monte à 1,45 fois cette base, soit
@@ -76,8 +99,14 @@ export const PART_CARACTERE = 0.557;
  */
 export const LIGNES_MORCEAU = 2;
 
-/** La taille sous laquelle on refuse de descendre pour faire tenir un texte, en pixels. */
-const PLANCHER_MORCEAU = 14;
+/**
+ * La taille de lecture : celle sous laquelle on refuse de descendre, en pixels.
+ *
+ * ⚠️ **C'est un plancher de *lecture*, pas un plancher technique.** Seize pixels, c'est la
+ * taille du texte courant de l'application. En dessous, le mot est encore dessiné, mais on ne
+ * le lit plus d'un coup d'œil — or une parole ne se déchiffre pas, elle s'attrape.
+ */
+const PLANCHER_MORCEAU = 16;
 
 /**
  * La taille d'un morceau à l'écran, en pixels — sa taille voulue, bornée par la place.

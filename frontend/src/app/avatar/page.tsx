@@ -22,7 +22,7 @@ import { type EtatVie, VIE_AU_REPOS, creerVie } from "@/lib/avatarVie";
 import { useMorphose } from "@/lib/useMorphose";
 import { ETATS } from "@/lib/avatarEtats";
 import {
-  BASE_PAROLE, PLACE_PAROLE, parolePour, tailleMorceau, texteDe,
+  BASE_PAROLE, PLACE_MINIMALE, PLACE_PAROLE, parolePour, tailleMorceau, texteDe,
 } from "@/lib/avatarDialogue";
 import { pourFondSombre } from "@/lib/couleur";
 import { tonRetenu } from "@/lib/avatarCouleur";
@@ -922,7 +922,19 @@ export default function AvatarProceduralPage() {
             )}
           </svg>
 
-          {dialogue && <Parole etat={parole} pseudo={pseudo} couleur={palette.tete} />}
+          {dialogue && (
+            <Parole etat={parole} pseudo={pseudo} couleur={palette.tete}
+              /**
+               * ⚠️ **Le banc a une colonne de réglages à ne pas mordre, d'où le pourcentage
+               * — mais borné des deux côtés.** Écrit `min(132px, 22%)`, il devenait le
+               * coupable lui-même : mesuré en rétrécissant la scène à la taille du bandeau,
+               * 63 pixels, le bloc tombait à **14 pixels** de large et « Je regarde » s'y
+               * empilait lettre par lettre. Le corps du texte, lui, n'avait pas bougé — ce
+               * n'est donc pas la typographie qui fautait, mais sa borne. Avec un plancher,
+               * une parole trop à l'étroit déborde ; elle ne se hache plus.
+               */
+              place={`clamp(${PLACE_MINIMALE}px, 22%, ${PLACE_PAROLE}px)`} />
+          )}
           </div>
 
           <p style={{
@@ -1590,8 +1602,18 @@ function Eclat({ couleur, retard, taille }: {
  * toujours. Deux états qui disent la même chose — le focus et l'observation disent tous deux
  * « Je regarde » — ne la rejouent donc pas : rien n'a changé pour qui regarde.
  */
-function Parole({ etat, pseudo, couleur }: {
+function Parole({ etat, pseudo, couleur, place = `${PLACE_PAROLE}px` }: {
   etat: string; pseudo: string; couleur: string;
+  /**
+   * La largeur dont l'appelant dispose, en CSS.
+   *
+   * ⚠️ **Elle borne l'enroulement, jamais le corps du texte.** C'est la seule chose que le
+   * contenant a le droit de décider : à 63 pixels d'avatar dans le bandeau, une largeur
+   * exprimée en pourcentage vaudrait quatorze pixels et la parole tomberait au plancher de
+   * lecture. Le banc passe sa propre borne parce qu'il a une colonne de réglages à ne pas
+   * mordre ; par défaut, c'est la place mesurée, en pixels absolus.
+   */
+  place?: string;
 }) {
   const parole = parolePour(etat, pseudo);
   const plein = pourFondSombre(couleur);
@@ -1623,7 +1645,7 @@ function Parole({ etat, pseudo, couleur }: {
          * droite. Le coin supérieur lui est disputé ; le flanc ne l'est jamais.
          */
         position: "absolute", left: "86%", top: "50%", transform: "translateY(-50%)",
-        width: "max-content", maxWidth: `min(${PLACE_PAROLE}px, 22%)`,
+        width: "max-content", maxWidth: place,
         fontWeight: 800, lineHeight: 1.02, letterSpacing: "-0.015em",
         /**
          * ⚠️ Le pseudonyme est le seul morceau dont on ignore la longueur. Il se coupe

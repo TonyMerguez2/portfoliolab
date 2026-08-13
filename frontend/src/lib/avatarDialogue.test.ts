@@ -127,7 +127,36 @@ describe("la mise en scène", () => {
 
     const demesure = parolePour("content", "Barthélemy-Alexandre de la Fontaine-Duverger");
     expect(tailleMorceau(demesure.morceaux[1]), "illisible à force de rapetisser")
-      .toBeGreaterThanOrEqual(14);
+      .toBeGreaterThanOrEqual(16);
+  });
+
+  it("garde une taille de lecture, quelle que soit la taille du personnage", () => {
+    /**
+     * ⚠️ **C'est la contrainte du bandeau, et elle ne se voit pas depuis le banc.** L'avatar
+     * y mesure environ 390 pixels ; dans l'en-tête du portefeuille, il en mesure **63**. Une
+     * typographie exprimée en fraction de la tête donnerait là-bas trois pixels et demi.
+     * Signalé à l'usage : « il faut pas que le texte soit trop petit ».
+     *
+     * Ce test tient la règle par son seul point vérifiable ici : les tailles ne se déduisent
+     * que de la place mesurée, jamais d'une dimension du personnage, et aucun mot ne descend
+     * sous la taille du texte courant. Le contenant peut faire enrouler la parole ; il ne
+     * peut pas la rapetisser.
+     */
+    for (const { cle, parole } of toutes()) {
+      // Un « z » de dodo n'est pas un mot : il se voit, il ne se lit pas.
+      if (parole.genre === "envol") continue;
+      for (const m of parole.morceaux) {
+        expect(tailleMorceau(m), `« ${m.texte} » (${cle}) est sous la taille de lecture`)
+          .toBeGreaterThanOrEqual(16);
+      }
+    }
+    // Y compris quand le pseudonyme force la réduction.
+    for (const nom of ["Alexandre-Maximilien", "Barthélemy-Alexandre de la Fontaine"]) {
+      for (const m of parolePour("content", nom).morceaux) {
+        expect(tailleMorceau(m), `« ${m.texte} » est sous la taille de lecture`)
+          .toBeGreaterThanOrEqual(16);
+      }
+    }
   });
 
   it("hiérarchise : une amorce ne peut pas peser plus que son appui", () => {
