@@ -130,6 +130,56 @@ class Objectif(Base):
     cree_le = Column(DateTime, default=datetime.utcnow)
 
 
+class Compte(Base):
+    """
+    Un compte **déclaré** par l'épargnant : son nom, son genre, sa couleur, son logo.
+
+    ⚠️ **Cette table remplace une déduction.** Jusqu'ici l'écran rangeait chaque ligne
+    dans « PEA », « CTO » ou « Crypto » d'après sa place de cotation — une inférence, pas
+    une donnée, et le code le disait : « une action parisienne détenue en compte-titres
+    ordinaire ira dans PEA et personne ne le saura ». Trois enveloppes devinées ne
+    peuvent pas non plus décrire un compte courant ou un livret, qui ne détiennent aucun
+    titre. Déclarer le compte lève les deux limites d'un coup.
+
+    ⚠️ **L'inférence n'est pas supprimée pour autant, et il ne faut pas la supprimer.**
+    Les portefeuilles existants n'ont aucun compte déclaré ; s'ils perdaient leur
+    rangement, leurs lignes se retrouveraient en vrac du jour au lendemain. Les deux
+    coexistent donc : ce qui est rattaché à un compte y va, le reste continue d'être
+    deviné. Voir `compte_id` sur les transactions.
+
+    ⚠️ **Rattaché au portefeuille, et c'est un choix contestable qu'on assume.** Dans la
+    vie, un PEA appartient à une personne, pas à un portefeuille — quelqu'un qui tient
+    deux portefeuilles devra donc le déclarer deux fois. Mais « Vos comptes » vit dans le
+    tableau de bord d'un portefeuille et groupe *ses* lignes ; rattacher au compte
+    utilisateur aurait fait apparaître, dans chaque portefeuille, des comptes qui ne le
+    concernent pas. Le jour où l'on voudra l'inverse, la colonne se déplace et les
+    lignes suivent.
+    """
+
+    __tablename__ = "comptes"
+    id           = Column(String, primary_key=True)
+    portfolio_id = Column(String, ForeignKey("portfolios.id", ondelete="CASCADE"),
+                          nullable=False, index=True)
+    nom          = Column(String, nullable=False)
+    #: courant | epargne | pea | cto | crypto — voir `GENRES_COMPTE`.
+    genre        = Column(String, nullable=False)
+    couleur      = Column(String, nullable=False, default="#6366F1")
+    #: Le logo de l'établissement. Chemin public, comme l'image d'un portefeuille :
+    #: `uploads/` est déjà servi en statique et SQLite grossit mal avec des octets.
+    logo_url     = Column(String, nullable=True)
+    #: Les liquidités du compte, en devise du portefeuille.
+    #:
+    #: ⚠️ **Elles valent pour tous les genres, pas seulement pour le courant.** Un PEA
+    #: porte une poche d'espèces à côté de ses titres ; la réserver aux comptes de
+    #: trésorerie aurait obligé à la redemander ailleurs. Nullable : un compte dont on
+    #: n'a pas saisi les liquidités n'en déclare pas zéro, il n'en déclare aucune — et la
+    #: différence compte quand on additionne.
+    solde        = Column(Float, nullable=True, default=None)
+    #: Le rang d'affichage, choisi par l'épargnant.
+    rang         = Column(Integer, nullable=False, default=0)
+    cree_le      = Column(DateTime, default=datetime.utcnow)
+
+
 class Transaction(Base):
     __tablename__ = "transactions"
     id           = Column(Integer, primary_key=True, autoincrement=True)
@@ -145,6 +195,20 @@ class Transaction(Base):
     # Six mois plus tard, la raison d'une ligne ne se retrouve nulle part
     # ailleurs.
     note         = Column(String, nullable=True)
+    #: Le compte déclaré où l'opération a eu lieu.
+    #:
+    #: ⚠️ **Nullable, et il le restera.** Toutes les transactions saisies avant les
+    #: comptes déclarés en sont dépourvues ; les rattacher d'office aurait demandé de
+    #: deviner, c'est-à-dire de refaire l'inférence qu'on cherche justement à remplacer
+    #: par une donnée. Sans compte, une ligne reste rangée par déduction, comme avant.
+    #:
+    #: ⚠️ **Pas de contrainte de clé étrangère.** SQLite ne sait pas ajouter une `FOREIGN
+    #: KEY` par `ALTER TABLE`, et c'est par là que passe la migration douce plus bas : la
+    #: colonne existerait sans contrainte sur les bases déjà créées et avec contrainte
+    #: sur les neuves. Une règle qui ne vaut que sur la moitié des installations est pire
+    #: qu'une règle absente, parce qu'on croit l'avoir. La suppression d'un compte
+    #: détache donc ses lignes explicitement, côté route.
+    compte_id    = Column(String, nullable=True, index=True)
     created_at   = Column(DateTime, default=datetime.utcnow)
 
 Base.metadata.create_all(engine)
@@ -162,6 +226,7 @@ for table, col, typedef in [
     ("transactions", "note",          "TEXT"),
     ("users",        "devise",         "TEXT"),
     ("objectifs",    "verse_deja",     "REAL"),
+    ("transactions", "compte_id",      "TEXT"),
 ]:
     try:
         with engine.connect() as conn:

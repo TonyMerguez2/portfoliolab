@@ -25,7 +25,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, field_validator
 from sqlalchemy.orm import Session
 
-from app.core.database import get_db, Portfolio, Transaction
+from app.core.database import Compte, get_db, Portfolio, Transaction
 from app.core.auth import require_auth
 from app.models.user import User
 from app.utils.positions import (
@@ -54,6 +54,13 @@ class TransactionCreate(BaseModel):
     fees:        float = 0.0
     executed_at: datetime
     note:        str | None = None
+    #: Le compte déclaré où l'opération a eu lieu.
+    #:
+    #: ⚠️ **Facultatif, et il doit le rester.** La saisie existait avant les comptes
+    #: déclarés, et un portefeuille peut n'en avoir aucun : l'exiger casserait le
+    #: parcours de tout le monde pour une donnée que la plupart n'ont pas encore. Sans
+    #: compte, la ligne reste rangée par déduction, comme avant.
+    compte_id:   str | None = None
 
     @field_validator("side")
     @classmethod
@@ -106,8 +113,35 @@ def _tx_to_dict(tx: Transaction) -> dict:
         "total":        round(tx.quantity * tx.unit_price + (tx.fees or 0), 4),
         "executed_at":  tx.executed_at.isoformat(),
         "note":         tx.note,
+        "compte_id":    tx.compte_id,
         "created_at":   tx.created_at.isoformat(),
     }
+
+
+def _compte_du_portefeuille(compte_id: str | None, portfolio_id: str,
+                            db: Session) -> str | None:
+    """
+    Le compte visé, s'il appartient bien à ce portefeuille — sinon on refuse.
+
+    ⚠️ **Rien ne le vérifierait à notre place.** `compte_id` n'est pas une clé étrangère :
+    SQLite ne sait pas en ajouter une par `ALTER TABLE`, et c'est par là que passent les
+    bases déjà créées. Sans ce contrôle, une opération pourrait porter l'identifiant du
+    compte d'un autre portefeuille — voire d'un compte inexistant — et disparaîtrait alors
+    des deux rangements à la fois : de son compte, qui n'est pas dans ce portefeuille, et
+    du classement par déduction, qui ne regarde que les lignes détachées.
+
+    ⚠️ **On refuse plutôt que d'ignorer.** Écrire `None` en silence aurait rangé la ligne
+    ailleurs que là où l'appelant l'a demandé, sans que rien ne le dise.
+    """
+    if not compte_id:
+        return None
+    existe = db.query(Compte).filter(
+        Compte.id == compte_id, Compte.portfolio_id == portfolio_id,
+    ).first()
+    if not existe:
+        raise HTTPException(status_code=400,
+                            detail="Compte inconnu pour ce portefeuille.")
+    return compte_id
 
 
 def _get_portfolio_or_404(portfolio_id: str, db: Session, user=None) -> Portfolio:
@@ -158,6 +192,7 @@ def create_transaction(
         fees         = data.fees,
         executed_at  = data.executed_at,
         note         = (data.note or "").strip() or None,
+        compte_id    = _compte_du_portefeuille(data.compte_id, portfolio_id, db),
     )
     db.add(tx)
     db.commit()
