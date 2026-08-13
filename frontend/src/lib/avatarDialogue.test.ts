@@ -1,10 +1,13 @@
 import { describe, expect, it } from "vitest";
 
 import { ETATS } from "./avatarEtats";
-import { PSEUDO_PAR_DEFAUT, messagePour, phrasesConnues } from "./avatarDialogue";
+import {
+  BASE_PAROLE, LIGNES_MORCEAU, PLACE_PAROLE, PART_CARACTERE, type Parole, PSEUDO_PAR_DEFAUT,
+  etatsQuiParlent, messagePour, parolePour, tailleMorceau, texteDe,
+} from "./avatarDialogue";
 
 /**
- * Ce que le personnage dit — et surtout, qu'il le dise vraiment.
+ * Ce que le personnage dit — et qu'il le dise vraiment, dans la place qu'il a.
  *
  * ⚠️ **Ce fichier naît d'une phrase qui n'a jamais atteint l'écran.** Quatre états — le
  * succès, l'erreur, la surprise, le réveil — avaient leur réplique écrite, et aucune ne
@@ -14,9 +17,19 @@ import { PSEUDO_PAR_DEFAUT, messagePour, phrasesConnues } from "./avatarDialogue
  * rendu bien branché, et la faute tenait à laquelle des deux variables on lisait.
  *
  * Un test ne peut pas garder ce branchement-là — il est dans la page. Il peut garder ce qui
- * l'a rendu invisible : qu'aucune réplique ne soit écrite pour un état qui n'existe pas, et
- * qu'aucune ne dépasse la place réellement disponible à côté de la tête.
+ * l'a rendu invisible, et ce que la mise en scène promet : qu'aucune réplique ne soit écrite
+ * pour un état qui n'existe pas, qu'aucune ne dépasse la place mesurée, et que le dodo monte
+ * bien vers le ciel.
  */
+
+/** Le nom de service, de longueur ordinaire : c'est celui du banc. */
+const NOM = "Sacha";
+
+/** Les paroles de tous les états, plus le repli. */
+const toutes = (): { cle: string; parole: Parole }[] => [
+  ...ETATS.map(e => ({ cle: e.cle, parole: parolePour(e.cle, NOM) })),
+  { cle: "(repli)", parole: parolePour("inconnu", NOM) },
+];
 
 describe("les répliques", () => {
   it("s'adressent toutes à un état qui existe", () => {
@@ -28,25 +41,8 @@ describe("les répliques", () => {
      * l'exécution ne viendra le dire.
      */
     const cles = new Set(ETATS.map(e => e.cle));
-    for (const cle of Object.keys(phrasesConnues())) {
+    for (const cle of etatsQuiParlent()) {
       expect(cles, `« ${cle} » n'est l'état de personne`).toContain(cle);
-    }
-  });
-
-  it("tiennent dans la place laissée par la tête", () => {
-    /**
-     * ⚠️ **La limite est mesurée, pas choisie.** La tête occupe les deux tiers du repère,
-     * soit 83 % de la largeur rendue ; la parole commence à 86 % et il lui reste un
-     * septième de la scène — environ quatre-vingts pixels. Posé en 20 gras, le plus large
-     * mot employé, « Bonjour », y tient à 78 pixels. Trois mots s'y replient sur deux
-     * lignes ; un quatrième en demanderait une troisième, et l'ensemble cesserait d'être
-     * une parole pour devenir un paragraphe.
-     *
-     * Le nom compte pour un mot : c'est celui qu'on ne maîtrise pas.
-     */
-    for (const [cle, phrase] of Object.entries(phrasesConnues())) {
-      const mots = phrase.split(/\s+/).filter(Boolean).length;
-      expect(mots, `« ${phrase} » (${cle}) est trop long pour la place`).toBeLessThanOrEqual(3);
     }
   });
 
@@ -57,19 +53,20 @@ describe("les répliques", () => {
      * production et pas ici.
      */
     for (const vide of [undefined, null, "", "   "]) {
-      const dit = messagePour("content", vide);
-      expect(dit).toBe("Bonjour !");
-      expect(dit).not.toMatch(/\s{2}|\{nom\}/);
+      expect(messagePour("content", vide)).toBe("Bonjour !");
+      expect(messagePour("inconnu", vide)).toBe("Bonjour !");
     }
     expect(messagePour("content", "  Sacha  ")).toBe("Bonjour Sacha !");
+    for (const { cle, parole } of toutes()) {
+      expect(texteDe(parole), `« ${cle} »`).not.toMatch(/\s{2}|\{nom\}/);
+    }
   });
 
   it("retombent sur le salut pour un état sans réplique", () => {
-    const muets = ETATS.filter(e => !(e.cle in phrasesConnues()));
+    const muets = ETATS.filter(e => !etatsQuiParlent().includes(e.cle));
     expect(muets.length).toBeGreaterThan(0);
-    for (const e of muets) expect(messagePour(e.cle, "Sacha")).toBe("Bonjour Sacha !");
-    // Y compris pour une clé qui n'est celle d'aucun état.
-    expect(messagePour("inconnu", "Sacha")).toBe("Bonjour Sacha !");
+    for (const e of muets) expect(messagePour(e.cle, NOM)).toBe("Bonjour Sacha !");
+    expect(messagePour("inconnu", NOM)).toBe("Bonjour Sacha !");
   });
 
   it("ne commentent jamais les chiffres de l'épargnant", () => {
@@ -80,10 +77,112 @@ describe("les répliques", () => {
      * grossier par nécessité : on ne peut pas éprouver une intention, seulement refuser le
      * vocabulaire par lequel elle passerait.
      */
-    const interdits = /%|€|\d|portefeuille|risqu|rendement|perte|gain|vendre|acheter|投/i;
-    for (const [cle, phrase] of Object.entries(phrasesConnues())) {
-      expect(phrase, `« ${phrase} » (${cle}) parle d'argent`).not.toMatch(interdits);
+    const interdits = /%|€|\d|portefeuille|risqu|rendement|perte|gain|vendre|acheter/i;
+    for (const { cle, parole } of toutes()) {
+      expect(texteDe(parole), `« ${cle} » parle d'argent`).not.toMatch(interdits);
     }
+  });
+});
+
+describe("la mise en scène", () => {
+  it("tient dans la place mesurée, sur deux lignes au plus", () => {
+    /**
+     * ⚠️ **La limite est mesurée, pas choisie.** La tête occupe les deux tiers du repère,
+     * soit 83 % de la largeur rendue ; la parole commence à 86 % et dispose du flanc plus la
+     * gouttière du panneau, cent trente-deux pixels. Un troisième morceau demanderait une
+     * troisième ligne, et l'ensemble cesserait d'être une parole pour devenir un paragraphe.
+     */
+    for (const { cle, parole } of toutes()) {
+      const sauts = parole.morceaux.filter(m => m.saut).length;
+      expect(sauts, `« ${cle} » demande ${sauts + 1} lignes`).toBeLessThanOrEqual(1);
+      for (const m of parole.morceaux) {
+        /**
+         * ⚠️ **On éprouve que le garde-fou **ne sert pas**, et c'est plus fort que de
+         * vérifier la largeur.** `tailleMorceau` rapetisse ce qui ne tient pas : une réplique
+         * trop longue s'afficherait donc quand même, en plus petit, et le contrôle de largeur
+         * passerait. Exiger que la taille rendue soit *exactement* la taille voulue revient à
+         * dire qu'aucune réplique écrite ici n'a besoin d'être secourue. Le pseudonyme, lui,
+         * est hors de notre main : c'est pour lui seul que le garde-fou existe.
+         */
+        expect(
+          tailleMorceau(m),
+          `« ${m.texte} » (${cle}) doit rapetisser pour tenir`,
+        ).toBeCloseTo(BASE_PAROLE * m.echelle, 6);
+      }
+    }
+  });
+
+  it("rapetisse un pseudonyme démesuré au lieu de le hacher", () => {
+    /**
+     * Vu à l'essai : « Alexandre-Maximilien » posé de force à sa taille voulue s'empilait sur
+     * quatre lignes coupées au milieu des syllabes. Le garde-fou le ramène à la taille qui le
+     * fait tenir en deux — et ne descend jamais sous le seuil de lisibilité.
+     */
+    const long = parolePour("content", "Alexandre-Maximilien");
+    const nom = long.morceaux[long.morceaux.length - 1];
+    const rendu = tailleMorceau(nom);
+    expect(rendu).toBeLessThan(BASE_PAROLE * nom.echelle);
+    expect(nom.texte.length * PART_CARACTERE * rendu)
+      .toBeLessThanOrEqual(LIGNES_MORCEAU * PLACE_PAROLE + 1e-6);
+
+    const demesure = parolePour("content", "Barthélemy-Alexandre de la Fontaine-Duverger");
+    expect(tailleMorceau(demesure.morceaux[1]), "illisible à force de rapetisser")
+      .toBeGreaterThanOrEqual(14);
+  });
+
+  it("hiérarchise : une amorce ne peut pas peser plus que son appui", () => {
+    /**
+     * ⚠️ **C'est la maquette qui fixe le sens.** La formule s'efface derrière le nom : plus
+     * petite *et* en sourdine. Un morceau retenu qui serait le plus grand de sa parole
+     * inverserait la lecture — on lirait « Bonjour » et l'on chercherait ensuite à qui.
+     */
+    for (const { cle, parole } of toutes()) {
+      const franc = Math.max(...parole.morceaux.filter(m => !m.sourd).map(m => m.echelle));
+      for (const m of parole.morceaux.filter(m => m.sourd)) {
+        expect(m.echelle, `« ${m.texte} » (${cle}) écrase son appui`).toBeLessThanOrEqual(franc);
+      }
+    }
+  });
+
+  it("ne fait s'envoler que ce qui s'envole", () => {
+    /**
+     * Une hauteur ou un pivot sur un morceau posé se lirait comme un défaut de mise en page :
+     * rien, autour, n'expliquerait pourquoi ce mot-là est de travers.
+     */
+    for (const { cle, parole } of toutes()) {
+      if (parole.genre === "envol") continue;
+      for (const m of parole.morceaux) {
+        expect(m.monte ?? 0, `« ${m.texte} » (${cle}) flotte sans raison`).toBe(0);
+        expect(m.pivot ?? 0, `« ${m.texte} » (${cle}) penche sans raison`).toBe(0);
+      }
+    }
+  });
+
+  it("fait monter le dodo vers le ciel, du plus petit au plus grand", () => {
+    /**
+     * ⚠️ **C'est le dessin même du sommeil, et il est directionnel.** Le souffle part
+     * minuscule et s'éloigne en enflant. Chaque `z` doit donc être **strictement** plus grand
+     * et **strictement** plus haut que le précédent : à égalité, on retombe sur trois lettres
+     * alignées, c'est-à-dire sur le mot « zzZ » et non sur un ronflement.
+     *
+     * ⚠️ **Et jamais deux pivots identiques.** Un balancement régulier se lit comme une
+     * décoration ; des angles inégaux se lisent comme des bouffées.
+     */
+    const dodo = parolePour("somnolent", NOM);
+    expect(dodo.genre).toBe("envol");
+    expect(dodo.morceaux.length).toBeGreaterThanOrEqual(3);
+
+    for (let i = 1; i < dodo.morceaux.length; i++) {
+      const av = dodo.morceaux[i - 1], ap = dodo.morceaux[i];
+      expect(ap.echelle, `le ${i + 1}ᵉ « z » n'enfle pas`).toBeGreaterThan(av.echelle);
+      expect(ap.monte ?? 0, `le ${i + 1}ᵉ « z » ne monte pas`).toBeGreaterThan(av.monte ?? 0);
+    }
+    const pivots = dodo.morceaux.map(m => m.pivot ?? 0);
+    expect(new Set(pivots).size, "deux « z » penchent pareil").toBe(pivots.length);
+
+    // Un souffle se recompose sans espaces : c'est ce qui le distingue d'un bégaiement.
+    expect(texteDe(dodo)).toBe("zzZ");
+    expect(texteDe(dodo)).not.toMatch(/\s/);
   });
 
   it("nomme un pseudonyme par défaut qui se lit dans une phrase", () => {

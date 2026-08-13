@@ -216,3 +216,57 @@ export const CLE_COULEUR = "novac-avatar-couleur";
 export function estCouleurValide(v: unknown): v is string {
   return typeof v === "string" && /^#[0-9A-Fa-f]{6}$/.test(v);
 }
+
+/**
+ * L'écart de clarté visé entre les deux tons d'une parole, en points de `L*`.
+ *
+ * ⚠️ **Onze points, parce que c'est ce que la plupart des couleurs peuvent donner.** Mesuré
+ * sur les onze teintes : à cette cible, huit d'entre elles atteignent entre 8 et 15 points,
+ * ce qui sépare franchement l'amorce de l'appui. Viser plus haut ne change rien — le
+ * plancher de lisibilité arrête la descente bien avant, et les valeurs mesurées à 8, 11 et
+ * 14 sont identiques. Viser moins bas rendrait la hiérarchie invisible sur les teintes qui,
+ * elles, ont de la marge.
+ */
+const ECART_PAROLE = 11;
+
+/**
+ * Le contraste minimal auquel on s'arrête, face au fond.
+ *
+ * ⚠️ **Trois pour un, parce que c'est du gros texte gras et rien d'autre.** C'est le seuil
+ * des grandes tailles, et il ne vaut ici que parce que la parole est posée en vingt gras au
+ * minimum. Le même ton dans une mention courante serait sous-dimensionné.
+ */
+const PLANCHER_PAROLE = 3.2;
+
+/**
+ * Le ton **retenu** d'une parole : la couleur du personnage, en sourdine.
+ *
+ * ⚠️ **Ni blanc, ni gris — la même teinte, moins présente.** La maquette posait le mot
+ * d'amorce en blanc ; refusé à l'usage, et à raison : un blanc n'appartient à personne, et
+ * c'est justement la couleur qui rattache la parole au personnage. On garde donc la teinte
+ * et l'on retire de la présence, par deux leviers à la fois.
+ *
+ * ⚠️ **Deux leviers, parce qu'aucun ne suffit seul.** Mélangé vers le fond, le ton perd sa
+ * lisibilité avant d'avoir perdu sa vivacité : mesuré, à trente pour cent de mélange, la
+ * pire des onze teintes tombe déjà à 2,29 de contraste. Désaturé seul, il **remonte** en
+ * clarté sur certaines teintes — HSL n'est pas perceptuel — et l'amorce se retrouve plus
+ * claire que l'appui, soit l'inverse de la hiérarchie voulue. On coupe donc la saturation de
+ * moitié *et* l'on descend en clarté jusqu'à l'écart visé.
+ *
+ * ⚠️ **La descente s'arrête au plancher, quitte à ne pas atteindre la cible.** Sur l'encre —
+ * une tête si sombre que le garde-fou du fond noir la remonte déjà à 3,42 de contraste — il
+ * ne reste que 1,4 point d'écart. La hiérarchie repose alors sur la seule taille, ce qui est
+ * la bonne dégradation : un ton illisible ne serait pas une nuance, ce serait un trou.
+ */
+export function tonRetenu(plein: string, fond: string): string {
+  const [teinte, saturation, clarte] = rvbVersTsl(hexVersRvb(plein));
+  const vise = clartePercue(plein) - ECART_PAROLE;
+  let retenu = rvbVersHex(tslVersRvb([teinte, saturation * 0.5, clarte]));
+  for (let i = 1; i <= 60; i++) {
+    const essai = rvbVersHex(tslVersRvb([teinte, saturation * 0.5, Math.max(0, clarte - i * 0.006)]));
+    if (contraste(essai, fond) < PLANCHER_PAROLE) break;
+    retenu = essai;
+    if (clartePercue(essai) <= vise) break;
+  }
+  return retenu;
+}

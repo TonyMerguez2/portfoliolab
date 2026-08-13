@@ -475,23 +475,95 @@
 }
 
 /* ─────────────────────────────────────────────────────────────
-   L'apparition d'une parole de l'avatar.
+   La mise en scène d'une parole de l'avatar.
 
-   ⚠️ **Elle monte et se révèle, elle ne surgit pas.** Un mot qui apparaît d'un
-   coup se lit comme un défaut d'affichage ; un mot qui monte de quelques pixels
-   en se révélant se lit comme une pensée qui se forme. Le déplacement est court
-   — six pixels — parce qu'au-delà on suit le mouvement au lieu de lire le mot.
+   ⚠️ **Chaque morceau entre pour son compte, décalé du précédent.** Une parole
+   qui apparaît d'un bloc se lit comme un panneau qu'on allume ; les morceaux qui
+   se posent l'un après l'autre se lisent comme quelqu'un qui parle. Le décalage
+   est porté par le composant — c'est lui qui connaît le rang de chaque morceau —
+   et il vaut quatre-vingt-dix millisecondes, assez pour qu'on perçoive l'ordre
+   sans jamais attendre le dernier mot.
 
-   ⚠️ **Le point de départ est en bas, pas en haut.** Une parole qui descendrait
-   vers le personnage aurait l'air de lui tomber dessus ; elle s'en échappe.
+   ⚠️ **La courbe dépasse sa cible, et c'est délibéré.** Un adoucissement sage
+   convient à un panneau qui s'ouvre ; le personnage est rond, il rebondit, ses
+   yeux clignent. Le dernier tiers de la courbe passe au-dessus de 1 : le mot
+   grossit un peu trop puis se repose. C'est ce dépassement qui fait « mignon »
+   plutôt que « propre ».
    ───────────────────────────────────────────────────────────── */
-@keyframes av-parole {
-  from { opacity: 0; transform: translateY(6px); }
-  to   { opacity: 1; transform: translateY(0); }
+@property --av-monte { syntax: "<length>"; inherits: false; initial-value: 0px; }
+@property --av-pivot { syntax: "<angle>"; inherits: false; initial-value: 0deg; }
+
+@keyframes av-mot {
+  from { opacity: 0; transform: translateY(9px) scale(0.84); }
+  to   { opacity: 1; transform: none; }
 }
 
-.av-parole {
-  animation: av-parole 260ms cubic-bezier(0.2, 0.7, 0.3, 1);
+.av-mot {
+  display: inline-block;
+  animation: av-mot 380ms cubic-bezier(0.34, 1.5, 0.5, 1) both;
+}
+
+/* ─────────────────────────────────────────────────────────────
+   Le souffle du dodo.
+
+   ⚠️ **Un « z » ne se pose pas, il s'échappe.** Le mot d'une phrase monte de
+   quelques pixels et s'arrête ; le souffle du sommeil part minuscule et enfle en
+   s'éloignant. Les deux ne peuvent donc pas partager une entrée : un « zzZ » qui
+   arriverait d'en bas comme un mot dirait le contraire de ce qu'il montre.
+
+   ⚠️ **Puis il continue de flotter, parce que dormir dure.** Les trois lettres
+   ondulent lentement et **hors phase** — le décalage de leur entrée décale aussi
+   leur flottement. En phase, elles remonteraient ensemble et l'on verrait un bloc
+   se balancer ; déphasées, on voit trois bouffées.
+
+   ⚠️ **La position de repos est portée par la classe, pas seulement par
+   l'animation.** Sinon, pendant le retard qui précède son tour, la lettre serait
+   posée sur la ligne de base et sauterait à sa hauteur d'un coup — et, mouvement
+   réduit demandé, elle y resterait pour de bon.
+   ───────────────────────────────────────────────────────────── */
+@keyframes av-souffle {
+  from { opacity: 0; transform: translateY(11px) scale(0.3); }
+  55%  { opacity: 1; }
+  to   { opacity: 1; transform: none; }
+}
+
+@keyframes av-flotte {
+  0%, 100% { transform: translateY(var(--av-monte)) rotate(var(--av-pivot)); }
+  50%      { transform: translateY(calc(var(--av-monte) - 5px)) rotate(calc(var(--av-pivot) + 4deg)); }
+}
+
+.av-envol {
+  display: inline-block;
+  transform: translateY(var(--av-monte)) rotate(var(--av-pivot));
+  animation: av-flotte 3.6s ease-in-out infinite both;
+}
+
+.av-souffle {
+  display: inline-block;
+  animation: av-souffle 520ms cubic-bezier(0.22, 1.3, 0.4, 1) both;
+}
+
+/* ─────────────────────────────────────────────────────────────
+   Les traits d'éclat, sur les paroles enjouées.
+
+   ⚠️ **Ils arrivent après le mot, jamais avec lui.** Ce sont des traits de bande
+   dessinée : ils ponctuent ce qui vient d'être dit. Lancés en même temps que le
+   texte, ils se lisent comme une décoration posée là ; lancés après, ils se
+   lisent comme une réaction.
+
+   ⚠️ **Ils pivotent en entrant, depuis leur point de fuite.** L'origine est au
+   coin bas-gauche du carré, là où les trois traits convergent : c'est de ce point
+   qu'un éclat jaillit, et c'est le seul autour duquel une rotation ne les décolle
+   pas de ce qu'ils désignent.
+   ───────────────────────────────────────────────────────────── */
+@keyframes av-eclat {
+  from { opacity: 0; transform: scale(0.25) rotate(-22deg); }
+  to   { opacity: 1; transform: none; }
+}
+
+.av-eclat {
+  transform-origin: 15% 85%;
+  animation: av-eclat 420ms cubic-bezier(0.34, 1.56, 0.5, 1) both;
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -858,7 +930,10 @@ canvas + div {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .av-parole { animation: none; }
+  /* La parole reste lisible : ce sont ses entrées et son flottement qui cessent,
+     pas le texte. Le repos de l'envol est porté par la classe, donc les « z »
+     gardent leur hauteur et leur pivot sans bouger. */
+  .av-mot, .av-souffle, .av-envol, .av-eclat { animation: none; }
   /* Un clignement est bref, mais c'est du mouvement non sollicité : il se coupe. */
   .novac-clignement { animation: none; }
   .novac-verre-defilant::after {
