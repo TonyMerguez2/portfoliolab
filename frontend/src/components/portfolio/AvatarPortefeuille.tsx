@@ -166,7 +166,14 @@ export default function AvatarPortefeuille({
           aria-hidden="true"
           style={{
             position: "absolute", inset: 0, display: "block", overflow: "visible",
-            pointerEvents: "none", opacity: survole || ouvert ? 1 : 0,
+            /**
+             * ⚠️ **Le survol seul, et surtout pas le panneau ouvert.** La surcouche
+             * annonce « on peut retoucher ceci » ; une fois le panneau ouvert, c'est fait
+             * — le laisser voilé cache l'avatar au moment précis où l'on regarde ce qu'on
+             * lui fait, alors que le curseur est parti dans les réglages. La marque
+             * accompagne le geste, elle ne le commente pas après coup.
+             */
+            pointerEvents: "none", opacity: survole ? 1 : 0,
             transition: "opacity 140ms ease",
           }}
         >
