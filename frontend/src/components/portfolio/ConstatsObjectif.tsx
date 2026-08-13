@@ -8,7 +8,7 @@ import {
   type Contexte, type Insight, type Priorite,
 } from "@/lib/aideDecision";
 import {
-  COULEUR_PAR_DEFAUT, bordCarte, cadreCarte, couleurDesYeux, encre, lisible,
+  COULEUR_PAR_DEFAUT, bordCarte, couleurDesYeux, encre, lisible,
 } from "@/lib/avatarCouleur";
 import { hexVersRvb } from "@/lib/couleur";
 import { ARRONDI_REFERENCE, OEIL_REFERENCE, TAILLE_REFERENCE } from "@/lib/avatarReglages";
@@ -171,15 +171,16 @@ export default function ConstatsObjectif({
    */
   const fond = couleurAvatar ?? COULEUR_PAR_DEFAUT;
   /**
-   * ⚠️ **Les deux anneaux suivent la carte, sinon ils la dénoncent.** Gardés aux couleurs
-   * du thème autour d'un fond teinté, ils dessinent un liseré bleu nuit sur une carte
-   * ambre : la carte cesse d'appartenir au jeu au lieu de s'y ranger. Les rapports
-   * viennent des cartes voisines, mesurés — voir `bordCarte` et `cadreCarte`.
+   * ⚠️ **Les trois anneaux suivent la carte, sinon ils la dénoncent.** C'est la règle des
+   * deux thèmes, appliquée telle quelle : le cadre extérieur **est** la couleur de la
+   * carte — `--nv-cadre` vaut `--nv-carte` en sombre comme en clair —, son voile est cette
+   * couleur à moitié, et seul le liseré intérieur s'en écarte, de sept points de clarté
+   * perçue. L'anneau extérieur ne se voit donc jamais : il ne fait que ménager six pixels
+   * autour de la carte.
    */
   const anneaux = useMemo(() => {
-    const cadre = cadreCarte(fond);
-    const [r, v, b] = hexVersRvb(cadre);
-    return { cadre, voile: `rgba(${r}, ${v}, ${b}, 0.5)`, bord: bordCarte(fond) };
+    const [r, v, b] = hexVersRvb(fond);
+    return { cadre: fond, voile: `rgba(${r}, ${v}, ${b}, 0.5)`, bord: bordCarte(fond) };
   }, [fond]);
   const teintePriorite = (p: Priorite) => lisible(fond, TEINTE_PRIORITE[p]);
 

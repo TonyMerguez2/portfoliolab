@@ -105,23 +105,20 @@ export function encre(fond: string, part: number): string {
 }
 
 /**
- * Les deux liserés d'une carte teintée, dans la famille de sa couleur.
+ * Le liseré intérieur d'une carte teintée.
  *
- * ⚠️ **Les rapports sont relevés sur les cartes du thème, pas choisis.** Une carte porte
- * deux anneaux : un cadre extérieur, qui laisse voir le noir de la page, et un liseré
- * intérieur à peine détaché du fond. Mesuré dans le thème sombre, `#030712` contre
- * `#101828` fait **1,135 pour un** — une séparation qu'on ne nomme pas, qu'on ne voit
- * qu'au coin de l'œil, et qui donne pourtant tout le relief. Reproduire ce rapport plutôt
- * qu'un écart choisi au jugé est ce qui fait que la carte teintée appartient au même jeu
- * que ses voisines.
+ * ⚠️ **Le cadre extérieur n'a pas de fonction ici : il *est* la carte.** C'est la règle des
+ * deux thèmes, et elle est sans ambiguïté — `--nv-cadre` vaut `--nv-carte`, `#030712` en
+ * sombre et `#FFFFFF` en clair, et le voile de l'anneau est cette même couleur à moitié.
+ * L'anneau ne se voit donc jamais ; il ne fait que ménager six pixels autour de la carte.
  *
- * ⚠️ **Le « noir » du thème n'en est pas un.** `#030712` est un bleu très sombre —
- * saturation 0,71, clarté 0,04 — et c'est ce qui l'empêche de faire un trou dans une page
- * bleutée. Le cadre d'une carte teintée reprend donc ces deux valeurs dans **sa** teinte :
- * il reste noir à l'œil, sans jamais être étranger à la couleur qu'il entoure.
+ * ⚠️ **J'avais fabriqué un noir teinté à sa place, et c'était un contresens.** Un noir posé
+ * autour d'une carte bleue se voit énormément — un anneau sombre, exactement ce que le
+ * thème évite en donnant au cadre la couleur de sa carte. Signalé à l'usage, deux fois.
+ * Reproduire un rapport, ce n'est pas fabriquer une couleur qui *ressemble* à celle du
+ * thème : c'est appliquer la même règle à une autre valeur de départ.
  */
-const CLARTE_CADRE = 0.041;
-const SATURATION_CADRE = 0.71;
+
 /**
  * L'écart de clarté perçue entre une carte et son liseré, en points de `L*`.
  *
@@ -133,13 +130,6 @@ const SATURATION_CADRE = 0.71;
  * même bord sur les onze couleurs.
  */
 const ECART_BORD = 7;
-
-/** Le cadre extérieur : le noir de cette teinte-là. */
-export function cadreCarte(fond: string): string {
-  const [teinte, saturation] = rvbVersTsl(hexVersRvb(fond));
-  return rvbVersHex(tslVersRvb(
-    [teinte, Math.min(saturation, SATURATION_CADRE), CLARTE_CADRE]));
-}
 
 /**
  * Le liseré intérieur : la même couleur, juste assez décalée pour se voir.
