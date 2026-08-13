@@ -180,7 +180,6 @@ export default function GlobalHeader() {
   const [searchResults, setSearchResults] = useState<Asset[]>([]);
   const [showDropdown, setShowDropdown] = useState(false);
   const [showSearch, setShowSearch] = useState(false);
-  const [showNotifs, setShowNotifs] = useState(false);
   const searchRef = useRef<HTMLInputElement>(null);
   const [portfolios, setPortfolios] = useState<Portefeuille[]>([]);
   const [showTools, setShowTools] = useState(false);
@@ -366,7 +365,7 @@ export default function GlobalHeader() {
         setShowSearch(true);
         searchRef.current?.focus();
       }
-      if (e.key === "Escape") { setShowSearch(false); setShowNotifs(false); }
+      if (e.key === "Escape") setShowSearch(false);
     };
     document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);
@@ -415,25 +414,24 @@ export default function GlobalHeader() {
       {showDropdown && <div style={{ position:"fixed", inset:0, zIndex:49 }} onClick={() => setShowDropdown(false)}/>}
 
 
-      {/* Recherche globale, à gauche du bandeau.
+      {/* Recherche globale, au bord droit du bandeau.
           Elle n'existait que repliée dans le menu du portefeuille, et sur la
           page portefeuille ce menu ne montre que les portefeuilles : il n'y
           avait donc aucun moyen de chercher un actif depuis cette page.
 
-          ⚠️ **Le calage part de la largeur de la barre latérale, pas d'une
-          constante.** `--novac-nav-w` vaut 232 dépliée et bien moins repliée ;
-          un `left: 252px` figé ferait chevaucher le champ et le menu au repli.
-          La transition reprend celle de `.novac-shell` — même durée, même
-          courbe — pour que le champ glisse avec le panneau au lieu de sauter
-          quand il se termine.
+          ⚠️ **Elle ne suit plus la barre latérale, et c'est ce qui simplifie tout.**
+          Calée à gauche, elle partait de `--novac-nav-w` — 232 dépliée, bien moins
+          repliée — et il fallait lui donner la transition de `.novac-shell`, même
+          durée et même courbe, pour qu'elle glisse avec le panneau au lieu de sauter
+          quand il se termine. Ancrée au bord droit, elle ne dépend plus de rien : le
+          repli de la barre ne la déplace pas, donc il n'y a plus rien à synchroniser.
 
           ⚠️ Le conteneur est `fixed`, ce qui suffit à ancrer le panneau de
           résultats en dessous : un `position: relative` intermédiaire, qu'il y
           avait ici, ne servait plus à rien. */}
       <div style={{
-        position:"fixed", top:"12px", left:"calc(var(--novac-nav-w, 232px) + 20px)",
+        position:"fixed", top:"12px", right:"20px",
         zIndex:50, width:"320px",
-        transition:"left 220ms cubic-bezier(0.4,0,0.2,1)",
       }}>
         <div style={{
           display:"flex", alignItems:"center", gap:"8px", height:"36px", padding:"0 12px",
@@ -480,13 +478,15 @@ export default function GlobalHeader() {
         </div>
 
         {showSearch && (
-          // ⚠️ **Ancré à gauche, et ce n'est pas un détail de symétrie.** Le panneau
-          // fait 420 de large pour un champ de 320 ; accroché à droite comme avant, il
-          // débordait de cent pixels *vers la gauche* — donc sous la barre latérale,
-          // qu'il recouvrait. À droite du bandeau ce dépassement tombait dans le vide et
-          // ne se voyait pas. Déplacer le champ a rendu l'ancrage faux.
+          // ⚠️ **Ancré à droite, et l'ancrage suit le champ.** Le panneau fait 420 de
+          // large pour un champ de 320 : il déborde donc de cent pixels du côté opposé à
+          // son ancrage. Accroché à gauche alors que le champ est au bord droit, ces cent
+          // pixels sortiraient de la fenêtre. Accroché à droite, ils tombent vers
+          // l'intérieur de la page, où il y a la place. C'est la même erreur qu'au
+          // déplacement précédent, en miroir : le champ avait bougé, pas l'ancrage — et le
+          // panneau passait alors sous la barre latérale, qu'il recouvrait.
           <div style={{
-            position:"absolute", top:"calc(100% + 6px)", left:0, width:"420px",
+            position:"absolute", top:"calc(100% + 6px)", right:0, width:"420px",
             background:"rgba(4,17,36,0.97)", border:"1px solid rgba(255,255,255,0.1)",
             borderRadius:"12px", overflow:"hidden", boxShadow:"0 16px 48px rgba(0,0,0,0.5)", zIndex:60,
           }} onMouseDown={e => e.preventDefault()}>
@@ -525,60 +525,21 @@ export default function GlobalHeader() {
         )}
         </div>
 
-      {/* Cloche. Pas de pastille de notification : il n'existe aucune source
-          d'alertes dans le projet, et un point coloré promettrait du contenu
-          qui n'arriverait jamais. Elle dit ce qu'elle sait.
-
-          ⚠️ **Elle reste à droite, seule dans son bloc.** Le champ et elle
-          partageaient un conteneur `flex` collé au bord droit ; la recherche étant
-          partie à gauche, ce conteneur n'avait plus qu'un enfant. Deux blocs
-          `fixed` indépendants disent mieux ce qui se passe : l'un suit la barre
-          latérale, l'autre le bord droit, et rien ne les lie. */}
-      <div style={{ position:"fixed", top:"12px", right:"20px", zIndex:50 }}>
-          <button type="button" onClick={() => setShowNotifs(v => !v)}
-            aria-label="Réglages" title="Réglages"
-            style={{
-              width:36, height:36, borderRadius:RAYONS.md, flexShrink:0, cursor:"pointer",
-              display:"flex", alignItems:"center", justifyContent:"center",
-              // Pastille claire à icône sombre, comme le bouton d'angle du
-              // concept — et comme les segments de la page, dont c'est déjà la
-              // langue. Le verre translucide qu'elle portait la faisait
-              // disparaître dans le bandeau.
-              background:JETONS.segmentActif,
-              border:"none", color:JETONS.segmentEncre,
-              boxShadow:JETONS.segmentOmbre,
-              transition:"opacity 150ms",
-              opacity: showNotifs ? 0.86 : 1,
-            }}>
-            {/* ⚠️ **L'avatar est reparti sur le portefeuille**, où il porte une
-                information — l'état de *ce* portefeuille-là. Ici il n'en portait
-                aucune : une seule tête pour toute l'application ne pouvait que
-                répéter ce que l'écran montrait déjà.
-
-                La roue revient donc telle qu'elle était : six lobes reliés par des
-                congés, moyeu dessiné dans le même tracé. Même boîte et même trait
-                que la loupe — 18 unités sur 24 à partir de (3,3). */}
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-              strokeWidth={2.0} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-              <path d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 0 0 2.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 0 0 1.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 0 0-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 0 0-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.723 1.723 0 0 0-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 0 0-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 0 0 1.066-2.573c-.94-1.543.826-3.31 2.37-2.37 1 .608 2.296.07 2.572-1.065M9 12a3 3 0 1 0 6 0 3 3 0 0 0-6 0" />
-            </svg>
-          </button>
-          {showNotifs && (
-            <div style={{
-              position:"absolute", top:"calc(100% + 6px)", right:0, width:"250px",
-              background:"rgba(4,17,36,0.97)", border:"1px solid rgba(255,255,255,0.1)",
-              borderRadius:"12px", padding:"18px 14px", textAlign:"center", zIndex:60,
-              boxShadow:"0 16px 48px rgba(0,0,0,0.5)",
-            }}>
-              <span style={{ fontSize:"11px", color:"rgba(255,255,255,0.35)", lineHeight:1.5 }}>
-                Aucune notification
-              </span>
-            </div>
-          )}
-      </div>
-      {(showSearch || showNotifs) && (
+      {/**
+        * La roue de réglage a été retirée du bandeau.
+        *
+        * ⚠️ **Elle disait « Réglages » et ouvrait les notifications.** Le libellé et
+        * l'infobulle annonçaient un panneau de réglages ; le clic dépliait une boîte
+        * contenant « Aucune notification ». Deux promesses, aucune tenue — et les vrais
+        * réglages vivent dans la barre latérale, où ils sont nommés « Paramètres ».
+        *
+        * ⚠️ **Ce qui part avec elle.** L'état `showNotifs` et son panneau vide, qui
+        * n'avaient plus d'autre déclencheur. Rien d'autre ne les lisait ; le voile de
+        * fermeture ne garde donc que la recherche.
+        */}
+      {showSearch && (
         <div style={{ position:"fixed", inset:0, zIndex:49 }}
-          onClick={() => { setShowSearch(false); setShowNotifs(false); }}/>
+          onClick={() => setShowSearch(false)}/>
       )}
     </>
   );
