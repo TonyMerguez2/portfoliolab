@@ -6,6 +6,9 @@ import {
   cheminsSurLaTete, contourSilhouette, projeter, tournerTete, traitSurLaTete,
 } from "@/lib/avatarSpherique";
 import { type FamilleSolide, solideDepuis } from "@/lib/avatarVolume";
+import {
+  ARRONDI_REFERENCE, OEIL_REFERENCE, TAILLE_REFERENCE, VIE_REFERENCE,
+} from "@/lib/avatarReglages";
 import { grilleSpherique } from "@/lib/avatarGrille";
 import {
   cheminOeilSolide, cheminsSurLeSolide, contourTeteSolide, normaleSolide,
@@ -155,10 +158,7 @@ type Oeil = {
   arrondi: number;
 };
 
-const OEIL_PAR_DEFAUT: Oeil = {
-  largeur: 19, hauteur: 66, ecart: 18, elevation: 0, inclinaison: 0,
-  forme: "capsule", arrondi: 0.42,
-};
+const OEIL_PAR_DEFAUT: Oeil = { ...OEIL_REFERENCE };
 
 
 /** Constante de temps de l'amorti du regard : le suivi glisse, il ne saute pas. */
@@ -190,7 +190,7 @@ export default function AvatarProceduralPage() {
    * bouts d'un même réglage, ce qui rend toutes les valeurs intermédiaires disponibles
    * — et surtout animables, le jour où la tête devra passer de l'une à l'autre.
    */
-  const [silhouette, setSilhouette] = useState(0.5);
+  const [silhouette, setSilhouette] = useState(ARRONDI_REFERENCE);
   const [formeTete, setFormeTete] = useState<FamilleSolide>("sphere");
   /** Le solide tourne-t-il pour de bon, ou seule son image est-elle étirée ? */
   const [vraie3D, setVraie3D] = useState(false);
@@ -200,18 +200,18 @@ export default function AvatarProceduralPage() {
     [formeTete, silhouette]);
   const [vie, setVie] = useState<EtatVie>(VIE_AU_REPOS);
   const [expression, setExpression] = useState<CleExpression>("neutre");
-  const [taille, setTaille] = useState(1.23);
+  const [taille, setTaille] = useState(TAILLE_REFERENCE);
   const [yeux, setYeux] = useState<{ gauche: Oeil; droit: Oeil }>(
     { gauche: OEIL_PAR_DEFAUT, droit: OEIL_PAR_DEFAUT });
   /** Tant que le lien tient, un curseur touche les deux yeux à la fois. */
   const [lies, setLies] = useState(true);
   const [oeilRegle, setOeilRegle] = useState<"gauche" | "droit">("gauche");
   const [suivi, setSuivi] = useState(true);
-  const [amplitude, setAmplitude] = useState(13);
-  const [clignement, setClignement] = useState(true);
-  const [cadence, setCadence] = useState(4.5);
+  const [amplitude, setAmplitude] = useState(VIE_REFERENCE.amplitude);
+  const [clignement, setClignement] = useState(VIE_REFERENCE.clignement);
+  const [cadence, setCadence] = useState(VIE_REFERENCE.cadenceClignement);
   const [etat, setEtat] = useState("neutre");
-  const [derive, setDerive] = useState(3);
+  const [derive, setDerive] = useState(VIE_REFERENCE.derive);
   const [skin, setSkin] = useState("uni");
   const [palette, setPalette] = useState<Palette>(skinParCle("uni").palette);
 

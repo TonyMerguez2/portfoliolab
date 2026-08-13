@@ -5,6 +5,9 @@ import {
   RAYON_TETE, type Orientation, cheminOeil, cheminSvg, contourSilhouette,
 } from "@/lib/avatarSpherique";
 import { type FamilleSolide, solideDepuis } from "@/lib/avatarVolume";
+import {
+  ARRONDI_REFERENCE, OEIL_REFERENCE, TAILLE_REFERENCE, VIE_REFERENCE,
+} from "@/lib/avatarReglages";
 import { type EtatVie, VIE_AU_REPOS, creerVie } from "@/lib/avatarVie";
 import { COULEUR_PAR_DEFAUT, couleurDesYeux } from "@/lib/avatarCouleur";
 import type { FormeAvatar } from "@/lib/useCouleurAvatar";
@@ -29,41 +32,23 @@ import type { FormeAvatar } from "@/lib/useCouleurAvatar";
  * redeviennent lisibles. La géométrie est la même — seuls trois nombres changent.
  */
 
-/** Les yeux, en unités de surface sur une tête de rayon 100. */
-const LARGEUR = 32;
-const HAUTEUR = 66;
-const ECART = 27;
+/**
+ * ⚠️ **Les proportions viennent du banc d'essai, sans retouche.** Elles y étaient
+ * élargies : vingt-trois unités de large sur deux cents de diamètre donnent, à
+ * trente-huit pixels, des traits de quatre pixels que l'antialiasage avale — d'où des
+ * capsules épaissies ici. Le prix était que la même forme ne rendait plus pareil aux
+ * deux endroits, ce qui se voit tout de suite quand on compare, et qui rend le banc
+ * d'essai inutile puisqu'il ne montre plus ce qu'on obtiendra. On garde donc la
+ * référence, et c'est la **taille de rendu** qu'il faut monter si le trait manque de
+ * corps : à soixante-trois pixels, la capsule fait sept pixels de large.
+ */
+
 /**
  * ⚠️ Deux fois moins d'échantillons que sur la page d'essai. À trente-huit pixels, un
  * contour de deux cent vingt points en dépose six par pixel : on paie un calcul que
  * l'écran ne peut pas montrer.
  */
 const ECHANTILLONS = 96;
-
-/**
- * L'arrondi de chaque forme.
- *
- * ⚠️ **Un par famille, parce que le même nombre n'y produit pas le même effet.**
- * Signalé à l'usage : « les côtés du carré ne sont pas droits ». Ils l'étaient — mesuré,
- * les quatre côtés s'écartent de la droite de 0,17 unité chacun, et le bord supérieur
- * rastérisé à soixante-trois pixels ne varie pas d'un centième —, mais **il y en avait
- * trop peu** : à 0,42 d'arrondi, 58 % seulement du pourtour tombe à moins de cinq degrés
- * d'un axe, le reste étant pris par les coins. À 0,30, c'est 70 %, et le côté se lit
- * enfin comme un côté.
- *
- * ⚠️ Un réglage par famille et non un curseur exposé : à cette taille, deux arrondis
- * voisins ne diffèrent pas d'un pixel, et un curseur de plus n'aurait donné que
- * l'illusion d'un choix. Le banc d'essai, lui, le laisse régler à vue.
- */
-const ARRONDI: Record<FamilleSolide, number> = {
-  sphere: 1,
-  cube: 0.30,
-  etoile: 0.42,
-  etoile6: 0.42,
-  // Le coussin est un cube écrasé : il prend le même arrondi que lui, sans quoi ses
-  // bords seraient plus mous que ceux du carré alors qu'ils sortent de la même formule.
-  coussin: 0.30,
-};
 
 /** Le volume que porte chaque forme proposée. */
 const FAMILLE: Record<FormeAvatar, FamilleSolide> = {
@@ -89,9 +74,13 @@ const FAMILLE: Record<FormeAvatar, FamilleSolide> = {
  * dix secondes, ses gestes tomberaient presque toujours pendant qu'on regarde ailleurs.
  */
 const REGLAGES = {
-  derive: 7,
-  clignement: true,
-  cadenceClignement: 3.6,
+  ...VIE_REFERENCE,
+  /**
+   * ⚠️ **Les gestes spontanés sont le seul ajout au banc d'essai, et il s'assume.** Un
+   * avatar de coin d'écran n'est regardé que par intermittence : sans eux, l'essentiel
+   * de sa vie tomberait pendant qu'on regarde ailleurs. Ils n'existent pas sur le banc
+   * parce qu'on y regarde le visage en continu.
+   */
   spontane: true,
   cadenceSpontane: 4.5,
 };
@@ -126,7 +115,7 @@ export default function AvatarNovac({
   couleur,
   couleurYeux,
   suivi = true,
-  amplitude = 17,
+  amplitude = VIE_REFERENCE.amplitude,
   forme = "sphere",
   titre,
   style,
@@ -187,7 +176,7 @@ export default function AvatarNovac({
    * le solide qui tourne.
    */
   const solide = useMemo(
-    () => solideDepuis(FAMILLE[forme], ARRONDI[FAMILLE[forme]]), [forme]);
+    () => solideDepuis(FAMILLE[forme], ARRONDI_REFERENCE), [forme]);
 
   const [vie, setVie] = useState<EtatVie>(VIE_AU_REPOS);
   const [pose, setPose] = useState({ lacet: 0, tangage: 0 });
@@ -326,18 +315,22 @@ export default function AvatarNovac({
   const contourTete = useMemo(
     () => cheminSvg(contourSilhouette(solide, RAYON_TETE, 180)), [solide]);
 
-  const oeil = useCallback((fermeture: number, cote: -1 | 1) => cheminOeil({
-    ecart: ECART * vie.ecart,
-    elevation: 0,
-    largeur: LARGEUR * vie.largeur,
-    hauteur: (() => {
-      const ouverte = HAUTEUR * vie.hauteur;
-      const fente = Math.max(1.5, LARGEUR * vie.largeur * 0.12);
-      return ouverte + (fente - ouverte) * fermeture;
-    })(),
-    inclinaison: rad(vie.inclinaison),
-    courbure: vie.courbure,
-  }, orientation, cote, RAYON_TETE, ECHANTILLONS, solide), [vie, orientation, solide]);
+  const oeil = useCallback((fermeture: number, cote: -1 | 1) => {
+    // ⚠️ La taille globale multiplie **aussi** l'écart : ne redimensionner que les
+    // capsules resserrerait le regard à mesure qu'il grandit.
+    const largeur = OEIL_REFERENCE.largeur * TAILLE_REFERENCE * vie.largeur;
+    const ouverte = OEIL_REFERENCE.hauteur * TAILLE_REFERENCE * vie.hauteur;
+    const fente = Math.max(1.5, largeur * 0.12);
+    return cheminOeil({
+      ecart: OEIL_REFERENCE.ecart * TAILLE_REFERENCE * vie.ecart,
+      elevation: OEIL_REFERENCE.elevation * TAILLE_REFERENCE,
+      largeur,
+      hauteur: ouverte + (fente - ouverte) * fermeture,
+      inclinaison: rad(OEIL_REFERENCE.inclinaison + vie.inclinaison),
+      courbure: vie.courbure,
+      arrondi: OEIL_REFERENCE.forme === "capsule" ? 1 : OEIL_REFERENCE.arrondi,
+    }, orientation, cote, RAYON_TETE, ECHANTILLONS, solide);
+  }, [vie, orientation, solide]);
 
   return (
     <svg
