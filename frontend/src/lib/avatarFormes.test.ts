@@ -310,21 +310,76 @@ describe("la morphose d'une forme à l'autre", () => {
   ];
   const PARTS = [0.05, 0.2, 0.35, 0.5, 0.65, 0.8, 0.95];
 
-  it("ne sort jamais du cadre de la tête, à aucun instant", () => {
+  it("garde exactement l'encombrement de la tête, à aucun instant plus ni moins", () => {
     /**
-     * ⚠️ **La propriété est démontrable, et ce test la garde.** Les deux volumes tiennent
-     * déjà dans le carré, donc leur rayon y est partout au plus celui du carré ; une
-     * moyenne pondérée de deux nombres bornés par un même maximum l'est aussi. Le mélange
-     * ne peut donc ni déborder en route, ni rétrécir puis regonfler — et si un jour il le
-     * faisait, c'est qu'un réajustement se serait glissé là où il n'a rien à faire.
+     * ⚠️ **Ce test a d'abord été écrit à moitié, et il a laissé passer le défaut qu'il
+     * existait pour attraper.** Il ne vérifiait que le débordement, parce que c'était le
+     * sens que j'avais démontré : deux volumes bornés par le carré ont une moyenne bornée
+     * par le carré. C'est vrai et c'est insuffisant. Une moyenne peut **rétrécir** — la
+     * sphère atteint son maximum dans toutes les directions, le triangle dans trois
+     * seulement, donc leur moyenne ne l'atteint nulle part. Mesuré sur la page, la tête
+     * passait de 200 unités de large à 190 au milieu du passage avant de revenir à 200 :
+     * un pincement suivi d'un regonflement, signalé à l'usage comme un défaut de
+     * fluidité.
+     *
+     * On éprouve donc les **deux** bornes. C'est ce qui oblige le mélange à se remettre à
+     * l'échelle comme n'importe quel volume, au lieu de se fier à une démonstration qui
+     * ne couvrait qu'un côté.
      */
     for (const [a, b] of COUPLES) {
       for (const p of PARTS) {
         const s = melangerSolides(solide(a), solide(b), p);
-        for (const point of contourSilhouette(s, RAYON, 360)) {
+        const c = contourSilhouette(s, RAYON, 360);
+        const largeur = Math.max(...c.map(q => q.x)) - Math.min(...c.map(q => q.x));
+        const hauteur = Math.max(...c.map(q => q.y)) - Math.min(...c.map(q => q.y));
+        // Le plus grand des deux encombrements vaut le diamètre : la forme touche le
+        // cadre sans le dépasser, exactement comme les huit volumes d'origine.
+        expect(Math.max(largeur, hauteur)).toBeCloseTo(2 * RAYON, 1);
+        for (const point of c) {
           expect(Math.abs(point.x)).toBeLessThanOrEqual(RAYON * 1.001);
           expect(Math.abs(point.y)).toBeLessThanOrEqual(RAYON * 1.001);
         }
+      }
+    }
+  });
+
+  it("ne fait ni pincer ni dériver la tête en route", () => {
+    /**
+     * ⚠️ **Le défaut ne se voyait pas image par image, mais en les mettant bout à bout.**
+     * Chaque volume intermédiaire était parfaitement valide ; c'est la *suite* qui
+     * fautait, en passant par un creux. On suit donc l'encombrement et le centre le long
+     * du passage, et l'on demande que ni l'un ni l'autre ne s'écarte de ce que les deux
+     * bouts encadrent — un mélange ne doit jamais être plus étroit que la plus étroite des
+     * deux formes, ni glisser latéralement hors de leurs deux centres.
+     */
+    for (const [a, b] of COUPLES) {
+      const mesure = (s: ReturnType<typeof solide>) => {
+        const c = contourSilhouette(s, RAYON, 360);
+        const xs = c.map(q => q.x), ys = c.map(q => q.y);
+        return {
+          largeur: Math.max(...xs) - Math.min(...xs),
+          centre: (Math.max(...xs) + Math.min(...xs)) / 2,
+        };
+      };
+      const de = mesure(solide(a)), vers = mesure(solide(b));
+      const mini = Math.min(de.largeur, vers.largeur);
+      for (const p of PARTS) {
+        const m = mesure(melangerSolides(solide(a), solide(b), p));
+        /**
+         * ⚠️ **Trois pour cent, et les deux restants ne sont pas un défaut.** Cinq des six
+         * couples sont parfaitement monotones ; seul sphère → triangle creuse de 2 %, tôt
+         * dans le passage. La cause est géométrique et non corrigeable sans dégât : les
+         * deux formes n'ont pas le même rapport largeur sur hauteur — 1 pour la sphère,
+         * 0,90 pour le triangle — donc le mélange traverse des proportions où c'est la
+         * hauteur qui touche le cadre, et la largeur y reste en deçà. La remise à
+         * l'échelle doit rester **uniforme** : la corriger axe par axe étirerait la forme
+         * qu'elle sert justement à préserver. Quatre unités sur deux cents, soit un peu
+         * plus d'un pixel sur l'avatar rendu ; le pincement signalé en faisait dix.
+         */
+        expect(m.largeur).toBeGreaterThan(mini * 0.97);
+        // Un dixième d'unité : le centre des deux formes est le même, celui du mélange
+        // doit l'être aussi. C'est ce qui interdit le glissement latéral.
+        expect(Math.abs(m.centre - (de.centre + vers.centre) / 2)).toBeLessThan(0.1);
       }
     }
   });

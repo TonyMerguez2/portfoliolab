@@ -145,27 +145,30 @@ export const SPHERE: Solide = { famille: "sphere" };
 /**
  * Le volume à mi-chemin entre deux autres.
  *
- * ⚠️ **Aucun réajustement n'est nécessaire, et c'est démontrable.** Les deux volumes sont
- * déjà mis à l'échelle du carré de la tête, donc leur rayon y est partout au plus celui
- * du carré ; une moyenne pondérée de deux nombres bornés par un même maximum l'est aussi.
- * Le mélange tient donc dans le cadre par construction, à toutes les valeurs de `part` —
- * il ne peut ni déborder en route, ni rétrécir puis regonfler.
+ * ⚠️ **Il faut le remettre à l'échelle, et j'avais démontré le contraire.** Le
+ * raisonnement tenait à moitié : les deux volumes sont bornés par le carré de la tête,
+ * donc leur moyenne l'est aussi — le mélange ne peut pas **déborder**. J'en avais conclu
+ * qu'aucun réajustement n'était nécessaire, et le test que j'avais écrit ne vérifiait que
+ * ce sens-là. Or une moyenne peut très bien **rétrécir** : la sphère atteint son maximum
+ * dans toutes les directions, le triangle seulement dans trois, si bien que leur moyenne
+ * ne l'atteint nulle part. Mesuré sur la page, la tête passait de 200 unités de large à
+ * 190 au milieu du passage avant de revenir à 200 — un pincement, puis un regonflement.
+ * C'est exactement ce qui se voyait, et ce qui se lisait comme un défaut de fluidité.
  *
- * Le recentrage et la demi-largeur se mélangent de la même façon : ce sont des grandeurs
- * de la silhouette, et la silhouette du mélange est entre les deux.
+ * Le mélange est donc mesuré et remis à l'échelle comme n'importe quel volume. Trois
+ * cent soixante directions suffisent : c'est une échelle, pas une silhouette, et le pas
+ * plus fin coûterait à chaque image d'une transition.
+ *
+ * ⚠️ **Le recentrage se recalcule aussi, il ne s'interpole pas.** Le décalage d'un volume
+ * dépend de sa silhouette ; celle du mélange n'est pas la moyenne des deux silhouettes,
+ * seulement celle du rayon moyen. Interpoler les deux décalages faisait dériver la tête
+ * de quelques unités en cours de route, un glissement latéral qui n'a rien à faire là.
  */
 export function melangerSolides(de: Solide, vers: Solide, part: number): Solide {
   const t = Math.min(1, Math.max(0, part));
-  const entre = (a: number, b: number) => a + (b - a) * t;
-  const da = de.decalage ?? { x: 0, y: 0 }, dv = vers.decalage ?? { x: 0, y: 0 };
-  return {
-    famille: "melange",
-    de,
-    vers,
-    part: t,
-    decalage: { x: entre(da.x, dv.x), y: entre(da.y, dv.y) },
-    demiLargeur: entre(de.demiLargeur ?? 1, vers.demiLargeur ?? 1),
-  };
+  if (t <= 0) return de;
+  if (t >= 1) return vers;
+  return ajuster({ famille: "melange", de, vers, part: t }, 360);
 }
 
 /**
@@ -255,10 +258,10 @@ const RENTRANT_TRIANGLE = 0.5;
  * divise par son plus grand écart aux axes. Toutes les formes touchent alors le bord du
  * carré, aucune ne le dépasse.
  */
-function ajuster(forme: FormeSolide): Solide {
+function ajuster(forme: FormeSolide, echantillons: number = 720): Solide {
   let xMin = Infinity, xMax = -Infinity, yMin = Infinity, yMax = -Infinity;
-  for (let i = 0; i < 720; i++) {
-    const t = (i / 720) * Math.PI * 2;
+  for (let i = 0; i < echantillons; i++) {
+    const t = (i / echantillons) * Math.PI * 2;
     const u = { x: Math.cos(t), y: Math.sin(t), z: 0 };
     const r = rayonSolide(u, forme);
     xMin = Math.min(xMin, u.x * r); xMax = Math.max(xMax, u.x * r);
