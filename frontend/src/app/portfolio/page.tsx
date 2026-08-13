@@ -1803,6 +1803,52 @@ function PortfolioPageInner() {
                     <span style={{ fontFamily: FONT, fontSize: 12.5, fontWeight: 600, color: CLAIR.surFond }}>
                       Vos comptes
                     </span>
+                    {/**
+                      * ⚠️ **Le bouton tient dans les 26 pixels de la rangée, et ce n'est pas
+                      * négociable.** Cette hauteur est celle du bouton de tri de la grille ;
+                      * la dépasser rendrait la vue des dossiers plus haute que celle d'un
+                      * dossier ouvert, et la courbe au-dessus gagnerait huit pixels pour les
+                      * reperdre au premier clic. Voir la note juste au-dessus.
+                      *
+                      * ⚠️ **Poussé au bout de la rangée par une marge automatique.** La
+                      * rangée s'arrête à dix pixels de la carte d'activité récente : le
+                      * bouton s'y range donc de lui-même, sans qu'on ait à connaître la
+                      * largeur de la colonne.
+                      *
+                      * ⚠️ **Il dit ce qu'il fait, et pas ce qu'on voudrait qu'il fasse.** Il
+                      * n'existe aujourd'hui **aucun compte** dans les données : `Enveloppe`
+                      * vaut PEA, CTO ou Crypto, et chaque ligne y est *déduite* de sa place
+                      * de cotation — rien n'est stocké, rien ne se crée. Un compte apparaît
+                      * quand on y détient quelque chose, et disparaît quand on n'y détient
+                      * plus rien. Ouvrir la saisie d'une opération est donc le seul chemin
+                      * véritable vers un nouveau compte ; l'infobulle le dit, pour que le
+                      * bouton ne promette pas une création qui n'existe pas.
+                      */}
+                    <button type="button" onClick={() => setShowTxModal(true)}
+                      title="Un compte apparaît dès qu'une opération y place une ligne."
+                      style={{
+                        marginLeft: "auto", height: 22, display: "flex", alignItems: "center",
+                        gap: 5, padding: "0 9px", borderRadius: RAYONS.xs,
+                        background: CLAIR.carteCreuse, border: `1px solid ${CLAIR.bord}`,
+                        color: CLAIR.texteSecondaire, fontFamily: FONT, fontSize: 11,
+                        fontWeight: 500, cursor: "pointer", flexShrink: 0,
+                        transition: "color 150ms, border-color 150ms",
+                      }}
+                      onMouseEnter={e => {
+                        e.currentTarget.style.color = CLAIR.texte;
+                        e.currentTarget.style.borderColor = CLAIR.bordFort;
+                      }}
+                      onMouseLeave={e => {
+                        e.currentTarget.style.color = CLAIR.texteSecondaire;
+                        e.currentTarget.style.borderColor = CLAIR.bord;
+                      }}>
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none"
+                        stroke="currentColor" strokeWidth={2.2} strokeLinecap="round"
+                        aria-hidden="true">
+                        <path d="M12 5v14M5 12h14" />
+                      </svg>
+                      Ajouter un compte
+                    </button>
                   </div>
                   {/**
                     * ⚠️ **Un rail sur une seule ligne, et non une grille qui se replie.**
