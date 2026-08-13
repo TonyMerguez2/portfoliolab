@@ -41,6 +41,11 @@ import Cadre from "@/components/ui/Cadre";
 import ChiffresRoulants from "@/components/ui/ChiffresRoulants";
 import AvatarPortefeuille from "@/components/portfolio/AvatarPortefeuille";
 import AvatarParole from "@/components/AvatarParole";
+import FormulaireCompte, { type SaisieCompte } from "@/components/portfolio/FormulaireCompte";
+import {
+  type Compte as CompteDeclare, type GenreCompte, creerCompte, lireComptes, lireGenres,
+  televerserLogo, urlDuLogo,
+} from "@/lib/comptes";
 import { BASE_COMPACTE, PLACE_COMPACTE, parleEnContexteDense } from "@/lib/avatarDialogue";
 import { useParoleStable } from "@/lib/useParoleStable";
 import { useSalutArrivee } from "@/lib/useSalutArrivee";
@@ -55,7 +60,7 @@ import { useImpactTitre } from "@/hooks/useImpactTitre";
 import { useObjectifs, type Saisie } from "@/hooks/useObjectifs";
 import { useParametresSuggeres } from "@/hooks/useParametresSuggeres";
 import { useProjection } from "@/hooks/useProjection";
-import { alerteRepartition, avertissementValeur, type Objectif } from "@/lib/objectifs";
+import { alerteRepartition, avertissementValeur, euros, type Objectif } from "@/lib/objectifs";
 import { useTransparence } from "@/hooks/useTransparence";
 import { DividendesAVenir, ProchainsResultats } from "@/components/portfolio/TablesEvenements";
 import CalendrierEvenements from "@/components/portfolio/CalendrierEvenements";
@@ -333,6 +338,19 @@ function PortfolioPageInner() {
   const [dashView,        setDashView]        = useState<"resume"|"analyse"|"evenements"|"objectifs"|"transactions">("resume");
   const [activeTooltip,   setActiveTooltip]   = useState<string | null>(null);
   const [showTxModal,     setShowTxModal]     = useState(false);
+  /**
+   * Les comptes **déclarés**, à côté de ceux que l'on devine.
+   *
+   * ⚠️ **Les deux coexistent, et il faut que les deux coexistent.** `comptes` plus bas
+   * range les lignes par déduction, d'après leur place de cotation ; aucun portefeuille
+   * existant n'a de compte déclaré, et les priver de ce rangement les laisserait en vrac
+   * du jour au lendemain. Ce qui est déclaré s'affiche en plus, pas à la place.
+   */
+  const [comptesDeclares, setComptesDeclares] = useState<CompteDeclare[]>([]);
+  const [genresCompte,    setGenresCompte]    = useState<GenreCompte[]>([]);
+  const [formCompte,      setFormCompte]      = useState(false);
+  const [compteEnCours,   setCompteEnCours]   = useState(false);
+  const [erreurCompte,    setErreurCompte]    = useState<string | null>(null);
   const [txRefreshKey,    setTxRefreshKey]    = useState(0);
   const [positions,       setPositions]       = useState<PositionsData | null>(null);
   const [prenom,          setPrenom]          = useState<string | null>(null);
@@ -1175,6 +1193,61 @@ function PortfolioPageInner() {
    * l'écran montre entre-temps — ce n'est pas le sujet ici. En attendant, « Aïe. » est le
    * seul endroit de l'interface qui dise que rien n'a été enregistré.
    */
+  /**
+   * ⚠️ **Les deux lectures sont indépendantes, et un échec ne doit pas emporter l'autre.**
+   * Les genres sont une constante publique ; les comptes demandent une session. Hors
+   * session, la seconde échoue et c'est normal — l'écran retombe alors sur le rangement par
+   * déduction, qui n'a jamais eu besoin de compte. Les enchaîner aurait fait disparaître le
+   * formulaire pour tout le monde dès que la liste des comptes n'arrive pas.
+   */
+  useEffect(() => {
+    let vivant = true;
+    lireGenres().then(g => { if (vivant) setGenresCompte(g); }).catch(() => {});
+    return () => { vivant = false; };
+  }, []);
+
+  const idPortefeuille = portfolio?.id;
+  const rechargerComptes = useCallback(() => {
+    if (!idPortefeuille) return;
+    lireComptes(String(idPortefeuille))
+      .then(setComptesDeclares)
+      .catch(() => setComptesDeclares([]));
+  }, [idPortefeuille]);
+
+  useEffect(() => { rechargerComptes(); }, [rechargerComptes]);
+
+  /**
+   * ⚠️ **Le logo part après la création, en deux appels.** Le compte n'a pas d'identifiant
+   * avant d'exister, et le nom du fichier en dérive : c'est ce qui garantit qu'aucune chaîne
+   * reçue du client ne devient un chemin sur le disque. Un envoi en `multipart` d'un seul
+   * tenant aurait supprimé le second aller-retour, au prix de cette garantie.
+   *
+   * ⚠️ **Un logo refusé ne perd pas le compte.** Il est créé, et l'image seule échoue — on
+   * garde donc le compte et l'on dit ce qui n'a pas suivi, plutôt que de tout annuler pour
+   * une image trop lourde.
+   */
+  const creerLeCompte = useCallback(async (saisie: SaisieCompte) => {
+    if (!idPortefeuille) return;
+    setCompteEnCours(true);
+    setErreurCompte(null);
+    try {
+      const cree = await creerCompte(String(idPortefeuille), saisie);
+      if (saisie.logo) {
+        try {
+          await televerserLogo(String(idPortefeuille), cree.id, saisie.logo);
+        } catch {
+          setErreurCompte("Le compte est créé, mais le logo n'a pas pu être enregistré.");
+        }
+      }
+      rechargerComptes();
+      setFormCompte(false);
+    } catch (e) {
+      setErreurCompte(e instanceof Error ? e.message : "Le compte n'a pas pu être créé.");
+    } finally {
+      setCompteEnCours(false);
+    }
+  }, [idPortefeuille, rechargerComptes]);
+
   const saveTotalValue = async () => {
     if (!portfolio) return;
     const v = parseFloat(valueInput.replace(/\s/g, "").replace(",", "."));
@@ -1815,17 +1888,15 @@ function PortfolioPageInner() {
                       * bouton s'y range donc de lui-même, sans qu'on ait à connaître la
                       * largeur de la colonne.
                       *
-                      * ⚠️ **Il dit ce qu'il fait, et pas ce qu'on voudrait qu'il fasse.** Il
-                      * n'existe aujourd'hui **aucun compte** dans les données : `Enveloppe`
-                      * vaut PEA, CTO ou Crypto, et chaque ligne y est *déduite* de sa place
-                      * de cotation — rien n'est stocké, rien ne se crée. Un compte apparaît
-                      * quand on y détient quelque chose, et disparaît quand on n'y détient
-                      * plus rien. Ouvrir la saisie d'une opération est donc le seul chemin
-                      * véritable vers un nouveau compte ; l'infobulle le dit, pour que le
-                      * bouton ne promette pas une création qui n'existe pas.
+                      * ⚠️ **Il ouvrait la saisie d'une opération, faute de mieux.** Il
+                      * n'existait alors aucun compte dans les données : `Enveloppe` valait
+                      * PEA, CTO ou Crypto et chaque ligne y était *déduite* de sa place de
+                      * cotation, si bien qu'un compte n'apparaissait qu'en y détenant
+                      * quelque chose — et qu'un compte courant, qui ne détient aucun titre,
+                      * ne pouvait pas exister du tout. Les comptes se déclarent désormais.
                       */}
-                    <button type="button" onClick={() => setShowTxModal(true)}
-                      title="Un compte apparaît dès qu'une opération y place une ligne."
+                    <button type="button" onClick={() => { setErreurCompte(null); setFormCompte(true); }}
+                      title="Déclarer un compte : son genre, sa couleur, son logo."
                       style={{
                         marginLeft: "auto", height: 22, display: "flex", alignItems: "center",
                         gap: 5, padding: "0 9px", borderRadius: RAYONS.xs,
@@ -1859,6 +1930,36 @@ function PortfolioPageInner() {
                     * d'actifs défilent déjà ainsi, à la même place.
                     */}
                   <RailHorizontal pasMinimal={CARTE_COMPTE.largeur + 16}>
+                    {/**
+                      * ⚠️ **Les comptes déclarés passent avant ceux que l'on devine, et par
+                      * le même composant.** Un second dessin pour « les vrais » aurait fait
+                      * deux langages dans une même rangée ; ils portent la même carte, avec
+                      * leur couleur et leur logo à la place de l'habillage par défaut.
+                      *
+                      * ⚠️ **Ils n'ont pas encore d'aperçu, et c'est exact plutôt que
+                      * flatteur.** Une ligne n'entre dans un compte déclaré que si son
+                      * opération y est rattachée ; rien ne le permet encore depuis l'écran.
+                      * Y afficher les lignes devinées du même genre aurait montré un
+                      * contenu que la donnée ne dit pas — précisément la confusion que ces
+                      * comptes servent à lever.
+                      */}
+                    {comptesDeclares.map(c => {
+                      const logo = urlDuLogo(c);
+                      return (
+                        <CarteCompte key={c.id} nom={c.nom} couleur={c.couleur}
+                          compte={c.solde != null
+                            ? `${c.libelle_genre} · ${euros(c.solde)}`
+                            : c.libelle_genre}
+                          icone={logo
+                            ? <img src={logo} alt="" width={19} height={19}
+                                style={{ borderRadius: 4, objectFit: "cover" }} />
+                            : <svg width="19" height="19" viewBox="0 0 24 24" fill="none"
+                                stroke="currentColor" strokeWidth={2} strokeLinecap="round"
+                                strokeLinejoin="round" aria-hidden="true">
+                                <path d="M3 7h18v12H3z" /><path d="M3 7l3-3h12l3 3" />
+                              </svg>} />
+                      );
+                    })}
                     {comptes.map(c => (
                       <CarteCompte key={c.cle} nom={c.cle} couleur={c.couleur} icone={c.icone}
                         compte={`${c.lignes.length} actif${c.lignes.length > 1 ? "s" : ""}`}
@@ -2563,6 +2664,13 @@ function PortfolioPageInner() {
       {/* Bottom padding */}
       <div style={{ height: 10, flexShrink: 0 }} />
 
+      {formCompte && (
+        <FormulaireCompte
+          genres={genresCompte} enCours={compteEnCours} erreur={erreurCompte}
+          onEnregistrer={creerLeCompte}
+          onFermer={() => { setFormCompte(false); setErreurCompte(null); }}
+        />
+      )}
       {showTxModal && (
         <TransactionModal
           portfolioId={portfolio?.id ?? ""}
