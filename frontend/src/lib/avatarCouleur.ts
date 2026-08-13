@@ -1,5 +1,6 @@
 import {
-  contraste, decalerClarte, hexVersRvb, luminance, rvbVersHex, rvbVersTsl, tslVersRvb,
+  clartePercue, contraste, decalerClarte, hexVersRvb, luminance, rvbVersHex, rvbVersTsl,
+  tslVersRvb,
 } from "./couleur";
 
 /**
@@ -121,7 +122,17 @@ export function encre(fond: string, part: number): string {
  */
 const CLARTE_CADRE = 0.041;
 const SATURATION_CADRE = 0.71;
-const SEPARATION_BORD = 1.135;
+/**
+ * L'écart de clarté perçue entre une carte et son liseré, en points de `L*`.
+ *
+ * ⚠️ **Mesuré sur les deux thèmes, et ce n'est pas le rapport de contraste.** Le thème
+ * sombre pose 6,3 points, le thème clair 8,4. Calé d'abord sur le *rapport* du thème
+ * sombre — 1,135 —, le liseré de la carte teintée n'atteignait que 4,7 points : invisible,
+ * alors même que son rapport de contraste était plus élevé que la référence. La formule du
+ * contraste s'effondre dès qu'on s'éloigne du noir ; `L*` ne bouge pas. Sept points rend le
+ * même bord sur les onze couleurs.
+ */
+const ECART_BORD = 7;
 
 /** Le cadre extérieur : le noir de cette teinte-là. */
 export function cadreCarte(fond: string): string {
@@ -140,12 +151,14 @@ export function cadreCarte(fond: string): string {
  */
 export function bordCarte(fond: string): string {
   const [teinte, saturation, clarte] = rvbVersTsl(hexVersRvb(fond));
+  const vise = clartePercue(fond);
   const sens = clarte > 0.5 ? -1 : 1;
   let essai = fond;
-  for (let i = 1; i <= 24; i++) {
-    essai = rvbVersHex(tslVersRvb(
-      [teinte, saturation, Math.min(1, Math.max(0, clarte + sens * i * 0.012))]));
-    if (contraste(fond, essai) >= SEPARATION_BORD) return essai;
+  for (let i = 1; i <= 40; i++) {
+    const l = clarte + sens * i * 0.008;
+    if (l <= 0 || l >= 1) return essai;
+    essai = rvbVersHex(tslVersRvb([teinte, saturation, l]));
+    if (Math.abs(clartePercue(essai) - vise) >= ECART_BORD) return essai;
   }
   return essai;
 }

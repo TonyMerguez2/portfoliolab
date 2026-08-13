@@ -144,6 +144,23 @@ export function luminance(hex: string): number {
   return 0.2126 * r + 0.7152 * g + 0.0722 * b;
 }
 
+/**
+ * La clarté **perçue**, au sens de CIE L* — de 0 pour le noir à 100 pour le blanc.
+ *
+ * ⚠️ **À ne pas confondre avec le contraste, et la confusion m'a coûté un aller-retour.**
+ * Le rapport de contraste répond à « ce texte est-il lisible » ; il est très sensible près
+ * du noir et très plat ailleurs. Pour un liseré, la question n'est pas la lisibilité mais
+ * la **différence vue** : sur un fond quasi noir, un rapport de 1,135 vaut six points de
+ * clarté, alors que le même rapport sur un bleu moyen n'en vaut plus que quatre. Un liseré
+ * calé sur le rapport disparaît donc dès que la carte s'éclaircit — constaté à l'écran.
+ * `L*` est construite pour être perceptuellement uniforme : un même écart s'y voit pareil
+ * partout, ce qui est exactement la propriété qu'on attend d'un bord.
+ */
+export function clartePercue(hex: string): number {
+  const y = luminance(hex);
+  return y > 0.008856 ? 116 * Math.cbrt(y) - 16 : 903.3 * y;
+}
+
 /** Le rapport de contraste entre deux couleurs, de 1 à 21. */
 export function contraste(a: string, b: string): number {
   const [x, y] = [luminance(a), luminance(b)].sort((p, q) => q - p);

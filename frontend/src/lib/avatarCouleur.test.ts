@@ -4,7 +4,7 @@ import {
   COULEURS_AVATAR, COULEUR_PAR_DEFAUT, bordCarte, cadreCarte, contrasteDuRegard,
   couleurDesYeux, encre, encrePleine, estCouleurValide, lisible,
 } from "./avatarCouleur";
-import { contraste, luminance, rvbVersTsl, hexVersRvb } from "./couleur";
+import { clartePercue, contraste, luminance, rvbVersTsl, hexVersRvb } from "./couleur";
 
 /**
  * Le regard reste-t-il visible, quelle que soit la couleur choisie ?
@@ -173,18 +173,24 @@ describe("l'encre d'une carte teintée du portefeuille", () => {
 });
 
 describe("les deux anneaux d'une carte teintée", () => {
-  it("détache son liseré intérieur comme les cartes du thème", () => {
+  it("détache son liseré autant que les cartes du thème, à l'œil", () => {
     /**
-     * ⚠️ **Le rapport est relevé sur les cartes existantes, pas choisi.** Dans le thème
-     * sombre, `#030712` contre `#101828` fait 1,135 pour un : une séparation qu'on ne voit
-     * qu'au coin de l'œil et qui porte tout le relief. La carte teintée doit la reproduire,
-     * sinon elle appartient à un autre jeu — un liseré trop franc la découpe, trop faible
-     * l'aplatit.
+     * ⚠️ **La grandeur est l'écart de clarté perçue, pas le rapport de contraste — et je
+     * m'étais trompé de grandeur.** Le liseré avait d'abord été calé sur le *rapport* du
+     * thème sombre, 1,135 pour un. Résultat sur la carte teintée : un rapport de 1,181,
+     * donc supérieur à la référence, pour un bord **invisible**. La formule du contraste
+     * est très sensible près du noir et très plate ailleurs ; le même rapport vaut six
+     * points de clarté sur un fond quasi noir et quatre sur un bleu moyen. Signalé à
+     * l'usage — « je te parle des bords ».
+     *
+     * `L*` est perceptuellement uniforme : un même écart s'y voit pareil partout. Les
+     * thèmes en posent 6,3 et 8,4 ; la carte teintée vise sept, et l'atteint sur les onze
+     * couleurs sans jamais le dépasser franchement.
      */
     for (const c of COULEURS_AVATAR) {
-      const k = contraste(c.hex, bordCarte(c.hex));
-      expect(k).toBeGreaterThanOrEqual(1.13);
-      expect(k).toBeLessThan(1.45);
+      const ecart = Math.abs(clartePercue(bordCarte(c.hex)) - clartePercue(c.hex));
+      expect(ecart).toBeGreaterThanOrEqual(6.3);
+      expect(ecart).toBeLessThan(9);
     }
   });
 
