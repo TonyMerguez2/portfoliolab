@@ -28,14 +28,24 @@ export type Solide =
   /** La superellipsoïde |x|ⁿ + |y|ⁿ + |z|ⁿ = 1 : du disque au cube arrondi. */
   | { famille: "cube"; exposant: number }
   /**
-   * L'étoile adoucie : une sphère creusée entre ses six pointes d'axe.
+   * L'étoile adoucie : une sphère pincée entre quatre lobes, autour de l'axe du regard.
    *
-   * `creux` va de 0 (la sphère) à 1 (l'étoile franche). Le rayon vaut
-   * `(1 + a·(x⁴+y⁴+z⁴)) / (1 + a)` — maximal sur les axes, minimal sur les diagonales.
-   * La puissance quatrième plutôt qu'un cosinus : elle donne la même modulation à quatre
-   * lobes dans le plan de l'écran, mais elle est **la même autour des trois axes**, donc
-   * la forme reste une étoile sous n'importe quelle rotation au lieu de s'aplatir dès
-   * qu'on la tourne.
+   * Le rayon vaut `1 − creux · 2x²y²`, et chacun des trois facteurs compte :
+   *
+   * ⚠️ **Rien sur `z`, donc aucune pointe devant ni derrière.** La première version
+   * creusait autour des six axes, y compris celui du regard : les yeux voyageaient alors
+   * en plein dans un creux, et la concavité y rapproche le bord visible au point de les
+   * couper dès dix degrés de lacet. Ici le terme s'annule dès qu'on quitte le plan de
+   * l'écran, si bien que le chemin du centre du visage jusqu'aux lobes latéraux reste
+   * **exactement sphérique** — c'est précisément le chemin que parcourent les yeux.
+   *
+   * ⚠️ **`x²y²` et non `x⁴+y⁴`.** Les deux donnent la même modulation à quatre lobes dans
+   * le plan de l'écran ; mais `x⁴+y⁴` vaut zéro au pôle du regard, ce qui y creuserait un
+   * trou, tandis que `x²y²` s'y annule — pas de creux, pas de pointe, la surface y passe
+   * lisse.
+   *
+   * `creux` va de 0 (la sphère) à environ 0,7 ; la profondeur du pincement en vaut la
+   * moitié.
    */
   | { famille: "etoile"; creux: number };
 
@@ -53,10 +63,12 @@ export const SPHERE: Solide = { famille: "sphere" };
  * en permanence : ce que l'on prend pour un défaut d'affichage, et qui n'est que la
  * géométrie d'un creux trop profond.
  *
- * À quarante-cinq centièmes, le creux se voit encore — dix pour cent de profondeur, le
- * galbe de la référence — et le rognage ne commence qu'au-delà du débattement du suivi.
+ * Le pincement ne portant plus sur l'axe du regard, cette contrainte s'est desserrée :
+ * les yeux ne traversent plus de creux du tout. Soixante-douze centièmes donnent un
+ * pincement d'un peu plus du tiers au bout de la course, et de dix-huit pour cent au
+ * réglage de l'application — le galbe de la référence.
  */
-const AMPLEUR_ETOILE = 0.45;
+const AMPLEUR_ETOILE = 0.72;
 
 /**
  * Le solide correspondant à une forme et à un réglage d'arrondi.
@@ -95,9 +107,7 @@ export function rayonSolide(u: Vec3, s: Solide): number {
     const somme = Math.pow(x, n) + Math.pow(y, n) + Math.pow(z, n);
     return 1 / Math.pow(somme, 1 / n);
   }
-  const a = s.creux;
-  const q = x * x * x * x + y * y * y * y + z * z * z * z;
-  return (1 + a * q) / (1 + a);
+  return 1 - s.creux * 2 * x * x * y * y;
 }
 
 /** Le point du solide qui correspond à un point de la sphère : même direction. */
@@ -140,11 +150,12 @@ export function normaleSolide(p: Vec3, s: Solide): Vec3 {
   const q = surLeSolide(normaliser(p), s);
   const a = s.creux;
   const r = Math.sqrt(q.x * q.x + q.y * q.y + q.z * q.z);
-  const c = 5 * (1 + a) * r * r * r - 4 * r * r;
+  // Gradient de `F(q) = |q|⁵ − |q|⁴ + 2·creux·qx²qy²`, qui s'annule sur la surface.
+  const c = 5 * r * r * r - 4 * r * r;
   return normaliser({
-    x: c * q.x - 4 * a * q.x * q.x * q.x,
-    y: c * q.y - 4 * a * q.y * q.y * q.y,
-    z: c * q.z - 4 * a * q.z * q.z * q.z,
+    x: c * q.x + 4 * a * q.x * q.y * q.y,
+    y: c * q.y + 4 * a * q.x * q.x * q.y,
+    z: c * q.z,
   });
 }
 

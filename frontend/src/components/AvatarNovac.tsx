@@ -42,24 +42,14 @@ const ECART = 27;
 const ECHANTILLONS = 96;
 
 /**
- * L'arrondi des silhouettes marquées — celui des icônes d'application, et le creux de
- * l'étoile.
+ * L'arrondi des silhouettes marquées — celui des icônes d'application, et le pincement
+ * de l'étoile.
  *
  * ⚠️ Fixé ici plutôt qu'exposé en propriété : à cette taille, deux arrondis voisins ne
  * diffèrent pas d'un pixel. Un réglage de plus n'aurait donné que l'illusion d'un choix.
  */
 const ARRONDI_FORME = 0.42;
 
-/**
- * L'arrondi de l'étoile, plus prudent que celui du cube.
- *
- * ⚠️ **Réglé sur le débattement du suivi, pas sur le goût.** Un creux concave rapproche
- * le bord visible du solide : mesuré, l'œil commence à être rogné dès 38° de lacet au
- * creux du cube, alors que le regard va jusqu'à 38°. Un cran plus rond porte ce seuil à
- * 41° et laisse trois degrés de marge — de quoi ne jamais montrer un croissant d'œil
- * collé au bord, qui se lit comme un défaut d'affichage alors que c'est de la géométrie.
- */
-const ARRONDI_ETOILE = 0.5;
 
 /**
  * La vie du visage à cette taille.
@@ -176,7 +166,7 @@ export default function AvatarNovac({
   const solide = useMemo(
     () => solideDepuis(
       forme.startsWith("etoile") ? "etoile" : forme.startsWith("carre") ? "cube" : "sphere",
-      forme === "sphere" ? 1 : forme.startsWith("etoile") ? ARRONDI_ETOILE : ARRONDI_FORME),
+      forme === "sphere" ? 1 : ARRONDI_FORME),
     [forme]);
 
   const [vie, setVie] = useState<EtatVie>(VIE_AU_REPOS);

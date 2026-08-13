@@ -571,6 +571,26 @@ describe("solideDepuis", () => {
     }
   });
 
+  it("laisse l'axe du regard parfaitement lisse, sans pointe ni creux", () => {
+    /**
+     * ⚠️ **La propriété qui rend l'étoile compatible avec un regard qui tourne.** La
+     * première version pinçait autour des six axes : les yeux traversaient alors un creux,
+     * et la concavité y rapproche le bord visible au point de les couper dès dix degrés de
+     * lacet. Ici le chemin qui va du centre du visage jusqu'à un lobe latéral reste
+     * exactement sphérique — c'est celui que les yeux parcourent.
+     */
+    for (const arrondi of [0, 0.3, 0.6]) {
+      const s = solideDepuis("etoile", arrondi);
+      expect(rayonSolide({ x: 0, y: 0, z: 1 }, s)).toBeCloseTo(1, 9);
+      for (let i = 0; i <= 20; i++) {
+        const t = (i / 20) * (Math.PI / 2);
+        // Le méridien du regard vers le lobe de droite, puis vers celui du haut.
+        expect(rayonSolide({ x: Math.sin(t), y: 0, z: Math.cos(t) }, s)).toBeCloseTo(1, 9);
+        expect(rayonSolide({ x: 0, y: Math.sin(t), z: Math.cos(t) }, s)).toBeCloseTo(1, 9);
+      }
+    }
+  });
+
   it("creuse l'étoile entre ses branches, sans jamais la rendre pointue", () => {
     // Quatre lobes dans le plan de l'écran : le rayon est maximal sur les axes et
     // minimal à quarante-cinq degrés — et il y passe en douceur, sans point anguleux.
@@ -578,15 +598,10 @@ describe("solideDepuis", () => {
     const r = (t: number) => rayonSolide({ x: Math.cos(t), y: Math.sin(t), z: 0 }, s);
     expect(r(0)).toBeCloseTo(1, 9);
     expect(r(Math.PI / 2)).toBeCloseTo(1, 9);
-    /**
-     * ⚠️ **Le creux se voit, mais il est borné par ce que le regard supporte.** Une
-     * dizaine de pour cent : au-delà, la concavité rapproche le bord visible au point de
-     * couper l'œil dès dix degrés de lacet — mesuré, contre cinquante-sept sur la sphère.
-     * Le seuil de ce test dit donc les deux choses à la fois : assez creusé pour se lire
-     * comme une étoile, pas assez pour manger le regard.
-     */
-    expect(r(Math.PI / 4)).toBeLessThan(0.93);
-    expect(r(Math.PI / 4)).toBeGreaterThan(0.85);
+    // Un pincement franc — près d'un quart au bout de la course — que la forme peut se
+    // permettre depuis qu'il ne porte plus sur l'axe du regard.
+    expect(r(Math.PI / 4)).toBeLessThan(0.8);
+    expect(r(Math.PI / 4)).toBeGreaterThan(0.7);
     // La dérivée s'annule aux extrêmes : pas de pointe, contrairement à une
     // superellipse d'exposant inférieur à un, qui ferait des cusps sur les axes.
     const h = 1e-4;
