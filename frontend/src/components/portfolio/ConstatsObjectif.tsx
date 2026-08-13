@@ -334,7 +334,15 @@ export default function ConstatsObjectif({
             * lit comme une décoration posée là ; alignés sur la première ligne, ils
             * regardent le titre de l'aide.
             */}
-          <svg viewBox={yeux.boite} height={HAUTEUR_YEUX}
+          {/**
+            * ⚠️ **La clé porte l'aide affichée, et c'est elle qui rejoue le clignement.**
+            * Une animation CSS ne se relance pas parce qu'on repose la même classe : le
+            * navigateur la considère déjà en cours. Changer la clé remonte l'élément, donc
+            * l'animation repart à zéro — deux chemins à reconstruire, ce qui ne coûte rien,
+            * et surtout aucun état d'animation à tenir dans le composant.
+            */}
+          <svg key={index} className="novac-clignement"
+            viewBox={yeux.boite} height={HAUTEUR_YEUX}
             width={(HAUTEUR_YEUX * yeux.rapport).toFixed(1)} aria-hidden="true"
             // Les yeux se posent sur la même ligne que les lettres du titre.
             style={{ display: "block", flexShrink: 0, marginTop: HAUT_ENCRE_TITRE }}>

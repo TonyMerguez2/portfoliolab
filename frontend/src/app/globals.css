@@ -435,6 +435,45 @@
 
 /* Le clignotement est un signal de mouvement, pas une information : sans lui,
    le chiffre reste lisible et à jour. */
+/* ─────────────────────────────────────────────────────────────
+   Le clignement des yeux de l'aide à la décision.
+
+   ⚠️ **Déclenché, jamais ambiant — et la nuance est tout l'objet de cet effet.**
+   Ces yeux accompagnent un paragraphe qu'on lit ; un visage qui bouge à côté d'un
+   texte prend le regard qu'on venait donner au texte, ce qui a déjà motivé de
+   figer les vignettes du sélecteur de forme. Le clignement ne se produit donc
+   qu'au **changement d'aide**, c'est-à-dire à un geste : il accuse réception du
+   contenu qui vient d'arriver, puis se tait. Rien ne bouge pendant la lecture,
+   et la carte garde une seule cadence continue, celle du reflet.
+
+   ⚠️ **Aucune expression, et c'est une limite tenue.** Content, suspicieux,
+   inquiet : ce sont des jugements. Le panneau s'appelle « Aide à la décision » et
+   non « Recommandations », et son texte est à la troisième personne, précisément
+   pour n'en porter aucun. Un visage qui prend l'air inquiet à côté d'un constat
+   chiffré dirait plus fort que les mots ce que les mots se refusent à dire.
+
+   ⚠️ **Un écrasement vertical, et non un recalcul du contour.** L'avatar, lui,
+   ferme vraiment ses capsules en ramenant leur hauteur à une fente. Le résultat
+   est le même à vingt-six pixels — une capsule courte, centrée au même endroit —
+   pour un coût sans commune mesure : une animation compositée contre une boucle
+   qui refait deux chemins à chaque image, dans un panneau qui n'a aucune autre
+   raison de se redessiner.
+
+   La fermeture est brève et l'ouverture plus lente : c'est le rythme d'une
+   paupière, et l'inverse se remarque immédiatement.
+   ───────────────────────────────────────────────────────────── */
+@keyframes novac-clignement {
+  0%   { transform: scaleY(1); }
+  28%  { transform: scaleY(0.1); }
+  40%  { transform: scaleY(0.1); }
+  100% { transform: scaleY(1); }
+}
+
+.novac-clignement {
+  transform-origin: 50% 50%;
+  animation: novac-clignement 260ms ease-in-out;
+}
+
 @media (prefers-reduced-motion: reduce) {
   [style*="nv-clignote"] { animation: none !important; }
 }
@@ -799,6 +838,8 @@ canvas + div {
 }
 
 @media (prefers-reduced-motion: reduce) {
+  /* Un clignement est bref, mais c'est du mouvement non sollicité : il se coupe. */
+  .novac-clignement { animation: none; }
   .novac-verre-defilant::after {
     animation: none;
     /* ⚠️ **207° et non une valeur ronde.** Sur la carte mesurée, 460 × 230, la
