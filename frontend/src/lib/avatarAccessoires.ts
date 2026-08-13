@@ -77,12 +77,12 @@ export type ReglagesCasquette = {
 };
 
 export const CASQUETTE_REFERENCE: ReglagesCasquette = {
-  assise: 0.27,
-  inclinaison: 15,
+  assise: 0.14,
+  inclinaison: 10,
   epaisseur: 0.1,
   visiere: 0.62,
-  epaisseurVisiere: 0.3,
-  galbe: 1.15,
+  epaisseurVisiere: 0.32,
+  galbe: 0.95,
   cote: -1,
 };
 
@@ -103,31 +103,42 @@ function surLaHauteur(a: Point2, b: Point2, y: number): Point2 {
  * partant du point le plus haut, on ne garde que le morceau **continu** qui le contient,
  * qui est exactement celui que le tissu recouvre.
  */
-function calotteDuContour(contour: Point2[], assise: number): Point2[] {
+function calotteDuContour(contour: Point2[], bandeauY: (x: number) => number): Point2[] {
   const n = contour.length;
   let sommet = 0;
   for (let i = 1; i < n; i++) if (contour[i].y < contour[sommet].y) sommet = i;
+  const dessous = (p: Point2) => p.y > bandeauY(p.x);
 
   let debut = sommet, fin = sommet;
   for (let k = 1; k < n; k++) {
     const i = (sommet - k + n) % n;
-    if (contour[i].y > assise) break;
+    if (dessous(contour[i])) break;
     debut = i;
   }
   for (let k = 1; k < n; k++) {
     const i = (sommet + k) % n;
-    if (contour[i].y > assise) break;
+    if (dessous(contour[i])) break;
     fin = i;
   }
 
-  const arc: Point2[] = [];
-  // Le point exact où le contour croise le bandeau, pour que le chapeau pose à plat.
-  arc.push(surLaHauteur(contour[(debut - 1 + n) % n], contour[debut], assise));
+  const croisement = (a: Point2, b: Point2): Point2 => {
+    // Le contour est échantillonné fin : une bissection de dix pas suffit largement.
+    let bas = 0, haut = 1;
+    for (let i = 0; i < 10; i++) {
+      const m = (bas + haut) / 2;
+      const p = { x: a.x + (b.x - a.x) * m, y: a.y + (b.y - a.y) * m };
+      if (p.y > bandeauY(p.x)) haut = m; else bas = m;
+    }
+    const t = (bas + haut) / 2;
+    return { x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t };
+  };
+
+  const arc: Point2[] = [croisement(contour[debut], contour[(debut - 1 + n) % n])];
   for (let i = debut; ; i = (i + 1) % n) {
     arc.push(contour[i]);
     if (i === fin) break;
   }
-  arc.push(surLaHauteur(contour[(fin + 1) % n], contour[fin], assise));
+  arc.push(croisement(contour[fin], contour[(fin + 1) % n]));
   return arc;
 }
 
@@ -242,7 +253,13 @@ const pivoter = (p: Point2, cos: number, sin: number): Point2 =>
  * ⚠️ C'est ce creux qui donne le volume : sans lui la calotte est un couvercle, avec lui
  * elle enveloppe. Un dixième suffit — au-delà, le bandeau descend au milieu du visage.
  */
-const BOMBEMENT_BANDEAU = 0.13;
+/**
+ * De combien le bandeau plonge, de la nuque au front, en part de la hauteur de la tête.
+ *
+ * ⚠️ C'est ce qui distingue une casquette d'une calotte : elle descend sur le front.
+ */
+const PLONGEE_BANDEAU = 0.12;
+
 
 /**
  * De combien la visière dépasse le bord de la tête, en part de la demi-largeur.
@@ -262,12 +279,25 @@ const bout = (p: Point2) => `${p.x.toFixed(2)} ${p.y.toFixed(2)}`;
 /**
  * Les trois pièces d'une casquette posée sur une forme quelconque.
  *
- * La calotte suit le crâne, la visière part du bandeau et le bouton coiffe le sommet.
- * Aucune des trois ne connaît la famille du volume : toutes se déduisent du contour.
+ * ⚠️ **Quatre aplats francs, et aucun dégradé — c'est un parti pris, pas un renoncement.**
+ * Le SVG sait très bien faire un dégradé et une ombre portée ; essayé, cela ajoute de la
+ * profondeur *et* jure avec le reste, parce que la tête et les yeux, eux, sont des aplats.
+ * Une casquette photoréaliste sur une tête plate se lit comme un collage. Ce qui fait
+ * qu'un aplat se lit comme une casquette, c'est la **franchise de la forme** : deux
+ * masses nettes, une coiffe et une visière, et le contraste entre les deux.
+ *
+ * ⚠️ **Une bande de tissu a été dessinée en travers du bas de la calotte, puis retirée.**
+ * L'intuition tenait : le bandeau est ce que l'œil reconnaît d'un couvre-chef. À l'image,
+ * il échoue — de la même teinte que la visière et collé contre elle, les deux masses
+ * fusionnent en une écharpe qui barre le visage, et l'on perd justement la lecture qu'on
+ * cherchait. La référence elle-même n'en a pas : un dôme, une visière, rien d'autre.
+ *
+ * Aucune des trois pièces ne connaît la famille du volume : toutes se déduisent du
+ * contour mesuré.
  */
 export function cheminsCasquette(
   solide: Solide, rayon: number, reglages: ReglagesCasquette,
-): { calotte: string; visiere: string; bouton: Point2 } {
+): { calotte: string; visiere: string; bouton: Point2; tissu: Point2[] } {
   const c = reglages.cote;
   /**
    * ⚠️ **Tout se construit dans le repère du bandeau, puis se remet d'aplomb.** Couper
@@ -292,7 +322,25 @@ export function cheminsCasquette(
   const assise = haut + reglages.assise * (bas - haut);
   const epaisseur = reglages.epaisseur * rayon;
 
-  const dedans = calotteDuContour(contour, assise);
+  /**
+   * La ligne du bandeau : elle **descend vers l'avant**, sans jamais remonter.
+   *
+   * ⚠️ **Une corde bombée symétriquement ne peut pas marcher, et c'est visible.** Le tour
+   * d'une casquette, refermé par une courbe qui creuse au milieu et rejoint l'assise aux
+   * deux bouts, remonte du côté arrière ; la visière, qui suit cette ligne, remonte avec
+   * elle et ressort de sous la calotte en coin, par-dessus l'œil. Une vraie casquette
+   * descend **continûment** vers l'avant : plus bas sur le front que sur la nuque. La
+   * courbe est donc monotone, et le carré donne une descente lente puis franche, comme
+   * une couture qui plonge.
+   */
+  const demiL = Math.max(...contour.map(p => Math.abs(p.x)), 1);
+  const creux = (bas - haut) * PLONGEE_BANDEAU;
+  const bandeauY = (x: number) => {
+    const u = Math.min(1, Math.max(0, ((x * c) / demiL + 1) / 2));
+    return assise + creux * u * u;
+  };
+
+  const dedans = calotteDuContour(contour, bandeauY);
   const dehors = pousser(dedans, epaisseur, reglages.galbe);
 
   /**
@@ -302,32 +350,24 @@ export function cheminsCasquette(
    * lieu de border — dessiné après la tête, il en cache le sommet.
    */
   /**
-   * ⚠️ **Le bandeau bombe, il ne coupe pas droit.** Refermée par un segment, la calotte
-   * se lit comme un couvercle posé de biais : une corde droite est exactement ce qu'on ne
-   * voit jamais sur une tête, parce que le tour d'une casquette est un cercle vu en
-   * perspective, donc une ellipse — qui descend là où elle s'approche de nous et remonte
-   * sur les côtés. On referme donc par une courbe, creusée du côté de la visière puisque
-   * c'est ce côté-là qui vient vers l'œil.
+   * ⚠️ **La calotte se referme sur la ligne du bandeau, pas sur une corde.** Une droite
+   * en travers est exactement ce qu'on ne voit jamais sur une tête : le tour d'une
+   * casquette est un cercle vu en perspective. Refermer sur la courbe qui a servi à
+   * couper rend la pièce cohérente par construction — le tissu s'arrête là où on a décidé
+   * qu'il s'arrête, et la visière, qui suit la même ligne, ne peut plus s'en écarter.
    */
-  const gauche = { x: dehors[0].x, y: assise };
-  const droite = { x: dehors[dehors.length - 1].x, y: assise };
-  const avant = gauche.x * c > droite.x * c ? gauche : droite;
-  const bombe = Math.abs(droite.x - gauche.x) * BOMBEMENT_BANDEAU;
   const ferme: Point2[] = [];
-  const PAS_BANDEAU = 48;
+  const PAS_BANDEAU = 64;
+  const xa = dehors[dehors.length - 1].x, xb = dehors[0].x;
   for (let i = 0; i <= PAS_BANDEAU; i++) {
-    const t = i / PAS_BANDEAU, u = 1 - t;
-    // Le point de contrôle est décalé vers l'avant : le creux n'est pas au milieu.
-    const kx = (droite.x + gauche.x) / 2 + (avant.x - (droite.x + gauche.x) / 2) * 0.55;
-    ferme.push({
-      x: u * u * droite.x + 2 * u * t * kx + t * t * gauche.x,
-      y: assise + 2 * u * t * bombe * 2,
-    });
+    const x = xa + ((xb - xa) * i) / PAS_BANDEAU;
+    ferme.push({ x, y: bandeauY(x) });
   }
   const bordCalotte: Point2[] = [...ferme, ...dehors, ferme[0]];
   let calotte = `M ${bout(droit(bordCalotte[0]))}`;
   for (let i = 1; i < bordCalotte.length; i++) calotte += ` L ${bout(droit(bordCalotte[i]))}`;
   calotte += " Z";
+
 
   /**
    * La visière : le bandeau lui-même, décalé vers le bas et prolongé.
@@ -365,17 +405,18 @@ export function cheminsCasquette(
   for (let i = 0; i < arc.length; i++) {
     const t = i / (arc.length - 1);
     /**
-     * ⚠️ **Le profil s'éteint aux deux bouts, et c'est ce qui en fait une visière.** Plein
-     * dès la racine, il donne une bande d'épaisseur constante qui traverse le visage en
-     * écharpe. Une visière est un **croissant** : effilée là où elle rejoint la calotte,
-     * pleine au milieu, arrondie au bec.
+     * ⚠️ **Pleine à la racine, et c'est la calotte qui la coupe.** Le profil s'éteignait
+     * d'abord aux deux bouts, pour que la visière se fonde dans le tissu : cela donnait
+     * un croissant effilé, une virgule, là où une casquette a une visière **franche**. Or
+     * la coupe n'a pas à être dessinée — à pleine épaisseur, le bord supérieur de la
+     * visière remonte au-dessus de la ligne du bandeau, donc **sous** la calotte, qui est
+     * peinte après et l'efface. Le raccord est net sans qu'on ait à l'aplanir.
+     *
+     * ⚠️ Une racine carrée au bout, et non une puissance douce : c'est elle qui donne un
+     * bec **rond**. Tout exposant supérieur à un demi y laisse une pointe.
      */
-    const e = demi
-      * Math.min(1, Math.pow(t / 0.34, 0.75))
-      // ⚠️ Une racine carrée au bout, et non une puissance douce : c'est elle qui donne
-      // un bec **rond**. Tout exposant supérieur à un demi y laisse une pointe.
-      * Math.sqrt(Math.max(0, 1 - Math.pow(t, 8)));
-    const y = arc[i].y + demi * 0.72;
+    const e = demi * Math.sqrt(Math.max(0, 1 - Math.pow(t, 8)));
+    const y = arc[i].y + demi * 0.58;
     dessus.push(pivoter({ x: arc[i].x, y: y - e }, ca, sa));
     dessous.push(pivoter({ x: arc[i].x, y: y + e }, ca, sa));
   }
@@ -394,5 +435,13 @@ export function cheminsCasquette(
   const surTete = bordCalotte.map(droit);
   let sommet = surTete[0];
   for (const p of surTete) if (p.y < sommet.y) sommet = p;
-  return { calotte, visiere, bouton: sommet };
+  /**
+   * ⚠️ **Le bord du tissu est rendu à part, et c'est pour la mesure.** Le chemin de la
+   * calotte mêle deux natures : la ligne du bandeau, qui repose sur rien, et l'arc
+   * extérieur, qui doit se tenir à l'épaisseur du crâne. Une mesure qui les confondrait
+   * accuserait le tissu de s'amincir là où il n'y a pas de tissu — c'est arrivé, deux
+   * fois, et chaque fois le défaut était dans la mesure. Les rendre séparés supprime la
+   * question.
+   */
+  return { calotte, visiere, bouton: sommet, tissu: dehors.map(droit) };
 }

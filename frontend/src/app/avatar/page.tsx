@@ -856,7 +856,7 @@ export default function AvatarProceduralPage() {
               <div style={{ marginTop: 18 }}>
                 <Curseur libelle="Assise sur le crâne"
                   valeur={casquette.assise} affichage={`${(casquette.assise * 100).toFixed(0)} %`}
-                  min={0.12} max={0.48} pas={0.01}
+                  min={0.04} max={0.4} pas={0.01}
                   onChange={v => setCasquette(c => ({ ...c, assise: v }))} />
                 <Curseur libelle="Épaisseur du tissu"
                   valeur={casquette.epaisseur} affichage={`${(casquette.epaisseur * 100).toFixed(1)} u`}
@@ -877,7 +877,7 @@ export default function AvatarProceduralPage() {
                 <Curseur libelle="Épaisseur de la visière"
                   valeur={casquette.epaisseurVisiere}
                   affichage={`${(casquette.epaisseurVisiere * 100).toFixed(0)} u`}
-                  min={0.05} max={0.34} pas={0.01}
+                  min={0.1} max={0.5} pas={0.01}
                   onChange={v => setCasquette(c => ({ ...c, epaisseurVisiere: v }))} />
                 <div style={{ display: "flex", gap: 12, marginTop: 16 }}>
                   <Teinte libelle="Casquette" valeur={couleurCoiffe} onChange={setCouleurCoiffe} />
