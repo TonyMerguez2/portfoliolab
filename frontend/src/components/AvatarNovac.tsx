@@ -41,13 +41,27 @@ const ECART = 27;
 const ECHANTILLONS = 96;
 
 /**
- * L'arrondi des silhouettes marquées — celui des icônes d'application, et le pincement
- * de l'étoile.
+ * L'arrondi de chaque forme.
  *
- * ⚠️ Fixé ici plutôt qu'exposé en propriété : à cette taille, deux arrondis voisins ne
- * diffèrent pas d'un pixel. Un réglage de plus n'aurait donné que l'illusion d'un choix.
+ * ⚠️ **Un par famille, parce que le même nombre n'y produit pas le même effet.**
+ * Signalé à l'usage : « les côtés du carré ne sont pas droits ». Ils l'étaient — mesuré,
+ * les quatre côtés s'écartent de la droite de 0,17 unité chacun, et le bord supérieur
+ * rastérisé à soixante-trois pixels ne varie pas d'un centième —, mais **il y en avait
+ * trop peu** : à 0,42 d'arrondi, 58 % seulement du pourtour tombe à moins de cinq degrés
+ * d'un axe, le reste étant pris par les coins. À 0,30, c'est 70 %, et le côté se lit
+ * enfin comme un côté.
+ *
+ * ⚠️ Un réglage par famille et non un curseur exposé : à cette taille, deux arrondis
+ * voisins ne diffèrent pas d'un pixel, et un curseur de plus n'aurait donné que
+ * l'illusion d'un choix. Le banc d'essai, lui, le laisse régler à vue.
  */
-const ARRONDI_FORME = 0.42;
+const ARRONDI: Record<FamilleSolide, number> = {
+  sphere: 1,
+  cube: 0.30,
+  etoile: 0.42,
+  etoile6: 0.42,
+  coussin: 0.42,
+};
 
 /** Le volume que porte chaque forme proposée. */
 const FAMILLE: Record<FormeAvatar, FamilleSolide> = {
@@ -171,7 +185,7 @@ export default function AvatarNovac({
    * le solide qui tourne.
    */
   const solide = useMemo(
-    () => solideDepuis(FAMILLE[forme], forme === "sphere" ? 1 : ARRONDI_FORME), [forme]);
+    () => solideDepuis(FAMILLE[forme], ARRONDI[FAMILLE[forme]]), [forme]);
 
   const [vie, setVie] = useState<EtatVie>(VIE_AU_REPOS);
   const [pose, setPose] = useState({ lacet: 0, tangage: 0 });
