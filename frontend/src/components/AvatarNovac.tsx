@@ -68,6 +68,26 @@ const REGLAGES = {
   cadenceSpontane: 4.5,
 };
 
+/**
+ * Le coup d'œil que jette un défilement, en degrés, et le temps qu'il met à retomber.
+ *
+ * ⚠️ **Il s'ajoute au suivi de la souris au lieu de le remplacer.** Pendant qu'on
+ * défile, le curseur ne bouge pas : le regard reste donc accroché là où il était, et
+ * rien ne dit que le visage a remarqué quelque chose. L'écart s'ajoute, si bien que le
+ * regard glisse dans le sens du défilement puis revient là où pointe la souris.
+ *
+ * ⚠️ **Sept degrés, pas davantage.** Le suivi complet vaut dix degrés à la verticale :
+ * un coup d'œil plus ample que le suivi lui-même se lirait comme un sursaut à chaque
+ * cran de molette.
+ *
+ * ⚠️ **Les deux axes, pas seulement la verticale.** Les listes de l'application
+ * défilent aussi de côté — le rail des actifs, celui des comptes —, et c'est justement
+ * là qu'on défile en cherchant quelque chose. N'écouter que `scrollTop` n'aurait rien
+ * donné sur ces rails : mesuré, le regard n'y bougeait pas d'un pixel.
+ */
+const COUP_OEIL = 7;
+const RETOUR_COUP_OEIL = 320;
+
 const rad = (d: number) => (d * Math.PI) / 180;
 const borner = (v: number, min: number, max: number) => Math.min(max, Math.max(min, v));
 
@@ -144,6 +164,8 @@ export default function AvatarNovac({
   const suiviRef = useRef(1);
   const svgRef = useRef<SVGSVGElement | null>(null);
   const [anime, setAnime] = useState(true);
+  /** Ce que le défilement ajoute au regard, et qui retombe tout seul. */
+  const coupDOeil = useRef({ lacet: 0, tangage: 0 });
 
   /** L'état demandé par l'appelant est transmis à la vie, qui gère la transition. */
   useEffect(() => { vieRef.current.demander(etat, performance.now()); }, [etat, impulsion]);
@@ -169,9 +191,16 @@ export default function AvatarNovac({
       // Amorti au temps écoulé et non par image : sinon le mouvement est deux fois plus
       // lent sur un écran à 120 Hz que sur un écran à 60.
       const part = 1 - Math.exp(-dt / 110);
+      // Le coup d'œil du défilement se dissipe de lui-même : ce qui l'entretient, c'est
+      // le défilement qui continue, pas une minuterie qu'il faudrait annuler.
+      const reste = Math.exp(-dt / RETOUR_COUP_OEIL);
+      coupDOeil.current = {
+        lacet: Math.abs(coupDOeil.current.lacet) < 0.01 ? 0 : coupDOeil.current.lacet * reste,
+        tangage: Math.abs(coupDOeil.current.tangage) < 0.01 ? 0 : coupDOeil.current.tangage * reste,
+      };
       setPose(p => ({
-        lacet: p.lacet + (cible.current.lacet - p.lacet) * part,
-        tangage: p.tangage + (cible.current.tangage - p.tangage) * part,
+        lacet: p.lacet + (cible.current.lacet + coupDOeil.current.lacet - p.lacet) * part,
+        tangage: p.tangage + (cible.current.tangage + coupDOeil.current.tangage - p.tangage) * part,
       }));
       setVie(precedente => {
         const suivante = vieRef.current.avancer(t, REGLAGES);
@@ -207,6 +236,45 @@ export default function AvatarNovac({
     window.addEventListener("pointermove", regarder, { passive: true });
     return () => window.removeEventListener("pointermove", regarder);
   }, [suivi, anime, regarder]);
+
+  /**
+   * Le regard suit le défilement.
+   *
+   * ⚠️ **Le sens se lit sur la position, pas sur `wheel`.** Un événement de molette
+   * porte bien son `deltaY`, mais il ne couvre ni le clavier, ni la barre de
+   * défilement, ni les défilements programmés — et sur un pavé tactile il continue
+   * d'arriver alors que la page est déjà en butée, ce qui ferait loucher le visage
+   * contre un mur. La différence de position ne ment pas : nulle, il ne se passe rien.
+   *
+   * ⚠️ **Une position par élément défilé, gardée dans une `WeakMap`.** Les panneaux, le
+   * menu et la page ont chacun la leur ; une seule variable les mélangerait et rendrait
+   * un écart absurde au premier passage de l'un à l'autre. La `WeakMap` laisse
+   * l'élément disparaître avec son entrée.
+   */
+  useEffect(() => {
+    if (!suivi || !anime) return;
+    const positions = new WeakMap<EventTarget, { x: number; y: number }>();
+    const defiler = (e: Event) => {
+      const ou = e.target;
+      if (!ou) return;
+      const page = ou === document || ou === document.documentElement || ou === document.body;
+      const position = page
+        ? { x: window.scrollX, y: window.scrollY }
+        : { x: (ou as Element).scrollLeft, y: (ou as Element).scrollTop };
+      const avant = positions.get(ou);
+      positions.set(ou, position);
+      if (!avant) return;
+      const glisse = (ecart: number) => (Math.abs(ecart) < 1 ? 0 : Math.sign(ecart) * COUP_OEIL * 0.5);
+      // Défiler vers le bas fait regarder vers le bas, vers la droite fait regarder à
+      // droite : c'est de là qu'arrive ce qu'on n'a pas encore lu.
+      coupDOeil.current = {
+        lacet: borner(coupDOeil.current.lacet + glisse(position.x - avant.x), -COUP_OEIL, COUP_OEIL),
+        tangage: borner(coupDOeil.current.tangage + glisse(position.y - avant.y), -COUP_OEIL, COUP_OEIL),
+      };
+    };
+    document.addEventListener("scroll", defiler, { passive: true, capture: true });
+    return () => document.removeEventListener("scroll", defiler, true);
+  }, [suivi, anime]);
 
   const orientation: Orientation = useMemo(() => ({
     lacet: rad(pose.lacet + vie.lacet),

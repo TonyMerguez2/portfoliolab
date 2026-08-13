@@ -74,12 +74,23 @@ const AVANT_SOMMEIL = 45000;
  * serait un visage figé sans que rien n'explique pourquoi.
  */
 const CHARGEMENT_MAX = 20000;
+/**
+ * Ce que dure la curiosité après le dernier cran de défilement.
+ *
+ * ⚠️ Un délai, et non un état qu'on éteint au premier événement manquant : le
+ * défilement d'inertie d'un pavé tactile envoie des salves espacées de plus de cent
+ * millisecondes, et le visage se serait allumé et éteint à chaque creux. Six cents
+ * millisecondes couvrent les trous d'une même impulsion sans laisser traîner la
+ * curiosité une fois la page arrêtée.
+ */
+const FIN_DEFILEMENT = 600;
 
 export function AvatarProvider({ children }: { children: ReactNode }) {
   const [ponctuel, setPonctuel] = useState<Expression | null>(null);
   const [survole, setSurvole] = useState<string | null>(null);
   const [pointe, setPointe] = useState<string | null>(null);
   const [travaux, setTravaux] = useState(0);
+  const [defile, setDefile] = useState(false);
   const [endormi, setEndormi] = useState(false);
   const jeton = useRef(0);
   const exprimer = useCallback((cle: string) => {
@@ -142,6 +153,33 @@ export function AvatarProvider({ children }: { children: ReactNode }) {
     };
     document.addEventListener("pointerover", survol, { passive: true });
     return () => document.removeEventListener("pointerover", survol);
+  }, []);
+
+  // ── Le défilement ───────────────────────────────────────────────────────────
+  /**
+   * ⚠️ **Écouté à la capture, sur le document.** Un `scroll` ne remonte pas : posé sur
+   * `window`, l'écouteur n'entend que le défilement de la page entière, et rate celui
+   * des panneaux internes — la liste des comptes, le rail des actifs, le menu. C'est
+   * précisément là qu'on défile le plus.
+   *
+   * ⚠️ **Passif, et sans lire la position.** Le seul fait qu'il se passe quelque chose
+   * suffit à rendre le visage curieux ; savoir *de combien* on a défilé regarde le
+   * regard, pas l'expression, et cela se joue dans le composant de l'avatar.
+   */
+  useEffect(() => {
+    let minuteur = 0;
+    const defiler = () => {
+      // React ignore l'écriture quand la valeur ne change pas : une salve de deux cents
+      // événements ne provoque donc qu'un seul rendu.
+      setDefile(true);
+      window.clearTimeout(minuteur);
+      minuteur = window.setTimeout(() => setDefile(false), FIN_DEFILEMENT);
+    };
+    document.addEventListener("scroll", defiler, { passive: true, capture: true });
+    return () => {
+      window.clearTimeout(minuteur);
+      document.removeEventListener("scroll", defiler, true);
+    };
   }, []);
 
   // ── Le chargement, en comptant les requêtes ─────────────────────────────────
@@ -221,11 +259,19 @@ export function AvatarProvider({ children }: { children: ReactNode }) {
     // La valeur pointée passe devant le survol : elle est plus précise que la zone qui
     // la contient, et c'est elle que l'utilisateur est en train de lire.
     if (pointe) return { cle: pointe, jeton: 0 };
+    /**
+     * ⚠️ **Le défilement passe devant le survol, et c'est délibéré.** Une zone survolée
+     * est un décor immobile : on peut la survoler par hasard, simplement parce que le
+     * curseur s'est arrêté là. Défiler est un geste. Rangé en dessous, il n'aurait
+     * quasiment jamais rien montré — on défile presque toujours avec le curseur posé
+     * quelque part, donc sur une zone qui parle déjà.
+     */
+    if (defile) return { cle: "curieux", jeton: 0 };
     if (survole) return { cle: survole, jeton: 0 };
     if (travaux > 0) return { cle: "focus", jeton: 0 };
     if (endormi) return { cle: "somnolent", jeton: 0 };
     return { cle: "neutre", jeton: 0 };
-  }, [ponctuel, pointe, survole, travaux, endormi]);
+  }, [ponctuel, pointe, defile, survole, travaux, endormi]);
 
   /**
    * Un ponctuel se retire de lui-même une fois joué.
