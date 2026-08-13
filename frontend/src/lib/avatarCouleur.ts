@@ -104,6 +104,53 @@ export function encre(fond: string, part: number): string {
 }
 
 /**
+ * Les deux liserés d'une carte teintée, dans la famille de sa couleur.
+ *
+ * ⚠️ **Les rapports sont relevés sur les cartes du thème, pas choisis.** Une carte porte
+ * deux anneaux : un cadre extérieur, qui laisse voir le noir de la page, et un liseré
+ * intérieur à peine détaché du fond. Mesuré dans le thème sombre, `#030712` contre
+ * `#101828` fait **1,135 pour un** — une séparation qu'on ne nomme pas, qu'on ne voit
+ * qu'au coin de l'œil, et qui donne pourtant tout le relief. Reproduire ce rapport plutôt
+ * qu'un écart choisi au jugé est ce qui fait que la carte teintée appartient au même jeu
+ * que ses voisines.
+ *
+ * ⚠️ **Le « noir » du thème n'en est pas un.** `#030712` est un bleu très sombre —
+ * saturation 0,71, clarté 0,04 — et c'est ce qui l'empêche de faire un trou dans une page
+ * bleutée. Le cadre d'une carte teintée reprend donc ces deux valeurs dans **sa** teinte :
+ * il reste noir à l'œil, sans jamais être étranger à la couleur qu'il entoure.
+ */
+const CLARTE_CADRE = 0.041;
+const SATURATION_CADRE = 0.71;
+const SEPARATION_BORD = 1.135;
+
+/** Le cadre extérieur : le noir de cette teinte-là. */
+export function cadreCarte(fond: string): string {
+  const [teinte, saturation] = rvbVersTsl(hexVersRvb(fond));
+  return rvbVersHex(tslVersRvb(
+    [teinte, Math.min(saturation, SATURATION_CADRE), CLARTE_CADRE]));
+}
+
+/**
+ * Le liseré intérieur : la même couleur, juste assez décalée pour se voir.
+ *
+ * ⚠️ **Dans le sens où il reste de la place.** Le thème sombre éclaircit son liseré, le
+ * thème clair l'assombrit — ce n'est pas une préférence mais une nécessité : sur une carte
+ * citron, un liseré plus clair sortirait de l'échelle et disparaîtrait. On cherche donc le
+ * décalage qui atteint la séparation voulue, du côté qui en a les moyens.
+ */
+export function bordCarte(fond: string): string {
+  const [teinte, saturation, clarte] = rvbVersTsl(hexVersRvb(fond));
+  const sens = clarte > 0.5 ? -1 : 1;
+  let essai = fond;
+  for (let i = 1; i <= 24; i++) {
+    essai = rvbVersHex(tslVersRvb(
+      [teinte, saturation, Math.min(1, Math.max(0, clarte + sens * i * 0.012))]));
+    if (contraste(fond, essai) >= SEPARATION_BORD) return essai;
+  }
+  return essai;
+}
+
+/**
  * Le contraste entre une tête et ses yeux, pour vérifier qu'on voit quelque chose.
  *
  * Exporté surtout pour le test : c'est la seule garantie qui compte, et elle se mesure.

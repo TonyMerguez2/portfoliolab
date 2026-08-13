@@ -8,8 +8,9 @@ import {
   type Contexte, type Insight, type Priorite,
 } from "@/lib/aideDecision";
 import {
-  COULEUR_PAR_DEFAUT, couleurDesYeux, encre, lisible,
+  COULEUR_PAR_DEFAUT, bordCarte, cadreCarte, couleurDesYeux, encre, lisible,
 } from "@/lib/avatarCouleur";
+import { hexVersRvb } from "@/lib/couleur";
 import { ARRONDI_REFERENCE, OEIL_REFERENCE, TAILLE_REFERENCE } from "@/lib/avatarReglages";
 import { RAYON_TETE, cheminOeil } from "@/lib/avatarSpherique";
 import { solideDepuis } from "@/lib/avatarVolume";
@@ -169,6 +170,17 @@ export default function ConstatsObjectif({
    * barre sur dix des onze couleurs proposées.
    */
   const fond = couleurAvatar ?? COULEUR_PAR_DEFAUT;
+  /**
+   * ⚠️ **Les deux anneaux suivent la carte, sinon ils la dénoncent.** Gardés aux couleurs
+   * du thème autour d'un fond teinté, ils dessinent un liseré bleu nuit sur une carte
+   * ambre : la carte cesse d'appartenir au jeu au lieu de s'y ranger. Les rapports
+   * viennent des cartes voisines, mesurés — voir `bordCarte` et `cadreCarte`.
+   */
+  const anneaux = useMemo(() => {
+    const cadre = cadreCarte(fond);
+    const [r, v, b] = hexVersRvb(cadre);
+    return { cadre, voile: `rgba(${r}, ${v}, ${b}, 0.5)`, bord: bordCarte(fond) };
+  }, [fond]);
   const teintePriorite = (p: Priorite) => lisible(fond, TEINTE_PRIORITE[p]);
 
   /**
@@ -228,7 +240,7 @@ export default function ConstatsObjectif({
     // panneau en permanence. Ce qui court dessus maintenant est un arc court : le bord reste
     // celui des voisins la plus grande partie du temps, et l'éclat ne fait que passer. Voir
     // `.novac-bord-defilant` dans globals.css, où tient toute la mécanique.
-    <Cadre classeCarte="novac-bord-defilant" style={{
+    <Cadre classeCarte="novac-bord-defilant" teinte={anneaux} style={{
       // ⚠️ **`1 0 auto` : il grandit, il ne rétrécit jamais.** Les trois termes comptent.
       // *Grandir* prend la place laissée libre au bas de la colonne — mesurée à 70 pixels
       // avant même le retrait de la mise en garde voisine, donc du vide qui ne servait à

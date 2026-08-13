@@ -49,7 +49,7 @@ export function repartir(style?: CSSProperties): { cadre: CSSProperties; carte: 
 }
 
 export default function Cadre({
-  children, style, classeCarte,
+  children, style, classeCarte, teinte,
 }: {
   children: ReactNode;
   /** Réparti automatiquement entre les deux couches. */
@@ -64,11 +64,30 @@ export default function Cadre({
    * deux cadres au lieu du liseré qu'on visait.
    */
   classeCarte?: string;
+  /**
+   * Les couleurs des deux anneaux, quand la carte ne prend pas celles du thème.
+   *
+   * ⚠️ **Passées ici plutôt que dans `style`, parce que `style` ne peut pas les
+   * atteindre.** La répartition envoie tout ce qui n'est pas du placement à la couche
+   * *intérieure* : un `border` écrit par l'appelant habille la carte, jamais le cadre qui
+   * l'entoure. Sans cette porte, une carte teintée garderait un cadre extérieur du thème
+   * autour d'un fond qui n'en est plus — c'est-à-dire un anneau étranger, exactement ce
+   * que ce composant existe pour éviter.
+   */
+  teinte?: { cadre: string; voile: string; bord: string };
 }) {
   const { cadre, carte } = repartir(style);
   return (
-    <div style={{ ...styleCadreExterieur(), ...cadre }}>
-      <div className={classeCarte} style={{ ...styleCarteInterieure(), ...carte }}>
+    <div style={{
+      ...styleCadreExterieur(),
+      ...(teinte ? { background: teinte.voile, border: `1px solid ${teinte.cadre}` } : {}),
+      ...cadre,
+    }}>
+      <div className={classeCarte} style={{
+        ...styleCarteInterieure(),
+        ...(teinte ? { border: `1px solid ${teinte.bord}` } : {}),
+        ...carte,
+      }}>
         {children}
       </div>
     </div>

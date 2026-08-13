@@ -1,10 +1,10 @@
 import { describe, expect, it } from "vitest";
 
 import {
-  COULEURS_AVATAR, COULEUR_PAR_DEFAUT, contrasteDuRegard, couleurDesYeux, encre,
-  encrePleine, estCouleurValide, lisible,
+  COULEURS_AVATAR, COULEUR_PAR_DEFAUT, bordCarte, cadreCarte, contrasteDuRegard,
+  couleurDesYeux, encre, encrePleine, estCouleurValide, lisible,
 } from "./avatarCouleur";
-import { contraste, rvbVersTsl, hexVersRvb } from "./couleur";
+import { contraste, luminance, rvbVersTsl, hexVersRvb } from "./couleur";
 
 /**
  * Le regard reste-t-il visible, quelle que soit la couleur choisie ?
@@ -168,6 +168,47 @@ describe("l'encre d'une carte teintée du portefeuille", () => {
         // La teinte survit : on n'est jamais retombé sur le noir ou le blanc.
         expect(t).not.toBe(encrePleine(c.hex));
       }
+    }
+  });
+});
+
+describe("les deux anneaux d'une carte teintée", () => {
+  it("détache son liseré intérieur comme les cartes du thème", () => {
+    /**
+     * ⚠️ **Le rapport est relevé sur les cartes existantes, pas choisi.** Dans le thème
+     * sombre, `#030712` contre `#101828` fait 1,135 pour un : une séparation qu'on ne voit
+     * qu'au coin de l'œil et qui porte tout le relief. La carte teintée doit la reproduire,
+     * sinon elle appartient à un autre jeu — un liseré trop franc la découpe, trop faible
+     * l'aplatit.
+     */
+    for (const c of COULEURS_AVATAR) {
+      const k = contraste(c.hex, bordCarte(c.hex));
+      expect(k).toBeGreaterThanOrEqual(1.13);
+      expect(k).toBeLessThan(1.45);
+    }
+  });
+
+  it("garde un cadre extérieur noir, mais de la teinte de la carte", () => {
+    /**
+     * ⚠️ **Le « noir » du thème n'en est pas un** : `#030712` est un bleu très sombre, et
+     * c'est ce qui l'empêche de faire un trou dans une page bleutée. Le cadre d'une carte
+     * teintée reprend donc la clarté et la saturation de ce noir-là dans **sa** teinte : il
+     * reste noir à l'œil sans être étranger à la couleur qu'il entoure.
+     *
+     * ⚠️ **On n'exige rien de son contraste contre la carte, et ce serait une erreur de le
+     * faire.** J'avais d'abord demandé qu'il s'en détache franchement : l'encre, un bleu
+     * déjà très sombre, n'y arrive qu'à 1,26 — et c'est juste. Le thème lui-même donne à
+     * ses cartes sombres un cadre **identique** à leur fond, soit 1,00 pour un : le cadre
+     * n'est pas là pour se voir contre la carte, mais pour se confondre avec la page.
+     * Exiger un écart aurait forcé un liseré visible là où le thème n'en veut aucun.
+     */
+    for (const c of COULEURS_AVATAR) {
+      const cadre = cadreCarte(c.hex);
+      expect(luminance(cadre)).toBeLessThan(0.02);
+      // La teinte survit : le cadre n'est pas un gris neutre.
+      const [t] = rvbVersTsl(hexVersRvb(cadre));
+      const [tf] = rvbVersTsl(hexVersRvb(c.hex));
+      expect(Math.abs(t - tf)).toBeLessThan(0.02);
     }
   });
 });
