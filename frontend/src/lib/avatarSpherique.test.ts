@@ -578,7 +578,15 @@ describe("solideDepuis", () => {
     const r = (t: number) => rayonSolide({ x: Math.cos(t), y: Math.sin(t), z: 0 }, s);
     expect(r(0)).toBeCloseTo(1, 9);
     expect(r(Math.PI / 2)).toBeCloseTo(1, 9);
-    expect(r(Math.PI / 4)).toBeLessThan(0.8);
+    /**
+     * ⚠️ **Le creux se voit, mais il est borné par ce que le regard supporte.** Une
+     * dizaine de pour cent : au-delà, la concavité rapproche le bord visible au point de
+     * couper l'œil dès dix degrés de lacet — mesuré, contre cinquante-sept sur la sphère.
+     * Le seuil de ce test dit donc les deux choses à la fois : assez creusé pour se lire
+     * comme une étoile, pas assez pour manger le regard.
+     */
+    expect(r(Math.PI / 4)).toBeLessThan(0.93);
+    expect(r(Math.PI / 4)).toBeGreaterThan(0.85);
     // La dérivée s'annule aux extrêmes : pas de pointe, contrairement à une
     // superellipse d'exposant inférieur à un, qui ferait des cusps sur les axes.
     const h = 1e-4;

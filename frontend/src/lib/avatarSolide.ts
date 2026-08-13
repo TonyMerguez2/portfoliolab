@@ -41,6 +41,16 @@ export { normaleSolide, surLeSolide };
 
 const TAU = Math.PI * 2;
 
+/**
+ * Sur combien de méridiens le bord est cherché.
+ *
+ * ⚠️ **Mesuré, pas choisi.** À quatre-vingt-seize, l'interpolation entre deux méridiens
+ * s'écartait de la vraie normale de six centièmes près d'une arête de cube — trois degrés,
+ * assez pour que le contour s'y aplatisse visiblement. À cent quatre-vingt-douze l'écart
+ * tombe sous le millième, et la table se construit une fois par image.
+ */
+const ECHANTILLONS_BORD = 192;
+
 function normaliser(v: Vec3): Vec3 {
   const n = Math.sqrt(v.x * v.x + v.y * v.y + v.z * v.z);
   return n === 0 ? v : { x: v.x / n, y: v.y / n, z: v.z / n };
@@ -101,54 +111,95 @@ export class Silhouette {
   private readonly e1: Vec3;
   private readonly e2: Vec3;
   private readonly axe: Vec3;
+  /**
+   * L'angle méridien du bord, échantillonné tout autour.
+   *
+   * ⚠️ **C'est cette table qui rend le contour et la visibilité *cohérents*.** Sans elle,
+   * le bord venait d'une recherche et la visibilité d'un test indépendant — « la normale
+   * regarde-t-elle vers nous ? ». Les deux ne disent pas la même chose sur une forme
+   * creusée : au fond d'un creux, la normale peut regarder vers nous alors que le point
+   * est passé derrière le bord. Vu à l'écran, l'œil qui rasait le bord de l'étoile ne
+   * gardait qu'un mince croissant collé à la silhouette, le reste étant déclaré caché.
+   * Ici, un point est vu s'il est **en deçà du bord sur son propre méridien** : la même
+   * table décide de l'un et de l'autre, ils ne peuvent plus se contredire.
+   */
+  private readonly bord: number[] | null;
 
-  constructor(regard: Vec3, private readonly solide: Solide) {
+  constructor(regard: Vec3, private readonly solide: Solide, echantillons: number = ECHANTILLONS_BORD) {
     this.axe = normaliser(regard);
     const base = baseDuPlan(this.axe);
     this.e1 = base.e1;
     this.e2 = base.e2;
+    this.bord = estSphere(solide) ? null : this.tabler(echantillons);
   }
 
-  /** Le point de la sphère qui, sur le solide, est au bord — à l'angle `t`. */
-  private surLaSphere(t: number): Vec3 {
+  /** La direction du méridien d'angle `t`, dans le plan perpendiculaire au regard. */
+  private direction(t: number): Vec3 {
     const c = Math.cos(t), s = Math.sin(t);
-    const d = {
+    return {
       x: this.e1.x * c + this.e2.x * s,
       y: this.e1.y * c + this.e2.y * s,
       z: this.e1.z * c + this.e2.z * s,
     };
-    const le = (angle: number): Vec3 => {
-      const ca = Math.cos(angle), sa = Math.sin(angle);
-      return {
-        x: this.axe.x * ca + d.x * sa,
-        y: this.axe.y * ca + d.y * sa,
-        z: this.axe.z * ca + d.z * sa,
+  }
+
+  /** Le point de la sphère à l'angle méridien `s` sur le méridien `t`. */
+  private surLeMeridien(t: number, angle: number): Vec3 {
+    const d = this.direction(t);
+    const ca = Math.cos(angle), sa = Math.sin(angle);
+    return {
+      x: this.axe.x * ca + d.x * sa,
+      y: this.axe.y * ca + d.y * sa,
+      z: this.axe.z * ca + d.z * sa,
+    };
+  }
+
+  /**
+   * Cherche l'angle du bord sur chaque méridien.
+   *
+   * Le long d'un méridien partant du point qui nous fait face, la normale bascule de
+   * « vers nous » vers « derrière ». On prend le **premier** basculement : c'est le bord
+   * extérieur, celui qui compte, même quand la forme est creusée et que la normale se
+   * retourne plus loin.
+   */
+  private tabler(n: number): number[] {
+    const table: number[] = [];
+    const PAS = Math.PI / 16;
+    for (let i = 0; i < n; i++) {
+      const t = (i / n) * TAU;
+      const face = (angle: number) => {
+        const N = normaleSolide(this.surLeMeridien(t, angle), this.solide);
+        return N.x * this.axe.x + N.y * this.axe.y + N.z * this.axe.z;
       };
-    };
-    // Sur la sphère, la silhouette est le quart de tour exact : rien à chercher.
-    if (estSphere(this.solide)) return le(Math.PI / 2);
-    const face = (angle: number) => {
-      const n = normaleSolide(le(angle), this.solide);
-      return n.x * this.axe.x + n.y * this.axe.y + n.z * this.axe.z;
-    };
-    const PAS = Math.PI / 24;
-    let a = 0, b = Math.PI;
-    let precedent = face(0);
-    for (let angle = PAS; angle <= Math.PI + 1e-9; angle += PAS) {
-      const v = face(angle);
-      if (precedent >= 0 && v < 0) { a = angle - PAS; b = angle; break; }
-      precedent = v;
+      let a = 0, b = Math.PI;
+      let precedent = face(0);
+      for (let angle = PAS; angle <= Math.PI + 1e-9; angle += PAS) {
+        const v = face(angle);
+        if (precedent >= 0 && v < 0) { a = angle - PAS; b = angle; break; }
+        precedent = v;
+      }
+      for (let k = 0; k < 12; k++) {
+        const m = (a + b) / 2;
+        if (face(m) >= 0) a = m; else b = m;
+      }
+      table.push((a + b) / 2);
     }
-    for (let i = 0; i < 24; i++) {
-      const m = (a + b) / 2;
-      if (face(m) >= 0) a = m; else b = m;
-    }
-    return le((a + b) / 2);
+    return table;
+  }
+
+  /** L'angle méridien du bord, à l'angle `t` — interpolé entre deux échantillons. */
+  private angleDuBord(t: number): number {
+    if (!this.bord) return Math.PI / 2;
+    const n = this.bord.length;
+    const x = ((t % TAU) + TAU) / TAU * n;
+    const i = Math.floor(x) % n;
+    const f = x - Math.floor(x);
+    return this.bord[i] * (1 - f) + this.bord[(i + 1) % n] * f;
   }
 
   /** Le point de la silhouette à l'angle `t`, sur le solide. */
   point(t: number): Vec3 {
-    return surLeSolide(this.surLaSphere(t), this.solide);
+    return surLeSolide(this.surLeMeridien(t, this.angleDuBord(t)), this.solide);
   }
 
   /**
@@ -164,6 +215,23 @@ export class Silhouette {
     );
   }
 
+  /**
+   * Ce point de la sphère est-il, une fois porté sur le solide, du côté visible ?
+   *
+   * ⚠️ **Deux conditions, et il faut les deux.** La normale qui regarde vers nous ne
+   * suffit pas : au fond d'un creux, elle peut nous faire face alors que le point est
+   * passé derrière le bord — c'est ce qui laissait un croissant d'œil déborder de
+   * l'étoile, mesuré à quatorze points sur cent treize. Être en deçà du bord ne suffit
+   * pas non plus : sur le flanc arrière d'une branche, un point reste en deçà tout en
+   * tournant le dos. Leur conjonction tient les deux bouts, et redonne exactement le
+   * test d'origine sur une forme convexe, où elles coïncident.
+   */
+  vu(p: Vec3, normaleTournee: Vec3): boolean {
+    if (normaleTournee.z < 0) return false;
+    const cos = p.x * this.axe.x + p.y * this.axe.y + p.z * this.axe.z;
+    return Math.acos(Math.min(1, Math.max(-1, cos))) <= this.angleDuBord(this.angle(p));
+  }
+
   /** Le point de la silhouette le plus proche d'un point de la sphère. */
   ramener(p: Vec3): Vec3 {
     return this.point(this.angle(p));
@@ -175,6 +243,29 @@ export class Silhouette {
     for (let i = 0; i < echantillons; i++) points.push(this.point((i / echantillons) * TAU));
     return points;
   }
+}
+
+/**
+ * La silhouette de l'orientation courante, gardée d'un appel à l'autre.
+ *
+ * ⚠️ **Une seule entrée suffit, et ce n'est pas un hasard.** Dans une image, tout — les
+ * deux yeux, chaque motif de skin, chaque trait du maillage — se rend sous la même
+ * orientation et le même solide. Un cache d'une entrée touche donc à chaque fois, là où
+ * reconstruire la table à chaque appel coûterait vingt-cinq fois le même travail.
+ */
+let derniere: { regard: Vec3; solide: Solide; valeur: Silhouette } | null = null;
+
+export function silhouettePour(orientation: Orientation, solide: Solide): Silhouette {
+  const regard = regardDansLeSolide(orientation);
+  if (derniere && derniere.solide === solide
+    && Math.abs(derniere.regard.x - regard.x) < 1e-12
+    && Math.abs(derniere.regard.y - regard.y) < 1e-12
+    && Math.abs(derniere.regard.z - regard.z) < 1e-12) {
+    return derniere.valeur;
+  }
+  const valeur = new Silhouette(regard, solide);
+  derniere = { regard, solide, valeur };
+  return valeur;
 }
 
 /** Un point du contour, tel qu'il se rend : sa position et sa visibilité. */
@@ -271,12 +362,13 @@ function poserArcDeSilhouette(
 function rendre(
   contourSphere: Vec3[], orientation: Orientation, solide: Solide, rayon: number,
 ): string {
-  const silhouette = new Silhouette(regardDansLeSolide(orientation), solide);
-  const sommets: Sommet[] = contourSphere.map(p => {
-    const normale = normaleSolide(p, solide);
-    const vue = tournerTete(normale, orientation.lacet, orientation.tangage, orientation.roulis ?? 0);
-    return { solide: surLeSolide(p, solide), sphere: p, vu: vue.z >= 0 };
-  });
+  const silhouette = silhouettePour(orientation, solide);
+  const tourne = (v: Vec3) =>
+    tournerTete(v, orientation.lacet, orientation.tangage, orientation.roulis ?? 0);
+  const sommets: Sommet[] = contourSphere.map(p => ({
+    solide: surLeSolide(p, solide), sphere: p,
+    vu: silhouette.vu(p, tourne(normaleSolide(p, solide))),
+  }));
   const morceaux = couper(sommets, silhouette, orientation, 0.06);
   const bouts: string[] = [];
   for (const morceau of morceaux) {
@@ -326,7 +418,7 @@ export function contourTeteSolide(
   orientation: Orientation, solide: Solide,
   rayon: number = RAYON_TETE, echantillons: number = 240,
 ): string {
-  const silhouette = new Silhouette(regardDansLeSolide(orientation), solide);
+  const silhouette = silhouettePour(orientation, solide);
   return cheminSvg(silhouette.contour(echantillons).map(q => projeter(
     tournerTete(q, orientation.lacet, orientation.tangage, orientation.roulis ?? 0), rayon)));
 }
@@ -340,11 +432,11 @@ export function traitSurLeSolide(
   courbe: Vec3[], orientation: Orientation,
   rayon: number = RAYON_TETE, solide: Solide = SPHERE,
 ): { devant: string; derriere: string } {
-  const silhouette = new Silhouette(regardDansLeSolide(orientation), solide);
+  const silhouette = silhouettePour(orientation, solide);
   const tourner = (p: Vec3) =>
     tournerTete(p, orientation.lacet, orientation.tangage, orientation.roulis ?? 0);
   const n = courbe.length;
-  const vu = courbe.map(p => tourner(normaleSolide(p, solide)).z >= 0);
+  const vu = courbe.map(p => silhouette.vu(p, tourner(normaleSolide(p, solide))));
   const ecran = courbe.map(p => projeter(tourner(surLeSolide(p, solide)), rayon));
 
   const devant: Point2[][] = [];

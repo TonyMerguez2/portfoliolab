@@ -41,8 +41,22 @@ export type Solide =
 
 export const SPHERE: Solide = { famille: "sphere" };
 
-/** L'amplitude du creusement, en fonction du réglage. */
-const AMPLEUR_ETOILE = 1.6;
+/**
+ * L'amplitude maximale du creusement.
+ *
+ * ⚠️ **Bornée par ce que le regard supporte, pas par ce qui est joli.** Un creux
+ * concave rapproche le bord visible : la surface s'y détourne avant le quart de tour, et
+ * l'œil qui passe par là se trouve coupé bien plus tôt que sur une sphère. Mesuré, à
+ * quatre-vingt-seize centièmes de creux — ce que donnait le premier réglage — l'œil
+ * commençait à être rogné dès **dix degrés de lacet** en volume tournant, là où la sphère
+ * tient jusqu'à cinquante-sept. Le visage montrait alors un croissant d'œil collé au bord
+ * en permanence : ce que l'on prend pour un défaut d'affichage, et qui n'est que la
+ * géométrie d'un creux trop profond.
+ *
+ * À quarante-cinq centièmes, le creux se voit encore — dix pour cent de profondeur, le
+ * galbe de la référence — et le rognage ne commence qu'au-delà du débattement du suivi.
+ */
+const AMPLEUR_ETOILE = 0.45;
 
 /**
  * Le solide correspondant à une forme et à un réglage d'arrondi.
