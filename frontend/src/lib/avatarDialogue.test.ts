@@ -2,8 +2,8 @@ import { describe, expect, it } from "vitest";
 
 import { ETATS } from "./avatarEtats";
 import {
-  BASE_PAROLE, LIGNES_MORCEAU, PLACE_PAROLE, PART_CARACTERE, type Parole, PSEUDO_PAR_DEFAUT,
-  etatsQuiParlent, messagePour, parolePour, tailleMorceau, texteDe,
+  BASE_COMPACTE, BASE_PAROLE, PLACE_COMPACTE, PLACE_PAROLE, PART_CARACTERE, type Parole,
+  PSEUDO_PAR_DEFAUT, etatsQuiParlent, messagePour, parolePour, tailleMorceau, texteDe,
 } from "./avatarDialogue";
 
 /**
@@ -26,9 +26,9 @@ import {
 const NOM = "Sacha";
 
 /** Les paroles de tous les états, plus le repli. */
-const toutes = (): { cle: string; parole: Parole }[] => [
-  ...ETATS.map(e => ({ cle: e.cle, parole: parolePour(e.cle, NOM) })),
-  { cle: "(repli)", parole: parolePour("inconnu", NOM) },
+const toutes = (nom: string = NOM): { cle: string; parole: Parole }[] => [
+  ...ETATS.map(e => ({ cle: e.cle, parole: parolePour(e.cle, nom) })),
+  { cle: "(repli)", parole: parolePour("inconnu", nom) },
 ];
 
 describe("les répliques", () => {
@@ -112,18 +112,35 @@ describe("la mise en scène", () => {
     }
   });
 
+  it("tient sur une ligne dans la largeur où il est rendu", () => {
+    /**
+     * ⚠️ **Le défaut que ce contrôle attrape s'est vu sur un cas parfaitement ordinaire.** La
+     * règle autorisait d'abord deux lignes par morceau, et le calcul se faisait sur la largeur
+     * du banc. Dans le bandeau, plus étroit, « Bonjour ! » s'affichait donc « Bonjou / r ! ».
+     * On éprouve maintenant les deux registres dans *leur* largeur, et l'on exige une ligne.
+     */
+    for (const [base, place] of [[BASE_PAROLE, PLACE_PAROLE], [BASE_COMPACTE, PLACE_COMPACTE]]) {
+      for (const nom of ["", "Sacha"]) {
+        for (const { cle, parole } of toutes(nom)) {
+          for (const m of parole.morceaux) {
+            const large = m.texte.length * PART_CARACTERE * tailleMorceau(m, base, place);
+            expect(large, `« ${m.texte} » (${cle}) déborde de sa ligne en base ${base}`)
+              .toBeLessThanOrEqual(place + 1e-6);
+          }
+        }
+      }
+    }
+  });
+
   it("rapetisse un pseudonyme démesuré au lieu de le hacher", () => {
     /**
      * Vu à l'essai : « Alexandre-Maximilien » posé de force à sa taille voulue s'empilait sur
-     * quatre lignes coupées au milieu des syllabes. Le garde-fou le ramène à la taille qui le
-     * fait tenir en deux — et ne descend jamais sous le seuil de lisibilité.
+     * quatre lignes coupées au milieu des syllabes. Il est ramené à la taille qui le ferait
+     * tenir sur une ligne — et s'arrête au seuil de lisibilité, quitte à s'enrouler.
      */
     const long = parolePour("content", "Alexandre-Maximilien");
     const nom = long.morceaux[long.morceaux.length - 1];
-    const rendu = tailleMorceau(nom);
-    expect(rendu).toBeLessThan(BASE_PAROLE * nom.echelle);
-    expect(nom.texte.length * PART_CARACTERE * rendu)
-      .toBeLessThanOrEqual(LIGNES_MORCEAU * PLACE_PAROLE + 1e-6);
+    expect(tailleMorceau(nom)).toBeLessThan(BASE_PAROLE * nom.echelle);
 
     const demesure = parolePour("content", "Barthélemy-Alexandre de la Fontaine-Duverger");
     expect(tailleMorceau(demesure.morceaux[1]), "illisible à force de rapetisser")

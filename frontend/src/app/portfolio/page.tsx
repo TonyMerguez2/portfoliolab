@@ -43,6 +43,7 @@ import AvatarPortefeuille from "@/components/portfolio/AvatarPortefeuille";
 import AvatarParole from "@/components/AvatarParole";
 import { BASE_COMPACTE, PLACE_COMPACTE, parleEnContexteDense } from "@/lib/avatarDialogue";
 import { useParoleStable } from "@/lib/useParoleStable";
+import { useSalutArrivee } from "@/lib/useSalutArrivee";
 import { skinParCle } from "@/lib/avatarSkins";
 import {
   type FormeAvatar, useCouleurAvatar, useFormeAvatar, useSkinAvatar,
@@ -932,8 +933,23 @@ function PortfolioPageInner() {
    * fait patienter les soutenus.
    */
   const expressionParlee = useParoleStable(expression.cle);
-  /** Le personnage a-t-il quelque chose à dire, là, maintenant ? */
-  const parle = parleEnContexteDense(expressionParlee);
+  /**
+   * Le salut de l'arrivée : il ne vient pas du répertoire d'expressions, parce qu'arriver
+   * n'est pas un état du visage. Voir `useSalutArrivee`.
+   */
+  const { salue, nom: nomCompte } = useSalutArrivee();
+  /**
+   * Ce que le personnage dit, s'il dit quelque chose.
+   *
+   * ⚠️ **L'événement passe devant la politesse.** Si le personnage a une réaction à donner —
+   * une erreur, un succès — au moment même où il saluait, c'est elle qui compte : un bonjour
+   * qui recouvrirait un échec serait la pire des deux paroles. Le salut n'occupe donc que le
+   * silence.
+   */
+  const paroleAffichee = parleEnContexteDense(expressionParlee)
+    ? { cle: expressionParlee, nom: null as string | null }
+    : salue ? { cle: "content", nom: nomCompte }
+    : null;
   /**
    * ⚠️ **Le thème est lu ici parce que la parole se corrige dans les deux sens.** La couleur
    * du personnage doit s'éclaircir sur un fond sombre et s'assombrir sur un fond clair ; et
@@ -1316,7 +1332,7 @@ function PortfolioPageInner() {
               */}
             <div
               style={{
-                width: parle ? PLACE_COMPACTE + ECART_IDENTITE : 0,
+                width: paroleAffichee ? PLACE_COMPACTE + ECART_IDENTITE : 0,
                 /**
                  * ⚠️ **Le retrait se referme avec la case, sinon il survit à zéro.** Sous
                  * `border-box`, une largeur inférieure au remplissage ne le rogne pas : la
@@ -1324,7 +1340,7 @@ function PortfolioPageInner() {
                  * donc onze pixels et le nom se tenait à vingt-deux du personnage au lieu de
                  * onze — exactement le décalage que ce montage devait éviter.
                  */
-                paddingLeft: parle ? ECART_IDENTITE : 0,
+                paddingLeft: paroleAffichee ? ECART_IDENTITE : 0,
                 boxSizing: "border-box", flexShrink: 0,
                 /**
                  * ⚠️ **On coupe les côtés, pas le haut — et `overflow` ne sait pas faire la
@@ -1344,11 +1360,12 @@ function PortfolioPageInner() {
                   + " padding-left 260ms cubic-bezier(0.2, 0.7, 0.3, 1)",
               }}
             >
-              {parle && (
+              {paroleAffichee && (
                 <AvatarParole
-                  etat={expressionParlee} couleur={couleurAvatar}
+                  etat={paroleAffichee.cle} pseudo={paroleAffichee.nom}
+                  couleur={couleurAvatar}
                   fond={theme.surfaceSolid} clair={!theme.isDark}
-                  base={BASE_COMPACTE} place={`${PLACE_COMPACTE}px`}
+                  base={BASE_COMPACTE} largeur={PLACE_COMPACTE}
                 />
               )}
             </div>

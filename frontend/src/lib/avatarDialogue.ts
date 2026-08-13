@@ -107,15 +107,27 @@ export const PLACE_COMPACTE = 104;
  * salue, pas un personnage qui parle. Le salut est donc muet ici, avec les deux états
  * contents qui le portent.
  *
- * ⚠️ **Les états du curseur se taisent aussi, et c'est la vraie raison de cette liste.**
+ * ⚠️ **Les états du curseur se taisent aussi, et c'est la première raison de cette liste.**
  * `curieux` naît du défilement *et* du survol — quatre éléments le portent —, `reflexion`
- * d'un survol, `sceptique` et `preoccupe` d'une valeur pointée. Tous changent au rythme de
- * la souris : un texte branché dessus clignoterait à chaque mouvement. Restent ceux qui
- * disent un événement plutôt qu'un passage — le sommeil, le calcul en cours, et les
- * réactions ponctuelles qui s'effacent d'elles-mêmes.
+ * d'un survol, `sceptique` et `preoccupe` d'une valeur pointée. Tous changent au rythme de la
+ * souris : un texte branché dessus clignoterait à chaque mouvement.
+ *
+ * ⚠️ **Le travail en cours s'est tu à son tour, et c'est la leçon de l'essai.** « Je regarde »
+ * y était : l'application est censée dire qu'elle calcule. Sauf qu'ici `fetch` est enveloppé
+ * en entier, donc l'avatar se met au travail à *chaque* requête — y compris la relecture des
+ * cours, toutes les quinze secondes, et pour elle seule. Retarder ne suffisait pas : ce pouls
+ * dure parfois plus longtemps qu'un changement d'onglet, si bien qu'aucun seuil ne les sépare.
+ * Signalé à l'usage — « trop le Je regarde ». Le visage, lui, garde sa concentration : c'est
+ * une nuance qu'on remarque à peine, et c'est exactement le bon registre pour un pouls. Les
+ * **mots** sont réservés à ce qui arrive vraiment.
+ *
+ * ⚠️ **Ce qui reste dessine un rythme, et non une conversation.** Le personnage salue quand on
+ * arrive — voir `useSalutArrivee`, qui ne passe pas par cette liste puisque arriver n'est pas
+ * un état —, s'endort si on le laisse, et réagit à ce qui aboutit ou échoue. Entre les deux,
+ * il se tait.
  */
 const MARQUANTS = new Set([
-  "somnolent", "reveil", "focus", "observation", "succes", "erreur", "surpris",
+  "somnolent", "reveil", "succes", "erreur", "surpris",
 ]);
 
 /** Le personnage a-t-il quelque chose à dire, ailleurs que sur le banc ? */
@@ -139,17 +151,6 @@ export function parleEnContexteDense(etat: string): boolean {
 export const PART_CARACTERE = 0.557;
 
 /**
- * Le nombre de lignes qu'un seul morceau peut occuper avant qu'on ne le rapetisse.
- *
- * ⚠️ **Deux, parce qu'au-delà le nom se hache.** Le pseudonyme est le seul morceau dont on
- * ignore la longueur, et il ne se coupe proprement nulle part. Vu à l'essai avec
- * « Alexandre-Maximilien » : posé de force à 32 pixels, il s'empilait sur **quatre** lignes
- * coupées au milieu des syllabes — contenu, mais illisible. Ramené à la taille qui le fait
- * tenir en deux, il reste un nom.
- */
-export const LIGNES_MORCEAU = 2;
-
-/**
  * La taille de lecture : celle sous laquelle on refuse de descendre, en pixels.
  *
  * ⚠️ **C'est un plancher de *lecture*, pas un plancher technique.** Seize pixels, c'est la
@@ -161,21 +162,33 @@ const PLANCHER_MORCEAU = 16;
 /**
  * La taille d'un morceau à l'écran, en pixels — sa taille voulue, bornée par la place.
  *
- * ⚠️ **Le plancher compte autant que le plafond.** Sans lui, un pseudonyme de quarante
- * caractères se réduirait à sept pixels : formellement il tiendrait, et personne ne pourrait
- * le lire. À quatorze, un nom démesuré finit par déborder en hauteur — ce qui se voit, se
- * comprend, et vaut mieux qu'un texte illisible qui prétend aller bien.
+ * ⚠️ **On vise **une** ligne, et l'on ne descend pas sous le plancher.** La règle a d'abord
+ * autorisé deux lignes, en pensant au pseudonyme qui ne tient pas. Résultat vu à l'écran dans
+ * le bandeau : « Bonjour ! », qui n'a rien d'un cas limite, s'affichait « Bonjou / r ! » —
+ * coupé au milieu du mot, puisque la seule coupure disponible ne tombait pas au bon endroit.
+ * Un mot ordinaire n'a pas à s'enrouler ; on le rapetisse jusqu'à ce qu'il passe.
  *
- * ⚠️ **Mais le plancher ne borne que la réduction, jamais la taille voulue.** Écrit
- * `max(14, min(voulu, tient))`, il **remontait** le premier « z » du dodo — voulu à 12,1
- * pixels — et le souffle repartait de trop haut : c'est le test qui l'a dit, pas l'œil. Un
- * morceau délibérément minuscule n'est pas un morceau en détresse. La fonction ne peut
+ * ⚠️ **Et le plancher rend la deuxième ligne à qui en a vraiment besoin.** Un nom de vingt
+ * caractères ne peut pas tenir sur une ligne à une taille lisible : la réduction s'arrête au
+ * plancher et le texte s'enroule alors sur deux lignes, voire trois. C'est la même
+ * dégradation qu'avant, mais elle n'arrive plus qu'au cas qu'elle visait.
+ *
+ * ⚠️ **La place est celle du rendu, pas celle du banc.** Écrite en dur, elle valait 132 —
+ * la largeur du banc — alors que le bandeau n'en offre que 104 : le calcul déclarait donc que
+ * tout tenait, dans une largeur qui n'existait pas là où le texte s'affichait.
+ *
+ * ⚠️ **Le plancher ne borne que la réduction, jamais la taille voulue.** Écrit
+ * `max(plancher, min(voulu, tient))`, il **remontait** le premier « z » du dodo — voulu à
+ * 12,1 pixels — et le souffle repartait de trop haut : c'est le test qui l'a dit, pas l'œil.
+ * Un morceau délibérément minuscule n'est pas un morceau en détresse. La fonction ne peut
  * qu'ôter de la taille, jamais en ajouter.
  */
-export function tailleMorceau(m: Morceau, base: number = BASE_PAROLE): number {
+export function tailleMorceau(
+  m: Morceau, base: number = BASE_PAROLE, place: number = PLACE_PAROLE,
+): number {
   const voulu = base * m.echelle;
-  const tient = (LIGNES_MORCEAU * PLACE_PAROLE) / (m.texte.length * PART_CARACTERE);
-  return Math.min(voulu, Math.max(PLANCHER_MORCEAU, tient));
+  const surUneLigne = place / (m.texte.length * PART_CARACTERE);
+  return Math.min(voulu, Math.max(PLANCHER_MORCEAU, surUneLigne));
 }
 
 /**

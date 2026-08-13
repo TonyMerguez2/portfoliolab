@@ -921,7 +921,7 @@ export default function AvatarProceduralPage() {
 
           {dialogue && (
             <AvatarParole etat={parole} pseudo={pseudo} couleur={palette.tete}
-              fond={ENCRE} clair={false}
+              fond={ENCRE} clair={false} largeur={PLACE_PAROLE}
               /**
                * ⚠️ **Le banc pose lui-même la parole, le composant ne se place pas.** Ici
                * elle flotte au flanc du dessin ; dans le bandeau elle prend son rang dans une

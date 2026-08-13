@@ -33,7 +33,24 @@ export type ProprietesParole = {
   clair: boolean;
   /** Le registre : ample au banc, compact dans une interface dense. */
   base?: number;
-  /** La largeur dont l'appelant dispose, en CSS. Elle borne l'enroulement, pas le corps. */
+  /**
+   * La largeur pour laquelle la parole est dessinée, en pixels.
+   *
+   * ⚠️ **C'est elle qui décide des tailles, et elle est un nombre.** Un mot trop long pour
+   * cette largeur est rapetissé jusqu'à y tenir ; sans elle, le calcul se faisait sur la
+   * largeur du banc — 132 pixels — alors que le bandeau n'en offre que 104, et déclarait donc
+   * que tout tenait dans une place qui n'existait pas.
+   */
+  largeur?: number;
+  /**
+   * La borne CSS de l'enroulement, si le contenant en veut une autre.
+   *
+   * ⚠️ **Séparée de la largeur de dessin, parce que les deux répondent à des questions
+   * différentes.** Celle-ci dit ce que le contenant *permet* — au banc, un `clamp` qui suit la
+   * fenêtre ; l'autre dit ce pour quoi le texte est *dessiné*. Les confondre, c'était rendre
+   * les tailles dépendantes de la largeur de la fenêtre, donc casser la règle même qui veut
+   * que le corps ne suive pas le contenant.
+   */
   place?: string;
   /** Le placement, qui n'appartient qu'à l'appelant. */
   style?: React.CSSProperties;
@@ -99,7 +116,7 @@ function Eclat({ couleur, retard, taille }: {
  */
 export default function AvatarParole({
   etat, pseudo, couleur, fond, clair, base = BASE_PAROLE,
-  place = `${PLACE_PAROLE}px`, style,
+  largeur = PLACE_PAROLE, place = `${largeur}px`, style,
 }: ProprietesParole) {
   const parole = parolePour(etat, pseudo);
   /**
@@ -116,7 +133,23 @@ export default function AvatarParole({
   const plein = tonFranc(pourFond(couleur, clair), fond);
   const sourd = tonRetenu(plein, fond);
   const envol = parole.genre === "envol";
-  const taille = (m: Morceau) => tailleMorceau(m, base);
+  const taille = (m: Morceau) => tailleMorceau(m, base, largeur);
+  /**
+   * Les traits d'éclat ne paraissent que si la parole leur laisse un coin.
+   *
+   * ⚠️ **Ils se posent au coin haut-droit du bloc, qui n'est libre que sur deux lignes.**
+   * C'est la disposition de la maquette : une amorce courte en haut, l'appui en dessous, et
+   * l'éclat dans le vide que laisse la première ligne. Sur une seule ligne, ce vide n'existe
+   * pas — le texte va jusqu'au bord — et les traits retombent **sur les dernières lettres**.
+   * Vu à l'écran dans le bandeau : « Bonjour ! » sans pseudonyme tient sur une ligne, et son
+   * point d'exclamation disparaissait sous l'éclat.
+   *
+   * ⚠️ **On les retire plutôt que de leur réserver une gouttière.** Réduire la largeur de
+   * dessin de leur encombrement ferait rapetissier le texte sous la taille de lecture dans le
+   * registre compact — mesuré, « Bonjour ! » y tomberait à quinze pixels. Un ornement ne
+   * justifie pas qu'on abîme ce qu'il orne.
+   */
+  const orne = parole.eclat && parole.morceaux.some(m => m.saut);
 
   return (
     <div
@@ -145,7 +178,7 @@ export default function AvatarParole({
         ...style,
       }}
     >
-      {parole.eclat && (
+      {orne && (
         <Eclat couleur={plein} taille={base * 1.3}
           retard={parole.morceaux.length * RETARD_MORCEAU + 90} />
       )}
