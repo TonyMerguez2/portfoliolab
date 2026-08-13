@@ -2291,6 +2291,9 @@ function PortfolioPageInner() {
                 deux familles sur neuf se taisent — et c'est justement celles qui portent les
                 priorités « critique ». */}
             <ConstatsObjectif
+              couleurAvatar={couleurAvatar}
+              formeAvatar={formeAvatar}
+              skinAvatar={skinAvatar}
               objectif={listeObjectifs.find(o => o.id === projeteEffectif) ?? null}
               valeurPortefeuille={objectifs.donnees?.valeur_portefeuille ?? null}
               medianeProjection={projection.projection?.possible

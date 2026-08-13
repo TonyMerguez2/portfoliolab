@@ -1,12 +1,14 @@
 "use client";
 import { useEffect, useState } from "react";
 
+import AvatarNovac from "@/components/AvatarNovac";
 import Cadre from "@/components/ui/Cadre";
 import {
   aideALaDecision, confianceEnClair, couperMetrique,
   type Contexte, type Insight, type Priorite,
 } from "@/lib/aideDecision";
 import { type Objectif } from "@/lib/objectifs";
+import { type FormeAvatar } from "@/lib/useCouleurAvatar";
 import { JETONS } from "@/lib/palette";
 import { FONT, NUM } from "@/lib/typography";
 
@@ -36,12 +38,6 @@ import { FONT, NUM } from "@/lib/typography";
  * défilement automatique : un texte qui bouge tout seul se lit deux fois moins bien.
  */
 
-/** L'étincelle du titre : un encart à lire, pas une intelligence qui aurait parlé. */
-const ETINCELLE = "M16.999 21.744c-1.24-.066-2.862-.835-4.963-2.289l-.039-.026-.036.026c-2.101 "
-  + "1.455-3.723 2.224-4.964 2.29l-.174.005c-2.688 0-3.03-2.566-1.681-7.041l.053-.173-.098-.073c"
-  + "-5.926-4.508-4.938-7.628 2.5-7.84l.197-.005.113-.317c1.158-3.236 2.374-4.942 3.94-5.046L12 "
-  + "1.25c1.638 0 2.894 1.71 4.093 5.051l.111.317.2.005c7.437.212 8.426 3.332 2.498 7.84l-.1.072"
-  + ".054.173c1.321 4.386 1.018 6.937-1.523 7.037l-.159.003z";
 
 /**
  * Le ciel du panneau : un fond noir, deux nébuleuses très pâles, et des étoiles.
@@ -137,8 +133,20 @@ function Points({ nombre, courant, onChoisir }: {
 export default function ConstatsObjectif({
   objectif, valeurPortefeuille, medianeProjection, tousLesObjectifs,
   sommeDesParts, volatilite, volatiliteSource, seancesMesurees,
+  couleurAvatar, formeAvatar, skinAvatar,
 }: {
   objectif: Objectif | null;
+  /**
+   * L'apparence de l'avatar du portefeuille — la même que dans l'en-tête.
+   *
+   * ⚠️ **Passée, et non relue depuis le stockage.** Le panneau ne connaît pas le
+   * portefeuille, et lui donner de quoi le chercher ferait deux sources pour un même
+   * réglage : on a déjà vu la couleur et la courbe de performance se désaccorder ainsi.
+   * La page tient l'apparence, elle la donne à qui l'affiche.
+   */
+  couleurAvatar?: string;
+  formeAvatar?: FormeAvatar;
+  skinAvatar?: string;
   valeurPortefeuille: number | null;
   /**
    * La médiane que le panneau de projection affiche.
@@ -239,11 +247,6 @@ export default function ConstatsObjectif({
       padding: "14px 16px",
     }}>
       <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
-        <svg width="19" height="19" viewBox="0 0 24 24" fill="currentColor"
-          aria-hidden="true" style={{ color: "rgba(255,255,255,0.92)", flexShrink: 0,
-            display: "block" }}>
-          <path d={ETINCELLE} />
-        </svg>
         <span style={{ fontFamily: FONT, fontSize: 15, fontWeight: 700, flexShrink: 0,
           color: "rgba(255,255,255,0.96)", letterSpacing: "-0.01em" }}>
           Aide à la décision
@@ -277,9 +280,52 @@ export default function ConstatsObjectif({
         // le bas. Le vide restant passe sous elle, absorbé par la marge automatique du pied.
         //
         // La hauteur minimale reste : elle tient la rangée quand une aide n'a qu'une ligne.
-        <div style={{ display: "flex", gap: 14, minHeight: 84, minWidth: 0 }}>
-          <div style={{ display: "flex", flexDirection: "column", gap: 5, minWidth: 0,
-            flex: 1 }}>
+        <div style={{ display: "flex", gap: 10, minHeight: 84, minWidth: 0 }}>
+          {/**
+            * La bulle — un essai, pour voir ce que donne une parole attribuée.
+            *
+            * ⚠️ **La pointe monte vers l'avatar du titre, elle ne part pas d'à côté.** Une
+            * bulle sans direction n'est qu'un cadre arrondi : ce qui attribue la phrase,
+            * c'est le petit triangle qui désigne le locuteur. Il est donc placé en haut à
+            * gauche, à l'aplomb exact de la tête, et non au milieu du bord.
+            *
+            * ⚠️ **Un fond très pâle plutôt qu'un cadre clair.** Le panneau est un ciel
+            * presque noir ; un contour blanc y découperait une fenêtre et couperait le
+            * texte du fond étoilé. Six pour cent de blanc suffisent à lever la bulle sans
+            * fermer le ciel derrière elle.
+            */}
+          {/**
+            * ⚠️ **L'avatar est descendu du titre pour venir contre la bulle, et c'est la
+            * seule position qui fasse lire une parole.** Posé dans le titre à dix-neuf
+            * pixels, il tenait la place de l'étincelle sans en dire plus : trop petit pour
+            * qu'on reconnaisse un visage, et trop loin de la phrase pour qu'on la lui
+            * attribue — la pointe de la bulle désignait un point du titre, pas quelqu'un.
+            * Comparé à l'image, c'est franc : à côté, à trente pixels, il parle ; au
+            * titre, il décore.
+            *
+            * ⚠️ **Il ne cligne pas et ne suit pas le curseur.** Ailleurs c'est ce qui le
+            * rend vivant ; ici il accompagne un texte qu'on lit, et un visage qui bouge à
+            * côté d'un paragraphe prend le regard qu'on venait donner au paragraphe.
+            *
+            * ⚠️ **Le prix est en largeur, et il est connu.** La colonne de texte perd une
+            * quarantaine de pixels sur un panneau dont l'équilibre est déjà réglé au plus
+            * juste — voir plus bas ce que le bloc du chiffre a coûté à réapprendre. La
+            * phrase enroule donc une ligne de plus, ce que le plancher de hauteur absorbe.
+            */}
+          <span style={{ flexShrink: 0, paddingTop: 2 }}>
+            <AvatarNovac taille={30} couleur={couleurAvatar} forme={formeAvatar ?? "sphere"}
+              skin={skinAvatar ?? "uni"} suivi={false} vivant={false} titre="Novac" />
+          </span>
+          <div style={{ position: "relative", flex: 1, minWidth: 0,
+            display: "flex", flexDirection: "column", gap: 5,
+            background: "rgba(255,255,255,0.06)", borderRadius: 12,
+            padding: "10px 12px" }}>
+            {/* La pointe désigne l'avatar : sans elle, la bulle n'est qu'un cadre arrondi. */}
+            <span aria-hidden="true" style={{
+              position: "absolute", left: -5, top: 13, width: 8, height: 12,
+              background: "rgba(255,255,255,0.06)",
+              clipPath: "polygon(0 50%, 100% 0, 100% 100%)",
+            }} />
             <span style={{ fontFamily: FONT, fontSize: 15, fontWeight: 650,
               lineHeight: 1.35, color: TEINTE[aide.priorite] }}>
               {aide.titre}
