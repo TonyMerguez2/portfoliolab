@@ -64,6 +64,10 @@ import { FONT, NUM } from "@/lib/typography";
 /** La hauteur des yeux dans le panneau, en pixels. */
 const HAUTEUR_YEUX = 26;
 
+/** Le corps du titre d'une aide, et la hauteur morte au-dessus de ses lettres. */
+const TAILLE_TITRE_AIDE = 16;
+const HAUT_ENCRE_TITRE = +(0.152 * TAILLE_TITRE_AIDE).toFixed(2);
+
 /**
  * La navigation entre les aides, en points.
  *
@@ -356,7 +360,8 @@ export default function ConstatsObjectif({
             */}
           <svg viewBox={yeux.boite} height={HAUTEUR_YEUX}
             width={(HAUTEUR_YEUX * yeux.rapport).toFixed(1)} aria-hidden="true"
-            style={{ display: "block", flexShrink: 0, marginTop: 3 }}>
+            // Les yeux se posent sur la même ligne que les lettres du titre.
+            style={{ display: "block", flexShrink: 0, marginTop: HAUT_ENCRE_TITRE }}>
             {yeux.traces.map((d, i) => <path key={i} d={d} fill={couleurDesYeux(fond)} />)}
           </svg>
           <div style={{ flex: 1, minWidth: 0, display: "flex",
@@ -369,7 +374,7 @@ export default function ConstatsObjectif({
               * pas perdue pour autant : elle passe sur la métrique, l'élément le plus
               * regardé de la carte, où une couleur se lit sans crier.
               */}
-            <span style={{ fontFamily: FONT, fontSize: 16, fontWeight: 700,
+            <span style={{ fontFamily: FONT, fontSize: TAILLE_TITRE_AIDE, fontWeight: 700,
               lineHeight: 1.3, color: encre(fond, 1), letterSpacing: "-0.01em" }}>
               {aide.titre}
             </span>
@@ -393,8 +398,16 @@ export default function ConstatsObjectif({
               est passé sur le bord du panneau. Ce qui distingue ce nombre est ce qui doit le
               distinguer : sa taille, sa graisse, et le blanc presque pur. */}
           {aide.metrique && (() => {
-            const { fort, discret } = couperMetrique(aide.metrique.valeur);
-            const taille = discret ? 28 : 40;
+            const { fort, discret, genre } = couperMetrique(aide.metrique.valeur);
+            /**
+             * ⚠️ **Seule une durée composée fait rétrécir le nombre.** Elle porte deux
+             * membres, donc deux fois plus de signes, et gonflait le bloc jusqu'à réduire
+             * le paragraphe voisin à un ruban. Une unité en symbole — « % », « € » —
+             * n'ajoute qu'un caractère : le nombre garde ses quarante pixels, et seul le
+             * signe se fait menu.
+             */
+            const taille = genre === "duree" ? 28 : 40;
+            const tailleRetrait = genre === "unite" ? Math.round(taille * 0.58) : 15;
             /**
              * ⚠️ **Une marge égale sur les quatre côtés ne donne pas un espace égal à
              * l'œil, et l'écart se mesure.** Une ligne de texte est plus haute que ses
@@ -458,6 +471,16 @@ export default function ConstatsObjectif({
                  */
                 alignSelf: "flex-start",
                 /**
+                 * ⚠️ **Aligné sur le haut des lettres du titre, pas sur le haut de sa
+                 * ligne.** Le bloc et le titre commencent à la même hauteur de rangée,
+                 * mais le titre est du texte : sa boîte de ligne dépasse ses capitales de
+                 * la place réservée aux accents. Sans compensation, le creux paraissait
+                 * monter plus haut que le titre qu'il accompagne. Le décalage vaut la même
+                 * fraction que partout ailleurs — 0,152 fois le corps —, mesurée sur Inter
+                 * au canevas.
+                 */
+                marginTop: HAUT_ENCRE_TITRE,
+                /**
                  * ⚠️ **Le creux, et il a bien failli ne jamais exister.** Ces trois lignes
                  * ont été écrites une première fois, validées sur une maquette que j'avais
                  * composée à la main — et jamais posées sur le composant : le remplacement
@@ -513,7 +536,7 @@ export default function ConstatsObjectif({
                     « 14 ans 8 » puis « mois » à la ligne. Insécable, le groupe est reporté
                     entier et la coupure remonte là où elle a un sens. */}
                 {discret && (
-                  <span style={{ fontSize: 15, fontWeight: 650, whiteSpace: "nowrap",
+                  <span style={{ fontSize: tailleRetrait, fontWeight: 650, whiteSpace: "nowrap",
                     color: encre(fond, 0.78), letterSpacing: "-0.01em" }}>
                     {" "}{discret}
                   </span>

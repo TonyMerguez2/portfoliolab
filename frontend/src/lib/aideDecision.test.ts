@@ -517,8 +517,10 @@ describe("répétition", () => {
 
 describe("couperMetrique", () => {
   it("détache les mois d’une durée composée", () => {
-    expect(couperMetrique("14 ans 8 mois")).toEqual({ fort: "14 ans", discret: "8 mois" });
-    expect(couperMetrique("1 an 3 mois")).toEqual({ fort: "1 an", discret: "3 mois" });
+    expect(couperMetrique("14 ans 8 mois"))
+      .toEqual({ fort: "14 ans", discret: "8 mois", genre: "duree" });
+    expect(couperMetrique("1 an 3 mois"))
+      .toEqual({ fort: "1 an", discret: "3 mois", genre: "duree" });
   });
 
   it("détache le rythme, espace fine insécable comprise", () => {
@@ -526,16 +528,37 @@ describe("couperMetrique", () => {
     // Un test écrit avec une espace ordinaire passerait ici tout en échouant à l'écran.
     const valeur = `${euros(6301)} / mois`;
     expect(valeur).toContain(" ");
-    expect(couperMetrique(valeur)).toEqual({ fort: euros(6301), discret: "/ mois" });
-    expect(couperMetrique("18,5 % / an")).toEqual({ fort: "18,5 %", discret: "/ an" });
+    expect(couperMetrique(valeur))
+      .toEqual({ fort: euros(6301), discret: "/ mois", genre: "rythme" });
+    expect(couperMetrique("18,5 % / an"))
+      .toEqual({ fort: "18,5 %", discret: "/ an", genre: "rythme" });
   });
 
-  it("laisse entier tout ce dont l’unité porte le sens", () => {
-    // ⚠️ Le cœur de la règle. Rapetisser « mois » dans « 6 mois » effacerait ce que le
-    // nombre mesure : il ne resterait qu'un « 6 » de 30 pixels ne voulant rien dire.
-    for (const v of ["6 mois", "60 %", "100 %", "atteint", "—", "3", euros(600000)]) {
-      expect(couperMetrique(v)).toEqual({ fort: v, discret: null });
+  it("laisse entier tout ce dont l’unité est un mot", () => {
+    /**
+     * ⚠️ **Le cœur de la règle, et sa nuance.** Rapetisser « mois » dans « 6 mois »
+     * effacerait ce que le nombre mesure : il ne resterait qu'un « 6 » de quarante pixels
+     * ne voulant rien dire. C'est vrai d'un **mot**, qui doit être lu. Ce ne l'est pas
+     * d'un **symbole** : « 93 » suivi d'un « % » plus menu se lit toujours quatre-vingt-
+     * treize pour cent, parce que le signe se reconnaît au lieu de se lire.
+     */
+    for (const v of ["6 mois", "atteint", "—", "3"]) {
+      expect(couperMetrique(v)).toEqual({ fort: v, discret: null, genre: "entier" });
     }
+  });
+
+  it("détache le pourcentage, mais jamais l’euro", () => {
+    expect(couperMetrique("60 %")).toEqual({ fort: "60", discret: "%", genre: "unite" });
+    expect(couperMetrique("100 %")).toEqual({ fort: "100", discret: "%", genre: "unite" });
+    /**
+     * ⚠️ **L'euro s'y prêtait autant, et il a fallu y renoncer.** `euros()` place une
+     * espace **fine insécable** avant son symbole ; recomposée avec une espace ordinaire,
+     * la coupe perdrait ce caractère invisible — exactement la faute que le garde-fou du
+     * moteur, plus bas, existe pour attraper. Le pourcentage, lui, s'écrit avec une espace
+     * ordinaire, et sa coupe se recompose au caractère près.
+     */
+    expect(couperMetrique(euros(600000)))
+      .toEqual({ fort: euros(600000), discret: null, genre: "entier" });
   });
 
   it("ne coupe aucune métrique du moteur ailleurs qu’aux deux formes prévues", () => {

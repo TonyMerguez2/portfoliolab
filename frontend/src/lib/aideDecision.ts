@@ -179,17 +179,50 @@ export function confianceEnClair(valeur: number): string {
  * d'appel : chacune des deux formes naît d'un seul endroit, et un test les couvre. Si une
  * troisième apparaît, elle passera *entière* — un échec lisible, et non une coupe fautive.
  */
-export function couperMetrique(valeur: string): { fort: string; discret: string | null } {
+/**
+ * Ce qui distingue les découpes entre elles.
+ *
+ * ⚠️ **Le genre existe pour la taille, pas pour le sens.** Une durée composée porte deux
+ * membres, donc deux fois plus de signes : elle doit rétrécir pour ne pas écraser le
+ * paragraphe voisin. Une unité en symbole n'ajoute qu'un caractère et ne coûte rien. Sans
+ * cette distinction, détacher le « % » de « 93 % » aurait rapetissé le nombre lui-même,
+ * ce qui est l'exact contraire de ce qu'on cherche.
+ */
+export type GenreMetrique = "duree" | "rythme" | "unite" | "entier";
+
+export function couperMetrique(
+  valeur: string,
+): { fort: string; discret: string | null; genre: GenreMetrique } {
   // ⚠️ `\s` couvre l'espace fine insécable U+202F que `Intl.NumberFormat("fr-FR")` place
   // dans « 6 301 € ». Un espace littéral ne l'attraperait pas, et le rythme ressortirait
   // entier sans que rien ne le signale — le piège de cette base de code, quatre fois déjà.
   const duree = valeur.match(/^(\d+\s*ans?)\s+(\d+\s*mois)$/);
-  if (duree) return { fort: duree[1], discret: duree[2] };
+  if (duree) return { fort: duree[1], discret: duree[2], genre: "duree" };
 
   const rythme = valeur.match(/^(.+?)\s*\/\s*(mois|an)$/);
-  if (rythme) return { fort: rythme[1], discret: `/ ${rythme[2]}` };
+  if (rythme) return { fort: rythme[1], discret: `/ ${rythme[2]}`, genre: "rythme" };
 
-  return { fort: valeur, discret: null };
+  /**
+   * ⚠️ **Un symbole n'est pas un mot, et la règle a dû se nuancer là-dessus.** Elle
+   * refusait de détacher toute unité, au motif que rapetisser « mois » dans « 6 mois »
+   * laisserait un « 6 » de trente pixels ne voulant rien dire. C'est vrai d'un mot, qui
+   * doit être lu pour que le nombre ait un sens. Ce ne l'est pas d'un symbole : « 93 »
+   * suivi d'un « % » plus petit se lit toujours quatre-vingt-treize pour cent, parce que
+   * le signe se reconnaît d'un coup d'œil au lieu de se lire. Signalé à l'usage, et
+   * conforme à la maquette, où le pourcentage est plus menu que son nombre.
+   *
+   * ⚠️ **Le pourcentage seulement, et une espace ordinaire seulement.** L'euro s'y prêtait
+   * autant, et il a fallu y renoncer : `euros()` place une **espace fine insécable** avant
+   * son symbole, que la recomposition de la coupe remplacerait par une espace ordinaire.
+   * C'est exactement la faute que le garde-fou du moteur redoute — une coupe qui perd un
+   * caractère invisible. Le moteur, lui, écrit ses pourcentages avec une espace ordinaire :
+   * la coupe s'y recompose au caractère près, et le motif l'exige explicitement plutôt que
+   * de tolérer n'importe quel blanc.
+   */
+  const symbole = valeur.match(/^(.+?) (%)$/);
+  if (symbole) return { fort: symbole[1], discret: symbole[2], genre: "unite" };
+
+  return { fort: valeur, discret: null, genre: "entier" };
 }
 
 // ── Hypothèses ───────────────────────────────────────────────────────────────
