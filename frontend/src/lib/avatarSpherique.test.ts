@@ -1,9 +1,10 @@
+import { SPHERE, solideDepuis, rayonSolide, surLeSolide } from "./avatarVolume";
 import { describe, expect, it } from "vitest";
 
 import {
   RAYON_TETE, type Point2, type Vec3,
   ancrageOeil, cheminOeil, contourArrondi, contourCapsule, contourSilhouette,
-  couperHemisphere, exposantSilhouette, versSuperellipsoide,
+  couperHemisphere,
   projeter, surLaSphere, tournerTete,
 } from "./avatarSpherique";
 
@@ -456,14 +457,14 @@ describe("projeter", () => {
   });
 });
 
-describe("versSuperellipsoide", () => {
+describe("surLeSolide", () => {
   it("ne touche à rien quand l'exposant est celui de la sphère", () => {
     // ⚠️ L'invariant qui protège tout l'existant : tant que personne ne demande de
     // cube, la transformation doit être rigoureusement l'identité — pas « presque ».
     for (let a = 0; a < 40; a++) {
       const t = (a / 40) * Math.PI * 2;
       const p = { x: Math.cos(t) * 0.6, y: Math.sin(t) * 0.6, z: 0.8 };
-      expect(versSuperellipsoide(p, 2)).toEqual(p);
+      expect(surLeSolide(p, SPHERE)).toEqual(p);
     }
   });
 
@@ -480,7 +481,7 @@ describe("versSuperellipsoide", () => {
         { x: Math.SQRT1_2, y: Math.SQRT1_2, z: 0 },
         { x: 0, y: 0, z: 1 },
       ]) {
-        const q = versSuperellipsoide(p, n);
+        const q = surLeSolide(p, { famille: "cube", exposant: n });
         const norme = Math.pow(Math.abs(q.x), n) + Math.pow(Math.abs(q.y), n)
           + Math.pow(Math.abs(q.z), n);
         expect(norme).toBeCloseTo(1, 9);
@@ -496,12 +497,12 @@ describe("versSuperellipsoide", () => {
     // pousse vers les coins, mais chaque coordonnée y reste sous 1.
     for (const n of [3, 4, 8, 16]) {
       for (const [x, y] of [[1, 0], [0, 1], [-1, 0], [0, -1]]) {
-        const q = versSuperellipsoide({ x, y, z: 0 }, n);
+        const q = surLeSolide({ x, y, z: 0 }, { famille: "cube", exposant: n });
         expect(Math.hypot(q.x, q.y)).toBeCloseTo(1, 12);
       }
       for (let a = 0; a < 180; a++) {
         const t = (a / 180) * Math.PI * 2;
-        const q = versSuperellipsoide({ x: Math.cos(t), y: Math.sin(t), z: 0 }, n);
+        const q = surLeSolide({ x: Math.cos(t), y: Math.sin(t), z: 0 }, { famille: "cube", exposant: n });
         expect(Math.abs(q.x)).toBeLessThanOrEqual(1 + 1e-9);
         expect(Math.abs(q.y)).toBeLessThanOrEqual(1 + 1e-9);
       }
@@ -518,7 +519,7 @@ describe("versSuperellipsoide", () => {
     const cote = (n: number) => {
       const r = 0.35;
       const p = { x: r, y: 0, z: Math.sqrt(1 - r * r) };
-      return versSuperellipsoide(p, n).z;
+      return surLeSolide(p, { famille: "cube", exposant: n }).z;
     };
     expect(cote(2)).toBeCloseTo(Math.sqrt(1 - 0.1225), 9);
     expect(cote(4)).toBeGreaterThan(cote(2));
@@ -527,12 +528,62 @@ describe("versSuperellipsoide", () => {
   });
 });
 
-describe("exposantSilhouette", () => {
+describe("solideDepuis", () => {
   it("rend la sphère à un arrondi plein, et un cube franc au bout de la course", () => {
-    expect(exposantSilhouette(1)).toBe(2);
-    expect(exposantSilhouette(0.5)).toBe(4);
-    expect(exposantSilhouette(0.25)).toBe(8);
-    expect(exposantSilhouette(0)).toBe(24);
+    expect(solideDepuis("cube", 1)).toEqual({ famille: "sphere" });
+    expect(solideDepuis("cube", 0.5)).toEqual({ famille: "cube", exposant: 4 });
+    expect(solideDepuis("cube", 0.25)).toEqual({ famille: "cube", exposant: 8 });
+    expect(solideDepuis("cube", 0)).toEqual({ famille: "cube", exposant: 24 });
+  });
+
+  it("creuse l'étoile d'autant que l'arrondi baisse, et la rend ronde à fond", () => {
+    expect(solideDepuis("etoile", 1)).toEqual({ famille: "sphere" });
+    const doux = solideDepuis("etoile", 0.7), franc = solideDepuis("etoile", 0.2);
+    expect(doux.famille).toBe("etoile");
+    expect(franc.famille).toBe("etoile");
+    if (doux.famille === "etoile" && franc.famille === "etoile") {
+      expect(franc.creux).toBeGreaterThan(doux.creux);
+    }
+  });
+
+  it("garde toutes les formes dans le carré de la tête, quel que soit le réglage", () => {
+    /**
+     * ⚠️ L'invariant qui protège la mise en page : changer de forme ne doit pas changer
+     * la place occupée. Il ne porte pas sur le **rayon** — le cube pousse vers les coins
+     * et dépasse le disque, l'étoile creuse et reste en deçà — mais sur l'**encombrement** :
+     * les deux valent exactement 1 sur les axes de l'écran, et n'en sortent jamais.
+     * C'est l'erreur que ce test a attrapée : écrit sur le rayon, il déclarait faux le
+     * cube, qui atteint 1,37 dans la direction d'un coin.
+     */
+    for (const famille of ["cube", "etoile"] as const) {
+      for (const arrondi of [0, 0.2, 0.5, 0.8]) {
+        const s = solideDepuis(famille, arrondi);
+        for (const axe of [{ x: 1, y: 0, z: 0 }, { x: 0, y: 1, z: 0 }, { x: 0, y: 0, z: 1 }]) {
+          expect(rayonSolide(axe, s)).toBeCloseTo(1, 9);
+        }
+        for (let i = 0; i < 120; i++) {
+          const t = (i / 120) * Math.PI * 2;
+          const q = surLeSolide({ x: Math.cos(t), y: Math.sin(t), z: 0 }, s);
+          expect(Math.abs(q.x)).toBeLessThanOrEqual(1 + 1e-9);
+          expect(Math.abs(q.y)).toBeLessThanOrEqual(1 + 1e-9);
+        }
+      }
+    }
+  });
+
+  it("creuse l'étoile entre ses branches, sans jamais la rendre pointue", () => {
+    // Quatre lobes dans le plan de l'écran : le rayon est maximal sur les axes et
+    // minimal à quarante-cinq degrés — et il y passe en douceur, sans point anguleux.
+    const s = solideDepuis("etoile", 0.35);
+    const r = (t: number) => rayonSolide({ x: Math.cos(t), y: Math.sin(t), z: 0 }, s);
+    expect(r(0)).toBeCloseTo(1, 9);
+    expect(r(Math.PI / 2)).toBeCloseTo(1, 9);
+    expect(r(Math.PI / 4)).toBeLessThan(0.8);
+    // La dérivée s'annule aux extrêmes : pas de pointe, contrairement à une
+    // superellipse d'exposant inférieur à un, qui ferait des cusps sur les axes.
+    const h = 1e-4;
+    expect(Math.abs(r(h) - r(-h)) / (2 * h)).toBeLessThan(1e-3);
+    expect(Math.abs(r(Math.PI / 4 + h) - r(Math.PI / 4 - h)) / (2 * h)).toBeLessThan(1e-3);
   });
 });
 
@@ -553,14 +604,15 @@ describe("projeter sur la superellipsoïde", () => {
       return 1 / Math.pow(Math.pow(ux, n) + Math.pow(uy, n), 1 / n);
     };
     for (const arrondi of [0, 0.3, 0.6, 1]) {
-      const n = exposantSilhouette(arrondi);
+      const n = solideDepuis("cube", arrondi);
       for (const lacet of [-140, -60, 0, 75, 175]) {
         for (const tangage of [-50, 0, 35]) {
           const d = cheminOeil(
             { ecart: 30, elevation: 4, largeur: 30, hauteur: 70, inclinaison: 0.2 },
             { lacet: deg(lacet), tangage: deg(tangage) }, -1, 100, 160, n);
           for (const p of pointsDuChemin(d)) {
-            expect(Math.hypot(p.x, p.y)).toBeLessThanOrEqual(100 * bord(p.x, p.y, n) + 0.05);
+            const e = n.famille === "cube" ? n.exposant : 2;
+            expect(Math.hypot(p.x, p.y)).toBeLessThanOrEqual(100 * bord(p.x, p.y, e) + 0.05);
           }
         }
       }
@@ -592,7 +644,7 @@ describe("cheminOeil sur le cube arrondi", () => {
      * elle ne corrigeait que la taille de face et laissait l'asymétrie intacte.
      */
     const rapport = (arrondi: number, lacet: number) => {
-      const n = exposantSilhouette(arrondi);
+      const n = solideDepuis("cube", arrondi);
       const o = { lacet: deg(lacet), tangage: 0 };
       const proche = aire(pointsDuChemin(cheminOeil(OEIL, o, -1, 100, 220, n)));
       const loin = aire(pointsDuChemin(cheminOeil(OEIL, o, 1, 100, 220, n)));
@@ -610,7 +662,7 @@ describe("cheminOeil sur le cube arrondi", () => {
 
   it("garde les deux yeux identiques de face", () => {
     for (const arrondi of [1, 0.42, 0.2]) {
-      const n = exposantSilhouette(arrondi);
+      const n = solideDepuis("cube", arrondi);
       const o = { lacet: 0, tangage: 0 };
       const g = aire(pointsDuChemin(cheminOeil(OEIL, o, -1, 100, 220, n)));
       const d = aire(pointsDuChemin(cheminOeil(OEIL, o, 1, 100, 220, n)));
@@ -621,6 +673,6 @@ describe("cheminOeil sur le cube arrondi", () => {
   it("ne change rien sur la sphère", () => {
     // La compensation vaut 1 à l'exposant 2 : le rendu d'origine doit être intact.
     const o = { lacet: deg(23), tangage: deg(-11) };
-    expect(cheminOeil(OEIL, o, -1, 100, 220, 2)).toBe(cheminOeil(OEIL, o, -1, 100, 220));
+    expect(cheminOeil(OEIL, o, -1, 100, 220, SPHERE)).toBe(cheminOeil(OEIL, o, -1, 100, 220));
   });
 });

@@ -5,7 +5,7 @@ import { createPortal } from "react-dom";
 import AvatarNovac from "@/components/AvatarNovac";
 import PastilleCouleur, { PastillePlus } from "@/components/portfolio/PastilleCouleur";
 import { COULEURS_AVATAR } from "@/lib/avatarCouleur";
-import type { FormeAvatar } from "@/lib/useCouleurAvatar";
+import { FORMES_AVATAR, type FormeAvatar } from "@/lib/useCouleurAvatar";
 import { useAvatar } from "@/lib/AvatarContext";
 
 /**
@@ -28,6 +28,45 @@ import { useAvatar } from "@/lib/AvatarContext";
  * n'est pas supprimé — il reste entier dans le code — mais plus rien ne l'appelle sur
  * cette page. Poser une image de portefeuille n'est donc, pour l'instant, plus possible.
  */
+
+/** Ce que chaque forme s'appelle, à l'écran comme pour les technologies d'assistance. */
+const NOM_FORME: Record<FormeAvatar, string> = {
+  sphere: "Ronde",
+  carre: "Carrée",
+  carre3d: "Carrée qui tourne",
+  etoile: "Étoile",
+  etoile3d: "Étoile qui tourne",
+};
+
+/** Le dessin d'une forme, en aplat quand la silhouette est fixe, en trait quand elle tourne. */
+function VignetteForme({ forme, couleur }: { forme: FormeAvatar; couleur: string }) {
+  const tourne = forme.endsWith("3d");
+  const trait = { fill: "none", stroke: couleur, strokeWidth: 2, strokeLinejoin: "round" as const };
+  const plein = { fill: couleur };
+  if (forme.startsWith("etoile")) {
+    // Quatre lobes doux : une étoile arrondie, dessinée en quatre arcs.
+    return (
+      <svg width={20} height={20} viewBox="0 0 20 20" aria-hidden="true">
+        <path d="M10 1.4c1.4 4 3.2 5.8 7.2 7.2-4 1.4-5.8 3.2-7.2 7.2-1.4-4-3.2-5.8-7.2-7.2 4-1.4 5.8-3.2 7.2-7.2z"
+          transform="translate(0 1.4)" {...(tourne ? trait : plein)} />
+      </svg>
+    );
+  }
+  if (forme === "sphere") {
+    return (
+      <svg width={20} height={20} viewBox="0 0 20 20" aria-hidden="true">
+        <circle cx={10} cy={10} r={8.5} fill={couleur} />
+      </svg>
+    );
+  }
+  return (
+    <svg width={20} height={20} viewBox="0 0 20 20" aria-hidden="true">
+      {tourne
+        ? <path d="M10 1.6 17.6 5.6v8.8L10 18.4 2.4 14.4V5.6z" {...trait} />
+        : <rect x={1.5} y={1.5} width={17} height={17} rx={5.4} ry={5.4} fill={couleur} />}
+    </svg>
+  );
+}
 
 export default function AvatarPortefeuille({
   portefeuille, couleur, onCouleur, forme, onForme, taille = 63,
@@ -158,10 +197,9 @@ export default function AvatarPortefeuille({
               borderTop: "1px solid rgba(18,20,28,0.10)",
               display: "flex", gap: 10,
             }}>
-              {(["sphere", "carre", "solide"] as const).map(cle => {
+              {FORMES_AVATAR.map(cle => {
                 const retenue = forme === cle;
-                const nom = cle === "sphere" ? "Ronde"
-                  : cle === "carre" ? "Carrée" : "Carrée qui tourne";
+                const nom = NOM_FORME[cle];
                 return (
                   <button key={cle} type="button" onClick={() => onForme(cle)}
                     aria-pressed={retenue}
@@ -175,18 +213,10 @@ export default function AvatarPortefeuille({
                       borderColor: retenue ? "rgba(20,22,30,0.55)" : "rgba(18,20,28,0.12)",
                       transition: "background 120ms, border-color 120ms",
                     }}>
-                    <svg width={20} height={20} viewBox="0 0 20 20" aria-hidden="true">
-                      {/* Le cube en perspective dit ce que les deux autres vignettes ne
-                          peuvent pas dire : que celle-ci, c'est le volume qui tourne. */}
-                      {cle === "solide" ? (
-                        <path d="M10 1.6 17.6 5.6v8.8L10 18.4 2.4 14.4V5.6z"
-                          fill="none" stroke={couleur} strokeWidth={2} strokeLinejoin="round" />
-                      ) : (
-                        <rect x={1.5} y={1.5} width={17} height={17}
-                          rx={cle === "sphere" ? 8.5 : 5.4} ry={cle === "sphere" ? 8.5 : 5.4}
-                          fill={couleur} />
-                      )}
-                    </svg>
+                    {/* ⚠️ Le trait plutôt que l'aplat dit « ce volume-là tourne » : c'est
+                        la seule différence entre les deux vignettes d'une même forme, et
+                        aucun mot ne l'aurait montrée dans trente-quatre pixels. */}
+                    <VignetteForme forme={cle} couleur={couleur} />
                   </button>
                 );
               })}

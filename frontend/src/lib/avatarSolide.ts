@@ -3,6 +3,9 @@ import {
   ancrageOeil, cheminOuvert, cheminSvg, contourArrondi, projeter, sensDeParcours,
   surLaSphere, tournerTete, type ReglagesOeil,
 } from "./avatarSpherique";
+import { SPHERE, type Solide, estSphere, normaleSolide, surLeSolide } from "./avatarVolume";
+
+export { normaleSolide, surLeSolide };
 
 /**
  * Le même personnage, mais dont le **solide tourne pour de bon**.
@@ -21,55 +24,26 @@ import {
  * Les deux coïncident sur la sphère — sa normale *est* sa position —, ce qui explique
  * que le module principal n'ait jamais eu à faire la distinction. Ici il le faut.
  *
- * ⚠️ **La silhouette a une forme close, et c'est ce qui rend le tout praticable.** Pour
- * la superellipsoïde |x|ⁿ + |y|ⁿ + |z|ⁿ = 1, la normale en `q` vaut
- * `(sgn·|qᵢ|ⁿ⁻¹)`. En posant `uᵢ = sgn(qᵢ)|qᵢ|ⁿ⁻¹`, la surface devient la boule unité de
- * la **norme duale** ℓⁿ′ avec 1/n + 1/n′ = 1, et la condition « normale perpendiculaire
- * au regard » devient `u · v = 0` : un simple plan. La silhouette est donc l'intersection
- * d'une boule duale et d'un plan — une courbe convexe plane, qu'on paramètre par un
- * angle et qu'on parcourt comme on parcourait le cercle du bord. Sans cela, il aurait
- * fallu la suivre au pas à pas, et c'est exactement le genre de marche qui se trompe en
- * silence.
+ * ⚠️ **La silhouette se cherche, elle ne se calcule pas.** Le long de chaque méridien
+ * partant du point qui nous fait face, la normale bascule de « vers nous » vers
+ * « derrière » : le changement de signe donne le bord. Une dichotomie suffit, et elle
+ * vaut pour n'importe quel volume étoilé — c'est ce qui a permis d'ajouter l'étoile sans
+ * rien réécrire. La superellipsoïde, elle, en admet une forme close ; un test s'en sert
+ * comme témoin pour vérifier que la recherche tombe au même endroit.
+ *
+ * ⚠️ **Ce qui ne vaut que pour les formes convexes, et qu'il faut savoir.** « Vu » est
+ * ici défini par « sa normale regarde vers nous ». Sur une sphère ou un cube arrondi,
+ * c'est exact. Sur l'étoile, qui est creusée, un point peut regarder vers nous tout en
+ * étant caché derrière une branche : à fort creux et sous un angle rasant, un morceau de
+ * fond peut donc reparaître. Le rendre juste demanderait un test d'occultation, c'est-à-
+ * dire un lancer de rayon par point — hors de proportion avec ce que cela corrigerait.
  */
 
 const TAU = Math.PI * 2;
 
-/** L'exposant en deçà duquel on est sur la sphère, où tout ceci est inutile. */
-const SPHERE = 2 + 1e-9;
-
 function normaliser(v: Vec3): Vec3 {
   const n = Math.sqrt(v.x * v.x + v.y * v.y + v.z * v.z);
   return n === 0 ? v : { x: v.x / n, y: v.y / n, z: v.z / n };
-}
-
-const puissanceSignee = (v: number, e: number) =>
-  (v === 0 ? 0 : Math.sign(v) * Math.pow(Math.abs(v), e));
-
-/** Le point du solide qui correspond à un point de la sphère : même direction. */
-export function surLeSolide(p: Vec3, exposant: number): Vec3 {
-  if (exposant <= SPHERE) return p;
-  const n = Math.pow(
-    Math.pow(Math.abs(p.x), exposant)
-    + Math.pow(Math.abs(p.y), exposant)
-    + Math.pow(Math.abs(p.z), exposant),
-    1 / exposant,
-  );
-  return n <= 1e-12 ? p : { x: p.x / n, y: p.y / n, z: p.z / n };
-}
-
-/**
- * La normale du solide, lue sur le point de la **sphère**.
- *
- * Le point du solide est proportionnel à celui de la sphère, et la normale ne dépend que
- * des rapports entre coordonnées : inutile de passer par le solide pour l'obtenir.
- */
-export function normaleSolide(p: Vec3, exposant: number): Vec3 {
-  if (exposant <= SPHERE) return p;
-  return normaliser({
-    x: puissanceSignee(p.x, exposant - 1),
-    y: puissanceSignee(p.y, exposant - 1),
-    z: puissanceSignee(p.z, exposant - 1),
-  });
 }
 
 /**
@@ -111,50 +85,82 @@ function baseDuPlan(v: Vec3): { e1: Vec3; e2: Vec3 } {
 /**
  * La silhouette du solide vue selon `v`, dans le repère du solide.
  *
- * Elle se lit dans l'espace dual : la surface y devient la boule de la norme ℓⁿ′, et la
- * condition de silhouette un plan. Il ne reste qu'à parcourir un cercle dans ce plan.
+ * ⚠️ **Trouvée par balayage puis dichotomie, et non par une formule.** La superellipsoïde
+ * en avait une : dans l'espace dual, sa silhouette est l'intersection d'une boule et d'un
+ * plan. L'étoile n'en a pas, et écrire deux chemins — l'un exact, l'autre approché —
+ * aurait fait diverger les deux formes au premier ajustement. On garde donc la méthode
+ * générale, et **un test la confronte à la formule exacte** là où celle-ci existe : c'est
+ * la seule façon d'avoir à la fois une méthode unique et l'assurance qu'elle est juste.
+ *
+ * Le principe : le long d'un méridien allant du point qui nous fait face au point opposé,
+ * la normale passe de « vers nous » à « vers l'arrière ». Le changement de signe donne la
+ * silhouette. On prend le **premier**, pour tenir le contour extérieur même quand la
+ * forme est creusée et que la normale se retourne plusieurs fois.
  */
 export class Silhouette {
   private readonly e1: Vec3;
   private readonly e2: Vec3;
-  private readonly dual: number;
+  private readonly axe: Vec3;
 
-  constructor(private readonly regard: Vec3, private readonly exposant: number) {
-    const base = baseDuPlan(normaliser(regard));
+  constructor(regard: Vec3, private readonly solide: Solide) {
+    this.axe = normaliser(regard);
+    const base = baseDuPlan(this.axe);
     this.e1 = base.e1;
     this.e2 = base.e2;
-    this.dual = exposant / (exposant - 1);
+  }
+
+  /** Le point de la sphère qui, sur le solide, est au bord — à l'angle `t`. */
+  private surLaSphere(t: number): Vec3 {
+    const c = Math.cos(t), s = Math.sin(t);
+    const d = {
+      x: this.e1.x * c + this.e2.x * s,
+      y: this.e1.y * c + this.e2.y * s,
+      z: this.e1.z * c + this.e2.z * s,
+    };
+    const le = (angle: number): Vec3 => {
+      const ca = Math.cos(angle), sa = Math.sin(angle);
+      return {
+        x: this.axe.x * ca + d.x * sa,
+        y: this.axe.y * ca + d.y * sa,
+        z: this.axe.z * ca + d.z * sa,
+      };
+    };
+    // Sur la sphère, la silhouette est le quart de tour exact : rien à chercher.
+    if (estSphere(this.solide)) return le(Math.PI / 2);
+    const face = (angle: number) => {
+      const n = normaleSolide(le(angle), this.solide);
+      return n.x * this.axe.x + n.y * this.axe.y + n.z * this.axe.z;
+    };
+    const PAS = Math.PI / 24;
+    let a = 0, b = Math.PI;
+    let precedent = face(0);
+    for (let angle = PAS; angle <= Math.PI + 1e-9; angle += PAS) {
+      const v = face(angle);
+      if (precedent >= 0 && v < 0) { a = angle - PAS; b = angle; break; }
+      precedent = v;
+    }
+    for (let i = 0; i < 24; i++) {
+      const m = (a + b) / 2;
+      if (face(m) >= 0) a = m; else b = m;
+    }
+    return le((a + b) / 2);
   }
 
   /** Le point de la silhouette à l'angle `t`, sur le solide. */
   point(t: number): Vec3 {
-    const c = Math.cos(t), s = Math.sin(t);
-    const d = { x: this.e1.x * c + this.e2.x * s, y: this.e1.y * c + this.e2.y * s, z: this.e1.z * c + this.e2.z * s };
-    const m = this.dual;
-    const norme = Math.pow(
-      Math.pow(Math.abs(d.x), m) + Math.pow(Math.abs(d.y), m) + Math.pow(Math.abs(d.z), m),
-      1 / m,
-    );
-    const u = { x: d.x / norme, y: d.y / norme, z: d.z / norme };
-    const inverse = 1 / (this.exposant - 1);
-    return {
-      x: puissanceSignee(u.x, inverse),
-      y: puissanceSignee(u.y, inverse),
-      z: puissanceSignee(u.z, inverse),
-    };
+    return surLeSolide(this.surLaSphere(t), this.solide);
   }
 
-  /** L'angle auquel se trouve la silhouette la plus proche d'un point de la sphère. */
+  /**
+   * L'angle auquel se trouve la silhouette la plus proche d'un point de la sphère.
+   *
+   * C'est simplement l'angle de sa composante perpendiculaire au regard : la
+   * paramétrisation est faite pour que ce soit vrai, chaque angle désignant un méridien.
+   */
   angle(p: Vec3): number {
-    const e = this.exposant - 1;
-    const u = {
-      x: puissanceSignee(p.x, e),
-      y: puissanceSignee(p.y, e),
-      z: puissanceSignee(p.z, e),
-    };
     return Math.atan2(
-      u.x * this.e2.x + u.y * this.e2.y + u.z * this.e2.z,
-      u.x * this.e1.x + u.y * this.e1.y + u.z * this.e1.z,
+      p.x * this.e2.x + p.y * this.e2.y + p.z * this.e2.z,
+      p.x * this.e1.x + p.y * this.e1.y + p.z * this.e1.z,
     );
   }
 
@@ -263,13 +269,13 @@ function poserArcDeSilhouette(
 
 /** Rend un contour de la sphère sur le solide tournant, en `d` SVG. */
 function rendre(
-  contourSphere: Vec3[], orientation: Orientation, exposant: number, rayon: number,
+  contourSphere: Vec3[], orientation: Orientation, solide: Solide, rayon: number,
 ): string {
-  const silhouette = new Silhouette(regardDansLeSolide(orientation), exposant);
+  const silhouette = new Silhouette(regardDansLeSolide(orientation), solide);
   const sommets: Sommet[] = contourSphere.map(p => {
-    const normale = normaleSolide(p, exposant);
+    const normale = normaleSolide(p, solide);
     const vue = tournerTete(normale, orientation.lacet, orientation.tangage, orientation.roulis ?? 0);
-    return { solide: surLeSolide(p, exposant), sphere: p, vu: vue.z >= 0 };
+    return { solide: surLeSolide(p, solide), sphere: p, vu: vue.z >= 0 };
   });
   const morceaux = couper(sommets, silhouette, orientation, 0.06);
   const bouts: string[] = [];
@@ -285,7 +291,7 @@ function rendre(
 /** Le `d` d'un œil posé sur le solide qui tourne. */
 export function cheminOeilSolide(
   reglages: ReglagesOeil, orientation: Orientation, cote: -1 | 1,
-  rayon: number = RAYON_TETE, echantillons: number = 220, exposant: number = 2,
+  rayon: number = RAYON_TETE, echantillons: number = 220, solide: Solide = SPHERE,
 ): string {
   const ancrage = ancrageOeil((cote * reglages.ecart) / rayon, reglages.elevation / rayon);
   const cos = Math.cos(reglages.inclinaison), sin = Math.sin(reglages.inclinaison);
@@ -299,17 +305,17 @@ export function cheminOeilSolide(
    */
   const surSphere = contour.map(c => surLaSphere(
     ancrage, cote * (c.x * cos - c.y * sin), c.x * sin + c.y * cos, rayon));
-  return rendre(surSphere, orientation, exposant, rayon);
+  return rendre(surSphere, orientation, solide, rayon);
 }
 
 /** Le `d` d'un motif de skin, posé sur le solide qui tourne. */
 export function cheminsSurLeSolide(
   morceaux: Vec3[][], orientation: Orientation,
-  rayon: number = RAYON_TETE, exposant: number = 2,
+  rayon: number = RAYON_TETE, solide: Solide = SPHERE,
 ): string {
   const bouts: string[] = [];
   for (const m of morceaux) {
-    const d = rendre(m, orientation, exposant, rayon);
+    const d = rendre(m, orientation, solide, rayon);
     if (d) bouts.push(d);
   }
   return bouts.join(" ");
@@ -317,10 +323,10 @@ export function cheminsSurLeSolide(
 
 /** Le contour de la tête : la silhouette du solide, projetée. */
 export function contourTeteSolide(
-  orientation: Orientation, exposant: number,
+  orientation: Orientation, solide: Solide,
   rayon: number = RAYON_TETE, echantillons: number = 240,
 ): string {
-  const silhouette = new Silhouette(regardDansLeSolide(orientation), exposant);
+  const silhouette = new Silhouette(regardDansLeSolide(orientation), solide);
   return cheminSvg(silhouette.contour(echantillons).map(q => projeter(
     tournerTete(q, orientation.lacet, orientation.tangage, orientation.roulis ?? 0), rayon)));
 }
@@ -332,14 +338,14 @@ export function contourTeteSolide(
  */
 export function traitSurLeSolide(
   courbe: Vec3[], orientation: Orientation,
-  rayon: number = RAYON_TETE, exposant: number = 2,
+  rayon: number = RAYON_TETE, solide: Solide = SPHERE,
 ): { devant: string; derriere: string } {
-  const silhouette = new Silhouette(regardDansLeSolide(orientation), exposant);
+  const silhouette = new Silhouette(regardDansLeSolide(orientation), solide);
   const tourner = (p: Vec3) =>
     tournerTete(p, orientation.lacet, orientation.tangage, orientation.roulis ?? 0);
   const n = courbe.length;
-  const vu = courbe.map(p => tourner(normaleSolide(p, exposant)).z >= 0);
-  const ecran = courbe.map(p => projeter(tourner(surLeSolide(p, exposant)), rayon));
+  const vu = courbe.map(p => tourner(normaleSolide(p, solide)).z >= 0);
+  const ecran = courbe.map(p => projeter(tourner(surLeSolide(p, solide)), rayon));
 
   const devant: Point2[][] = [];
   const derriere: Point2[][] = [];

@@ -3,11 +3,12 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import {
   RAYON_TETE, type Orientation, cheminOeil, cheminSvg, contourSilhouette,
-  exposantSilhouette,
 } from "@/lib/avatarSpherique";
+import { solideDepuis } from "@/lib/avatarVolume";
 import { cheminOeilSolide, contourTeteSolide } from "@/lib/avatarSolide";
 import { type EtatVie, VIE_AU_REPOS, creerVie } from "@/lib/avatarVie";
 import { COULEUR_PAR_DEFAUT, couleurDesYeux } from "@/lib/avatarCouleur";
+import type { FormeAvatar } from "@/lib/useCouleurAvatar";
 
 /**
  * Le visage de Novac, prêt à poser n'importe où.
@@ -41,12 +42,13 @@ const ECART = 27;
 const ECHANTILLONS = 96;
 
 /**
- * L'arrondi de la silhouette carrée — celui des icônes d'application.
+ * L'arrondi des silhouettes marquées — celui des icônes d'application, et le creux de
+ * l'étoile.
  *
  * ⚠️ Fixé ici plutôt qu'exposé en propriété : à cette taille, deux arrondis voisins ne
  * diffèrent pas d'un pixel. Un réglage de plus n'aurait donné que l'illusion d'un choix.
  */
-const ARRONDI_CARRE = 0.42;
+const ARRONDI_FORME = 0.42;
 
 /**
  * La vie du visage à cette taille.
@@ -139,7 +141,7 @@ export default function AvatarNovac({
    * garde une silhouette immuable et laisse la surface se tordre en tournant ; le second
    * fait tourner le solide, ce qui rend la surface rigide et fait respirer la silhouette.
    */
-  forme?: "sphere" | "carre" | "solide";
+  forme?: FormeAvatar;
   titre?: string;
   style?: React.CSSProperties;
 }) {
@@ -154,12 +156,17 @@ export default function AvatarNovac({
   const yeuxRendus = couleurYeux ?? couleurDesYeux(teteRendue);
 
   /**
-   * ⚠️ **Un exposant, pas deux formes.** La sphère est la superellipsoïde d'exposant 2 :
-   * il n'y a donc qu'un seul chemin de rendu, et rien à tenir en double.
+   * ⚠️ **Un descripteur, pas cinq chemins de rendu.** La sphère est la superellipsoïde
+   * d'exposant 2, et l'étoile n'est qu'une autre famille du même descripteur : le
+   * composant ne choisit qu'entre deux fonctions — l'image étirée après la rotation, ou
+   * le solide qui tourne.
    */
-  const vraie3D = forme === "solide";
-  const exposant = useMemo(
-    () => exposantSilhouette(forme === "sphere" ? 1 : ARRONDI_CARRE), [forme]);
+  const vraie3D = forme.endsWith("3d");
+  const solide = useMemo(
+    () => solideDepuis(
+      forme.startsWith("etoile") ? "etoile" : forme.startsWith("carre") ? "cube" : "sphere",
+      forme === "sphere" ? 1 : ARRONDI_FORME),
+    [forme]);
 
   const [vie, setVie] = useState<EtatVie>(VIE_AU_REPOS);
   const [pose, setPose] = useState({ lacet: 0, tangage: 0 });
@@ -295,9 +302,9 @@ export default function AvatarNovac({
    */
   const contourTete = useMemo(
     () => (vraie3D
-      ? contourTeteSolide(orientation, exposant, RAYON_TETE, 120)
-      : cheminSvg(contourSilhouette(exposant, RAYON_TETE, 180))),
-    [vraie3D, orientation, exposant]);
+      ? contourTeteSolide(orientation, solide, RAYON_TETE, 120)
+      : cheminSvg(contourSilhouette(solide, RAYON_TETE, 180))),
+    [vraie3D, orientation, solide]);
 
   const oeil = useCallback((fermeture: number, cote: -1 | 1) => (vraie3D ? cheminOeilSolide : cheminOeil)({
     ecart: ECART * vie.ecart,
@@ -310,7 +317,7 @@ export default function AvatarNovac({
     })(),
     inclinaison: rad(vie.inclinaison),
     courbure: vie.courbure,
-  }, orientation, cote, RAYON_TETE, ECHANTILLONS, exposant), [vie, orientation, exposant, vraie3D]);
+  }, orientation, cote, RAYON_TETE, ECHANTILLONS, solide), [vie, orientation, solide, vraie3D]);
 
   return (
     <svg

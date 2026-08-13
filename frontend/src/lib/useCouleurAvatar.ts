@@ -26,16 +26,21 @@ export const cleForme = (id: string | number) => `novac-avatar-forme:${id}`;
 /**
  * Les silhouettes proposées.
  *
- * ⚠️ `carre` et `solide` sont le **même volume**, et ne diffèrent que par l'ordre des
- * opérations : le premier étire l'image après la rotation — la silhouette ne bouge
- * jamais, mais ce qui est peint dessus se tord —, le second fait tourner le solide —
- * la surface reste rigide, mais la silhouette respire. Il n'y a pas de troisième voie :
- * la sphère est la seule forme où les deux tiennent en place.
+ * ⚠️ **Deux volumes, et pour chacun deux façons de tourner.** `carre` et `carre3d`
+ * portent le même solide, de même que `etoile` et `etoile3d` : ce qui les sépare est
+ * l'ordre des opérations. Sans le suffixe, l'image est étirée après la rotation — la
+ * silhouette ne bouge jamais, mais ce qui est peint dessus se tord. Avec, c'est le
+ * solide qui tourne — la surface reste rigide, mais la silhouette respire. Il n'y a pas
+ * de troisième voie : la sphère est la seule forme où les deux tiennent en place, et
+ * c'est pourquoi elle n'a pas de variante.
  */
-export type FormeAvatar = "sphere" | "carre" | "solide";
+export const FORMES_AVATAR = [
+  "sphere", "carre", "carre3d", "etoile", "etoile3d",
+] as const;
+export type FormeAvatar = (typeof FORMES_AVATAR)[number];
 export const FORME_PAR_DEFAUT: FormeAvatar = "sphere";
 const estFormeValide = (v: unknown): v is FormeAvatar =>
-  v === "sphere" || v === "carre" || v === "solide";
+  typeof v === "string" && (FORMES_AVATAR as readonly string[]).indexOf(v) >= 0;
 
 /**
  * Un choix d'apparence, gardé pour un portefeuille.

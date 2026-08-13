@@ -3,9 +3,9 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import {
   RAYON_TETE, type Orientation, type ReglagesOeil, cheminOeil, cheminSvg,
-  cheminsSurLaTete, contourSilhouette, exposantSilhouette, projeter, tournerTete,
-  traitSurLaTete,
+  cheminsSurLaTete, contourSilhouette, projeter, tournerTete, traitSurLaTete,
 } from "@/lib/avatarSpherique";
+import { solideDepuis } from "@/lib/avatarVolume";
 import { grilleSpherique } from "@/lib/avatarGrille";
 import {
   cheminOeilSolide, cheminsSurLeSolide, contourTeteSolide, normaleSolide,
@@ -158,11 +158,13 @@ export default function AvatarProceduralPage() {
    * — et surtout animables, le jour où la tête devra passer de l'une à l'autre.
    */
   const [silhouette, setSilhouette] = useState(0.5);
-  const [formeTete, setFormeTete] = useState<"sphere" | "carre" | "solide">("sphere");
+  const [formeTete, setFormeTete] = useState<"sphere" | "cube" | "etoile">("sphere");
   /** Le solide tourne-t-il pour de bon, ou seule son image est-elle étirée ? */
-  const vraie3D = formeTete === "solide";
+  const [vraie3D, setVraie3D] = useState(false);
   /** L'exposant de la superellipsoïde : 2 pour la sphère, davantage vers le cube. */
-  const exposantTete = exposantSilhouette(formeTete === "sphere" ? 1 : silhouette);
+  const solideTete = useMemo(
+    () => solideDepuis(formeTete, formeTete === "sphere" ? 1 : silhouette),
+    [formeTete, silhouette]);
   const [vie, setVie] = useState<EtatVie>(VIE_AU_REPOS);
   const [expression, setExpression] = useState<CleExpression>("neutre");
   const [taille, setTaille] = useState(1.23);
@@ -217,8 +219,8 @@ export default function AvatarProceduralPage() {
     if (!grille) return null;
     const devant: string[] = [], derriere: string[] = [];
     const trait = (courbe: { x: number; y: number; z: number }[]) => (vraie3D
-      ? traitSurLeSolide(courbe, orientation, RAYON_TETE, exposantTete)
-      : traitSurLaTete(courbe, orientation, RAYON_TETE, true, exposantTete));
+      ? traitSurLeSolide(courbe, orientation, RAYON_TETE, solideTete)
+      : traitSurLaTete(courbe, orientation, RAYON_TETE, true, solideTete));
     const ajouter = (courbe: { x: number; y: number; z: number }[]) => {
       const t = trait(courbe);
       if (t.devant) devant.push(t.devant);
@@ -236,19 +238,19 @@ export default function AvatarProceduralPage() {
       axes: GRILLE.axes.map(a => {
         // En vraie 3D, l'axe s'arrête sur la surface du solide et sa visibilité se lit
         // sur la normale, comme tout le reste.
-        const surface = vraie3D ? surLeSolide(a.pointe, exposantTete) : a.pointe;
+        const surface = vraie3D ? surLeSolide(a.pointe, solideTete) : a.pointe;
         const p = tournerTete(surface, orientation.lacet, orientation.tangage, orientation.roulis ?? 0);
         const n = vraie3D
-          ? tournerTete(normaleSolide(a.pointe, exposantTete),
+          ? tournerTete(normaleSolide(a.pointe, solideTete),
             orientation.lacet, orientation.tangage, orientation.roulis ?? 0)
           : p;
         return {
           cle: a.cle, signe: a.signe, devant: n.z >= 0,
-          bout: projeter(p, RAYON_TETE, vraie3D ? 2 : exposantTete),
+          bout: projeter(p, RAYON_TETE, vraie3D ? undefined : solideTete),
         };
       }),
     };
-  }, [grille, orientation, exposantTete, vraie3D]);
+  }, [grille, orientation, solideTete, vraie3D]);
 
   /**
    * Le contour de la tête.
@@ -259,21 +261,21 @@ export default function AvatarProceduralPage() {
    */
   const contourTete = useMemo(
     () => (vraie3D
-      ? contourTeteSolide(orientation, exposantTete, RAYON_TETE)
-      : cheminSvg(contourSilhouette(exposantTete, RAYON_TETE))),
-    [vraie3D, orientation, exposantTete]);
+      ? contourTeteSolide(orientation, solideTete, RAYON_TETE)
+      : cheminSvg(contourSilhouette(solideTete, RAYON_TETE))),
+    [vraie3D, orientation, solideTete]);
 
   const cheminsMotifs = useMemo(
     () => motifs.map(m => ({
       d: vraie3D
-        ? cheminsSurLeSolide(m.morceaux, orientation, RAYON_TETE, exposantTete)
-        : cheminsSurLaTete(m.morceaux, orientation, RAYON_TETE, exposantTete),
+        ? cheminsSurLeSolide(m.morceaux, orientation, RAYON_TETE, solideTete)
+        : cheminsSurLaTete(m.morceaux, orientation, RAYON_TETE, solideTete),
       couleur: m.couleur,
       trait: m.trait,
       epaisseur: m.epaisseur,
     })),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [motifs, orientation, exposantTete, vraie3D]);
+    [motifs, orientation, solideTete, vraie3D]);
 
   /** Choisir un skin **propose** sa palette ; elle reste modifiable ensuite. */
   const choisirSkin = useCallback((cle: string) => {
@@ -340,13 +342,13 @@ export default function AvatarProceduralPage() {
   const oeilGauche = useMemo(
     () => (vraie3D ? cheminOeilSolide : cheminOeil)(
       reglagesOeil(yeux.gauche, vie.fermetureGauche), orientation, -1,
-      RAYON_TETE, 220, exposantTete),
-    [reglagesOeil, yeux.gauche, vie.fermetureGauche, orientation, exposantTete, vraie3D]);
+      RAYON_TETE, 220, solideTete),
+    [reglagesOeil, yeux.gauche, vie.fermetureGauche, orientation, solideTete, vraie3D]);
   const oeilDroit = useMemo(
     () => (vraie3D ? cheminOeilSolide : cheminOeil)(
       reglagesOeil(yeux.droit, vie.fermetureDroite), orientation, 1,
-      RAYON_TETE, 220, exposantTete),
-    [reglagesOeil, yeux.droit, vie.fermetureDroite, orientation, exposantTete, vraie3D]);
+      RAYON_TETE, 220, solideTete),
+    [reglagesOeil, yeux.droit, vie.fermetureDroite, orientation, solideTete, vraie3D]);
 
   /**
    * Écrit un réglage sur l'œil courant, ou sur les deux si le lien tient.
@@ -860,25 +862,24 @@ export default function AvatarProceduralPage() {
 
           <Carte
             titre="Forme du personnage"
-            note="La tête devient une superellipsoïde — un cube aux arêtes arrondies. Reste à choisir ce qui tourne : l’image, ou le solide."
+            note="Deux volumes — le cube aux arêtes arrondies, l’étoile adoucie —, et pour chacun deux façons de tourner : l’image, ou le solide."
           >
             <div style={{ display: "flex", gap: 10 }}>
-              {([["sphere", "Sphère"], ["carre", "Carré arrondi"], ["solide", "Vraie 3D"]] as const).map(([cle, libelle]) => (
+              {([["sphere", "Sphère"], ["cube", "Carré arrondi"], ["etoile", "Étoile"]] as const).map(([cle, libelle]) => (
                 <button key={cle} type="button" onClick={() => setFormeTete(cle)}
                   aria-pressed={formeTete === cle}
                   style={{
-                    flex: 1, padding: "10px 8px", borderRadius: 9, cursor: "pointer",
+                    flex: 1, padding: "10px 6px", borderRadius: 9, cursor: "pointer",
                     fontSize: 12.5, fontWeight: 600, fontFamily: "inherit",
-                    display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
+                    display: "flex", alignItems: "center", justifyContent: "center", gap: 7,
                     border: `1px solid ${formeTete === cle ? ACCENT : BORD}`,
                     background: formeTete === cle ? ACCENT : "#FFFFFF",
                     color: formeTete === cle ? "#FFFFFF" : "#33333D",
                   }}>
                   <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true">
-                    {cle === "solide" ? (
-                      // Le cube en perspective : ce mode-là fait tourner le volume.
-                      <path d="M8 1.4 14 4.6v6.8L8 14.6 2 11.4V4.6z" fill="none"
-                        stroke="currentColor" strokeWidth={1.6} strokeLinejoin="round" />
+                    {cle === "etoile" ? (
+                      <path d="M8 0.9c1.15 3.3 2.65 4.8 5.95 5.95C10.65 8 9.15 9.5 8 12.8 6.85 9.5 5.35 8 2.05 6.85 5.35 5.7 6.85 4.2 8 0.9z"
+                        transform="translate(0 1.2)" fill="currentColor" />
                     ) : (
                       <rect x={1} y={1} width={14} height={14}
                         rx={cle === "sphere" ? 7 : 4} ry={cle === "sphere" ? 7 : 4}
@@ -889,6 +890,18 @@ export default function AvatarProceduralPage() {
                 </button>
               ))}
             </div>
+
+            {/* ⚠️ Un interrupteur et non un quatrième bouton : « ce qui tourne » est une
+                question **orthogonale** à la forme, et la ranger dans la même rangée
+                aurait laissé croire à trois formes là où il y en a deux, chacune vue de
+                deux manières. Sur la sphère la question ne se pose pas — les deux modes
+                y sont rigoureusement identiques —, l'interrupteur y est donc éteint. */}
+            <div style={{ marginTop: 16, opacity: formeTete === "sphere" ? 0.45 : 1 }}>
+              <Bascule libelle="Faire tourner le volume (vraie 3D)"
+                actif={vraie3D && formeTete !== "sphere"}
+                onChange={v => { if (formeTete !== "sphere") setVraie3D(v); }} />
+            </div>
+
             {formeTete !== "sphere" && (
               <div style={{ marginTop: 16 }}>
                 <Curseur libelle="Arrondi de la silhouette" valeur={silhouette}
