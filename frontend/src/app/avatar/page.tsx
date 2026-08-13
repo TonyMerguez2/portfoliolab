@@ -22,6 +22,7 @@ import { type EtatVie, VIE_AU_REPOS, creerVie } from "@/lib/avatarVie";
 import { useMorphose } from "@/lib/useMorphose";
 import { ETATS } from "@/lib/avatarEtats";
 import { messagePour } from "@/lib/avatarDialogue";
+import { pourFondSombre } from "@/lib/couleur";
 
 /**
  * Prototype 02 — un regard construit par le calcul, pas par le dessin.
@@ -271,6 +272,17 @@ export default function AvatarProceduralPage() {
   const [clignement, setClignement] = useState(VIE_REFERENCE.clignement);
   const [cadence, setCadence] = useState(VIE_REFERENCE.cadenceClignement);
   const [etat, setEtat] = useState("neutre");
+  /**
+   * L'état **réellement joué**, ponctuel compris — c'est lui qui parle.
+   *
+   * ⚠️ **Il ne peut pas être `etat`, et c'est la raison d'être de ce second réglage.**
+   * `etat` sert à montrer quel bouton est retenu dans la colonne des états, et un ponctuel
+   * ne doit justement *pas* s'y montrer retenu : il se joue puis rend la main. Il ne reçoit
+   * donc que le fond. En rebranchant la parole dessus, « Succès » et « Erreur » n'ont
+   * jamais rien dit — mesuré, le mot passait directement au salut : leurs phrases étaient
+   * du code mort, alors que ce sont les deux moments où le personnage a le plus à dire.
+   */
+  const [parole, setParole] = useState("neutre");
   const [derive, setDerive] = useState(VIE_REFERENCE.derive);
   const [notification, setNotification] = useState(false);
   const [dialogue, setDialogue] = useState(false);
@@ -591,6 +603,12 @@ export default function AvatarProceduralPage() {
        * par seconde même toutes animations éteintes — y compris quand l'utilisateur a
        * demandé moins de mouvement, ce qui serait le comble.
        */
+      /**
+       * ⚠️ **Comparé avant d'être posé, comme la pose au-dessus.** `courant()` rend une
+       * chaîne à chaque image ; la reposer telle quelle relancerait un rendu soixante fois
+       * par seconde. Elle ne change qu'aux transitions, donc l'égalité suffit.
+       */
+      setParole(v => { const c = vieRef.current.courant(); return v === c ? v : c; });
       setVie(precedente => {
         const suivante = vieRef.current.avancer(t, reglagesVie.current);
         suiviRef.current = suivante.suivi;
@@ -708,12 +726,12 @@ export default function AvatarProceduralPage() {
           }}
         >
           {/**
-            * ⚠️ **La bulle est du HTML posé à côté du dessin, et non un tracé dans le SVG.**
-            * Le repère ne laisse que cinquante unités à droite du crâne : une bulle
-            * dessinée dedans arriverait tranchée, et l'élargir encore rapetisserait la tête
-            * pour de bon. Surtout, c'est du **texte** — il doit enrouler, hériter de la
-            * police de l'application et rester sélectionnable, trois choses qu'un `<text>`
-            * SVG fait mal ou pas du tout.
+            * ⚠️ **La parole est du HTML posé à côté du dessin, et non un tracé dans le SVG.**
+            * C'est du **texte** : il doit enrouler tout seul quand la place manque — et elle
+            * manque, il ne reste qu'un septième de la scène à droite du crâne —, hériter de
+            * la police de l'application et rester sélectionnable. Un `<text>` SVG ne fait
+            * aucune des trois : il ne connaît pas le retour à la ligne, et il faudrait
+            * mesurer soi-même où couper « Bonjour Sacha ! ».
             *
             * ⚠️ **Elle s'ancre sur le bord du crâne, pas sur celui du cadre.** La tête
             * occupe le tiers central du repère — deux cents unités sur trois cents — donc
@@ -901,56 +919,65 @@ export default function AvatarProceduralPage() {
             )}
           </svg>
 
+          {/**
+            * La parole du personnage : du texte, et rien autour.
+            *
+            * ⚠️ **Une bulle blanche à liseré, c'est de l'interface — pas une voix.** La
+            * première version en portait une, avec sa pointe et son ombre : elle se lisait
+            * comme une infobulle du logiciel posée à côté du dessin, alors qu'on veut ce
+            * que le personnage dit. Signalé à l'usage. Le mot seul, en gras et **dans la
+            * couleur de la tête**, appartient au personnage au lieu de le commenter — c'est
+            * la convention de la bande dessinée pour un « zzZ », qui n'a jamais eu besoin
+            * d'un cadre pour se comprendre.
+            *
+            * ⚠️ **La couleur passe par le garde-fou du fond sombre.** Prise telle quelle,
+            * une tête très foncée — l'encre, l'ardoise — donnerait un mot illisible sur le
+            * panneau noir du banc. `pourFondSombre` ramène la teinte dans la plage lisible
+            * sans la changer : c'est la même fonction qui sert aux courbes et aux logos
+            * d'actifs, donc le mot reste exactement de la couleur qu'on reconnaît.
+            *
+            * ⚠️ **La clé porte le message, ce qui rejoue l'apparition.** Une animation CSS
+            * ne repart pas parce qu'on repose la même classe ; remonter l'élément la relance.
+            * Le mot monte et se révèle à chaque changement d'état — c'est ce qui fait
+            * qu'un « zzZ » *arrive* au moment où la tête s'endort, au lieu d'être là depuis
+            * toujours.
+            */}
           {dialogue && (
-            <div style={{
-              position: "absolute", left: "83.33%", top: "38%",
-              transform: "translateY(-50%)",
-              /**
-               * ⚠️ **Pas de `nowrap`, et la contradiction s'est vue à l'écran.** Il y en
-               * avait un, avec une largeur maximale : les deux se contredisent, et c'est le
-               * `nowrap` qui l'emporte — la bulle sortait du panneau sur une fenêtre
-               * étroite. Le module des phrases les tient à trois mots ; si l'une devait
-               * grandir, mieux vaut qu'elle enroule que de quitter l'écran.
-               *
-               * ⚠️ **La largeur vient du cadre, pas d'un pourcentage choisi.** Le repère du
-               * dessin fait trois cents unités pour une tête de deux cents : il reste donc
-               * un sixième de la largeur rendue — cinquante unités — entre le flanc droit
-               * du crâne et le bord du SVG, plus le rembourrage de la colonne. C'est cette
-               * réserve que la bulle occupe. Serrée à dix-sept pour cent, elle coupait
-               * « Bonjour Sacha ! » en trois lignes dont un point d'exclamation esseulé.
-               */
-              /**
-               * ⚠️ **`max-content`, sans quoi la largeur maximale ne sert à rien.** Pour un
-               * élément absolument positionné avec un `left` et une largeur automatique, la
-               * place disponible est bornée par le bord du conteneur : la bulle se voyait
-               * plafonnée à quatre-vingt-dix-sept pixels — la distance de son ancre au bord
-               * du SVG — et coupait « Bonjour Sacha ! » en trois lignes, quelle que soit la
-               * largeur maximale déclarée. Mesuré, puis corrigé : en demandant la largeur de
-               * son contenu, elle déborde du dessin comme prévu, dans le rembourrage de la
-               * colonne, et la borne reprend son rôle de garde-fou.
-               */
-              width: "max-content", maxWidth: "min(170px, 25%)",
-              padding: "9px 13px", borderRadius: 16,
-              background: "#FFFFFF", border: `1px solid ${BORD}`,
-              boxShadow: "0 6px 18px rgba(8,10,16,0.28)",
-              fontSize: 13.5, lineHeight: 1.35, fontWeight: 650,
-              color: TITRE,
-            }}>
-              {/* La pointe, tournée vers le crâne. Deux triangles superposés : le sombre
-                  porte le liseré, le clair remplit — sans quoi la pointe aurait un bord
-                  d'un côté et pas de l'autre. */}
-              <span aria-hidden="true" style={{
-                position: "absolute", left: -7, top: "50%", width: 7, height: 12,
-                transform: "translateY(-50%)", background: BORD,
-                clipPath: "polygon(0 50%, 100% 0, 100% 100%)",
-              }} />
-              <span aria-hidden="true" style={{
-                position: "absolute", left: -6, top: "50%", width: 6, height: 10,
-                transform: "translateY(-50%)", background: "#FFFFFF",
-                clipPath: "polygon(0 50%, 100% 0, 100% 100%)",
-              }} />
-              {messagePour(etat, pseudo)}
-            </div>
+            <span
+              key={messagePour(parole, pseudo)}
+              className="av-parole"
+              style={{
+                /**
+                 * ⚠️ **Le mot commence après la silhouette, jamais dessus.** Il est de la
+                 * couleur de la tête : la moindre lettre qui mord le volume y **disparaît**
+                 * — vu sur le « zzZ », dont le premier `z` s'était fondu dans le disque.
+                 * Tous les volumes tiennent dans le rayon 100 du cadre, soit 83,3 % de la
+                 * largeur ; on part donc à 86 %, et c'est vrai des huit formes. Mesuré
+                 * après coup : à 84 %, le volume mordait encore de trois pixels d'encre —
+                 * le contour peint dépasse un peu le rayon nominal.
+                 *
+                 * ⚠️ **Ce qui reste est étroit, et le mot s'y plie au lieu d'en sortir.** Un
+                 * septième de la scène, quatre-vingts pixels : « Bonjour Sacha ! » y passe sur
+                 * deux lignes, « zzZ » sur une. La taille se déduit de cette largeur et non
+                 * l'inverse — mesuré au canevas, le plus large des mots employés est
+                 * « Bonjour » à 78 pixels une fois posé en 20 gras. Exprimée en pour cent, la limite
+                 * suit la scène quand la fenêtre rétrécit — posée en pixels, elle allait
+                 * mordre la colonne des réglages.
+                 *
+                 * ⚠️ **Placé à mi-hauteur, il passe sous la pastille.** Celle-ci se pose au
+                 * point le plus haut à droite du contour — le coin, sur un cube, donc très
+                 * haut et très à droite. Le coin supérieur, plus large, lui est disputé ;
+                 * le flanc ne l'est jamais.
+                 */
+                position: "absolute", left: "86%", top: "40%",
+                maxWidth: "14%",
+                fontSize: 20, fontWeight: 800, lineHeight: 1.1,
+                letterSpacing: "-0.01em", color: pourFondSombre(palette.tete),
+                pointerEvents: "none",
+              }}
+            >
+              {messagePour(parole, pseudo)}
+            </span>
           )}
           </div>
 
@@ -1025,12 +1052,12 @@ export default function AvatarProceduralPage() {
 
           <Carte
             titre="Notification et dialogue"
-            note="La pastille creuse vraiment la silhouette au lieu de se poser dessus : le trou laisse voir le fond, quel qu’il soit. La bulle, elle, dit ce que l’avatar fait — jamais ce que vos chiffres valent."
+            note="La pastille creuse vraiment la silhouette au lieu de se poser dessus : le trou laisse voir le fond, quel qu’il soit. La parole, elle, est écrite dans la couleur du personnage plutôt qu'enfermée dans une bulle — et elle dit ce que l’avatar fait, jamais ce que vos chiffres valent."
           >
             <Bascule libelle="Pastille de notification" actif={notification}
               onChange={setNotification} />
             <div style={{ marginTop: 12 }}>
-              <Bascule libelle="Bulle de dialogue" actif={dialogue} onChange={setDialogue} />
+              <Bascule libelle="Parole du personnage" actif={dialogue} onChange={setDialogue} />
             </div>
 
             {dialogue && (

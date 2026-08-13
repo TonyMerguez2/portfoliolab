@@ -474,6 +474,26 @@
   animation: novac-clignement 260ms ease-in-out;
 }
 
+/* ─────────────────────────────────────────────────────────────
+   L'apparition d'une parole de l'avatar.
+
+   ⚠️ **Elle monte et se révèle, elle ne surgit pas.** Un mot qui apparaît d'un
+   coup se lit comme un défaut d'affichage ; un mot qui monte de quelques pixels
+   en se révélant se lit comme une pensée qui se forme. Le déplacement est court
+   — six pixels — parce qu'au-delà on suit le mouvement au lieu de lire le mot.
+
+   ⚠️ **Le point de départ est en bas, pas en haut.** Une parole qui descendrait
+   vers le personnage aurait l'air de lui tomber dessus ; elle s'en échappe.
+   ───────────────────────────────────────────────────────────── */
+@keyframes av-parole {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.av-parole {
+  animation: av-parole 260ms cubic-bezier(0.2, 0.7, 0.3, 1);
+}
+
 @media (prefers-reduced-motion: reduce) {
   [style*="nv-clignote"] { animation: none !important; }
 }
@@ -838,6 +858,7 @@ canvas + div {
 }
 
 @media (prefers-reduced-motion: reduce) {
+  .av-parole { animation: none; }
   /* Un clignement est bref, mais c'est du mouvement non sollicité : il se coupe. */
   .novac-clignement { animation: none; }
   .novac-verre-defilant::after {
