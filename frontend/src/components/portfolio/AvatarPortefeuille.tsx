@@ -35,36 +35,66 @@ const NOM_FORME: Record<FormeAvatar, string> = {
   carre: "Carrée",
   carre3d: "Carrée qui tourne",
   etoile: "Étoile",
+  etoile6: "Étoile à six lobes",
+  galet: "Galet",
+  coussin: "Coussin",
+  fossettes: "Fossettes",
 };
 
-/** Le dessin d'une forme, en aplat quand la silhouette est fixe, en trait quand elle tourne. */
+/**
+ * Le dessin d'une forme.
+ *
+ * ⚠️ **En aplat, sauf le cube qui tourne, dessiné en trait.** La vignette doit distinguer
+ * deux choses différentes : la *forme* du volume, que l'aplat montre bien, et le fait que
+ * le volume **tourne**, qu'aucune forme plate ne peut dire. Le trait et la perspective
+ * sont réservés à cette seconde information, qui ne concerne que le cube — toutes les
+ * autres formes tournent déjà sans que leur silhouette bouge.
+ */
 function VignetteForme({ forme, couleur }: { forme: FormeAvatar; couleur: string }) {
-  const tourne = forme.endsWith("3d");
-  const trait = { fill: "none", stroke: couleur, strokeWidth: 2, strokeLinejoin: "round" as const };
   const plein = { fill: couleur };
-  if (forme.startsWith("etoile")) {
-    // Quatre lobes doux : une étoile arrondie, dessinée en quatre arcs.
-    return (
-      <svg width={20} height={20} viewBox="0 0 20 20" aria-hidden="true">
-        <path d="M10 1.4c1.4 4 3.2 5.8 7.2 7.2-4 1.4-5.8 3.2-7.2 7.2-1.4-4-3.2-5.8-7.2-7.2 4-1.4 5.8-3.2 7.2-7.2z"
-          transform="translate(0 1.4)" {...(tourne ? trait : plein)} />
-      </svg>
-    );
+  const cadre = { width: 20, height: 20, viewBox: "0 0 20 20", "aria-hidden": true } as const;
+  switch (forme) {
+    case "carre3d":
+      return (
+        <svg {...cadre}>
+          <path d="M10 1.6 17.6 5.6v8.8L10 18.4 2.4 14.4V5.6z"
+            fill="none" stroke={couleur} strokeWidth={2} strokeLinejoin="round" />
+        </svg>
+      );
+    case "carre":
+      return <svg {...cadre}><rect x={1.5} y={1.5} width={17} height={17} rx={5.4} {...plein} /></svg>;
+    case "etoile":
+      return (
+        <svg {...cadre}>
+          <path d="M10 2.6c1.2 3.3 2.9 5 6.2 6.2-3.3 1.2-5 2.9-6.2 6.2-1.2-3.3-2.9-5-6.2-6.2 3.3-1.2 5-2.9 6.2-6.2z"
+            transform="translate(0 1.2)" {...plein} />
+        </svg>
+      );
+    case "etoile6":
+      return (
+        <svg {...cadre}>
+          <path d="M10 2.2c.8 3 1.9 4.1 4.9 4.9-3 .8-4.1 1.9-4.9 4.9-.8-3-1.9-4.1-4.9-4.9 3-.8 4.1-1.9 4.9-4.9z"
+            transform="translate(0 2.9)" {...plein} />
+          <path d="M10 2.2c.8 3 1.9 4.1 4.9 4.9-3 .8-4.1 1.9-4.9 4.9-.8-3-1.9-4.1-4.9-4.9 3-.8 4.1-1.9 4.9-4.9z"
+            transform="rotate(30 10 10) translate(0 2.9)" {...plein} />
+        </svg>
+      );
+    case "galet":
+      // Vue de trois quarts : c'est en tournant qu'un galet se distingue d'un rond.
+      return <svg {...cadre}><ellipse cx={10} cy={10} rx={9} ry={6.2} {...plein} /></svg>;
+    case "coussin":
+      return <svg {...cadre}><ellipse cx={10} cy={10} rx={6.2} ry={9} {...plein} /></svg>;
+    case "fossettes":
+      return (
+        <svg {...cadre}>
+          <circle cx={10} cy={10} r={9} {...plein} />
+          <circle cx={6.4} cy={6.4} r={2.1} fill="rgba(12,16,28,0.30)" />
+          <circle cx={13.6} cy={13.6} r={2.1} fill="rgba(12,16,28,0.30)" />
+        </svg>
+      );
+    default:
+      return <svg {...cadre}><circle cx={10} cy={10} r={9} {...plein} /></svg>;
   }
-  if (forme === "sphere") {
-    return (
-      <svg width={20} height={20} viewBox="0 0 20 20" aria-hidden="true">
-        <circle cx={10} cy={10} r={8.5} fill={couleur} />
-      </svg>
-    );
-  }
-  return (
-    <svg width={20} height={20} viewBox="0 0 20 20" aria-hidden="true">
-      {tourne
-        ? <path d="M10 1.6 17.6 5.6v8.8L10 18.4 2.4 14.4V5.6z" {...trait} />
-        : <rect x={1.5} y={1.5} width={17} height={17} rx={5.4} ry={5.4} fill={couleur} />}
-    </svg>
-  );
 }
 
 export default function AvatarPortefeuille({
@@ -196,7 +226,7 @@ export default function AvatarPortefeuille({
             <div style={{
               marginTop: 16, paddingTop: 14,
               borderTop: "1px solid rgba(18,20,28,0.10)",
-              display: "flex", gap: 10,
+              display: "grid", gridTemplateColumns: "repeat(4, 34px)", gap: 10,
             }}>
               {FORMES_AVATAR.map(cle => {
                 const retenue = forme === cle;

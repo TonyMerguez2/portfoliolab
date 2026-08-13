@@ -5,7 +5,7 @@ import {
   RAYON_TETE, type Orientation, type ReglagesOeil, cheminOeil, cheminSvg,
   cheminsSurLaTete, contourSilhouette, projeter, tournerTete, traitSurLaTete,
 } from "@/lib/avatarSpherique";
-import { solideDepuis } from "@/lib/avatarVolume";
+import { type FamilleSolide, solideDepuis } from "@/lib/avatarVolume";
 import { grilleSpherique } from "@/lib/avatarGrille";
 import {
   cheminOeilSolide, cheminsSurLeSolide, contourTeteSolide, normaleSolide,
@@ -58,6 +58,50 @@ const GRILLE = grilleSpherique();
  * plus joli pourrait rapporter.
  */
 const COULEUR_AXE = { x: "#F87171", y: "#4ADE80", z: "#60A5FA" } as const;
+
+/** Les volumes proposés, dans l'ordre du plus simple au plus surprenant. */
+const FORMES: [FamilleSolide, string][] = [
+  ["sphere", "Sphère"],
+  ["cube", "Carré arrondi"],
+  ["etoile", "Étoile"],
+  ["etoile6", "Étoile 6 lobes"],
+  ["galet", "Galet"],
+  ["coussin", "Coussin"],
+  ["fossettes", "Fossettes"],
+];
+
+/** Le pictogramme d'un volume, dans la couleur du bouton. */
+function VignetteVolume({ famille }: { famille: FamilleSolide }) {
+  const c = { width: 16, height: 16, viewBox: "0 0 16 16", "aria-hidden": true } as const;
+  const f = { fill: "currentColor" };
+  switch (famille) {
+    case "cube":
+      return <svg {...c}><rect x={1} y={1} width={14} height={14} rx={4} {...f} /></svg>;
+    case "etoile":
+      return <svg {...c}><path d="M8 1.4c1 2.7 2.4 4.1 5.1 5.1-2.7 1-4.1 2.4-5.1 5.1-1-2.7-2.4-4.1-5.1-5.1 2.7-1 4.1-2.4 5.1-5.1z" transform="translate(0 1.2)" {...f} /></svg>;
+    case "etoile6":
+      return (
+        <svg {...c}>
+          <path d="M8 1.8c.7 2.5 1.6 3.4 4.1 4.1-2.5.7-3.4 1.6-4.1 4.1-.7-2.5-1.6-3.4-4.1-4.1 2.5-.7 3.4-1.6 4.1-4.1z" transform="translate(0 2)" {...f} />
+          <path d="M8 1.8c.7 2.5 1.6 3.4 4.1 4.1-2.5.7-3.4 1.6-4.1 4.1-.7-2.5-1.6-3.4-4.1-4.1 2.5-.7 3.4-1.6 4.1-4.1z" transform="rotate(30 8 8) translate(0 2)" {...f} />
+        </svg>
+      );
+    case "galet":
+      return <svg {...c}><ellipse cx={8} cy={8} rx={7.2} ry={4.8} {...f} /></svg>;
+    case "coussin":
+      return <svg {...c}><ellipse cx={8} cy={8} rx={4.8} ry={7.2} {...f} /></svg>;
+    case "fossettes":
+      return (
+        <svg {...c}>
+          <circle cx={8} cy={8} r={7} {...f} />
+          <circle cx={5.3} cy={5.3} r={1.7} fill="rgba(0,0,0,0.28)" />
+          <circle cx={10.7} cy={10.7} r={1.7} fill="rgba(0,0,0,0.28)" />
+        </svg>
+      );
+    default:
+      return <svg {...c}><circle cx={8} cy={8} r={7} {...f} /></svg>;
+  }
+}
 
 const ACCENT = "#6366F1";
 const ENCRE = "#121214";
@@ -158,7 +202,7 @@ export default function AvatarProceduralPage() {
    * — et surtout animables, le jour où la tête devra passer de l'une à l'autre.
    */
   const [silhouette, setSilhouette] = useState(0.5);
-  const [formeTete, setFormeTete] = useState<"sphere" | "cube" | "etoile">("sphere");
+  const [formeTete, setFormeTete] = useState<FamilleSolide>("sphere");
   /** Le solide tourne-t-il pour de bon, ou seule son image est-elle étirée ? */
   const [vraie3D, setVraie3D] = useState(false);
   /** L'exposant de la superellipsoïde : 2 pour la sphère, davantage vers le cube. */
@@ -864,28 +908,26 @@ export default function AvatarProceduralPage() {
             titre="Forme du personnage"
             note="Deux volumes — le cube aux arêtes arrondies, l’étoile adoucie —, et pour chacun deux façons de tourner : l’image, ou le solide."
           >
-            <div style={{ display: "flex", gap: 10 }}>
-              {([["sphere", "Sphère"], ["cube", "Carré arrondi"], ["etoile", "Étoile"]] as const).map(([cle, libelle]) => (
+            {/* ⚠️ Une grille qui se replie plutôt qu'une rangée : à sept volumes, une seule
+                ligne les réduirait à des libellés illisibles. */}
+            <div style={{ display: "grid", gap: 8, gridTemplateColumns: "repeat(2, 1fr)" }}>
+              {FORMES.map(([cle, libelle]) => (
                 <button key={cle} type="button" onClick={() => setFormeTete(cle)}
                   aria-pressed={formeTete === cle}
                   style={{
-                    flex: 1, padding: "10px 6px", borderRadius: 9, cursor: "pointer",
-                    fontSize: 12.5, fontWeight: 600, fontFamily: "inherit",
-                    display: "flex", alignItems: "center", justifyContent: "center", gap: 7,
+                    padding: "9px 8px", borderRadius: 9, cursor: "pointer",
+                    fontSize: 12, fontWeight: 600, fontFamily: "inherit",
+                    display: "flex", alignItems: "center", gap: 8,
                     border: `1px solid ${formeTete === cle ? ACCENT : BORD}`,
                     background: formeTete === cle ? ACCENT : "#FFFFFF",
                     color: formeTete === cle ? "#FFFFFF" : "#33333D",
                   }}>
-                  <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true">
-                    {cle === "etoile" ? (
-                      <path d="M8 0.9c1.15 3.3 2.65 4.8 5.95 5.95C10.65 8 9.15 9.5 8 12.8 6.85 9.5 5.35 8 2.05 6.85 5.35 5.7 6.85 4.2 8 0.9z"
-                        transform="translate(0 1.2)" fill="currentColor" />
-                    ) : (
-                      <rect x={1} y={1} width={14} height={14}
-                        rx={cle === "sphere" ? 7 : 4} ry={cle === "sphere" ? 7 : 4}
-                        fill="currentColor" />
-                    )}
-                  </svg>
+                  <span style={{
+                    width: 16, height: 16, flexShrink: 0, borderRadius: 3,
+                    display: "flex", alignItems: "center", justifyContent: "center",
+                  }}>
+                    <VignetteVolume famille={cle} />
+                  </span>
                   {libelle}
                 </button>
               ))}
@@ -900,6 +942,12 @@ export default function AvatarProceduralPage() {
               <Bascule libelle="Faire tourner le volume (vraie 3D)"
                 actif={vraie3D && formeTete !== "sphere"}
                 onChange={v => { if (formeTete !== "sphere") setVraie3D(v); }} />
+              <p style={{ margin: "8px 0 0", color: DOUX, fontSize: 12, lineHeight: 1.5 }}>
+                Seul le cube y perd quelque chose : il pousse hors de la sphère, donc sa
+                silhouette respire en tournant. Les autres volumes sont creusés en gardant
+                un grand cercle intact — leur contour atteint toujours le même cercle sans
+                jamais le dépasser, et tourner ne leur coûte rien.
+              </p>
             </div>
 
             {formeTete !== "sphere" && (

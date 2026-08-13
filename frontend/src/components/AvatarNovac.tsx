@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   RAYON_TETE, type Orientation, cheminOeil, cheminSvg, contourSilhouette,
 } from "@/lib/avatarSpherique";
-import { solideDepuis } from "@/lib/avatarVolume";
+import { type FamilleSolide, solideDepuis } from "@/lib/avatarVolume";
 import { cheminOeilSolide, contourTeteSolide } from "@/lib/avatarSolide";
 import { type EtatVie, VIE_AU_REPOS, creerVie } from "@/lib/avatarVie";
 import { COULEUR_PAR_DEFAUT, couleurDesYeux } from "@/lib/avatarCouleur";
@@ -49,6 +49,18 @@ const ECHANTILLONS = 96;
  * diffèrent pas d'un pixel. Un réglage de plus n'aurait donné que l'illusion d'un choix.
  */
 const ARRONDI_FORME = 0.42;
+
+/** Le volume que porte chaque forme proposée. */
+const FAMILLE: Record<FormeAvatar, FamilleSolide> = {
+  sphere: "sphere",
+  carre: "cube",
+  carre3d: "cube",
+  etoile: "etoile",
+  etoile6: "etoile6",
+  galet: "galet",
+  coussin: "coussin",
+  fossettes: "fossettes",
+};
 
 
 /**
@@ -162,12 +174,16 @@ export default function AvatarNovac({
    * composant ne choisit qu'entre deux fonctions — l'image étirée après la rotation, ou
    * le solide qui tourne.
    */
-  const vraie3D = forme.endsWith("3d");
+  /**
+   * ⚠️ **Tout tourne en vrai volume, sauf le carré à silhouette figée.** Les formes
+   * creusées gardent leur cercle circonscrit sous toutes les rotations — mesuré, 0,0 %
+   * de variation —, donc le rendu volumique ne leur coûte rien : la surface reste rigide
+   * et l'encombrement ne bouge pas. La sphère, elle, prend le chemin le plus court :
+   * les deux modes y donnent rigoureusement la même image.
+   */
+  const vraie3D = forme !== "sphere" && forme !== "carre";
   const solide = useMemo(
-    () => solideDepuis(
-      forme.startsWith("etoile") ? "etoile" : forme.startsWith("carre") ? "cube" : "sphere",
-      forme === "sphere" ? 1 : ARRONDI_FORME),
-    [forme]);
+    () => solideDepuis(FAMILLE[forme], forme === "sphere" ? 1 : ARRONDI_FORME), [forme]);
 
   const [vie, setVie] = useState<EtatVie>(VIE_AU_REPOS);
   const [pose, setPose] = useState({ lacet: 0, tangage: 0 });

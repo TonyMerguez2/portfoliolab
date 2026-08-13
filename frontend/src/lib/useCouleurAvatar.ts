@@ -26,17 +26,19 @@ export const cleForme = (id: string | number) => `novac-avatar-forme:${id}`;
 /**
  * Les silhouettes proposées.
  *
- * ⚠️ **Seul le cube a sa variante en volume tournant, et c'est une mesure qui l'a
- * décidé.** `carre` et `carre3d` portent le même solide, séparés par l'ordre des
- * opérations : sans le suffixe l'image est étirée après la rotation — silhouette
- * immuable, surface qui se tord ; avec, le solide tourne — surface rigide, silhouette
- * qui respire. Pour la sphère la question ne se pose pas : les deux coïncident. Pour
- * l'étoile, mesuré, la version à silhouette fixe suit déjà la sphère de très près — le
- * rapport des deux yeux y fait 1,00 · 0,89 · 0,78 · 0,68 de zéro à trente degrés, contre
- * 1,00 · 0,91 · 0,82 · 0,72 sur la sphère, sans la bosse que le cube y montre. Sa
- * variante en volume tournant n'apporterait donc qu'une silhouette qui enfle.
+ * ⚠️ **Seul le cube a une variante, et c'est une propriété géométrique qui le veut.**
+ * Toutes les autres formes sont **creusées** dans la sphère en laissant au moins un
+ * grand cercle intact ; or un grand cercle se projette toujours en une ellipse de
+ * demi-grand axe R, si bien que leur contour atteint toujours R sans jamais le dépasser.
+ * Elles tournent donc en vrai volume — surface rigide, perspective honnête — **sans
+ * jamais changer de taille** : mesuré, 0,0 % de variation du cercle circonscrit. Le cube
+ * est le seul à pousser vers l'extérieur, jusqu'à 1,37 dans la direction d'une arête, et
+ * c'est pourquoi il respire de 12,5 % — d'où le choix qu'on lui laisse entre une
+ * silhouette figée et un volume qui tourne.
  */
-export const FORMES_AVATAR = ["sphere", "carre", "carre3d", "etoile"] as const;
+export const FORMES_AVATAR = [
+  "sphere", "carre", "carre3d", "etoile", "etoile6", "galet", "coussin", "fossettes",
+] as const;
 export type FormeAvatar = (typeof FORMES_AVATAR)[number];
 export const FORME_PAR_DEFAUT: FormeAvatar = "sphere";
 const estFormeValide = (v: unknown): v is FormeAvatar =>

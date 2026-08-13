@@ -1,4 +1,4 @@
-import { SPHERE, solideDepuis, rayonSolide, surLeSolide } from "./avatarVolume";
+import { SPHERE, solideDepuis, normaleSolide, rayonSolide, surLeSolide } from "./avatarVolume";
 import { describe, expect, it } from "vitest";
 
 import {
@@ -697,5 +697,120 @@ describe("cheminOeil sur le cube arrondi", () => {
     // La compensation vaut 1 à l'exposant 2 : le rendu d'origine doit être intact.
     const o = { lacet: deg(23), tangage: deg(-11) };
     expect(cheminOeil(OEIL, o, -1, 100, 220, SPHERE)).toBe(cheminOeil(OEIL, o, -1, 100, 220));
+  });
+});
+
+describe("les volumes qui ne changent jamais de taille", () => {
+  /**
+   * ⚠️ **La règle que ces tests protègent, et qui vaut d'être écrite en clair.**
+   *
+   * Un grand cercle se projette toujours en une ellipse de demi-grand axe R, quelle que
+   * soit la direction de vue. Un solide **inscrit** dans la sphère de rayon R qui laisse
+   * au moins un grand cercle **intact** a donc un contour qui atteint toujours R sans
+   * jamais le dépasser : sa taille ne bouge pas d'un pixel quand il tourne, même si sa
+   * forme, elle, change franchement.
+   *
+   * C'est ce qui sépare nos volumes en deux : ceux qu'on **creuse** vers l'intérieur —
+   * étoiles, galet, coussin, fossettes — gardent leur encombrement, et ceux qui
+   * **poussent** vers l'extérieur — le cube, jusqu'à 1,37 dans la direction d'une arête
+   * — le font respirer. Mesuré : 0,0 % contre 12,5 %.
+   */
+  const cercleCirconscrit = (s: ReturnType<typeof solideDepuis>, lacet: number, tangage: number) => {
+    let max = 0;
+    for (let i = 0; i < 120; i++) {
+      for (let j = 0; j < 60; j++) {
+        const th = (i / 120) * Math.PI * 2, ph = (j / 59) * Math.PI;
+        const u = { x: Math.sin(ph) * Math.cos(th), y: Math.cos(ph), z: Math.sin(ph) * Math.sin(th) };
+        const k = rayonSolide(u, s);
+        const q = tournerTete({ x: u.x * k, y: u.y * k, z: u.z * k }, lacet, tangage, 0);
+        max = Math.max(max, Math.hypot(q.x, q.y));
+      }
+    }
+    return max;
+  };
+
+  it("garde le même cercle circonscrit sous toutes les rotations", () => {
+    for (const famille of ["etoile", "etoile6", "galet", "coussin", "fossettes"] as const) {
+      for (const arrondi of [0.2, 0.5]) {
+        const s = solideDepuis(famille, arrondi);
+        let min = Infinity, max = -Infinity;
+        for (const l of [0, 25, 50, 75, 90]) {
+          for (const t of [0, 30, 60]) {
+            const r = cercleCirconscrit(s, deg(l), deg(t));
+            min = Math.min(min, r); max = Math.max(max, r);
+          }
+        }
+        // À un demi-pour-cent près : c'est la finesse de l'échantillonnage de la surface,
+        // pas une variation réelle.
+        expect(max / min - 1).toBeLessThan(0.005);
+        expect(max).toBeCloseTo(1, 2);
+      }
+    }
+  });
+
+  it("laisse au contraire le cube respirer, faute de rester inscrit", () => {
+    const s = solideDepuis("cube", 0.42);
+    let min = Infinity, max = -Infinity;
+    for (const l of [0, 25, 45]) {
+      for (const t of [0, 30]) {
+        const r = cercleCirconscrit(s, deg(l), deg(t));
+        min = Math.min(min, r); max = Math.max(max, r);
+      }
+    }
+    expect(max / min - 1).toBeGreaterThan(0.05);
+  });
+});
+
+describe("normaleSolide", () => {
+  it("tombe sur le gradient exact là où on sait l'écrire", () => {
+    /**
+     * ⚠️ **Le témoin qui autorise une normale par différences finies.** Sept familles,
+     * ce sont sept gradients à écrire à la main, donc sept occasions de se tromper d'un
+     * signe — et une normale fausse ne casse rien de visible, elle décale seulement le
+     * bord. On calcule donc la normale une fois pour toutes à partir du rayon, et l'on
+     * vérifie ici qu'elle coïncide avec les deux gradients qu'on sait poser exactement.
+     */
+    const exacteCube = (p: Vec3, n: number) => {
+      const s = (v: number, e: number) => (v === 0 ? 0 : Math.sign(v) * Math.pow(Math.abs(v), e));
+      const g = { x: s(p.x, n - 1), y: s(p.y, n - 1), z: s(p.z, n - 1) };
+      const l = Math.hypot(g.x, g.y, g.z);
+      return { x: g.x / l, y: g.y / l, z: g.z / l };
+    };
+    const exacteEtoile = (p: Vec3, c: number) => {
+      const k = rayonSolide(p, { famille: "etoile", creux: c });
+      const q = { x: p.x * k, y: p.y * k, z: p.z * k };
+      const r = Math.hypot(q.x, q.y, q.z);
+      const a = 5 * r * r * r - 4 * r * r;
+      const g = {
+        x: a * q.x + 4 * c * q.x * q.y * q.y,
+        y: a * q.y + 4 * c * q.x * q.x * q.y,
+        z: a * q.z,
+      };
+      const l = Math.hypot(g.x, g.y, g.z);
+      return { x: g.x / l, y: g.y / l, z: g.z / l };
+    };
+    const points: Vec3[] = [];
+    for (let i = 0; i < 40; i++) {
+      const th = (i / 40) * Math.PI * 2, ph = 0.4 + (i % 7) * 0.3;
+      points.push({ x: Math.sin(ph) * Math.cos(th), y: Math.cos(ph), z: Math.sin(ph) * Math.sin(th) });
+    }
+    for (const p of points) {
+      for (const n of [3, 4.8, 8]) {
+        const a = exacteCube(p, n), b = normaleSolide(p, { famille: "cube", exposant: n });
+        expect(a.x * b.x + a.y * b.y + a.z * b.z).toBeGreaterThan(0.9999);
+      }
+      for (const c of [0.2, 0.5, 0.72]) {
+        const a = exacteEtoile(p, c), b = normaleSolide(p, { famille: "etoile", creux: c });
+        expect(a.x * b.x + a.y * b.y + a.z * b.z).toBeGreaterThan(0.9999);
+      }
+    }
+  });
+
+  it("rend l'axe du regard normal à lui-même sur le galet et les fossettes", () => {
+    // Une face-avant lisse : la normale y est radiale, sans quoi le bord serait faux.
+    for (const s of [solideDepuis("galet", 0.4), solideDepuis("fossettes", 0.4)]) {
+      const n = normaleSolide({ x: 0, y: 0, z: 1 }, s);
+      expect(n.z).toBeCloseTo(1, 6);
+    }
   });
 });
