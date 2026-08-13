@@ -109,3 +109,64 @@ export function PastillePlus({
     </label>
   );
 }
+
+/**
+ * Une pastille qui montre un **habillage** plutôt qu'une couleur.
+ *
+ * ⚠️ **Le même objet que ses voisines, à la peinture près.** Elle vit dans la rangée des
+ * couleurs parce qu'elle décrit la même chose — ce que porte la tête — et il n'y a rien à
+ * composer entre les deux : l'habillage recouvre la couleur. Elle en reprend donc le
+ * diamètre, l'ombre portée, le creux et la lumière du haut, sans quoi elle se lirait
+ * comme un bouton étranger tombé au milieu d'un jeu de bonbons.
+ *
+ * ⚠️ **Le halo est neutre, lui.** Celui des pastilles prend leur couleur, ce qui les fait
+ * paraître éclairées de l'intérieur ; un aplat à deux teintes n'a pas de couleur unique à
+ * rayonner, et lui en imposer une aurait teinté l'océan ou les terres au hasard.
+ */
+export function PastilleSkin({
+  contour, aplats, fond, taille = 34, retenue = false, titre, onClick,
+}: {
+  /** La silhouette, dans un repère centré de rayon 100. */
+  contour: string;
+  aplats: { d: string; couleur: string; trait?: string; epaisseur?: number }[];
+  /** Le fond sur lequel les aplats se posent — l'océan, pour la Terre. */
+  fond: string;
+  taille?: number;
+  retenue?: boolean;
+  titre?: string;
+  onClick?: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      title={titre}
+      aria-label={titre}
+      aria-pressed={retenue}
+      style={{
+        width: taille, height: taille, borderRadius: "50%", padding: 0, border: 0,
+        cursor: "pointer", flexShrink: 0, position: "relative", overflow: "hidden",
+        background: fond,
+        boxShadow: [
+          `0 ${Math.round(taille * 0.06)}px ${Math.round(taille * 0.12)}px rgba(0,0,0,0.20)`,
+          `inset 0 ${-Math.round(taille * 0.07)}px ${Math.round(taille * 0.11)}px rgba(0,0,0,0.22)`,
+          `inset 0 ${Math.round(taille * 0.06)}px ${Math.round(taille * 0.09)}px rgba(255,255,255,0.30)`,
+        ].join(", "),
+        outline: retenue ? "2px solid rgba(20,22,30,0.55)" : "none",
+        outlineOffset: 2,
+      }}
+    >
+      <svg viewBox="-100 -100 200 200" width={taille} height={taille}
+        aria-hidden="true" style={{ display: "block" }}>
+        <clipPath id={`past-${titre ?? "skin"}`}><path d={contour} /></clipPath>
+        <g clipPath={`url(#past-${titre ?? "skin"})`}>
+          {aplats.map((m, i) => (
+            <path key={i} d={m.d} fill={m.couleur}
+              stroke={m.trait ?? "none"} strokeWidth={m.epaisseur ?? 0}
+              strokeLinejoin="round" strokeLinecap="round" />
+          ))}
+        </g>
+      </svg>
+    </button>
+  );
+}

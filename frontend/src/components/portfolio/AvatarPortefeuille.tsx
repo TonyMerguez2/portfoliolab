@@ -2,10 +2,12 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 
-import AvatarNovac from "@/components/AvatarNovac";
-import PastilleCouleur, { PastillePlus } from "@/components/portfolio/PastilleCouleur";
+import AvatarNovac, { contourDeForme } from "@/components/AvatarNovac";
+import PastilleCouleur, {
+  PastilleSkin, PastillePlus,
+} from "@/components/portfolio/PastilleCouleur";
 import { COULEURS_AVATAR } from "@/lib/avatarCouleur";
-import { SKINS } from "@/lib/avatarSkins";
+import { skinParCle } from "@/lib/avatarSkins";
 import { FORMES_AVATAR, type FormeAvatar } from "@/lib/useCouleurAvatar";
 import { useAvatar } from "@/lib/AvatarContext";
 
@@ -42,64 +44,6 @@ const NOM_FORME: Record<FormeAvatar, string> = {
   goutte: "Goutte",
 };
 
-/**
- * Le dessin d'une forme.
- *
- * ⚠️ **En aplat, sauf le cube qui tourne, dessiné en trait.** La vignette doit distinguer
- * deux choses différentes : la *forme* du volume, que l'aplat montre bien, et le fait que
- * le volume **tourne**, qu'aucune forme plate ne peut dire. Le trait et la perspective
- * sont réservés à cette seconde information, qui ne concerne que le cube — toutes les
- * autres formes tournent déjà sans que leur silhouette bouge.
- */
-function VignetteForme({ forme, couleur }: { forme: FormeAvatar; couleur: string }) {
-  const plein = { fill: couleur };
-  const cadre = { width: 20, height: 20, viewBox: "0 0 20 20", "aria-hidden": true } as const;
-  switch (forme) {
-    case "carre":
-      return <svg {...cadre}><rect x={1.5} y={1.5} width={17} height={17} rx={5.4} {...plein} /></svg>;
-    case "etoile":
-      return (
-        <svg {...cadre}>
-          <path d="M10 2.6c1.2 3.3 2.9 5 6.2 6.2-3.3 1.2-5 2.9-6.2 6.2-1.2-3.3-2.9-5-6.2-6.2 3.3-1.2 5-2.9 6.2-6.2z"
-            transform="translate(0 1.2)" {...plein} />
-        </svg>
-      );
-    case "etoile6":
-      return (
-        <svg {...cadre}>
-          <path d="M10 2.2c.8 3 1.9 4.1 4.9 4.9-3 .8-4.1 1.9-4.9 4.9-.8-3-1.9-4.1-4.9-4.9 3-.8 4.1-1.9 4.9-4.9z"
-            transform="translate(0 2.9)" {...plein} />
-          <path d="M10 2.2c.8 3 1.9 4.1 4.9 4.9-3 .8-4.1 1.9-4.9 4.9-.8-3-1.9-4.1-4.9-4.9 3-.8 4.1-1.9 4.9-4.9z"
-            transform="rotate(30 10 10) translate(0 2.9)" {...plein} />
-        </svg>
-      );
-    case "hexagone":
-      return (
-        <svg {...cadre}>
-          <path d="M10 1.6 17.3 5.8v8.4L10 18.4 2.7 14.2V5.8z" {...plein} />
-        </svg>
-      );
-    case "triangle":
-      return (
-        <svg {...cadre}>
-          <path d="M10 2.4 18 16.4H2z" {...plein} strokeLinejoin="round" stroke={couleur} strokeWidth={3} />
-        </svg>
-      );
-    case "goutte":
-      // Resserrée en haut, pleine en bas : la goutte, adoucie comme la forme rendue.
-      return (
-        <svg {...cadre}>
-          <path d="M10 1.8c3.4 4.4 6.6 6.7 6.6 10.3a6.6 6.6 0 1 1-13.2 0c0-3.6 3.2-5.9 6.6-10.3z" {...plein} />
-        </svg>
-      );
-    case "coussin":
-      // Une capsule couchée : bouts entièrement ronds, côtés rigoureusement droits.
-      return <svg {...cadre}><rect x={1} y={4.4} width={18} height={11.2} rx={5.6} {...plein} /></svg>;
-    default:
-      return <svg {...cadre}><circle cx={10} cy={10} r={9} {...plein} /></svg>;
-  }
-}
-
 export default function AvatarPortefeuille({
   portefeuille, couleur, onCouleur, forme, onForme, skin, onSkin, taille = 63,
 }: {
@@ -116,8 +60,32 @@ export default function AvatarPortefeuille({
   taille?: number;
 }) {
   const { expression } = useAvatar();
-  const skinsOfferts = useMemo(
-    () => SKINS.filter(s => !s.rond || forme === "sphere"), [forme]);
+  const [survole, setSurvole] = useState(false);
+  /**
+   * Le contour de la forme portée, pour le cerne du survol.
+   *
+   * ⚠️ **Il suit la silhouette, il ne l'encadre pas.** Un anneau rond autour d'une goutte
+   * ou d'un triangle dit « bouton », pas « cet avatar-là ». Le tracé vient du composant
+   * de l'avatar, seul endroit qui sache quel volume porte chaque forme.
+   */
+  const contour = useMemo(() => contourDeForme(forme), [forme]);
+
+  /**
+   * ⚠️ **Choisir une couleur retire l'habillage, et c'est ce qui rend la rangée
+   * lisible.** Les pastilles et le globe vivent côte à côte, donc ils décrivent une même
+   * chose : ce que porte la tête. Sans cela, on cliquerait une couleur sans rien voir
+   * changer — le globe la recouvre — et la sélection montrerait deux marques à la fois.
+   */
+  /** L'aperçu du globe, calculé une fois : il ne dépend d'aucun réglage. */
+  const apercuTerre = useMemo(() => {
+    const s = skinParCle("terre");
+    return { aplats: s.plats ? s.plats(s.palette) : [], fond: s.palette.tete };
+  }, []);
+
+  const choisirCouleur = useCallback((hex: string) => {
+    onCouleur(hex);
+    if (skin !== "uni") onSkin("uni");
+  }, [onCouleur, onSkin, skin]);
   const [ouvert, setOuvert] = useState(false);
   const bouton = useRef<HTMLButtonElement | null>(null);
   /** Où poser le panneau, relevé sur le bouton au moment de l'ouverture. */
@@ -159,13 +127,16 @@ export default function AvatarPortefeuille({
         ref={bouton}
         type="button"
         onClick={() => (ouvert ? setOuvert(false) : ouvrir())}
+        onPointerEnter={() => setSurvole(true)}
+        onPointerLeave={() => setSurvole(false)}
+        onFocus={() => setSurvole(true)}
+        onBlur={() => setSurvole(false)}
         aria-expanded={ouvert}
-        aria-label={`Couleur de l’avatar${portefeuille.name ? ` de ${portefeuille.name}` : ""}`}
-        title="Changer sa couleur"
+        aria-label={`Personnaliser l’avatar${portefeuille.name ? ` de ${portefeuille.name}` : ""}`}
+        title="Personnaliser l’avatar"
         style={{
           width: taille, height: taille, padding: 0, border: 0, background: "none",
-          cursor: "pointer", display: "block", borderRadius: "50%",
-          transition: "opacity 150ms", opacity: ouvert ? 0.86 : 1,
+          cursor: "pointer", display: "block", position: "relative",
         }}
       >
         <AvatarNovac
@@ -177,6 +148,39 @@ export default function AvatarPortefeuille({
           impulsion={expression.jeton}
           titre={portefeuille.name ?? "Novac"}
         />
+        {/**
+          * La surcouche de retouche, posée par-dessus l'avatar.
+          *
+          * ⚠️ **Un débordement visible, parce que le cerne sort du cadre.** L'anneau est
+          * tracé un peu plus grand que la silhouette pour la border sans la mordre ; le
+          * SVG a exactement la taille de la tête, donc l'anneau serait tranché sans cela.
+          *
+          * ⚠️ **Ni la souris ni le lecteur d'écran ne la voient.** Elle n'existe que
+          * pendant le survol du bouton qui la contient : lui laisser capter les
+          * événements ferait clignoter l'état à chaque passage sur elle.
+          */}
+        <svg
+          viewBox="-100 -100 200 200"
+          width={taille}
+          height={taille}
+          aria-hidden="true"
+          style={{
+            position: "absolute", inset: 0, display: "block", overflow: "visible",
+            pointerEvents: "none", opacity: survole || ouvert ? 1 : 0,
+            transition: "opacity 140ms ease",
+          }}
+        >
+          <path d={contour} transform="scale(1.07)" fill="none"
+            stroke="#1C1F26" strokeWidth={13} strokeLinejoin="round" />
+          <path d={contour} fill="rgba(12,14,18,0.42)" />
+          {/* Le stylo, centré. Le trait est fixé à l'écran : sans cela il s'épaissirait
+              avec la taille rendue, et l'icône deviendrait une tache à 63 pixels. */}
+          <g transform="translate(-21 -21) scale(1.75)" fill="none" stroke="#FFFFFF"
+            strokeWidth={1.6} strokeLinecap="round" strokeLinejoin="round"
+            vectorEffect="non-scaling-stroke">
+            <path d="m13.5 6.5 4 4M4 20h4L18.5 9.5a2.828 2.828 0 0 0-4-4L4 16z" />
+          </g>
+        </svg>
       </button>
 
       {ouvert && ancre && createPortal(
@@ -206,15 +210,35 @@ export default function AvatarPortefeuille({
             }}>
               {COULEURS_AVATAR.slice(0, 3).map(c => (
                 <PastilleCouleur key={c.hex} couleur={c.hex} titre={c.nom}
-                  retenue={c.hex.toLowerCase() === couleur.toLowerCase()}
-                  onClick={() => onCouleur(c.hex)} />
+                  retenue={skin === "uni" && c.hex.toLowerCase() === couleur.toLowerCase()}
+                  onClick={() => choisirCouleur(c.hex)} />
               ))}
-              <PastillePlus valeur={couleur} onChange={onCouleur} />
+              <PastillePlus valeur={couleur} onChange={choisirCouleur} />
               {COULEURS_AVATAR.slice(3).map(c => (
                 <PastilleCouleur key={c.hex} couleur={c.hex} titre={c.nom}
-                  retenue={c.hex.toLowerCase() === couleur.toLowerCase()}
-                  onClick={() => onCouleur(c.hex)} />
+                  retenue={skin === "uni" && c.hex.toLowerCase() === couleur.toLowerCase()}
+                  onClick={() => choisirCouleur(c.hex)} />
               ))}
+              {/**
+                * ⚠️ **Le globe est une pastille parmi les couleurs, pas un réglage à
+                * part.** C'est une décision d'usage : il n'y a rien à composer entre une
+                * couleur et un habillage — l'un recouvre l'autre. Les mettre dans la même
+                * rangée dit exactement cela, un choix unique, là où deux réglages séparés
+                * auraient laissé croire qu'ils se combinent.
+                *
+                * ⚠️ Il ne paraît que sur la forme ronde : détouré par un triangle, il
+                * n'est plus un globe. Et comme la forme peut changer après, le réglage
+                * sait aussi se défaire — voir la page, qui le tient.
+                */}
+              {forme === "sphere" && (
+                <PastilleSkin
+                  contour={contourDeForme("sphere")}
+                  aplats={apercuTerre.aplats}
+                  fond={apercuTerre.fond}
+                  retenue={skin === "terre"}
+                  titre="Terre"
+                  onClick={() => onSkin("terre")} />
+              )}
             </div>
 
             {/**
@@ -253,52 +277,20 @@ export default function AvatarPortefeuille({
                       borderColor: retenue ? "rgba(20,22,30,0.55)" : "rgba(18,20,28,0.12)",
                       transition: "background 120ms, border-color 120ms",
                     }}>
-                    {/* ⚠️ Le trait plutôt que l'aplat dit « ce volume-là tourne » : c'est
-                        la seule différence entre les deux vignettes d'une même forme, et
-                        aucun mot ne l'aurait montrée dans trente-quatre pixels. */}
-                    <VignetteForme forme={cle} couleur={couleur} />
-                  </button>
-                );
-              })}
-            </div>
-
-            {/**
-              * L'habillage, en dernier — c'est le réglage le plus rare.
-              *
-              * ⚠️ **Une pastille qui montre l'habillage, pas son nom.** « Terre »,
-              * « basket » et « volley » ne se distinguent qu'une fois vus, et une vignette
-              * de trente-quatre pixels dessinée par la même mécanique que la tête montre
-              * exactement ce qu'on obtiendra — silhouette comprise.
-              *
-              * ⚠️ **Les habillages réservés à la sphère disparaissent au lieu de se
-              * griser.** Une carte du monde détourée par un triangle n'est pas un globe
-              * un peu déformé : c'est une image fausse, que rien dans le panneau ne
-              * rattraperait. Et comme la forme peut changer *après* l'habillage, le choix
-              * se retire aussi de lui-même.
-              */}
-            <div style={{
-              marginTop: 14, paddingTop: 14,
-              borderTop: "1px solid rgba(18,20,28,0.10)",
-              display: "flex", gap: 10, flexWrap: "wrap",
-            }}>
-              {skinsOfferts.map(s => {
-                const retenu = skin === s.cle;
-                return (
-                  <button key={s.cle} type="button" onClick={() => onSkin(s.cle)}
-                    aria-pressed={retenu}
-                    aria-label={`Habillage ${s.libelle.toLowerCase()}`}
-                    title={s.libelle}
-                    style={{
-                      width: 34, height: 34, padding: 0, borderRadius: 10, cursor: "pointer",
-                      display: "flex", alignItems: "center", justifyContent: "center",
-                      background: retenu ? "rgba(18,20,28,0.06)" : "transparent",
-                      borderWidth: 1.5, borderStyle: "solid",
-                      borderColor: retenu ? "rgba(20,22,30,0.55)" : "rgba(18,20,28,0.12)",
-                      transition: "background 120ms, border-color 120ms",
-                    }}>
-                    <AvatarNovac taille={22} forme={forme} skin={s.cle} suivi={false}
-                      couleur={s.cle === "uni" ? couleur : s.palette.tete}
-                      titre={s.libelle} />
+                    {/**
+                      * ⚠️ **La vignette est l'avatar lui-même, plus un pictogramme.** Un
+                      * dessin à part ne montre que la silhouette ; il faut ouvrir le
+                      * panneau, choisir, puis regarder ailleurs pour savoir ce qu'on a
+                      * fait. Ici chaque case porte la couleur, l'habillage et le regard
+                      * en cours : on voit les huit résultats possibles avant de choisir.
+                      *
+                      * ⚠️ **Et elle ne bouge pas.** Huit têtes qui clignent chacune de son
+                      * côté attirent l'œil sur le choix qu'on n'a pas encore fait ; un
+                      * aperçu est une image de ce qu'on obtiendra, pas une créature.
+                      */}
+                    <AvatarNovac taille={26} forme={cle} couleur={couleur}
+                      skin={cle === "sphere" ? skin : "uni"}
+                      suivi={false} vivant={false} titre={nom} />
                   </button>
                 );
               })}

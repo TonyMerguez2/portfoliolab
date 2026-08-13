@@ -65,6 +65,19 @@ const FAMILLE: Record<FormeAvatar, FamilleSolide> = {
 
 
 /**
+ * Le contour d'une forme, dans le repère de l'avatar — pour ce qui se pose **par-dessus**.
+ *
+ * ⚠️ **Rendu ici parce que la table des volumes est ici.** Un survol qui cerne l'avatar
+ * doit suivre sa silhouette, sinon il cerne un carré autour d'une goutte. L'interface
+ * n'a pas à connaître la famille de solide derrière chaque forme proposée ; elle demande
+ * un tracé et le pose.
+ */
+export function contourDeForme(forme: FormeAvatar): string {
+  return cheminSvg(contourSilhouette(solideDepuis(FAMILLE[forme], ARRONDI_REFERENCE),
+    RAYON_TETE, 180));
+}
+
+/**
  * La vie du visage à cette taille.
  *
  * ⚠️ **La dérive est bien plus ample qu'au banc d'essai, et ce n'est pas un caprice.**
@@ -122,6 +135,7 @@ export default function AvatarNovac({
   amplitude = VIE_REFERENCE.amplitude,
   forme = "sphere",
   skin = "uni",
+  vivant = true,
   titre,
   style,
 }: {
@@ -155,6 +169,16 @@ export default function AvatarNovac({
    * fasse le regard. Une seule règle pour les huit formes.
    */
   skin?: string;
+  /**
+   * Le visage respire-t-il ?
+   *
+   * ⚠️ **Distinct du suivi, et il fallait les séparer.** Couper le suivi arrête le
+   * regard mais laisse le clignement et la dérive : dans une vignette de sélection, une
+   * douzaine de têtes qui clignent chacune de son côté attire l'œil sur le choix qu'on
+   * ne fait pas encore. Un aperçu doit être **immobile** — c'est une image de ce qu'on
+   * obtiendra, pas une créature.
+   */
+  vivant?: boolean;
   /** Le regard suit-il le curseur dans la fenêtre ? */
   suivi?: boolean;
   /** Débattement du suivi, en degrés. */
@@ -218,7 +242,7 @@ export default function AvatarNovac({
   }, []);
 
   useEffect(() => {
-    if (!anime) return;
+    if (!anime || !vivant) return;
     let image = 0;
     let precedent = performance.now();
     const boucle = (t: number) => {
@@ -247,7 +271,7 @@ export default function AvatarNovac({
     };
     image = requestAnimationFrame(boucle);
     return () => cancelAnimationFrame(image);
-  }, [anime]);
+  }, [anime, vivant]);
 
   const regarder = useCallback((e: PointerEvent) => {
     const boite = svgRef.current?.getBoundingClientRect();
