@@ -196,36 +196,6 @@ const NORMALES_TRIANGLE = [-90, 30, 150].map(a => (a * Math.PI) / 180)
   .map(a => ({ x: Math.cos(a), y: Math.sin(a) }));
 /** La distance du centre à chaque côté : la moitié du rayon des sommets. */
 const RENTRANT_TRIANGLE = 0.5;
-/**
- * De combien la face avant du triangle est **aplatie**.
- *
- * ⚠️ **Le triangle est la seule forme dont le rayon varie du simple au double sur la
- * hauteur d'un œil** — 0,76 en bas contre 0,95 en haut, parce qu'une contrainte ferme la
- * base quand deux ferment les flancs. L'œil, transporté sur une surface qui s'évase
- * ainsi, s'ouvrait en aile et les deux yeux finissaient par se confondre en une tache dès
- * vingt degrés de lacet. Vérifié en coupant toute correction : le défaut est celui de la
- * forme, pas de ce qu'on lui applique.
- *
- * On alourdit donc le terme de profondeur. Le rayon devient partout plus petit sauf sur
- * l'équateur, où `z` s'annule et où le coefficient n'a donc aucun effet : la variation
- * angulaire se dilue dans un terme constant, et l'œil cesse de s'ouvrir.
- *
- * ⚠️ **Ce sens-là est le seul qui soit sûr, et ce n'est pas un détail.** La tête est
- * dessinée par `contourSilhouette`, qui transporte le cercle `z = 0` : c'est la coupe
- * équatoriale, pas la vraie silhouette. Tout ce qui gonfle la face avant sort donc du
- * trait sans que rien ne le rattrape — mesuré sur une première tentative qui arrondissait
- * la face avant vers la sphère, l'œil débordait de **29,6 unités** hors de la tête aux
- * fortes inclinaisons. Un coefficient qui ne fait que *réduire* le rayon ne peut pas
- * produire ce défaut : la projection d'un point vaut `r·ρ`, elle décroît avec `r`, et
- * elle est déjà bornée par le contour à l'équateur. Vérifié sur les quarante-cinq
- * orientations du banc de mesure, à 1, 3, 8 et 20 : aucun point dehors.
- *
- * Reste à choisir, et cela se regarde : à 1 l'œil s'ouvre en aile dès vingt degrés, à 3
- * il tient jusqu'à vingt, à 8 jusqu'à trente ; à 20 les deux yeux restent deux traits
- * francs sur tout le débattement, et il ne reste qu'un œil en virgule à trente-huit
- * degrés — ce qui est exactement ce qu'on attend d'un œil rasant le flanc d'un triangle.
- */
-const APLATISSEMENT_TRIANGLE = 20;
 
 /**
  * Met la forme à l'échelle du carré de la tête.
@@ -255,35 +225,6 @@ function ajuster(forme: FormeSolide): Solide {
   };
 }
 
-/**
- * La longitude qui pose l'œil au même endroit **relatif** que sur une sphère.
- *
- * ⚠️ **L'écart est un arc, et un arc ne se projette pas pareil selon le volume.** Sur la
- * capsule, la surface près du visage est un cylindre : le même arc y ramène l'œil vers
- * l'axe, et les deux yeux se retrouvent à 13 % de la largeur de la tête au lieu de 21 sur
- * la sphère. Sur le triangle, l'inverse — 30 %. Signalé à l'usage : « sur le coussin les
- * yeux sont trop serrés ». On corrige donc la **longitude**, pas la taille de l'œil, que
- * `cheminOeil` compense déjà à l'ancre : on cherche celle qui met l'ancre à la même
- * fraction de la demi-largeur que sur une sphère.
- */
-export function longitudeCorrigee(longitude: number, s: Solide): number {
-  if (s.famille === "sphere") return longitude;
-  const signe = Math.sign(longitude) || 1;
-  const l0 = Math.abs(longitude);
-  if (l0 <= 1e-6) return longitude;
-  const vise = Math.sin(l0) * (s.demiLargeur ?? 1);
-  const x = (l: number) => {
-    const u = { x: Math.sin(l), y: 0, z: Math.cos(l) };
-    return u.x * rayonSolide(u, s) - (s.decalage ? s.decalage.x : 0);
-  };
-  // La position croît avec la longitude jusqu'au quart de tour : une dichotomie suffit.
-  let a = 0, b = Math.PI / 2;
-  for (let i = 0; i < 40; i++) {
-    const m = (a + b) / 2;
-    if (x(m) < vise) a = m; else b = m;
-  }
-  return signe * (a + b) / 2;
-}
 
 export function solideDepuis(forme: FamilleSolide, arrondi: number): Solide {
   const a = Math.min(1, Math.max(0, arrondi));
@@ -347,7 +288,7 @@ function brut(u: Vec3, s: Solide): number {
     }
     case "triangle": {
       const n = s.exposant;
-      let somme = APLATISSEMENT_TRIANGLE * Math.pow(z, n);
+      let somme = Math.pow(z, n);
       for (const m of NORMALES_TRIANGLE) {
         const c = sx * m.x + sy * m.y;
         if (c > 0) somme += Math.pow(c / RENTRANT_TRIANGLE, n);

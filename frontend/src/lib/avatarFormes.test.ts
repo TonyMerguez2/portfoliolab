@@ -4,9 +4,7 @@ import { ARRONDI_REFERENCE, OEIL_REFERENCE, TAILLE_REFERENCE } from "./avatarReg
 import {
   type Point2, type Vec3, ancrageOeil, cheminOeil, contourSilhouette, surLaSphere,
 } from "./avatarSpherique";
-import {
-  type FamilleSolide, longitudeCorrigee, rayonSolide, solideDepuis,
-} from "./avatarVolume";
+import { type FamilleSolide, rayonSolide, solideDepuis } from "./avatarVolume";
 
 /**
  * Les yeux épousent-ils vraiment la forme sur laquelle ils sont peints ?
@@ -83,7 +81,9 @@ describe("l'œil est posé sur la surface", () => {
      */
     for (const f of FORMES) {
       const s = solide(f);
-      const ancrage = ancrageOeil(longitudeCorrigee(OEIL.ecart / RAYON, s), 0);
+      const l = OEIL.ecart / RAYON;
+      const ancrage = ancrageOeil(
+        Math.asin(Math.sin(l) * (s.demiLargeur ?? 1)), 0);
       for (const u of [-14, -6, 0, 6, 14]) {
         for (const v of [-30, -12, 0, 12, 30]) {
           const p = surLaSphere(ancrage, u, v, RAYON);
@@ -130,11 +130,12 @@ describe("l'œil est posé sur la surface", () => {
 describe("l'œil suit la rotation", () => {
   it("rapetisse en se détournant, sur toutes les formes", () => {
     /**
-     * ⚠️ **Le défaut que cette mesure a déjà attrapé une fois.** Sur le cube, le
+     * ⚠️ **Le défaut que cette mesure a déjà attrapé deux fois.** Sur le cube, le
      * gonflement vers les arêtes faisait *grandir* de 27 % l'œil qui s'éloignait, là où
      * la perspective aurait dû le raccourcir de 10 : la tête montrait deux yeux de
-     * tailles franchement différentes. La compensation à l'ancre a corrigé cela, et ce
-     * test empêche la même chose de revenir par une autre forme.
+     * tailles franchement différentes. Sur le triangle, plus tard, l'œil éloigné s'ouvrait
+     * en virgule. Aucune tolérance ici — l'aire ne remonte jamais d'un cran au suivant,
+     * et c'est vérifié à 0,953 au pire sur les huit formes.
      */
     for (const f of FORMES) {
       const s = solide(f);
@@ -142,47 +143,64 @@ describe("l'œil suit la rotation", () => {
       for (const lacet of [0, 10, 20, 30, 38]) {
         const o = { lacet: deg(lacet), tangage: 0 };
         const a = aire(pointsDuChemin(cheminOeil(OEIL, o, 1, RAYON, 220, s)));
-        /**
-         * ⚠️ **Aucune tolérance : l'aire ne remonte jamais.** Elle a longtemps eu droit à
-         * un dixième de marge, la correction n'étant juste qu'au premier ordre. Ce n'est
-         * plus nécessaire — mesuré sur les huit formes, le pire rapport d'un cran au
-         * suivant vaut 0,956. Une remontée, même d'un pour cent, veut dire qu'une forme
-         * s'est remise à gonfler l'œil qui se détourne, et c'est exactement le défaut que
-         * ce fichier existe pour attraper.
-         */
         expect(a).toBeLessThanOrEqual(precedent);
         precedent = a;
       }
-      // Et au bout du débattement, il a franchement rapetissé.
-      const face = aire(pointsDuChemin(cheminOeil(OEIL, { lacet: 0, tangage: 0 }, 1, RAYON, 220, s)));
-      const tourne = aire(pointsDuChemin(
-        cheminOeil(OEIL, { lacet: deg(38), tangage: 0 }, 1, RAYON, 220, s)));
-      /**
-       * Le repère est la sphère, qui garde 65 % de son aire à trente-huit degrés. Les huit
-       * formes doivent s'en approcher — mesuré, de 55 à 65 %. Sans la correction locale
-       * l'hexagone tombait à 17 % et le triangle à 19 %, deux lames là où la sphère a
-       * encore un œil ; les bornes sont donc larges d'un côté comme de l'autre, mais
-       * assez serrées pour que ce retour-là se voie.
-       */
-      expect(tourne / face).toBeLessThan(0.75);
-      expect(tourne / face).toBeGreaterThan(0.5);
+    }
+  });
+
+  it("ne dépasse jamais ce que l'œil ferait sur une sphère", () => {
+    /**
+     * ⚠️ **L'invariant qui remplace tous les seuils réglés à la main.** Chaque point de
+     * l'œil est résolu pour se projeter là où il se projetterait sur une sphère ; la
+     * forme ne peut donc que **retrancher**, jamais ajouter. C'est la propriété centrale
+     * du procédé, et elle est vraie orientation par orientation, pas en moyenne.
+     *
+     * Ce qu'elle interdit exactement, c'est tout ce que les versions précédentes ont
+     * produit tour à tour : l'œil du cube grandissant de 27 %, celui du triangle
+     * s'élargissant à 39,3 unités, celui de l'hexagone poussé à 98 de haut par une
+     * correction non bornée. Aucune de ces trois n'aurait passé cette ligne.
+     */
+    for (const f of FORMES) {
+      const s = solide(f);
+      for (const lacet of [0, 20, 38]) {
+        for (const tangage of [0, 26]) {
+          const o = { lacet: deg(lacet), tangage: deg(tangage) };
+          for (const cote of [-1, 1] as const) {
+            const forme = aire(pointsDuChemin(cheminOeil(OEIL, o, cote, RAYON, 220, s)));
+            const ronde = aire(pointsDuChemin(
+              cheminOeil(OEIL, o, cote, RAYON, 220, solide("sphere"))));
+            /**
+             * ⚠️ **Trois pour cent de marge, et ils ont une cause nommée.** Sur six
+             * formes le rapport vaut 1,0000 — l'égalité, comme la construction le
+             * promet. Sur l'hexagone et la goutte il monte à 1,026, et seulement aux
+             * fortes inclinaisons : c'est là que des points de l'œil sortent de ce que la
+             * forme peut atteindre, et qu'ils se **collent au bord** au lieu de
+             * disparaître. L'œil épouse alors l'arête, qui bombe un peu plus que le limbe
+             * de la sphère. Ce n'est pas l'œil qui grandit, c'est son bord qui suit la
+             * silhouette — précisément le comportement retenu pour que le regard passe
+             * derrière l'arête sans se déchirer.
+             */
+            expect(forme).toBeLessThanOrEqual(ronde * 1.03);
+          }
+        }
+      }
     }
   });
 
   it("garde les deux yeux identiques de face", () => {
+    /**
+     * ⚠️ **De face, les deux yeux sont exactement l'image l'un de l'autre.** Les huit
+     * volumes sont symétriques d'un côté à l'autre, donc rien ne justifierait le moindre
+     * écart. Il y en avait pourtant un, un demi-pour-cent, dû à des dérivées prises à
+     * droite et à un miroir appliqué après la correction. Les deux causes ont disparu
+     * avec la correction elle-même : il n'y a plus de matrice à mirorer.
+     */
     for (const f of FORMES) {
       const s = solide(f);
       const o = { lacet: 0, tangage: 0 };
       const g = aire(pointsDuChemin(cheminOeil(OEIL, o, -1, RAYON, 220, s)));
       const d = aire(pointsDuChemin(cheminOeil(OEIL, o, 1, RAYON, 220, s)));
-      /**
-       * ⚠️ **De face, les deux yeux sont exactement l'image l'un de l'autre — au
-       * millionième.** Les huit volumes sont symétriques d'un côté à l'autre, donc rien
-       * ne justifierait le moindre écart. Il y en avait pourtant un, un demi-pour-cent,
-       * et il a fallu deux corrections pour l'effacer : mesurer les dérivées par
-       * différence *centrée*, et prendre le miroir **avant** la correction et non après.
-       * Ce test ne tolère plus rien, parce qu'il n'y a rien à tolérer.
-       */
       expect(d / g).toBeCloseTo(1, 5);
     }
   });
@@ -191,7 +209,13 @@ describe("l'œil suit la rotation", () => {
     /**
      * En roulis, la tête tourne dans son propre plan : les deux yeux doivent tourner
      * d'autant, donc la droite qui les joint doit prendre exactement le même angle.
-     * C'est le contrôle le plus simple que le repère local suit bien la surface.
+     *
+     * ⚠️ **Exactement, désormais, et sur les huit formes.** Ce test tolérait trois
+     * degrés : la capsule, aplatie, ne rendait que 12,7° pour 15 parce que l'ancre suivait
+     * la surface du volume et qu'une même course d'arc n'y donne pas le même angle à
+     * l'écran. L'ancre étant maintenant posée à la projection de la sphère, l'écart est
+     * tombé à zéro partout — mesuré 0,00° sur les huit. Un dixième de degré de marge
+     * suffit, et il ne reste que pour la finesse de la dichotomie.
      */
     for (const f of FORMES) {
       const s = solide(f);
@@ -206,20 +230,9 @@ describe("l'œil suit la rotation", () => {
         };
         const g = centre(-1), d = centre(1);
         const angle = (Math.atan2(d.y - g.y, d.x - g.x) * 180) / Math.PI;
-        /**
-         * Le repère de l'écran descend, d'où le signe : un roulis positif fait monter
-         * l'œil de droite.
-         *
-         * ⚠️ **La tolérance est relative, et c'est une propriété du procédé, pas un
-         * défaut.** Le volume ne tourne pas — c'est le regard qui se déplace dessus. Sur
-         * une forme qui n'est pas ronde, une même course d'arc ne rend donc pas le même
-         * angle à l'écran : la capsule, aplatie, rend 13 % de moins que demandé, et c'est
-         * son seul écart notable — 2,03° sur un roulis de 15, 3,24° sur un roulis de −25.
-         * Les sept autres tombent sous le vingtième de degré. Un
-         * seuil en degrés absolus mentirait en laissant passer un grand roulis faux ;
-         * mesuré en proportion, l'invariant est le même à quinze degrés qu'à vingt-cinq.
-         */
-        expect(Math.abs(angle + roulis)).toBeLessThan(Math.abs(roulis) * 0.15);
+        // Le repère de l'écran descend, d'où le signe : un roulis positif fait monter
+        // l'œil de droite.
+        expect(Math.abs(angle + roulis)).toBeLessThan(0.1);
       }
     }
   });
@@ -237,14 +250,12 @@ describe("l'œil garde sa taille d'une forme à l'autre", () => {
       cheminOeil(OEIL, { lacet: 0, tangage: 0 }, 1, RAYON, 220, solide(f)))));
     const min = Math.min(...aires), max = Math.max(...aires);
     /**
-     * Mesuré : de 1541 unités² sur la capsule à 1898 sur l'hexagone, soit ×1,23. C'est
-     * l'écart qui reste une fois la correction bornée, et il n'est pas nul par
-     * construction — au-delà du premier ordre, la forme continue de courber ce qu'on
-     * peint dessus, et c'est même ce qui distingue un œil posé sur un cube d'un
-     * autocollant. On garde donc une borne au-dessus du mesuré, mais assez basse pour
-     * rattraper le tiers que valait cet écart sans correction du tout.
+     * ⚠️ **C'est une égalité, à un pour cent près, et ce pour cent est de la dichotomie.**
+     * Mesuré : 1676 unités² sur six formes, 1683 sur l'hexagone, 1689 sur la goutte. Le
+     * seuil valait 1,3 quand la correction était approchée — de 1541 sur la capsule à 1898
+     * sur l'hexagone — et un tiers quand il n'y avait aucune correction du tout.
      */
-    expect(max / min).toBeLessThan(1.3);
+    expect(max / min).toBeLessThan(1.02);
   });
 
   it("écarte les deux yeux de la même fraction de la tête", () => {
@@ -263,10 +274,10 @@ describe("l'œil garde sa taille d'une forme à l'autre", () => {
         return p.reduce((a, q) => a + q.x, 0) / p.length;
       };
       const part = (centre(1) - centre(-1)) / largeur;
-      // Mesuré : de 20,5 % sur la capsule à 22,2 % sur l'hexagone, contre 21,1 sur la
-      // sphère. Avant `longitudeCorrigee`, de 13,1 à 29,7.
-      expect(part).toBeGreaterThan(0.19);
-      expect(part).toBeLessThan(0.24);
+      // Mesuré : 21,1 % sur les huit formes. Avant correction, de 13,1 à 29,7 — et de
+      // 20,5 à 22,2 du temps où la longitude se cherchait par dichotomie.
+      expect(part).toBeGreaterThan(0.205);
+      expect(part).toBeLessThan(0.215);
     }
   });
 });
