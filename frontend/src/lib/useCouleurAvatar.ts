@@ -26,15 +26,17 @@ export const cleForme = (id: string | number) => `novac-avatar-forme:${id}`;
 /**
  * Les silhouettes proposées.
  *
- * ⚠️ **Aucune ne propose de variante « volume qui tourne », et c'est réglé par la
- * géométrie plutôt que par un choix laissé à l'utilisateur.** Les formes creusées —
- * étoiles, coussin — laissent au moins un grand cercle intact ; or un grand cercle se
- * projette toujours en une ellipse de demi-grand axe R, si bien que leur contour atteint
- * toujours R sans jamais le dépasser. Elles tournent donc **déjà** en vrai volume,
- * surface rigide et perspective honnête, sans jamais changer de taille : mesuré, 0,0 %
- * de variation du cercle circonscrit. Le cube est le seul à pousser vers l'extérieur —
- * jusqu'à 1,37 dans la direction d'une arête —, donc le seul dont le volume tournant
- * ferait respirer la marque de 12,5 % : il garde sa silhouette figée.
+ * ⚠️ **Aucune ne fait tourner son volume : toutes gardent une silhouette figée.** C'est
+ * le parti du logo, celui du rond et du carré depuis le début — quoi que fasse la tête,
+ * la marque garde exactement le même contour, et tout le mouvement se lit sur ce qui est
+ * peint dessus. Le prix est connu et mesuré : la surface se tord en tournant, ce que
+ * la compensation à l'ancre de l'œil absorbe pour l'essentiel. Le rapport des deux yeux
+ * suit alors de très près celui de la sphère — 1,00 · 0,89 · 0,78 · 0,68 sur l'étoile
+ * contre 1,00 · 0,91 · 0,82 · 0,72 —, sans la bosse que seul le cube y montre.
+ *
+ * Le banc d'essai propose l'autre parti, où le solide tourne pour de bon : la surface y
+ * devient rigide, mais la silhouette respire. Il n'y a pas de troisième voie — la sphère
+ * est la seule forme où les deux tiennent en place à la fois.
  */
 export const FORMES_AVATAR = ["sphere", "carre", "etoile", "etoile6", "coussin"] as const;
 export type FormeAvatar = (typeof FORMES_AVATAR)[number];

@@ -5,7 +5,6 @@ import {
   RAYON_TETE, type Orientation, cheminOeil, cheminSvg, contourSilhouette,
 } from "@/lib/avatarSpherique";
 import { type FamilleSolide, solideDepuis } from "@/lib/avatarVolume";
-import { cheminOeilSolide, contourTeteSolide } from "@/lib/avatarSolide";
 import { type EtatVie, VIE_AU_REPOS, creerVie } from "@/lib/avatarVie";
 import { COULEUR_PAR_DEFAUT, couleurDesYeux } from "@/lib/avatarCouleur";
 import type { FormeAvatar } from "@/lib/useCouleurAvatar";
@@ -171,14 +170,6 @@ export default function AvatarNovac({
    * composant ne choisit qu'entre deux fonctions — l'image étirée après la rotation, ou
    * le solide qui tourne.
    */
-  /**
-   * ⚠️ **Tout tourne en vrai volume, sauf le carré à silhouette figée.** Les formes
-   * creusées gardent leur cercle circonscrit sous toutes les rotations — mesuré, 0,0 %
-   * de variation —, donc le rendu volumique ne leur coûte rien : la surface reste rigide
-   * et l'encombrement ne bouge pas. La sphère, elle, prend le chemin le plus court :
-   * les deux modes y donnent rigoureusement la même image.
-   */
-  const vraie3D = forme !== "sphere" && forme !== "carre";
   const solide = useMemo(
     () => solideDepuis(FAMILLE[forme], forme === "sphere" ? 1 : ARRONDI_FORME), [forme]);
 
@@ -310,17 +301,16 @@ export default function AvatarNovac({
   /**
    * Le contour de la tête.
    *
-   * ⚠️ En vraie 3D il dépend de l'orientation — c'est justement ce qui change : le
-   * solide tourne, donc sa silhouette aussi. Dans les deux autres modes elle est
-   * immuable, et se calcule une fois par forme.
+   * ⚠️ **Le volume ne tourne pas : c'est son image qu'on étire, après la rotation.** La
+   * silhouette est donc immuable — elle ne dépend que de la forme, et se calcule une fois
+   * pour toutes. C'est le parti du logo : quoi que fasse la tête, la marque garde
+   * exactement le même contour, et tout le mouvement se lit sur ce qui est peint dessus.
+   * Le banc d'essai propose l'autre parti, où le solide tourne pour de bon.
    */
   const contourTete = useMemo(
-    () => (vraie3D
-      ? contourTeteSolide(orientation, solide, RAYON_TETE, 120)
-      : cheminSvg(contourSilhouette(solide, RAYON_TETE, 180))),
-    [vraie3D, orientation, solide]);
+    () => cheminSvg(contourSilhouette(solide, RAYON_TETE, 180)), [solide]);
 
-  const oeil = useCallback((fermeture: number, cote: -1 | 1) => (vraie3D ? cheminOeilSolide : cheminOeil)({
+  const oeil = useCallback((fermeture: number, cote: -1 | 1) => cheminOeil({
     ecart: ECART * vie.ecart,
     elevation: 0,
     largeur: LARGEUR * vie.largeur,
@@ -331,7 +321,7 @@ export default function AvatarNovac({
     })(),
     inclinaison: rad(vie.inclinaison),
     courbure: vie.courbure,
-  }, orientation, cote, RAYON_TETE, ECHANTILLONS, solide), [vie, orientation, solide, vraie3D]);
+  }, orientation, cote, RAYON_TETE, ECHANTILLONS, solide), [vie, orientation, solide]);
 
   return (
     <svg
