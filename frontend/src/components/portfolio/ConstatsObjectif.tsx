@@ -63,7 +63,7 @@ import { FONT, NUM } from "@/lib/typography";
  */
 
 /** La hauteur des yeux dans le panneau, en pixels. */
-const HAUTEUR_YEUX = 20;
+const HAUTEUR_YEUX = 26;
 
 /**
  * La couleur d'une priorité.
@@ -305,9 +305,17 @@ export default function ConstatsObjectif({
           color: encre(fond, 1), letterSpacing: "-0.01em" }}>
           Aide à la décision
         </span>
+        {/**
+          * ⚠️ **Le nom de l'objectif dans une pastille, et non en gris à côté du titre.**
+          * Posé nu, il se lit comme la suite de la phrase — « Aide à la décision Liberté ».
+          * Le fond le détache comme ce qu'il est : une étiquette, le sujet dont la carte
+          * parle. Il se teinte de l'encre à un dixième, donc il suit la couleur de la carte
+          * sans jamais avoir à être choisi.
+          */}
         {objectif && (
           <span style={{ fontFamily: FONT, fontSize: 10.5, minWidth: 0,
-            color: encre(fond, 0.72), overflow: "hidden",
+            color: encre(fond, 0.8), background: encre(fond, 0.12),
+            padding: "3px 9px", borderRadius: 999, overflow: "hidden",
             textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
             {objectif.nom}
           </span>
@@ -368,8 +376,16 @@ export default function ConstatsObjectif({
           </svg>
           <div style={{ flex: 1, minWidth: 0, display: "flex",
             flexDirection: "column", gap: 5 }}>
-            <span style={{ fontFamily: FONT, fontSize: 15, fontWeight: 650,
-              lineHeight: 1.35, color: teintePriorite(aide.priorite) }}>
+            {/**
+              * ⚠️ **Le titre passe à l'encre, et la priorité descend sur le chiffre.** Il
+              * portait la couleur d'urgence ; sur la référence il est simplement écrit en
+              * grand et en foncé, et c'est plus juste — une phrase entière en rouge se lit
+              * comme une alarme quand elle ne fait souvent que constater. La priorité n'est
+              * pas perdue pour autant : elle passe sur la métrique, l'élément le plus
+              * regardé de la carte, où une couleur se lit sans crier.
+              */}
+            <span style={{ fontFamily: FONT, fontSize: 16, fontWeight: 700,
+              lineHeight: 1.3, color: encre(fond, 1), letterSpacing: "-0.01em" }}>
               {aide.titre}
             </span>
             <span style={{ fontFamily: FONT, fontSize: 12.5, lineHeight: 1.55,
@@ -416,7 +432,7 @@ export default function ConstatsObjectif({
                 justifyContent: "center", flex: "0 1 auto", maxWidth: 200, minWidth: 76,
                 padding: "8px 10px", boxSizing: "border-box", alignSelf: "center" }}>
               <span style={{ ...NUM, fontSize: 30, fontWeight: 700, lineHeight: 1.08,
-                color: encre(fond, 1), textAlign: "center",
+                color: teintePriorite(aide.priorite), textAlign: "center",
                 letterSpacing: "-0.02em" }}>
                 {fort}
                 {/* ⚠️ **Les mois en retrait, dans le même flux et non sur une ligne à part.**
@@ -451,13 +467,28 @@ export default function ConstatsObjectif({
           des données et non une probabilité de réalisation, et un « 0,54 » se lirait comme la
           seconde. Le détail des motifs est au survol, pour ne pas alourdir la carte. */}
       {aide != null && (
-        <span title={aide.motifs.join(" · ")}
-          style={{ marginTop: "auto", fontFamily: FONT, fontSize: 9.5, lineHeight: 1.45,
-            color: encre(fond, 0.74), overflow: "hidden", textOverflow: "ellipsis",
-            whiteSpace: "nowrap" }}>
-          {confianceEnClair(aide.confiance)}
-          {aide.hypotheses.length > 0 && ` · ${aide.hypotheses.join(" · ")}`}
-        </span>
+        <div title={aide.motifs.join(" · ")}
+          style={{ marginTop: "auto", paddingTop: 10, display: "flex", alignItems: "center",
+            gap: 7, minWidth: 0, borderTop: `1px solid ${encre(fond, 0.14)}` }}>
+          {/* Un bouclier : ce qui suit dit la solidité du calcul, pas son résultat. */}
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" aria-hidden="true"
+            stroke={encre(fond, 0.85)} strokeWidth={1.8} strokeLinecap="round"
+            strokeLinejoin="round" style={{ display: "block", flexShrink: 0 }}>
+            <path d="M12 3 5 6v5.5c0 4.2 2.9 7.6 7 8.5 4.1-.9 7-4.3 7-8.5V6z" />
+            <path d="m9 12 2 2 4-4" />
+          </svg>
+          <span style={{ fontFamily: FONT, fontSize: 9.5, fontWeight: 700, flexShrink: 0,
+            color: encre(fond, 0.88) }}>
+            {confianceEnClair(aide.confiance)}
+          </span>
+          {aide.hypotheses.length > 0 && (
+            <span style={{ fontFamily: FONT, fontSize: 9.5, lineHeight: 1.45, minWidth: 0,
+              color: encre(fond, 0.7), overflow: "hidden", textOverflow: "ellipsis",
+              whiteSpace: "nowrap" }}>
+              · {aide.hypotheses.join(" · ")}
+            </span>
+          )}
+        </div>
       )}
 
     </Cadre>
