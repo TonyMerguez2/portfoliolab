@@ -1,10 +1,10 @@
 import { describe, expect, it } from "vitest";
 
 import {
-  COULEURS_AVATAR, COULEUR_PAR_DEFAUT, contrasteDuRegard, couleurDesYeux,
-  estCouleurValide,
+  COULEURS_AVATAR, COULEUR_PAR_DEFAUT, contrasteDuRegard, couleurDesYeux, encre,
+  encrePleine, estCouleurValide, lisible,
 } from "./avatarCouleur";
-import { rvbVersTsl, hexVersRvb } from "./couleur";
+import { contraste, rvbVersTsl, hexVersRvb } from "./couleur";
 
 /**
  * Le regard reste-t-il visible, quelle que soit la couleur choisie ?
@@ -107,3 +107,67 @@ function hexDepuisTsl(h: number, s: number, l: number): string {
   };
   return `#${f(0)}${f(8)}${f(4)}`;
 }
+
+describe("l'encre d'une carte teintée du portefeuille", () => {
+  /**
+   * ⚠️ **Une carte au fond libre est une promesse de contraste, et elle doit être tenue.**
+   * L'aide à la décision porte désormais **exactement** la couleur de l'avatar : ce n'est
+   * plus un fond réglé une fois par le thème mais onze fonds possibles, plus tout choix
+   * libre au champ de couleur. Chaque niveau de texte doit donc rester lisible sur
+   * n'importe lequel — c'est le genre de garantie qu'on croit acquise et qui se perd en
+   * silence au premier ajout de couleur à la palette.
+   */
+  const NIVEAUX = [1, 0.88, 0.78, 0.74, 0.72];
+
+  it("garde tous les niveaux de texte au-dessus de trois pour un", () => {
+    /**
+     * Mesuré sur les onze couleurs proposées : de 3,33 sur l'ardoise — un gris moyen, le
+     * fond le plus ingrat, puisque ni le noir ni le blanc n'y portent loin — à 15,8 sur
+     * l'encre. Trois pour un est le seuil des grands caractères ; les mentions faibles
+     * du panneau sont à 10,5 pixels, donc on vise plus haut qu'il n'est exigé.
+     */
+    for (const c of COULEURS_AVATAR) {
+      for (const part of NIVEAUX) {
+        expect(contraste(c.hex, encre(c.hex, part))).toBeGreaterThanOrEqual(3);
+      }
+    }
+  });
+
+  it("choisit l'encre en comparant le noir et le blanc, sans seuil", () => {
+    /**
+     * ⚠️ **Un seuil de luminance posé à la main s'est trompé, et le test le garde.** À
+     * 0,34, le corail partait vers le blanc — 3,67 pour un — alors que le noir y donne
+     * 5,8 : sa luminance le classait « sombre » quand sa clarté perçue en fait un fond
+     * moyen. Avec deux candidats seulement, la comparaison directe est exacte ; aucun
+     * seuil ne peut faire mieux, et tout seuil peut se tromper.
+     */
+    for (const c of COULEURS_AVATAR) {
+      const choisie = encrePleine(c.hex);
+      const autre = choisie === "#000000" ? "#FFFFFF" : "#000000";
+      expect(contraste(c.hex, choisie)).toBeGreaterThanOrEqual(contraste(c.hex, autre));
+    }
+  });
+
+  it("rend une teinte de priorité lisible sans lui ôter sa teinte", () => {
+    /**
+     * ⚠️ **Sans cela, l'urgence cesse de se voir — mesuré, sur dix couleurs sur onze.** Le
+     * titre d'une aide se teinte selon sa priorité, avec des valeurs réglées pour le fond
+     * sombre des cartes : posées sur une carte crème ou ambre, elles tombent entre 1,1 et
+     * 2,5 pour un. Le titre le plus pressant devenait le moins lisible, exactement à
+     * l'envers de ce qu'il veut dire.
+     *
+     * On déplace donc la clarté et non la teinte : le rouge reste rouge, le vert reste
+     * vert. Retomber sur l'encre aurait été plus simple et aurait donné la même couleur
+     * aux quatre priorités — mesuré, la teinte est conservée dans les quarante-quatre cas.
+     */
+    const PRIORITES = ["#FF6467", "#FF8904", "#00D492", "#50A2FF"];
+    for (const c of COULEURS_AVATAR) {
+      for (const p of PRIORITES) {
+        const t = lisible(c.hex, p);
+        expect(contraste(c.hex, t)).toBeGreaterThanOrEqual(3);
+        // La teinte survit : on n'est jamais retombé sur le noir ou le blanc.
+        expect(t).not.toBe(encrePleine(c.hex));
+      }
+    }
+  });
+});

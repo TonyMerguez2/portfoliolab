@@ -7,11 +7,13 @@ import {
   aideALaDecision, confianceEnClair, couperMetrique,
   type Contexte, type Insight, type Priorite,
 } from "@/lib/aideDecision";
-import { COULEUR_PAR_DEFAUT } from "@/lib/avatarCouleur";
+import {
+  COULEUR_PAR_DEFAUT, couleurDesYeux, encre, lisible,
+} from "@/lib/avatarCouleur";
 import { ARRONDI_REFERENCE, OEIL_REFERENCE, TAILLE_REFERENCE } from "@/lib/avatarReglages";
 import { RAYON_TETE, cheminOeil } from "@/lib/avatarSpherique";
 import { solideDepuis } from "@/lib/avatarVolume";
-import { hexVersRvb } from "@/lib/couleur";
+
 import { type Objectif } from "@/lib/objectifs";
 import { type FormeAvatar } from "@/lib/useCouleurAvatar";
 import { JETONS } from "@/lib/palette";
@@ -43,37 +45,24 @@ import { FONT, NUM } from "@/lib/typography";
  * défilement automatique : un texte qui bouge tout seul se lit deux fois moins bien.
  */
 
-
 /**
- * Le voile qui teinte la carte de la couleur de l'avatar.
+ * La carte porte **exactement** la couleur de l'avatar, et son encre s'en déduit.
  *
- * ⚠️ **Un voile, et non la couleur pleine.** Le panneau est une carte parmi ses voisines
- * — même cadre, même rayon, même liseré — et il doit le rester : la teinte le rattache au
- * portefeuille sans le sortir du jeu. Posée pleine, elle en ferait un encart étranger et
- * rouvrirait la question du contraste du texte, réglée une fois pour toutes par les
- * jetons du thème.
+ * ⚠️ **Un voile ne suffisait pas.** La teinte à un dixième était invisible : sur la
+ * capture, la carte restait bleu nuit comme ses voisines et rien ne la rattachait au
+ * portefeuille. Elle prend donc la couleur pleine — c'est la même tête, en grand.
  *
- * ⚠️ **Le ciel étoilé a disparu avec elle.** Il tenait un fond presque noir, donc du texte
- * blanc et une palette à part : dès que la carte redevient claire, chacun de ces choix
- * doit être défait, sans quoi il reste du texte blanc sur fond blanc. C'est la partie du
- * changement qui ne se voit pas dans la maquette et qu'il faut faire en entier.
+ * ⚠️ **Et cela oblige à recalculer toutes les couleurs de texte.** Un fond quelconque
+ * n'est ni clair ni sombre : les jetons du thème, réglés pour le fond des cartes, y
+ * deviennent illisibles dès que l'utilisateur choisit une couleur claire — du gris pâle
+ * sur de la crème. L'encre se déduit donc du fond par la **même règle que les yeux de
+ * l'avatar**, qui garantit trois pour un et bascule du sombre au clair quand la tête est
+ * trop foncée. La carte et le visage partagent alors leur contraste : ce qui est lisible
+ * sur l'un l'est sur l'autre, par construction.
  */
-const VOILE_AVATAR = 0.1;
 
-/**
- * La hauteur des yeux dans le panneau, en pixels.
- *
- * ⚠️ Comparée à l'image sur trois valeurs. À dix, ils passent inaperçus ; à vingt-huit,
- * ils dépassent la ligne de titre de l'aide et prennent le pas sur elle. À vingt, ils se
- * lisent et s'alignent sur la première ligne du texte.
- */
+/** La hauteur des yeux dans le panneau, en pixels. */
 const HAUTEUR_YEUX = 20;
-
-/** La couleur du portefeuille, diluée en voile. */
-const teinter = (hex: string, part: number) => {
-  const [r, v, b] = hexVersRvb(hex);
-  return `rgba(${r}, ${v}, ${b}, ${part})`;
-};
 
 /**
  * La couleur d'une priorité.
@@ -81,7 +70,7 @@ const teinter = (hex: string, part: number) => {
  * ⚠️ Discrète, et appliquée au seul titre. La priorité se lit d'abord dans les mots : un
  * panneau qui crie en rouge à chaque visite finit par n'être plus lu du tout.
  */
-const TEINTE: Record<Priorite, string> = {
+const TEINTE_PRIORITE: Record<Priorite, string> = {
   critique: JETONS.negatif,
   warning: JETONS.attention,
   positive: JETONS.positif,
@@ -95,8 +84,10 @@ const TEINTE: Record<Priorite, string> = {
  * d'écran, et la tabulation les atteint. Une pagination qu'on ne peut pas atteindre au clavier
  * cache purement et simplement les aides suivantes.
  */
-function Points({ nombre, courant, onChoisir }: {
+function Points({ nombre, courant, onChoisir, fond }: {
   nombre: number; courant: number; onChoisir: (i: number) => void;
+  /** Le fond de la carte : les points s'y encrent comme le reste du texte. */
+  fond: string;
 }) {
   return (
     <div role="tablist" aria-label="Aides disponibles"
@@ -114,7 +105,7 @@ function Points({ nombre, courant, onChoisir }: {
               // repère alors du coin de l'œil, sans comparer des luminosités.
               width: actif ? 16 : 6, height: 6, borderRadius: 999,
               border: "none", padding: 0, cursor: "pointer",
-              background: actif ? JETONS.texteFort : JETONS.bordFort,
+              background: actif ? encre(fond, 0.95) : encre(fond, 0.3),
               transition: "width 220ms, background 220ms",
             }} />
         );
@@ -170,8 +161,15 @@ export default function ConstatsObjectif({
   };
   const aides: Insight[] = aideALaDecision(objectif, contexte);
 
-  /** Le voile de la carte : la couleur du portefeuille, très diluée. */
-  const voile = teinter(couleurAvatar ?? COULEUR_PAR_DEFAUT, VOILE_AVATAR);
+  /**
+   * Le fond de la carte et son encre.
+   *
+   * ⚠️ **Les couleurs de priorité sont vérifiées contre le fond réel, pas supposées.**
+   * Voir `lisible` : elles sont réglées pour le fond sombre des cartes et tombent sous la
+   * barre sur dix des onze couleurs proposées.
+   */
+  const fond = couleurAvatar ?? COULEUR_PAR_DEFAUT;
+  const teintePriorite = (p: Priorite) => lisible(fond, TEINTE_PRIORITE[p]);
 
   /**
    * Les deux yeux, seuls — sans tête.
@@ -287,28 +285,28 @@ export default function ConstatsObjectif({
        * dégradé plat sur `JETONS.carte`, elle teinte les deux modes sans qu'aucun ne soit
        * traité à part.
        */
-      background: `linear-gradient(${voile}, ${voile}), ${JETONS.carte}`,
+      background: fond,
     }}>
       <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
         <span style={{ fontFamily: FONT, fontSize: 15, fontWeight: 700, flexShrink: 0,
-          color: JETONS.texteIntense, letterSpacing: "-0.01em" }}>
+          color: encre(fond, 1), letterSpacing: "-0.01em" }}>
           Aide à la décision
         </span>
         {objectif && (
           <span style={{ fontFamily: FONT, fontSize: 10.5, minWidth: 0,
-            color: JETONS.texteFaible, overflow: "hidden",
+            color: encre(fond, 0.72), overflow: "hidden",
             textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
             {objectif.nom}
           </span>
         )}
         {aides.length > 1 && (
-          <Points nombre={aides.length} courant={index} onChoisir={setPage} />
+          <Points nombre={aides.length} courant={index} onChoisir={setPage} fond={fond} />
         )}
       </div>
 
       {aide == null ? (
         <p style={{ margin: 0, fontFamily: FONT, fontSize: 12.5, lineHeight: 1.55,
-          color: JETONS.texteSecondaire }}>
+          color: encre(fond, 0.78) }}>
           {objectif
             ? "Rien à interpréter sans échéance ni hypothèse de rendement : ce panneau ne "
               + "calcule que ce que vos paramètres permettent."
@@ -353,16 +351,16 @@ export default function ConstatsObjectif({
           <svg viewBox={yeux.boite} height={HAUTEUR_YEUX}
             width={(HAUTEUR_YEUX * yeux.rapport).toFixed(1)} aria-hidden="true"
             style={{ display: "block", flexShrink: 0, marginTop: 3 }}>
-            {yeux.traces.map((d, i) => <path key={i} d={d} fill={JETONS.texteFort} />)}
+            {yeux.traces.map((d, i) => <path key={i} d={d} fill={couleurDesYeux(fond)} />)}
           </svg>
           <div style={{ flex: 1, minWidth: 0, display: "flex",
             flexDirection: "column", gap: 5 }}>
             <span style={{ fontFamily: FONT, fontSize: 15, fontWeight: 650,
-              lineHeight: 1.35, color: TEINTE[aide.priorite] }}>
+              lineHeight: 1.35, color: teintePriorite(aide.priorite) }}>
               {aide.titre}
             </span>
             <span style={{ fontFamily: FONT, fontSize: 12.5, lineHeight: 1.55,
-              color: JETONS.texte }}>
+              color: encre(fond, 0.88) }}>
               {aide.description}
             </span>
           </div>
@@ -405,7 +403,7 @@ export default function ConstatsObjectif({
                 justifyContent: "center", flex: "0 1 auto", maxWidth: 200, minWidth: 76,
                 padding: "8px 10px", boxSizing: "border-box", alignSelf: "center" }}>
               <span style={{ ...NUM, fontSize: 30, fontWeight: 700, lineHeight: 1.08,
-                color: JETONS.texteIntense, textAlign: "center",
+                color: encre(fond, 1), textAlign: "center",
                 letterSpacing: "-0.02em" }}>
                 {fort}
                 {/* ⚠️ **Les mois en retrait, dans le même flux et non sur une ligne à part.**
@@ -419,13 +417,13 @@ export default function ConstatsObjectif({
                     entier et la coupure remonte là où elle a un sens. */}
                 {discret && (
                   <span style={{ fontSize: 18, fontWeight: 650, whiteSpace: "nowrap",
-                    color: JETONS.texteSecondaire, letterSpacing: "-0.01em" }}>
+                    color: encre(fond, 0.78), letterSpacing: "-0.01em" }}>
                     {" "}{discret}
                   </span>
                 )}
               </span>
               <span style={{ fontFamily: FONT, fontSize: 10, lineHeight: 1.3, marginTop: 3,
-                color: JETONS.texteFaible, textAlign: "center" }}>
+                color: encre(fond, 0.74), textAlign: "center" }}>
                 {aide.metrique.libelle}
               </span>
             </div>
@@ -442,7 +440,7 @@ export default function ConstatsObjectif({
       {aide != null && (
         <span title={aide.motifs.join(" · ")}
           style={{ marginTop: "auto", fontFamily: FONT, fontSize: 9.5, lineHeight: 1.45,
-            color: JETONS.texteFaible, overflow: "hidden", textOverflow: "ellipsis",
+            color: encre(fond, 0.74), overflow: "hidden", textOverflow: "ellipsis",
             whiteSpace: "nowrap" }}>
           {confianceEnClair(aide.confiance)}
           {aide.hypotheses.length > 0 && ` · ${aide.hypotheses.join(" · ")}`}

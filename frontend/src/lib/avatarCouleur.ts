@@ -1,4 +1,6 @@
-import { contraste, hexVersRvb, rvbVersHex, rvbVersTsl, tslVersRvb } from "./couleur";
+import {
+  contraste, decalerClarte, hexVersRvb, luminance, rvbVersHex, rvbVersTsl, tslVersRvb,
+} from "./couleur";
 
 /**
  * La couleur des yeux, déduite de celle de la tête.
@@ -35,6 +37,70 @@ export function couleurDesYeux(fond: string): string {
    */
   if (contraste(fond, creux) >= 3) return creux;
   return teinté(0.93, 0.16);
+}
+
+/**
+ * L'encre la plus forte que le fond permette — noir ou blanc.
+ *
+ * ⚠️ **Ce n'est pas la couleur des yeux, et la différence est mesurée.** Le regard n'a
+ * besoin que de trois pour un : ce sont deux grandes formes pleines, et `couleurDesYeux`
+ * cherche d'abord un creux de la teinte pour rester dans la famille du visage. Du texte
+ * en a besoin de bien plus, parce qu'il sera **dilué** — les mentions secondaires et
+ * faibles se rapprochent du fond, et chaque dilution mange du contraste. Mesuré avec
+ * l'encre du regard : sur l'ardoise, un gris moyen où elle plafonne à 3,7, les niveaux
+ * faibles tombaient à 2,71. Le noir ou le blanc donne la réserve nécessaire ; le fond,
+ * lui, garde ses yeux.
+ */
+export function encrePleine(fond: string): string {
+  /**
+   * ⚠️ **On compare les deux, on ne devine pas d'après la luminance.** Un seuil posé à la
+   * main envoyait le corail vers le blanc — 3,67 pour 1 — alors que le noir y donne 5,8 :
+   * sa luminance le classait « sombre » quand sa clarté perçue en fait un fond moyen.
+   * Avec deux candidats seulement, la comparaison directe est exacte et tient en une
+   * ligne ; aucun seuil ne peut faire mieux, et tout seuil peut se tromper.
+   */
+  return contraste(fond, "#000000") >= contraste(fond, "#FFFFFF") ? "#000000" : "#FFFFFF";
+}
+
+/**
+ * Une encre plus ou moins appuyée, obtenue en la ramenant vers le fond.
+ *
+ * ⚠️ **Vers le fond, et non vers le gris.** Une opacité sur du noir ou du blanc
+ * déteindrait : sur une carte crème, du texte atténué virerait au gris sale au lieu de
+ * s'estomper dans sa propre couleur. Mélangée au fond, chaque nuance reste de la famille.
+ */
+/**
+ * La teinte d'une priorité, ramenée jusqu'à devenir lisible sur le fond.
+ *
+ * ⚠️ **Sans cela, l'urgence cesse de se voir — mesuré, sur dix couleurs sur onze.** Le
+ * titre d'une aide se teinte selon sa priorité : rouge, orange, vert. Ces valeurs sont
+ * réglées pour le fond sombre des cartes ; posées sur une carte crème ou ambre, elles
+ * tombent entre 1,1 et 2,5 pour 1. Le titre le plus pressant devenait le moins lisible,
+ * exactement à l'envers de ce qu'il veut dire.
+ *
+ * ⚠️ **On déplace la clarté, pas la teinte.** Retomber sur l'encre serait le plus simple
+ * et perdrait l'information : les quatre priorités auraient la même couleur. En
+ * assombrissant ou en éclaircissant par pas — dans le sens que le fond commande, celui-là
+ * même que suivent les yeux de l'avatar — le rouge reste rouge et le vert reste vert,
+ * jusqu'à ce qu'ils passent la barre des trois pour un.
+ */
+export function lisible(fond: string, teinte: string): string {
+  if (contraste(fond, teinte) >= 3) return teinte;
+  const versLeClair = luminance(encrePleine(fond)) > luminance(fond);
+  let essai = teinte;
+  for (let i = 0; i < 20; i++) {
+    essai = decalerClarte(essai, versLeClair ? 0.05 : -0.05);
+    if (contraste(fond, essai) >= 3) return essai;
+  }
+  // Aucune clarté ne convient — teinte trop proche du fond. L'encre reste lisible.
+  return couleurDesYeux(fond);
+}
+
+export function encre(fond: string, part: number): string {
+  const [rf, vf, bf] = hexVersRvb(fond);
+  const [re, ve, be] = hexVersRvb(encrePleine(fond));
+  const m = (a: number, b: number) => Math.round(a + (b - a) * part);
+  return rvbVersHex([m(rf, re), m(vf, ve), m(bf, be)]);
 }
 
 /**
