@@ -102,6 +102,26 @@ export const OMBRES_CREUX =
   "inset 0 2px 5px rgba(0,0,0,0.20), inset 0 -1px 0 rgba(255,255,255,0.10)";
 
 /**
+ * La teinte d'un reflet sur une carte : sa couleur, montée vers la lumière.
+ *
+ * ⚠️ **Un reflet blanc trahit le placage.** Du verre teinté ne renvoie pas de la lumière
+ * blanche : il la colore au passage. Comparé à l'image sur quatre couleurs de carte, un
+ * reflet blanc lave la teinte — sur le corail il vire au gris, sur le citron il délave —
+ * alors qu'un reflet monté de trente-cinq pour cent vers le blanc reste franchement de la
+ * couleur de la carte tout en se lisant comme une lumière. Au-delà, vers soixante, il
+ * redevient blanc et l'on perd ce qu'on cherchait.
+ *
+ * ⚠️ **Rendue en triplet séparé d'espaces, pas en hexadécimal.** Le dégradé décline la
+ * même teinte à quatre opacités ; la syntaxe `rgb(var(--t) / α)` permet de n'écrire la
+ * couleur qu'une fois, là où un hexadécimal obligerait à en fabriquer quatre.
+ */
+export function refletCarte(fond: string, part: number = 0.35): string {
+  const [r, v, b] = hexVersRvb(fond);
+  const m = (x: number) => Math.round(x + (255 - x) * part);
+  return `${m(r)} ${m(v)} ${m(b)}`;
+}
+
+/**
  * Le liseré intérieur d'une carte teintée.
  *
  * ⚠️ **Le cadre extérieur n'a pas de fonction ici : il *est* la carte.** C'est la règle des

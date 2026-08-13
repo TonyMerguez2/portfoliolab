@@ -9,6 +9,7 @@ import {
 } from "@/lib/aideDecision";
 import {
   COULEUR_PAR_DEFAUT, OMBRES_CREUX, bordCarte, couleurDesYeux, encre, fondCreux,
+  refletCarte,
 } from "@/lib/avatarCouleur";
 import { hexVersRvb } from "@/lib/couleur";
 import { ARRONDI_REFERENCE, OEIL_REFERENCE, TAILLE_REFERENCE } from "@/lib/avatarReglages";
@@ -170,7 +171,10 @@ export default function ConstatsObjectif({
    */
   const anneaux = useMemo(() => {
     const [r, v, b] = hexVersRvb(fond);
-    return { cadre: fond, voile: `rgba(${r}, ${v}, ${b}, 0.5)`, bord: bordCarte(fond) };
+    return {
+      cadre: fond, voile: `rgba(${r}, ${v}, ${b}, 0.5)`,
+      bord: bordCarte(fond), reflet: refletCarte(fond),
+    };
   }, [fond]);
 
   /**

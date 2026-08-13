@@ -84,13 +84,33 @@ export default function Cadre({
    * autour d'un fond qui n'en est plus — c'est-à-dire un anneau étranger, exactement ce
    * que ce composant existe pour éviter.
    */
-  teinte?: { cadre: string; voile: string; bord: string };
+  teinte?: {
+    cadre: string;
+    voile: string;
+    bord: string;
+    /**
+     * La teinte du reflet, en triplet `R V B` séparé d'espaces.
+     *
+     * ⚠️ **Posée en variable sur la couche extérieure, parce que l'effet vit dans un
+     * pseudo-élément.** Un `::after` n'est atteignable par aucun style en ligne ; seule
+     * une propriété personnalisée, qui hérite, peut lui porter une valeur calculée au
+     * rendu. La feuille de style en déclare un repli blanc, si bien qu'un cadre sans
+     * teinte garde l'ancien reflet au lieu de perdre son dégradé entier.
+     */
+    reflet?: string;
+  };
 }) {
   const { cadre, carte } = repartir(style);
   return (
     <div className={classeCadre} style={{
       ...styleCadreExterieur(),
-      ...(teinte ? { background: teinte.voile, border: `1px solid ${teinte.cadre}` } : {}),
+      ...(teinte
+        ? {
+          background: teinte.voile,
+          border: `1px solid ${teinte.cadre}`,
+          ...(teinte.reflet ? { "--novac-verre-teinte": teinte.reflet } : {}),
+        } as CSSProperties
+        : {}),
       ...cadre,
     }}>
       <div className={classeCarte} style={{

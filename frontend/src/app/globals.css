@@ -741,6 +741,14 @@ canvas + div {
 .novac-verre-defilant {
   position: relative;
   isolation: isolate;
+  /* ⚠️ **Le repli est blanc, et il est déclaré sur l'élément et non sur le
+     pseudo-élément.** Une propriété personnalisée redéclarée dans le `::after`
+     l'emporterait sur celle que le composant pose en ligne, et le reflet resterait
+     blanc quoi qu'on lui donne — c'est le piège inverse de `--novac-verre`, qui
+     doit l'être parce qu'il ne s'hérite pas. Ici on veut l'héritage : la valeur
+     vient du dehors, et celle-ci ne sert qu'à ce qu'un cadre sans teinte garde
+     l'ancien reflet au lieu de perdre son dégradé entier. */
+  --novac-verre-teinte: 255 255 255;
 }
 
 .novac-verre-defilant::after {
@@ -762,12 +770,12 @@ canvas + div {
      0,40 se remarque en passant sans jamais accrocher l'œil. Les épaules suivent le
      même rapport, sans quoi la montée deviendrait une arête. */
   background: conic-gradient(from var(--novac-verre) at 50% 50%,
-    rgba(255, 255, 255, 0) 0deg,
-    rgba(255, 255, 255, 0.11) 40deg,
-    rgba(255, 255, 255, 0.40) 90deg,
-    rgba(255, 255, 255, 0.11) 140deg,
-    rgba(255, 255, 255, 0) 180deg,
-    rgba(255, 255, 255, 0) 360deg);
+    rgb(var(--novac-verre-teinte) / 0) 0deg,
+    rgb(var(--novac-verre-teinte) / 0.11) 40deg,
+    rgb(var(--novac-verre-teinte) / 0.40) 90deg,
+    rgb(var(--novac-verre-teinte) / 0.11) 140deg,
+    rgb(var(--novac-verre-teinte) / 0) 180deg,
+    rgb(var(--novac-verre-teinte) / 0) 360deg);
   -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
   -webkit-mask-composite: xor;
   mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
