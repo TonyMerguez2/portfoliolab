@@ -218,6 +218,49 @@ export function estCouleurValide(v: unknown): v is string {
 }
 
 /**
+ * Le contraste que la parole doit atteindre face à son fond.
+ *
+ * ⚠️ **Trois pour un, et ce chiffre engage la typographie.** C'est le seuil des grands
+ * caractères — quatorze points en gras, soit 18,7 pixels. Il ne vaut donc que parce que la
+ * parole est posée en gras 800 à dix-neuf pixels au minimum, y compris dans son registre
+ * compact. Descendre la taille sans remonter ce seuil rendrait la règle fausse en silence.
+ *
+ * ⚠️ **Choisi pour ce qu'il **ne** corrige pas.** Mesuré sur les onze teintes : à trois,
+ * `tonFranc` n'en retouche **aucune** sur un fond sombre — les sept que la normalisation du
+ * thème laisse déjà intactes gardent donc la couleur exacte du personnage, là où il vit le
+ * plus souvent — et quatre seulement sont corrigées sur une carte blanche, les claires.
+ * À quatre et demi, l'indigo lui-même se serait décalé, et l'on aurait perdu la propriété qui
+ * fait tenir tout le dispositif : que le mot soit *sa* couleur.
+ */
+const CONTRASTE_PAROLE = 3;
+
+/**
+ * Le ton **franc** d'une parole : la couleur du personnage, corrigée juste assez pour se lire.
+ *
+ * ⚠️ **La correction du thème ne suffisait pas, et c'est une mesure qui l'a montré.**
+ * `pourFond` ramène une teinte dans une plage jugée lisible, mais ne vise aucun contraste :
+ * sur une carte blanche, le pire des onze avatars tombait à **1,87** — un mot qu'on devine.
+ * Ici l'on ne suppose plus, on mesure et l'on s'éloigne du fond jusqu'à atteindre le seuil.
+ *
+ * ⚠️ **Le sens de la correction se déduit du fond, pas du thème.** Un jeton de thème peut
+ * mentir — une carte « claire » très saturée, un fond sombre presque gris. Comparer le noir
+ * et le blanc face au fond répond exactement à la question posée : de quel côté y a-t-il de
+ * la place ?
+ */
+export function tonFranc(couleur: string, fond: string): string {
+  if (contraste(couleur, fond) >= CONTRASTE_PAROLE) return couleur;
+  const [teinte, saturation, clarte] = rvbVersTsl(hexVersRvb(couleur));
+  const sens = contraste("#000000", fond) > contraste("#FFFFFF", fond) ? -1 : 1;
+  let franc = couleur;
+  for (let i = 1; i <= 120; i++) {
+    const l = Math.max(0, Math.min(1, clarte + sens * i * 0.006));
+    franc = rvbVersHex(tslVersRvb([teinte, saturation, l]));
+    if (contraste(franc, fond) >= CONTRASTE_PAROLE || l === 0 || l === 1) break;
+  }
+  return franc;
+}
+
+/**
  * L'écart de clarté visé entre les deux tons d'une parole, en points de `L*`.
  *
  * ⚠️ **Onze points, parce que c'est ce que la plupart des couleurs peuvent donner.** Mesuré
@@ -262,6 +305,16 @@ export function tonRetenu(plein: string, fond: string): string {
   const [teinte, saturation, clarte] = rvbVersTsl(hexVersRvb(plein));
   const vise = clartePercue(plein) - ECART_PAROLE;
   let retenu = rvbVersHex(tslVersRvb([teinte, saturation * 0.5, clarte]));
+  /**
+   * ⚠️ **Le point de départ lui-même peut être sous le plancher, et il l'était.** Désaturer
+   * ne change pas que la vivacité : sur une carte blanche, cela **éclaircit** certaines
+   * teintes, et le ton retenu tombait à 2,96 — sous son propre plancher — sans que la boucle
+   * ne s'en aperçoive, puisqu'elle ne vérifiait que les candidats suivants. On renonce alors
+   * à retenir quoi que ce soit : les deux tons se confondent, et la hiérarchie ne tient plus
+   * qu'à la taille. C'est la même dégradation que pour une tête trop sombre, et c'est la
+   * bonne : une nuance illisible n'est pas une nuance.
+   */
+  if (contraste(retenu, fond) < PLANCHER_PAROLE) return plein;
   for (let i = 1; i <= 60; i++) {
     const essai = rvbVersHex(tslVersRvb([teinte, saturation * 0.5, Math.max(0, clarte - i * 0.006)]));
     if (contraste(essai, fond) < PLANCHER_PAROLE) break;

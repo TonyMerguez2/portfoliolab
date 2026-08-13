@@ -74,6 +74,56 @@ export const PLACE_MINIMALE = 88;
 export const BASE_PAROLE = 22;
 
 /**
+ * La taille de base d'une parole posée dans une interface dense, en pixels.
+ *
+ * ⚠️ **Le bandeau du portefeuille n'a pas l'échelle du banc.** Autour de l'avatar y vivent
+ * un nom en 13, un décompte en 10,5 et une valeur totale en 32. Une parole en 22/32 y
+ * pèserait autant que le montant du portefeuille — le personnage crierait. En 19/27,5, elle
+ * domine le nom sans lui disputer la vedette.
+ *
+ * ⚠️ **Dix-neuf et pas moins, et ce n'est pas une question de goût.** La couleur de la parole
+ * n'est garantie qu'à trois pour un, le seuil des **grands** caractères : quatorze points en
+ * gras, soit 18,7 pixels. En dessous, le seuil applicable serait 4,5 — et à 4,5, l'indigo
+ * lui-même devrait se décaler, donc le mot cesserait d'être exactement la couleur du
+ * personnage. La taille tient le contraste ; la baisser casserait la couleur.
+ */
+export const BASE_COMPACTE = 19;
+
+/**
+ * La largeur d'une parole compacte, en pixels.
+ *
+ * ⚠️ **Assez pour le plus large appui du registre, et pas un pixel de plus.** Estimé :
+ * « regarde » en 24,7 gras occupe 96 pixels, « fait ! » en 27,5 en occupe 92. Cent quatre les
+ * laisse tenir sur une ligne sans que le bandeau y perde de la place — chaque pixel pris ici
+ * est un pixel de moins pour la valeur totale et les gains, qui sont ce qu'on vient lire.
+ */
+export const PLACE_COMPACTE = 104;
+
+/**
+ * Les états qui parlent dans l'application — et seulement eux.
+ *
+ * ⚠️ **Au repos, le personnage se tait.** Sur le banc, tout parle : c'est une vitrine. Dans
+ * le bandeau, un « Bonjour » permanent à côté du nom du portefeuille serait un bandeau qui
+ * salue, pas un personnage qui parle. Le salut est donc muet ici, avec les deux états
+ * contents qui le portent.
+ *
+ * ⚠️ **Les états du curseur se taisent aussi, et c'est la vraie raison de cette liste.**
+ * `curieux` naît du défilement *et* du survol — quatre éléments le portent —, `reflexion`
+ * d'un survol, `sceptique` et `preoccupe` d'une valeur pointée. Tous changent au rythme de
+ * la souris : un texte branché dessus clignoterait à chaque mouvement. Restent ceux qui
+ * disent un événement plutôt qu'un passage — le sommeil, le calcul en cours, et les
+ * réactions ponctuelles qui s'effacent d'elles-mêmes.
+ */
+const MARQUANTS = new Set([
+  "somnolent", "reveil", "focus", "observation", "succes", "erreur", "surpris",
+]);
+
+/** Le personnage a-t-il quelque chose à dire, ailleurs que sur le banc ? */
+export function parleEnContexteDense(etat: string): boolean {
+  return MARQUANTS.has(etat);
+}
+
+/**
  * La largeur d'un caractère, rapportée à la taille de la police.
  *
  * ⚠️ **Une estimation, et elle n'a le droit que de *réduire*.** Mesurée dans le navigateur :
@@ -122,8 +172,8 @@ const PLANCHER_MORCEAU = 16;
  * morceau délibérément minuscule n'est pas un morceau en détresse. La fonction ne peut
  * qu'ôter de la taille, jamais en ajouter.
  */
-export function tailleMorceau(m: Morceau): number {
-  const voulu = BASE_PAROLE * m.echelle;
+export function tailleMorceau(m: Morceau, base: number = BASE_PAROLE): number {
+  const voulu = base * m.echelle;
   const tient = (LIGNES_MORCEAU * PLACE_PAROLE) / (m.texte.length * PART_CARACTERE);
   return Math.min(voulu, Math.max(PLANCHER_MORCEAU, tient));
 }

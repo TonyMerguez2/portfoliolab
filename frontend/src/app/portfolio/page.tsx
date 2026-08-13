@@ -33,13 +33,16 @@ import { FONT } from "@/lib/typography";
 import type { Period } from "@/lib/chart/portfolioCurve";
 import { JETONS, CLAIR, RAYON, couleurMontant, RAYONS, styleCadreExterieur, styleCarteInterieure } from "@/lib/palette";
 import { hexVersRvb, rvbVersHex, rvbVersTsl, tslVersRvb } from "@/lib/couleur";
-import { resoudreJeton } from "@/lib/theme";
+import { resoudreJeton, useTheme } from "@/lib/theme";
 import { useClignotement, styleClignotement } from "@/lib/clignotement";
 import { CADENCE_COURS_MS } from "@/lib/cadence";
 import { useCoursCrypto, symboleBinance } from "@/lib/coursCrypto";
 import Cadre from "@/components/ui/Cadre";
 import ChiffresRoulants from "@/components/ui/ChiffresRoulants";
 import AvatarPortefeuille from "@/components/portfolio/AvatarPortefeuille";
+import AvatarParole from "@/components/AvatarParole";
+import { BASE_COMPACTE, PLACE_COMPACTE, parleEnContexteDense } from "@/lib/avatarDialogue";
+import { useParoleStable } from "@/lib/useParoleStable";
 import { skinParCle } from "@/lib/avatarSkins";
 import {
   type FormeAvatar, useCouleurAvatar, useFormeAvatar, useSkinAvatar,
@@ -909,7 +912,23 @@ function PortfolioPageInner() {
    * graphique pendant que la valeur change sous lui. Et par un canal distinct de
    * `exprimer`, pour ne pas effacer la mimique d'une carte survolée en même temps.
    */
-  const { pointer } = useAvatar();
+  const { pointer, expression } = useAvatar();
+  /**
+   * ⚠️ **La parole attend que l'état se pose ; la mimique, non.** Le visage peut changer
+   * vite — c'est ce qui le fait vivre. Des mots au même rythme se lisent comme un défaut :
+   * mesuré ici, la relecture des cours met l'avatar au travail quatre cents millisecondes
+   * toutes les quinze secondes, et « zzZ » cédait la place à « Je regarde » puis la
+   * reprenait en boucle. Voir `useParoleStable`, qui laisse passer les ponctuels aussitôt et
+   * fait patienter les soutenus.
+   */
+  const expressionParlee = useParoleStable(expression.cle);
+  /**
+   * ⚠️ **Le thème est lu ici parce que la parole se corrige dans les deux sens.** La couleur
+   * du personnage doit s'éclaircir sur un fond sombre et s'assombrir sur un fond clair ; et
+   * son ton retenu se calibre en mesurant son contraste avec le fond *réel* de la carte, pas
+   * avec une supposition.
+   */
+  const theme = useTheme();
 
   useEffect(() => {
     if (!survolCourbe || survolCourbe.investi == null || survolCourbe.investi <= 0) {
@@ -1248,6 +1267,49 @@ function PortfolioPageInner() {
               <span style={{ fontSize: 10.5, color: CLAIR.texteAttenue }}>
                 {enriched.length} actif{enriched.length > 1 ? "s" : ""}
               </span>
+            </div>
+
+            {/**
+              * Ce que le personnage a à dire, quand il a quelque chose à dire.
+              *
+              * ⚠️ **Au repos, rien — et c'est ce qui la rend acceptable ici.** Sur le banc,
+              * toutes les expressions parlent : c'est une vitrine. Un « Bonjour » permanent
+              * posé contre le nom du portefeuille ferait un bandeau qui salue, pas un
+              * personnage qui parle. `parleEnContexteDense` écarte aussi les états du
+              * curseur — le défilement, le survol, la valeur pointée changent au rythme de la
+              * souris, et un texte branché dessus clignoterait à chaque mouvement. Restent le
+              * sommeil, le calcul en cours et les réactions ponctuelles.
+              *
+              * ⚠️ **Elle prend son rang dans la rangée au lieu de flotter par-dessus.** La
+              * géométrie de cette bande est mesurée au pixel — 19 en haut, 19 en bas, 19 à
+              * gauche, et c'est le bloc de la valeur totale qui en commande la hauteur. Une
+              * parole posée en absolu par-dessus aurait recouvert le nom ; posée dans le
+              * flux, elle consomme le mou qui reste à droite (mesuré : plus de quatre cents
+              * pixels) et ne pousse rien hors du cadre. Elle ne peut pas non plus grandir la
+              * bande : deux lignes de 16/23 font 40 pixels, contre 63 à la vignette.
+              *
+              * ⚠️ **Un registre compact, mais jamais en dessous de la taille de lecture.**
+              * L'avatar mesure ici 63 pixels contre 390 au banc ; suivre sa taille aurait
+              * donné trois pixels et demi. C'est la densité typographique du bandeau qui
+              * décide — un nom en 13, une valeur en 32 —, pas la taille du personnage.
+              */}
+            {/**
+              * ⚠️ **La place est réservée en permanence, même quand personne ne parle.**
+              * Mesuré : le bloc fait 33 pixels pour « zzZ » et 78 pour « Je regarde ». Rendu
+              * à la demande, il poussait « Valeur totale », « Gains » et toute la suite de
+              * quarante-cinq pixels **à chaque endormissement et à chaque chargement** —
+              * c'est-à-dire sans arrêt, et sous les yeux de quelqu'un en train de lire un
+              * montant. Une largeur fixe coûte quatre-vingt-seize pixels de mou, que la bande
+              * a largement (plus de quatre cents), et rend la rangée immobile.
+              */}
+            <div style={{ width: PLACE_COMPACTE, flexShrink: 0, marginLeft: 2 }}>
+              {parleEnContexteDense(expressionParlee) && (
+                <AvatarParole
+                  etat={expressionParlee} couleur={couleurAvatar}
+                  fond={theme.surfaceSolid} clair={!theme.isDark}
+                  base={BASE_COMPACTE} place={`${PLACE_COMPACTE}px`}
+                />
+              )}
             </div>
           </div>
         )}

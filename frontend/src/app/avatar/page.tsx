@@ -21,11 +21,8 @@ import { PRESETS, SKINS, type Palette, skinParCle } from "@/lib/avatarSkins";
 import { type EtatVie, VIE_AU_REPOS, creerVie } from "@/lib/avatarVie";
 import { useMorphose } from "@/lib/useMorphose";
 import { ETATS } from "@/lib/avatarEtats";
-import {
-  BASE_PAROLE, PLACE_MINIMALE, PLACE_PAROLE, parolePour, tailleMorceau, texteDe,
-} from "@/lib/avatarDialogue";
-import { pourFondSombre } from "@/lib/couleur";
-import { tonRetenu } from "@/lib/avatarCouleur";
+import { PLACE_MINIMALE, PLACE_PAROLE } from "@/lib/avatarDialogue";
+import AvatarParole from "@/components/AvatarParole";
 
 /**
  * Prototype 02 — un regard construit par le calcul, pas par le dessin.
@@ -923,7 +920,38 @@ export default function AvatarProceduralPage() {
           </svg>
 
           {dialogue && (
-            <Parole etat={parole} pseudo={pseudo} couleur={palette.tete}
+            <AvatarParole etat={parole} pseudo={pseudo} couleur={palette.tete}
+              fond={ENCRE} clair={false}
+              /**
+               * ⚠️ **Le banc pose lui-même la parole, le composant ne se place pas.** Ici
+               * elle flotte au flanc du dessin ; dans le bandeau elle prend son rang dans une
+               * rangée. Une position écrite dans le composant aurait obligé le second
+               * appelant à la défaire.
+               */
+              style={{
+                /**
+                 * ⚠️ **La parole commence après la silhouette, jamais dessus.** Elle est de
+                 * la couleur de la tête : la moindre lettre qui mord le volume y
+                 * **disparaît** — vu sur le « zzZ », dont le premier `z` s'était fondu dans
+                 * le disque. Tous les volumes tiennent dans le rayon 100 du repère, soit
+                 * 83,3 % de la largeur ; on part donc à 86 %, et c'est vrai des neuf formes.
+                 * Mesuré : à 84 %, le volume mordait encore de trois pixels d'encre — le
+                 * contour peint dépasse un peu le rayon nominal.
+                 *
+                 * ⚠️ **Elle déborde du cadre du dessin, et c'est voulu.** Le repère garde
+                 * 16,7 % de marge à droite de la tête pour les accessoires — la visière
+                 * d'une casquette —, et le panneau ajoute la sienne. Ces deux marges sont la
+                 * gouttière de la parole : s'arrêter au bord du dessin ne laissait que 82
+                 * pixels, ce qui obligeait à écrire petit.
+                 *
+                 * ⚠️ **Centrée sur la tête, elle passe sous la pastille.** Celle-ci se pose
+                 * au point le plus haut à droite du contour — le coin, sur un carré, donc
+                 * très haut et très à droite. Le coin supérieur lui est disputé ; le flanc ne
+                 * l'est jamais.
+                 */
+                position: "absolute", left: "86%", top: "50%",
+                transform: "translateY(-50%)", pointerEvents: "none",
+              }}
               /**
                * ⚠️ **Le banc a une colonne de réglages à ne pas mordre, d'où le pourcentage
                * — mais borné des deux côtés.** Écrit `min(132px, 22%)`, il devenait le
@@ -1541,163 +1569,6 @@ function Teinte({ libelle, valeur, onChange }: {
         </span>
       </span>
     </label>
-  );
-}
-
-/**
- * Le décalage entre deux entrées, en millisecondes.
- *
- * ⚠️ Réglé à vue, puis borné par le plus long : trois morceaux à 90 ms font 180 ms d'attente
- * pour le dernier, ce qui se perçoit comme un enchaînement. À 150 on entend les morceaux se
- * détacher, et la parole traîne ; à 40 tout arrive ensemble et le décalage ne sert plus.
- */
-const RETARD_MORCEAU = 90;
-
-/**
- * Les trois traits d'éclat de la maquette.
- *
- * ⚠️ **Dessinés en SVG et non écrits en caractères.** Un « ✨ » dépend de la police d'émojis
- * du système : il change de dessin d'une machine à l'autre, arrive en couleurs imposées et
- * ne peut donc pas prendre celle du personnage. Trois traits tracés obéissent, et se
- * teintent comme le reste.
- *
- * ⚠️ **Trois longueurs inégales, en éventail.** Trois traits identiques se lisent comme un
- * symbole ; inégaux, ils se lisent comme un éclat. Le plus long au milieu, comme sur la
- * maquette.
- */
-function Eclat({ couleur, retard, taille }: {
-  couleur: string; retard: number; taille: number;
-}) {
-  return (
-    <svg
-      className="av-eclat" viewBox="0 0 40 40" width={taille} height={taille}
-      aria-hidden style={{ position: "absolute", top: -6, right: 0, animationDelay: `${retard}ms` }}
-    >
-      <g stroke={couleur} strokeWidth={4.6} strokeLinecap="round" fill="none">
-        <path d="M8 26 L12 8" />
-        <path d="M21 24 L34 6" />
-        <path d="M26 36 L38 30" />
-      </g>
-    </svg>
-  );
-}
-
-/**
- * La parole du personnage : des morceaux typographiés, et rien autour.
- *
- * ⚠️ **Une bulle blanche à liseré, c'est de l'interface — pas une voix.** La première version
- * en portait une, avec sa pointe et son ombre : elle se lisait comme une infobulle du
- * logiciel posée à côté du dessin, alors qu'on veut ce que le personnage dit. Signalé à
- * l'usage. Le texte seul, en gras et **dans la couleur de la tête**, appartient au
- * personnage au lieu de le commenter — c'est la convention de la bande dessinée pour un
- * « zzZ », qui n'a jamais eu besoin d'un cadre pour se comprendre.
- *
- * ⚠️ **Deux tons de la même couleur, aucun blanc.** La maquette posait l'amorce en blanc ;
- * refusé à l'usage, et à raison — un blanc n'appartient à personne. `tonRetenu` garde la
- * teinte et retire de la présence, en mesurant qu'il reste lisible.
- *
- * ⚠️ **La clé porte le texte, ce qui rejoue toute la mise en scène.** Une animation CSS ne
- * repart pas parce qu'on repose la même classe ; remonter l'élément la relance. C'est ce qui
- * fait qu'un « zzZ » *arrive* au moment où la tête s'endort, au lieu d'être là depuis
- * toujours. Deux états qui disent la même chose — le focus et l'observation disent tous deux
- * « Je regarde » — ne la rejouent donc pas : rien n'a changé pour qui regarde.
- */
-function Parole({ etat, pseudo, couleur, place = `${PLACE_PAROLE}px` }: {
-  etat: string; pseudo: string; couleur: string;
-  /**
-   * La largeur dont l'appelant dispose, en CSS.
-   *
-   * ⚠️ **Elle borne l'enroulement, jamais le corps du texte.** C'est la seule chose que le
-   * contenant a le droit de décider : à 63 pixels d'avatar dans le bandeau, une largeur
-   * exprimée en pourcentage vaudrait quatorze pixels et la parole tomberait au plancher de
-   * lecture. Le banc passe sa propre borne parce qu'il a une colonne de réglages à ne pas
-   * mordre ; par défaut, c'est la place mesurée, en pixels absolus.
-   */
-  place?: string;
-}) {
-  const parole = parolePour(etat, pseudo);
-  const plein = pourFondSombre(couleur);
-  const sourd = tonRetenu(plein, ENCRE);
-  const envol = parole.genre === "envol";
-
-  return (
-    <div
-      key={texteDe(parole)}
-      style={{
-        /**
-         * ⚠️ **La parole commence après la silhouette, jamais dessus.** Elle est de la
-         * couleur de la tête : la moindre lettre qui mord le volume y **disparaît** — vu sur
-         * le « zzZ », dont le premier `z` s'était fondu dans le disque. Tous les volumes
-         * tiennent dans le rayon 100 du cadre, soit 83,3 % de la largeur ; on part donc à
-         * 86 %, et c'est vrai des neuf formes. Mesuré : à 84 %, le volume mordait encore de
-         * trois pixels d'encre — le contour peint dépasse un peu le rayon nominal.
-         *
-         * ⚠️ **Elle déborde du cadre du dessin, et c'est voulu.** Le repère garde 16,7 % de
-         * marge à droite de la tête pour les accessoires — la visière d'une casquette —, et
-         * le panneau ajoute la sienne. Ces deux marges sont la gouttière de la parole :
-         * s'arrêter au bord du dessin ne laissait que 82 pixels, ce qui obligeait à écrire
-         * petit. En prenant la gouttière on monte à 130, de quoi poser un appui à 29 pixels.
-         * La limite reste bornée par un pourcentage pour ne jamais toucher la colonne des
-         * réglages quand la fenêtre rétrécit.
-         *
-         * ⚠️ **Centrée sur la tête, elle passe sous la pastille.** Celle-ci se pose au point
-         * le plus haut à droite du contour — le coin, sur un carré, donc très haut et très à
-         * droite. Le coin supérieur lui est disputé ; le flanc ne l'est jamais.
-         */
-        position: "absolute", left: "86%", top: "50%", transform: "translateY(-50%)",
-        width: "max-content", maxWidth: place,
-        fontWeight: 800, lineHeight: 1.02, letterSpacing: "-0.015em",
-        /**
-         * ⚠️ Le pseudonyme est le seul morceau dont on ignore la longueur. Il se coupe
-         * plutôt qu'il ne s'échappe : une césure moche reste lisible, un mot qui sort du
-         * panneau ne l'est plus.
-         */
-        overflowWrap: "anywhere",
-        pointerEvents: "none",
-      }}
-    >
-      {parole.eclat && (
-        <Eclat couleur={plein} taille={BASE_PAROLE * 1.3}
-          retard={parole.morceaux.length * RETARD_MORCEAU + 90} />
-      )}
-      {parole.morceaux.map((m, i) => (
-        <span key={i}>
-          {m.saut && <br />}
-          <span
-            className={envol ? "av-envol" : undefined}
-            style={{
-              display: "inline-block",
-              // Le repos de l'envol : sa hauteur et son pivot, que le flottement reprend.
-              ["--av-monte" as string]: `${-(m.monte ?? 0) * BASE_PAROLE}px`,
-              ["--av-pivot" as string]: `${m.pivot ?? 0}deg`,
-              // Les flottements se déphasent, sinon les trois « z » se balancent en bloc.
-              animationDelay: `${i * RETARD_MORCEAU}ms`,
-              /**
-               * Une espace là où le texte brut en met une, et nulle part ailleurs.
-               *
-               * ⚠️ **Sauf l'envol, qui s'écarte sans que le texte change.** Trois « z »
-               * posés à la seule chasse des glyphes se touchent presque, et leur diagonale
-               * ne se lit plus ; un dixième de cadratin les détache. C'est un écart
-               * *optique* — le texte brut reste « zzZ », sans espace, parce qu'un souffle
-               * n'est pas trois mots.
-               */
-              marginLeft: i === 0 ? 0 : envol ? "0.1em" : m.saut || m.colle ? 0 : "0.26em",
-            }}
-          >
-            <span
-              className={envol ? "av-souffle" : "av-mot"}
-              style={{
-                fontSize: tailleMorceau(m),
-                color: m.sourd ? sourd : plein,
-                animationDelay: `${i * RETARD_MORCEAU}ms`,
-              }}
-            >
-              {m.texte}
-            </span>
-          </span>
-        </span>
-      ))}
-    </div>
   );
 }
 
