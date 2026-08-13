@@ -95,7 +95,24 @@ type FormeSolide =
    * `corps` est le rayon du corps rond, la pointe atteignant 1 ; `finesse` commande
    * l'angle du cône — plus elle est petite, plus la pointe est fine.
    */
-  | { famille: "goutte"; corps: number; finesse: number };
+  | { famille: "goutte"; corps: number; finesse: number }
+  /**
+   * Deux volumes à la fois, pour passer de l'un à l'autre.
+   *
+   * ⚠️ **C'est le rayon qu'on mélange, pas l'image.** Fondre deux dessins l'un dans
+   * l'autre donne un fantôme : pendant la transition on voit deux formes superposées,
+   * jamais une forme intermédiaire. Or ici toutes les familles disent la même chose — un
+   * **rayon par direction** — si bien que leur moyenne pondérée en est un aussi, et
+   * décrit un volume parfaitement légitime. Le triangle devient rond en passant par des
+   * triangles de plus en plus émoussés, pas par une surimpression.
+   *
+   * ⚠️ **Et tout le reste suit sans une ligne de plus.** La silhouette, les yeux, le
+   * détourage de l'habillage se déduisent tous du rayon : il n'y a rien à animer
+   * séparément, donc rien qui puisse se désynchroniser en route. C'est le bénéfice qu'on
+   * paie depuis le début en décrivant les formes par une fonction plutôt que par un
+   * tracé.
+   */
+  | { famille: "melange"; de: Solide; vers: Solide; part: number };
 
 /**
  * Un volume, avec l'échelle qui le fait tenir dans le carré de la tête.
@@ -126,6 +143,32 @@ export type Solide = FormeSolide & {
 export const SPHERE: Solide = { famille: "sphere" };
 
 /**
+ * Le volume à mi-chemin entre deux autres.
+ *
+ * ⚠️ **Aucun réajustement n'est nécessaire, et c'est démontrable.** Les deux volumes sont
+ * déjà mis à l'échelle du carré de la tête, donc leur rayon y est partout au plus celui
+ * du carré ; une moyenne pondérée de deux nombres bornés par un même maximum l'est aussi.
+ * Le mélange tient donc dans le cadre par construction, à toutes les valeurs de `part` —
+ * il ne peut ni déborder en route, ni rétrécir puis regonfler.
+ *
+ * Le recentrage et la demi-largeur se mélangent de la même façon : ce sont des grandeurs
+ * de la silhouette, et la silhouette du mélange est entre les deux.
+ */
+export function melangerSolides(de: Solide, vers: Solide, part: number): Solide {
+  const t = Math.min(1, Math.max(0, part));
+  const entre = (a: number, b: number) => a + (b - a) * t;
+  const da = de.decalage ?? { x: 0, y: 0 }, dv = vers.decalage ?? { x: 0, y: 0 };
+  return {
+    famille: "melange",
+    de,
+    vers,
+    part: t,
+    decalage: { x: entre(da.x, dv.x), y: entre(da.y, dv.y) },
+    demiLargeur: entre(de.demiLargeur ?? 1, vers.demiLargeur ?? 1),
+  };
+}
+
+/**
  * L'amplitude maximale du creusement.
  *
  * ⚠️ **Bornée par ce que le regard supporte, pas par ce qui est joli.** Un creux
@@ -151,7 +194,15 @@ const AMPLEUR_ETOILE = 0.72;
  * familles : c'est le même curseur qui sert aux deux, et il va toujours du plus doux au
  * plus franc.
  */
-export type FamilleSolide = Solide["famille"];
+/**
+ * Les familles qu'on peut **choisir**.
+ *
+ * ⚠️ Le mélange en est exclu, et le compilateur y tient : c'est un état de transition,
+ * pas une forme. L'y laisser entrer aurait permis de demander « la forme mélange » à
+ * `solideDepuis`, qui n'a alors ni volume de départ ni volume d'arrivée à quoi se
+ * raccrocher.
+ */
+export type FamilleSolide = Exclude<Solide["famille"], "melange">;
 
 /**
  * L'ampleur maximale de chaque famille, atteinte au bout de la course du réglage.
@@ -268,6 +319,9 @@ export function rayonSolide(u: Vec3, s: Solide): number {
 
 function brut(u: Vec3, s: Solide): number {
   if (s.famille === "sphere") return 1;
+  if (s.famille === "melange") {
+    return rayonSolide(u, s.de) + (rayonSolide(u, s.vers) - rayonSolide(u, s.de)) * s.part;
+  }
   const l = Math.sqrt(u.x * u.x + u.y * u.y + u.z * u.z);
   if (l <= 1e-12) return 1;
   // ⚠️ Les composantes **signées** d'abord : les symétries d'ordre trois et la goutte

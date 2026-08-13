@@ -4,7 +4,9 @@ import { ARRONDI_REFERENCE, OEIL_REFERENCE, TAILLE_REFERENCE } from "./avatarReg
 import {
   type Point2, type Vec3, ancrageOeil, cheminOeil, contourSilhouette, surLaSphere,
 } from "./avatarSpherique";
-import { type FamilleSolide, rayonSolide, solideDepuis } from "./avatarVolume";
+import {
+  type FamilleSolide, melangerSolides, rayonSolide, solideDepuis,
+} from "./avatarVolume";
 
 /**
  * Les yeux épousent-ils vraiment la forme sur laquelle ils sont peints ?
@@ -99,6 +101,17 @@ describe("l'œil est posé sur la surface", () => {
     }
   });
 
+  /**
+   * ⚠️ **Ce test est long, et on le déclare plutôt que de le raccourcir.** Quarante-cinq
+   * orientations, huit formes, deux yeux, quatre-vingt-seize points chacun, éprouvés
+   * contre un contour de mille quatre cent quarante segments : plus de cent millions de
+   * comparaisons. Il tenait dans les cinq secondes par défaut jusqu'à ce que la
+   * résolution point par point s'ajoute, puis il s'est mis à échouer **une fois sur
+   * quatre** — seulement quand la suite entière tourne en parallèle, jamais seul. Un
+   * échec intermittent est pire qu'une absence de mesure : on finit par le croire faux et
+   * par le retirer. La cause n'était pas géométrique, seulement le délai ; c'est donc le
+   * délai qu'on corrige, sans rien retirer à la couverture.
+   */
   it("ne laisse jamais un œil sortir de la silhouette", () => {
     /**
      * ⚠️ Le seul défaut qui se voit vraiment, et le plus laid : un morceau d'œil posé
@@ -124,7 +137,7 @@ describe("l'œil est posé sur la surface", () => {
         }
       }
     }
-  });
+  }, 30000);
 });
 
 describe("l'œil suit la rotation", () => {
@@ -278,6 +291,84 @@ describe("l'œil garde sa taille d'une forme à l'autre", () => {
       // 20,5 à 22,2 du temps où la longitude se cherchait par dichotomie.
       expect(part).toBeGreaterThan(0.205);
       expect(part).toBeLessThan(0.215);
+    }
+  });
+});
+
+describe("la morphose d'une forme à l'autre", () => {
+  /**
+   * ⚠️ **Ce qu'on éprouve ici n'est pas l'animation mais le *volume* qu'elle traverse.**
+   * Une transition entre deux dessins ne se vérifie qu'à l'œil : on regarde si le fondu
+   * est joli. Une transition entre deux **rayons** produit à chaque instant un volume
+   * comme les autres, dont on peut donc exiger exactement ce qu'on exige des huit — tenir
+   * dans le cadre, garder les yeux dedans, ne pas s'effondrer. C'est le bénéfice qu'on
+   * paie depuis le début en décrivant les formes par une fonction plutôt qu'un tracé.
+   */
+  const COUPLES: [FamilleSolide, FamilleSolide][] = [
+    ["sphere", "triangle"], ["cube", "goutte"], ["etoile6", "coussin"],
+    ["hexagone", "etoile"], ["triangle", "cube"], ["goutte", "sphere"],
+  ];
+  const PARTS = [0.05, 0.2, 0.35, 0.5, 0.65, 0.8, 0.95];
+
+  it("ne sort jamais du cadre de la tête, à aucun instant", () => {
+    /**
+     * ⚠️ **La propriété est démontrable, et ce test la garde.** Les deux volumes tiennent
+     * déjà dans le carré, donc leur rayon y est partout au plus celui du carré ; une
+     * moyenne pondérée de deux nombres bornés par un même maximum l'est aussi. Le mélange
+     * ne peut donc ni déborder en route, ni rétrécir puis regonfler — et si un jour il le
+     * faisait, c'est qu'un réajustement se serait glissé là où il n'a rien à faire.
+     */
+    for (const [a, b] of COUPLES) {
+      for (const p of PARTS) {
+        const s = melangerSolides(solide(a), solide(b), p);
+        for (const point of contourSilhouette(s, RAYON, 360)) {
+          expect(Math.abs(point.x)).toBeLessThanOrEqual(RAYON * 1.001);
+          expect(Math.abs(point.y)).toBeLessThanOrEqual(RAYON * 1.001);
+        }
+      }
+    }
+  });
+
+  it("garde les deux yeux entiers dans la silhouette pendant tout le passage", () => {
+    /**
+     * ⚠️ **Le moment le plus dangereux d'une forme est celui où elle n'en est plus une.**
+     * À mi-chemin entre un triangle et une capsule, le volume n'a été dessiné par
+     * personne : c'est exactement là qu'un œil pourrait dépasser sans que rien ne
+     * l'annonce, et cela ne durerait qu'un cinquième de seconde — invisible à la relecture
+     * d'une capture. On l'éprouve donc à sept instants du passage, sur les deux yeux.
+     */
+    for (const [a, b] of COUPLES) {
+      for (const p of PARTS) {
+        const s = melangerSolides(solide(a), solide(b), p);
+        const contour = contourSilhouette(s, RAYON, 1440);
+        for (const lacet of [-38, 0, 38]) {
+          const o = { lacet: deg(lacet), tangage: deg(-26) };
+          for (const cote of [-1, 1] as const) {
+            for (const q of pointsDuChemin(cheminOeil(OEIL, o, cote, RAYON, 96, s))) {
+              expect(dedans({ x: q.x * 0.995, y: q.y * 0.995 }, contour)).toBe(true);
+            }
+          }
+        }
+      }
+    }
+    // Même raison que plus haut : quarante-deux volumes intermédiaires à éprouver.
+  }, 30000);
+
+  it("part bien de la première forme et arrive à la seconde", () => {
+    /**
+     * Aux deux bouts, le mélange doit rendre exactement les volumes d'origine — sans quoi
+     * la transition sauterait à son début ou à sa fin, ce qui est précisément le défaut
+     * qu'elle existe pour supprimer.
+     */
+    for (const [a, b] of COUPLES) {
+      for (const [part, attendu] of [[0, a], [1, b]] as [number, FamilleSolide][]) {
+        const melange = contourSilhouette(melangerSolides(solide(a), solide(b), part), RAYON, 180);
+        const seul = contourSilhouette(solide(attendu), RAYON, 180);
+        for (let i = 0; i < seul.length; i++) {
+          expect(Math.hypot(melange[i].x - seul[i].x, melange[i].y - seul[i].y))
+            .toBeLessThan(1e-9);
+        }
+      }
     }
   });
 });

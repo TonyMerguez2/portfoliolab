@@ -4,7 +4,7 @@ import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react"
 import {
   RAYON_TETE, type Orientation, cheminOeil, cheminSvg, contourSilhouette,
 } from "@/lib/avatarSpherique";
-import { type FamilleSolide, solideDepuis } from "@/lib/avatarVolume";
+import { type FamilleSolide, melangerSolides, solideDepuis } from "@/lib/avatarVolume";
 import {
   ARRONDI_REFERENCE, OEIL_REFERENCE, TAILLE_REFERENCE, VIE_REFERENCE,
 } from "@/lib/avatarReglages";
@@ -12,6 +12,7 @@ import { type EtatVie, VIE_AU_REPOS, creerVie } from "@/lib/avatarVie";
 import { COULEUR_PAR_DEFAUT, couleurDesYeux } from "@/lib/avatarCouleur";
 import { skinParCle } from "@/lib/avatarSkins";
 import type { FormeAvatar } from "@/lib/useCouleurAvatar";
+import { useMorphose } from "@/lib/useMorphose";
 
 /**
  * Le visage de Novac, prêt à poser n'importe où.
@@ -50,6 +51,7 @@ import type { FormeAvatar } from "@/lib/useCouleurAvatar";
  * l'écran ne peut pas montrer.
  */
 const ECHANTILLONS = 96;
+
 
 /** Le volume que porte chaque forme proposée. */
 const FAMILLE: Record<FormeAvatar, FamilleSolide> = {
@@ -214,8 +216,6 @@ export default function AvatarNovac({
    * composant ne choisit qu'entre deux fonctions — l'image étirée après la rotation, ou
    * le solide qui tourne.
    */
-  const solide = useMemo(
-    () => solideDepuis(FAMILLE[forme], ARRONDI_REFERENCE), [forme]);
 
   const [vie, setVie] = useState<EtatVie>(VIE_AU_REPOS);
   const [pose, setPose] = useState({ lacet: 0, tangage: 0 });
@@ -224,6 +224,22 @@ export default function AvatarNovac({
   const suiviRef = useRef(1);
   const svgRef = useRef<SVGSVGElement | null>(null);
   const [anime, setAnime] = useState(true);
+
+  /**
+   * Le volume rendu — celui de la forme, ou le mélange pendant une morphose.
+   *
+   * ⚠️ **Tout se déduit du rayon, donc rien n'est animé séparément.** La silhouette, les
+   * yeux et le détourage de l'habillage sortent tous du même volume : il n'y a pas de
+   * transition du contour d'un côté et du regard de l'autre, donc rien qui puisse se
+   * désynchroniser en route.
+   */
+  const transition = useMorphose(forme, anime && vivant);
+  const solide = useMemo(() => {
+    const arrivee = solideDepuis(FAMILLE[forme], ARRONDI_REFERENCE);
+    if (!transition) return arrivee;
+    return melangerSolides(
+      solideDepuis(FAMILLE[transition.de], ARRONDI_REFERENCE), arrivee, transition.part);
+  }, [forme, transition]);
   /** Ce que le défilement ajoute au regard, et qui retombe tout seul. */
   const coupDOeil = useRef({ lacet: 0, tangage: 0 });
 

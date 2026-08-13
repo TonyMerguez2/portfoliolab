@@ -5,7 +5,7 @@ import {
   RAYON_TETE, type Orientation, type ReglagesOeil, cheminOeil, cheminSvg,
   cheminsSurLaTete, contourSilhouette, projeter, tournerTete, traitSurLaTete,
 } from "@/lib/avatarSpherique";
-import { type FamilleSolide, solideDepuis } from "@/lib/avatarVolume";
+import { type FamilleSolide, melangerSolides, solideDepuis } from "@/lib/avatarVolume";
 import {
   ARRONDI_REFERENCE, OEIL_REFERENCE, TAILLE_REFERENCE, VIE_REFERENCE,
 } from "@/lib/avatarReglages";
@@ -19,6 +19,7 @@ import {
 } from "@/lib/avatarAccessoires";
 import { PRESETS, SKINS, type Palette, skinParCle } from "@/lib/avatarSkins";
 import { type EtatVie, VIE_AU_REPOS, creerVie } from "@/lib/avatarVie";
+import { useMorphose } from "@/lib/useMorphose";
 import { ETATS } from "@/lib/avatarEtats";
 
 /**
@@ -229,9 +230,22 @@ export default function AvatarProceduralPage() {
   /** Le solide tourne-t-il pour de bon, ou seule son image est-elle étirée ? */
   const [vraie3D, setVraie3D] = useState(false);
   /** L'exposant de la superellipsoïde : 2 pour la sphère, davantage vers le cube. */
+  /**
+   * ⚠️ **La morphose passe par le rayon, pas par l'image.** Fondre deux dessins l'un dans
+   * l'autre donnerait un fantôme — deux formes superposées, jamais une forme
+   * intermédiaire. Ici les familles disent toutes la même chose, un rayon par direction,
+   * si bien que leur moyenne en est un aussi : le triangle devient rond en passant par
+   * des triangles de plus en plus émoussés. Le curseur d'arrondi s'applique aux deux
+   * bouts, de sorte qu'on peut le pousser pendant la transition sans la casser.
+   */
+  const morphose = useMorphose(formeTete);
+  const solideDe = useCallback(
+    (f: FamilleSolide) => solideDepuis(f, f === "sphere" ? 1 : silhouette), [silhouette]);
   const solideTete = useMemo(
-    () => solideDepuis(formeTete, formeTete === "sphere" ? 1 : silhouette),
-    [formeTete, silhouette]);
+    () => (morphose
+      ? melangerSolides(solideDe(morphose.de), solideDe(formeTete), morphose.part)
+      : solideDe(formeTete)),
+    [formeTete, morphose, solideDe]);
   const [vie, setVie] = useState<EtatVie>(VIE_AU_REPOS);
   const [expression, setExpression] = useState<CleExpression>("neutre");
   const [taille, setTaille] = useState(TAILLE_REFERENCE);
