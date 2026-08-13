@@ -35,7 +35,6 @@ const NOM_FORME: Record<FormeAvatar, string> = {
   carre: "Carrée",
   carre3d: "Carrée qui tourne",
   etoile: "Étoile",
-  etoile3d: "Étoile qui tourne",
 };
 
 /** Le dessin d'une forme, en aplat quand la silhouette est fixe, en trait quand elle tourne. */
@@ -187,10 +186,12 @@ export default function AvatarPortefeuille({
               * vignette prend la couleur en cours, ce qui montre du même coup les deux
               * réglages ensemble — c'est bien la même tête qu'on habille.
               *
-              * ⚠️ Les deux dernières portent le **même volume** : l'une garde sa
-              * silhouette immuable et laisse la surface se tordre en tournant, l'autre
-              * fait tourner le solide et laisse la silhouette respirer. Le cube en
-              * perspective est là pour signaler cette différence-là, la seule qui compte.
+              * ⚠️ Les deux carrés portent le **même volume** : l'un garde sa silhouette
+              * immuable et laisse la surface se tordre en tournant, l'autre fait tourner
+              * le solide et laisse la silhouette respirer. Le cube en perspective est là
+              * pour signaler cette différence-là, la seule qui compte. L'étoile n'a pas
+              * cette variante : mesuré, sa version à silhouette fixe suit déjà la sphère
+              * de très près, et la faire tourner n'ajouterait qu'une marque qui enfle.
               */}
             <div style={{
               marginTop: 16, paddingTop: 14,

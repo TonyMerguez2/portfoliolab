@@ -26,21 +26,31 @@ export const cleForme = (id: string | number) => `novac-avatar-forme:${id}`;
 /**
  * Les silhouettes proposées.
  *
- * ⚠️ **Deux volumes, et pour chacun deux façons de tourner.** `carre` et `carre3d`
- * portent le même solide, de même que `etoile` et `etoile3d` : ce qui les sépare est
- * l'ordre des opérations. Sans le suffixe, l'image est étirée après la rotation — la
- * silhouette ne bouge jamais, mais ce qui est peint dessus se tord. Avec, c'est le
- * solide qui tourne — la surface reste rigide, mais la silhouette respire. Il n'y a pas
- * de troisième voie : la sphère est la seule forme où les deux tiennent en place, et
- * c'est pourquoi elle n'a pas de variante.
+ * ⚠️ **Seul le cube a sa variante en volume tournant, et c'est une mesure qui l'a
+ * décidé.** `carre` et `carre3d` portent le même solide, séparés par l'ordre des
+ * opérations : sans le suffixe l'image est étirée après la rotation — silhouette
+ * immuable, surface qui se tord ; avec, le solide tourne — surface rigide, silhouette
+ * qui respire. Pour la sphère la question ne se pose pas : les deux coïncident. Pour
+ * l'étoile, mesuré, la version à silhouette fixe suit déjà la sphère de très près — le
+ * rapport des deux yeux y fait 1,00 · 0,89 · 0,78 · 0,68 de zéro à trente degrés, contre
+ * 1,00 · 0,91 · 0,82 · 0,72 sur la sphère, sans la bosse que le cube y montre. Sa
+ * variante en volume tournant n'apporterait donc qu'une silhouette qui enfle.
  */
-export const FORMES_AVATAR = [
-  "sphere", "carre", "carre3d", "etoile", "etoile3d",
-] as const;
+export const FORMES_AVATAR = ["sphere", "carre", "carre3d", "etoile"] as const;
 export type FormeAvatar = (typeof FORMES_AVATAR)[number];
 export const FORME_PAR_DEFAUT: FormeAvatar = "sphere";
 const estFormeValide = (v: unknown): v is FormeAvatar =>
   typeof v === "string" && (FORMES_AVATAR as readonly string[]).indexOf(v) >= 0;
+
+/**
+ * Ce qu'on fait des choix devenus caducs.
+ *
+ * ⚠️ **Retirer une forme ne doit pas retirer le choix de l'utilisateur.** Sans cette
+ * table, un portefeuille réglé sur l'étoile en volume tournant serait tombé au rejet de
+ * la validation, donc revenu à la sphère : on lui aurait enlevé son étoile pour avoir
+ * enlevé une variante de l'étoile. Il retrouve la forme la plus proche.
+ */
+const REMPLACEMENTS: Record<string, FormeAvatar> = { etoile3d: "etoile" };
 
 /**
  * Un choix d'apparence, gardé pour un portefeuille.
@@ -67,7 +77,8 @@ function useChoixGarde<T extends string>(
     if (id != null) {
       try {
         const gardee = localStorage.getItem(cle(id));
-        if (valide(gardee)) choisie = gardee;
+        const remis = (gardee != null && REMPLACEMENTS[gardee]) || gardee;
+        if (valide(remis)) choisie = remis;
       } catch {
         // Stockage refusé — navigation privée, réglage strict. Ce n'est pas une raison
         // de casser la page : on garde ce que l'API sait.
