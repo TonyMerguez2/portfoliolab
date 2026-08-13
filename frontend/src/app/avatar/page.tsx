@@ -15,7 +15,7 @@ import {
   regardDansLeSolide, surLeSolide, traitSurLeSolide,
 } from "@/lib/avatarSolide";
 import {
-  ACCESSOIRES, CASQUETTE_REFERENCE, type FamilleAccessoire, cheminsCasquette, ombre,
+  ACCESSOIRES, CASQUETTE_REFERENCE, type FamilleAccessoire, cheminsCasquette, contraste,
 } from "@/lib/avatarAccessoires";
 import { PRESETS, SKINS, type Palette, skinParCle } from "@/lib/avatarSkins";
 import { type EtatVie, VIE_AU_REPOS, creerVie } from "@/lib/avatarVie";
@@ -253,7 +253,7 @@ export default function AvatarProceduralPage() {
    * partie, et lui imposer d'y entrer aurait obligé les quatre skins à déclarer une
    * couleur de chapeau qu'ils n'ont pas.
    */
-  const [couleurCoiffe, setCouleurCoiffe] = useState("#F43F5E");
+  const [couleurCoiffe, setCouleurCoiffe] = useState("#1E2340");
   const [skin, setSkin] = useState("uni");
   const [palette, setPalette] = useState<Palette>(skinParCle("uni").palette);
 
@@ -747,10 +747,10 @@ export default function AvatarProceduralPage() {
                 */}
               {coiffe && (
                 <g>
-                  <path d={coiffe.visiere} fill={ombre(couleurCoiffe)} />
+                  <path d={coiffe.visiere} fill={contraste(couleurCoiffe)} />
                   <path d={coiffe.calotte} fill={couleurCoiffe} />
-                  <circle cx={coiffe.bouton.x} cy={coiffe.bouton.y} r={4.6}
-                    fill={ombre(couleurCoiffe)} />
+                  <circle cx={coiffe.bouton.x} cy={coiffe.bouton.y} r={5}
+                    fill={contraste(couleurCoiffe)} />
                 </g>
               )}
             </g>
@@ -862,9 +862,17 @@ export default function AvatarProceduralPage() {
                   valeur={casquette.epaisseur} affichage={`${(casquette.epaisseur * 100).toFixed(1)} u`}
                   min={0.01} max={0.12} pas={0.005}
                   onChange={v => setCasquette(c => ({ ...c, epaisseur: v }))} />
-                <Curseur libelle="Longueur de la visière"
+                <Curseur libelle="Inclinaison"
+                  valeur={casquette.inclinaison} affichage={`${casquette.inclinaison.toFixed(0)}°`}
+                  min={0} max={32} pas={1}
+                  onChange={v => setCasquette(c => ({ ...c, inclinaison: v }))} />
+                <Curseur libelle="Hauteur de calotte"
+                  valeur={casquette.galbe} affichage={`${(casquette.galbe * 100).toFixed(0)} %`}
+                  min={0} max={2.4} pas={0.05}
+                  onChange={v => setCasquette(c => ({ ...c, galbe: v }))} />
+                <Curseur libelle="Étendue de la visière"
                   valeur={casquette.visiere} affichage={`${(casquette.visiere * 100).toFixed(0)} %`}
-                  min={0} max={1.2} pas={0.02}
+                  min={0.2} max={0.95} pas={0.02}
                   onChange={v => setCasquette(c => ({ ...c, visiere: v }))} />
                 <Curseur libelle="Épaisseur de la visière"
                   valeur={casquette.epaisseurVisiere}
@@ -881,11 +889,13 @@ export default function AvatarProceduralPage() {
                     onChange={v => setCasquette(c => ({ ...c, cote: v ? -1 : 1 }))} />
                 </div>
                 <p style={{ margin: "12px 0 0", color: DOUX, fontSize: 12, lineHeight: 1.5 }}>
-                  L’assise se compte en part de la hauteur de la forme, et la visière en
-                  part de la largeur du bandeau — sans quoi une même valeur enfoncerait la
-                  casquette jusqu’aux yeux du coussin en effleurant le sommet du triangle.
+                  L’assise se compte en part de la hauteur de la forme, sans quoi une même
+                  valeur enfoncerait la casquette jusqu’aux yeux du coussin en effleurant
+                  le sommet du triangle. La visière n’est pas dessinée à part : c’est la
+                  ligne du bandeau, décalée vers le bas puis prolongée par sa tangente.
                   La visière et le bouton se déduisent de la teinte choisie : c’est la
-                  même, assombrie — deux réglages pourraient se contredire, un seul non.
+                  même, montée en clair sans être blanchie, pour qu’elle garde la couleur
+                  de la casquette. Deux réglages pourraient se contredire, un seul non.
                 </p>
               </div>
             )}

@@ -38,6 +38,17 @@ export type ReglagesCasquette = {
    * yeux pendant qu'elle effleurait le sommet du triangle.
    */
   assise: number;
+  /**
+   * De combien le bandeau penche, en degrés, vers le côté de la visière.
+   *
+   * ⚠️ **C'est l'inclinaison qui fait la casquette plutôt que le bonnet.** Une coupe
+   * horizontale donne une calotte posée bien à plat, symétrique, qui se lit comme une
+   * demi-sphère ; une vraie casquette est portée de travers, et son bandeau descend du
+   * côté de la visière. Elle ne complique rien : on tourne le contour de l'angle voulu,
+   * on coupe droit dans ce repère-là, et l'on remet tout d'aplomb. À zéro degré, la
+   * construction redevient exactement celle d'une coupe horizontale.
+   */
+  inclinaison: number;
   /** L'épaisseur du tissu, en part du rayon de la tête. */
   epaisseur: number;
   /**
@@ -59,16 +70,20 @@ export type ReglagesCasquette = {
    * visière se lit de loin. Ce sont deux pièces, elles ont deux épaisseurs.
    */
   epaisseurVisiere: number;
+  /** De combien la calotte monte au-dessus du crâne, en part de son épaisseur. */
+  galbe: number;
   /** Le côté vers lequel la visière pointe. */
   cote: -1 | 1;
 };
 
 export const CASQUETTE_REFERENCE: ReglagesCasquette = {
-  assise: 0.30,
-  epaisseur: 0.055,
-  visiere: 0.72,
-  epaisseurVisiere: 0.2,
-  cote: 1,
+  assise: 0.27,
+  inclinaison: 15,
+  epaisseur: 0.1,
+  visiere: 0.62,
+  epaisseurVisiere: 0.3,
+  galbe: 1.15,
+  cote: -1,
 };
 
 /** Le point d'un segment à la hauteur `y` — pour couper le contour au ras du bandeau. */
@@ -126,7 +141,7 @@ function calotteDuContour(contour: Point2[], assise: number): Point2[] {
  * perpendiculaire à la tangente — dont le signe se décide en la comparant, une fois, à
  * la direction du centre.
  */
-function pousser(arc: Point2[], epaisseur: number): Point2[] {
+function pousser(arc: Point2[], epaisseur: number, galbe: number): Point2[] {
   /**
    * ⚠️ **Les deux extrémités reprennent la normale de leur voisine.** Partout ailleurs la
    * tangente se prend de part et d'autre du point, donc centrée sur lui ; aux deux bouts
@@ -147,10 +162,20 @@ function pousser(arc: Point2[], epaisseur: number): Point2[] {
     if (nx * p.x + ny * p.y < 0) { nx = -nx; ny = -ny; }
     return { x: nx, y: ny };
   });
-  return arc.map((p, i) => ({
-    x: p.x + normales[i].x * epaisseur,
-    y: p.y + normales[i].y * epaisseur,
-  }));
+  /**
+   * ⚠️ **Le tissu est plus épais sur le dessus que sur les côtés, et ce n'est pas un
+   * caprice.** Poussée d'une épaisseur uniforme, la calotte a exactement la forme du
+   * crâne : elle se lit comme un couvercle posé dessus, jamais comme une casquette. Une
+   * vraie casquette a une **hauteur de calotte** — le tissu monte au-dessus du crâne et
+   * se resserre sur les tempes. On module donc la poussée par la verticalité de la
+   * normale : pleine au sommet, nulle aux flancs. La forme du crâne reste lisible sous le
+   * tissu, ce qui est le but ; elle est seulement coiffée au lieu d'être recopiée.
+   */
+  return arc.map((p, i) => {
+    const monte = Math.max(0, -normales[i].y);
+    const e = epaisseur * (1 + galbe * monte * monte);
+    return { x: p.x + normales[i].x * e, y: p.y + normales[i].y * e };
+  });
 }
 
 /**
@@ -161,14 +186,76 @@ function pousser(arc: Point2[], epaisseur: number): Point2[] {
  * peuvent se contredire — une visière plus claire que sa calotte ne ressemble à rien.
  * Un seul ton se choisit, l'autre s'en déduit : le second est toujours le plus sombre.
  */
-export function ombre(couleur: string, part = 0.44): string {
+function composantes(couleur: string): [number, number, number] | null {
   const h = couleur.replace("#", "");
   const plein = h.length === 3 ? h.split("").map(c => c + c).join("") : h;
   const n = parseInt(plein, 16);
-  if (!isFinite(n)) return couleur;
-  const f = (d: number) => Math.round(((n >> d) & 255) * (1 - part));
-  return "#" + [16, 8, 0].map(d => f(d).toString(16).padStart(2, "0")).join("");
+  if (!isFinite(n) || plein.length !== 6) return null;
+  return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
 }
+
+const enHexa = (c: number[]) =>
+  "#" + c.map(v => Math.round(Math.min(255, Math.max(0, v))).toString(16).padStart(2, "0")).join("");
+
+/**
+ * Le second ton d'un accessoire — sa visière, son bouton.
+ *
+ * ⚠️ **Il s'éloigne du premier, dans le sens où il reste de la place.** Une casquette
+ * porte deux tons et demander les deux, c'est deux réglages qui peuvent se contredire :
+ * une visière plus sombre qu'une calotte déjà noire ne se voit plus. On dérive donc le
+ * second, en éclaircissant une teinte foncée et en assombrissant une teinte claire. Le
+ * contraste est garanti quel que soit le choix, y compris aux deux extrêmes.
+ */
+export function contraste(couleur: string, part = 0.52): string {
+  const c = composantes(couleur);
+  if (!c) return couleur;
+  /**
+   * ⚠️ **On décide sur le canal le plus fort, pas sur la luminance.** Un rose vif comme
+   * `#F43F5E` a une luminance de 121 — sous la moitié, donc « foncé » au sens usuel — et
+   * pourtant son rouge est déjà à 244 : il n'y a plus rien à monter, et l'éclaircir par
+   * un facteur revenait à le *ternir* de dix-huit pour cent. Le canal le plus fort dit ce
+   * qui reste de place vers le haut, ce qui est exactement la question posée.
+   */
+  const fort = Math.max(c[0], c[1], c[2], 1);
+  if (fort > 165) return enHexa(c.map(v => v * (1 - part)));
+  /**
+   * ⚠️ **Une teinte foncée s'éclaircit en montant, pas en blanchissant.** Mélanger vers
+   * le blanc désature : un bleu nuit y devient gris, et la visière perdait la couleur de
+   * la casquette au lieu d'en être le ton clair. On multiplie donc les trois canaux d'un
+   * même facteur — ce qui laisse leurs rapports intacts, donc la teinte — jusqu'à ce que
+   * le plus fort atteigne sa cible. Le mélange vers le blanc ne sert plus qu'au repêchage
+   * des teintes si sombres qu'aucun facteur raisonnable ne les relèverait.
+   */
+  const monte = c.map(v => v * Math.min(200 / fort, 4));
+  const reste = (200 - Math.max(monte[0], monte[1], monte[2])) / 255;
+  return enHexa(monte.map(v => v + (255 - v) * Math.max(0, reste) * part));
+}
+
+
+/** Une rotation autour du centre de la tête — l'aller et le retour du repère du bandeau. */
+const pivoter = (p: Point2, cos: number, sin: number): Point2 =>
+  ({ x: p.x * cos - p.y * sin, y: p.x * sin + p.y * cos });
+
+/**
+ * De combien le tour de la casquette se creuse, en part de sa largeur.
+ *
+ * ⚠️ C'est ce creux qui donne le volume : sans lui la calotte est un couvercle, avec lui
+ * elle enveloppe. Un dixième suffit — au-delà, le bandeau descend au milieu du visage.
+ */
+const BOMBEMENT_BANDEAU = 0.13;
+
+/**
+ * De combien la visière dépasse le bord de la tête, en part de la demi-largeur.
+ *
+ * ⚠️ **Très peu, et c'est contraire à l'intuition.** Une visière paraît s'avancer loin ;
+ * mesuré sur la référence, son bec ne sort du crâne que d'un cinquième du rayon. Ce qui
+ * la fait paraître grande, c'est son **étendue** — elle barre presque toute la face
+ * avant — et non son dépassement. Il faut malgré tout qu'elle sorte : à plat, la part qui
+ * couvre la tête se confond avec elle, et seul le bec dit qu'il y a une visière. Les deux premières versions l'ont
+ * confondu : rallongées vers l'extérieur, elles donnaient un bec de vingt unités posé à
+ * côté du chapeau au lieu d'une visière.
+ */
+const DEPASSEMENT_VISIERE = 0.26;
 
 const bout = (p: Point2) => `${p.x.toFixed(2)} ${p.y.toFixed(2)}`;
 
@@ -181,18 +268,32 @@ const bout = (p: Point2) => `${p.x.toFixed(2)} ${p.y.toFixed(2)}`;
 export function cheminsCasquette(
   solide: Solide, rayon: number, reglages: ReglagesCasquette,
 ): { calotte: string; visiere: string; bouton: Point2 } {
-  const contour = contourSilhouette(solide, rayon, 720);
-  let haut = Infinity, bas = -Infinity, large = 0;
+  const c = reglages.cote;
+  /**
+   * ⚠️ **Tout se construit dans le repère du bandeau, puis se remet d'aplomb.** Couper
+   * une silhouette suivant une droite oblique demanderait de reprendre le parcours du
+   * contour, la poussée du tissu et l'assise de la visière — trois endroits où l'oblique
+   * s'infiltrerait. En tournant le contour de l'angle voulu, la coupe redevient
+   * horizontale et la construction est celle, simple, qu'on avait déjà ; il ne reste qu'à
+   * rendre les points à l'endroit. La casquette penche du côté de sa visière, comme une
+   * vraie.
+   */
+  const angle = (reglages.inclinaison * Math.PI) / 180 * c;
+  const ca = Math.cos(angle), sa = Math.sin(angle);
+  const contour = contourSilhouette(solide, rayon, 720)
+    .map(p => pivoter(p, ca, -sa));
+  const droit = (p: Point2) => pivoter(p, ca, sa);
+
+  let haut = Infinity, bas = -Infinity;
   for (const p of contour) {
     if (p.y < haut) haut = p.y;
     if (p.y > bas) bas = p.y;
-    if (Math.abs(p.x) > large) large = Math.abs(p.x);
   }
   const assise = haut + reglages.assise * (bas - haut);
   const epaisseur = reglages.epaisseur * rayon;
 
   const dedans = calotteDuContour(contour, assise);
-  const dehors = pousser(dedans, epaisseur);
+  const dehors = pousser(dedans, epaisseur, reglages.galbe);
 
   /**
    * ⚠️ **La calotte se referme droit, sur la ligne du bandeau.** Elle est faite de l'arc
@@ -200,60 +301,98 @@ export function cheminsCasquette(
    * crâne, puisqu'il ne se voit pas. C'est aussi ce qui fait que le chapeau *couvre* au
    * lieu de border — dessiné après la tête, il en cache le sommet.
    */
-  let calotte = `M ${bout({ x: dehors[0].x, y: assise })}`;
-  for (const p of dehors) calotte += ` L ${bout(p)}`;
-  calotte += ` L ${bout({ x: dehors[dehors.length - 1].x, y: assise })} Z`;
+  /**
+   * ⚠️ **Le bandeau bombe, il ne coupe pas droit.** Refermée par un segment, la calotte
+   * se lit comme un couvercle posé de biais : une corde droite est exactement ce qu'on ne
+   * voit jamais sur une tête, parce que le tour d'une casquette est un cercle vu en
+   * perspective, donc une ellipse — qui descend là où elle s'approche de nous et remonte
+   * sur les côtés. On referme donc par une courbe, creusée du côté de la visière puisque
+   * c'est ce côté-là qui vient vers l'œil.
+   */
+  const gauche = { x: dehors[0].x, y: assise };
+  const droite = { x: dehors[dehors.length - 1].x, y: assise };
+  const avant = gauche.x * c > droite.x * c ? gauche : droite;
+  const bombe = Math.abs(droite.x - gauche.x) * BOMBEMENT_BANDEAU;
+  const ferme: Point2[] = [];
+  const PAS_BANDEAU = 48;
+  for (let i = 0; i <= PAS_BANDEAU; i++) {
+    const t = i / PAS_BANDEAU, u = 1 - t;
+    // Le point de contrôle est décalé vers l'avant : le creux n'est pas au milieu.
+    const kx = (droite.x + gauche.x) / 2 + (avant.x - (droite.x + gauche.x) / 2) * 0.55;
+    ferme.push({
+      x: u * u * droite.x + 2 * u * t * kx + t * t * gauche.x,
+      y: assise + 2 * u * t * bombe * 2,
+    });
+  }
+  const bordCalotte: Point2[] = [...ferme, ...dehors, ferme[0]];
+  let calotte = `M ${bout(droit(bordCalotte[0]))}`;
+  for (let i = 1; i < bordCalotte.length; i++) calotte += ` L ${bout(droit(bordCalotte[i]))}`;
+  calotte += " Z";
 
   /**
-   * La visière : une pièce balayée le long d'une ligne, et non un contour dessiné.
+   * La visière : le bandeau lui-même, décalé vers le bas et prolongé.
    *
-   * ⚠️ **Sa racine est prise sur le contour, pas sur le cadre.** Posée à la demi-largeur
-   * de la tête, elle décollerait de toutes les formes qui sont plus étroites à hauteur du
-   * bandeau — le triangle s'en écarte de trente unités, la goutte de vingt. On mesure
-   * donc le contour **à la hauteur du bandeau**, et la visière part de là.
+   * ⚠️ **Elle se déduit du bandeau, elle n'est pas dessinée à côté.** Écrite comme une
+   * courbe indépendante, elle vivait sa vie : le tour de casquette bombe de vingt-cinq
+   * unités quand la visière n'en fait que seize d'épaisseur, si bien que la calotte —
+   * peinte par-dessus — l'avalait entièrement. En prenant **la ligne du bandeau** et en
+   * la décalant, l'accord est vrai par construction, à toutes les valeurs de bombement et
+   * sur les huit formes : la visière est cousue au bord, elle ne peut plus s'en séparer.
    *
-   * ⚠️ **Balayée, parce qu'un contour écrit à la main ne se règle pas.** Une visière
-   * dessinée en quatre courbes tient à une seule taille : changer sa longueur en tord le
-   * galbe, et changer l'épaisseur du tissu la décolle. Ici on décrit une **ligne
-   * moyenne** — qui part du bandeau, s'avance et retombe un peu — et une **demi-épaisseur
-   * qui s'éteint au bout**. La pièce se déduit des deux, donc elle garde sa forme à
-   * toutes les longueurs. Le profil en `√(1 − t⁴)` reste plein presque jusqu'au bout puis
-   * s'arrondit d'un coup : c'est ce qui donne un bout rond plutôt qu'une pointe.
+   * ⚠️ **Elle se prolonge par la tangente, pas par la courbe.** Prolonger la quadratique
+   * du bandeau au-delà de son extrémité la fait repartir vers le haut — une visière qui
+   * se relève en crochet. La tangente, elle, continue le mouvement : le bec s'avance dans
+   * la direction que le tour de tête avait prise.
    */
-  const c = reglages.cote;
-  let bordX = 0;
-  for (const p of contour) {
-    if (Math.abs(p.y - assise) <= 0.8 && p.x * c > bordX * c) bordX = p.x;
-  }
-  // La racine rentre sous la calotte : le raccord se cache au lieu de se voir.
+  const versAvant = ferme[ferme.length - 1].x * c > ferme[0].x * c;
+  const ligne = versAvant ? ferme.slice() : ferme.slice().reverse();
   const demi = reglages.epaisseurVisiere * rayon * 0.5;
-  const x0 = bordX - c * epaisseur * 1.2, y0 = assise - demi * 0.15;
-  const longueur = reglages.visiere * Math.abs(bordX);
-  const tombee = demi * 1.5;
+  const dernier = ligne[ligne.length - 1], avantDernier = ligne[ligne.length - 2];
+  // Le bec se compte sur le bord même de la casquette, là où il pousse.
+  const bec = Math.abs(dernier.x) * DEPASSEMENT_VISIERE;
+  const tx = dernier.x - avantDernier.x, ty = dernier.y - avantDernier.y;
+  const lt = Math.hypot(tx, ty) || 1;
+  const PROLONGE = 14;
+  for (let i = 1; i <= PROLONGE; i++) {
+    const k = (bec * i) / PROLONGE;
+    ligne.push({ x: dernier.x + (tx / lt) * k, y: dernier.y + (ty / lt) * k });
+  }
+  // Le début se perd sous la calotte : la visière ne commence pas au bord opposé.
+  const debut = Math.floor(ligne.length * (1 - reglages.visiere));
+  const arc = ligne.slice(Math.max(0, debut));
+
   const dessus: Point2[] = [], dessous: Point2[] = [];
-  const PAS = 40;
-  for (let i = 0; i <= PAS; i++) {
-    const t = i / PAS;
-    // Ligne moyenne : une quadratique qui part à plat et retombe vers le bout.
-    const u = 1 - t;
-    const cx = x0 + c * longueur * 0.58, cy = y0 - tombee * 0.28;
-    const x = u * u * x0 + 2 * u * t * cx + t * t * (x0 + c * longueur);
-    const y = u * u * y0 + 2 * u * t * cy + t * t * (y0 + tombee);
-    // La normale à cette ligne, pour poser l'épaisseur perpendiculairement.
-    const dx = 2 * u * (cx - x0) + 2 * t * (x0 + c * longueur - cx);
-    const dy = 2 * u * (cy - y0) + 2 * t * (y0 + tombee - cy);
-    const l = Math.hypot(dx, dy) || 1;
-    const e = demi * Math.sqrt(Math.max(0, 1 - t * t * t * t));
-    dessus.push({ x: x + (dy / l) * e * c, y: y - (dx / l) * e * c });
-    dessous.push({ x: x - (dy / l) * e * c, y: y + (dx / l) * e * c });
+  for (let i = 0; i < arc.length; i++) {
+    const t = i / (arc.length - 1);
+    /**
+     * ⚠️ **Le profil s'éteint aux deux bouts, et c'est ce qui en fait une visière.** Plein
+     * dès la racine, il donne une bande d'épaisseur constante qui traverse le visage en
+     * écharpe. Une visière est un **croissant** : effilée là où elle rejoint la calotte,
+     * pleine au milieu, arrondie au bec.
+     */
+    const e = demi
+      * Math.min(1, Math.pow(t / 0.34, 0.75))
+      // ⚠️ Une racine carrée au bout, et non une puissance douce : c'est elle qui donne
+      // un bec **rond**. Tout exposant supérieur à un demi y laisse une pointe.
+      * Math.sqrt(Math.max(0, 1 - Math.pow(t, 8)));
+    const y = arc[i].y + demi * 0.72;
+    dessus.push(pivoter({ x: arc[i].x, y: y - e }, ca, sa));
+    dessous.push(pivoter({ x: arc[i].x, y: y + e }, ca, sa));
   }
   let visiere = `M ${bout(dessus[0])}`;
   for (let i = 1; i < dessus.length; i++) visiere += ` L ${bout(dessus[i])}`;
   for (let i = dessous.length - 1; i >= 0; i--) visiere += ` L ${bout(dessous[i])}`;
   visiere += " Z";
 
-  // Le bouton coiffe le sommet **du tissu**, pas celui du crâne.
-  let sommet = dehors[0];
-  for (const p of dehors) if (p.y < sommet.y) sommet = p;
+  /**
+   * Le bouton coiffe le sommet du tissu.
+   *
+   * ⚠️ **Le sommet une fois la casquette remise d'aplomb, pas avant.** Cherché dans le
+   * repère penché, il désigne le point le plus haut *du bandeau incliné* — qui, redressé,
+   * tombe sur le côté. Le bouton se posait alors à mi-pente.
+   */
+  const surTete = bordCalotte.map(droit);
+  let sommet = surTete[0];
+  for (const p of surTete) if (p.y < sommet.y) sommet = p;
   return { calotte, visiere, bouton: sommet };
 }
