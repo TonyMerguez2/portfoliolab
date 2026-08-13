@@ -2271,7 +2271,14 @@ function PortfolioPageInner() {
                 données — et l'aide à la décision, à hauteur fixe depuis qu'elle ne montre
                 qu'une aide à la fois, doit rester entière. `flexShrink` implicite à 1, donc,
                 et un défilement interne en dernier recours. */}
-            <Cadre style={{ padding: "14px 16px", display: "flex",
+            {/* ⚠️ **Elle grandit désormais, en plus de céder.** L'aide à la décision
+                absorbait toute la hauteur libre de la colonne et se retrouvait avec des
+                centaines de pixels de vide à l'intérieur ; elle prend maintenant sa hauteur
+                juste. Sans ce `flexGrow`, la place ainsi rendue s'ouvrirait en trou au bas
+                de la colonne. La progression a de quoi l'employer — elle défile dès que son
+                contenu dépasse — et elle reste celle qui cède quand la place manque, son
+                `flexShrink` implicite étant inchangé. */}
+            <Cadre style={{ padding: "14px 16px", display: "flex", flexGrow: 1,
               flexDirection: "column", minHeight: 0, overflowY: "auto" }}>
               <ProgressionGlobale objectifs={listeObjectifs}
                 sommeDesParts={objectifs.donnees?.somme_des_parts ?? null} />

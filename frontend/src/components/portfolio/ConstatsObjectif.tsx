@@ -231,53 +231,25 @@ export default function ConstatsObjectif({
     // celui des voisins la plus grande partie du temps, et l'éclat ne fait que passer. Voir
     // `.novac-bord-defilant` dans globals.css, où tient toute la mécanique.
     <Cadre classeCarte="novac-bord-defilant" teinte={anneaux} style={{
-      // ⚠️ **`1 0 auto` : il grandit, il ne rétrécit jamais.** Les trois termes comptent.
-      // *Grandir* prend la place laissée libre au bas de la colonne — mesurée à 70 pixels
-      // avant même le retrait de la mise en garde voisine, donc du vide qui ne servait à
-      // personne. *Ne pas rétrécir* garde le comportement documenté d'à côté : sur une
-      // fenêtre courte, c'est « Progression globale » qui absorbe, pas l'aide qu'on vient
-      // lire. Et *base automatique* laisse le contenu décider du plancher.
-      //
-      // ⚠️ C'est aussi ce qui fixe la hauteur d'une aide à l'autre : dès lors qu'elle est
-      // dictée par la colonne et non par le texte, elle ne dépend plus de la longueur de
-      // la phrase affichée. Une hauteur en dur ferait la même chose au prix d'un débordement
-      // sur les fenêtres courtes.
-      flex: "1 0 auto",
-      // ⚠️ **Un plancher mesuré, parce que « grandir » ne suffisait pas.** Sur une fenêtre
-      // assez haute, la croissance fixe la hauteur et la longueur de la phrase n'y change
-      // rien : 274 pixels pour les quatorze combinaisons d'objectif et d'aide, vérifié une à
-      // une. Mais sur une fenêtre courte il n'y a plus de place à prendre, la hauteur retombe
-      // sur le contenu — et le contenu, lui, varie : la rangée fait de 84 à 142 pixels selon
-      // que la description tient en une ligne ou en cinq. Un panneau qui change de taille quand
-      // on passe d'une aide à la suivante est exactement ce qu'on cherchait à éviter.
-      //
-      // 244 vient d'une addition, pas d'un tâtonnement : 101 pixels de partie fixe — les deux
-      // rembourrages, les deux liserés, l'en-tête, le pied, les deux interlignes — plus la
-      // rangée la plus haute, 142. Soit 243, et un pixel au-dessus. **C'est bien la hauteur du
-      // cadre extérieur**, non celle de la carte : `minHeight` est une clé de placement, que
-      // `Cadre` pose sur l'anneau, lequel ajoute 7 pixels de chaque côté. Un plancher de 232
-      // pris sur la carte laissait le panneau grandir jusqu'à 243, et le saut restait — vu à
-      // l'écran avant d'être corrigé.
-      //
-      // ⚠️ **Il valait 264, et l'élargissement de la colonne de texte l'a fait baisser.** Ce
-      // n'est pas un ajustement cosmétique : chaque pixel de plancher est un pixel pris à
-      // « Progression globale », qui défile déjà sur une fenêtre de 854. Le laisser à 264 aurait
-      // gardé vingt pixels d'air ici pendant que la voisine rognait son contenu. Un plancher
-      // doit valoir le contenu le plus haut, jamais davantage — donc il se recalcule chaque
-      // fois que la mise en page du contenu change.
-      //
-      // ⚠️ **La rangée la plus haute dépend de la largeur de la carte**, puisque le texte
-      // enroule : 123 pixels à 446 de large, 142 à 439. La valeur retenue est celle du cas le
-      // plus étroit mesuré. Sur une carte plus étroite encore, le contenu passera au-dessus du
-      // plancher et le panneau grandira : la progression absorbe, rien n'est rogné, on perd
-      // seulement la constance.
-      //
-      // ⚠️ **Ce plancher a un prix, et il faut le connaître.** Sous 870 pixels de fenêtre
-      // environ, la colonne n'a plus de quoi le payer sans rogner sa voisine : « Progression
-      // globale » défile alors. C'est l'arbitrage déjà inscrit à côté — l'aide qu'on vient lire
-      // reste entière, la progression cède — poussé à son terme. Si l'on préférait l'inverse,
-      // c'est ce nombre qu'il faut baisser, au prix d'un saut d'une aide à l'autre.
-      minHeight: 244,
+      /**
+       * ⚠️ **`0 0 auto` : il prend sa hauteur, ni plus ni moins — et il grandissait avant.**
+       * En `1 0 auto` il absorbait toute la hauteur libre de sa colonne, ce qui avait un
+       * sens quand ce vide n'allait nulle part ailleurs. Mesuré sur la page : la carte
+       * faisait **593 pixels** pour un contenu qui en réclame 213, soit trois cent quatre-
+       * vingts pixels de vide à l'intérieur d'un cadre — signalé à l'usage. La place libre
+       * revient désormais à « Progression globale », qui a de quoi l'employer puisqu'elle
+       * défile.
+       *
+       * ⚠️ **Le plancher est remesuré, et il avait vieilli.** Deux cent quarante-quatre
+       * pixels dataient d'une typographie plus grosse — paragraphe à 12,5, bloc du chiffre
+       * centré. Avec les corps actuels, la plus haute des aides réclame 213 pixels entre
+       * 420 et 460 de large, et 230 au cas le plus étroit mesuré, 400 : le texte y enroule
+       * d'une ligne de plus. C'est cette valeur-là qui est retenue, puisque le plancher
+       * existe pour que le panneau ne saute pas d'une aide à l'autre — il doit donc couvrir
+       * la plus haute, pas la moyenne.
+       */
+      flex: "0 0 auto",
+      minHeight: 230,
       display: "flex", flexDirection: "column", gap: 10,
       padding: "14px 16px",
       /**
