@@ -23,7 +23,7 @@ import type { Vec3 } from "./avatarSpherique";
  * quarts en hauteur : il ne dépasse pas davantage, il en prend moins.
  */
 
-export type Solide =
+type FormeSolide =
   /** La sphère, où la silhouette et la surface tiennent toutes deux en place. */
   | { famille: "sphere" }
   /** La superellipsoïde |x|ⁿ + |y|ⁿ + |z|ⁿ = 1 : du disque au cube arrondi. */
@@ -54,53 +54,72 @@ export type Solide =
    */
   | { famille: "etoile6"; creux: number }
   /**
-   * Le coussin : le cube arrondi, écrasé sur la verticale.
+   * Le coussin : une **capsule couchée** — un cylindre à bouts hémisphériques.
    *
-   * ⚠️ **Un aplatissement du cube, et non un pincement des pôles.** La première version
-   * valait `1 − creux · y⁴` : un pincement qui, passé un cinquième de creux, **affaisse
-   * le milieu du bord** au lieu de l'aplatir. Le point le plus haut n'était plus au
-   * sommet mais à soixante-neuf degrés, et le centre du bord supérieur pendait de 1,3 %
-   * de la demi-hauteur — assez pour qu'on voie un bord mou là où l'on attend un côté.
-   * En divisant `y` dans la formule du cube, le bord garde exactement la platitude d'un
-   * cube et la forme s'aplatit sans jamais creuser.
+   * Côtés haut et bas rigoureusement droits, bouts entièrement ronds. C'est la forme la
+   * plus simple à décrire et la plus difficile à obtenir par modulation : un cube écrasé
+   * donne des coins, un pincement des pôles donne un bord mou. Ici la surface est
+   * définie par sa **distance à un segment**, ce qui donne exactement la capsule.
+   *
+   * `rayon` est celui des bouts ; le segment porte le reste, `1 − rayon` de demi-longueur.
    */
-  | { famille: "coussin"; exposant: number; hauteur: number }
+  | { famille: "coussin"; rayon: number }
   /**
-   * Le triangle adouci : trois lobes, `1 − creux · ρ³(1 − cos 3θ)/2`.
+   * L'hexagone : trois paires de plans, sommet en haut.
    *
-   * ⚠️ **La modulation s'annule sur l'axe du regard**, comme pour les étoiles : `ρ³`
-   * tend vers zéro au pôle, si bien que la face avant reste sphérique là où passent les
-   * yeux. C'est la même précaution, pour la même raison — un creux au milieu du visage
-   * rapprocherait le bord visible et couperait le regard.
-   *
-   * `x³ − 3xy²` est la partie réelle de `(x + iy)³` : c'est elle qui porte la symétrie
-   * d'ordre trois, et elle est polynomiale donc lisse partout.
-   */
-  | { famille: "triangle"; creux: number }
-  /**
-   * L'hexagone : le cube arrondi, mais fermé par **trois** paires de plans au lieu de
-   * deux.
-   *
-   * `1 / (Σₖ |u·nₖ|ⁿ + |z|ⁿ)^(1/n)` avec les trois normales à 90°, 150° et 210°. Quand
-   * `n` grandit, la somme tend vers le maximum et la forme vers l'intersection des trois
-   * bandes — l'hexagone exact, sommet en haut aplati. C'est la même construction que le
-   * carré, à une direction près : le carré n'en ferme que deux.
+   * `1 / (Σₖ |u·nₖ|ⁿ + |z|ⁿ)^(1/n)` avec les normales à 0°, 60° et 120°. La première
+   * bande vaut `|x| ≤ 1` : les côtés plats sont donc **verticaux**, et les sommets
+   * tombent en haut et en bas. C'est la même construction que le carré, à une direction
+   * près — le carré n'en ferme que deux.
    */
   | { famille: "hexagone"; exposant: number }
   /**
-   * La goutte : une sphère dont le haut se resserre, `1 − creux · (1 + y)²/4`.
+   * Le triangle : trois demi-plans, pointe en haut.
    *
-   * ⚠️ **Adoucie, sans pointe — et ce n'est pas un choix mais une contrainte.** Une
-   * surface décrite par un rayon en fonction de la direction est toujours **ronde à ses
-   * pôles** : près de l'axe, le rayon horizontal vaut `r·φ` quoi qu'on fasse, donc la
-   * tangente ne peut pas s'y redresser. Une vraie pointe demanderait de sortir de la
-   * description radiale, c'est-à-dire de reprendre toute la chaîne. Ce qu'on obtient est
-   * un œuf : large en bas, resserré en haut.
-   *
-   * La modulation ne dépend que de `y`, donc elle est constante le long de l'équateur —
-   * là où vivent les yeux, qui ne subissent aucune asymétrie gauche-droite.
+   * ⚠️ **Des demi-plans et non des bandes, et c'est ce qui change tout.** Une bande
+   * `|u·n| ≤ h` contraint des deux côtés : trois bandes font un hexagone, jamais un
+   * triangle. Il faut ne retenir que le côté positif — `max(0, u·n)` — pour que les trois
+   * contraintes ferment trois côtés seulement. La somme des puissances arrondit ensuite
+   * les sommets, exactement comme sur le carré.
    */
-  | { famille: "goutte"; creux: number };
+  | { famille: "triangle"; exposant: number }
+  /**
+   * La goutte : un corps rond surmonté d'une vraie pointe.
+   *
+   * ⚠️ **La pointe est possible, contrairement à ce que je croyais.** Une surface
+   * radiale est ronde à ses pôles tant que le rayon y est *dérivable* ; il suffit qu'il
+   * y présente un **coin** pour que la tangente saute et que la pointe apparaisse. Le
+   * terme en `exp(−φ/finesse)`, où `φ` est l'angle depuis le sommet, a exactement ce
+   * coin en zéro : la dérivée y vaut `−1/finesse` d'un côté et `+1/finesse` de l'autre.
+   *
+   * `corps` est le rayon du corps rond, la pointe atteignant 1 ; `finesse` commande
+   * l'angle du cône — plus elle est petite, plus la pointe est fine.
+   */
+  | { famille: "goutte"; corps: number; finesse: number };
+
+/**
+ * Un volume, avec l'échelle qui le fait tenir dans le carré de la tête.
+ *
+ * ⚠️ **Sans elle, changer de forme change la taille du personnage.** Le triangle ne
+ * mesurait que 148 unités de large contre 200 pour le rond, et la goutte 140 : à côté
+ * d'un nom de portefeuille, cela se lit comme un avatar plus petit, pas comme une autre
+ * forme. L'échelle se calcule une fois, en cherchant le plus grand écart aux deux axes
+ * sur la silhouette de face, et ramène chaque forme au même encombrement.
+ */
+export type Solide = FormeSolide & {
+  echelle?: number;
+  /**
+   * Le décalage qui recentre la forme dans le carré de la tête.
+   *
+   * ⚠️ **Une forme radiale n'est pas centrée sur son origine.** Le triangle a sa pointe à
+   * un rayon et sa base à un demi : mesuré, il occupait `y ∈ [−0,59 ; 1]`, donc il
+   * flottait en haut de son cadre. La goutte de même. Comme la description radiale ne
+   * connaît que des rayons, le recentrage se fait à la projection — sur tout ce qui est
+   * dessiné, yeux compris, pour que le regard reste au milieu de la forme et non au
+   * milieu du cadre.
+   */
+  decalage?: { x: number; y: number };
+};
 
 export const SPHERE: Solide = { famille: "sphere" };
 
@@ -140,9 +159,7 @@ export type FamilleSolide = Solide["famille"];
  * marquée : ce que le curseur commande, c'est « du plus doux au plus franc », pas une
  * grandeur physique commune.
  */
-const AMPLEUR: Record<
-  Exclude<FamilleSolide, "sphere" | "cube" | "coussin" | "hexagone">, number
-> = {
+const AMPLEUR: Record<"etoile" | "etoile6", number> = {
   etoile: AMPLEUR_ETOILE,
   /**
    * ⚠️ Plus prudente que l'étoile à quatre lobes, à profondeur égale : six creux serrés
@@ -150,12 +167,12 @@ const AMPLEUR: Record<
    * petits éclats sombres — le remplissage ne sait pas quel côté est l'intérieur.
    */
   etoile6: 0.3,
-  triangle: 0.5,
-  goutte: 0.85,
 };
 
-/** Ce dont le coussin est écrasé sur la verticale — indépendant de l'arrondi des bords. */
-const HAUTEUR_COUSSIN = 0.75;
+/** Le rayon des bouts de la capsule : ce qui reste porte sa longueur. */
+const RAYON_COUSSIN = 0.62;
+/** Le corps de la goutte, et la finesse de sa pointe. */
+const GOUTTE = { corps: 0.7, finesse: 0.22 };
 
 /**
  * Les trois directions qui ferment l'hexagone.
@@ -165,16 +182,59 @@ const HAUTEUR_COUSSIN = 0.75;
  * aurait un sommet en haut — un hexagone posé sur la pointe, qu'on ne lit plus comme
  * une tête.
  */
-const ANGLES_HEXAGONE = [90, 150, 210].map(a => (a * Math.PI) / 180);
+const ANGLES_HEXAGONE = [0, 60, 120].map(a => (a * Math.PI) / 180);
+
+/**
+ * Les trois normales sortantes du triangle, sommet en haut.
+ *
+ * ⚠️ Sortantes, donc l'une pointe vers le bas : c'est elle qui ferme la base. Prises
+ * toutes trois vers le haut, les contraintes ne fermeraient rien.
+ */
+const NORMALES_TRIANGLE = [-90, 30, 150].map(a => (a * Math.PI) / 180)
+  .map(a => ({ x: Math.cos(a), y: Math.sin(a) }));
+/** La distance du centre à chaque côté : la moitié du rayon des sommets. */
+const RENTRANT_TRIANGLE = 0.5;
+
+/**
+ * Met la forme à l'échelle du carré de la tête.
+ *
+ * On mesure la silhouette de face — le cercle `z = 0` transporté sur le solide — et l'on
+ * divise par son plus grand écart aux axes. Toutes les formes touchent alors le bord du
+ * carré, aucune ne le dépasse.
+ */
+function ajuster(forme: FormeSolide): Solide {
+  let xMin = Infinity, xMax = -Infinity, yMin = Infinity, yMax = -Infinity;
+  for (let i = 0; i < 720; i++) {
+    const t = (i / 720) * Math.PI * 2;
+    const u = { x: Math.cos(t), y: Math.sin(t), z: 0 };
+    const r = rayonSolide(u, forme);
+    xMin = Math.min(xMin, u.x * r); xMax = Math.max(xMax, u.x * r);
+    yMin = Math.min(yMin, u.y * r); yMax = Math.max(yMax, u.y * r);
+  }
+  const demiL = (xMax - xMin) / 2, demiH = (yMax - yMin) / 2;
+  const plus = Math.max(demiL, demiH);
+  if (plus <= 1e-9) return forme;
+  const echelle = 1 / plus;
+  return {
+    ...forme,
+    echelle,
+    decalage: { x: ((xMax + xMin) / 2) * echelle, y: ((yMax + yMin) / 2) * echelle },
+  };
+}
 
 export function solideDepuis(forme: FamilleSolide, arrondi: number): Solide {
   const a = Math.min(1, Math.max(0, arrondi));
   if (forme === "sphere" || a >= 1) return SPHERE;
   const exposant = Math.min(24, 2 / Math.max(0.001, a));
   if (forme === "cube") return { famille: "cube", exposant };
-  if (forme === "hexagone") return { famille: "hexagone", exposant };
-  if (forme === "coussin") return { famille: "coussin", exposant, hauteur: HAUTEUR_COUSSIN };
-  return { famille: forme, creux: (1 - a) * AMPLEUR[forme] };
+  if (forme === "hexagone") return ajuster({ famille: "hexagone", exposant });
+  if (forme === "triangle") return ajuster({ famille: "triangle", exposant });
+  // La capsule et la goutte tiennent leur galbe de leur construction, pas d'un réglage :
+  // les bouts d'une capsule sont ronds par définition, la pointe d'une goutte est une
+  // pointe. L'arrondi n'a rien à y commander.
+  if (forme === "coussin") return ajuster({ famille: "coussin", rayon: RAYON_COUSSIN });
+  if (forme === "goutte") return ajuster({ famille: "goutte", ...GOUTTE });
+  return ajuster({ famille: forme, creux: (1 - a) * AMPLEUR[forme] });
 }
 
 export const estSphere = (s: Solide) => s.famille === "sphere";
@@ -189,6 +249,10 @@ const puissanceSignee = (v: number, e: number) =>
  * normalise. Le rayon vaut 1 sur les axes ; au-delà pour le cube, en deçà pour l'étoile.
  */
 export function rayonSolide(u: Vec3, s: Solide): number {
+  return brut(u, s) * (s.echelle ?? 1);
+}
+
+function brut(u: Vec3, s: Solide): number {
   if (s.famille === "sphere") return 1;
   const l = Math.sqrt(u.x * u.x + u.y * u.y + u.z * u.z);
   if (l <= 1e-12) return 1;
@@ -209,17 +273,13 @@ export function rayonSolide(u: Vec3, s: Solide): number {
       return 1 - s.creux * f * f;
     }
     case "triangle": {
-      /**
-       * Partie réelle de (x + iy)³, comparée au module : trois lobes, creusés entre eux.
-       *
-       * ⚠️ Le repère est tourné d'un quart de tour — on lit `(y, −x)` au lieu de
-       * `(x, y)` — pour que le sommet pointe **vers le haut**. Pris tel quel, le triangle
-       * pointait vers la droite : une tête posée sur le côté.
-       */
-      const a = sy, b = -sx;
-      const rho3 = Math.pow(a * a + b * b, 1.5);
-      const cos3 = a * a * a - 3 * a * b * b;
-      return 1 - s.creux * (rho3 - cos3) / 2;
+      const n = s.exposant;
+      let somme = Math.pow(z, n);
+      for (const m of NORMALES_TRIANGLE) {
+        const c = sx * m.x + sy * m.y;
+        if (c > 0) somme += Math.pow(c / RENTRANT_TRIANGLE, n);
+      }
+      return somme <= 0 ? 1 : 1 / Math.pow(somme, 1 / n);
     }
     case "hexagone": {
       const n = s.exposant;
@@ -230,14 +290,25 @@ export function rayonSolide(u: Vec3, s: Solide): number {
       return 1 / Math.pow(somme, 1 / n);
     }
     case "goutte": {
-      const t = (1 + sy) / 2;
-      return 1 - s.creux * t * t;
+      /**
+       * Le rayon en fonction de l'angle depuis le sommet. Le terme exponentiel a un
+       * **coin** en zéro — dérivée `∓1/finesse` selon le côté —, et c'est ce coin qui
+       * fait la pointe : sans lui la surface serait ronde là comme partout.
+       */
+      const phi = Math.acos(Math.min(1, Math.max(-1, sy)));
+      return s.corps + (1 - s.corps) * Math.exp(-phi / s.finesse);
     }
     default: {
-      // Le cube, mais dont la verticale est comptée plus cher : il s'écrase d'autant.
-      const n = s.exposant, h = s.hauteur;
-      return 1 / Math.pow(
-        Math.pow(x, n) + Math.pow(y / h, n) + Math.pow(z, n), 1 / n);
+      /**
+       * La capsule : la surface à distance constante d'un segment. On cherche le `t` tel
+       * que `dist(t·u, segment) = rayon`, ce qui se résout à la main — côté plat quand le
+       * pied de la perpendiculaire tombe dans le segment, côté rond sinon.
+       */
+      const b = s.rayon, d2 = 1 - b;
+      const A = x, B = Math.sqrt(sy * sy + sz * sz);
+      if (B <= 1e-9) return 1;
+      if ((b * A) / B <= d2) return b / B;
+      return d2 * A + Math.sqrt(Math.max(0, b * b - d2 * d2 * B * B));
     }
   }
 }

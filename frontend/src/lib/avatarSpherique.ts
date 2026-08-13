@@ -433,7 +433,10 @@ function poserArcDeBord(
  */
 export function projeter(p: Vec3, rayon: number, solide: Solide = SPHERE): Point2 {
   const q = surLeSolide(p, solide);
-  return { x: q.x * rayon, y: -q.y * rayon };
+  // Le recentrage s'applique **avant** le passage à l'écran, donc dans le repère du
+  // monde, où `y` monte encore : c'est le même décalage pour la tête et pour les yeux.
+  const d = solide.decalage;
+  return { x: (q.x - (d ? d.x : 0)) * rayon, y: -(q.y - (d ? d.y : 0)) * rayon };
 }
 
 /**

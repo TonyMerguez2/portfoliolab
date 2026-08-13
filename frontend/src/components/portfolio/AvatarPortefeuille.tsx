@@ -75,7 +75,7 @@ function VignetteForme({ forme, couleur }: { forme: FormeAvatar; couleur: string
     case "hexagone":
       return (
         <svg {...cadre}>
-          <path d="M10 1.6 17.3 5.8v8.4L10 18.4 2.7 14.2V5.8z" transform="rotate(90 10 10)" {...plein} />
+          <path d="M10 1.6 17.3 5.8v8.4L10 18.4 2.7 14.2V5.8z" {...plein} />
         </svg>
       );
     case "triangle":
@@ -92,10 +92,8 @@ function VignetteForme({ forme, couleur }: { forme: FormeAvatar; couleur: string
         </svg>
       );
     case "coussin":
-      // ⚠️ **Couché, pas debout.** Le coussin se pince aux pôles — le haut et le bas —,
-      // il est donc plus large que haut : mesuré, 1,34 fois. La vignette le dessinait
-      // dressé, ce qui promettait l'inverse de ce qu'on obtenait en le choisissant.
-      return <svg {...cadre}><ellipse cx={10} cy={10} rx={9} ry={6.7} {...plein} /></svg>;
+      // Une capsule couchée : bouts entièrement ronds, côtés rigoureusement droits.
+      return <svg {...cadre}><rect x={1} y={4.4} width={18} height={11.2} rx={5.6} {...plein} /></svg>;
     default:
       return <svg {...cadre}><circle cx={10} cy={10} r={9} {...plein} /></svg>;
   }

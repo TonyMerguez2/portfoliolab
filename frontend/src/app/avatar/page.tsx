@@ -91,10 +91,10 @@ function VignetteVolume({ famille }: { famille: FamilleSolide }) {
         </svg>
       );
     case "coussin":
-      // Couché : l'écrasement porte sur la verticale, donc la forme est plus large que haute.
-      return <svg {...c}><ellipse cx={8} cy={8} rx={7.2} ry={5.4} {...f} /></svg>;
+      // Une capsule couchée : bouts ronds, côtés droits.
+      return <svg {...c}><rect x={0.8} y={3.6} width={14.4} height={8.8} rx={4.4} {...f} /></svg>;
     case "hexagone":
-      return <svg {...c}><path d="M8 1.2 13.9 4.6v6.8L8 14.8 2.1 11.4V4.6z" transform="rotate(90 8 8)" {...f} /></svg>;
+      return <svg {...c}><path d="M8 1.2 13.9 4.6v6.8L8 14.8 2.1 11.4V4.6z" {...f} /></svg>;
     case "triangle":
       return <svg {...c}><path d="M8 2 14.4 13.2H1.6z" {...f} stroke="currentColor" strokeWidth={2.6} strokeLinejoin="round" /></svg>;
     case "goutte":

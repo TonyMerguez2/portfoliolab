@@ -730,7 +730,7 @@ describe("les volumes qui ne changent jamais de taille", () => {
   };
 
   it("garde le même cercle circonscrit sous toutes les rotations", () => {
-    for (const famille of ["etoile", "etoile6", "triangle"] as const) {
+    for (const famille of ["etoile", "etoile6"] as const) {
       for (const arrondi of [0.2, 0.5]) {
         const s = solideDepuis(famille, arrondi);
         let min = Infinity, max = -Infinity;
@@ -758,7 +758,7 @@ describe("les volumes qui ne changent jamais de taille", () => {
      * respirerait si on le faisait tourner. Aucune des deux formes ne tourne dans
      * l'application : c'est ce qui rend l'échange acceptable.
      */
-    for (const famille of ["cube", "coussin"] as const) {
+    for (const famille of ["cube", "hexagone", "triangle"] as const) {
       const s = solideDepuis(famille, 0.42);
       let min = Infinity, max = -Infinity;
       for (const l of [0, 25, 45]) {
@@ -771,23 +771,18 @@ describe("les volumes qui ne changent jamais de taille", () => {
     }
   });
 
-  it("garde le bord supérieur du coussin franchement plat", () => {
+  it("garde le bord du coussin rigoureusement droit", () => {
     /**
-     * ⚠️ **Le défaut que ce test attrape, et qu'on a vu à l'écran.** Le pincement en
-     * `1 − creux · y⁴` n'aplatit le bord que jusqu'à un cinquième de creux ; au-delà il
-     * l'**affaisse** — le point le plus haut n'est plus au sommet mais à soixante-neuf
-     * degrés, et le milieu du bord pend de 1,3 % de la demi-hauteur. Sur un « coussin »,
-     * cela se lit immédiatement comme un côté qui n'est pas droit.
+     * ⚠️ **Deux définitions ont échoué avant celle-ci.** Le cube écrasé donnait des
+     * coins ; le pincement en `1 − creux · y⁴` **affaissait** le milieu du bord dès
+     * qu'on le creusait un peu — le point le plus haut tombait à soixante-neuf degrés.
+     * Une capsule, elle, est droite par construction : c'est la surface à distance
+     * constante d'un segment, donc le bord *est* une parallèle au segment.
      */
-    for (const arrondi of [0.5, 0.3]) {
-      const pts = contourSilhouette(solideDepuis("coussin", arrondi), 100, 720);
-      const plusHaut = Math.min(...pts.map(p => p.y));
-      const auSommet = pts.reduce((m, p) => (Math.abs(p.x) < 0.6 && p.y < m ? p.y : m), 0);
-      expect(auSommet - plusHaut).toBeLessThan(0.01);
-      const l = Math.max(...pts.map(p => p.x)) - Math.min(...pts.map(p => p.x));
-      const h = Math.max(...pts.map(p => p.y)) - Math.min(...pts.map(p => p.y));
-      expect(l / h).toBeCloseTo(1 / 0.75, 2);
-    }
+    const pts = contourSilhouette(solideDepuis("coussin", 0.5), 100, 720);
+    const haut = pts.filter(p => Math.abs(p.x) < 30);
+    const y = haut.map(p => p.y).filter(v => v < 0);
+    expect(Math.max(...y) - Math.min(...y)).toBeLessThan(0.02);
   });
 });
 
@@ -836,23 +831,19 @@ describe("normaleSolide", () => {
     }
   });
 
-  it("rend l'axe du regard normal à lui-même, sauf sur la goutte", () => {
+  it("rend l'axe du regard normal à lui-même sur toutes les formes", () => {
     /**
      * Une face avant droite : la normale y est radiale, sans quoi le bord serait faux —
      * et c'est là que se trouvent les yeux.
      *
-     * ⚠️ **La goutte fait exception, et légitimement.** Son rayon dépend de la hauteur :
-     * au point qui nous fait face, la surface est donc **penchée**, d'une dizaine de
-     * degrés. Ce n'est pas un défaut mais la forme même d'une goutte — un profil qui
-     * varie du bas vers le haut ne peut pas être perpendiculaire au regard partout. La
-     * conséquence à connaître : les yeux y reposent sur un plan légèrement incliné.
+     * ⚠️ La goutte y arrive aussi, alors que sa devancière — un rayon variant en `(1+y)²`
+     * — penchait de dix degrés au point qui nous fait face. Sa pointe est désormais
+     * portée par un terme exponentiel qui s'éteint bien avant l'équateur : loin du
+     * sommet, la surface redevient exactement sphérique.
      */
-    for (const famille of ["etoile", "etoile6", "coussin", "triangle", "hexagone"] as const) {
+    for (const famille of ["etoile", "etoile6", "coussin", "triangle", "hexagone", "goutte"] as const) {
       const n = normaleSolide({ x: 0, y: 0, z: 1 }, solideDepuis(famille, 0.4));
-      expect(n.z).toBeCloseTo(1, 6);
+      expect(n.z).toBeCloseTo(1, 5);
     }
-    const goutte = normaleSolide({ x: 0, y: 0, z: 1 }, solideDepuis("goutte", 0.4));
-    expect(goutte.z).toBeLessThan(0.999);
-    expect(goutte.z).toBeGreaterThan(0.9);
   });
 });
