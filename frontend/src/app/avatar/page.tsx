@@ -21,6 +21,7 @@ import { PRESETS, SKINS, type Palette, skinParCle } from "@/lib/avatarSkins";
 import { type EtatVie, VIE_AU_REPOS, creerVie } from "@/lib/avatarVie";
 import { useMorphose } from "@/lib/useMorphose";
 import { ETATS } from "@/lib/avatarEtats";
+import { messagePour } from "@/lib/avatarDialogue";
 
 /**
  * Prototype 02 — un regard construit par le calcul, pas par le dessin.
@@ -129,6 +130,17 @@ function VignetteAccessoire({ famille }: { famille: FamilleAccessoire }) {
 
 /** L'orientation nulle — celle où les habillages sont figés. */
 const AU_REPOS: Orientation = { lacet: 0, tangage: 0, roulis: 0 };
+
+/**
+ * La pastille de notification, en unités de surface sur une tête de rayon 100.
+ *
+ * ⚠️ **L'écart n'est pas une bordure, c'est un vide.** Un liseré de la couleur du fond
+ * ferait illusion tant que le fond ne change pas ; ici la silhouette est vraiment creusée,
+ * et l'écart est la largeur de ce creux. Il vaut un tiers du rayon de la pastille : moins,
+ * et le trou se lit comme un défaut d'anticrénelage ; plus, et la tête paraît grignotée.
+ */
+const RAYON_PASTILLE = 17;
+const ECART_PASTILLE = 6;
 
 const ACCENT = "#6366F1";
 const ENCRE = "#121214";
@@ -260,6 +272,9 @@ export default function AvatarProceduralPage() {
   const [cadence, setCadence] = useState(VIE_REFERENCE.cadenceClignement);
   const [etat, setEtat] = useState("neutre");
   const [derive, setDerive] = useState(VIE_REFERENCE.derive);
+  const [notification, setNotification] = useState(false);
+  const [dialogue, setDialogue] = useState(false);
+  const [pseudo, setPseudo] = useState("Sacha");
   const [accessoire, setAccessoire] = useState<FamilleAccessoire>("aucun");
   const [casquette, setCasquette] = useState(CASQUETTE_REFERENCE);
   /**
@@ -390,6 +405,23 @@ export default function AvatarProceduralPage() {
    * Ce qu'on perd en réalisme sur une forme, on le gagne en unité sur les huit — et en
    * calcul, puisque plus rien ici ne dépend de l'image.
    */
+  /**
+   * Où poser la pastille de notification, sur n'importe laquelle des huit formes.
+   *
+   * ⚠️ **Sur la silhouette mesurée, et non dans le coin du cadre.** Le carré de la tête
+   * est le même pour tous les volumes, mais aucun ne le remplit : posée à 45° du cadre, la
+   * pastille flotterait à trente unités du triangle et mordrait la capsule de plein fouet.
+   * On cherche donc le point du contour le plus avancé vers le haut-droit — le maximum de
+   * `x − y`, l'écran comptant les `y` vers le bas — et la pastille s'y assied. Elle est
+   * alors toujours **à cheval** sur le bord, quelle que soit la forme.
+   */
+  const pastille = useMemo(() => {
+    const contour = contourSilhouette(solideTete, RAYON_TETE, 720);
+    let choisi = contour[0];
+    for (const p of contour) if (p.x - p.y > choisi.x - choisi.y) choisi = p;
+    return choisi;
+  }, [solideTete]);
+
   const cheminsMotifs = useMemo(
     () => motifs.map(m => ({
       d: vraie3D
@@ -675,6 +707,21 @@ export default function AvatarProceduralPage() {
             justifyContent: "center", gap: 44, padding: "48px 40px",
           }}
         >
+          {/**
+            * ⚠️ **La bulle est du HTML posé à côté du dessin, et non un tracé dans le SVG.**
+            * Le repère ne laisse que cinquante unités à droite du crâne : une bulle
+            * dessinée dedans arriverait tranchée, et l'élargir encore rapetisserait la tête
+            * pour de bon. Surtout, c'est du **texte** — il doit enrouler, hériter de la
+            * police de l'application et rester sélectionnable, trois choses qu'un `<text>`
+            * SVG fait mal ou pas du tout.
+            *
+            * ⚠️ **Elle s'ancre sur le bord du crâne, pas sur celui du cadre.** La tête
+            * occupe le tiers central du repère — deux cents unités sur trois cents — donc
+            * son flanc droit tombe à cinq sixièmes de la largeur rendue, quelle que soit la
+            * taille à l'écran. C'est ce rapport qu'on écrit, et non une distance en pixels
+            * qui se serait décrochée au premier redimensionnement.
+            */}
+          <div style={{ position: "relative", width: "min(94%, 678px)", flexShrink: 0 }}>
           <svg
             ref={svgRef}
             className="av-tete"
@@ -695,9 +742,7 @@ export default function AvatarProceduralPage() {
             aria-label={`Visage orienté de ${lacet.toFixed(0)} degrés horizontalement, `
               + `${tangage.toFixed(0)} degrés verticalement et ${roulis.toFixed(0)} degrés `
               + "d’inclinaison"}
-            style={{
-              width: "min(94%, 678px)", height: "auto", display: "block", flexShrink: 0,
-            }}
+            style={{ width: "100%", height: "auto", display: "block" }}
           >
             {/* ⚠️ **Le squash est une échelle du rendu, pas une déformation de la
                 sphère.** L'écrasement d'un rebond touche l'objet entier, motifs et yeux
@@ -705,7 +750,26 @@ export default function AvatarProceduralPage() {
                 tenir compte, et la sphère ne serait plus une sphère — la coupe de
                 l'hémisphère et la silhouette n'auraient plus de sens. Ici la géométrie
                 reste sphérique et c'est l'image qu'on comprime. */}
-            <g transform={`scale(${vie.echelleX.toFixed(4)} ${vie.echelleY.toFixed(4)})`}>
+            {/**
+              * ⚠️ **Le masque creuse la tête, il ne pose pas un anneau par-dessus.** Un
+              * cercle de la couleur du fond autour de la pastille aurait le même air —
+              * jusqu'à ce que la page change de fond, ou qu'un skin passe dessous. En
+              * découpant vraiment la silhouette, le trou laisse voir ce qu'il y a derrière,
+              * quoi que ce soit. C'est aussi ce qui met la notification en avant : elle ne
+              * se pose pas sur la tête, elle y mord.
+              *
+              * ⚠️ **Le masque porte sur tout le groupe, pas sur le seul contour.** Appliqué
+              * à la tête seule, un œil ou une couture de skin traverserait le trou.
+              */}
+            <mask id="av-encoche">
+              <rect x={-150} y={-150} width={300} height={300} fill="#fff" />
+              {notification && (
+                <circle cx={pastille.x} cy={pastille.y} r={RAYON_PASTILLE + ECART_PASTILLE}
+                  fill="#000" />
+              )}
+            </mask>
+            <g mask="url(#av-encoche)"
+              transform={`scale(${vie.echelleX.toFixed(4)} ${vie.echelleY.toFixed(4)})`}>
               <path d={contourTete} fill={palette.tete} />
               {/* Les découpes du skin, prises sur la surface au repos. Dessinées avant
                   les yeux, pour que le regard passe devant la couture qu'il croise. */}
@@ -828,7 +892,67 @@ export default function AvatarProceduralPage() {
                 </g>
               )}
             </g>
+            {/* La pastille est peinte **hors** du groupe masqué : elle occupe le trou
+                qu'elle y a creusé, et le squash du rebond ne la déforme pas — un point de
+                notification qui s'ovalise se lit comme un défaut. */}
+            {notification && (
+              <circle cx={pastille.x} cy={pastille.y} r={RAYON_PASTILLE}
+                fill="#FF6467" />
+            )}
           </svg>
+
+          {dialogue && (
+            <div style={{
+              position: "absolute", left: "83.33%", top: "38%",
+              transform: "translateY(-50%)",
+              /**
+               * ⚠️ **Pas de `nowrap`, et la contradiction s'est vue à l'écran.** Il y en
+               * avait un, avec une largeur maximale : les deux se contredisent, et c'est le
+               * `nowrap` qui l'emporte — la bulle sortait du panneau sur une fenêtre
+               * étroite. Le module des phrases les tient à trois mots ; si l'une devait
+               * grandir, mieux vaut qu'elle enroule que de quitter l'écran.
+               *
+               * ⚠️ **La largeur vient du cadre, pas d'un pourcentage choisi.** Le repère du
+               * dessin fait trois cents unités pour une tête de deux cents : il reste donc
+               * un sixième de la largeur rendue — cinquante unités — entre le flanc droit
+               * du crâne et le bord du SVG, plus le rembourrage de la colonne. C'est cette
+               * réserve que la bulle occupe. Serrée à dix-sept pour cent, elle coupait
+               * « Bonjour Sacha ! » en trois lignes dont un point d'exclamation esseulé.
+               */
+              /**
+               * ⚠️ **`max-content`, sans quoi la largeur maximale ne sert à rien.** Pour un
+               * élément absolument positionné avec un `left` et une largeur automatique, la
+               * place disponible est bornée par le bord du conteneur : la bulle se voyait
+               * plafonnée à quatre-vingt-dix-sept pixels — la distance de son ancre au bord
+               * du SVG — et coupait « Bonjour Sacha ! » en trois lignes, quelle que soit la
+               * largeur maximale déclarée. Mesuré, puis corrigé : en demandant la largeur de
+               * son contenu, elle déborde du dessin comme prévu, dans le rembourrage de la
+               * colonne, et la borne reprend son rôle de garde-fou.
+               */
+              width: "max-content", maxWidth: "min(170px, 25%)",
+              padding: "9px 13px", borderRadius: 16,
+              background: "#FFFFFF", border: `1px solid ${BORD}`,
+              boxShadow: "0 6px 18px rgba(8,10,16,0.28)",
+              fontSize: 13.5, lineHeight: 1.35, fontWeight: 650,
+              color: TITRE,
+            }}>
+              {/* La pointe, tournée vers le crâne. Deux triangles superposés : le sombre
+                  porte le liseré, le clair remplit — sans quoi la pointe aurait un bord
+                  d'un côté et pas de l'autre. */}
+              <span aria-hidden="true" style={{
+                position: "absolute", left: -7, top: "50%", width: 7, height: 12,
+                transform: "translateY(-50%)", background: BORD,
+                clipPath: "polygon(0 50%, 100% 0, 100% 100%)",
+              }} />
+              <span aria-hidden="true" style={{
+                position: "absolute", left: -6, top: "50%", width: 6, height: 10,
+                transform: "translateY(-50%)", background: "#FFFFFF",
+                clipPath: "polygon(0 50%, 100% 0, 100% 100%)",
+              }} />
+              {messagePour(etat, pseudo)}
+            </div>
+          )}
+          </div>
 
           <p style={{
             margin: 0, maxWidth: 430, textAlign: "center", color: "#85858F",
@@ -897,6 +1021,47 @@ export default function AvatarProceduralPage() {
                 </button>
               ))}
             </div>
+          </Carte>
+
+          <Carte
+            titre="Notification et dialogue"
+            note="La pastille creuse vraiment la silhouette au lieu de se poser dessus : le trou laisse voir le fond, quel qu’il soit. La bulle, elle, dit ce que l’avatar fait — jamais ce que vos chiffres valent."
+          >
+            <Bascule libelle="Pastille de notification" actif={notification}
+              onChange={setNotification} />
+            <div style={{ marginTop: 12 }}>
+              <Bascule libelle="Bulle de dialogue" actif={dialogue} onChange={setDialogue} />
+            </div>
+
+            {dialogue && (
+              <div style={{ marginTop: 16 }}>
+                <label style={{ display: "block" }}>
+                  <span style={{
+                    display: "block", marginBottom: 7,
+                    color: "#3A3A45", fontSize: 12.5, fontWeight: 600,
+                  }}>
+                    Pseudonyme
+                  </span>
+                  <input
+                    type="text"
+                    value={pseudo}
+                    onChange={e => setPseudo(e.target.value)}
+                    placeholder="Sans nom"
+                    style={{
+                      width: "100%", boxSizing: "border-box", padding: "8px 11px",
+                      borderRadius: 9, border: `1px solid ${BORD}`, background: "#FFFFFF",
+                      color: "#33333D", fontSize: 13, fontFamily: "inherit", outline: "none",
+                    }} />
+                </label>
+                {/* ⚠️ Le champ vide ne laisse pas « Bonjour  ! » avec sa double espace et
+                    son point orphelin : la phrase retombe sur un salut sans nom. */}
+                <p style={{ margin: "10px 0 0", color: DOUX, fontSize: 12, lineHeight: 1.5 }}>
+                  La phrase suit l’état choisi plus haut : « zzZ » quand il somnole,
+                  « Aïe. » sur une erreur, un salut le reste du temps. Un état sans phrase
+                  retombe sur le salut, ce qui évite qu’une tête qui dort vous dise bonjour.
+                </p>
+              </div>
+            )}
           </Carte>
 
           <Carte
