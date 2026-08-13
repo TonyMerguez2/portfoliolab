@@ -89,7 +89,29 @@ export default function FormulaireCompte({
 
   const genreChoisi = genres.find(g => g.cle === genre);
   const nomPropre = nom.trim();
-  const peutContinuer = nomPropre.length > 0 && genre.length > 0;
+  /**
+   * Le compte détient-il des titres ? Toute la suite en dépend.
+   *
+   * ⚠️ **Ce n'est pas une nuance d'étiquette, c'est deux comptes différents.** Un compte
+   * de trésorerie n'a pas d'opérations au sens de l'application — le modèle de saisie
+   * parle de ticker, de sens achat/vente, de quantité et de prix unitaire, et rien de
+   * cela ne s'applique à un livret. Son solde **est** sa valeur, là où celui d'un PEA
+   * n'est que la poche d'espèces posée à côté des titres.
+   *
+   * ⚠️ **Tant que le serveur n'a rien publié, on ne suppose rien.** `genreChoisi` est
+   * indéfini au premier rendu ; traiter cette absence comme « avec titres » aurait
+   * montré, le temps d'une image, un formulaire qui ne correspond à rien.
+   */
+  const avecTitres = genreChoisi?.titres ?? true;
+  /**
+   * ⚠️ **Le solde est exigé quand il est toute la valeur du compte.** Un livret déclaré
+   * sans solde ne vaut rien et ne dit rien : la carte porterait un nom et un vide. Sur un
+   * compte à titres, en revanche, il reste facultatif — les espèces non investies peuvent
+   * être nulles, et surtout on les ignore souvent au moment de déclarer.
+   */
+  const soldeSaisi = solde.trim() !== "" && Number.isFinite(Number(solde.replace(",", ".")));
+  const peutContinuer = nomPropre.length > 0 && genre.length > 0
+    && (avecTitres || soldeSaisi);
 
   const enregistrer = () => onEnregistrer({
     nom: nomPropre, genre, couleur, logo,
@@ -118,7 +140,8 @@ export default function FormulaireCompte({
 
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
           <span style={{ fontFamily: FONT, fontSize: 13.5, fontWeight: 700, color: CLAIR.texte }}>
-            {etape === 1 ? "Nouveau compte" : "Les opérations de ce compte"}
+            {etape === 1 ? "Nouveau compte"
+              : avecTitres ? "Les opérations de ce compte" : "La mise à jour du solde"}
           </span>
           <button type="button" onClick={onFermer} aria-label="Fermer"
             style={{ background: "none", border: "none", cursor: "pointer",
@@ -158,7 +181,8 @@ export default function FormulaireCompte({
               </div>
               {genreChoisi && !genreChoisi.titres && (
                 <span style={{ fontFamily: FONT, fontSize: 10.5, color: CLAIR.texteAttenue }}>
-                  Ce compte ne détient pas de titres : sa valeur est son solde.
+                  Ce compte ne détient pas de titres : son solde est sa valeur, et il n’y a
+                  pas d’opérations à y saisir.
                 </span>
               )}
             </div>
@@ -209,17 +233,40 @@ export default function FormulaireCompte({
               </span>
             </div>
 
+            {/**
+              * ⚠️ **L'étiquette suit le genre, et ce n'est pas de la cosmétique.**
+              * « Liquidités » est le mot juste en finance, et il a quand même échoué :
+              * il a fallu demander ce qu'il désignait. Sur un compte courant, personne ne
+              * dit « mes liquidités » — on dit son solde ; et sur un PEA, le mot ne dit
+              * pas qu'il s'agit de la part *non investie*, ce qui est pourtant tout le
+              * sens du champ.
+              */}
             <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
-              <span style={etiquette}>Liquidités {genreChoisi?.titres ? "du compte" : ""}</span>
+              <span style={etiquette}>{avecTitres ? "Espèces non investies" : "Solde"}</span>
               <input value={solde} onChange={e => setSolde(e.target.value)}
-                inputMode="decimal" placeholder="Facultatif"
+                inputMode="decimal"
+                placeholder={avecTitres ? "Facultatif" : "Ex : 8 400"}
                 style={{ ...champ, ...NUM }} />
+              <span style={{ fontFamily: FONT, fontSize: 10.5, color: CLAIR.texteAttenue }}>
+                {avecTitres
+                  ? "La part en euros qui dort à côté de vos titres. Facultatif."
+                  : "Ce que contient le compte aujourd’hui."}
+              </span>
             </div>
           </>
         ) : (
           <>
+            {/**
+              * ⚠️ **La question posée n'est pas la même selon le compte.** Sur un PEA, on
+              * demande d'où viennent les achats et les ventes. Sur un livret, il n'y a pas
+              * d'opérations : la seule chose qui bouge est le solde, et la seule question
+              * est de savoir qui le tient à jour. Poser la première question à un livret
+              * aurait promis une saisie d'opérations qui n'existe pas pour lui.
+              */}
             <span style={{ fontFamily: FONT, fontSize: 11.5, color: CLAIR.texteSecondaire, lineHeight: 1.55 }}>
-              Comment les opérations de <b>{nomPropre}</b> arrivent-elles ?
+              {avecTitres
+                ? <>Comment les opérations de <b>{nomPropre}</b> arrivent-elles ?</>
+                : <>Comment le solde de <b>{nomPropre}</b> se met-il à jour ?</>}
             </span>
 
             <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
@@ -228,11 +275,12 @@ export default function FormulaireCompte({
                 background: CLAIR.carteCreuse, border: `1px solid ${couleur}`,
               }}>
                 <div style={{ fontFamily: FONT, fontSize: 12.5, fontWeight: 600, color: CLAIR.texte }}>
-                  Saisie manuelle
+                  {avecTitres ? "Saisie manuelle" : "Vous le tenez à jour"}
                 </div>
                 <div style={{ fontFamily: FONT, fontSize: 11, color: CLAIR.texteSecondaire, marginTop: 3, lineHeight: 1.5 }}>
-                  Vous enregistrez vos achats et ventes vous-même. C’est ce qui alimente les
-                  quantités, le prix de revient et la valorisation.
+                  {avecTitres
+                    ? "Vous enregistrez vos achats et ventes vous-même. C’est ce qui alimente les quantités, le prix de revient et la valorisation."
+                    : "Ce compte n’a pas d’opérations à saisir : vous corrigez son solde quand il change."}
                 </div>
               </div>
 
@@ -261,8 +309,9 @@ export default function FormulaireCompte({
                   </span>
                 </div>
                 <div style={{ fontFamily: FONT, fontSize: 11, color: CLAIR.texteSecondaire, marginTop: 3, lineHeight: 1.5 }}>
-                  Les opérations remonteraient seules depuis votre banque. Cela demande une
-                  connexion bancaire, qui n’est pas encore en place.
+                  {avecTitres
+                    ? "Les opérations remonteraient seules depuis votre banque. Cela demande une connexion bancaire, qui n’est pas encore en place."
+                    : "Le solde se mettrait à jour seul depuis votre banque. Cela demande une connexion bancaire, qui n’est pas encore en place."}
                 </div>
               </div>
             </div>
