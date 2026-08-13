@@ -460,15 +460,28 @@ export function projeter(p: Vec3, rayon: number, exposant: number = 2): Point2 {
  * tête ne change pas de taille en changeant de forme.
  */
 export function versSuperellipsoide(p: Vec3, exposant: number): Vec3 {
-  if (exposant <= 2 + 1e-9) return p;
+  const k = gonflement(p, exposant);
+  return k === 1 ? p : { x: p.x * k, y: p.y * k, z: p.z * k };
+}
+
+/**
+ * De combien le point est poussé vers l'extérieur en passant de la sphère au solide.
+ *
+ * ⚠️ **Ce facteur n'est pas uniforme, et c'est ce qui déforme ce qu'on peint.** Il vaut
+ * 1 au centre des faces et jusqu'à 1,37 vers les coins : une forme posée sur la sphère
+ * puis gonflée grandit donc en s'approchant d'une arête. Sur un œil, l'effet se voit —
+ * mesuré, l'œil qui s'éloigne du regard **grandissait de 27 %** là où il aurait dû
+ * rapetisser de 10 %. C'est pourquoi `cheminOeil` s'en sert pour compenser.
+ */
+export function gonflement(p: Vec3, exposant: number): number {
+  if (exposant <= 2 + 1e-9) return 1;
   const n = Math.pow(
     Math.pow(Math.abs(p.x), exposant)
     + Math.pow(Math.abs(p.y), exposant)
     + Math.pow(Math.abs(p.z), exposant),
     1 / exposant,
   );
-  if (n <= 1e-12) return p;
-  return { x: p.x / n, y: p.y / n, z: p.z / n };
+  return n <= 1e-12 ? 1 : 1 / n;
 }
 
 /**
@@ -950,13 +963,34 @@ export function cheminOeil(
   );
   const cos = Math.cos(reglages.inclinaison), sin = Math.sin(reglages.inclinaison);
 
+  /**
+   * ⚠️ **L'œil est rétréci d'avance de ce que le gonflement va lui rendre.**
+   * Le passage au cube pousse les points d'autant plus qu'ils approchent d'une arête :
+   * un œil qui s'écarte de l'axe du regard s'y trouvait donc **agrandi** au lieu d'être
+   * raccourci par la perspective — mesuré, +27 % à dix degrés de lacet quand la sphère
+   * en rendait −10 %. Le visage donnait alors deux yeux de tailles franchement
+   * différentes, ce qui se remarque immédiatement.
+   *
+   * La correction se prend **à l'ancre**, une seule fois : c'est le terme dominant, et
+   * il s'annule exactement. Il reste la variation du gonflement *à l'intérieur* de
+   * l'œil, qui l'étire un peu vers les bords — symétrique, donc invisible, et d'autant
+   * plus faible que l'œil est petit. Sur la sphère, le facteur vaut 1 : rien ne change.
+   */
+  const compense = 1 / gonflement(
+    // ⚠️ **Le gonflement se mesure sur l'ancre *tournée*, pas sur l'ancre au repos.**
+    // Il s'applique après la rotation, dans le repère du solide : pris avant, il ne
+    // corrigeait que la taille de face et laissait intacte l'asymétrie qu'on cherchait
+    // à supprimer — mesuré, le rapport des deux yeux restait à 1,27 au lieu de tomber.
+    tournerTete(ancrage.centre, orientation.lacet, orientation.tangage, orientation.roulis ?? 0),
+    exposant);
+
   const contour = contourArrondi(
     reglages.largeur, reglages.hauteur, reglages.arrondi ?? 1,
     echantillons, reglages.courbure ?? 0);
   const surface: Vec3[] = [];
   for (let i = 0; i < contour.length; i++) {
-    const u = cote * (contour[i].x * cos - contour[i].y * sin);
-    const v = contour[i].x * sin + contour[i].y * cos;
+    const u = cote * (contour[i].x * cos - contour[i].y * sin) * compense;
+    const v = (contour[i].x * sin + contour[i].y * cos) * compense;
     surface.push(tournerTete(
       surLaSphere(ancrage, u, v, rayon),
       orientation.lacet, orientation.tangage, orientation.roulis ?? 0,

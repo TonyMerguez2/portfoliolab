@@ -567,3 +567,60 @@ describe("projeter sur la superellipsoïde", () => {
     }
   });
 });
+
+describe("cheminOeil sur le cube arrondi", () => {
+  /** L'aire d'un contour, par la formule du lacet : la mesure de « plus grand ». */
+  const aire = (pts: Point2[]) => {
+    let a = 0;
+    for (let i = 0; i < pts.length; i++) {
+      const p = pts[i], q = pts[(i + 1) % pts.length];
+      a += p.x * q.y - q.x * p.y;
+    }
+    return Math.abs(a) / 2;
+  };
+  const OEIL = { ecart: 29, elevation: 0, largeur: 30, hauteur: 105, inclinaison: 0 };
+
+  it("rapetisse l'œil qui s'éloigne, au lieu de l'agrandir", () => {
+    /**
+     * ⚠️ **Le défaut que ce test attrape, et qu'on a vu à l'écran.** Le passage au cube
+     * pousse les points d'autant plus qu'ils approchent d'une arête : un œil qui
+     * s'écarte de l'axe du regard s'y trouvait **agrandi** au lieu d'être raccourci par
+     * la perspective — mesuré, +27 % à dix degrés de lacet là où la sphère rendait
+     * −10 %. Le visage montrait alors deux yeux de tailles franchement différentes.
+     *
+     * La correction se prend sur l'ancre **tournée** : mesurée sur l'ancre au repos,
+     * elle ne corrigeait que la taille de face et laissait l'asymétrie intacte.
+     */
+    const rapport = (arrondi: number, lacet: number) => {
+      const n = exposantSilhouette(arrondi);
+      const o = { lacet: deg(lacet), tangage: 0 };
+      const proche = aire(pointsDuChemin(cheminOeil(OEIL, o, -1, 100, 220, n)));
+      const loin = aire(pointsDuChemin(cheminOeil(OEIL, o, 1, 100, 220, n)));
+      return loin / proche;
+    };
+    for (const arrondi of [1, 0.42, 0.28]) {
+      // Aux petits angles, il ne doit en tout cas plus **grandir** franchement. Il reste
+      // ce que la variation du gonflement laisse *à l'intérieur* de l'œil : mesuré, au
+      // plus 3 % sur la forme de l'application, 8 % sur la plus cubique proposée.
+      for (const lacet of [5, 10, 15, 20]) expect(rapport(arrondi, lacet)).toBeLessThan(1.1);
+      // Et passé vingt degrés, il rapetisse pour de bon — c'est la perspective qui parle.
+      for (const lacet of [30, 40]) expect(rapport(arrondi, lacet)).toBeLessThan(0.72);
+    }
+  });
+
+  it("garde les deux yeux identiques de face", () => {
+    for (const arrondi of [1, 0.42, 0.2]) {
+      const n = exposantSilhouette(arrondi);
+      const o = { lacet: 0, tangage: 0 };
+      const g = aire(pointsDuChemin(cheminOeil(OEIL, o, -1, 100, 220, n)));
+      const d = aire(pointsDuChemin(cheminOeil(OEIL, o, 1, 100, 220, n)));
+      expect(d).toBeCloseTo(g, 0);
+    }
+  });
+
+  it("ne change rien sur la sphère", () => {
+    // La compensation vaut 1 à l'exposant 2 : le rendu d'origine doit être intact.
+    const o = { lacet: deg(23), tangage: deg(-11) };
+    expect(cheminOeil(OEIL, o, -1, 100, 220, 2)).toBe(cheminOeil(OEIL, o, -1, 100, 220));
+  });
+});
