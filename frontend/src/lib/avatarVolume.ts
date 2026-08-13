@@ -15,11 +15,12 @@ import type { Vec3 } from "./avatarSpherique";
  * couper, la projeter — en n'ajoutant qu'une mise à l'échelle radiale. Un volume qui ne
  * l'aurait pas — un tore, une forme creusée — demanderait de tout reprendre.
  *
- * ⚠️ **Tous valent exactement 1 sur les axes, et c'est là l'invariant.** Il ne porte pas
- * sur le rayon — le cube pousse vers les coins et atteint 1,37 dans la direction d'une
- * arête, l'étoile creuse et descend sous 1 — mais sur l'**encombrement** : la silhouette
- * touche le cercle aux quatre milieux des côtés et ne sort jamais de son carré. Changer
- * de forme ne change donc pas la place que la tête occupe.
+ * ⚠️ **Aucun ne sort de son carré, et c'est là l'invariant.** Il ne porte pas sur le
+ * rayon — le cube pousse vers les coins et atteint 1,37 dans la direction d'une arête,
+ * les étoiles creusent et descendent sous 1 — mais sur l'**encombrement** : la silhouette
+ * reste dans le carré de côté 2, qu'elle touche sur les axes. Changer de forme ne change
+ * donc pas la place que la tête occupe. Le coussin, écrasé, n'en occupe que les trois
+ * quarts en hauteur : il ne dépasse pas davantage, il en prend moins.
  */
 
 export type Solide =
@@ -53,12 +54,17 @@ export type Solide =
    */
   | { famille: "etoile6"; creux: number }
   /**
-   * Le coussin : pincé aux pôles, `1 − creux · y⁴`.
+   * Le coussin : le cube arrondi, écrasé sur la verticale.
    *
-   * L'inverse du galet — il s'aplatit sur la verticale et non sur la profondeur, donc il
-   * est ovale de face et rond de profil.
+   * ⚠️ **Un aplatissement du cube, et non un pincement des pôles.** La première version
+   * valait `1 − creux · y⁴` : un pincement qui, passé un cinquième de creux, **affaisse
+   * le milieu du bord** au lieu de l'aplatir. Le point le plus haut n'était plus au
+   * sommet mais à soixante-neuf degrés, et le centre du bord supérieur pendait de 1,3 %
+   * de la demi-hauteur — assez pour qu'on voie un bord mou là où l'on attend un côté.
+   * En divisant `y` dans la formule du cube, le bord garde exactement la platitude d'un
+   * cube et la forme s'aplatit sans jamais creuser.
    */
-  | { famille: "coussin"; creux: number };
+  | { famille: "coussin"; exposant: number; hauteur: number };
 
 export const SPHERE: Solide = { famille: "sphere" };
 
@@ -98,7 +104,7 @@ export type FamilleSolide = Solide["famille"];
  * marquée : ce que le curseur commande, c'est « du plus doux au plus franc », pas une
  * grandeur physique commune.
  */
-const AMPLEUR: Record<Exclude<FamilleSolide, "sphere" | "cube">, number> = {
+const AMPLEUR: Record<Exclude<FamilleSolide, "sphere" | "cube" | "coussin">, number> = {
   etoile: AMPLEUR_ETOILE,
   /**
    * ⚠️ Plus prudente que l'étoile à quatre lobes, à profondeur égale : six creux serrés
@@ -106,13 +112,17 @@ const AMPLEUR: Record<Exclude<FamilleSolide, "sphere" | "cube">, number> = {
    * petits éclats sombres — le remplissage ne sait pas quel côté est l'intérieur.
    */
   etoile6: 0.3,
-  coussin: 0.45,
 };
+
+/** Ce dont le coussin est écrasé sur la verticale — indépendant de l'arrondi des bords. */
+const HAUTEUR_COUSSIN = 0.75;
 
 export function solideDepuis(forme: FamilleSolide, arrondi: number): Solide {
   const a = Math.min(1, Math.max(0, arrondi));
   if (forme === "sphere" || a >= 1) return SPHERE;
-  if (forme === "cube") return { famille: "cube", exposant: Math.min(24, 2 / Math.max(0.001, a)) };
+  const exposant = Math.min(24, 2 / Math.max(0.001, a));
+  if (forme === "cube") return { famille: "cube", exposant };
+  if (forme === "coussin") return { famille: "coussin", exposant, hauteur: HAUTEUR_COUSSIN };
   return { famille: forme, creux: (1 - a) * AMPLEUR[forme] };
 }
 
@@ -143,8 +153,12 @@ export function rayonSolide(u: Vec3, s: Solide): number {
       const f = 3 * x * x * y - y * y * y;
       return 1 - s.creux * f * f;
     }
-    default:
-      return 1 - s.creux * y * y * y * y;
+    default: {
+      // Le cube, mais dont la verticale est comptée plus cher : il s'écrase d'autant.
+      const n = s.exposant, h = s.hauteur;
+      return 1 / Math.pow(
+        Math.pow(x, n) + Math.pow(y / h, n) + Math.pow(z, n), 1 / n);
+    }
   }
 }
 

@@ -60,7 +60,9 @@ const ARRONDI: Record<FamilleSolide, number> = {
   cube: 0.30,
   etoile: 0.42,
   etoile6: 0.42,
-  coussin: 0.42,
+  // Le coussin est un cube écrasé : il prend le même arrondi que lui, sans quoi ses
+  // bords seraient plus mous que ceux du carré alors qu'ils sortent de la même formule.
+  coussin: 0.30,
 };
 
 /** Le volume que porte chaque forme proposée. */

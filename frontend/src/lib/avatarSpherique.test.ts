@@ -730,7 +730,7 @@ describe("les volumes qui ne changent jamais de taille", () => {
   };
 
   it("garde le même cercle circonscrit sous toutes les rotations", () => {
-    for (const famille of ["etoile", "etoile6", "coussin"] as const) {
+    for (const famille of ["etoile", "etoile6"] as const) {
       for (const arrondi of [0.2, 0.5]) {
         const s = solideDepuis(famille, arrondi);
         let min = Infinity, max = -Infinity;
@@ -748,16 +748,46 @@ describe("les volumes qui ne changent jamais de taille", () => {
     }
   });
 
-  it("laisse au contraire le cube respirer, faute de rester inscrit", () => {
-    const s = solideDepuis("cube", 0.42);
-    let min = Infinity, max = -Infinity;
-    for (const l of [0, 25, 45]) {
-      for (const t of [0, 30]) {
-        const r = cercleCirconscrit(s, deg(l), deg(t));
-        min = Math.min(min, r); max = Math.max(max, r);
+  it("laisse au contraire respirer ce qui pousse dehors : le cube et le coussin", () => {
+    /**
+     * ⚠️ **Le coussin a changé de camp, et c'est délibéré.** Tant qu'il était un
+     * pincement des pôles, il restait inscrit dans la sphère et gardait sa taille en
+     * tournant. Mais ce pincement **affaissait le milieu du bord** au-delà d'un
+     * cinquième de creux, ce qui se lit comme un côté mou. Redéfini en cube écrasé, il
+     * a des bords vraiment plats — et pousse hors de la sphère comme le cube, donc il
+     * respirerait si on le faisait tourner. Aucune des deux formes ne tourne dans
+     * l'application : c'est ce qui rend l'échange acceptable.
+     */
+    for (const famille of ["cube", "coussin"] as const) {
+      const s = solideDepuis(famille, 0.42);
+      let min = Infinity, max = -Infinity;
+      for (const l of [0, 25, 45]) {
+        for (const t of [0, 30]) {
+          const r = cercleCirconscrit(s, deg(l), deg(t));
+          min = Math.min(min, r); max = Math.max(max, r);
+        }
       }
+      expect(max / min - 1).toBeGreaterThan(0.05);
     }
-    expect(max / min - 1).toBeGreaterThan(0.05);
+  });
+
+  it("garde le bord supérieur du coussin franchement plat", () => {
+    /**
+     * ⚠️ **Le défaut que ce test attrape, et qu'on a vu à l'écran.** Le pincement en
+     * `1 − creux · y⁴` n'aplatit le bord que jusqu'à un cinquième de creux ; au-delà il
+     * l'**affaisse** — le point le plus haut n'est plus au sommet mais à soixante-neuf
+     * degrés, et le milieu du bord pend de 1,3 % de la demi-hauteur. Sur un « coussin »,
+     * cela se lit immédiatement comme un côté qui n'est pas droit.
+     */
+    for (const arrondi of [0.5, 0.3]) {
+      const pts = contourSilhouette(solideDepuis("coussin", arrondi), 100, 720);
+      const plusHaut = Math.min(...pts.map(p => p.y));
+      const auSommet = pts.reduce((m, p) => (Math.abs(p.x) < 0.6 && p.y < m ? p.y : m), 0);
+      expect(auSommet - plusHaut).toBeLessThan(0.01);
+      const l = Math.max(...pts.map(p => p.x)) - Math.min(...pts.map(p => p.x));
+      const h = Math.max(...pts.map(p => p.y)) - Math.min(...pts.map(p => p.y));
+      expect(l / h).toBeCloseTo(1 / 0.75, 2);
+    }
   });
 });
 
