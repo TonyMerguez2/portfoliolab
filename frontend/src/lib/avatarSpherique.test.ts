@@ -767,7 +767,17 @@ describe("les volumes qui ne changent jamais de taille", () => {
           min = Math.min(min, r); max = Math.max(max, r);
         }
       }
-      expect(max / min - 1).toBeGreaterThan(0.05);
+      /**
+       * ⚠️ **Le seuil est bas parce que le triangle s'est aplati, pas parce que la
+       * propriété a faibli.** Mesuré aux réglages de référence : cube 12,5 %, hexagone
+       * 29,3 %, triangle 4,8 % — contre 0,01 et 0,03 % pour les deux étoiles, qui elles
+       * laissent un grand cercle intact. Le triangle a perdu du terrain en route : sa face
+       * avant est délibérément aplatie pour que les yeux cessent de s'y ouvrir en aile
+       * (voir `APLATISSEMENT_TRIANGLE`), et ce qui ne pousse plus en profondeur ne
+       * respire plus en tournant. Deux pour cent restent cent fois le bruit de mesure des
+       * étoiles : la frontière entre les deux familles est toujours nette.
+       */
+      expect(max / min - 1).toBeGreaterThan(0.02);
     }
   });
 

@@ -907,6 +907,141 @@ export type Orientation = { lacet: number; tangage: number; roulis?: number };
  * rompue de plusieurs unités. Mesuré avant correction : 21 u d'écart sur un contour
  * qui devait être exactement symétrique.
  */
+/**
+ * La correction locale à appliquer au contour de l'œil.
+ *
+ * On mesure comment les deux axes locaux de l'œil arrivent à l'écran — une fois par la
+ * chaîne complète, une fois comme ils y arriveraient sur une sphère — et l'on rend la
+ * matrice qui ramène la première sur la seconde. Les dérivées sont prises par
+ * différences finies sur la chaîne réelle : elle est trop composée pour qu'on écrive sa
+ * jacobienne à la main sans se tromper, et un signe faux ne se verrait qu'à certains
+ * angles.
+ *
+ * ⚠️ **Le repère est la sphère, et non la surface réelle — c'est un parti pris, mesuré.**
+ * La correction rigoureuse serait métrique : prédéformer le dessin par l'inverse de la
+ * racine de la première forme fondamentale, pour que le décalque arrive à sa vraie taille
+ * sur la surface. Elle a été écrite et éprouvée. Elle est juste, elle ne peut pas
+ * exploser, elle rend l'œil monotone sur les huit formes — et elle est inutilisable :
+ * un décalque honnête suit la surface *jusqu'au bout*, donc s'efface quand la surface se
+ * met de profil. Mesuré à trente-huit degrés de lacet, l'œil de l'hexagone tombait à
+ * **3,0 unités de large** — un cheveu — et celui du triangle s'ouvrait à 38,1, là où la
+ * sphère se contente de passer de 23,5 à 18,3. Ce n'est pas un défaut de calcul mais la
+ * forme même d'une tête plate : ses côtés sont vus par la tranche. Une mascotte ne peut
+ * pas perdre un œil parce qu'elle regarde de côté ; on garde donc le comportement de la
+ * sphère comme référence, et la forme n'agit plus que là où on veut la voir agir — la
+ * silhouette, et le découpage de l'œil qui passe derrière elle.
+ */
+function correctionLocale(
+  ancrage: Ancrage, orientation: Orientation, rayon: number, solide: Solide,
+): { uu: number; uv: number; vu: number; vv: number } {
+  const image = (u: number, v: number, s: Solide) => projeter(
+    tournerTete(surLaSphere(ancrage, u, v, rayon),
+      orientation.lacet, orientation.tangage, orientation.roulis ?? 0),
+    rayon, s);
+  const h = 0.5;
+  /**
+   * ⚠️ **Différence centrée, et la symétrie des deux yeux en dépend.** Une différence à
+   * droite mesure la pente un demi-pas *plus loin* que l'ancre, et ce demi-pas se compte
+   * vers les `u` croissants pour les deux yeux : il tombe donc vers l'extérieur de la
+   * tête d'un côté et vers l'intérieur de l'autre. Les deux yeux ne recevaient pas la
+   * même correction — mesuré de face, où ils doivent être exactement l'image l'un de
+   * l'autre, un demi-pour-cent d'écart d'aire, et jusqu'à trois dixièmes d'unité sur la
+   * hauteur. Centrée, la mesure est symétrique par construction, et juste au second ordre
+   * au lieu du premier.
+   */
+  const derivee = (s: Solide) => {
+    const px = image(h, 0, s), mx = image(-h, 0, s);
+    const py = image(0, h, s), my = image(0, -h, s);
+    return [
+      (px.x - mx.x) / (2 * h), (py.x - my.x) / (2 * h),
+      (px.y - mx.y) / (2 * h), (py.y - my.y) / (2 * h),
+    ];
+  };
+  const identite = { uu: 1, uv: 0, vu: 0, vv: 1 };
+  if (solide.famille === "sphere") return identite;
+  const [a, b, c, d] = derivee(solide);
+  const [a0, b0, c0, d0] = derivee(SPHERE);
+  const det = a * d - b * c;
+  /**
+   * ⚠️ Au ras du bord, la déformation écrase une direction : la matrice devient
+   * singulière et son inverse partirait à l'infini. On laisse alors l'œil tel quel — il
+   * n'est de toute façon plus qu'un liseré, et une correction démesurée y ferait bien
+   * plus de dégâts que la déformation qu'elle prétend annuler.
+   */
+  if (Math.abs(det) < 1e-6) return identite;
+  // (correction) = (dérivée de la forme)⁻¹ · (dérivée de la sphère)
+  const ia = d / det, ib = -b / det, ic = -c / det, id = a / det;
+  const m = {
+    uu: ia * a0 + ib * c0, uv: ia * b0 + ib * d0,
+    vu: ic * a0 + id * c0, vv: ic * b0 + id * d0,
+  };
+  /**
+   * ⚠️ **La correction est bornée, et sans cela elle fait pire que le mal.** Elle n'est
+   * juste qu'au **premier ordre** : elle décrit ce que la forme fait à un voisinage
+   * *infinitésimal* de l'ancre. Or l'œil n'est pas infinitésimal — il fait 81 unités de
+   * haut sur une tête de 200, deux bons cinquièmes. Quand la compression locale devient
+   * forte, au bord d'un hexagone ou sur le flanc d'un triangle, son inverse réclame
+   * d'agrandir de plusieurs fois, et l'œil agrandi sort largement du voisinage où
+   * l'approximation valait. Mesuré sans borne : une capsule de 23,5 unités de large
+   * passait à 98 sur l'hexagone et à 176 sur le triangle, soit tout l'écran.
+   *
+   * ⚠️ **Ce qu'on borne, ce sont les valeurs singulières — pas les coefficients.** Un
+   * cisaillement se lit dans les axes propres de la matrice, pas dans ses cases : on
+   * ramenait naguère chaque coefficient vers l'identité, ce qui limitait bien la taille
+   * moyenne mais laissait passer l'anisotropie, celle qui transforme un œil en lame ou en
+   * flaque. Les valeurs singulières sont exactement les deux facteurs d'étirement de la
+   * transformation ; les enfermer entre `1/L` et `L` borne l'étirement *dans toutes les
+   * directions à la fois*, ce que ni la trace ni les normes de lignes ne savent faire.
+   * La correction est ensuite recomposée dans ses propres axes, donc sans rotation
+   * parasite qui ferait pivoter le regard.
+   */
+  const mm = { uu: m.uu, uv: m.uv, vu: m.vu, vv: m.vv };
+  // Les valeurs propres de `MᵀM` : leurs racines sont les valeurs singulières de `M`.
+  const g11 = mm.uu * mm.uu + mm.vu * mm.vu;
+  const g12 = mm.uu * mm.uv + mm.vu * mm.vv;
+  const g22 = mm.uv * mm.uv + mm.vv * mm.vv;
+  const demi = (g11 + g22) / 2;
+  const ecart = Math.sqrt(Math.max(0, demi * demi - (g11 * g22 - g12 * g12)));
+  const l1 = demi + ecart, l2 = Math.max(1e-12, demi - ecart);
+  const s1 = Math.sqrt(l1), s2 = Math.sqrt(l2);
+  const brider = (x: number) => Math.min(LIMITE_CORRECTION, Math.max(1 / LIMITE_CORRECTION, x)) / x;
+  const f1 = brider(s1), f2 = brider(s2);
+  if (Math.abs(f1 - 1) < 1e-9 && Math.abs(f2 - 1) < 1e-9) return m;
+  /**
+   * On recompose `M · W`, où `W` vaut `f` sur chaque axe propre. Avec deux valeurs
+   * propres seulement, le projecteur spectral s'écrit sans passer par les vecteurs
+   * propres : `W = f2·I + (f1 − f2)·(G − l2·I)/(l1 − l2)`.
+   */
+  const k = l1 - l2 > 1e-12 ? (f1 - f2) / (l1 - l2) : 0;
+  const wa = f2 + k * (g11 - l2), wb = k * g12, wd = f2 + k * (g22 - l2);
+  return {
+    uu: mm.uu * wa + mm.uv * wb, uv: mm.uu * wb + mm.uv * wd,
+    vu: mm.vu * wa + mm.vv * wb, vv: mm.vu * wb + mm.vv * wd,
+  };
+}
+
+/**
+ * Jusqu'où la correction locale peut aller — la borne des valeurs singulières.
+ *
+ * ⚠️ Mesurée, pas choisie. Le repère est le comportement de l'œil sur la sphère : de face
+ * 23,5 × 79 unités, et 65 % de son aire à trente-huit degrés de lacet. Quatre grandeurs
+ * suivies sur les huit formes, en balayant de 1,20 à 1,70 :
+ *
+ * | borne | écart des aires de face | aire restante à 38° | pire grossissement | pire élargissement |
+ * |-------|------------------------|---------------------|--------------------|--------------------|
+ * | 1,20  | ×1,93                  | 0,38 – 0,92         | 1,128              | 1,022              |
+ * | 1,30  | ×1,46                  | 0,44 – 0,73         | 1,040              | 0,897              |
+ * | 1,40  | ×1,32                  | 0,51 – 0,66         | 0,965              | 0,911              |
+ * | 1,55  | ×1,23                  | 0,57 – 0,66         | 0,956              | 0,911              |
+ * | 1,70  | ×1,23                  | 0,57 – 0,72         | 1,047              | 0,911              |
+ *
+ * Trop bas, la correction est trop timide et chaque forme impose sa taille aux yeux ;
+ * trop haut, elle dépasse et l'œil se remet à grossir en se détournant. À 1,55 les quatre
+ * grandeurs sont au mieux en même temps — c'est un vrai creux, pas un plateau où l'on
+ * choisirait au jugé.
+ */
+const LIMITE_CORRECTION = 1.55;
+
 export function cheminOeil(
   reglages: ReglagesOeil,
   orientation: Orientation,
@@ -922,33 +1057,46 @@ export function cheminOeil(
   const cos = Math.cos(reglages.inclinaison), sin = Math.sin(reglages.inclinaison);
 
   /**
-   * ⚠️ **L'œil est rétréci d'avance de ce que le gonflement va lui rendre.**
-   * Le passage au cube pousse les points d'autant plus qu'ils approchent d'une arête :
-   * un œil qui s'écarte de l'axe du regard s'y trouvait donc **agrandi** au lieu d'être
-   * raccourci par la perspective — mesuré, +27 % à dix degrés de lacet quand la sphère
-   * en rendait −10 %. Le visage donnait alors deux yeux de tailles franchement
-   * différentes, ce qui se remarque immédiatement.
+   * ⚠️ **L'œil est corrigé de ce que la forme va lui faire subir, et en deux dimensions.**
    *
-   * La correction se prend **à l'ancre**, une seule fois : c'est le terme dominant, et
-   * il s'annule exactement. Il reste la variation du gonflement *à l'intérieur* de
-   * l'œil, qui l'étire un peu vers les bords — symétrique, donc invisible, et d'autant
-   * plus faible que l'œil est petit. Sur la sphère, le facteur vaut 1 : rien ne change.
+   * Le passage de la sphère au volume n'est pas une simple mise à l'échelle : près d'un
+   * bord, il comprime beaucoup dans un sens et presque pas dans l'autre. Une correction
+   * scalaire — diviser par le rayon local, ce qu'on faisait — ne rattrape que la
+   * moyenne. Mesuré au débattement du suivi : sur l'hexagone, l'œil éloigné tombait à
+   * **4,6 unités de large** contre 24,9 de face, une lame ; sur le triangle il
+   * *s'élargissait* à 39,3 tout en perdant les quatre cinquièmes de son aire. Deux yeux
+   * cisaillés là où la sphère se contente de raccourcir le sien de 23,5 à 18,3.
+   *
+   * On annule donc la **différentielle** de la déformation : la matrice qui envoie les
+   * deux axes locaux de l'œil sur l'écran, comparée à celle qu'on aurait sur la sphère.
+   * Ce qui reste est exactement le raccourci de la perspective — celui qu'on veut — sans
+   * le cisaillement propre à la forme.
+   *
+   * ⚠️ **On n'annule que la déformation, pas la projection.** Comparer à la sphère plutôt
+   * qu'à l'identité est ce qui garde l'œil *posé* : il continue de se raccourcir en se
+   * détournant, de disparaître derrière le bord, de suivre la courbure. Il cesse
+   * seulement d'être étiré par la forme.
    */
-  const compense = 1 / gonflement(
-    // ⚠️ **Le gonflement se mesure sur l'ancre *tournée*, pas sur l'ancre au repos.**
-    // Il s'applique après la rotation, dans le repère du solide : pris avant, il ne
-    // corrigeait que la taille de face et laissait intacte l'asymétrie qu'on cherchait
-    // à supprimer — mesuré, le rapport des deux yeux restait à 1,27 au lieu de tomber.
-    tournerTete(ancrage.centre, orientation.lacet, orientation.tangage, orientation.roulis ?? 0),
-    solide);
+  const correction = correctionLocale(ancrage, orientation, rayon, solide);
 
   const contour = contourArrondi(
     reglages.largeur, reglages.hauteur, reglages.arrondi ?? 1,
     echantillons, reglages.courbure ?? 0);
   const surface: Vec3[] = [];
   for (let i = 0; i < contour.length; i++) {
-    const u = cote * (contour[i].x * cos - contour[i].y * sin) * compense;
-    const v = (contour[i].x * sin + contour[i].y * cos) * compense;
+    /**
+     * ⚠️ **Le miroir se prend avant la correction, pas après.** La correction est une
+     * matrice lue dans le repère tangent de *cet* œil-là ; la mirorer revient à conjuguer
+     * par le retournement, ce qui change le signe des seuls termes croisés. Appliqué
+     * après, `cote` retourne `u` sans retourner `v`, et les termes croisés gardent un
+     * signe qui appartenait à l'autre œil. Pris avant, la symétrie est exacte : les huit
+     * volumes étant symétriques d'un côté à l'autre, l'œil gauche redevient au bit près
+     * l'image de l'œil droit.
+     */
+    const a = cote * (contour[i].x * cos - contour[i].y * sin);
+    const b = contour[i].x * sin + contour[i].y * cos;
+    const u = correction.uu * a + correction.uv * b;
+    const v = correction.vu * a + correction.vv * b;
     surface.push(tournerTete(
       surLaSphere(ancrage, u, v, rayon),
       orientation.lacet, orientation.tangage, orientation.roulis ?? 0,
