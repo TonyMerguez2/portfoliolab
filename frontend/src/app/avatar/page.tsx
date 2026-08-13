@@ -65,9 +65,7 @@ const FORMES: [FamilleSolide, string][] = [
   ["cube", "Carré arrondi"],
   ["etoile", "Étoile"],
   ["etoile6", "Étoile 6 lobes"],
-  ["galet", "Galet"],
   ["coussin", "Coussin"],
-  ["fossettes", "Fossettes"],
 ];
 
 /** Le pictogramme d'un volume, dans la couleur du bouton. */
@@ -86,18 +84,8 @@ function VignetteVolume({ famille }: { famille: FamilleSolide }) {
           <path d="M8 1.8c.7 2.5 1.6 3.4 4.1 4.1-2.5.7-3.4 1.6-4.1 4.1-.7-2.5-1.6-3.4-4.1-4.1 2.5-.7 3.4-1.6 4.1-4.1z" transform="rotate(30 8 8) translate(0 2)" {...f} />
         </svg>
       );
-    case "galet":
-      return <svg {...c}><ellipse cx={8} cy={8} rx={7.2} ry={4.8} {...f} /></svg>;
     case "coussin":
       return <svg {...c}><ellipse cx={8} cy={8} rx={4.8} ry={7.2} {...f} /></svg>;
-    case "fossettes":
-      return (
-        <svg {...c}>
-          <circle cx={8} cy={8} r={7} {...f} />
-          <circle cx={5.3} cy={5.3} r={1.7} fill="rgba(0,0,0,0.28)" />
-          <circle cx={10.7} cy={10.7} r={1.7} fill="rgba(0,0,0,0.28)" />
-        </svg>
-      );
     default:
       return <svg {...c}><circle cx={8} cy={8} r={7} {...f} /></svg>;
   }

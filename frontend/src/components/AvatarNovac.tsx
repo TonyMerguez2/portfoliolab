@@ -54,12 +54,9 @@ const ARRONDI_FORME = 0.42;
 const FAMILLE: Record<FormeAvatar, FamilleSolide> = {
   sphere: "sphere",
   carre: "cube",
-  carre3d: "cube",
   etoile: "etoile",
   etoile6: "etoile6",
-  galet: "galet",
   coussin: "coussin",
-  fossettes: "fossettes",
 };
 
 

@@ -730,7 +730,7 @@ describe("les volumes qui ne changent jamais de taille", () => {
   };
 
   it("garde le même cercle circonscrit sous toutes les rotations", () => {
-    for (const famille of ["etoile", "etoile6", "galet", "coussin", "fossettes"] as const) {
+    for (const famille of ["etoile", "etoile6", "coussin"] as const) {
       for (const arrondi of [0.2, 0.5]) {
         const s = solideDepuis(famille, arrondi);
         let min = Infinity, max = -Infinity;
@@ -806,10 +806,11 @@ describe("normaleSolide", () => {
     }
   });
 
-  it("rend l'axe du regard normal à lui-même sur le galet et les fossettes", () => {
-    // Une face-avant lisse : la normale y est radiale, sans quoi le bord serait faux.
-    for (const s of [solideDepuis("galet", 0.4), solideDepuis("fossettes", 0.4)]) {
-      const n = normaleSolide({ x: 0, y: 0, z: 1 }, s);
+  it("rend l'axe du regard normal à lui-même sur toutes les formes creusées", () => {
+    // Une face avant lisse : la normale y est radiale, sans quoi le bord serait faux —
+    // et c'est là que se trouvent les yeux.
+    for (const famille of ["etoile", "etoile6", "coussin"] as const) {
+      const n = normaleSolide({ x: 0, y: 0, z: 1 }, solideDepuis(famille, 0.4));
       expect(n.z).toBeCloseTo(1, 6);
     }
   });

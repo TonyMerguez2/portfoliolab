@@ -53,28 +53,12 @@ export type Solide =
    */
   | { famille: "etoile6"; creux: number }
   /**
-   * Le galet : une boule aplatie sur l'axe du regard.
-   *
-   * Parfaitement ronde de face, elle devient une lentille en tournant. C'est le rendu le
-   * plus franchement volumique de la série — on voit littéralement l'épaisseur de la tête
-   * — et pourtant son encombrement ne bouge pas.
-   */
-  | { famille: "galet"; epaisseur: number }
-  /**
    * Le coussin : pincé aux pôles, `1 − creux · y⁴`.
    *
    * L'inverse du galet — il s'aplatit sur la verticale et non sur la profondeur, donc il
    * est ovale de face et rond de profil.
    */
-  | { famille: "coussin"; creux: number }
-  /**
-   * Les fossettes : `1 − creux · 27(xyz)²`, un creux par octant.
-   *
-   * Le terme s'annule sur les **trois** plans de coordonnées, donc sur trois grands
-   * cercles : de face, la silhouette est un cercle parfait. Les fossettes n'apparaissent
-   * qu'en tournant — on croit voir une sphère, puis elle se révèle.
-   */
-  | { famille: "fossettes"; creux: number };
+  | { famille: "coussin"; creux: number };
 
 export const SPHERE: Solide = { famille: "sphere" };
 
@@ -122,24 +106,13 @@ const AMPLEUR: Record<Exclude<FamilleSolide, "sphere" | "cube">, number> = {
    * petits éclats sombres — le remplissage ne sait pas quel côté est l'intérieur.
    */
   etoile6: 0.3,
-  galet: 0.58,
   coussin: 0.45,
-  /**
-   * ⚠️ **Les fossettes sont la forme la plus contrainte, et de loin.** Leurs creux sont
-   * pile là où passent les coins des yeux quand la tête tourne : mesuré, à 30 % de
-   * profondeur l'œil commence à être rogné dès 18° de lacet, contre 52° pour l'étoile à
-   * profondeur comparable. Il faut descendre à 16 % pour tenir jusqu'à 37°, et c'est ce
-   * qu'on garde — la fossette reste lisible, elle n'est pas là pour trouer la tête.
-   */
-  fossettes: 0.28,
 };
 
 export function solideDepuis(forme: FamilleSolide, arrondi: number): Solide {
   const a = Math.min(1, Math.max(0, arrondi));
   if (forme === "sphere" || a >= 1) return SPHERE;
   if (forme === "cube") return { famille: "cube", exposant: Math.min(24, 2 / Math.max(0.001, a)) };
-  // L'épaisseur du galet se compte à l'envers des creux : un galet plein est une sphère.
-  if (forme === "galet") return { famille: "galet", epaisseur: 1 - (1 - a) * AMPLEUR.galet };
   return { famille: forme, creux: (1 - a) * AMPLEUR[forme] };
 }
 
@@ -170,14 +143,8 @@ export function rayonSolide(u: Vec3, s: Solide): number {
       const f = 3 * x * x * y - y * y * y;
       return 1 - s.creux * f * f;
     }
-    case "galet":
-      return 1 / Math.sqrt(x * x + y * y + (z * z) / (s.epaisseur * s.epaisseur));
-    case "coussin":
+    default:
       return 1 - s.creux * y * y * y * y;
-    default: {
-      const f = x * y * z;
-      return 1 - s.creux * 27 * f * f;
-    }
   }
 }
 

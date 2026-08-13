@@ -26,19 +26,17 @@ export const cleForme = (id: string | number) => `novac-avatar-forme:${id}`;
 /**
  * Les silhouettes proposées.
  *
- * ⚠️ **Seul le cube a une variante, et c'est une propriété géométrique qui le veut.**
- * Toutes les autres formes sont **creusées** dans la sphère en laissant au moins un
- * grand cercle intact ; or un grand cercle se projette toujours en une ellipse de
- * demi-grand axe R, si bien que leur contour atteint toujours R sans jamais le dépasser.
- * Elles tournent donc en vrai volume — surface rigide, perspective honnête — **sans
- * jamais changer de taille** : mesuré, 0,0 % de variation du cercle circonscrit. Le cube
- * est le seul à pousser vers l'extérieur, jusqu'à 1,37 dans la direction d'une arête, et
- * c'est pourquoi il respire de 12,5 % — d'où le choix qu'on lui laisse entre une
- * silhouette figée et un volume qui tourne.
+ * ⚠️ **Aucune ne propose de variante « volume qui tourne », et c'est réglé par la
+ * géométrie plutôt que par un choix laissé à l'utilisateur.** Les formes creusées —
+ * étoiles, coussin — laissent au moins un grand cercle intact ; or un grand cercle se
+ * projette toujours en une ellipse de demi-grand axe R, si bien que leur contour atteint
+ * toujours R sans jamais le dépasser. Elles tournent donc **déjà** en vrai volume,
+ * surface rigide et perspective honnête, sans jamais changer de taille : mesuré, 0,0 %
+ * de variation du cercle circonscrit. Le cube est le seul à pousser vers l'extérieur —
+ * jusqu'à 1,37 dans la direction d'une arête —, donc le seul dont le volume tournant
+ * ferait respirer la marque de 12,5 % : il garde sa silhouette figée.
  */
-export const FORMES_AVATAR = [
-  "sphere", "carre", "carre3d", "etoile", "etoile6", "galet", "coussin", "fossettes",
-] as const;
+export const FORMES_AVATAR = ["sphere", "carre", "etoile", "etoile6", "coussin"] as const;
 export type FormeAvatar = (typeof FORMES_AVATAR)[number];
 export const FORME_PAR_DEFAUT: FormeAvatar = "sphere";
 const estFormeValide = (v: unknown): v is FormeAvatar =>
@@ -52,7 +50,12 @@ const estFormeValide = (v: unknown): v is FormeAvatar =>
  * la validation, donc revenu à la sphère : on lui aurait enlevé son étoile pour avoir
  * enlevé une variante de l'étoile. Il retrouve la forme la plus proche.
  */
-const REMPLACEMENTS: Record<string, FormeAvatar> = { etoile3d: "etoile" };
+const REMPLACEMENTS: Record<string, FormeAvatar> = {
+  etoile3d: "etoile",
+  carre3d: "carre",
+  galet: "sphere",
+  fossettes: "sphere",
+};
 
 /**
  * Un choix d'apparence, gardé pour un portefeuille.

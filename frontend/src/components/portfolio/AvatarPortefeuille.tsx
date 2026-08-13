@@ -33,12 +33,9 @@ import { useAvatar } from "@/lib/AvatarContext";
 const NOM_FORME: Record<FormeAvatar, string> = {
   sphere: "Ronde",
   carre: "Carrée",
-  carre3d: "Carrée qui tourne",
   etoile: "Étoile",
   etoile6: "Étoile à six lobes",
-  galet: "Galet",
   coussin: "Coussin",
-  fossettes: "Fossettes",
 };
 
 /**
@@ -54,13 +51,6 @@ function VignetteForme({ forme, couleur }: { forme: FormeAvatar; couleur: string
   const plein = { fill: couleur };
   const cadre = { width: 20, height: 20, viewBox: "0 0 20 20", "aria-hidden": true } as const;
   switch (forme) {
-    case "carre3d":
-      return (
-        <svg {...cadre}>
-          <path d="M10 1.6 17.6 5.6v8.8L10 18.4 2.4 14.4V5.6z"
-            fill="none" stroke={couleur} strokeWidth={2} strokeLinejoin="round" />
-        </svg>
-      );
     case "carre":
       return <svg {...cadre}><rect x={1.5} y={1.5} width={17} height={17} rx={5.4} {...plein} /></svg>;
     case "etoile":
@@ -79,19 +69,8 @@ function VignetteForme({ forme, couleur }: { forme: FormeAvatar; couleur: string
             transform="rotate(30 10 10) translate(0 2.9)" {...plein} />
         </svg>
       );
-    case "galet":
-      // Vue de trois quarts : c'est en tournant qu'un galet se distingue d'un rond.
-      return <svg {...cadre}><ellipse cx={10} cy={10} rx={9} ry={6.2} {...plein} /></svg>;
     case "coussin":
       return <svg {...cadre}><ellipse cx={10} cy={10} rx={6.2} ry={9} {...plein} /></svg>;
-    case "fossettes":
-      return (
-        <svg {...cadre}>
-          <circle cx={10} cy={10} r={9} {...plein} />
-          <circle cx={6.4} cy={6.4} r={2.1} fill="rgba(12,16,28,0.30)" />
-          <circle cx={13.6} cy={13.6} r={2.1} fill="rgba(12,16,28,0.30)" />
-        </svg>
-      );
     default:
       return <svg {...cadre}><circle cx={10} cy={10} r={9} {...plein} /></svg>;
   }
