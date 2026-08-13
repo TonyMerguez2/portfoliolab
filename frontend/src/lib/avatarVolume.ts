@@ -119,6 +119,8 @@ export type Solide = FormeSolide & {
    * milieu du cadre.
    */
   decalage?: { x: number; y: number };
+  /** La demi-largeur de la silhouette, dont dépend l'écartement des yeux. */
+  demiLargeur?: number;
 };
 
 export const SPHERE: Solide = { famille: "sphere" };
@@ -219,7 +221,38 @@ function ajuster(forme: FormeSolide): Solide {
     ...forme,
     echelle,
     decalage: { x: ((xMax + xMin) / 2) * echelle, y: ((yMax + yMin) / 2) * echelle },
+    demiLargeur: demiL * echelle,
   };
+}
+
+/**
+ * La longitude qui pose l'œil au même endroit **relatif** que sur une sphère.
+ *
+ * ⚠️ **L'écart est un arc, et un arc ne se projette pas pareil selon le volume.** Sur la
+ * capsule, la surface près du visage est un cylindre : le même arc y ramène l'œil vers
+ * l'axe, et les deux yeux se retrouvent à 13 % de la largeur de la tête au lieu de 21 sur
+ * la sphère. Sur le triangle, l'inverse — 30 %. Signalé à l'usage : « sur le coussin les
+ * yeux sont trop serrés ». On corrige donc la **longitude**, pas la taille de l'œil, que
+ * `cheminOeil` compense déjà à l'ancre : on cherche celle qui met l'ancre à la même
+ * fraction de la demi-largeur que sur une sphère.
+ */
+export function longitudeCorrigee(longitude: number, s: Solide): number {
+  if (s.famille === "sphere") return longitude;
+  const signe = Math.sign(longitude) || 1;
+  const l0 = Math.abs(longitude);
+  if (l0 <= 1e-6) return longitude;
+  const vise = Math.sin(l0) * (s.demiLargeur ?? 1);
+  const x = (l: number) => {
+    const u = { x: Math.sin(l), y: 0, z: Math.cos(l) };
+    return u.x * rayonSolide(u, s) - (s.decalage ? s.decalage.x : 0);
+  };
+  // La position croît avec la longitude jusqu'au quart de tour : une dichotomie suffit.
+  let a = 0, b = Math.PI / 2;
+  for (let i = 0; i < 40; i++) {
+    const m = (a + b) / 2;
+    if (x(m) < vise) a = m; else b = m;
+  }
+  return signe * (a + b) / 2;
 }
 
 export function solideDepuis(forme: FamilleSolide, arrondi: number): Solide {
@@ -227,7 +260,17 @@ export function solideDepuis(forme: FamilleSolide, arrondi: number): Solide {
   if (forme === "sphere" || a >= 1) return SPHERE;
   const exposant = Math.min(24, 2 / Math.max(0.001, a));
   if (forme === "cube") return { famille: "cube", exposant };
-  if (forme === "hexagone") return ajuster({ famille: "hexagone", exposant });
+  /**
+   * ⚠️ **L'hexagone part de plus haut, et il le faut absolument.** Avec trois directions
+   * espacées de soixante degrés, `Σ cos^n` est **constante** pour n = 2 et n = 4 : les
+   * termes en `cos 2θ` et `cos 4θ` s'y annulent trois à trois. À l'exposant 4 — celui que
+   * donnait le réglage de référence — la forme était donc un cercle parfait, ce qui s'est
+   * vu tout de suite. La modulation n'apparaît qu'avec le terme en `cos 6θ`, c'est-à-dire
+   * à partir de la puissance sixième.
+   */
+  if (forme === "hexagone") {
+    return ajuster({ famille: "hexagone", exposant: Math.min(30, 8 / Math.max(0.001, a)) });
+  }
   if (forme === "triangle") return ajuster({ famille: "triangle", exposant });
   // La capsule et la goutte tiennent leur galbe de leur construction, pas d'un réglage :
   // les bouts d'une capsule sont ronds par définition, la pointe d'une goutte est une

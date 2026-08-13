@@ -27,7 +27,9 @@
  * un objet plutôt que de décalque.
  */
 
-import { SPHERE, type Solide, rayonSolide, surLeSolide } from "./avatarVolume";
+import {
+  SPHERE, type Solide, longitudeCorrigee, rayonSolide, surLeSolide,
+} from "./avatarVolume";
 
 export type Vec3 = { x: number; y: number; z: number };
 export type Point2 = { x: number; y: number };
@@ -914,7 +916,7 @@ export function cheminOeil(
   solide: Solide = SPHERE,
 ): string {
   const ancrage = ancrageOeil(
-    (cote * reglages.ecart) / rayon,
+    longitudeCorrigee((cote * reglages.ecart) / rayon, solide),
     reglages.elevation / rayon,
   );
   const cos = Math.cos(reglages.inclinaison), sin = Math.sin(reglages.inclinaison);
