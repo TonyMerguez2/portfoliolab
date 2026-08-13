@@ -5,6 +5,7 @@ import {
   RAYON_TETE, type Orientation, cheminOeil, cheminSvg, contourSilhouette,
   exposantSilhouette,
 } from "@/lib/avatarSpherique";
+import { cheminOeilSolide, contourTeteSolide } from "@/lib/avatarSolide";
 import { type EtatVie, VIE_AU_REPOS, creerVie } from "@/lib/avatarVie";
 import { COULEUR_PAR_DEFAUT, couleurDesYeux } from "@/lib/avatarCouleur";
 
@@ -133,8 +134,12 @@ export default function AvatarNovac({
    * ⚠️ Ce n'est pas un habillage plaqué par-dessus mais la surface elle-même : les yeux
    * sont peints dessus et suivent son galbe. Sur le cube, la face avant est plate, donc
    * un œil vu de face n'y est pas courbé — cela se voit même à trente-huit pixels.
+   *
+   * ⚠️ `carre` et `solide` sont le même volume dans deux ordres différents. Le premier
+   * garde une silhouette immuable et laisse la surface se tordre en tournant ; le second
+   * fait tourner le solide, ce qui rend la surface rigide et fait respirer la silhouette.
    */
-  forme?: "sphere" | "carre";
+  forme?: "sphere" | "carre" | "solide";
   titre?: string;
   style?: React.CSSProperties;
 }) {
@@ -152,10 +157,9 @@ export default function AvatarNovac({
    * ⚠️ **Un exposant, pas deux formes.** La sphère est la superellipsoïde d'exposant 2 :
    * il n'y a donc qu'un seul chemin de rendu, et rien à tenir en double.
    */
+  const vraie3D = forme === "solide";
   const exposant = useMemo(
-    () => exposantSilhouette(forme === "carre" ? ARRONDI_CARRE : 1), [forme]);
-  const contourTete = useMemo(
-    () => cheminSvg(contourSilhouette(exposant, RAYON_TETE, 180)), [exposant]);
+    () => exposantSilhouette(forme === "sphere" ? 1 : ARRONDI_CARRE), [forme]);
 
   const [vie, setVie] = useState<EtatVie>(VIE_AU_REPOS);
   const [pose, setPose] = useState({ lacet: 0, tangage: 0 });
@@ -282,7 +286,20 @@ export default function AvatarNovac({
     roulis: rad(vie.roulis),
   }), [pose, vie]);
 
-  const oeil = useCallback((fermeture: number, cote: -1 | 1) => cheminOeil({
+  /**
+   * Le contour de la tête.
+   *
+   * ⚠️ En vraie 3D il dépend de l'orientation — c'est justement ce qui change : le
+   * solide tourne, donc sa silhouette aussi. Dans les deux autres modes elle est
+   * immuable, et se calcule une fois par forme.
+   */
+  const contourTete = useMemo(
+    () => (vraie3D
+      ? contourTeteSolide(orientation, exposant, RAYON_TETE, 120)
+      : cheminSvg(contourSilhouette(exposant, RAYON_TETE, 180))),
+    [vraie3D, orientation, exposant]);
+
+  const oeil = useCallback((fermeture: number, cote: -1 | 1) => (vraie3D ? cheminOeilSolide : cheminOeil)({
     ecart: ECART * vie.ecart,
     elevation: 0,
     largeur: LARGEUR * vie.largeur,
@@ -293,7 +310,7 @@ export default function AvatarNovac({
     })(),
     inclinaison: rad(vie.inclinaison),
     courbure: vie.courbure,
-  }, orientation, cote, RAYON_TETE, ECHANTILLONS, exposant), [vie, orientation, exposant]);
+  }, orientation, cote, RAYON_TETE, ECHANTILLONS, exposant), [vie, orientation, exposant, vraie3D]);
 
   return (
     <svg

@@ -143,23 +143,30 @@ export default function AvatarPortefeuille({
             {/**
               * La silhouette, sous les couleurs et séparée d'un trait.
               *
-              * ⚠️ **Deux vignettes qui dessinent la forme, et non deux mots.** « Sphère »
-              * et « carré arrondi » ne se distinguent qu'une fois vus ; et la vignette
-              * prend la couleur en cours, ce qui montre du même coup les deux réglages
-              * ensemble — c'est bien la même tête qu'on habille.
+              * ⚠️ **Des vignettes qui dessinent la forme, et non des mots.** « Sphère »,
+              * « carré arrondi » et « vraie 3D » ne se distinguent qu'une fois vus ; et la
+              * vignette prend la couleur en cours, ce qui montre du même coup les deux
+              * réglages ensemble — c'est bien la même tête qu'on habille.
+              *
+              * ⚠️ Les deux dernières portent le **même volume** : l'une garde sa
+              * silhouette immuable et laisse la surface se tordre en tournant, l'autre
+              * fait tourner le solide et laisse la silhouette respirer. Le cube en
+              * perspective est là pour signaler cette différence-là, la seule qui compte.
               */}
             <div style={{
               marginTop: 16, paddingTop: 14,
               borderTop: "1px solid rgba(18,20,28,0.10)",
               display: "flex", gap: 10,
             }}>
-              {(["sphere", "carre"] as const).map(cle => {
+              {(["sphere", "carre", "solide"] as const).map(cle => {
                 const retenue = forme === cle;
+                const nom = cle === "sphere" ? "Ronde"
+                  : cle === "carre" ? "Carrée" : "Carrée qui tourne";
                 return (
                   <button key={cle} type="button" onClick={() => onForme(cle)}
                     aria-pressed={retenue}
-                    aria-label={cle === "sphere" ? "Silhouette ronde" : "Silhouette carrée"}
-                    title={cle === "sphere" ? "Ronde" : "Carrée"}
+                    aria-label={`Silhouette ${nom.toLowerCase()}`}
+                    title={nom}
                     style={{
                       width: 34, height: 34, padding: 0, borderRadius: 10, cursor: "pointer",
                       display: "flex", alignItems: "center", justifyContent: "center",
@@ -169,9 +176,16 @@ export default function AvatarPortefeuille({
                       transition: "background 120ms, border-color 120ms",
                     }}>
                     <svg width={20} height={20} viewBox="0 0 20 20" aria-hidden="true">
-                      <rect x={1.5} y={1.5} width={17} height={17}
-                        rx={cle === "sphere" ? 8.5 : 5.4} ry={cle === "sphere" ? 8.5 : 5.4}
-                        fill={couleur} />
+                      {/* Le cube en perspective dit ce que les deux autres vignettes ne
+                          peuvent pas dire : que celle-ci, c'est le volume qui tourne. */}
+                      {cle === "solide" ? (
+                        <path d="M10 1.6 17.6 5.6v8.8L10 18.4 2.4 14.4V5.6z"
+                          fill="none" stroke={couleur} strokeWidth={2} strokeLinejoin="round" />
+                      ) : (
+                        <rect x={1.5} y={1.5} width={17} height={17}
+                          rx={cle === "sphere" ? 8.5 : 5.4} ry={cle === "sphere" ? 8.5 : 5.4}
+                          fill={couleur} />
+                      )}
                     </svg>
                   </button>
                 );
