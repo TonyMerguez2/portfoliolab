@@ -64,7 +64,43 @@ export type Solide =
    * En divisant `y` dans la formule du cube, le bord garde exactement la platitude d'un
    * cube et la forme s'aplatit sans jamais creuser.
    */
-  | { famille: "coussin"; exposant: number; hauteur: number };
+  | { famille: "coussin"; exposant: number; hauteur: number }
+  /**
+   * Le triangle adouci : trois lobes, `1 − creux · ρ³(1 − cos 3θ)/2`.
+   *
+   * ⚠️ **La modulation s'annule sur l'axe du regard**, comme pour les étoiles : `ρ³`
+   * tend vers zéro au pôle, si bien que la face avant reste sphérique là où passent les
+   * yeux. C'est la même précaution, pour la même raison — un creux au milieu du visage
+   * rapprocherait le bord visible et couperait le regard.
+   *
+   * `x³ − 3xy²` est la partie réelle de `(x + iy)³` : c'est elle qui porte la symétrie
+   * d'ordre trois, et elle est polynomiale donc lisse partout.
+   */
+  | { famille: "triangle"; creux: number }
+  /**
+   * L'hexagone : le cube arrondi, mais fermé par **trois** paires de plans au lieu de
+   * deux.
+   *
+   * `1 / (Σₖ |u·nₖ|ⁿ + |z|ⁿ)^(1/n)` avec les trois normales à 90°, 150° et 210°. Quand
+   * `n` grandit, la somme tend vers le maximum et la forme vers l'intersection des trois
+   * bandes — l'hexagone exact, sommet en haut aplati. C'est la même construction que le
+   * carré, à une direction près : le carré n'en ferme que deux.
+   */
+  | { famille: "hexagone"; exposant: number }
+  /**
+   * La goutte : une sphère dont le haut se resserre, `1 − creux · (1 + y)²/4`.
+   *
+   * ⚠️ **Adoucie, sans pointe — et ce n'est pas un choix mais une contrainte.** Une
+   * surface décrite par un rayon en fonction de la direction est toujours **ronde à ses
+   * pôles** : près de l'axe, le rayon horizontal vaut `r·φ` quoi qu'on fasse, donc la
+   * tangente ne peut pas s'y redresser. Une vraie pointe demanderait de sortir de la
+   * description radiale, c'est-à-dire de reprendre toute la chaîne. Ce qu'on obtient est
+   * un œuf : large en bas, resserré en haut.
+   *
+   * La modulation ne dépend que de `y`, donc elle est constante le long de l'équateur —
+   * là où vivent les yeux, qui ne subissent aucune asymétrie gauche-droite.
+   */
+  | { famille: "goutte"; creux: number };
 
 export const SPHERE: Solide = { famille: "sphere" };
 
@@ -104,7 +140,9 @@ export type FamilleSolide = Solide["famille"];
  * marquée : ce que le curseur commande, c'est « du plus doux au plus franc », pas une
  * grandeur physique commune.
  */
-const AMPLEUR: Record<Exclude<FamilleSolide, "sphere" | "cube" | "coussin">, number> = {
+const AMPLEUR: Record<
+  Exclude<FamilleSolide, "sphere" | "cube" | "coussin" | "hexagone">, number
+> = {
   etoile: AMPLEUR_ETOILE,
   /**
    * ⚠️ Plus prudente que l'étoile à quatre lobes, à profondeur égale : six creux serrés
@@ -112,16 +150,29 @@ const AMPLEUR: Record<Exclude<FamilleSolide, "sphere" | "cube" | "coussin">, num
    * petits éclats sombres — le remplissage ne sait pas quel côté est l'intérieur.
    */
   etoile6: 0.3,
+  triangle: 0.5,
+  goutte: 0.85,
 };
 
 /** Ce dont le coussin est écrasé sur la verticale — indépendant de l'arrondi des bords. */
 const HAUTEUR_COUSSIN = 0.75;
+
+/**
+ * Les trois directions qui ferment l'hexagone.
+ *
+ * ⚠️ Quatre-vingt-dix degrés en tête, et non zéro : la première bande devient alors
+ * `|y| ≤ 1`, ce qui donne un **côté plat en haut et en bas**. Partie de zéro, la forme
+ * aurait un sommet en haut — un hexagone posé sur la pointe, qu'on ne lit plus comme
+ * une tête.
+ */
+const ANGLES_HEXAGONE = [90, 150, 210].map(a => (a * Math.PI) / 180);
 
 export function solideDepuis(forme: FamilleSolide, arrondi: number): Solide {
   const a = Math.min(1, Math.max(0, arrondi));
   if (forme === "sphere" || a >= 1) return SPHERE;
   const exposant = Math.min(24, 2 / Math.max(0.001, a));
   if (forme === "cube") return { famille: "cube", exposant };
+  if (forme === "hexagone") return { famille: "hexagone", exposant };
   if (forme === "coussin") return { famille: "coussin", exposant, hauteur: HAUTEUR_COUSSIN };
   return { famille: forme, creux: (1 - a) * AMPLEUR[forme] };
 }
@@ -141,7 +192,11 @@ export function rayonSolide(u: Vec3, s: Solide): number {
   if (s.famille === "sphere") return 1;
   const l = Math.sqrt(u.x * u.x + u.y * u.y + u.z * u.z);
   if (l <= 1e-12) return 1;
-  const x = Math.abs(u.x) / l, y = Math.abs(u.y) / l, z = Math.abs(u.z) / l;
+  // ⚠️ Les composantes **signées** d'abord : les symétries d'ordre trois et la goutte
+  // distinguent le haut du bas et la gauche de la droite. Les valeurs absolues ne
+  // servent qu'aux familles qui sont symétriques par rapport aux trois plans.
+  const sx = u.x / l, sy = u.y / l, sz = u.z / l;
+  const x = Math.abs(sx), y = Math.abs(sy), z = Math.abs(sz);
   switch (s.famille) {
     case "cube": {
       const n = s.exposant;
@@ -152,6 +207,31 @@ export function rayonSolide(u: Vec3, s: Solide): number {
     case "etoile6": {
       const f = 3 * x * x * y - y * y * y;
       return 1 - s.creux * f * f;
+    }
+    case "triangle": {
+      /**
+       * Partie réelle de (x + iy)³, comparée au module : trois lobes, creusés entre eux.
+       *
+       * ⚠️ Le repère est tourné d'un quart de tour — on lit `(y, −x)` au lieu de
+       * `(x, y)` — pour que le sommet pointe **vers le haut**. Pris tel quel, le triangle
+       * pointait vers la droite : une tête posée sur le côté.
+       */
+      const a = sy, b = -sx;
+      const rho3 = Math.pow(a * a + b * b, 1.5);
+      const cos3 = a * a * a - 3 * a * b * b;
+      return 1 - s.creux * (rho3 - cos3) / 2;
+    }
+    case "hexagone": {
+      const n = s.exposant;
+      let somme = Math.pow(z, n);
+      for (const a of ANGLES_HEXAGONE) {
+        somme += Math.pow(Math.abs(sx * Math.cos(a) + sy * Math.sin(a)), n);
+      }
+      return 1 / Math.pow(somme, 1 / n);
+    }
+    case "goutte": {
+      const t = (1 + sy) / 2;
+      return 1 - s.creux * t * t;
     }
     default: {
       // Le cube, mais dont la verticale est comptée plus cher : il s'écrase d'autant.

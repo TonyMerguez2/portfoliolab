@@ -18,7 +18,9 @@ import { solideDepuis, type FamilleSolide } from "./avatarVolume";
  * reparte pas en silence.
  */
 
-const FORMES: FamilleSolide[] = ["sphere", "cube", "etoile", "etoile6", "coussin"];
+const FORMES: FamilleSolide[] = [
+  "sphere", "cube", "coussin", "hexagone", "triangle", "etoile", "etoile6", "goutte",
+];
 
 /** Ce que le composant de l'application construit, reproduit ici à l'identique. */
 const solideDeLApplication = (f: FamilleSolide) => solideDepuis(f, ARRONDI_REFERENCE);

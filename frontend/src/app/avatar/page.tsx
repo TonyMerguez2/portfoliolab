@@ -69,6 +69,9 @@ const FORMES: [FamilleSolide, string][] = [
   ["etoile", "Étoile"],
   ["etoile6", "Étoile 6 lobes"],
   ["coussin", "Coussin"],
+  ["hexagone", "Hexagone"],
+  ["triangle", "Triangle"],
+  ["goutte", "Goutte"],
 ];
 
 /** Le pictogramme d'un volume, dans la couleur du bouton. */
@@ -88,8 +91,14 @@ function VignetteVolume({ famille }: { famille: FamilleSolide }) {
         </svg>
       );
     case "coussin":
-      // Couché : le pincement porte sur les pôles, donc la forme est plus large que haute.
+      // Couché : l'écrasement porte sur la verticale, donc la forme est plus large que haute.
       return <svg {...c}><ellipse cx={8} cy={8} rx={7.2} ry={5.4} {...f} /></svg>;
+    case "hexagone":
+      return <svg {...c}><path d="M8 1.2 13.9 4.6v6.8L8 14.8 2.1 11.4V4.6z" transform="rotate(90 8 8)" {...f} /></svg>;
+    case "triangle":
+      return <svg {...c}><path d="M8 2 14.4 13.2H1.6z" {...f} stroke="currentColor" strokeWidth={2.6} strokeLinejoin="round" /></svg>;
+    case "goutte":
+      return <svg {...c}><path d="M8 1.4c2.7 3.6 5.3 5.4 5.3 8.3a5.3 5.3 0 1 1-10.6 0c0-2.9 2.6-4.7 5.3-8.3z" {...f} /></svg>;
     default:
       return <svg {...c}><circle cx={8} cy={8} r={7} {...f} /></svg>;
   }

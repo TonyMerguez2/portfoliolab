@@ -36,6 +36,9 @@ const NOM_FORME: Record<FormeAvatar, string> = {
   etoile: "Étoile",
   etoile6: "Étoile à six lobes",
   coussin: "Coussin",
+  hexagone: "Hexagone",
+  triangle: "Triangle",
+  goutte: "Goutte",
 };
 
 /**
@@ -67,6 +70,25 @@ function VignetteForme({ forme, couleur }: { forme: FormeAvatar; couleur: string
             transform="translate(0 2.9)" {...plein} />
           <path d="M10 2.2c.8 3 1.9 4.1 4.9 4.9-3 .8-4.1 1.9-4.9 4.9-.8-3-1.9-4.1-4.9-4.9 3-.8 4.1-1.9 4.9-4.9z"
             transform="rotate(30 10 10) translate(0 2.9)" {...plein} />
+        </svg>
+      );
+    case "hexagone":
+      return (
+        <svg {...cadre}>
+          <path d="M10 1.6 17.3 5.8v8.4L10 18.4 2.7 14.2V5.8z" transform="rotate(90 10 10)" {...plein} />
+        </svg>
+      );
+    case "triangle":
+      return (
+        <svg {...cadre}>
+          <path d="M10 2.4 18 16.4H2z" {...plein} strokeLinejoin="round" stroke={couleur} strokeWidth={3} />
+        </svg>
+      );
+    case "goutte":
+      // Resserrée en haut, pleine en bas : la goutte, adoucie comme la forme rendue.
+      return (
+        <svg {...cadre}>
+          <path d="M10 1.8c3.4 4.4 6.6 6.7 6.6 10.3a6.6 6.6 0 1 1-13.2 0c0-3.6 3.2-5.9 6.6-10.3z" {...plein} />
         </svg>
       );
     case "coussin":

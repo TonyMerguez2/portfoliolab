@@ -730,7 +730,7 @@ describe("les volumes qui ne changent jamais de taille", () => {
   };
 
   it("garde le même cercle circonscrit sous toutes les rotations", () => {
-    for (const famille of ["etoile", "etoile6"] as const) {
+    for (const famille of ["etoile", "etoile6", "triangle"] as const) {
       for (const arrondi of [0.2, 0.5]) {
         const s = solideDepuis(famille, arrondi);
         let min = Infinity, max = -Infinity;
@@ -836,12 +836,23 @@ describe("normaleSolide", () => {
     }
   });
 
-  it("rend l'axe du regard normal à lui-même sur toutes les formes creusées", () => {
-    // Une face avant lisse : la normale y est radiale, sans quoi le bord serait faux —
-    // et c'est là que se trouvent les yeux.
-    for (const famille of ["etoile", "etoile6", "coussin"] as const) {
+  it("rend l'axe du regard normal à lui-même, sauf sur la goutte", () => {
+    /**
+     * Une face avant droite : la normale y est radiale, sans quoi le bord serait faux —
+     * et c'est là que se trouvent les yeux.
+     *
+     * ⚠️ **La goutte fait exception, et légitimement.** Son rayon dépend de la hauteur :
+     * au point qui nous fait face, la surface est donc **penchée**, d'une dizaine de
+     * degrés. Ce n'est pas un défaut mais la forme même d'une goutte — un profil qui
+     * varie du bas vers le haut ne peut pas être perpendiculaire au regard partout. La
+     * conséquence à connaître : les yeux y reposent sur un plan légèrement incliné.
+     */
+    for (const famille of ["etoile", "etoile6", "coussin", "triangle", "hexagone"] as const) {
       const n = normaleSolide({ x: 0, y: 0, z: 1 }, solideDepuis(famille, 0.4));
       expect(n.z).toBeCloseTo(1, 6);
     }
+    const goutte = normaleSolide({ x: 0, y: 0, z: 1 }, solideDepuis("goutte", 0.4));
+    expect(goutte.z).toBeLessThan(0.999);
+    expect(goutte.z).toBeGreaterThan(0.9);
   });
 });

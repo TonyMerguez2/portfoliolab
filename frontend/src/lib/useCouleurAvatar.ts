@@ -38,7 +38,10 @@ export const cleForme = (id: string | number) => `novac-avatar-forme:${id}`;
  * devient rigide, mais la silhouette respire. Il n'y a pas de troisième voie — la sphère
  * est la seule forme où les deux tiennent en place à la fois.
  */
-export const FORMES_AVATAR = ["sphere", "carre", "etoile", "etoile6", "coussin"] as const;
+export const FORMES_AVATAR = [
+  "sphere", "carre", "coussin", "hexagone",
+  "triangle", "etoile", "etoile6", "goutte",
+] as const;
 export type FormeAvatar = (typeof FORMES_AVATAR)[number];
 export const FORME_PAR_DEFAUT: FormeAvatar = "sphere";
 const estFormeValide = (v: unknown): v is FormeAvatar =>

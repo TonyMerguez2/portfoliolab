@@ -57,6 +57,9 @@ const FAMILLE: Record<FormeAvatar, FamilleSolide> = {
   etoile: "etoile",
   etoile6: "etoile6",
   coussin: "coussin",
+  hexagone: "hexagone",
+  triangle: "triangle",
+  goutte: "goutte",
 };
 
 
