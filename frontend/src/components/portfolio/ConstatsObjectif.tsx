@@ -5,11 +5,10 @@ import { FAMILLE_AVATAR } from "@/components/AvatarNovac";
 import Cadre from "@/components/ui/Cadre";
 import {
   aideALaDecision, confianceEnClair, couperMetrique,
-  type Contexte, type Insight, type Priorite,
+  type Contexte, type Insight,
 } from "@/lib/aideDecision";
 import {
   COULEUR_PAR_DEFAUT, OMBRES_CREUX, bordCarte, couleurDesYeux, encre, fondCreux,
-  lisible,
 } from "@/lib/avatarCouleur";
 import { hexVersRvb } from "@/lib/couleur";
 import { ARRONDI_REFERENCE, OEIL_REFERENCE, TAILLE_REFERENCE } from "@/lib/avatarReglages";
@@ -18,7 +17,6 @@ import { solideDepuis } from "@/lib/avatarVolume";
 
 import { type Objectif } from "@/lib/objectifs";
 import { type FormeAvatar } from "@/lib/useCouleurAvatar";
-import { JETONS } from "@/lib/palette";
 import { FONT, NUM } from "@/lib/typography";
 
 /**
@@ -65,19 +63,6 @@ import { FONT, NUM } from "@/lib/typography";
 
 /** La hauteur des yeux dans le panneau, en pixels. */
 const HAUTEUR_YEUX = 26;
-
-/**
- * La couleur d'une priorité.
- *
- * ⚠️ Discrète, et appliquée au seul titre. La priorité se lit d'abord dans les mots : un
- * panneau qui crie en rouge à chaque visite finit par n'être plus lu du tout.
- */
-const TEINTE_PRIORITE: Record<Priorite, string> = {
-  critique: JETONS.negatif,
-  warning: JETONS.attention,
-  positive: JETONS.positif,
-  info: JETONS.accent,
-};
 
 /**
  * La navigation entre les aides, en points.
@@ -183,7 +168,6 @@ export default function ConstatsObjectif({
     const [r, v, b] = hexVersRvb(fond);
     return { cadre: fond, voile: `rgba(${r}, ${v}, ${b}, 0.5)`, bord: bordCarte(fond) };
   }, [fond]);
-  const teintePriorite = (p: Priorite) => lisible(fond, TEINTE_PRIORITE[p]);
 
   /**
    * Les deux yeux, seuls — sans tête.
@@ -293,11 +277,11 @@ export default function ConstatsObjectif({
       display: "flex", flexDirection: "column", gap: 10,
       padding: "14px 16px",
       /**
-       * ⚠️ **La teinte se pose *par-dessus* le fond de la carte, elle ne le remplace pas.**
-       * Écrite en `background`, elle effacerait le fond du thème et la carte cesserait de
-       * suivre le mode clair ou sombre — un aplat opaque ne s'adapte à rien. Superposée en
-       * dégradé plat sur `JETONS.carte`, elle teinte les deux modes sans qu'aucun ne soit
-       * traité à part.
+       * ⚠️ **La carte porte la couleur du portefeuille, pas celle du thème — donc elle ne
+       * suit plus le mode clair ni le sombre.** C'est assumé : cette carte-là dit à qui
+       * elle appartient, et son encre se déduit du fond pour rester lisible dans les deux
+       * modes. Toutes les autres couleurs de ce fichier passent par `encre`, précisément
+       * pour que ce choix ne coûte rien ailleurs.
        */
       background: fond,
     }}>
@@ -462,9 +446,22 @@ export default function ConstatsObjectif({
                 * à l'image. Une valeur en deux temps est longue **par construction** : elle
                 * reçoit donc trente pixels, ce qui la laisse tenir sans écraser son voisin.
                 */}
-              <span style={{ ...NUM, fontSize: discret ? 30 : 40, fontWeight: 700,
-                lineHeight: 1.04,
-                color: teintePriorite(aide.priorite), textAlign: "center",
+              {/**
+                * ⚠️ **La partie forte est insécable, et c'est ce qui répare les valeurs
+                * longues.** « 16 ans » porte une espace, donc le navigateur y coupait :
+                * l'écran affichait « 16 » puis « ans 11 mois » à la ligne, la durée
+                * disloquée en deux morceaux qui ne veulent rien dire séparément. Insécable,
+                * elle est reportée entière et la coupure remonte là où elle a un sens —
+                * « 16 ans » au-dessus, « 11 mois » en dessous. Le retrait portait déjà cette
+                * marque ; il manquait au chiffre lui-même.
+                *
+                * ⚠️ **En noir, et non à la couleur de la priorité.** Une couleur d'urgence
+                * sur le nombre le tirait vers l'alerte alors qu'il ne fait que mesurer. La
+                * priorité se lit dans les mots du titre, qui la disent mieux qu'une teinte.
+                */}
+              <span style={{ ...NUM, fontSize: discret ? 28 : 40, fontWeight: 700,
+                lineHeight: 1.06, whiteSpace: discret ? "nowrap" : "normal",
+                color: encre(fond, 1), textAlign: "center",
                 letterSpacing: "-0.02em" }}>
                 {fort}
                 {/* ⚠️ **Les mois en retrait, dans le même flux et non sur une ligne à part.**
@@ -502,19 +499,26 @@ export default function ConstatsObjectif({
         <div title={aide.motifs.join(" · ")}
           style={{ marginTop: "auto", paddingTop: 10, display: "flex", alignItems: "center",
             gap: 7, minWidth: 0, borderTop: `1px solid ${encre(fond, 0.14)}` }}>
-          {/* Un bouclier : ce qui suit dit la solidité du calcul, pas son résultat. */}
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" aria-hidden="true"
-            stroke={encre(fond, 0.85)} strokeWidth={1.8} strokeLinecap="round"
-            strokeLinejoin="round" style={{ display: "block", flexShrink: 0 }}>
-            <path d="M12 3 5 6v5.5c0 4.2 2.9 7.6 7 8.5 4.1-.9 7-4.3 7-8.5V6z" />
-            <path d="m9 12 2 2 4-4" />
+          {/**
+            * Un bouclier : ce qui suit dit la solidité du calcul, pas son résultat.
+            *
+            * ⚠️ **Plein plutôt que tracé, et aligné sur la ligne de base du texte.** Un
+            * contour à un pixel et demi se perdait à cette taille ; un aplat tient. Le
+            * `flex` de la rangée le centre déjà verticalement, mais un glyphe plein paraît
+            * toujours un cheveu trop haut à côté d'une capitale : le demi-pixel de
+            * décalage le pose sur la ligne.
+            */}
+          <svg width="15" height="15" viewBox="0 0 24 24" fill={encre(fond, 0.85)}
+            aria-hidden="true"
+            style={{ display: "block", flexShrink: 0, marginTop: 0.5 }}>
+            <path d="m11.999 2.25.115.007.057.008.06.012.108.033a1 1 0 0 1 .212.11l.102.08.248.212a10.75 10.75 0 0 0 7.019 2.474l.334-.01a.98.98 0 0 1 .98.699 12.66 12.66 0 0 1-4.449 13.63 12.7 12.7 0 0 1-4.54 2.214 1 1 0 0 1-.49 0 12.7 12.7 0 0 1-7.855-6.02 12.66 12.66 0 0 1-1.135-9.824.975.975 0 0 1 .981-.699 10.75 10.75 0 0 0 7.352-2.464l.257-.22.094-.072a1 1 0 0 1 .212-.11l.11-.033a1 1 0 0 1 .115-.02zm3.621 7.11a.977.977 0 0 0-1.381 0l-3.215 3.21-1.262-1.26-.092-.08a.977.977 0 0 0-1.573.8c.008.248.11.484.285.66l1.952 1.95.092.08a.976.976 0 0 0 1.288-.08l3.905-3.9.081-.092a.974.974 0 0 0-.08-1.287" />
           </svg>
-          <span style={{ fontFamily: FONT, fontSize: 9.5, fontWeight: 700, flexShrink: 0,
+          <span style={{ fontFamily: FONT, fontSize: 10.5, fontWeight: 700, flexShrink: 0,
             color: encre(fond, 0.88) }}>
             {confianceEnClair(aide.confiance)}
           </span>
           {aide.hypotheses.length > 0 && (
-            <span style={{ fontFamily: FONT, fontSize: 9.5, lineHeight: 1.45, minWidth: 0,
+            <span style={{ fontFamily: FONT, fontSize: 10.5, lineHeight: 1.45, minWidth: 0,
               color: encre(fond, 0.7), overflow: "hidden", textOverflow: "ellipsis",
               whiteSpace: "nowrap" }}>
               · {aide.hypotheses.join(" · ")}

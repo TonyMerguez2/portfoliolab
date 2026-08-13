@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   COULEURS_AVATAR, COULEUR_PAR_DEFAUT, bordCarte, contrasteDuRegard,
-  couleurDesYeux, encre, encrePleine, estCouleurValide, lisible,
+  couleurDesYeux, encre, encrePleine, estCouleurValide,
 } from "./avatarCouleur";
 import { clartePercue, contraste, luminance, rvbVersTsl, hexVersRvb } from "./couleur";
 
@@ -148,28 +148,6 @@ describe("l'encre d'une carte teintée du portefeuille", () => {
     }
   });
 
-  it("rend une teinte de priorité lisible sans lui ôter sa teinte", () => {
-    /**
-     * ⚠️ **Sans cela, l'urgence cesse de se voir — mesuré, sur dix couleurs sur onze.** Le
-     * titre d'une aide se teinte selon sa priorité, avec des valeurs réglées pour le fond
-     * sombre des cartes : posées sur une carte crème ou ambre, elles tombent entre 1,1 et
-     * 2,5 pour un. Le titre le plus pressant devenait le moins lisible, exactement à
-     * l'envers de ce qu'il veut dire.
-     *
-     * On déplace donc la clarté et non la teinte : le rouge reste rouge, le vert reste
-     * vert. Retomber sur l'encre aurait été plus simple et aurait donné la même couleur
-     * aux quatre priorités — mesuré, la teinte est conservée dans les quarante-quatre cas.
-     */
-    const PRIORITES = ["#FF6467", "#FF8904", "#00D492", "#50A2FF"];
-    for (const c of COULEURS_AVATAR) {
-      for (const p of PRIORITES) {
-        const t = lisible(c.hex, p);
-        expect(contraste(c.hex, t)).toBeGreaterThanOrEqual(3);
-        // La teinte survit : on n'est jamais retombé sur le noir ou le blanc.
-        expect(t).not.toBe(encrePleine(c.hex));
-      }
-    }
-  });
 });
 
 describe("les deux anneaux d'une carte teintée", () => {

@@ -70,32 +70,6 @@ export function encrePleine(fond: string): string {
  * déteindrait : sur une carte crème, du texte atténué virerait au gris sale au lieu de
  * s'estomper dans sa propre couleur. Mélangée au fond, chaque nuance reste de la famille.
  */
-/**
- * La teinte d'une priorité, ramenée jusqu'à devenir lisible sur le fond.
- *
- * ⚠️ **Sans cela, l'urgence cesse de se voir — mesuré, sur dix couleurs sur onze.** Le
- * titre d'une aide se teinte selon sa priorité : rouge, orange, vert. Ces valeurs sont
- * réglées pour le fond sombre des cartes ; posées sur une carte crème ou ambre, elles
- * tombent entre 1,1 et 2,5 pour 1. Le titre le plus pressant devenait le moins lisible,
- * exactement à l'envers de ce qu'il veut dire.
- *
- * ⚠️ **On déplace la clarté, pas la teinte.** Retomber sur l'encre serait le plus simple
- * et perdrait l'information : les quatre priorités auraient la même couleur. En
- * assombrissant ou en éclaircissant par pas — dans le sens que le fond commande, celui-là
- * même que suivent les yeux de l'avatar — le rouge reste rouge et le vert reste vert,
- * jusqu'à ce qu'ils passent la barre des trois pour un.
- */
-export function lisible(fond: string, teinte: string): string {
-  if (contraste(fond, teinte) >= 3) return teinte;
-  const versLeClair = luminance(encrePleine(fond)) > luminance(fond);
-  let essai = teinte;
-  for (let i = 0; i < 20; i++) {
-    essai = decalerClarte(essai, versLeClair ? 0.05 : -0.05);
-    if (contraste(fond, essai) >= 3) return essai;
-  }
-  // Aucune clarté ne convient — teinte trop proche du fond. L'encre reste lisible.
-  return couleurDesYeux(fond);
-}
 
 export function encre(fond: string, part: number): string {
   const [rf, vf, bf] = hexVersRvb(fond);
