@@ -550,6 +550,18 @@ function PortfolioPageInner() {
    */
   const [ecritures, setEcritures] = useState<Tx[]>([]);
   /**
+   * Le journal est-il arrivé ?
+   *
+   * ⚠️ **Sans lui, aucune ligne ne *paraît* rattachée — et ce n'est pas la même chose que
+   * de ne pas l'être.** Une liste vide se lit comme « rien n'est rangé » : les comptes
+   * déclarés s'affichent alors à « Aucun actif » et les dossiers devinés reparaissent à
+   * côté d'eux, pleins. Vu à l'écran quelques secondes après chaque rechargement, un
+   * compte déclaré vide en vis-à-vis du dossier deviné qu'il venait de remplacer. Une
+   * répartition qu'on va contredire deux secondes plus tard vaut moins que pas de
+   * répartition du tout.
+   */
+  const [journalArrive, setJournalArrive] = useState(false);
+  /**
    * L'analyse des publications, obtenue **une fois** ici puis distribuée.
    *
    * ⚠️ Les deux panneaux qui s'en servent l'appelaient chacun de leur côté : la
@@ -652,16 +664,21 @@ function PortfolioPageInner() {
   useEffect(() => {
     const id = portfolio?.id;
     // ⚠️ Un portefeuille valorisé en poids n'a aucune écriture : la liste vide est le fait
-    // juste, et non un chargement manqué. Tout y est alors rangé par déduction.
-    if (!id || !surTransactions) { setEcritures([]); return; }
+    // juste, et non un chargement manqué. Tout y est rangé par déduction, et le journal
+    // compte comme arrivé d'emblée.
+    if (!id || !surTransactions) { setEcritures([]); setJournalArrive(true); return; }
+    setJournalArrive(false);
     let annule = false;
     fetch(`${API_URL}/api/v1/portfolios/${id}/transactions`, { headers: enTetesAuth() })
       .then(r => (r.ok ? r.json() : null))
       .then((d) => {
         if (annule) return;
         setEcritures(Array.isArray(d) ? d : (d?.transactions ?? []));
+        setJournalArrive(true);
       })
-      .catch(() => { if (!annule) setEcritures([]); });
+      // ⚠️ Un journal qu'on n'a pas pu lire compte comme arrivé : sinon la rangée resterait
+      // en attente pour toujours, et l'on ne verrait plus aucun dossier du tout.
+      .catch(() => { if (!annule) { setEcritures([]); setJournalArrive(true); } });
     return () => { annule = true; };
   }, [portfolio?.id, surTransactions, txRefreshKey]);
 
@@ -2243,7 +2260,22 @@ function PortfolioPageInner() {
                       * contenu que la donnée ne dit pas — précisément la confusion que ces
                       * comptes servent à lever.
                       */}
-                    {dossiers.map(d => {
+                    {/**
+                      * ⚠️ **Rien tant que le journal n'est pas là.** Le rangement des lignes
+                      * se lit dans les opérations ; avant leur arrivée, aucune ne paraît
+                      * rattachée. La rangée montrait alors les comptes déclarés à « Aucun
+                      * actif » et faisait reparaître à côté d'eux les dossiers devinés
+                      * qu'ils venaient de remplacer — pendant les deux secondes de la
+                      * requête, à chaque rechargement. Une répartition qu'on va contredire
+                      * ne vaut pas mieux que pas de répartition.
+                      *
+                      * ⚠️ **La place est gardée, pas seulement le contenu retiré.** Sans ce
+                      * bloc de la hauteur d'un dossier, la courbe au-dessus gagnerait 196
+                      * pixels le temps du chargement pour les reperdre aussitôt : on
+                      * remplacerait un clignotement par un soubresaut. */}
+                    {!journalArrive ? (
+                      <div style={{ height: CARTE_COMPTE.hauteur, flexShrink: 0 }} />
+                    ) : dossiers.map(d => {
                       const compte = d.compteId
                         ? comptesDeclares.find(c => c.id === d.compteId) : undefined;
                       const depuis = compte ? fraicheurDuSolde(compte.mis_a_jour_le) : null;

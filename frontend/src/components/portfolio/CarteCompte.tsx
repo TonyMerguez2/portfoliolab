@@ -156,6 +156,15 @@ export const CARTE_COMPTE = {
    * le coin gauche du plan. Publier la découpe évite de la redécouvrir à l'œil.
    */
   languette: LANGUETTE,
+  /**
+   * La hauteur d'un dossier — celle d'une carte d'actif, par construction.
+   *
+   * ⚠️ **Publiée parce que la page doit pouvoir réserver la place d'un dossier sans en
+   * rendre un.** Le temps que le journal des opérations arrive, la rangée n'a rien de vrai
+   * à montrer ; laisser le vide ferait gagner 196 pixels à la courbe pour les lui reprendre
+   * aussitôt. Recopier le nombre là-bas l'aurait figé le jour où celui-ci change.
+   */
+  get hauteur() { return this.apercu + this.panneau; },
 };
 const HAUTEUR = CARTE_COMPTE.apercu + CARTE_COMPTE.panneau;
 

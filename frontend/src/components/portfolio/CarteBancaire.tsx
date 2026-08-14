@@ -185,10 +185,35 @@ function Guilloche({ id }: { id: string }) {
       </defs>
       {/* La lueur du coin haut-droit : elle éclaire la bande visible sans y poser de forme. */}
       <rect width={L} height={H} fill={`url(#lueur-${id})`} />
-      <g fill="none" stroke="rgba(255,255,255,0.075)" strokeWidth={1.2}>
+      {/**
+        * ⚠️ **Les arcs se voient, sinon ils ne servent à rien.** À 7,5 % d'opacité sur un
+        * pixel et deux dixièmes, ils étaient signalés comme « trop discrets » — et ils
+        * l'étaient d'autant plus depuis que la carte a été éclaircie : un blanc à peine posé
+        * disparaît sur un fond clair, là où il tenait encore sur un presque-noir. Ils passent
+        * à 14 %, sur un trait plus franc.
+        *
+        * ⚠️ **Un quatrième arc, et l'écart resserré.** Trois cercles espacés de quarante-cinq
+        * laissaient de grandes plages nues entre eux ; le guillochis d'une vraie carte se
+        * reconnaît à la **répétition**, pas à la présence de courbes. Les rayons se suivent
+        * donc de trente-huit, et le plus petit remonte pour que le motif atteigne la bande
+        * visible plutôt que de rester tapi sous le plan du dossier.
+        *
+        * ⚠️ **Ils s'éteignent vers l'extérieur.** Tous à la même intensité, les arcs du bord
+        * gauche pesaient autant que ceux qui tournent près du coin éclairé, ce qui aplatit la
+        * surface. Le dégradé les fait naître dans la lueur et s'y perdre.
+        */}
+      <defs>
+        <linearGradient id={`arcs-${id}`} x1="1" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor="rgba(255,255,255,0.20)" />
+          <stop offset="55%" stopColor="rgba(255,255,255,0.11)" />
+          <stop offset="100%" stopColor="rgba(255,255,255,0.04)" />
+        </linearGradient>
+      </defs>
+      <g fill="none" stroke={`url(#arcs-${id})`} strokeWidth={1.4}>
+        <circle cx={L + 7} cy={H + 19} r={152} />
         <circle cx={L + 7} cy={H + 19} r={190} />
-        <circle cx={L + 7} cy={H + 19} r={235} />
-        <circle cx={L + 7} cy={H + 19} r={280} />
+        <circle cx={L + 7} cy={H + 19} r={228} />
+        <circle cx={L + 7} cy={H + 19} r={266} />
       </g>
     </svg>
   );
