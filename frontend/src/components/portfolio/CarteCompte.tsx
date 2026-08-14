@@ -25,14 +25,14 @@ import { CARTE_ACTIF } from "@/components/portfolio/CarteActif";
  */
 
 /**
- * Le rayon des angles.
+ * Le rayon des angles : celui d'une carte d'actif, jamais un autre.
  *
- * ⚠️ **Mesuré sur la maquette plutôt que choisi.** Le dossier y fait sept cents pixels de
- * large pour trois cent quatre ici, soit un facteur 2,3 ; ses angles mesurent une soixantaine
- * de pixels, ce qui en fait vingt-six chez nous. À vingt-deux, la silhouette était plus sèche
- * que le modèle sans qu'on sache dire pourquoi.
+ * ⚠️ **Repris et non recopié.** Les dossiers et les cartes se côtoient dans la même rangée,
+ * et un dossier plus rond que ce qu'il range se voit immédiatement sans qu'on sache le
+ * nommer. J'ai successivement posé vingt-deux puis vingt-six au jugé, en mesurant sur la
+ * maquette — le bon nombre était sous la main depuis le début, et il ne peut plus dériver.
  */
-const RAYON = 26;
+const RAYON = CARTE_ACTIF.rayon;
 /**
  * La languette : sa hauteur au-dessus du plan, sa largeur, et la forme de son raccord.
  *
@@ -40,11 +40,18 @@ const RAYON = 26;
  * hauteur.** Le raccord était fait de deux quarts de cercle de même rayon, ce qui l'obligeait
  * à valoir exactement la moitié de la hauteur de la languette : onze pixels d'étalement pour
  * vingt-deux de descente, soit une pente à quarante-cinq degrés. Sur la maquette elle est
- * bien plus douce — mesurée, une trentaine de pixels d'étalement pour la même descente. Une
- * courbe de Bézier remplace donc le second arc : sa longueur devient un réglage, au lieu
- * d'être une conséquence.
+ * bien plus douce, mais pas au point où je l'ai d'abord poussée : une cubique de trente-deux
+ * pixels après un coin de neuf faisait quarante-et-un pixels de transition, et le bord se
+ * couchait à l'horizontale bien avant d'atteindre le plan — un toboggan plutôt qu'une
+ * languette. Signalé à l'usage. Mesurée sur la maquette, la transition entière fait une
+ * trentaine de pixels : douze de coin bombé, vingt de raccord.
+ *
+ * ⚠️ **Une Bézier plutôt qu'un second arc, malgré tout.** Deux quarts de cercle accolés
+ * obligent l'étalement à valoir le rayon, donc la moitié de la hauteur de la languette : la
+ * proportion des deux courbures cesse d'être réglable. La cubique laisse choisir le coin et
+ * le raccord séparément.
  */
-const LANGUETTE = { hauteur: 22, largeur: 118, courbure: 9, pente: 32 };
+const LANGUETTE = { hauteur: 22, largeur: 118, courbure: 12, pente: 20 };
 
 /**
  * La taille du dossier, déduite de la carte d'actif qu'il doit contenir.
@@ -112,8 +119,15 @@ const CONTOUR = (() => {
     `M ${RAYON},0`,
     `L ${ll - c},0`,
     `A ${c},${c} 0 0 1 ${ll},${c}`,          // le coin de la languette, bombé
-    // Le raccord au plan : verticale au départ, horizontale à l'arrivée.
-    `C ${ll},${c + hl * 0.34} ${ll + pente * 0.46},${hl} ${ll + pente},${hl}`,
+    /**
+     * Le raccord au plan : verticale au départ, horizontale à l'arrivée.
+     *
+     * ⚠️ **Les deux poignées sont symétriques, sinon la courbe se couche trop tôt.** La
+     * seconde était posée à 0,46 de la longueur : la Bézier atteignait l'horizontale au
+     * milieu du parcours et finissait par un long plat. À la moitié de chaque côté, la
+     * descente se répartit et l'on obtient un S régulier.
+     */
+    `C ${ll},${c + (hl - c) * 0.5} ${ll + pente * 0.5},${hl} ${ll + pente},${hl}`,
     `L ${l - RAYON},${hl}`,
     `A ${RAYON},${RAYON} 0 0 1 ${l},${hl + RAYON}`,
     `L ${l},${h - RAYON}`,
@@ -254,7 +268,23 @@ export default function CarteCompte({
            * point de bascule remonte : la lumière frappe le haut-gauche sur près de la
            * moitié du trajet, puis la surface s'enfonce.
            */
-          background: `linear-gradient(148deg, ${tresClair} 0%, ${clair} 26%,`
+          /**
+           * ⚠️ **Deux couches, parce qu'un dégradé linéaire ne fait pas une surface.** Il
+           * décrit une pente régulière : la couleur y varie du même pas d'un bout à l'autre,
+           * et l'œil lit un aplat incliné plutôt qu'un objet éclairé. Sur la maquette, la
+           * lumière est **localisée** — elle frappe le haut-gauche et s'éteint en s'en
+           * éloignant, ce qui est un dégradé radial, pas linéaire. On garde donc le linéaire
+           * pour la teinte de fond, qui doit tourner du clair au sombre, et l'on pose
+           * par-dessus une tache lumineuse qui donne le relief.
+           *
+           * ⚠️ **La tache est blanche, jamais teintée.** Le dossier prend l'une des onze
+           * couleurs de l'épargnant : une lumière colorée aurait été juste sur une et fausse
+           * sur les dix autres. Du blanc à quatorze pour cent éclaircit n'importe quelle
+           * teinte sans en introduire une seconde.
+           */
+          background: `radial-gradient(120% 100% at 8% -8%,`
+            + ` rgba(255,255,255,0.14) 0%, rgba(255,255,255,0) 58%),`
+            + ` linear-gradient(148deg, ${tresClair} 0%, ${clair} 26%,`
             + ` ${couleur} 58%, ${sombre} 100%)`,
         }}>
           <div style={{
@@ -326,11 +356,12 @@ export default function CarteCompte({
         * rectangle, et traverserait l'encoche de part en part. Le même chemin, tracé sans
         * remplissage, colle exactement au bord — encoche et pente comprises.
         *
-        * ⚠️ **Blanc en haut, noir en bas — et le noir n'est pas un détail.** Un liseré qui
-        * s'éteint en transparence disparaît sur les couleurs claires : sur un dossier menthe,
-        * un blanc à quinze pour cent ne se distingue plus du dossier. Le bord bas vire donc
-        * au sombre, si bien que l'arête se lit sur les onze teintes — éclairée dessus,
-        * ombrée dessous, comme un objet posé.
+        * ⚠️ **Blanc sur tout le tour, plus vif en haut.** Deux versions ont raté avant celle-ci :
+        * l'une s'éteignait en transparence vers le bas, l'autre virait au noir. Toutes deux
+        * partaient du même raisonnement — imiter une lumière rasante — et toutes deux
+        * donnaient un liseré qu'on ne voyait pas, signalé comme « inexistant ». Sur la
+        * maquette, l'arête fait le tour complet : plus vive en tête, jamais absente ailleurs.
+        * Le dégradé ne descend donc plus sous vingt-six pour cent.
         *
         * ⚠️ **Il se peint en dernier, après le plan.** Placé avant, il était recouvert par
         * le plan qu'il est censé cerner — invisible, et je l'ai cru absent avant de
@@ -351,7 +382,7 @@ export default function CarteCompte({
   
           </linearGradient>
         </defs>
-        <path d={CONTOUR} fill="none" stroke={`url(#bord-${idBord})`} strokeWidth={1.25}
+        <path d={CONTOUR} fill="none" stroke={`url(#bord-${idBord})`} strokeWidth={1.5}
           transform="translate(0.5, 0.5) scale(0.9967)" />
       </svg>
     </button>
