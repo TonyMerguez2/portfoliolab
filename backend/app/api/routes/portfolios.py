@@ -39,6 +39,9 @@ class PortfolioUpdate(BaseModel):
     # sur `Portfolio.frais_lignes` : le fournisseur de cours ne publie presque jamais
     # le TER des ETF européens, et l'épargnant l'a sur son document d'information.
     frais_lignes: dict[str, float] | None = None
+    # La couleur des dossiers déduits, `{genre: "#RRGGBB"}`. Voir la note sur
+    # `Portfolio.couleurs_comptes` : une préférence d'affichage, qu'aucun calcul ne lit.
+    couleurs_comptes: dict[str, str] | None = None
 
 def _adopter_orphelins(user: User, db: Session) -> None:
     """
@@ -152,6 +155,28 @@ def update_portfolio(
                 )
             propres[str(ticker).upper()] = v
         p.frais_lignes = propres
+    if data.couleurs_comptes is not None:
+        # ⚠️ **Les clés sont bornées aux genres que le serveur publie, et les valeurs à une
+        # couleur hexadécimale.** Sans cela, ce champ devient un fourre-tout : n'importe
+        # quelle clé, n'importe quelle chaîne, et un jour du JavaScript recopié tel quel
+        # dans un attribut de style. Le champ n'a de sens que pour les genres à titres —
+        # eux seuls ont un dossier déduit — mais on accepte les cinq : refuser « courant »
+        # obligerait cette route à connaître, en plus, lesquels portent des titres.
+        from app.api.routes.comptes import COULEUR, GENRES_COMPTE
+        teintes: dict[str, str] = {}
+        for genre, hexa in data.couleurs_comptes.items():
+            if genre not in GENRES_COMPTE:
+                raise HTTPException(
+                    status_code=422,
+                    detail=f"Genre inconnu : {genre}. Attendu : {', '.join(GENRES_COMPTE)}.",
+                )
+            if not COULEUR.match(str(hexa)):
+                raise HTTPException(
+                    status_code=422,
+                    detail=f"Couleur attendue au format #RRGGBB pour {genre}.",
+                )
+            teintes[genre] = str(hexa)
+        p.couleurs_comptes = teintes
     db.commit()
     db.refresh(p)
     return p

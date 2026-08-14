@@ -65,6 +65,19 @@ def creer_portefeuille(client, nom="Test"):
     return r.json()["id"]
 
 
+def relire(client, pid):
+    """
+    Le portefeuille tel que l'écran le reçoit.
+
+    ⚠️ **Par la liste, parce qu'aucune route ne rend un portefeuille seul.** Écrit
+    d'abord en `GET /portfolios/{id}`, ce test passait sur la réponse d'une route qui
+    n'existe pas — donc sur un corps d'erreur, dans lequel n'importe quelle clé manque.
+    C'est la liste que le client interroge, et c'est donc elle qui doit porter le champ.
+    """
+    lot = client.get("/api/v1/portfolios").json()
+    return next(p for p in lot if p["id"] == pid)
+
+
 def compte_valide(**ecrase):
     return {"nom": "PEA Boursorama", "genre": "pea", "couleur": "#22C55E", **ecrase}
 
@@ -263,3 +276,54 @@ def test_supprimer_un_compte_detache_ses_operations_sans_les_perdre(client):
     assert len(apres) == 1, "l'opération a disparu avec son compte"
     assert apres[0].get("compte_id") in (None, ""), "l'opération pointe un compte disparu"
     assert client.get(f"/api/v1/portfolios/{pid}/comptes").json() == []
+
+
+# ── La couleur des dossiers déduits ───────────────────────────────────────────
+
+def test_couleurs_des_dossiers_deduits(client):
+    """
+    Un dossier déduit n'a pas de ligne en base, et retient quand même sa couleur.
+
+    ⚠️ **C'est le portefeuille qui la porte, pas la table `comptes`.** PEA,
+    compte-titres et crypto apparaissent à l'écran parce que des lignes s'y rangent
+    d'après leur place de cotation. Leur créer un compte pour retenir une teinte en
+    ferait des comptes *déclarés*, donc des dossiers en plus de ceux qu'on devine —
+    deux PEA côte à côte, dont l'un vide.
+    """
+    pid = creer_portefeuille(client)
+
+    assert relire(client, pid).get("couleurs_comptes") is None
+
+    r = client.put(f"/api/v1/portfolios/{pid}",
+                   json={"couleurs_comptes": {"pea": "#22C55E", "crypto": "#F43F5E"}})
+    assert r.status_code == 200, r.text
+    assert r.json()["couleurs_comptes"] == {"pea": "#22C55E", "crypto": "#F43F5E"}
+
+    assert relire(client, pid)["couleurs_comptes"]["pea"] == "#22C55E"
+
+    # Retirer une teinte la rend au dossier : on renvoie la carte entière, pas un delta.
+    r = client.put(f"/api/v1/portfolios/{pid}", json={"couleurs_comptes": {"pea": "#22C55E"}})
+    assert r.status_code == 200, r.text
+    assert r.json()["couleurs_comptes"] == {"pea": "#22C55E"}
+
+
+def test_couleurs_refusees(client):
+    """
+    ⚠️ **Sans bornes, ce champ devient un fourre-tout.** Il accepte du JSON libre :
+    n'importe quelle clé, n'importe quelle chaîne, et un jour une valeur recopiée telle
+    quelle dans un attribut de style. Les clés sont donc celles que le serveur publie,
+    et les valeurs des couleurs.
+    """
+    pid = creer_portefeuille(client)
+
+    r = client.put(f"/api/v1/portfolios/{pid}", json={"couleurs_comptes": {"livret_a": "#22C55E"}})
+    assert r.status_code == 422, "un genre inconnu doit être refusé"
+
+    r = client.put(f"/api/v1/portfolios/{pid}", json={"couleurs_comptes": {"pea": "vert"}})
+    assert r.status_code == 422, "une couleur qui n'en est pas une doit être refusée"
+
+    r = client.put(f"/api/v1/portfolios/{pid}",
+                   json={"couleurs_comptes": {"pea": "javascript:alert(1)"}})
+    assert r.status_code == 422
+
+    assert relire(client, pid).get("couleurs_comptes") in (None, {})

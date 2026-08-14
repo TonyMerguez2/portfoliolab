@@ -3,7 +3,7 @@ import { useEffect, useState } from "react";
 
 import type { Compte, CompteASoumettre, GenreCompte } from "@/lib/comptes";
 import { fraicheurDuSolde } from "@/lib/comptes";
-import { COULEURS_AVATAR } from "@/lib/avatarCouleur";
+import PastillesCouleur, { COULEURS_DOSSIER } from "@/components/portfolio/PastillesCouleur";
 import { CLAIR, RAYONS } from "@/lib/palette";
 import { FONT, NUM } from "@/lib/typography";
 
@@ -42,16 +42,6 @@ import { FONT, NUM } from "@/lib/typography";
  */
 export type SaisieCompte = CompteASoumettre;
 
-/**
- * Les couleurs proposées pour le dossier.
- *
- * ⚠️ **Celles de l'avatar, et non une seconde palette.** Elles couvrent le tour du cercle
- * chromatique à clarté et saturation comparables — c'est déjà éprouvé — et deux palettes
- * auraient divergé au premier ajustement, si bien qu'un dossier et un personnage n'auraient
- * plus jamais été exactement de la même couleur.
- */
-const COULEURS = COULEURS_AVATAR;
-
 const etiquette: React.CSSProperties = {
   fontFamily: FONT, fontSize: 10, fontWeight: 600, letterSpacing: "0.08em",
   color: CLAIR.texteFaible, textTransform: "uppercase",
@@ -80,7 +70,7 @@ export default function FormulaireCompte({
   const [etape, setEtape] = useState<1 | 2>(1);
   const [nom, setNom] = useState(initial?.nom ?? "");
   const [genre, setGenre] = useState<string>(initial?.genre ?? "");
-  const [couleur, setCouleur] = useState(initial?.couleur ?? COULEURS[0].hex);
+  const [couleur, setCouleur] = useState(initial?.couleur ?? COULEURS_DOSSIER[0].hex);
   /**
    * ⚠️ **Le solde se relit en français, avec ses centimes.** `String(12450.8)` rend
    * « 12450.8 » : un point décimal dans une saisie française, et le zéro final envolé. Vu à
@@ -210,20 +200,7 @@ export default function FormulaireCompte({
 
             <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
               <span style={etiquette}>Couleur du dossier</span>
-              <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
-                {COULEURS.map(c => (
-                  <button key={c.hex} type="button" onClick={() => setCouleur(c.hex)}
-                    aria-label={c.nom} title={c.nom}
-                    style={{
-                      width: 22, height: 22, borderRadius: "50%", cursor: "pointer",
-                      background: c.hex, border: "none",
-                      // La sélection se dit par un anneau détaché, pas par un liseré : sur
-                      // une pastille de 22 px, un bord de la même famille disparaît.
-                      boxShadow: couleur === c.hex
-                        ? `0 0 0 2px ${CLAIR.carte}, 0 0 0 4px ${c.hex}` : "none",
-                    }} />
-                ))}
-              </div>
+              <PastillesCouleur couleur={couleur} onChoisir={setCouleur} />
             </div>
 
             {/**

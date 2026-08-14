@@ -62,6 +62,18 @@ class Portfolio(Base):
     # détenir deux parts différentes du même fonds, aux frais différents, et rien
     # ici ne justifie de trancher pour elles.
     frais_lignes   = Column(JSON,    nullable=True, default=None)
+    # La couleur choisie pour les dossiers **déduits**, `{genre: "#RRGGBB"}`.
+    #
+    # ⚠️ **Ici, et non dans la table `comptes`, parce qu'un dossier déduit n'y a pas de
+    # ligne.** PEA, compte-titres et crypto apparaissent à l'écran parce que des lignes s'y
+    # rangent d'après leur place de cotation — c'est une inférence, pas une déclaration.
+    # Leur créer un `Compte` pour retenir une couleur en ferait des comptes déclarés, donc
+    # des dossiers *en plus* de ceux qu'on devine : deux PEA côte à côte, l'un vide.
+    #
+    # ⚠️ **Une préférence d'affichage, et rien d'autre.** Aucun calcul ne la lit. Elle ne
+    # rattache aucune ligne, ne crée aucun compte, et disparaître ne ferait que rendre au
+    # dossier sa couleur d'origine.
+    couleurs_comptes = Column(JSON, nullable=True, default=None)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
@@ -235,6 +247,7 @@ for table, col, typedef in [
     ("portfolios",   "horizon_annees", "INTEGER"),
     ("portfolios",   "tolerance",      "TEXT"),
     ("portfolios",   "frais_lignes",   "JSON"),
+    ("portfolios",   "couleurs_comptes", "JSON"),
     ("transactions", "note",          "TEXT"),
     ("users",        "devise",         "TEXT"),
     ("objectifs",    "verse_deja",     "REAL"),

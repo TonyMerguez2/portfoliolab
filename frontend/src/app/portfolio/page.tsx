@@ -42,6 +42,7 @@ import ChiffresRoulants from "@/components/ui/ChiffresRoulants";
 import AvatarPortefeuille from "@/components/portfolio/AvatarPortefeuille";
 import AvatarParole from "@/components/AvatarParole";
 import FormulaireCompte, { type SaisieCompte } from "@/components/portfolio/FormulaireCompte";
+import PaletteDossier from "@/components/portfolio/PaletteDossier";
 import CarteBancaire from "@/components/portfolio/CarteBancaire";
 import {
   type Compte as CompteDeclare, type GenreCompte, creerCompte, fraicheurDuSolde,
@@ -76,7 +77,9 @@ import { API_URL } from "@/lib/api";
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 type PortfolioAsset = { ticker: string; weight: number };
-type PortfolioData  = { id: string; name: string; assets: PortfolioAsset[]; color: string; total_value?: number | null; cost_basis?: number | null; image_url?: string | null };
+type PortfolioData  = { id: string; name: string; assets: PortfolioAsset[]; color: string; total_value?: number | null; cost_basis?: number | null; image_url?: string | null;
+  /** La couleur choisie pour les dossiers déduits, `{genre: "#RRGGBB"}`. Voir `GENRE_DE`. */
+  couleurs_comptes?: Record<string, string> | null };
 type PriceData      = { symbol: string; price: number; change: number; series?: number[] };
 type Enriched       = PortfolioAsset & {
   price: number | null; change: number | null; type?: string;
@@ -386,6 +389,8 @@ function PortfolioPageInner() {
   const [formCompte,      setFormCompte]      = useState(false);
   /** Le compte en cours de correction, ou `null` quand on en déclare un nouveau. */
   const [compteEdite,     setCompteEdite]     = useState<CompteDeclare | null>(null);
+  /** Le dossier **déduit** dont on règle la couleur, ou `null`. */
+  const [dossierAColorer, setDossierAColorer] = useState<Enveloppe | null>(null);
   const [compteEnCours,   setCompteEnCours]   = useState(false);
   const [erreurCompte,    setErreurCompte]    = useState<string | null>(null);
   const [txRefreshKey,    setTxRefreshKey]    = useState(0);
@@ -955,6 +960,20 @@ function PortfolioPageInner() {
    * Les vides ne sont pas rendus : un dossier « Crypto » à zéro ligne promettrait un
    * rangement qui n'existe pas.
    */
+  /**
+   * La couleur retenue pour chaque dossier déduit, telle que le serveur la garde.
+   *
+   * ⚠️ **Dérivée du portefeuille, et non copiée dans un état.** Un second état aurait dû
+   * se resynchroniser à chaque rechargement, et c'est le genre de fil qui se casse
+   * silencieusement : l'écran garderait une couleur que le serveur a oubliée. Le repli sur
+   * `{}` est mémorisé, faute de quoi il rendrait un objet neuf à chaque rendu et
+   * recalculerait les dossiers pour rien.
+   */
+  const couleursChoisies = useMemo<Record<string, string>>(
+    () => portfolio?.couleurs_comptes ?? {},
+    [portfolio?.couleurs_comptes],
+  );
+
   const comptes = useMemo(() => {
     const par: Partial<Record<Enveloppe, typeof enriched>> = {};
     for (const a of enriched) {
@@ -970,8 +989,18 @@ function PortfolioPageInner() {
     };
     return (Object.keys(par) as Enveloppe[])
       .sort((a, b) => rang(a) - rang(b))
-      .map(cle => ({ cle, ...HABILLAGE_COMPTES[cle], lignes: par[cle] ?? [] }));
-  }, [enriched]);
+      .map(cle => ({
+        cle, ...HABILLAGE_COMPTES[cle], lignes: par[cle] ?? [],
+        /**
+         * ⚠️ **La couleur choisie l'emporte sur celle d'origine, si elle existe.** Elle
+         * est rangée dans le portefeuille et non dans la table des comptes : un dossier
+         * déduit n'y a pas de ligne, et lui en créer une pour retenir une teinte en
+         * ferait un compte *déclaré*, donc un second dossier à côté de celui qu'on
+         * devine. Voir `Portfolio.couleurs_comptes`.
+         */
+        couleur: couleursChoisies[GENRE_DE[cle]] ?? HABILLAGE_COMPTES[cle].couleur,
+      }));
+  }, [enriched, couleursChoisies]);
 
   /**
    * Les lignes que la page montre : le dossier ouvert, ou tout.
@@ -1291,6 +1320,38 @@ function PortfolioPageInner() {
   }, [idPortefeuille]);
 
   useEffect(() => { rechargerComptes(); }, [rechargerComptes]);
+
+  /**
+   * Recolorer un dossier déduit.
+   *
+   * ⚠️ **La carte entière part, pas la seule teinte qui change.** Le serveur remplace le
+   * champ au lieu de le fusionner — c'est ce qui permet de *retirer* une couleur, en
+   * renvoyant la carte sans elle. Un envoi partiel n'aurait jamais rien su effacer.
+   *
+   * ⚠️ **L'écran change d'abord, et se dédit si l'envoi échoue.** Une pastille qui attend
+   * l'aller-retour paraît morte ; une pastille qui ment est pire. On garde donc l'état
+   * précédent pour le remettre, plutôt que de laisser l'écran affirmer ce que le serveur
+   * ignore.
+   */
+  const recolorerLeDossier = useCallback(async (cle: Enveloppe, hex: string | null) => {
+    const id = portfolio?.id;
+    if (!id) return;
+    const avant = couleursChoisies;
+    const suivantes = { ...avant };
+    if (hex) suivantes[GENRE_DE[cle]] = hex;
+    else delete suivantes[GENRE_DE[cle]];
+    setPortfolio(p => (p ? { ...p, couleurs_comptes: suivantes } : p));
+    try {
+      const r = await fetch(`${API_URL}/api/v1/portfolios/${id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json", ...enTetesAuth() },
+        body: JSON.stringify({ couleurs_comptes: suivantes }),
+      });
+      if (!r.ok) throw new Error(String(r.status));
+    } catch {
+      setPortfolio(p => (p ? { ...p, couleurs_comptes: avant } : p));
+    }
+  }, [portfolio?.id, couleursChoisies]);
 
   /**
    * Ouvrir la correction d'un compte déclaré.
@@ -2170,7 +2231,11 @@ function PortfolioPageInner() {
                             .sort((a, b) => b.weight - a.weight)
                             .slice(0, APERCUS_PAR_DOSSIER)
                             .map(a => <CarteActif key={a.ticker} a={versCarte(a)} inerte />)}
-                          onClick={() => setCompteOuvert(c.cle)} />
+                          onClick={() => setCompteOuvert(c.cle)}
+                          /* ⚠️ Les trois points d'un dossier déduit ne mènent pas au
+                             formulaire de déclaration : il n'y aurait que des champs
+                             inertes. Ce dossier n'a que son apparence à régler. */
+                          onModifier={() => setDossierAColorer(c.cle)} />
                       );
                     })}
                   </RailHorizontal>
@@ -2886,6 +2951,20 @@ function PortfolioPageInner() {
           onFermer={() => { setFormCompte(false); setCompteEdite(null); setErreurCompte(null); }}
         />
       )}
+      {dossierAColorer && (
+        <PaletteDossier
+          nom={dossierAColorer}
+          couleur={couleursChoisies[GENRE_DE[dossierAColorer]]
+            ?? HABILLAGE_COMPTES[dossierAColorer].couleur}
+          surMesure={couleursChoisies[GENRE_DE[dossierAColorer]] != null}
+          /* ⚠️ La palette ne se referme pas sur le choix. Comparer deux teintes demande de
+             les essayer l'une après l'autre : refermer à chaque clic obligerait à rouvrir
+             pour changer d'avis, et le dossier n'est de toute façon visible qu'en fermant. */
+          onChoisir={hex => recolorerLeDossier(dossierAColorer, hex)}
+          onReinitialiser={() => recolorerLeDossier(dossierAColorer, null)}
+          onFermer={() => setDossierAColorer(null)}
+        />
+      )}
       {showTxModal && (
         <TransactionModal
           portfolioId={portfolio?.id ?? ""}
@@ -2970,6 +3049,18 @@ const ICONE_PAR_GENRE: Record<string, React.ReactNode> = {
  * sa couleur et son pictogramme. L'ordre, lui, reste indicatif — voir `comptes`, qui
  * range en queue tout compte que cette liste aurait oublié plutôt que de le perdre.
  */
+/**
+ * Le genre serveur qui correspond à une enveloppe déduite.
+ *
+ * ⚠️ **La couture entre deux vocabulaires, et il vaut mieux qu'elle soit visible.** Le
+ * client range les lignes dans des `Enveloppe` — « PEA », « CTO », « Crypto » — que lui
+ * seul connaît, puisqu'elles sont déduites d'une place de cotation. Le serveur, lui, ne
+ * connaît que ses `GENRES_COMPTE` en minuscules, et c'est sur eux qu'il valide les couleurs
+ * qu'on lui confie. Écrire `cle.toLowerCase()` aurait marché sur les trois d'aujourd'hui et
+ * cassé au premier nom composé, sans rien dire.
+ */
+const GENRE_DE: Record<Enveloppe, string> = { PEA: "pea", CTO: "cto", Crypto: "crypto" };
+
 const HABILLAGE_COMPTES: Record<Enveloppe, { couleur: string; icone: React.ReactNode }> = {
   PEA: { couleur: "#5B6CF0", icone: ICONE_TITRES },
   CTO: { couleur: "#9B5BD6", icone: ICONE_TITRES },
