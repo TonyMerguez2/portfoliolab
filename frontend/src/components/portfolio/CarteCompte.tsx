@@ -34,23 +34,29 @@ import { CARTE_ACTIF } from "@/components/portfolio/CarteActif";
  */
 const RAYON = CARTE_ACTIF.rayon;
 /**
- * La languette : sa hauteur au-dessus du plan, sa largeur, et les deux rayons de son raccord.
+ * La languette : sa hauteur, sa largeur, et les deux courbes de son raccord.
  *
- * ⚠️ **Deux arcs de rayons différents, et c'est le creux qui fait la languette.** Trois formes
- * ont échoué avant celle-ci. Deux quarts de cercle égaux — onze et onze — donnaient une
- * marche symétrique. Une cubique de trente-deux pixels donnait un toboggan, le bord se
- * couchant à l'horizontale avant d'atteindre le plan. Une cubique plus courte, à poignées
- * symétriques, a supprimé le toboggan mais aussi le creux : en répartissant la courbure sur
- * toute la longueur, elle ne laisse **aucun** endroit franchement concave, et il ne reste
- * qu'une rampe. Signalé à l'usage, deux fois.
+ * ⚠️ **Les deux courbes sont des quarts d'ellipse, pas de cercle — et c'est là que quatre
+ * essais se sont trompés.** Un arc circulaire impose que son étalement égale sa descente ;
+ * tant qu'on reste dans le cercle, régler l'un règle l'autre, et la seule liberté restante
+ * est de partager les vingt-deux pixels de hauteur entre le bombé et le creux. On a donc
+ * essayé onze-onze (une marche symétrique), une cubique longue (un toboggan), une cubique
+ * courte (une rampe sans creux), puis huit-quatorze — un petit bombé et un grand creux.
  *
- * ⚠️ **La forme juste est asymétrique : petit bombé, grand creux.** Mesuré sur la maquette,
- * le coin de la languette tourne court et le raccord au plan s'évase largement. Deux arcs
- * tangents l'un à l'autre le donnent exactement, à condition que leurs rayons s'additionnent
- * pour valoir la hauteur — c'est ce qui garantit que le premier finit vertical là où le
- * second commence, sans cassure.
+ * ⚠️ **Or la maquette montre l'inverse, et en plus aplati.** Mesurée en se calant sur le
+ * rayon des angles, qui vaut dix-huit et donne l'échelle : le bombé y couvre **dix-huit de
+ * large pour onze de haut**, le creux **quatorze pour onze**. Le bombé est donc large et
+ * couché — impossible à obtenir avec un cercle — tandis que le creux est presque rond. C'est
+ * ce coin étalé qui donne l'allure fondue du modèle, là où un quart de cercle fait un angle
+ * pincé.
  */
-const LANGUETTE = { hauteur: 22, largeur: 118, bombe: 8, creux: 14 };
+const LANGUETTE = {
+  hauteur: 22, largeur: 118,
+  /** Le coin de la languette : large et couché. */
+  bombe: { x: 18, y: 11 },
+  /** Le raccord au plan : presque rond. */
+  creux: { x: 14, y: 11 },
+};
 
 /**
  * La taille du dossier, déduite de la carte d'actif qu'il doit contenir.
@@ -116,10 +122,12 @@ const CONTOUR = (() => {
   const { hauteur: hl, largeur: ll, bombe: b, creux: cr } = LANGUETTE;
   return [
     `M ${RAYON},0`,
-    `L ${ll - b},0`,
-    `A ${b},${b} 0 0 1 ${ll},${b}`,          // le coin de la languette, bombé — court
-    // Le creux : large, tangent au précédent, et horizontal en arrivant sur le plan.
-    `A ${cr},${cr} 0 0 0 ${ll + cr},${hl}`,
+    `L ${ll - b.x},0`,
+    // Le coin de la languette : large et couché, donc un quart d'ellipse.
+    `A ${b.x},${b.y} 0 0 1 ${ll},${b.y}`,
+    // Le creux : tangent au précédent — vertical là où l'autre finit — et horizontal en
+    // arrivant sur le plan. Sa hauteur complète celle du bombé.
+    `A ${cr.x},${hl - b.y} 0 0 0 ${ll + cr.x},${hl}`,
     `L ${l - RAYON},${hl}`,
     `A ${RAYON},${RAYON} 0 0 1 ${l},${hl + RAYON}`,
     `L ${l},${h - RAYON}`,
