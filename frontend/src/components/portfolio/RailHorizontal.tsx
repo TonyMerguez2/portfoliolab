@@ -21,14 +21,31 @@ import { CLAIR } from "@/lib/palette";
  * détail qu'on ne recopie qu'à moitié.
  */
 /**
- * La place réservée au-dessus des cartes pour qu'elles puissent se soulever.
+ * La place que le rail se réserve au-dessus et au-dessous de ses cartes.
  *
- * ⚠️ **Elle doit valoir au moins la translation appliquée au survol**, définie dans
+ * ⚠️ **Un rail tranche à l'horizontale, en haut comme en bas.** `overflow-x: auto` force
+ * l'autre axe à devenir non visible : ce qui dépasse est coupé net. Deux choses en
+ * souffraient. Les cartes d'un dossier, qui s'élèvent au survol, se retrouvaient sciées par
+ * le haut. Et l'ombre portée des dossiers, qui n'avait que deux pixels devant elle, était
+ * coupée **en pleine force** — un trait horizontal net juste sous le dossier, qui donnait à
+ * croire que le dossier lui-même était amputé.
+ *
+ * ⚠️ **En haut, la réserve doit valoir au moins la translation du survol**, définie dans
  * `globals.css` sous `.novac-dossier-paquet`. Deux nombres réglés séparément, donc : celui-ci
- * est le plus grand des deux par sécurité, et le dépasser ne coûte rien puisque la marge
- * négative le reprend aussitôt.
+ * est le plus grand des deux par sécurité.
+ *
+ * ⚠️ **En bas, la réserve vaut la portée réelle de l'ombre, et non une marge de confort.**
+ * La plus large des trois ombres de `CarteCompte` est décalée de seize pixels et floutée sur
+ * trente-quatre : elle ne s'éteint qu'à cinquante. En réserver moins ne supprime pas le
+ * trait, cela le rend seulement plus pâle — mesuré à l'écran avant d'être écrit ici.
+ *
+ * ⚠️ **La marge négative reprend la réserve, mais le parent doit malgré tout la prévoir.**
+ * Elle annule bien la place dans le flux ; elle n'empêche pas la boîte du rail de dépasser
+ * de son conteneur. Sous un ancêtre qui défile, ce dépassement devient du défilement
+ * fantôme — cinquante pixels de course pour ne montrer qu'une ombre. D'où l'export : la
+ * colonne qui héberge un rail se termine sur `bas`, exactement là où l'ombre s'éteint.
  */
-const SOULEVEMENT = 10;
+export const RESERVE_RAIL = { haut: 10, bas: 50 };
 
 export default function RailHorizontal({
   children, cache = false, pasMinimal = 258,
@@ -99,24 +116,18 @@ export default function RailHorizontal({
       {!cache && debord.gauche && voile("gauche")}
       {!cache && debord.droite && voile("droite")}
       {/**
-        * ⚠️ **Le rail réserve en haut la place de ce qui s'y soulève.** Un conteneur qui
-        * défile en `overflow-x` ne peut pas laisser l'autre axe libre : la spécification
-        * force `overflow-y` à devenir non visible dès que l'un des deux ne l'est pas. Tout
-        * ce qui dépasse par le haut est donc **tranché net** — vu à l'écran sur les cartes
-        * des dossiers, qui s'élèvent de sept pixels au survol et se retrouvaient coupées à
-        * l'horizontale.
-        *
         * ⚠️ **Le retrait est repris par une marge négative, pour que la rangée ne grandisse
         * pas.** Le rembourrage donne la place *dans* la zone de défilement ; la marge
-        * l'annule au dehors. Sans elle, réserver de quoi soulever une carte pousserait vers
-        * le bas tout ce qui suit — la courbe, le bandeau — au seul motif qu'une animation
-        * pourrait avoir lieu.
+        * l'annule au dehors. Sans elle, réserver de quoi soulever une carte ou de quoi finir
+        * une ombre pousserait vers le bas tout ce qui suit — la courbe, le bandeau — au seul
+        * motif qu'une animation pourrait avoir lieu. Voir `RESERVE_RAIL` pour d'où viennent
+        * les deux nombres, et pour ce que le conteneur doit prévoir en retour.
         */}
       <div ref={rail} className="novac-rail" onScroll={mesurer} style={{
         display: cache ? "none" : "flex",
-        gap: 10, overflowX: "auto", overflowY: "hidden",
-        scrollbarWidth: "none", paddingBottom: 2,
-        paddingTop: SOULEVEMENT, marginTop: -SOULEVEMENT,
+        gap: 10, overflowX: "auto", overflowY: "hidden", scrollbarWidth: "none",
+        paddingTop: RESERVE_RAIL.haut, marginTop: -RESERVE_RAIL.haut,
+        paddingBottom: RESERVE_RAIL.bas, marginBottom: -RESERVE_RAIL.bas,
       }}>
         {children}
       </div>
