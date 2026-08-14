@@ -224,7 +224,7 @@ const contourPour = (l: number) => {
 };
 
 export default function CarteCompte({
-  nom, compte, couleur, icone, apercu, onClick, onModifier,
+  nom, compte, couleur, icone, apercu, annonce, onClick, onModifier,
 }: {
   nom: string;
   /**
@@ -248,6 +248,16 @@ export default function CarteCompte({
    * suffit à savoir ce qu'il contient sans l'ouvrir.
    */
   apercu?: React.ReactNode[];
+  /**
+   * Ce que le lecteur d'écran annonce, en toutes lettres.
+   *
+   * ⚠️ **Parce que `compte` est un nœud et qu'un nœud ne se concatène pas.** L'étiquette
+   * était bâtie avec ` Ouvrir ${nom}, ${compte} ` : depuis que le panneau porte un montant
+   * et une mention plutôt qu'une chaîne, elle annonçait littéralement « Ouvrir PEA,
+   * [object Object] ». Le défaut ne se voyait pas à l'écran — c'est justement pour cela
+   * qu'il a duré.
+   */
+  annonce?: string;
   onClick?: () => void;
   /**
    * Ouvre la correction du compte, depuis les trois points en haut à droite.
@@ -296,7 +306,15 @@ export default function CarteCompte({
      * les cartes retomber au moment précis où l'on visait.
      */
     <div className="novac-dossier-carte"
-      style={{ position: "relative", width: largeur, flexShrink: 0 }}>
+      /**
+       * ⚠️ **`display: flex`, et ce n'est pas indifférent — sept pixels en dépendent.** Un
+       * `<button>` est de niveau ligne : posé dans un bloc, il s'assoit sur la ligne de base
+       * et laisse sous lui la place des jambages. Mesuré : l'enveloppe faisait 203 pixels
+       * pour un dossier de 196, et la rangée entière avec elle — or sa hauteur doit valoir
+       * exactement celle d'une carte d'actif, faute de quoi la courbe change de taille selon
+       * qu'on regarde les dossiers ou leur contenu.
+       */
+      style={{ position: "relative", width: largeur, flexShrink: 0, display: "flex" }}>
     <button
       type="button"
       className="novac-dossier"
@@ -310,7 +328,7 @@ export default function CarteCompte({
       // ⚠️ Pas d'`aria-expanded` : le dossier ne se déplie pas sous lui-même, il
       // remplace la vue. Annoncer un dépliement ferait attendre un contenu juste en
       // dessous, alors que c'est toute la zone qui change.
-      aria-label={`Ouvrir ${nom}, ${compte}`}
+      aria-label={`Ouvrir ${annonce ?? nom}`}
       style={{
         position: "relative", width: largeur, height: HAUTEUR,
         padding: 0, border: 0, background: "none", cursor: "pointer",

@@ -24,6 +24,7 @@ import AllocationDonut from "@/components/portfolio/AllocationDonut";
 import RecentActivity from "@/components/portfolio/RecentActivity";
 import PortfolioTabs from "@/components/portfolio/PortfolioTabs";
 import { donutArcs } from "@/lib/donut";
+import { repartirEnDossiers } from "@/lib/dossiers";
 import { compteInfere, valoriser, type Enveloppe, type GridAsset } from "@/lib/portfolio";
 import { assetExchange } from "@/lib/assets";
 import RadarChart from "@/components/charts/RadarChart";
@@ -389,8 +390,14 @@ function PortfolioPageInner() {
   const [formCompte,      setFormCompte]      = useState(false);
   /** Le compte en cours de correction, ou `null` quand on en déclare un nouveau. */
   const [compteEdite,     setCompteEdite]     = useState<CompteDeclare | null>(null);
-  /** Le dossier **déduit** dont on règle la couleur, ou `null`. */
-  const [dossierAColorer, setDossierAColorer] = useState<Enveloppe | null>(null);
+  /**
+   * Le dossier **déduit** dont on règle la couleur, désigné par sa clé préfixée.
+   *
+   * ⚠️ **La clé, et non le dossier lui-même.** Les dossiers se reconstruisent à chaque
+   * cours reçu : garder l'objet aurait figé une copie, et la palette aurait montré la
+   * couleur d'il y a quinze secondes après un premier choix.
+   */
+  const [dossierAColorer, setDossierAColorer] = useState<string | null>(null);
   const [compteEnCours,   setCompteEnCours]   = useState(false);
   const [erreurCompte,    setErreurCompte]    = useState<string | null>(null);
   const [txRefreshKey,    setTxRefreshKey]    = useState(0);
@@ -522,13 +529,15 @@ function PortfolioPageInner() {
    * sans eux, on ne distingue pas une hausse due au marché d'une hausse due à
    * un versement.
    */
-  const [reperesOperations, setReperesOperations] = useState<
-    {
-      id: number; ticker: string; executed_at: string; type: string;
-      couleur: string; libelle: string;
-      quantity: number; unit_price: number; fees: number;
-    }[]
-  >([]);
+  /**
+   * Le journal brut, gardé entier plutôt que réduit tout de suite aux repères.
+   *
+   * ⚠️ **Il portait déjà le rangement des lignes, et on le jetait au `.map`.** Chaque
+   * écriture dit son `compte_id` depuis toujours ; l'effet n'en retenait que la date, le
+   * type et le montant pour la courbe. Savoir quelle ligne appartient à quel dossier ne
+   * coûte donc aucune requête de plus — seulement de ne plus perdre ce qui est déjà là.
+   */
+  const [ecritures, setEcritures] = useState<Tx[]>([]);
   /**
    * L'analyse des publications, obtenue **une fois** ici puis distribuée.
    *
@@ -631,26 +640,37 @@ function PortfolioPageInner() {
 
   useEffect(() => {
     const id = portfolio?.id;
-    if (!id || !surTransactions) { setReperesOperations([]); return; }
+    // ⚠️ Un portefeuille valorisé en poids n'a aucune écriture : la liste vide est le fait
+    // juste, et non un chargement manqué. Tout y est alors rangé par déduction.
+    if (!id || !surTransactions) { setEcritures([]); return; }
     let annule = false;
     fetch(`${API_URL}/api/v1/portfolios/${id}/transactions`, { headers: enTetesAuth() })
       .then(r => (r.ok ? r.json() : null))
       .then((d) => {
         if (annule) return;
-        const liste: Tx[] = Array.isArray(d) ? d : (d?.transactions ?? []);
-        const types = typesParOperation(liste);
-        setReperesOperations(liste.map(t => ({
-          id: t.id, ticker: t.ticker, executed_at: t.executed_at,
-          type: types[t.id], couleur: COULEUR_OP[types[t.id]], libelle: LIBELLE_OP[types[t.id]],
-          // Quantité, prix et frais : lus par l'encart de survol du graphique,
-          // qui détaille l'écriture sous le curseur. Sans eux il ne pourrait
-          // annoncer qu'un libellé et une date.
-          quantity: t.quantity, unit_price: t.unit_price, fees: t.fees ?? 0,
-        })));
+        setEcritures(Array.isArray(d) ? d : (d?.transactions ?? []));
       })
-      .catch(() => { if (!annule) setReperesOperations([]); });
+      .catch(() => { if (!annule) setEcritures([]); });
     return () => { annule = true; };
   }, [portfolio?.id, surTransactions, txRefreshKey]);
+
+  /**
+   * Les repères posés sur la courbe, dérivés du journal.
+   *
+   * ⚠️ **Dérivés et non stockés.** Deux états à tenir d'accord — le journal et sa
+   * réduction — se seraient désynchronisés au premier chemin d'erreur qui vide l'un sans
+   * l'autre. Le calcul est celui d'avant, déplacé.
+   */
+  const reperesOperations = useMemo(() => {
+    const types = typesParOperation(ecritures);
+    return ecritures.map(t => ({
+      id: t.id, ticker: t.ticker, executed_at: t.executed_at,
+      type: types[t.id], couleur: COULEUR_OP[types[t.id]], libelle: LIBELLE_OP[types[t.id]],
+      // Quantité, prix et frais : lus par l'encart de survol du graphique, qui détaille
+      // l'écriture sous le curseur. Sans eux il ne pourrait annoncer qu'un libellé et une date.
+      quantity: t.quantity, unit_price: t.unit_price, fees: t.fees ?? 0,
+    }));
+  }, [ecritures]);
 
   /** Les mêmes versements rejoués sur le S&P 500, aux mêmes dates. */
   const [simRepere, setSimRepere] = useState<{ value: number; gain_eur: number; gain_pct: number } | null>(null);
@@ -951,16 +971,6 @@ function PortfolioPageInner() {
   const [compteOuvert, setCompteOuvert] = useState<string | null>(null);
 
   /**
-   * Les comptes qui portent réellement quelque chose.
-   *
-   * ⚠️ **Déduits des lignes, jamais déclarés** — voir `compteInfere` et sa mise en garde.
-   * L'avantage est qu'ils sont peuplés dès le premier chargement, sans une saisie ; le
-   * prix est que le rangement est une supposition, et qu'il faudra pouvoir le corriger.
-   *
-   * Les vides ne sont pas rendus : un dossier « Crypto » à zéro ligne promettrait un
-   * rangement qui n'existe pas.
-   */
-  /**
    * La couleur retenue pour chaque dossier déduit, telle que le serveur la garde.
    *
    * ⚠️ **Dérivée du portefeuille, et non copiée dans un état.** Un second état aurait dû
@@ -974,33 +984,36 @@ function PortfolioPageInner() {
     [portfolio?.couleurs_comptes],
   );
 
-  const comptes = useMemo(() => {
-    const par: Partial<Record<Enveloppe, typeof enriched>> = {};
-    for (const a of enriched) {
-      const c = compteInfere(a.ticker, assetExchange);
-      (par[c] ??= []).push(a);
-    }
-    // Le tri suit `ORDRE_COMPTES` ; un compte absent de cette liste garde un rang au-delà
-    // du dernier, ce qui le met en queue sans jamais l'écarter. Aucune ligne ne peut
-    // ainsi quitter la page à la faveur d'un oubli.
-    const rang = (c: Enveloppe) => {
-      const i = ORDRE_COMPTES.indexOf(c);
-      return i < 0 ? ORDRE_COMPTES.length : i;
-    };
-    return (Object.keys(par) as Enveloppe[])
-      .sort((a, b) => rang(a) - rang(b))
-      .map(cle => ({
-        cle, ...HABILLAGE_COMPTES[cle], lignes: par[cle] ?? [],
-        /**
-         * ⚠️ **La couleur choisie l'emporte sur celle d'origine, si elle existe.** Elle
-         * est rangée dans le portefeuille et non dans la table des comptes : un dossier
-         * déduit n'y a pas de ligne, et lui en créer une pour retenir une teinte en
-         * ferait un compte *déclaré*, donc un second dossier à côté de celui qu'on
-         * devine. Voir `Portfolio.couleurs_comptes`.
-         */
-        couleur: couleursChoisies[GENRE_DE[cle]] ?? HABILLAGE_COMPTES[cle].couleur,
-      }));
-  }, [enriched, couleursChoisies]);
+  /**
+   * Les dossiers de la rangée : les comptes déclarés, puis ce qui reste à deviner.
+   *
+   * ⚠️ **Une seule liste, d'une seule forme.** Les deux sortes vivaient dans deux `.map`
+   * du rendu, aux propriétés différentes — et rien n'empêchait une ligne rattachée de
+   * rester dans son dossier deviné, comptée des deux côtés. Le rangement est parti dans
+   * `dossiers.ts`, où un test exige que la somme des dossiers redonne la valeur totale.
+   *
+   * ⚠️ **La couleur d'un dossier deviné vient du portefeuille, celle d'un compte déclaré
+   * de sa propre colonne.** Deux sources pour deux objets qui peuvent tous deux s'appeler
+   * « PEA » — d'où une couleur **déjà résolue** ici plutôt qu'un choix laissé au rendu.
+   *
+   * ⚠️ **Le côté deviné reste typé sur `Enveloppe` jusqu'ici.** C'est ce qui fait refuser
+   * la compilation si `compteInfere` gagne une quatrième enveloppe sans dossier : sans
+   * cela, des actifs quitteraient la page en silence. Seul le résultat s'élargit.
+   */
+  const dossiers = useMemo(
+    () => repartirEnDossiers({
+      lignes: enriched,
+      ecritures,
+      declares: comptesDeclares,
+      deduire: t => compteInfere(t, assetExchange),
+      couleurDeduite: e => couleursChoisies[GENRE_DE[e as Enveloppe]]
+        ?? HABILLAGE_COMPTES[e as Enveloppe].couleur,
+      nomDeduit: e => e,
+      genreDeduit: e => GENRE_DE[e as Enveloppe],
+      ordreDeduits: ORDRE_COMPTES,
+    }),
+    [enriched, ecritures, comptesDeclares, couleursChoisies],
+  );
 
   /**
    * Les lignes que la page montre : le dossier ouvert, ou tout.
@@ -1013,19 +1026,24 @@ function PortfolioPageInner() {
   /**
    * Le dossier réellement ouvert.
    *
-   * ⚠️ **Dérivé, parce que les comptes se recalculent sous lui.** Vendre la dernière
-   * ligne d'un compte le fait disparaître de la liste ; l'état, lui, continuerait de
-   * le désigner, et la page afficherait un chemin vers un dossier qui n'existe plus,
-   * au-dessus d'une grille vide. On retombe alors sur la vue des dossiers.
+   * ⚠️ **Dérivé, parce que les dossiers se recalculent sous lui.** Vendre la dernière ligne
+   * d'un dossier deviné le fait disparaître de la liste ; l'état, lui, continuerait de le
+   * désigner, et la page afficherait un chemin vers un dossier qui n'existe plus, au-dessus
+   * d'une grille vide. On retombe alors sur la rangée.
+   *
+   * ⚠️ **La garde a changé de sens depuis que les comptes déclarés sont là.** Elle valait
+   * aussi « le dossier n'est pas vide », puisqu'un dossier deviné vide n'est jamais
+   * construit. Un compte déclaré vide, lui, existe et s'ouvre légitimement : l'épargnant
+   * l'a déclaré. La garde ne protège donc plus que contre la **disparition** — un compte
+   * supprimé pendant qu'il était ouvert.
    */
-  const compteActif = compteOuvert != null && comptes.some(c => c.cle === compteOuvert)
-    ? compteOuvert : null;
+  const dossierActif = compteOuvert != null
+    ? (dossiers.find(d => d.cle === compteOuvert) ?? null) : null;
+  const compteActif = dossierActif?.cle ?? null;
 
   const lignesMontrees = useMemo(
-    () => (compteActif
-      ? (comptes.find(c => c.cle === compteActif)?.lignes ?? [])
-      : enriched),
-    [comptes, compteActif, enriched],
+    () => (dossierActif ? dossierActif.lignes : enriched),
+    [dossierActif, enriched],
   );
 
   const [survolCourbe, setSurvolCourbe] =
@@ -1333,13 +1351,13 @@ function PortfolioPageInner() {
    * précédent pour le remettre, plutôt que de laisser l'écran affirmer ce que le serveur
    * ignore.
    */
-  const recolorerLeDossier = useCallback(async (cle: Enveloppe, hex: string | null) => {
+  const recolorerLeDossier = useCallback(async (genre: string, hex: string | null) => {
     const id = portfolio?.id;
     if (!id) return;
     const avant = couleursChoisies;
     const suivantes = { ...avant };
-    if (hex) suivantes[GENRE_DE[cle]] = hex;
-    else delete suivantes[GENRE_DE[cle]];
+    if (hex) suivantes[genre] = hex;
+    else delete suivantes[genre];
     setPortfolio(p => (p ? { ...p, couleurs_comptes: suivantes } : p));
     try {
       const r = await fetch(`${API_URL}/api/v1/portfolios/${id}`, {
@@ -2135,107 +2153,82 @@ function PortfolioPageInner() {
                       * contenu que la donnée ne dit pas — précisément la confusion que ces
                       * comptes servent à lever.
                       */}
-                    {comptesDeclares.map(c => {
-                      const depuis = fraicheurDuSolde(c.mis_a_jour_le);
-                      return (
-                        <CarteCompte key={c.id} nom={c.nom} couleur={c.couleur}
-                          /**
-                            * ⚠️ **Le montant va sur le panneau, là où un PEA dit « 3 actifs ».**
-                            * Je l'avais posé dans la bande qui dépasse ; la référence fait
-                            * l'inverse, et elle a raison — cette bande est faite pour laisser
-                            * voir ce que le dossier **range**, le panneau pour dire ce qu'il
-                            * **est**. Sur un compte de trésorerie, ce qu'il est, c'est une
-                            * somme.
-                            *
-                            * ⚠️ **La date sous le montant n'est pas un ornement.** Ce chiffre
-                            * entre dans le total du portefeuille comme s'il était mesuré, alors
-                            * qu'il a été tapé un jour donné.
-                            */
-                          compte={!c.porte_des_titres && c.solde != null ? (
-                            <>
-                              {/* ⚠️ **Les centimes, et non `euros()`.** Cet arrondi vaut pour
-                                  une valorisation, qui bouge à chaque cours ; un solde de
-                                  compte est un montant exact que l'épargnant a recopié. Vu à
-                                  l'écran : 12 450,80 € s'affichait « 12 451 € », et le chiffre
-                                  cessait de correspondre à ce qu'on venait de taper. */}
-                              <div style={ANNONCE_DOSSIER.montant}>
-                                {montantExact(c.solde)}
-                              </div>
-                              {depuis && (
-                                <div style={ANNONCE_DOSSIER.mention}>
-                                  Solde déclaré {depuis}
-                                </div>
-                              )}
-                            </>
-                          ) : c.libelle_genre}
-                          /**
-                            * ⚠️ **Ce qui dépasse d'un dossier dit ce qu'il range.** Des lignes
-                            * d'actifs pour un compte à titres, une carte bancaire pour un
-                            * compte de trésorerie. Le vide qu'on y voyait se lisait « à
-                            * remplir », alors que ce compte ne recevra jamais de ligne.
-                            */
-                          apercu={!c.porte_des_titres ? [
-                            <CarteBancaire key="carte" couleur={c.couleur}
-                              intitule={c.libelle_genre} />,
-                          ] : undefined}
-                          /**
-                            * ⚠️ **Le pictogramme vient du genre, et de rien d'autre.** Un logo
-                            * d'établissement téléversé pouvait le remplacer ; la promesse
-                            * n'était pas tenable. Sans plaque blanche derrière lui, une image
-                            * quelconque tombe sur un dossier coloré — logo carré sur fond blanc
-                            * opaque, capture rognée, PNG sans transparence — et le résultat
-                            * dépendait entièrement du fichier choisi, donc échappait au dessin.
-                            * Cinq dessins d'un même jeu tiennent la rangée ensemble ; une image
-                            * par compte la défaisait.
-                            */
-                          icone={ICONE_PAR_GENRE[c.genre] ?? ICONE_BANQUE}
-                          /* ⚠️ **Le dossier s'ouvre sur sa correction, et c'est ce qui
-                             manquait le plus.** Un solde de trésorerie entre dans le total
-                             du portefeuille et vieillit tout seul ; sans moyen de le
-                             reprendre, le déclarer revenait à le graver. Les trois points
-                             mènent au même endroit : le clic de la carte reste, mais rien
-                             ne l'annonçait. */
-                          onClick={ouvrirLaCorrection(c)}
-                          onModifier={ouvrirLaCorrection(c)} />
-                      );
-                    })}
-                    {comptes.map(c => {
+                    {dossiers.map(d => {
+                      const compte = d.compteId
+                        ? comptesDeclares.find(c => c.id === d.compteId) : undefined;
+                      const depuis = compte ? fraicheurDuSolde(compte.mis_a_jour_le) : null;
                       /**
                         * ⚠️ **Le dossier annonce ce qu'il vaut, pas seulement ce qu'il
                         * contient.** « 3 actifs » ne dit rien du poids du compte : deux
                         * dossiers de trois lignes peuvent porter cent euros et cinquante
-                        * mille. À côté de comptes déclarés qui affichent, eux, une somme, un
-                        * compte déduit qui n'en affiche pas paraissait vide.
+                        * mille.
                         *
-                        * ⚠️ **Les centimes, comme sur un solde déclaré — et j'avais tranché
-                        * l'inverse.** J'arrondissais à l'euro au motif qu'une valorisation
-                        * suit les cours et n'a pas la précision qu'elle afficherait. L'argument
-                        * reste vrai et il ne suffit pas : ces dossiers sont côte à côte dans
-                        * une rangée, et deux montants au même endroit, dans le même style, dont
-                        * l'un porte ses centimes et l'autre non, se lisent comme deux natures
-                        * de chiffre. La constance de la rangée l'emporte sur l'honnêteté du
-                        * dernier centime, d'autant que le total du bandeau les affiche déjà.
+                        * ⚠️ **Les centimes partout, et j'avais tranché l'inverse.**
+                        * J'arrondissais les valorisations à l'euro au motif qu'elles suivent
+                        * les cours et n'ont pas la précision affichée. L'argument reste vrai
+                        * et il ne suffit pas : deux montants côte à côte, dans le même style,
+                        * dont l'un porte ses centimes et l'autre non, se lisent comme deux
+                        * natures de chiffre.
+                        *
+                        * ⚠️ **La mention dit d'abord ce que le dossier contient, puis ses
+                        * espèces s'il en a.** Un compte à titres vaut ses lignes *plus* la
+                        * poche non investie ; taire la seconde ferait un montant qu'aucune
+                        * addition visible ne retrouve. Sur un compte de trésorerie, il n'y a
+                        * pas de lignes du tout : la date de saisie prend la place, parce que
+                        * ce chiffre entre dans le total comme s'il était mesuré alors qu'il a
+                        * été tapé un jour donné.
                         */
-                      const valeur = c.lignes.reduce((s, a) => s + (a.value ?? 0), 0);
+                      const mention = !d.porteDesTitres
+                        ? (depuis && `Solde déclaré ${depuis}`)
+                        : [
+                            d.lignes.length === 0
+                              ? "Aucun actif"
+                              : `${d.lignes.length} actif${d.lignes.length > 1 ? "s" : ""}`,
+                            d.especes != null && d.especes !== 0
+                              && `${montantExact(d.especes)} d’espèces`,
+                          ].filter(Boolean).join(" · ");
                       return (
-                        <CarteCompte key={c.cle} nom={c.cle} couleur={c.couleur} icone={c.icone}
+                        <CarteCompte key={d.cle} nom={d.nom} couleur={d.couleur}
+                          icone={ICONE_PAR_GENRE[d.genre] ?? ICONE_BANQUE}
+                          annonce={`${d.nom}, ${montantExact(d.montant)}${mention ? `, ${mention}` : ""}`}
                           compte={
                             <>
-                              <div style={ANNONCE_DOSSIER.montant}>{montantExact(valeur)}</div>
-                              <div style={ANNONCE_DOSSIER.mention}>
-                                {c.lignes.length} actif{c.lignes.length > 1 ? "s" : ""}
+                              <div style={ANNONCE_DOSSIER.montant}>
+                                {montantExact(d.montant)}
                               </div>
+                              {mention && (
+                                <div style={ANNONCE_DOSSIER.mention}>{mention}</div>
+                              )}
                             </>
                           }
-                          apercu={[...c.lignes]
-                            .sort((a, b) => b.weight - a.weight)
-                            .slice(0, APERCUS_PAR_DOSSIER)
-                            .map(a => <CarteActif key={a.ticker} a={versCarte(a)} inerte />)}
-                          onClick={() => setCompteOuvert(c.cle)}
-                          /* ⚠️ Les trois points d'un dossier déduit ne mènent pas au
-                             formulaire de déclaration : il n'y aurait que des champs
-                             inertes. Ce dossier n'a que son apparence à régler. */
-                          onModifier={() => setDossierAColorer(c.cle)} />
+                          /**
+                            * ⚠️ **Ce qui dépasse d'un dossier dit ce qu'il range.** Des lignes
+                            * d'actifs pour un compte à titres, une carte bancaire pour un
+                            * compte de trésorerie — dont le vide se lisait « à remplir », alors
+                            * qu'il ne recevra jamais de ligne.
+                            */
+                          apercu={!d.porteDesTitres
+                            ? [<CarteBancaire key="carte" couleur={d.couleur}
+                                intitule={compte?.libelle_genre ?? d.nom} />]
+                            : [...d.lignes]
+                                .sort((a, b) => b.weight - a.weight)
+                                .slice(0, APERCUS_PAR_DOSSIER)
+                                .map(a => <CarteActif key={a.ticker} a={versCarte(a)} inerte />)}
+                          /* ⚠️ **Un compte de trésorerie s'ouvre sur sa correction, faute
+                             d'intérieur à montrer.** Son solde entre dans le total et
+                             vieillit tout seul ; sans moyen de le reprendre, le déclarer
+                             reviendrait à le graver. Deux sens du clic cohabitent donc dans
+                             la rangée — dette assumée, faute d'un écran « intérieur d'un
+                             livret » qui aurait quelque chose à dire. */
+                          onClick={compte && !d.porteDesTitres
+                            ? ouvrirLaCorrection(compte)
+                            : () => setCompteOuvert(d.cle)}
+                          onModifier={compte
+                            ? ouvrirLaCorrection(compte)
+                            /* Un dossier deviné n'a pas été saisi : son nom vient de
+                               l'enveloppe et son contenu des lignes. Seule son apparence se
+                               règle — et c'est de là qu'on le déclare. */
+                            : () => setDossierAColorer(d.cle)} />
                       );
                     })}
                   </RailHorizontal>
@@ -2246,8 +2239,11 @@ function PortfolioPageInner() {
                   onAssetClick={ticker => router.push(`/chart?ticker=${encodeURIComponent(ticker)}`)}
                   view={view}
                   titre={
-                    <FilAriane racine="Vos comptes" courant={compteActif}
-                      couleur={comptes.find(c => c.cle === compteActif)?.couleur}
+                    /* ⚠️ Le chemin porte le **nom** du dossier, pas sa clé : celle-ci est
+                       préfixée (`deduit:PEA`) pour qu'un compte déclaré nommé « PEA » et le
+                       dossier deviné du même nom ne s'ouvrent pas l'un pour l'autre. */
+                    <FilAriane racine="Vos comptes" courant={dossierActif?.nom ?? ""}
+                      couleur={dossierActif?.couleur}
                       onRacine={() => setCompteOuvert(null)} />
                   }
                 />
@@ -2951,20 +2947,26 @@ function PortfolioPageInner() {
           onFermer={() => { setFormCompte(false); setCompteEdite(null); setErreurCompte(null); }}
         />
       )}
-      {dossierAColorer && (
-        <PaletteDossier
-          nom={dossierAColorer}
-          couleur={couleursChoisies[GENRE_DE[dossierAColorer]]
-            ?? HABILLAGE_COMPTES[dossierAColorer].couleur}
-          surMesure={couleursChoisies[GENRE_DE[dossierAColorer]] != null}
-          /* ⚠️ La palette ne se referme pas sur le choix. Comparer deux teintes demande de
-             les essayer l'une après l'autre : refermer à chaque clic obligerait à rouvrir
-             pour changer d'avis, et le dossier n'est de toute façon visible qu'en fermant. */
-          onChoisir={hex => recolorerLeDossier(dossierAColorer, hex)}
-          onReinitialiser={() => recolorerLeDossier(dossierAColorer, null)}
-          onFermer={() => setDossierAColorer(null)}
-        />
-      )}
+      {/* ⚠️ Retrouvé dans la liste vivante plutôt que gardé en copie : les dossiers se
+          reconstruisent à chaque cours reçu, et une copie aurait montré la couleur d'avant
+          le premier choix. S'il a disparu entre-temps, la palette se ferme d'elle-même. */}
+      {(() => {
+        const d = dossiers.find(x => x.cle === dossierAColorer);
+        if (!d) return null;
+        return (
+          <PaletteDossier
+            nom={d.nom}
+            couleur={d.couleur}
+            surMesure={couleursChoisies[d.genre] != null}
+            /* ⚠️ La palette ne se referme pas sur le choix. Comparer deux teintes demande de
+               les essayer l'une après l'autre : refermer à chaque clic obligerait à rouvrir
+               pour changer d'avis, et le dossier n'est de toute façon visible qu'en fermant. */
+            onChoisir={hex => recolorerLeDossier(d.genre, hex)}
+            onReinitialiser={() => recolorerLeDossier(d.genre, null)}
+            onFermer={() => setDossierAColorer(null)}
+          />
+        );
+      })()}
       {showTxModal && (
         <TransactionModal
           portfolioId={portfolio?.id ?? ""}
