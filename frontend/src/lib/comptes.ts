@@ -152,3 +152,26 @@ export async function supprimerCompte(portefeuille: string, id: string): Promise
   if (!r.ok) await ouRaler(r, "Le compte n'a pas pu être supprimé.");
 }
 
+/**
+ * Range des opérations déjà saisies dans ce compte.
+ *
+ * ⚠️ **C'est ce qui rend un dossier deviné déclarable.** Un compte déclaré ne pouvait
+ * contenir que des opérations créées après lui : déclarer son PEA donnait un dossier vide
+ * à côté du dossier deviné toujours plein. Le serveur écrit tout ou rien — un lot qui
+ * contient une opération étrangère est refusé sans qu'aucune ne bouge.
+ */
+export async function rattacherOperations(
+  portefeuille: string, id: string, operations: number[],
+): Promise<{ rattachees: number; deplacees: number }> {
+  const r = await fetch(
+    `${API_URL}/api/v1/portfolios/${encodeURIComponent(portefeuille)}/comptes/${id}/operations`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...enTetesAuth() },
+      body: JSON.stringify({ operations }),
+    },
+  );
+  if (!r.ok) return ouRaler(r, "Les opérations n'ont pas pu être rattachées.");
+  return r.json();
+}
+

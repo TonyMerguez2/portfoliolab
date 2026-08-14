@@ -54,12 +54,26 @@ const champ: React.CSSProperties = {
 };
 
 export default function FormulaireCompte({
-  genres, initial, enCours, erreur, onEnregistrer, onSupprimer, onFermer,
+  genres, initial, prerempli, titre, mention, enCours, erreur,
+  onEnregistrer, onSupprimer, onFermer,
 }: {
   /** Les genres publiés par le serveur. Vide tant qu'ils ne sont pas arrivés. */
   genres: GenreCompte[];
   /** Le compte à corriger, ou rien pour en déclarer un nouveau. */
   initial?: Compte | null;
+  /**
+   * De quoi ouvrir le formulaire déjà rempli, **sans en faire une correction**.
+   *
+   * ⚠️ **Un champ à part, et non un faux `initial`.** `correction = initial != null`
+   * commande trois choses d'un coup : le titre, le saut de la seconde étape, et la présence
+   * du bouton Supprimer. Préremplir en passant un compte fabriqué aurait donc offert de
+   * supprimer un compte qui n'existe pas encore.
+   */
+  prerempli?: SaisieCompte;
+  /** Remplace le titre, quand la déclaration a un contexte à nommer. */
+  titre?: React.ReactNode;
+  /** Ce que l'enregistrement va faire en plus de créer le compte. */
+  mention?: React.ReactNode;
   enCours: boolean;
   erreur: string | null;
   onEnregistrer: (s: SaisieCompte) => void;
@@ -67,10 +81,11 @@ export default function FormulaireCompte({
   onFermer: () => void;
 }) {
   const correction = initial != null;
+  const depart = initial ?? prerempli;
   const [etape, setEtape] = useState<1 | 2>(1);
-  const [nom, setNom] = useState(initial?.nom ?? "");
-  const [genre, setGenre] = useState<string>(initial?.genre ?? "");
-  const [couleur, setCouleur] = useState(initial?.couleur ?? COULEURS_DOSSIER[0].hex);
+  const [nom, setNom] = useState(depart?.nom ?? "");
+  const [genre, setGenre] = useState<string>(depart?.genre ?? "");
+  const [couleur, setCouleur] = useState(depart?.couleur ?? COULEURS_DOSSIER[0].hex);
   /**
    * ⚠️ **Le solde se relit en français, avec ses centimes.** `String(12450.8)` rend
    * « 12450.8 » : un point décimal dans une saisie française, et le zéro final envolé. Vu à
@@ -79,7 +94,7 @@ export default function FormulaireCompte({
    * ne porte aucun séparateur de milliers.
    */
   const [solde, setSolde] = useState(
-    initial?.solde != null ? initial.solde.toFixed(2).replace(".", ",") : "");
+    depart?.solde != null ? depart.solde.toFixed(2).replace(".", ",") : "");
   /**
    * ⚠️ **La suppression demande deux clics, et non une boîte du navigateur.** `confirm()`
    * arrête tout, sort de la page et se présente au nom du site plutôt qu'au nom de
@@ -150,9 +165,9 @@ export default function FormulaireCompte({
 
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
           <span style={{ fontFamily: FONT, fontSize: 13.5, fontWeight: 700, color: CLAIR.texte }}>
-            {correction ? "Modifier le compte"
+            {titre ?? (correction ? "Modifier le compte"
               : etape === 1 ? "Nouveau compte"
-              : avecTitres ? "Les opérations de ce compte" : "La mise à jour du solde"}
+              : avecTitres ? "Les opérations de ce compte" : "La mise à jour du solde")}
           </span>
           <button type="button" onClick={onFermer} aria-label="Fermer"
             style={{ background: "none", border: "none", cursor: "pointer",
@@ -257,6 +272,21 @@ export default function FormulaireCompte({
                     ? "Vous enregistrez vos achats et ventes vous-même. C’est ce qui alimente les quantités, le prix de revient et la valorisation."
                     : "Ce compte n’a pas d’opérations à saisir : vous corrigez son solde quand il change."}
                 </div>
+                {/**
+                  * ⚠️ **Ce que l'enregistrement fait en plus, dit avant de le faire.**
+                  * Déclarer un dossier deviné y range ses lignes du même geste : sans cette
+                  * phrase, appuyer sur « Créer le compte » rattacherait trois opérations en
+                  * silence — l'effet le plus surprenant de tout le parcours. Elle se pose
+                  * ici, dans l'encart qui décrit déjà comment les opérations arrivent.
+                  */}
+                {mention && (
+                  <div style={{
+                    fontFamily: FONT, fontSize: 11, color: CLAIR.texte, marginTop: 8,
+                    paddingTop: 8, borderTop: `1px solid ${CLAIR.bord}`, lineHeight: 1.5,
+                  }}>
+                    {mention}
+                  </div>
+                )}
               </div>
 
               {/**

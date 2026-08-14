@@ -24,7 +24,7 @@ import AllocationDonut from "@/components/portfolio/AllocationDonut";
 import RecentActivity from "@/components/portfolio/RecentActivity";
 import PortfolioTabs from "@/components/portfolio/PortfolioTabs";
 import { donutArcs } from "@/lib/donut";
-import { repartirEnDossiers } from "@/lib/dossiers";
+import { operationsDuDossier, repartirEnDossiers } from "@/lib/dossiers";
 import { compteInfere, valoriser, type Enveloppe, type GridAsset } from "@/lib/portfolio";
 import { assetExchange } from "@/lib/assets";
 import RadarChart from "@/components/charts/RadarChart";
@@ -47,7 +47,7 @@ import PaletteDossier from "@/components/portfolio/PaletteDossier";
 import CarteBancaire from "@/components/portfolio/CarteBancaire";
 import {
   type Compte as CompteDeclare, type GenreCompte, creerCompte, fraicheurDuSolde,
-  lireComptes, lireGenres, modifierCompte, supprimerCompte,
+  lireComptes, lireGenres, modifierCompte, rattacherOperations, supprimerCompte,
 } from "@/lib/comptes";
 import { BASE_COMPACTE, PLACE_COMPACTE, parleEnContexteDense } from "@/lib/avatarDialogue";
 import { useParoleStable } from "@/lib/useParoleStable";
@@ -398,6 +398,15 @@ function PortfolioPageInner() {
    * couleur d'il y a quinze secondes après un premier choix.
    */
   const [dossierAColorer, setDossierAColorer] = useState<string | null>(null);
+  /**
+   * Ce que le formulaire porte quand il sert à **déclarer un dossier deviné** : les valeurs
+   * de départ, et les opérations à ranger dans le compte une fois créé.
+   *
+   * ⚠️ **Séparé de `compteEdite`, qui ne désigne qu'une correction.** Confondre les deux
+   * aurait fait proposer de supprimer un compte qui n'existe pas encore.
+   */
+  const [prereglage,      setPrereglage]      = useState<SaisieCompte | null>(null);
+  const [aRattacher,      setARattacher]      = useState<number[]>([]);
   const [compteEnCours,   setCompteEnCours]   = useState(false);
   const [erreurCompte,    setErreurCompte]    = useState<string | null>(null);
   const [txRefreshKey,    setTxRefreshKey]    = useState(0);
@@ -1382,6 +1391,11 @@ function PortfolioPageInner() {
   const ouvrirLaCorrection = useCallback((c: CompteDeclare) => () => {
     setErreurCompte(null);
     setCompteEdite(c);
+    // ⚠️ Le préréglage d'une déclaration se défait ici. Vu à l'écran : après avoir déclaré
+    // le PEA, rouvrir sa correction affichait encore « Déclarer votre PEA » en titre. Un
+    // état qu'on ne pose qu'à l'ouverture doit se retirer à toutes les autres.
+    setPrereglage(null);
+    setARattacher([]);
     setFormCompte(true);
   }, []);
 
@@ -1395,17 +1409,61 @@ function PortfolioPageInner() {
        * auraient divergé sur le rechargement, sur la fermeture — et c'est précisément la
        * moitié rarement exercée qui aurait pris du retard.
        */
-      if (compteEdite) await modifierCompte(String(idPortefeuille), compteEdite.id, saisie);
-      else await creerCompte(String(idPortefeuille), saisie);
+      if (compteEdite) {
+        await modifierCompte(String(idPortefeuille), compteEdite.id, saisie);
+      } else {
+        const cree = await creerCompte(String(idPortefeuille), saisie);
+        /**
+         * ⚠️ **Le rattachement suit la création, en deux appels, et son échec se dit.** Le
+         * second peut manquer après le succès du premier : on aurait alors un compte déclaré
+         * vide à côté du dossier deviné toujours plein, ce qui se rattrape — mais pas si
+         * personne ne l'apprend. Le formulaire reste donc ouvert avec le message. Tout
+         * fondre dans la création aurait supprimé ce cas, au prix d'une route qui fait deux
+         * choses et d'un rattachement qu'il faut de toute façon pouvoir demander seul.
+         */
+        if (aRattacher.length > 0) {
+          try {
+            await rattacherOperations(String(idPortefeuille), cree.id, aRattacher);
+          } catch {
+            rechargerComptes();
+            setTxRefreshKey(k => k + 1);
+            setErreurCompte(
+              "Le compte a été créé, mais ses lignes n'ont pas pu y être rattachées.");
+            return;
+          }
+          setTxRefreshKey(k => k + 1);
+        }
+      }
       rechargerComptes();
       setFormCompte(false);
       setCompteEdite(null);
+      setPrereglage(null);
+      setARattacher([]);
     } catch (e) {
       setErreurCompte(e instanceof Error ? e.message : "Le compte n'a pas pu être enregistré.");
     } finally {
       setCompteEnCours(false);
     }
-  }, [idPortefeuille, compteEdite, rechargerComptes]);
+  }, [idPortefeuille, compteEdite, aRattacher, rechargerComptes]);
+
+  /**
+   * Déclarer un dossier deviné : le formulaire s'ouvre prérempli, et retiendra ses lignes.
+   *
+   * ⚠️ **Les identifiants d'opération sont figés à l'ouverture, pas relus à l'envoi.** Le
+   * journal se recharge sous le formulaire ; rattacher ce qu'il contient au moment de
+   * valider prendrait des lignes que l'épargnant n'a pas vu annoncer — la palette lui a dit
+   * « ses 3 lignes seront rattachées », et c'est ces trois-là qui doivent partir.
+   */
+  const declarerLeDossier = useCallback((cle: string) => {
+    const d = dossiers.find(x => x.cle === cle);
+    if (!d) return;
+    setARattacher(operationsDuDossier(d, ecritures));
+    setPrereglage({ nom: d.nom, genre: d.genre, couleur: d.couleur, solde: null });
+    setDossierAColorer(null);
+    setErreurCompte(null);
+    setCompteEdite(null);
+    setFormCompte(true);
+  }, [dossiers, ecritures]);
 
   const supprimerLeCompte = useCallback(async () => {
     if (!idPortefeuille || !compteEdite) return;
@@ -2939,12 +2997,22 @@ function PortfolioPageInner() {
           /* ⚠️ La clé remonte le formulaire d'un compte à l'autre : ses champs sont un état
              local initialisé au montage, et sans elle on rouvrirait « Livret A » rempli avec
              les valeurs du compte regardé juste avant. */
-          key={compteEdite?.id ?? "nouveau"}
+          key={compteEdite?.id ?? prereglage?.nom ?? "nouveau"}
           genres={genresCompte} initial={compteEdite}
+          prerempli={prereglage ?? undefined}
+          titre={prereglage ? `Déclarer votre ${prereglage.nom}` : undefined}
+          mention={aRattacher.length > 0
+            ? (aRattacher.length === 1
+                ? "L\u2019opération de ce dossier sera rattachée à ce compte."
+                : `Les ${aRattacher.length} opérations de ce dossier seront rattachées à ce compte.`)
+            : undefined}
           enCours={compteEnCours} erreur={erreurCompte}
           onEnregistrer={enregistrerLeCompte}
           onSupprimer={compteEdite ? supprimerLeCompte : undefined}
-          onFermer={() => { setFormCompte(false); setCompteEdite(null); setErreurCompte(null); }}
+          onFermer={() => {
+            setFormCompte(false); setCompteEdite(null); setErreurCompte(null);
+            setPrereglage(null); setARattacher([]);
+          }}
         />
       )}
       {/* ⚠️ Retrouvé dans la liste vivante plutôt que gardé en copie : les dossiers se
@@ -2958,11 +3026,13 @@ function PortfolioPageInner() {
             nom={d.nom}
             couleur={d.couleur}
             surMesure={couleursChoisies[d.genre] != null}
+            lignes={d.lignes.length}
             /* ⚠️ La palette ne se referme pas sur le choix. Comparer deux teintes demande de
                les essayer l'une après l'autre : refermer à chaque clic obligerait à rouvrir
                pour changer d'avis, et le dossier n'est de toute façon visible qu'en fermant. */
             onChoisir={hex => recolorerLeDossier(d.genre, hex)}
             onReinitialiser={() => recolorerLeDossier(d.genre, null)}
+            onDeclarer={() => declarerLeDossier(d.cle)}
             onFermer={() => setDossierAColorer(null)}
           />
         );
