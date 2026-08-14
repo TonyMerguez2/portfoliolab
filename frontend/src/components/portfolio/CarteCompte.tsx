@@ -24,8 +24,15 @@ import { CARTE_ACTIF } from "@/components/portfolio/CarteActif";
  * l'encoche. Le filtre, lui, suit la silhouette réelle.
  */
 
-/** Le rayon des angles. */
-const RAYON = 22;
+/**
+ * Le rayon des angles.
+ *
+ * ⚠️ **Mesuré sur la maquette plutôt que choisi.** Le dossier y fait sept cents pixels de
+ * large pour trois cent quatre ici, soit un facteur 2,3 ; ses angles mesurent une soixantaine
+ * de pixels, ce qui en fait vingt-six chez nous. À vingt-deux, la silhouette était plus sèche
+ * que le modèle sans qu'on sache dire pourquoi.
+ */
+const RAYON = 26;
 /**
  * La languette : sa hauteur au-dessus du plan, sa largeur, et la forme de son raccord.
  *
@@ -158,8 +165,9 @@ export default function CarteCompte({
 }) {
   /** Un identifiant par instance : deux dossiers voisins partageraient sinon le dégradé. */
   const idBord = useId().replace(/:/g, "");
-  const clair = decalerClarte(couleur, 0.12);
-  const sombre = decalerClarte(couleur, -0.12);
+  const tresClair = decalerClarte(couleur, 0.19);
+  const clair = decalerClarte(couleur, 0.10);
+  const sombre = decalerClarte(couleur, -0.16);
   const cartes = apercu ?? [];
 
   return (
@@ -238,11 +246,26 @@ export default function CarteCompte({
         <div style={{
           width: "100%", height: "100%",
           clipPath: `path("${CONTOUR}")`,
-          background: `linear-gradient(150deg, ${clair} 0%, ${couleur} 48%, ${sombre} 100%)`,
+          /**
+           * ⚠️ **Le dégradé s'étire davantage, parce qu'un aplat ne se lit pas comme un
+           * objet.** Il allait du clair au sombre en passant par la teinte à mi-course ;
+           * comparé à la maquette, il manquait de course — le dossier paraissait plat là où
+           * le modèle a une surface qui tourne. Les deux extrêmes s'écartent donc, et le
+           * point de bascule remonte : la lumière frappe le haut-gauche sur près de la
+           * moitié du trajet, puis la surface s'enfonce.
+           */
+          background: `linear-gradient(148deg, ${tresClair} 0%, ${clair} 26%,`
+            + ` ${couleur} 58%, ${sombre} 100%)`,
         }}>
           <div style={{
             position: "relative", height: "100%",
-            padding: `${LANGUETTE.hauteur + 12}px 16px 12px`,
+            /**
+             * ⚠️ **Les marges viennent de la maquette, où le plan respire davantage.**
+             * Mesuré au même facteur 2,3 : le pictogramme s'y tient à vingt-et-un pixels du
+             * bord et la dernière ligne à vingt-quatre du bas, contre seize et douze ici. Le
+             * texte y gagne l'air qui le distinguait d'un bloc collé au coin.
+             */
+            padding: `${LANGUETTE.hauteur + 14}px 21px 21px`,
             display: "flex", flexDirection: "column", justifyContent: "space-between",
           }}>
             <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between" }}>
@@ -328,7 +351,7 @@ export default function CarteCompte({
   
           </linearGradient>
         </defs>
-        <path d={CONTOUR} fill="none" stroke={`url(#bord-${idBord})`} strokeWidth={1}
+        <path d={CONTOUR} fill="none" stroke={`url(#bord-${idBord})`} strokeWidth={1.25}
           transform="translate(0.5, 0.5) scale(0.9967)" />
       </svg>
     </button>
