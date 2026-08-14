@@ -36,21 +36,54 @@ const DEBORD = CARTE_COMPTE.languette.largeur - 16;
 /**
  * Le contact d'une puce à circuit intégré.
  *
- * ⚠️ **Trois rangées, et celle du milieu est plus courte : c'est ce qui fait la puce.**
- * Une grille régulière de neuf cases se lit comme une fenêtre, pas comme un contact. Sur une
- * vraie puce, la bande centrale est écrasée entre deux rangées plus hautes, ce qui isole un
- * petit pavé large au milieu — la forme qu'on reconnaît sans savoir la décrire.
+ * ⚠️ **Ce ne sont pas des traits sur une plaque, ce sont des pavés séparés.** Le premier jet
+ * remplissait un carré puis le barrait de lignes : à l'œil, un quadrillage dessiné *sur* une
+ * surface. Sur une vraie puce, chaque contact est une plage de métal isolée, et ce qu'on voit
+ * entre elles est le substrat qui affleure. On peint donc le fond sombre, puis neuf pavés
+ * par-dessus — la différence tient à ce que les sillons ont alors une *profondeur*, et que
+ * les angles des pavés s'arrondissent chacun pour leur compte.
  *
- * ⚠️ **Du métal, pas un voile blanc.** Le premier jet remplissait la puce d'un blanc à vingt
- * pour cent barré de traits clairs : cela donnait une grille translucide posée sur la carte.
- * Ce qu'on reconnaît d'une puce, c'est qu'elle **réfléchit** — un dégradé qui passe du clair
- * au sombre en diagonale, et des rainures **sombres** entre les pavés, puisque ce sont des
- * sillons et non des traits tracés.
+ * ⚠️ **Les rangées et les colonnes sont inégales, et c'est la signature de la forme.** Trois
+ * bandes égales font un damier ; sur le contact, la colonne du milieu est large et celles des
+ * bords étroites, tandis que la rangée du bas est la plus haute. C'est ce déséquilibre qu'on
+ * reconnaît sans savoir le nommer, et c'est lui qu'un damier régulier manquait.
+ *
+ * ⚠️ **Les pavés d'angle épousent la courbe du contour, et ils ne peuvent pas le faire
+ * seuls.** Un rectangle a quatre angles de même rayon : posé dans un carré arrondi, il
+ * laisse quatre coins sombres que la photo n'a pas. Plutôt que de tracer quatre chemins aux
+ * rayons dissymétriques, on laisse les pavés du pourtour **déborder** et l'on découpe
+ * l'ensemble à la silhouette de la puce. Le contour taille alors leurs angles extérieurs
+ * exactement comme le sien.
+ *
+ * ⚠️ **Aucun reflet posé à la main.** Une version portait un trait blanc le long du bord
+ * supérieur, censé dire « surface polie » : il ne suivait aucun pavé, coupait le premier
+ * sillon et se lisait comme une rayure. Le métal se dit par le dégradé qui traverse tous les
+ * pavés d'un seul tenant — clair en haut à gauche, sombre en bas à droite — et par rien
+ * d'autre.
  *
  * ⚠️ **Elle garde la boîte du logo qu'elle remplace.** Même côté, même arrondi, même origine
- * que le logo d'une carte d'actif : c'est ce qui aligne les deux cartes lorsqu'elles
- * dépassent côte à côte de deux dossiers voisins.
+ * que le logo d'une carte d'actif : c'est ce qui aligne les deux cartes lorsqu'elles dépassent
+ * côte à côte de deux dossiers voisins.
  */
+
+/**
+ * La grille des contacts, en unités du repère de 32.
+ *
+ * ⚠️ **Écrite en bornes plutôt qu'en largeurs.** Les pavés se déduisent d'un produit de deux
+ * listes : trois colonnes, trois rangées. Exprimée en largeurs additionnées, la moindre
+ * retouche décalait tout ce qui suit et il fallait refaire l'arithmétique à la main.
+ *
+ * ⚠️ **Les bornes extérieures sortent du repère, et c'est voulu.** Le débord est rattrapé
+ * par la découpe : c'est lui qui donne aux pavés d'angle la courbe du contour.
+ *
+ * ⚠️ **Colonne du milieu large, rangée du bas haute.** Trois bandes égales font un damier ;
+ * le déséquilibre est ce qu'on reconnaît d'un contact sans savoir le nommer.
+ */
+const COLONNES = [[-2, 9.0], [9.9, 22.1], [23.0, 34]];
+const RANGEES = [[-2, 9.6], [10.5, 19.7], [20.6, 34]];
+/** Le sillon entre deux pavés, en unités du repère — mesuré sur la photo, il est fin. */
+const ARRONDI_PAVE = 1.3;
+
 function Puce() {
   /**
    * ⚠️ **L'identifiant du dégradé est propre à l'instance.** Deux cartes bancaires côte à
@@ -63,22 +96,39 @@ function Puce() {
     <svg width={cote} height={cote} viewBox="0 0 32 32" aria-hidden="true"
       style={{ flexShrink: 0 }}>
       <defs>
-        <linearGradient id={`puce-${id}`} x1="0" y1="0" x2="1" y2="1">
-          <stop offset="0%" stopColor="#F2F4F7" />
-          <stop offset="38%" stopColor="#C7CCD4" />
-          <stop offset="62%" stopColor="#9AA1AC" />
-          <stop offset="100%" stopColor="#DDE1E7" />
+        {/**
+          * ⚠️ **Le dégradé est en coordonnées du repère, pas de chaque boîte.** Rapporté à
+          * la boîte de chaque pavé, il repartait du clair dans les neuf : on obtenait neuf
+          * petites plaques éclairées pareil, au lieu d'une seule surface que la lumière
+          * traverse.
+          */}
+        <linearGradient id={`puce-${id}`} gradientUnits="userSpaceOnUse"
+          x1="0" y1="0" x2="32" y2="32">
+          <stop offset="0%" stopColor="#F4F6F9" />
+          <stop offset="34%" stopColor="#D3D8DF" />
+          <stop offset="66%" stopColor="#A8AFBA" />
+          <stop offset="100%" stopColor="#CDD3DA" />
         </linearGradient>
       </defs>
-      <rect x="0.5" y="0.5" width="31" height="31" rx={CARTE_ACTIF.logo.rayon - 0.5}
-        fill={`url(#puce-${id})`} stroke="rgba(0,0,0,0.28)" strokeWidth={1} />
-      {/* Les sillons : deux montants sur toute la hauteur, deux traverses qui écrasent la
-          rangée du milieu à huit unités contre douze pour ses voisines. */}
-      <path d="M10 1v30M22 1v30M1 12h30M1 20h30"
-        stroke="rgba(30,35,45,0.42)" strokeWidth={1.4} strokeLinecap="round" />
-      {/* Le reflet du bord supérieur, celui qui dit que la surface est polie. */}
-      <path d="M4 2.5h24" stroke="rgba(255,255,255,0.65)" strokeWidth={1.1}
-        strokeLinecap="round" />
+
+      <defs>
+        <clipPath id={`silhouette-${id}`}>
+          <rect x="0.6" y="0.6" width="30.8" height="30.8"
+            rx={CARTE_ACTIF.logo.rayon - 0.6} />
+        </clipPath>
+      </defs>
+
+      {/* Le substrat : ce qui affleure entre les pavés. Sans liseré épais autour — sur la
+          photo, le pourtour est fait des pavés eux-mêmes, pas d'un cadre. */}
+      <rect x="0.6" y="0.6" width="30.8" height="30.8" rx={CARTE_ACTIF.logo.rayon - 0.6}
+        fill="#5F656F" />
+
+      <g clipPath={`url(#silhouette-${id})`}>
+        {RANGEES.map(([y1, y2], r) => COLONNES.map(([x1, x2], c) => (
+          <rect key={`${r}-${c}`} x={x1} y={y1} width={x2 - x1} height={y2 - y1}
+            rx={ARRONDI_PAVE} fill={`url(#puce-${id})`} />
+        )))}
+      </g>
     </svg>
   );
 }
