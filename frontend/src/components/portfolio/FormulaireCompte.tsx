@@ -1,7 +1,8 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
 
-import type { CompteASoumettre, GenreCompte } from "@/lib/comptes";
+import type { Compte, CompteASoumettre, GenreCompte } from "@/lib/comptes";
+import { fraicheurDuSolde } from "@/lib/comptes";
 import { COULEURS_AVATAR } from "@/lib/avatarCouleur";
 import { CLAIR, RAYONS } from "@/lib/palette";
 import { FONT, NUM } from "@/lib/typography";
@@ -22,6 +23,13 @@ import { FONT, NUM } from "@/lib/typography";
  *
  * ⚠️ **Aucun jugement.** Le formulaire enregistre ce que l'épargnant déclare détenir. Il ne
  * dit pas qu'un PEA vaut mieux qu'un compte-titres, et ne propose rien à y mettre.
+ *
+ * ⚠️ **Le même écran sert à corriger, et il le fallait d'urgence.** Un solde saisi à la main
+ * est la valeur d'un compte de trésorerie : il entre dans le total du portefeuille et vieillit
+ * tout seul. Sans moyen de le reprendre, déclarer un livret revenait à graver un chiffre —
+ * pire que de ne rien déclarer, puisque le total avait l'air juste. La correction se fait donc
+ * ici, en un temps : le second, qui demande d'où viennent les opérations, ne concerne que la
+ * déclaration initiale.
  */
 
 /** Ce que le formulaire rend une fois le premier temps rempli. */
@@ -49,20 +57,31 @@ const champ: React.CSSProperties = {
 };
 
 export default function FormulaireCompte({
-  genres, enCours, erreur, onEnregistrer, onFermer,
+  genres, initial, enCours, erreur, onEnregistrer, onSupprimer, onFermer,
 }: {
   /** Les genres publiés par le serveur. Vide tant qu'ils ne sont pas arrivés. */
   genres: GenreCompte[];
+  /** Le compte à corriger, ou rien pour en déclarer un nouveau. */
+  initial?: Compte | null;
   enCours: boolean;
   erreur: string | null;
   onEnregistrer: (s: SaisieCompte) => void;
+  onSupprimer?: () => void;
   onFermer: () => void;
 }) {
+  const correction = initial != null;
   const [etape, setEtape] = useState<1 | 2>(1);
-  const [nom, setNom] = useState("");
-  const [genre, setGenre] = useState<string>("");
-  const [couleur, setCouleur] = useState(COULEURS[0].hex);
-  const [solde, setSolde] = useState("");
+  const [nom, setNom] = useState(initial?.nom ?? "");
+  const [genre, setGenre] = useState<string>(initial?.genre ?? "");
+  const [couleur, setCouleur] = useState(initial?.couleur ?? COULEURS[0].hex);
+  const [solde, setSolde] = useState(initial?.solde != null ? String(initial.solde) : "");
+  /**
+   * ⚠️ **La suppression demande deux clics, et non une boîte du navigateur.** `confirm()`
+   * arrête tout, sort de la page et se présente au nom du site plutôt qu'au nom de
+   * l'application. Le bouton qui se transforme en son propre garde-fou reste dans le
+   * formulaire, se défait en fermant, et personne ne supprime un compte en visant mal.
+   */
+  const [confirmeSuppression, setConfirmeSuppression] = useState(false);
   const [logo, setLogo] = useState<File | null>(null);
   const [apercuLogo, setApercuLogo] = useState<string | null>(null);
   const fichier = useRef<HTMLInputElement>(null);
@@ -140,7 +159,8 @@ export default function FormulaireCompte({
 
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
           <span style={{ fontFamily: FONT, fontSize: 13.5, fontWeight: 700, color: CLAIR.texte }}>
-            {etape === 1 ? "Nouveau compte"
+            {correction ? "Modifier le compte"
+              : etape === 1 ? "Nouveau compte"
               : avecTitres ? "Les opérations de ce compte" : "La mise à jour du solde"}
           </span>
           <button type="button" onClick={onFermer} aria-label="Fermer"
@@ -148,7 +168,7 @@ export default function FormulaireCompte({
               color: CLAIR.texteFaible, fontSize: 18, lineHeight: 1, padding: 0 }}>×</button>
         </div>
 
-        {etape === 1 ? (
+        {correction || etape === 1 ? (
           <>
             <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
               <span style={etiquette}>Nom</span>
@@ -251,6 +271,11 @@ export default function FormulaireCompte({
                 {avecTitres
                   ? "La part en euros qui dort à côté de vos titres. Facultatif."
                   : "Ce que contient le compte aujourd’hui."}
+                {/* ⚠️ **L'âge du solde s'affiche là où on le corrige.** Sur la carte, il
+                    informe ; ici, il justifie le geste qu'on est en train de faire. */}
+                {correction && initial?.mis_a_jour_le && (
+                  <> Dernière saisie {fraicheurDuSolde(initial.mis_a_jour_le)}.</>
+                )}
               </span>
             </div>
           </>
@@ -322,24 +347,40 @@ export default function FormulaireCompte({
           <span style={{ fontFamily: FONT, fontSize: 11.5, color: CLAIR.negatif }}>{erreur}</span>
         )}
 
-        <div style={{ display: "flex", justifyContent: "space-between", gap: 8, marginTop: 2 }}>
-          <button type="button" onClick={() => (etape === 1 ? onFermer() : setEtape(1))}
-            style={{
-              fontFamily: FONT, fontSize: 12, padding: "8px 14px", borderRadius: RAYONS.xs,
-              cursor: "pointer", background: "transparent",
-              border: `1px solid ${CLAIR.bord}`, color: CLAIR.texteSecondaire,
-            }}>
-            {etape === 1 ? "Annuler" : "Retour"}
-          </button>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, marginTop: 2 }}>
+          {correction && onSupprimer ? (
+            <button type="button" disabled={enCours}
+              onClick={() => (confirmeSuppression ? onSupprimer() : setConfirmeSuppression(true))}
+              style={{
+                fontFamily: FONT, fontSize: 12, padding: "8px 14px", borderRadius: RAYONS.xs,
+                cursor: enCours ? "default" : "pointer", background: "transparent",
+                border: `1px solid ${confirmeSuppression ? CLAIR.negatif : CLAIR.bord}`,
+                color: confirmeSuppression ? CLAIR.negatif : CLAIR.texteFaible,
+                fontWeight: confirmeSuppression ? 600 : 400,
+              }}>
+              {confirmeSuppression ? "Confirmer la suppression" : "Supprimer"}
+            </button>
+          ) : (
+            <button type="button" onClick={() => (etape === 1 ? onFermer() : setEtape(1))}
+              style={{
+                fontFamily: FONT, fontSize: 12, padding: "8px 14px", borderRadius: RAYONS.xs,
+                cursor: "pointer", background: "transparent",
+                border: `1px solid ${CLAIR.bord}`, color: CLAIR.texteSecondaire,
+              }}>
+              {etape === 1 ? "Annuler" : "Retour"}
+            </button>
+          )}
           <button type="button" disabled={!peutContinuer || enCours}
-            onClick={() => (etape === 1 ? setEtape(2) : enregistrer())}
+            onClick={() => (correction || etape === 2 ? enregistrer() : setEtape(2))}
             style={{
               fontFamily: FONT, fontSize: 12, fontWeight: 600, padding: "8px 16px",
               borderRadius: RAYONS.xs, border: "none", color: "#FFFFFF",
               background: couleur, opacity: !peutContinuer || enCours ? 0.45 : 1,
               cursor: !peutContinuer || enCours ? "default" : "pointer",
             }}>
-            {etape === 1 ? "Continuer" : enCours ? "Création…" : "Créer le compte"}
+            {enCours ? "Enregistrement…"
+              : correction ? "Enregistrer"
+              : etape === 1 ? "Continuer" : "Créer le compte"}
           </button>
         </div>
       </div>

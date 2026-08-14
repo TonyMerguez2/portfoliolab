@@ -44,7 +44,7 @@ import AvatarParole from "@/components/AvatarParole";
 import FormulaireCompte, { type SaisieCompte } from "@/components/portfolio/FormulaireCompte";
 import {
   type Compte as CompteDeclare, type GenreCompte, creerCompte, fraicheurDuSolde,
-  lireComptes, lireGenres, televerserLogo, urlDuLogo,
+  lireComptes, lireGenres, modifierCompte, supprimerCompte, televerserLogo, urlDuLogo,
 } from "@/lib/comptes";
 import { BASE_COMPACTE, PLACE_COMPACTE, parleEnContexteDense } from "@/lib/avatarDialogue";
 import { useParoleStable } from "@/lib/useParoleStable";
@@ -349,6 +349,8 @@ function PortfolioPageInner() {
   const [comptesDeclares, setComptesDeclares] = useState<CompteDeclare[]>([]);
   const [genresCompte,    setGenresCompte]    = useState<GenreCompte[]>([]);
   const [formCompte,      setFormCompte]      = useState(false);
+  /** Le compte en cours de correction, ou `null` quand on en déclare un nouveau. */
+  const [compteEdite,     setCompteEdite]     = useState<CompteDeclare | null>(null);
   const [compteEnCours,   setCompteEnCours]   = useState(false);
   const [erreurCompte,    setErreurCompte]    = useState<string | null>(null);
   const [txRefreshKey,    setTxRefreshKey]    = useState(0);
@@ -1265,27 +1267,51 @@ function PortfolioPageInner() {
    * garde donc le compte et l'on dit ce qui n'a pas suivi, plutôt que de tout annuler pour
    * une image trop lourde.
    */
-  const creerLeCompte = useCallback(async (saisie: SaisieCompte) => {
+  const enregistrerLeCompte = useCallback(async (saisie: SaisieCompte) => {
     if (!idPortefeuille) return;
     setCompteEnCours(true);
     setErreurCompte(null);
     try {
-      const cree = await creerCompte(String(idPortefeuille), saisie);
+      /**
+       * ⚠️ **Corriger et déclarer suivent le même chemin, à la route près.** Deux fonctions
+       * auraient divergé sur le logo, sur le rechargement, sur la fermeture — et c'est
+       * précisément la moitié rarement exercée qui aurait pris du retard.
+       */
+      const compte = compteEdite
+        ? await modifierCompte(String(idPortefeuille), compteEdite.id, saisie)
+        : await creerCompte(String(idPortefeuille), saisie);
       if (saisie.logo) {
         try {
-          await televerserLogo(String(idPortefeuille), cree.id, saisie.logo);
+          await televerserLogo(String(idPortefeuille), compte.id, saisie.logo);
         } catch {
-          setErreurCompte("Le compte est créé, mais le logo n'a pas pu être enregistré.");
+          setErreurCompte("Le compte est enregistré, mais le logo n'a pas pu l'être.");
         }
       }
       rechargerComptes();
       setFormCompte(false);
+      setCompteEdite(null);
     } catch (e) {
-      setErreurCompte(e instanceof Error ? e.message : "Le compte n'a pas pu être créé.");
+      setErreurCompte(e instanceof Error ? e.message : "Le compte n'a pas pu être enregistré.");
     } finally {
       setCompteEnCours(false);
     }
-  }, [idPortefeuille, rechargerComptes]);
+  }, [idPortefeuille, compteEdite, rechargerComptes]);
+
+  const supprimerLeCompte = useCallback(async () => {
+    if (!idPortefeuille || !compteEdite) return;
+    setCompteEnCours(true);
+    setErreurCompte(null);
+    try {
+      await supprimerCompte(String(idPortefeuille), compteEdite.id);
+      rechargerComptes();
+      setFormCompte(false);
+      setCompteEdite(null);
+    } catch (e) {
+      setErreurCompte(e instanceof Error ? e.message : "Le compte n'a pas pu être supprimé.");
+    } finally {
+      setCompteEnCours(false);
+    }
+  }, [idPortefeuille, compteEdite, rechargerComptes]);
 
   const saveTotalValue = async () => {
     if (!portfolio) return;
@@ -2048,7 +2074,14 @@ function PortfolioPageInner() {
                                 stroke="currentColor" strokeWidth={2} strokeLinecap="round"
                                 strokeLinejoin="round" aria-hidden="true">
                                 <path d="M3 7h18v12H3z" /><path d="M3 7l3-3h12l3 3" />
-                              </svg>} />
+                              </svg>}
+                          /* ⚠️ **Le dossier s'ouvre sur sa correction, et c'est ce qui
+                             manquait le plus.** Un solde de trésorerie entre dans le total
+                             du portefeuille et vieillit tout seul ; sans moyen de le
+                             reprendre, le déclarer revenait à le graver. */
+                          onClick={() => {
+                            setErreurCompte(null); setCompteEdite(c); setFormCompte(true);
+                          }} />
                       );
                     })}
                     {comptes.map(c => (
@@ -2763,9 +2796,15 @@ function PortfolioPageInner() {
 
       {formCompte && (
         <FormulaireCompte
-          genres={genresCompte} enCours={compteEnCours} erreur={erreurCompte}
-          onEnregistrer={creerLeCompte}
-          onFermer={() => { setFormCompte(false); setErreurCompte(null); }}
+          /* ⚠️ La clé remonte le formulaire d'un compte à l'autre : ses champs sont un état
+             local initialisé au montage, et sans elle on rouvrirait « Livret A » rempli avec
+             les valeurs du compte regardé juste avant. */
+          key={compteEdite?.id ?? "nouveau"}
+          genres={genresCompte} initial={compteEdite}
+          enCours={compteEnCours} erreur={erreurCompte}
+          onEnregistrer={enregistrerLeCompte}
+          onSupprimer={compteEdite ? supprimerLeCompte : undefined}
+          onFermer={() => { setFormCompte(false); setCompteEdite(null); setErreurCompte(null); }}
         />
       )}
       {showTxModal && (
