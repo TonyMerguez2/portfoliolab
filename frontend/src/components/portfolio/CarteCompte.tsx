@@ -300,10 +300,20 @@ export default function CarteCompte({
          * ⚠️ **`drop-shadow` et non `box-shadow`.** Le second suit la boîte, que le
          * `clip-path` vient justement de tailler : l'ombre débordait dans l'encoche. Le
          * filtre, lui, suit la silhouette réelle.
+         *
+         * ⚠️ **La portée de l'ombre est bornée par la marge de la page, et non l'inverse.**
+         * Elle valait 16 de décalage et 34 de flou, soit cinquante pixels sous la
+         * silhouette. Or un rail tranche à l'horizontale, et la colonne qui le contient
+         * aussi : lui ménager cinquante pixels revenait à les prendre à la courbe, seule à
+         * porter un `flex: 1` — la courbe a visiblement rétréci, et c'était le bon reproche.
+         * L'ombre tient donc désormais dans `MARGE`, la marge que la page applique déjà sur
+         * ses côtés. Ce qui dépasse encore — deux pixels — y est à moins de deux pour cent
+         * d'opacité, là où l'ancienne y était près de son maximum : c'est cette coupe-là,
+         * en pleine force, qui donnait le trait net sous le dossier.
          */
-        filter: `drop-shadow(0 16px 34px ${couleur}59)`
-          + ` drop-shadow(0 6px 12px ${couleur}3D)`
-          + ` drop-shadow(0 2px 3px rgba(4,10,24,0.38))`,
+        filter: `drop-shadow(0 2px 9px ${couleur}59)`
+          + ` drop-shadow(0 1px 3px ${couleur}3D)`
+          + ` drop-shadow(0 1px 2px rgba(4,10,24,0.38))`,
       }} />
 
       {/* Le paquet de cartes, décalé vers la droite.

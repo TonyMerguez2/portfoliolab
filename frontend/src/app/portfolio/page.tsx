@@ -19,7 +19,7 @@ import AssetGrid from "@/components/portfolio/AssetGrid";
 import CarteCompte, { APERCUS_MAX, CARTE_COMPTE } from "@/components/portfolio/CarteCompte";
 import CarteActif from "@/components/portfolio/CarteActif";
 import FilAriane from "@/components/portfolio/FilAriane";
-import RailHorizontal, { RESERVE_RAIL } from "@/components/portfolio/RailHorizontal";
+import RailHorizontal from "@/components/portfolio/RailHorizontal";
 import AllocationDonut from "@/components/portfolio/AllocationDonut";
 import RecentActivity from "@/components/portfolio/RecentActivity";
 import PortfolioTabs from "@/components/portfolio/PortfolioTabs";
@@ -1894,21 +1894,25 @@ function PortfolioPageInner() {
 
       {/* ══ VUE RÉSUMÉ ══════════════════════════════════════════════════════════ */}
       {/**
-        * ⚠️ **Le bas de la colonne vaut la réserve du rail, et ce n'est pas un ornement.**
-        * Les deux rails de cette vue — les dossiers, puis les cartes une fois un dossier
-        * ouvert — se réservent `RESERVE_RAIL.bas` sous eux pour laisser leur ombre finir. Une
-        * marge négative annule cette place dans le flux, mais la boîte du rail dépasse
-        * malgré tout de son conteneur : sans rembourrage ici, ce dépassement devenait
-        * cinquante pixels de défilement fantôme, mesurés, au bout desquels il n'y avait
-        * qu'une ombre. La colonne se termine donc exactement là où l'ombre s'éteint.
+        * ⚠️ **Le bas rejoint les côtés : `MARGE`, comme partout ailleurs.** Il valait zéro,
+        * et cela se voyait doublement. La rangée du bas finissait collée à l'arête de la
+        * zone de défilement, ce qui se lit comme une troncature ; et les deux rails de cette
+        * vue — les dossiers, puis les cartes une fois un dossier ouvert — dépassent de
+        * `RESERVE_RAIL.bas` sous eux pour laisser leur ombre finir, dépassement qui devenait
+        * du défilement fantôme faute d'un rembourrage pour l'accueillir.
         *
-        * ⚠️ **Cette place est prise à la courbe, et c'est le seul endroit où la prendre.**
-        * L'unique enfant de la colonne est en `flex: 1` : le rembourrage le raccourcit
-        * d'autant, et la courbe, seule à porter un `flex: 1` à l'intérieur, l'absorbe. La
-        * poser sur la rangée des dossiers plutôt qu'ici l'aurait rendue conditionnelle — la
-        * courbe aurait changé de hauteur en ouvrant un dossier, ce que la rangée s'échine
-        * justement à éviter en se calant sur les 26 pixels de l'en-tête de la grille. */}
-      <div style={{ display: dashView === "resume" ? "flex" : "none", flexDirection: "column", height: "100%", gap: 8, padding: `8px ${MARGE}px ${RESERVE_RAIL.bas}px`, overflowY: "auto", overflowX: "hidden" }}>
+        * ⚠️ **Cette place est prise à la courbe, donc elle se compte.** L'unique enfant de
+        * la colonne est en `flex: 1`, et la courbe est la seule à l'être à l'intérieur : tout
+        * rembourrage posé ici la raccourcit d'autant. C'est pourquoi le bas vaut la marge de
+        * la page et rien de plus — j'y avais d'abord mis les cinquante pixels que réclamait
+        * l'ombre des dossiers, et la courbe les a perdus pour une lueur. C'est l'ombre qui a
+        * été retaillée.
+        *
+        * ⚠️ **Ici et non sur la rangée des dossiers**, où elle serait devenue
+        * conditionnelle : la courbe aurait changé de hauteur à l'ouverture d'un dossier, ce
+        * que la rangée s'échine justement à éviter en se calant sur les 26 pixels de
+        * l'en-tête de la grille. */}
+      <div style={{ display: dashView === "resume" ? "flex" : "none", flexDirection: "column", height: "100%", gap: 8, padding: `8px ${MARGE}px ${MARGE}px`, overflowY: "auto", overflowX: "hidden" }}>
 
         <div style={{ display: "flex", flex: 1, minHeight: 0, gap: 0, alignItems: "stretch" }}>
 

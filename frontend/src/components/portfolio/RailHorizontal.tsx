@@ -1,7 +1,7 @@
 "use client";
 import { useCallback, useEffect, useRef, useState } from "react";
 
-import { CLAIR } from "@/lib/palette";
+import { CLAIR, MARGE } from "@/lib/palette";
 
 /**
  * Une rangée qui défile horizontalement, et qui dit ce qu'elle cache.
@@ -34,18 +34,22 @@ import { CLAIR } from "@/lib/palette";
  * `globals.css` sous `.novac-dossier-paquet`. Deux nombres réglés séparément, donc : celui-ci
  * est le plus grand des deux par sécurité.
  *
- * ⚠️ **En bas, la réserve vaut la portée réelle de l'ombre, et non une marge de confort.**
- * La plus large des trois ombres de `CarteCompte` est décalée de seize pixels et floutée sur
- * trente-quatre : elle ne s'éteint qu'à cinquante. En réserver moins ne supprime pas le
- * trait, cela le rend seulement plus pâle — mesuré à l'écran avant d'être écrit ici.
+ * ⚠️ **En bas, la réserve vaut `MARGE`, et c'est à l'ombre de s'y tenir.** J'ai d'abord fait
+ * l'inverse : mesuré la portée de l'ombre des dossiers — cinquante pixels — et réservé
+ * autant. Cette place se prend forcément quelque part, et la colonne qui héberge un rail n'a
+ * qu'un enfant en `flex: 1`, la courbe : c'est elle qui a rétréci de cinquante pixels pour
+ * qu'une lueur puisse finir. Une ombre ne vaut pas cela. La réserve retombe donc sur la
+ * marge que la page applique déjà sur ses côtés, et l'ombre de `CarteCompte` a été retaillée
+ * pour s'y éteindre.
  *
  * ⚠️ **La marge négative reprend la réserve, mais le parent doit malgré tout la prévoir.**
  * Elle annule bien la place dans le flux ; elle n'empêche pas la boîte du rail de dépasser
  * de son conteneur. Sous un ancêtre qui défile, ce dépassement devient du défilement
- * fantôme — cinquante pixels de course pour ne montrer qu'une ombre. D'où l'export : la
- * colonne qui héberge un rail se termine sur `bas`, exactement là où l'ombre s'éteint.
+ * fantôme — de la course pour ne montrer qu'une ombre. La colonne qui héberge un rail doit
+ * donc finir sur `MARGE`, ce que la vue Résumé ne faisait pas : ses côtés en avaient dix,
+ * son bas zéro.
  */
-export const RESERVE_RAIL = { haut: 10, bas: 50 };
+export const RESERVE_RAIL = { haut: 10, bas: MARGE };
 
 export default function RailHorizontal({
   children, cache = false, pasMinimal = 258,
