@@ -34,28 +34,32 @@ import { CARTE_ACTIF } from "@/components/portfolio/CarteActif";
  */
 const RAYON = CARTE_ACTIF.rayon;
 /**
- * La languette : sa hauteur, sa largeur, et les deux courbes de son raccord.
+ * La languette : sa largeur, et le rayon unique dont tout le reste découle.
  *
- * ⚠️ **Les deux courbes sont des quarts d'ellipse, pas de cercle — et c'est là que quatre
- * essais se sont trompés.** Un arc circulaire impose que son étalement égale sa descente ;
- * tant qu'on reste dans le cercle, régler l'un règle l'autre, et la seule liberté restante
- * est de partager les vingt-deux pixels de hauteur entre le bombé et le creux. On a donc
- * essayé onze-onze (une marche symétrique), une cubique longue (un toboggan), une cubique
- * courte (une rampe sans creux), puis huit-quatorze — un petit bombé et un grand creux.
+ * ⚠️ **Les trois coins de l'encoche ont le même rayon que les angles du dossier.** C'est la
+ * règle la plus simple possible, et c'est celle qui manquait : le coin haut-gauche de la
+ * languette est un angle du dossier, donc dix-huit ; le coin haut-droit et le creux qui suit
+ * doivent l'être aussi, faute de quoi trois courbures différentes se succèdent sur quinze
+ * centimètres et l'œil voit un raccord bricolé sans savoir le nommer.
  *
- * ⚠️ **Or la maquette montre l'inverse, et en plus aplati.** Mesurée en se calant sur le
- * rayon des angles, qui vaut dix-huit et donne l'échelle : le bombé y couvre **dix-huit de
- * large pour onze de haut**, le creux **quatorze pour onze**. Le bombé est donc large et
- * couché — impossible à obtenir avec un cercle — tandis que le creux est presque rond. C'est
- * ce coin étalé qui donne l'allure fondue du modèle, là où un quart de cercle fait un angle
- * pincé.
+ * ⚠️ **La hauteur en découle, elle ne se règle plus.** Deux quarts de cercle tangents — l'un
+ * bombé, l'autre creusé — descendent chacun de leur rayon : la languette fait donc exactement
+ * deux rayons de haut, trente-six. C'est ce que valait la question « si besoin augmente la
+ * hauteur » : ce n'était pas un réglage à trouver, c'était une conséquence à accepter. Posée
+ * à part, la hauteur pouvait contredire les rayons et la tangence se perdait — ce qui a
+ * produit, tour après tour, une marche, un toboggan, une rampe et un coin pincé.
+ *
+ * ⚠️ **Rien d'autre ne bouge dans la géométrie du dossier.** `apercu` vaut la hauteur de la
+ * languette plus la ligne d'identité d'une carte, et le plan commence à `apercu − hauteur` :
+ * ces deux-là se compensent, si bien que le plan garde sa position et sa taille. Seule la
+ * bande visible à droite de la languette s'allonge, ce qui profite à la carte bancaire.
  */
 const LANGUETTE = {
-  hauteur: 22, largeur: 118,
-  /** Le coin de la languette : large et couché. */
-  bombe: { x: 18, y: 11 },
-  /** Le raccord au plan : presque rond. */
-  creux: { x: 14, y: 11 },
+  largeur: 118,
+  /** Le rayon des trois courbes — celui des angles du dossier, donc celui des cartes. */
+  rayon: RAYON,
+  /** Deux quarts de cercle tangents descendent chacun de leur rayon. */
+  get hauteur() { return this.rayon * 2; },
 };
 
 /**
@@ -119,15 +123,14 @@ const HAUTEUR = CARTE_COMPTE.apercu + CARTE_COMPTE.panneau;
 const CONTOUR = (() => {
   const l = CARTE_COMPTE.largeur;
   const h = CARTE_COMPTE.panneau + LANGUETTE.hauteur;
-  const { hauteur: hl, largeur: ll, bombe: b, creux: cr } = LANGUETTE;
+  const { hauteur: hl, largeur: ll, rayon: r } = LANGUETTE;
   return [
     `M ${RAYON},0`,
-    `L ${ll - b.x},0`,
-    // Le coin de la languette : large et couché, donc un quart d'ellipse.
-    `A ${b.x},${b.y} 0 0 1 ${ll},${b.y}`,
-    // Le creux : tangent au précédent — vertical là où l'autre finit — et horizontal en
-    // arrivant sur le plan. Sa hauteur complète celle du bombé.
-    `A ${cr.x},${hl - b.y} 0 0 0 ${ll + cr.x},${hl}`,
+    `L ${ll - r},0`,
+    // Le coin de la languette, bombé.
+    `A ${r},${r} 0 0 1 ${ll},${r}`,
+    // Le creux, de même rayon : vertical là où le bombé finit, horizontal sur le plan.
+    `A ${r},${r} 0 0 0 ${ll + r},${hl}`,
     `L ${l - RAYON},${hl}`,
     `A ${RAYON},${RAYON} 0 0 1 ${l},${hl + RAYON}`,
     `L ${l},${h - RAYON}`,
