@@ -1613,29 +1613,18 @@ function PortfolioPageInner() {
       </div>
     )}
     {/**
-      * ⚠️ **Un total qui grossit sans dire pourquoi est un total qu'on ne croit plus.**
-      * Déclarer un livret de cinq mille euros ajoute cinq mille euros au grand chiffre :
-      * sans mention, l'écart avec la veille est inexplicable, et l'on se demande si
-      * l'application a compté deux fois. La composition est donc écrite dès qu'il y a des
-      * liquidités — et elle disparaît quand il n'y en a pas, plutôt que d'afficher un
-      * « dont 0 € » qui n'apprend rien.
+      * ⚠️ **La composition du total ne s'écrit plus ici, et ce n'est pas un oubli.** Une
+      * ligne « 5 325,29 € de titres · 5 400,00 € de liquidités » s'intercalait sous le grand
+      * chiffre dès qu'un compte de trésorerie était déclaré. Elle répondait à une vraie
+      * question — déclarer un livret de cinq mille euros ajoute cinq mille euros au total,
+      * et l'écart avec la veille est sinon inexplicable — mais elle la posait au plus mauvais
+      * endroit : une troisième ligne dans un bandeau qui en tient deux, donc un en-tête qui
+      * grandit pour tout le monde, tous les jours, à cause d'un doute d'un seul jour.
       *
-      * ⚠️ **Elle s'efface sous le curseur.** La courbe montre les titres à une date ; y
-      * laisser la composition d'aujourd'hui accolerait deux instants différents.
-      */}
-    {survolCourbe == null && !masque && liquiditesDeclarees > 0 && valeurTitres != null && (
-      /**
-        * ⚠️ **Les composantes s'écrivent avec les centimes du total, sinon l'addition est
-        * fausse à l'écran.** Vu en vrai : « 4 548 € de titres · 12 451 € de liquidités »
-        * sous un total de 16 998,72 €, alors que 4 548 + 12 451 font 16 999. Chaque nombre
-        * était pourtant correctement arrondi — c'est leur somme qui ne l'était pas, et c'est
-        * elle qu'on lit. Une décomposition dont les termes ne redonnent pas le tout ne
-        * décompose rien : elle jette un doute sur le tout.
-        */
-      <div style={{ fontSize: 10, fontFamily: FONT, color: CLAIR.texteAttenue, marginBottom: 3 }}>
-        {montantExact(valeurTitres)} de titres · {montantExact(liquiditesDeclarees)} de liquidités
-      </div>
-    )}
+      * ⚠️ **La question reste ouverte, elle attend juste un meilleur endroit.** Le total
+      * n'annonce plus ce qui le compose ; les dossiers de compte, eux, portent chacun leur
+      * solde. Si le doute revient, c'est là — ou au survol du total — qu'il faudra répondre,
+      * pas en ajoutant une ligne au bandeau. */}
     {/* Sous la valeur : le capital engagé et depuis quand.
         Le gain figurait ici *et* dans « Gains / pertes », deux fois le même
         nombre à quatre centimètres d'écart. Ce qui manquait, c'était ce
