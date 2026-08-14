@@ -258,6 +258,7 @@ export default function CarteCompte({
   return (
     <button
       type="button"
+      className="novac-dossier"
       onClick={onClick}
       /* ⚠️ **Le personnage se penche sur ce qu'on survole, et ne dit rien.** Un survol
          change au rythme du curseur : c'est le bon registre pour une mimique, qu'on
@@ -315,7 +316,7 @@ export default function CarteCompte({
           Ce sont donc leurs tranches de droite qui dépassent — et c'est ce dépassement,
           pas un compteur, qui dit qu'il y en a plusieurs. */}
       {cartes.map((c, i) => i).reverse().map(i => (
-        <div key={i} aria-hidden="true" style={{
+        <div key={i} aria-hidden="true" className="novac-dossier-paquet" style={{
           position: "absolute", left: PAQUET.retrait + i * PAQUET.decalage, top: 0,
           pointerEvents: "none",
         }}>
@@ -373,9 +374,11 @@ export default function CarteCompte({
              * bord et la dernière ligne à vingt-quatre du bas, contre seize et douze ici. Le
              * texte y gagne l'air qui le distinguait d'un bloc collé au coin.
              */
-            padding: `${LANGUETTE.hauteur + 14}px 21px 21px`,
+            padding: `${LANGUETTE.hauteur + 10}px 18px 18px`,
             display: "flex", flexDirection: "column", justifyContent: "space-between",
           }}>
+            {/* L'identité du dossier : le repère de l'établissement, puis son nom. */}
+            <div>
             <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between" }}>
               <span style={{
                 width: 36, height: 36, borderRadius: 11, flexShrink: 0,
@@ -398,17 +401,24 @@ export default function CarteCompte({
                 </span>
               )}
             </div>
-
-            <div>
+              {/**
+                * ⚠️ **Le nom passe sous le pictogramme, et rapetisse.** Il partageait le bas
+                * de la carte avec le montant, deux lignes de poids voisin qui se disputaient
+                * la lecture. En tête, sous le repère de l'établissement, il devient ce qu'il
+                * est — une étiquette — et laisse le bas au seul chiffre qui compte.
+                */}
               <div style={{
-                fontSize: 18, fontWeight: 700, color: "#FFFFFF", lineHeight: 1.15,
-                letterSpacing: "-0.01em",
+                marginTop: 9, fontSize: 15, fontWeight: 650, color: "rgba(255,255,255,0.95)",
+                lineHeight: 1.2, letterSpacing: "-0.005em",
+                overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
               }}>
                 {nom}
               </div>
+            </div>
+
+            <div>
               <div style={{
-                display: "flex", alignItems: "center", justifyContent: "space-between",
-                marginTop: 3,
+                display: "flex", alignItems: "flex-end", justifyContent: "space-between",
               }}>
                 <div style={{ fontSize: 12.5, color: "rgba(255,255,255,0.82)", minWidth: 0 }}>
                   {compte}
@@ -433,6 +443,14 @@ export default function CarteCompte({
         * dossier vient d'un `clip-path` : un `border` en épouserait la *boîte*, donc un
         * rectangle, et traverserait l'encoche de part en part. Le même chemin, tracé sans
         * remplissage, colle exactement au bord — encoche et pente comprises.
+        *
+        * ⚠️ **Il est de la couleur du dossier, éclaircie — pas blanc.** Trois versions blanches ont
+        * échoué avant de comprendre la demande. Un blanc posé sur une teinte ne décrit pas une
+        * arête, il décrit un reflet : il paraît juste sur un dossier sombre et se dissout sur
+        * un clair, et sur aucun il ne donne l'impression d'un bord *taillé dans la matière*.
+        * Éclaircir la teinte du dossier, en revanche, fait toujours la même chose quelle que
+        * soit la couleur choisie — le bord reste de la famille, et l'objet paraît épais plutôt
+        * que verni.
         *
         * ⚠️ **Il faut le poser franchement, et c'est une mesure qui l'a tranché.** Je l'ai cru
         * absent alors qu'il était peint : repassé en rouge de quatre pixels le temps d'un
@@ -464,7 +482,9 @@ export default function CarteCompte({
         }}>
         <defs>
           <linearGradient id={`bord-${idBord}`} x1="0" y1="0" x2="0" y2="1">
-  
+            <stop offset="0%" stopColor={decalerClarte(couleur, 0.32)} />
+            <stop offset="34%" stopColor={decalerClarte(couleur, 0.22)} />
+            <stop offset="100%" stopColor={decalerClarte(couleur, 0.12)} />
           </linearGradient>
         </defs>
         <path d={CONTOUR} fill="none" stroke={`url(#bord-${idBord})`} strokeWidth={2}

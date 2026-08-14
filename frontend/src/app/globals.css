@@ -566,7 +566,37 @@
   animation: av-eclat 420ms cubic-bezier(0.34, 1.56, 0.5, 1) both;
 }
 
+/* ─────────────────────────────────────────────────────────────
+   Les cartes qui s'élèvent quand la souris passe sur leur dossier.
+
+   ⚠️ **Une `transform`, jamais une position.** Le geste doit rester purement
+   visuel : les dossiers vivent dans un rail, lui-même sous la courbe et le
+   bandeau, et le moindre pixel pris à la mise en page ferait sursauter tout ce
+   qui est au-dessus au passage de la souris. Une translation ne touche à aucune
+   boîte — le rail garde sa hauteur, le dossier la sienne.
+
+   ⚠️ **Elles montent, elles ne grandissent pas.** Une mise à l'échelle aurait
+   fait dépasser les cartes du plan sur les côtés, alors qu'elles en sortent par
+   le haut : c'est ce mouvement-là qu'on veut, celui de cartes qu'on tire du
+   dossier pour les regarder.
+
+   ⚠️ **Sept pixels, pas plus.** C'est ce que la marge au-dessus du rail permet
+   sans que les cartes n'aillent mordre le titre « Vos comptes ».
+   ───────────────────────────────────────────────────────────── */
+.novac-dossier-paquet {
+  transition: transform 240ms cubic-bezier(0.2, 0.7, 0.3, 1);
+}
+
+.novac-dossier:hover .novac-dossier-paquet,
+.novac-dossier:focus-visible .novac-dossier-paquet {
+  transform: translateY(-7px);
+}
+
 @media (prefers-reduced-motion: reduce) {
+  /* Un mouvement d'agrément : il se coupe entièrement, les cartes restent en place. */
+  .novac-dossier-paquet { transition: none; }
+  .novac-dossier:hover .novac-dossier-paquet,
+  .novac-dossier:focus-visible .novac-dossier-paquet { transform: none; }
   [style*="nv-clignote"] { animation: none !important; }
 }
 
