@@ -2101,7 +2101,7 @@ function PortfolioPageInner() {
                             */
                           apercu={!c.porte_des_titres ? [
                             <CarteBancaire key="carte" couleur={c.couleur}
-                              intitule={c.libelle_genre} mention="Solde disponible" />,
+                              intitule={c.libelle_genre} />,
                           ] : undefined}
                           icone={logo
                             ? <img src={logo} alt="" width={19} height={19}

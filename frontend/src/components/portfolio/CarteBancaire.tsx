@@ -152,12 +152,10 @@ function Puce() {
 }
 
 export default function CarteBancaire({
-  intitule, mention, couleur, derniers,
+  intitule, couleur, derniers,
 }: {
   /** Ce que la carte annonce en tête — « Compte courant », « Livret A ». */
   intitule: string;
-  /** La ligne sous l'intitulé — « Solde disponible ». */
-  mention: string;
   /** La couleur du dossier, dont la carte tire sa propre teinte. */
   couleur: string;
   /** Les quatre derniers chiffres, s'ils ont été déclarés. */
@@ -224,19 +222,13 @@ export default function CarteBancaire({
           }}>
             {intitule}
           </div>
-          <div style={{
-            fontFamily: FONT, fontSize: 11.5, fontWeight: 550, color: "rgba(255,255,255,0.45)",
-            lineHeight: 1.2, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
-          }}>
-            {mention}
-          </div>
         </div>
 
         {/* Le fronton d'une banque : le pictogramme du genre, pas un logo d'établissement —
             celui-là a sa place sur le dossier, où l'épargnant le pose. */}
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.55)"
-          strokeWidth={1.7} strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
-          <path d="M3 10h18M5 10v8m4-8v8m6-8v8m4-8v8M2 21h20M12 3l9 5H3z" />
+          strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
+          <path d="M3 21h18M3 10h18M5 6l7-3 7 3M4 10v11m16-11v11M8 14v3m4-3v3m4-3v3" />
         </svg>
       </div>
 
