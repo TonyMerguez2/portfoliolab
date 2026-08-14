@@ -1292,6 +1292,20 @@ function PortfolioPageInner() {
 
   useEffect(() => { rechargerComptes(); }, [rechargerComptes]);
 
+  /**
+   * Ouvrir la correction d'un compte déclaré.
+   *
+   * ⚠️ **Une fabrique, parce que deux commandes mènent au même écran.** La carte entière et
+   * les trois points de son coin ouvrent la même correction ; deux fermetures recopiées
+   * auraient fini par diverger — l'une remettant l'erreur à zéro, l'autre non, selon
+   * laquelle on aurait touchée en dernier.
+   */
+  const ouvrirLaCorrection = useCallback((c: CompteDeclare) => () => {
+    setErreurCompte(null);
+    setCompteEdite(c);
+    setFormCompte(true);
+  }, []);
+
   const enregistrerLeCompte = useCallback(async (saisie: SaisieCompte) => {
     if (!idPortefeuille) return;
     setCompteEnCours(true);
@@ -2094,13 +2108,6 @@ function PortfolioPageInner() {
                             </>
                           ) : c.libelle_genre}
                           /**
-                            * ⚠️ **Un compte de trésorerie ne compte pas ses lignes.** La
-                            * pastille est pleine quand le dossier porte quelque chose et creuse
-                            * quand il est vide — mais « creuse » promet un remplissage, et un
-                            * livret n'en attend aucun.
-                            */
-                          sansPastille={!c.porte_des_titres}
-                          /**
                             * ⚠️ **Ce qui dépasse d'un dossier dit ce qu'il range.** Des lignes
                             * d'actifs pour un compte à titres, une carte bancaire pour un
                             * compte de trésorerie. Le vide qu'on y voyait se lisait « à
@@ -2124,10 +2131,11 @@ function PortfolioPageInner() {
                           /* ⚠️ **Le dossier s'ouvre sur sa correction, et c'est ce qui
                              manquait le plus.** Un solde de trésorerie entre dans le total
                              du portefeuille et vieillit tout seul ; sans moyen de le
-                             reprendre, le déclarer revenait à le graver. */
-                          onClick={() => {
-                            setErreurCompte(null); setCompteEdite(c); setFormCompte(true);
-                          }} />
+                             reprendre, le déclarer revenait à le graver. Les trois points
+                             mènent au même endroit : le clic de la carte reste, mais rien
+                             ne l'annonçait. */
+                          onClick={ouvrirLaCorrection(c)}
+                          onModifier={ouvrirLaCorrection(c)} />
                       );
                     })}
                     {comptes.map(c => {
@@ -2138,25 +2146,26 @@ function PortfolioPageInner() {
                         * mille. À côté de comptes déclarés qui affichent, eux, une somme, un
                         * compte déduit qui n'en affiche pas paraissait vide.
                         *
-                        * ⚠️ **Arrondi à l'euro, là où un solde déclaré garde ses centimes.**
-                        * Même style, précision différente, et c'est voulu : un solde est un
-                        * montant recopié, exact tant que personne n'y touche, tandis que
-                        * ceci est une valorisation qui suit les cours. En afficher les
-                        * centimes les ferait tourner à chaque sondage — et sur la crypto, à
-                        * chaque cours poussé — pour une précision que le chiffre n'a pas.
+                        * ⚠️ **Les centimes, comme sur un solde déclaré — et j'avais tranché
+                        * l'inverse.** J'arrondissais à l'euro au motif qu'une valorisation
+                        * suit les cours et n'a pas la précision qu'elle afficherait. L'argument
+                        * reste vrai et il ne suffit pas : ces dossiers sont côte à côte dans
+                        * une rangée, et deux montants au même endroit, dans le même style, dont
+                        * l'un porte ses centimes et l'autre non, se lisent comme deux natures
+                        * de chiffre. La constance de la rangée l'emporte sur l'honnêteté du
+                        * dernier centime, d'autant que le total du bandeau les affiche déjà.
                         */
                       const valeur = c.lignes.reduce((s, a) => s + (a.value ?? 0), 0);
                       return (
                         <CarteCompte key={c.cle} nom={c.cle} couleur={c.couleur} icone={c.icone}
                           compte={
                             <>
-                              <div style={ANNONCE_DOSSIER.montant}>{euros(valeur)}</div>
+                              <div style={ANNONCE_DOSSIER.montant}>{montantExact(valeur)}</div>
                               <div style={ANNONCE_DOSSIER.mention}>
                                 {c.lignes.length} actif{c.lignes.length > 1 ? "s" : ""}
                               </div>
                             </>
                           }
-                          nombre={c.lignes.length}
                           apercu={[...c.lignes]
                             .sort((a, b) => b.weight - a.weight)
                             .slice(0, APERCUS_PAR_DOSSIER)

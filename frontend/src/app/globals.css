@@ -587,15 +587,29 @@
   transition: transform 240ms cubic-bezier(0.2, 0.7, 0.3, 1);
 }
 
-.novac-dossier:hover .novac-dossier-paquet,
+/* ⚠️ Le survol se lit sur l'**enveloppe**, pas sur le bouton du dossier. Les trois points
+   qui ouvrent la correction sont un second bouton, frère du premier : posé sur eux, le
+   curseur quittait `.novac-dossier` et les cartes retombaient au moment précis où l'on
+   visait. L'enveloppe couvre les deux. Le focus, lui, reste sur le bouton — c'est lui
+   qu'on atteint au clavier. */
+.novac-dossier-carte:hover .novac-dossier-paquet,
 .novac-dossier:focus-visible .novac-dossier-paquet {
   transform: translateY(-7px);
+}
+
+/* Les trois points se réveillent au survol, et restent lisibles au repos : masqués
+   jusque-là, rien n'annoncerait qu'un dossier se corrige — et sur un écran tactile,
+   « jusque-là » ne finit jamais. */
+.novac-dossier-modifier:hover,
+.novac-dossier-modifier:focus-visible {
+  color: rgba(255, 255, 255, 0.95);
+  background: rgba(255, 255, 255, 0.16);
 }
 
 @media (prefers-reduced-motion: reduce) {
   /* Un mouvement d'agrément : il se coupe entièrement, les cartes restent en place. */
   .novac-dossier-paquet { transition: none; }
-  .novac-dossier:hover .novac-dossier-paquet,
+  .novac-dossier-carte:hover .novac-dossier-paquet,
   .novac-dossier:focus-visible .novac-dossier-paquet { transform: none; }
   [style*="nv-clignote"] { animation: none !important; }
 }

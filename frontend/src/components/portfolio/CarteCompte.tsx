@@ -160,6 +160,21 @@ export const CARTE_COMPTE = {
 const HAUTEUR = CARTE_COMPTE.apercu + CARTE_COMPTE.panneau;
 
 /**
+ * L'air que le plan garde entre son contenu et ses bords.
+ *
+ * ⚠️ **Les valeurs viennent de la maquette, où le plan respire davantage.** Mesuré au même
+ * facteur 2,3 : le pictogramme s'y tient à vingt-et-un pixels du bord et la dernière ligne
+ * à vingt-quatre du bas, contre seize et douze auparavant. Le texte y gagne l'air qui le
+ * distinguait d'un bloc collé au coin.
+ *
+ * ⚠️ **Nommé parce que les trois points s'en servent aussi.** Eux sont posés en absolu,
+ * hors du flux du plan : ils doivent refaire le calcul du rembourrage à la main. Deux
+ * nombres réglés séparément auraient dérivé, et le pictogramme n'aurait plus été à la même
+ * hauteur que les points d'en face.
+ */
+const AIR_PANNEAU = { haut: 10, cote: 18, bas: 18 };
+
+/**
  * Le contour du dossier, languette comprise.
  *
  * Décrit une fois pour toutes puisque la taille est fixe. Le sens de parcours est horaire.
@@ -209,7 +224,7 @@ const contourPour = (l: number) => {
 };
 
 export default function CarteCompte({
-  nom, compte, couleur, icone, nombre, apercu, sansPastille, onClick,
+  nom, compte, couleur, icone, apercu, onClick, onModifier,
 }: {
   nom: string;
   /**
@@ -224,8 +239,6 @@ export default function CarteCompte({
   compte: React.ReactNode;
   couleur: string;
   icone: React.ReactNode;
-  /** Le nombre porté par la pastille de droite, quand il y a lieu. */
-  nombre?: number;
   /**
    * Les cartes rangées dans le dossier, la première devant.
    *
@@ -235,15 +248,20 @@ export default function CarteCompte({
    * suffit à savoir ce qu'il contient sans l'ouvrir.
    */
   apercu?: React.ReactNode[];
-  /**
-   * ⚠️ **Trois états, pas deux.** La pastille est pleine quand le dossier porte quelque
-   * chose et creuse quand il est vide — mais « creuse » veut dire *pas encore*, et
-   * compter les lignes d'un livret n'a aucun sens, ni maintenant ni plus tard. Sans ce
-   * troisième cas, un compte de trésorerie affichait un cercle vide qui promettait un
-   * remplissage.
-   */
-  sansPastille?: boolean;
   onClick?: () => void;
+  /**
+   * Ouvre la correction du compte, depuis les trois points en haut à droite.
+   *
+   * ⚠️ **Absent quand il n'y a rien à corriger, et c'est ce qui décide de l'affichage.** Un
+   * dossier déduit — PEA, compte-titres, crypto — n'a pas été déclaré : il n'existe que
+   * parce que des lignes s'y rangent, et rien en lui ne se modifie. Lui poser les trois
+   * points quand même ouvrirait sur un formulaire vide ou sur rien.
+   *
+   * ⚠️ **Il double le clic de la carte, à dessein.** Sur un compte de trésorerie, cliquer le
+   * dossier ouvre déjà sa correction — mais rien ne l'annonce : une carte qui ouvre un
+   * formulaire est une promesse qu'elle ne fait pas. Les trois points la disent.
+   */
+  onModifier?: () => void;
 }) {
   /** Un identifiant par instance : deux dossiers voisins partageraient sinon le dégradé. */
   const idBord = useId().replace(/:/g, "");
@@ -265,6 +283,20 @@ export default function CarteCompte({
   const cartes = apercu ?? [];
 
   return (
+    /**
+     * ⚠️ **Une enveloppe autour du dossier, parce qu'un bouton n'en contient pas un autre.**
+     * Le dossier *est* un bouton — c'est ce qui lui donne le clavier et le rôle sans rien
+     * réécrire — et les trois points en sont un second. Imbriqués, le balisage est invalide
+     * et le navigateur défait l'imbrication à sa façon : le clic intérieur remonte au
+     * dossier, qui s'ouvre. Ils sont donc frères, superposés par l'enveloppe.
+     *
+     * ⚠️ **C'est elle qui porte le survol, désormais.** La classe `novac-dossier-carte`
+     * remplace `novac-dossier` dans le sélecteur qui soulève les cartes : sur le bouton, le
+     * simple fait de glisser la souris vers les trois points sortait du survol et laissait
+     * les cartes retomber au moment précis où l'on visait.
+     */
+    <div className="novac-dossier-carte"
+      style={{ position: "relative", width: largeur, flexShrink: 0 }}>
     <button
       type="button"
       className="novac-dossier"
@@ -387,13 +419,8 @@ export default function CarteCompte({
         }}>
           <div style={{
             position: "relative", height: "100%",
-            /**
-             * ⚠️ **Les marges viennent de la maquette, où le plan respire davantage.**
-             * Mesuré au même facteur 2,3 : le pictogramme s'y tient à vingt-et-un pixels du
-             * bord et la dernière ligne à vingt-quatre du bas, contre seize et douze ici. Le
-             * texte y gagne l'air qui le distinguait d'un bloc collé au coin.
-             */
-            padding: `${LANGUETTE.hauteur + 10}px 18px 18px`,
+            padding: `${LANGUETTE.hauteur + AIR_PANNEAU.haut}px ${AIR_PANNEAU.cote}px`
+              + ` ${AIR_PANNEAU.bas}px`,
             display: "flex", flexDirection: "column", justifyContent: "space-between",
           }}>
             {/* L'identité du dossier : le repère de l'établissement, puis son nom. */}
@@ -425,19 +452,12 @@ export default function CarteCompte({
               }}>
                 {icone}
               </span>
-              {/* La pastille de droite : pleine quand le dossier porte quelque chose,
-                  creuse quand il est vide — comme la coche de la référence. */}
-              {!sansPastille && (
-                <span style={{
-                  width: 28, height: 28, borderRadius: "50%", flexShrink: 0,
-                  display: "flex", alignItems: "center", justifyContent: "center",
-                  background: nombre ? "rgba(255,255,255,0.94)" : "transparent",
-                  border: nombre ? "none" : "1.5px solid rgba(255,255,255,0.55)",
-                  color: sombre, fontSize: 12.5, fontWeight: 700,
-                }}>
-                  {nombre ? nombre : ""}
-                </span>
-              )}
+              {/**
+                * ⚠️ **Plus de pastille comptant les lignes.** Un rond blanc portant « 3 »
+                * répondait à une question que la carte pose déjà deux lignes plus bas, en
+                * toutes lettres — « 3 actifs » —, et il le faisait avec le poids visuel d'un
+                * bouton. Le coin haut-droit revient à ce qui s'y actionne vraiment.
+                */}
             </div>
               {/**
                 * ⚠️ **Le nom passe sous le pictogramme, et rapetisse.** Il partageait le bas
@@ -562,5 +582,36 @@ export default function CarteCompte({
           })`} />
       </svg>
     </button>
+
+    {/**
+      * Les trois points, à la place qu'occupait la pastille.
+      *
+      * ⚠️ **Posé en absolu sur les coordonnées du panneau, et non dans son flux.** Il est
+      * frère du dossier, pas son enfant : il faut donc refaire ici le calcul que le
+      * rembourrage faisait tout seul. `apercu` est ce que le dossier laisse dépasser
+      * au-dessus du plan, `AIR_PANNEAU.haut` l'air que le plan garde sous sa languette —
+      * leur somme est exactement la hauteur à laquelle commence la rangée d'identité.
+      * D'où la constante partagée : réglés séparément, les deux auraient dérivé d'un pixel
+      * et le pictogramme n'aurait plus été à la même hauteur que les points d'en face.
+      */}
+    {onModifier && (
+      <button type="button" className="novac-dossier-modifier"
+        aria-label={`Modifier ${nom}`}
+        onClick={onModifier}
+        style={{
+          position: "absolute", top: CARTE_COMPTE.apercu + AIR_PANNEAU.haut,
+          right: AIR_PANNEAU.cote, width: 28, height: 28, borderRadius: "50%",
+          display: "flex", alignItems: "center", justifyContent: "center",
+          padding: 0, border: 0, background: "none", cursor: "pointer",
+          color: "rgba(255,255,255,0.6)",
+        }}>
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+          <circle cx="5" cy="12" r="1.7" />
+          <circle cx="12" cy="12" r="1.7" />
+          <circle cx="19" cy="12" r="1.7" />
+        </svg>
+      </button>
+    )}
+    </div>
   );
 }
