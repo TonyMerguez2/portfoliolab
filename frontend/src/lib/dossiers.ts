@@ -64,30 +64,43 @@ export type Dossier<L extends LigneRangeable> = {
 /**
  * À quel compte déclaré appartient chaque ticker.
  *
- * ⚠️ **Règle d'unanimité : toutes les opérations, ou aucune.** Une position est un agrégat
- * indivisible — `compute_positions` groupe par ticker et n'en tient qu'un seul prix de
- * revient. La couper entre deux comptes demanderait de recalculer ce PRU par sous-ensemble,
- * donc de réécrire en TypeScript une arithmétique qui vit en Python et y est éprouvée. Tant
- * que ce n'est pas fait, un ticker dont les opérations divergent reste **déduit**, ce qui
- * est déjà le domicile de tout ce qui n'est pas rangé.
+ * ⚠️ **Seules les opérations rangées votent ; les autres s'abstiennent.** Un ticker va dans
+ * le compte sur lequel ses écritures **rattachées** s'accordent. Celles qui ne le sont pas
+ * ne contredisent rien : elles n'ont simplement pas encore été classées.
  *
- * ⚠️ **`null` recouvre ici deux faits, et c'est délibéré à cet endroit précis** — « aucune
- * opération n'est rattachée » et « elles ne s'accordent pas ». Les deux mènent au même
- * rangement, et les distinguer n'aurait servi qu'à faire choisir l'appelant entre deux
- * branches identiques. Ce serait un défaut dans un contrat de route, où l'appelant est
- * lointain ; c'en est un de moins dans une fonction qui ne répond qu'à « où va cette ligne ».
+ * ⚠️ **J'avais d'abord exigé l'unanimité de *toutes* les écritures, et l'écran l'a démenti
+ * en une manipulation.** Le raisonnement paraissait prudent : ne pas faire entrer une ligne
+ * dans un compte tant qu'une partie de son histoire lui échappe. Mais dans un portefeuille
+ * dont l'historique n'est pas encore classé — c'est-à-dire tous, au début — le premier achat
+ * d'un titre déjà détenu produisait aussitôt une divergence. Mesuré : deux actions Apple
+ * achetées **dans** le PEA déclaré sont allées grossir le dossier deviné CTO, sous les yeux
+ * de qui venait de choisir le compte. Une règle qui contredit le geste qu'on vient de faire
+ * n'est pas prudente, elle est fausse.
+ *
+ * ⚠️ **Ce qui reste refusé : deux comptes rattachés pour un même ticker.** Là, la
+ * contradiction est réelle — le même titre détenu chez deux courtiers — et une position est
+ * un agrégat indivisible, avec un seul prix de revient calculé en Python sur l'ensemble de
+ * ses opérations. La couper demanderait de refaire ce calcul ici, donc de tenir deux
+ * arithmétiques qui divergeraient. La ligne retombe alors au rangement deviné, domicile de
+ * tout ce qui n'est pas tranché.
+ *
+ * ⚠️ **`null` recouvre donc deux faits** — « rien n'est encore rattaché » et « les
+ * rattachements se contredisent » — et les deux mènent au même endroit. Les distinguer
+ * n'aurait servi qu'à faire choisir l'appelant entre deux branches identiques.
  */
 export function comptesParTicker(
   ecritures: EcritureRangeable[],
 ): Record<string, string | null> {
-  const vu: Record<string, string | null> = {};
-  const divergent = new Set<string>();
+  const votes = new Map<string, Set<string>>();
   for (const e of ecritures) {
-    const compte = e.compte_id ?? null;
-    if (!(e.ticker in vu)) { vu[e.ticker] = compte; continue; }
-    if (vu[e.ticker] !== compte) divergent.add(e.ticker);
+    const paquet = votes.get(e.ticker) ?? new Set<string>();
+    if (e.compte_id) paquet.add(e.compte_id);
+    votes.set(e.ticker, paquet);
   }
-  divergent.forEach(t => { vu[t] = null; });
+  const vu: Record<string, string | null> = {};
+  votes.forEach((comptes, ticker) => {
+    vu[ticker] = comptes.size === 1 ? Array.from(comptes)[0] : null;
+  });
   return vu;
 }
 

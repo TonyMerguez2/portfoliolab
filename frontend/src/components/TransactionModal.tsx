@@ -59,6 +59,30 @@ interface Props {
   embedded?: boolean;
   /** Masque la croix de fermeture, inutile en rendu intégré. */
   hideClose?: boolean;
+  /**
+   * Les comptes déclarés **à titres** du portefeuille, parmi lesquels ranger l'écriture.
+   *
+   * ⚠️ **Une opération se range dans un compte, et ce n'est plus facultatif à l'écran.**
+   * Sans compte, elle retombe dans le classement par déduction — deviné d'après la place de
+   * cotation, incapable de distinguer deux PEA. Tant que ce classement était le seul, il
+   * fallait bien s'en contenter ; depuis qu'un compte peut être déclaré, laisser une ligne
+   * sans compte ne fait plus que reporter le rangement.
+   *
+   * ⚠️ **Les comptes de trésorerie n'y figurent pas.** Sur un livret, le solde *est* la
+   * valeur : y ranger un achat compterait la somme deux fois. Le serveur le refuse, mais un
+   * choix impossible n'a pas à être proposé.
+   */
+  comptes?: { id: string; nom: string; couleur: string }[];
+  /**
+   * Le compte imposé, quand la saisie part de l'intérieur d'un dossier.
+   *
+   * ⚠️ **Imposé et montré, jamais imposé en silence.** On ouvre cette saisie depuis un
+   * dossier précis ; laisser le choix ouvert inviterait à ranger ailleurs que là où l'on
+   * vient de cliquer, et le taire ferait un rangement invisible.
+   */
+  compteImpose?: { id: string; nom: string; couleur: string };
+  /** Ouvre la déclaration d'un compte, quand il n'y en a aucun où ranger l'écriture. */
+  onDeclarerCompte?: () => void;
 }
 
 function todayStr(): string {
@@ -80,8 +104,17 @@ function fmtEur(v: number): string {
 export default function TransactionModal({
   portfolioId, isOpen, onClose, onSuccess, prefillTicker, prefillAsset,
   lockAsset = false, onDraft, initialDraft, embedded = false, hideClose = false,
+  comptes = [], compteImpose, onDeclarerCompte,
 }: Props) {
   const [side,           setSide]           = useState<Side>("BUY");
+  /**
+   * Le compte où ranger l'écriture.
+   *
+   * ⚠️ **Aucun choix par défaut, même quand il n'y a qu'un compte.** Le préremplir ferait
+   * ranger sans y penser, et l'on ne s'en apercevrait qu'au moment où un second compte
+   * existe — c'est-à-dire trop tard, avec un historique déjà mal classé.
+   */
+  const [compteId,       setCompteId]       = useState<string>("");
   const [searchQuery,    setSearchQuery]    = useState("");
   const [searchResults,  setSearchResults]  = useState<SearchAsset[]>([]);
   const [isSearching,    setIsSearching]    = useState(false);
@@ -255,6 +288,16 @@ export default function TransactionModal({
   }
 
   // ── Computed ─────────────────────────────────────────────────────────────────
+  /**
+   * ⚠️ **Le compte imposé se réapplique à chaque ouverture.** L'état survit au démontage —
+   * le panneau se cache, il ne se démonte pas — si bien qu'ouvrir la saisie depuis un
+   * dossier après l'avoir ouverte depuis un autre aurait gardé le premier compte.
+   */
+  useEffect(() => {
+    if (!isOpen) return;
+    setCompteId(compteImpose?.id ?? "");
+  }, [isOpen, compteImpose?.id]);
+
   const price    = parseFloat(unitPrice.replace(",", ".")) || 0;
   const feesVal  = parseFloat(fees.replace(",", "."))      || 0;
   const montantVal = parseFloat(montant.replace(",", ".")) || 0;
@@ -264,7 +307,15 @@ export default function TransactionModal({
     ? (parseFloat(quantity) || 0)
     : (price > 0 ? montantVal / price : 0);
   const total    = qty * price + feesVal;
-  const isValid  = !!selectedAsset && qty > 0 && price > 0;
+  /**
+   * ⚠️ **Le compte n'est exigé que sur le chemin qui écrit en base.** Le brouillon sert la
+   * création d'un portefeuille : il n'existe pas encore, donc il n'a aucun compte, et
+   * l'exiger là rendrait toute création impossible. C'est la même raison qui interdit de
+   * rendre `compte_id` obligatoire côté serveur.
+   */
+  const compteRequis = !onDraft;
+  const isValid  = !!selectedAsset && qty > 0 && price > 0
+    && (!compteRequis || !!compteId);
 
   const accentColor  = side === "BUY" ? "#4ade80"              : "#f87171";
   const accentBg     = side === "BUY" ? "rgba(74,222,128,0.15)" : "rgba(248,113,113,0.15)";
@@ -308,6 +359,7 @@ export default function TransactionModal({
           fees:        feesVal,
           executed_at: `${date}T00:00:00`,
           note:        note.trim() || null,
+          compte_id:   compteId || null,
         }),
       });
       if (!res.ok) {
@@ -625,6 +677,68 @@ export default function TransactionModal({
                 style={inputStyle("note")}
               />
             </div>
+
+            {/**
+              * Le compte où ranger l'écriture.
+              *
+              * ⚠️ **Trois cas, et le troisième est celui qu'on oublie.** Un compte imposé —
+              * la saisie part de l'intérieur d'un dossier — se montre sans se changer. Une
+              * liste de comptes se choisit. Et quand il n'y en a aucun, un bouton éteint et
+              * muet serait le pire des trois : on ne saurait ni pourquoi ni quoi faire. On
+              * dit donc ce qui manque, et on offre de le créer.
+              */}
+            {compteRequis && (
+              <div style={{ gridColumn: "1 / -1" }}>
+                <label style={labelStyle}>COMPTE</label>
+                {compteImpose ? (
+                  <div style={{
+                    ...inputStyle("compte"),
+                    display: "flex", alignItems: "center", gap: 8,
+                    color: "rgba(255,255,255,0.92)",
+                  }}>
+                    <span style={{
+                      width: 9, height: 9, borderRadius: "50%", flexShrink: 0,
+                      background: compteImpose.couleur,
+                    }} />
+                    {compteImpose.nom}
+                  </div>
+                ) : comptes.length > 0 ? (
+                  <select
+                    value={compteId} onChange={e => setCompteId(e.target.value)}
+                    onFocus={() => setFocusedField("compte")} onBlur={() => setFocusedField(null)}
+                    style={inputStyle("compte")}>
+                    {/* ⚠️ Une option vide et sélectionnée par défaut, plutôt que le premier
+                        compte : préremplir ferait ranger sans y penser, et l'on ne s'en
+                        apercevrait qu'une fois un second compte ouvert — trop tard, avec un
+                        historique déjà mal classé. */}
+                    <option value="">Choisissez un compte…</option>
+                    {comptes.map(c => (
+                      <option key={c.id} value={c.id}>{c.nom}</option>
+                    ))}
+                  </select>
+                ) : (
+                  <div style={{
+                    padding: "10px 12px", borderRadius: 10, fontSize: 12, lineHeight: 1.5,
+                    background: "rgba(255,255,255,0.04)",
+                    border: "1px solid rgba(255,255,255,0.10)",
+                    color: "rgba(255,255,255,0.72)",
+                  }}>
+                    Une opération se range dans un compte, et vous n’en avez pas encore
+                    déclaré.
+                    {onDeclarerCompte && (
+                      <button type="button" onClick={onDeclarerCompte}
+                        style={{
+                          display: "block", marginTop: 8, padding: 0, background: "none",
+                          border: "none", cursor: "pointer", font: "inherit",
+                          color: "#4ade80", textDecoration: "underline",
+                        }}>
+                        Déclarer un compte
+                      </button>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
           </div>
 
           {/* ── Live recap ───────────────────────────────────────────────────── */}

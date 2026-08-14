@@ -2304,6 +2304,31 @@ function PortfolioPageInner() {
                       couleur={dossierActif?.couleur}
                       onRacine={() => setCompteOuvert(null)} />
                   }
+                  /**
+                    * ⚠️ **Seulement dans un dossier **déclaré** à titres.** Un dossier deviné
+                    * ne peut pas tenir la promesse : la ligne saisie irait où sa place de
+                    * cotation l'envoie, si bien qu'un achat d'AAPL fait depuis le PEA
+                    * atterrirait dans le CTO et disparaîtrait sous les yeux de celui qui
+                    * vient de le saisir. C'est pour lever cela que le dossier se déclare.
+                    */
+                  action={dossierActif?.declare && dossierActif.porteDesTitres && (
+                    <button type="button" onClick={() => setShowTxModal(true)}
+                      title={`Saisir une opération dans ${dossierActif.nom}`}
+                      style={{
+                        display: "flex", alignItems: "center", gap: 5, height: 26,
+                        padding: "0 10px", borderRadius: RAYONS.sm, cursor: "pointer",
+                        border: "none", background: CLAIR.carte, color: CLAIR.texte,
+                        fontFamily: FONT, fontSize: 11.5, fontWeight: 500,
+                        whiteSpace: "nowrap", flexShrink: 0,
+                      }}>
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none"
+                        stroke="currentColor" strokeWidth={2.2} strokeLinecap="round"
+                        aria-hidden="true">
+                        <path d="M12 5v14M5 12h14" />
+                      </svg>
+                      Ajouter une opération
+                    </button>
+                  )}
                 />
               )}
             </div>
@@ -3043,6 +3068,20 @@ function PortfolioPageInner() {
           isOpen={showTxModal}
           onClose={() => setShowTxModal(false)}
           onSuccess={() => { setShowTxModal(false); setTxRefreshKey(k => k + 1); }}
+          /* ⚠️ Les comptes de trésorerie sont écartés : sur un livret, le solde *est* la
+             valeur, et y ranger un achat compterait la somme deux fois. Le serveur le
+             refuse, mais un choix impossible n'a pas à être proposé. */
+          comptes={comptesDeclares.filter(c => c.porte_des_titres)
+            .map(c => ({ id: c.id, nom: c.nom, couleur: c.couleur }))}
+          compteImpose={dossierActif?.declare && dossierActif.porteDesTitres
+            ? { id: dossierActif.compteId!, nom: dossierActif.nom, couleur: dossierActif.couleur }
+            : undefined}
+          onDeclarerCompte={() => {
+            setShowTxModal(false);
+            setErreurCompte(null); setCompteEdite(null);
+            setPrereglage(null); setARattacher([]);
+            setFormCompte(true);
+          }}
         />
       )}
     </div>

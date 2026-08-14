@@ -30,7 +30,7 @@ const TRIS: Record<SortKey, string> = {
 };
 
 export default function AssetGrid({
-  assets, onAssetClick, view, titre = "Vos actifs",
+  assets, onAssetClick, view, titre = "Vos actifs", action,
 }: {
   assets: GridAsset[];
   onAssetClick?: (ticker: string) => void;
@@ -46,6 +46,14 @@ export default function AssetGrid({
    * amputée comme le portefeuille entier, et n'offrirait aucun retour.
    */
   titre?: React.ReactNode;
+  /**
+   * Une commande propre au contenu montré, posée à droite avant le tri.
+   *
+   * ⚠️ **Ici plutôt que dans la rangée de dossiers, parce que les deux se remplacent.** Le
+   * bouton « Ajouter un compte » n'existe qu'à la racine ; dès qu'un dossier est ouvert,
+   * c'est cette rangée-ci qui occupe la place, et son coin droit est libre.
+   */
+  action?: React.ReactNode;
 }) {
   const [filter, setFilter] = useState("Tous");
   const [sort, setSort] = useState<SortKey>("poids");
@@ -98,6 +106,15 @@ export default function AssetGrid({
           options={classes.map(c => ({ valeur: c, libelle: c }))} />
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 6, position: "relative", flexShrink: 0 }}>
+          {/**
+            * ⚠️ **L'action tient dans les 26 pixels de cette rangée, et ce n'est pas
+            * négociable.** Cette hauteur est celle du bouton de tri d'à côté, et elle est
+            * aussi celle de l'en-tête de la rangée de dossiers : les deux écrans se
+            * remplacent l'un l'autre, et si l'un est plus haut, la courbe au-dessus gagne
+            * des pixels à la vue des dossiers pour les reperdre à l'ouverture de l'un
+            * d'eux. Un contenu plus long change la largeur, jamais la hauteur.
+            */}
+          {action}
           <span style={{ fontFamily: FONT, fontSize: 11, color: CLAIR.surFondAttenue, whiteSpace: "nowrap" }}>
             Trier par
           </span>

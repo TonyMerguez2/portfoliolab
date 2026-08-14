@@ -48,13 +48,12 @@ describe("le compte d'un ticker", () => {
       .toEqual({ AAPL: null });
   });
 
-  it("n'est aucun quand les écritures divergent", () => {
+  it("n'est aucun quand deux comptes se disputent le même ticker", () => {
     /**
-     * ⚠️ **Un ticker acheté dans deux comptes reste déduit, et c'est un choix.** Une
-     * position n'a qu'un prix de revient, calculé en Python sur l'ensemble de ses
-     * opérations ; la couper entre deux comptes demanderait de refaire ce calcul ici, donc
-     * de tenir deux arithmétiques qui divergeraient. Tant que ce n'est pas fait côté
-     * serveur, la ligne reste là où va tout ce qui n'est pas rangé.
+     * ⚠️ **La seule contradiction qui compte : deux rattachements pour un ticker.** Le même
+     * titre détenu chez deux courtiers. Une position n'a qu'un prix de revient, calculé en
+     * Python sur l'ensemble de ses opérations ; la couper demanderait de refaire ce calcul
+     * ici, donc de tenir deux arithmétiques qui divergeraient.
      */
     expect(comptesParTicker([
       { ticker: "ESE.PA", compte_id: "a" },
@@ -62,14 +61,21 @@ describe("le compte d'un ticker", () => {
     ])).toEqual({ "ESE.PA": null });
   });
 
-  it("n'est aucun dès qu'une seule écriture manque à l'appel", () => {
-    // Le cas le plus courant de la reprise : d'anciennes lignes non rattachées côtoient
-    // les nouvelles. Sans l'unanimité, la ligne entrerait dans le compte déclaré alors
-    // qu'une partie de son histoire lui échappe.
+  it("ne se laisse pas contredire par une écriture non classée", () => {
+    /**
+     * ⚠️ **Le test qui a corrigé la règle, et c'est l'écran qui l'a dicté.** J'exigeais
+     * d'abord l'unanimité de *toutes* les écritures. Dans un portefeuille dont l'historique
+     * n'est pas encore classé — c'est-à-dire tous, au début — le premier achat d'un titre
+     * déjà détenu produisait aussitôt une divergence : mesuré, deux actions Apple achetées
+     * **dans** le PEA déclaré sont allées grossir le dossier deviné CTO, sous les yeux de
+     * qui venait de choisir le compte. Une écriture non classée n'affirme rien ; elle ne
+     * peut donc rien contredire.
+     */
     expect(comptesParTicker([
       { ticker: "MC.PA", compte_id: "a" },
       { ticker: "MC.PA", compte_id: null },
-    ])).toEqual({ "MC.PA": null });
+      { ticker: "MC.PA" },
+    ])).toEqual({ "MC.PA": "a" });
   });
 });
 
