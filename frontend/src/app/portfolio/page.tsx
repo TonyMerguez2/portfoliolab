@@ -8,6 +8,7 @@ import TransactionModal from "@/components/TransactionModal";
 import TransactionsView from "@/components/portfolio/TransactionsView";
 import AnalyseView from "@/components/portfolio/AnalyseView";
 import { createPortal } from "react-dom";
+import CarteConstats from "@/components/portfolio/CarteConstats";
 import PanneauProfil from "@/components/portfolio/PanneauProfil";
 import PanneauFrais from "@/components/portfolio/PanneauFrais";
 import {
@@ -2510,10 +2511,27 @@ function PortfolioPageInner() {
           ...anim(160),
         }}>
 
-          {/* Santé du portefeuille. La valeur totale est remontée dans la
-              bande de tête : elle y est le premier chiffre qu'on cherche, et
-              son départ rend une centaine de pixels à cette colonne. */}
-          <Cadre style={{ padding: "14px 16px", flexShrink: 0 }}>
+          {/**
+            * ⚠️ **La même carte que l'« Aide à la décision » des objectifs, à la lettre.**
+            * Demandé ainsi, et c'est ce qui a fait sortir la coquille dans `CarteConstats` :
+            * recopier sa mise en page — dont des compensations d'encre mesurées au canevas —
+            * aurait donné deux cartes jumelles qui se seraient séparées au premier
+            * ajustement de l'une.
+            *
+            * ⚠️ **Les réglages passent en pied de carte.** Ce panneau reste le **seul** point
+            * d'accès à la saisie des frais et du profil : les perdre en changeant son
+            * contenu aurait dégradé le score pour toujours, sans que rien ne le dise.
+            */}
+          <CarteConstats
+            titre="Constats"
+            aides={constats}
+            texteVide={"Rien à mesurer pour l’instant : ces constats se calculent sur vos "
+              + "lignes, vos soldes déclarés et vos opérations."}
+            couleurAvatar={couleurAvatar}
+            formeAvatar={formeAvatar}
+            skinAvatar={skinAvatar}
+            apres={encreCarte => (
+              <>
             {fraisOuvert && ancreFrais && (
               <PanneauFrais
                 lignes={(analyse?.poids ?? []).map(p => ({ ticker: p.ticker, part: p.part }))}
@@ -2531,65 +2549,24 @@ function PortfolioPageInner() {
                 ancre={ancreProfil}
               />
             )}
-            {/**
-              * Les constats chiffrés du portefeuille.
-              *
-              * ⚠️ **Ce panneau prend la place du « Détail du score », et c'est un aveu de
-              * redondance.** Sur un portefeuille complet, celui-ci ne portait plus qu'une
-              * ligne neuve — la cause de la note — sous un score déjà écrit dans le
-              * bandeau, trois centimètres plus haut, et au-dessus d'un lien vers l'onglet
-              * qui détaille tout. Un quart de la colonne pour une information.
-              *
-              * ⚠️ **Les constats ne dépendent pas de l'analyse, et c'est ce qui les rend
-              * fiables.** Ils se calculent sur les lignes, les soldes et les opérations
-              * déjà chargés : un cours manquant fait taire le score, pas eux.
-              *
-              * ⚠️ **Aucune phrase ne conseille.** C'est la même règle que l'« Aide à la
-              * décision » des objectifs, qui remplaçait déjà les « Recommandations IA » de
-              * la maquette : « vos trois premières lignes font 74 % » est une mesure,
-              * « allégez-les » serait du conseil en investissement.
-              */}
-            <p style={{ margin: "0 0 10px", fontSize: 12.5, fontWeight: 600, color: CLAIR.texte }}>
-              Constats
-            </p>
-            {constats.length > 0 ? (
-              <ul style={{ margin: "0 0 10px", padding: 0, listStyle: "none",
-                display: "flex", flexDirection: "column", gap: 7 }}>
-                {constats.map(c => (
-                  <li key={c} style={{ fontSize: 11, lineHeight: 1.5, color: CLAIR.texteSecondaire,
-                    display: "flex", gap: 7 }}>
-                    <span aria-hidden="true" style={{ color: CLAIR.accent, flexShrink: 0 }}>·</span>
-                    {c}
-                  </li>
-                ))}
-              </ul>
-            ) : (
-              /* ⚠️ Dire de quoi ils se nourrissent, plutôt que « aucune donnée ». Un
-                 panneau vide sans motif se lit comme une panne. */
-              <p style={{ margin: "0 0 10px", fontSize: 10.5, color: CLAIR.texteAttenue,
-                lineHeight: 1.45 }}>
-                Rien à mesurer pour l’instant : ces constats se calculent sur vos lignes,
-                vos soldes déclarés et vos opérations.
-              </p>
-            )}
             {etatAnalyse === "charge" && (
-              <p style={{ margin: 0, fontSize: 11.5, color: CLAIR.texteFaible }}>Analyse en cours…</p>
+              <p style={{ margin: 0, fontSize: 11.5, color: encreCarte(0.70) }}>Analyse en cours…</p>
             )}
             {etatAnalyse === "vide" && (
               // Dire **pourquoi** il n'y a pas de note. Un cours manquant et un
               // portefeuille vide n'appellent pas la même action, et les confondre
               // enverrait ajouter des transactions à qui en a déjà.
               analyse?.source === "incomplet" ? (
-                <p style={{ margin: 0, fontSize: 11.5, color: CLAIR.texteFaible, lineHeight: 1.5 }}>
+                <p style={{ margin: 0, fontSize: 11.5, color: encreCarte(0.70), lineHeight: 1.5 }}>
                   Score indisponible : le cours de{" "}
-                  <span style={{ color: CLAIR.texte, fontWeight: 600 }}>
+                  <span style={{ color: encreCarte(1), fontWeight: 600 }}>
                     {(analyse.sans_cours ?? []).join(", ")}
                   </span>{" "}
                   n&apos;a pas pu être lu. Noter sans cette ligne reviendrait à la
                   retirer du portefeuille.
                 </p>
               ) : (
-                <p style={{ margin: 0, fontSize: 11.5, color: CLAIR.texteFaible, lineHeight: 1.5 }}>
+                <p style={{ margin: 0, fontSize: 11.5, color: encreCarte(0.70), lineHeight: 1.5 }}>
                   Pas encore de score : ajoutez des transactions, ou une composition
                   et une valeur totale.
                 </p>
@@ -2661,12 +2638,12 @@ function PortfolioPageInner() {
                         style={{
                           display: "block", width: "100%", textAlign: "left",
                           margin: "0 0 9px", padding: "7px 8px", cursor: "pointer",
-                          borderRadius: RAYONS.xs, background: CLAIR.carteCreuse,
-                          border: `1px solid ${JETONS.bord}`,
-                          fontFamily: FONT, fontSize: 10.5, color: CLAIR.texteAttenue,
+                          borderRadius: RAYONS.xs, background: encreCarte(0.10),
+                          border: `1px solid ${encreCarte(0.20)}`,
+                          fontFamily: FONT, fontSize: 10.5, color: encreCarte(0.74),
                           lineHeight: 1.45,
                         }}>
-                        <span style={{ color: CLAIR.accent, fontWeight: 600 }}>
+                        <span style={{ color: encreCarte(1), fontWeight: 600 }}>
                           Déclarez votre profil de risque
                         </span>{" "}
                         pour que {enAttente.length === 1 ? "ce pilier soit noté" : `ces ${enAttente.length} piliers soient notés`} :{" "}
@@ -2717,12 +2694,12 @@ function PortfolioPageInner() {
                           margin: mesure ? "0 0 6px" : "0 0 9px",
                           padding: mesure ? 0 : "7px 8px", cursor: "pointer",
                           borderRadius: RAYONS.xs,
-                          background: mesure ? "none" : CLAIR.carteCreuse,
-                          border: mesure ? "none" : `1px solid ${JETONS.bord}`,
-                          fontFamily: FONT, fontSize: 10.5, color: CLAIR.texteAttenue,
+                          background: mesure ? "none" : encreCarte(0.10),
+                          border: mesure ? "none" : `1px solid ${encreCarte(0.20)}`,
+                          fontFamily: FONT, fontSize: 10.5, color: encreCarte(0.74),
                           lineHeight: 1.45,
                         }}>
-                        <span style={{ color: CLAIR.accent, fontWeight: mesure ? 500 : 600 }}>
+                        <span style={{ color: encreCarte(1), fontWeight: mesure ? 500 : 600 }}>
                           {mesure ? "Modifier les frais des fonds" : "Saisissez les frais de vos fonds"}
                         </span>
                         {!mesure && (
@@ -2733,8 +2710,8 @@ function PortfolioPageInner() {
                     );
                   })()}
                   {analyse.profil && (
-                    <p style={{ margin: "0 0 9px", fontSize: 10.5, color: CLAIR.texteAttenue, lineHeight: 1.45 }}>
-                      Profil : <span style={{ color: CLAIR.texte, fontWeight: 600 }}>
+                    <p style={{ margin: "0 0 9px", fontSize: 10.5, color: encreCarte(0.74), lineHeight: 1.45 }}>
+                      Profil : <span style={{ color: encreCarte(1), fontWeight: 600 }}>
                         {analyse.profil.horizon_annees} ans, {analyse.profil.tolerance}
                       </span>{" "}
                       — cible {analyse.profil.volatilite.toFixed(0)} % de volatilité.{" "}
@@ -2746,7 +2723,7 @@ function PortfolioPageInner() {
                         }}
                         style={{
                           background: "none", border: "none", padding: 0, cursor: "pointer",
-                          fontFamily: FONT, fontSize: 10.5, color: CLAIR.accent,
+                          fontFamily: FONT, fontSize: 10.5, color: encreCarte(1),
                         }}>Modifier</button>
                     </p>
                   )}
@@ -2766,7 +2743,7 @@ function PortfolioPageInner() {
                     style={{
                       display: "flex", alignItems: "center", gap: 5, marginTop: 10,
                       background: "none", border: "none", cursor: "pointer", padding: 0,
-                      fontFamily: FONT, fontSize: 11, fontWeight: 500, color: CLAIR.accent,
+                      fontFamily: FONT, fontSize: 11, fontWeight: 500, color: encreCarte(1),
                     }}>
                     Voir le détail du score
                     <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor"
@@ -2777,7 +2754,9 @@ function PortfolioPageInner() {
                 </>
               );
             })()}
-          </Cadre>
+              </>
+            )}
+          />
 
           {/* « Mouvements » vivait ici : les trois plus fortes hausses et
               baisses en contribution. Retiré — chaque carte d'actif affiche

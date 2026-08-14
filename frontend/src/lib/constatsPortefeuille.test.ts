@@ -22,8 +22,13 @@ const l = (ticker: string, value: number | null, pnlEur?: number | null): LigneC
  * illisible. On compare donc à espaces normalisées.
  */
 const memeTexte = (t: string) => t.replace(/[\s\u202f\u00a0]+/g, " ");
-const contient = (dits: string[], attendu: string) =>
-  dits.map(memeTexte).includes(memeTexte(attendu));
+
+/** Tout le texte d'un constat, à espaces normalisées : titre, description et chiffre. */
+const enClair = (c: {
+  titre: string; description: string; metrique?: { libelle: string; valeur: string };
+}) => memeTexte(`${c.titre} | ${c.description} | ${c.metrique?.valeur ?? ""} `
+  + `${c.metrique?.libelle ?? ""}`);
+const tout = (dits: Parameters<typeof enClair>[0][]) => dits.map(enClair).join(" ¶ ");
 
 describe("d'où vient le gain", () => {
   it("nomme la ligne qui porte le plus du résultat, et sa part", () => {
@@ -31,7 +36,10 @@ describe("d'où vient le gain", () => {
       lignes: [l("ESE.PA", 1770, 400), l("ETZ.PA", 867, 150), l("AAPL", 500, 50)],
       gainTotal: 600,
     });
-    expect(memeTexte(dits[0])).toBe("ESE.PA porte 67 % de votre gain de 600 €.");
+    expect(dits[0].titre).toBe("D\u2019où vient votre gain");
+    expect(dits[0].metrique).toEqual({ libelle: "porté par ESE.PA", valeur: "67 %" });
+    expect(memeTexte(dits[0].description))
+      .toBe("Sur vos 600 € de gain, 400 € viennent de ESE.PA.");
   });
 
   it("dit « perte » quand le portefeuille en fait une", () => {
@@ -39,7 +47,8 @@ describe("d'où vient le gain", () => {
       lignes: [l("AAPL", 500, -300), l("ESE.PA", 1000, -100)],
       gainTotal: -400,
     });
-    expect(memeTexte(dits[0])).toBe("AAPL porte 75 % de votre perte de 400 €.");
+    expect(dits[0].titre).toBe("D\u2019où vient votre perte");
+    expect(dits[0].metrique?.valeur).toBe("75 %");
   });
 
   it("se tait quand aucune ligne ne va dans le sens du total", () => {
@@ -52,14 +61,14 @@ describe("d'où vient le gain", () => {
       lignes: [l("AAPL", 500, 200), l("ESE.PA", 1000, 100)],
       gainTotal: -50,
     });
-    expect(dits.some(d => /porte/.test(d))).toBe(false);
+    expect(tout(dits)).not.toContain("vient votre");
   });
 
   it("se tait sur un gain négligeable, plutôt que d'annoncer 100 % de rien", () => {
     const dits = constatsDuPortefeuille({
       lignes: [l("AAPL", 500, 0.4)], gainTotal: 0.5,
     });
-    expect(dits.some(d => /porte/.test(d))).toBe(false);
+    expect(tout(dits)).not.toContain("vient votre");
   });
 
   it("borne la part à cent pour cent", () => {
@@ -69,7 +78,7 @@ describe("d'où vient le gain", () => {
       lignes: [l("ESE.PA", 1000, 400), l("AAPL", 500, -100)],
       gainTotal: 300,
     });
-    expect(memeTexte(dits[0])).toBe("ESE.PA porte 100 % de votre gain de 300 €.");
+    expect(dits[0].metrique?.valeur).toBe("100 %");
   });
 });
 
@@ -80,8 +89,9 @@ describe("le coût des frais", () => {
       lignes: [l("ESE.PA", 10000), l("ETZ.PA", 5000)],
       fraisParLigne: { "ESE.PA": 0.2, "ETZ.PA": 0.3 },
     });
-    expect(contient(dits, "Les frais de vos fonds coûtent 35 € par an, au niveau actuel."))
-      .toBe(true);
+    const frais = dits.find(d => d.titre === "Ce que coûtent vos fonds")!;
+    expect(frais.metrique).toEqual({ libelle: "par an", valeur: "35 €" });
+    expect(frais.confiance, "toutes les lignes sont couvertes").toBe(1);
   });
 
   it("annonce sur combien de lignes le calcul porte quand il n'est pas complet", () => {
@@ -94,14 +104,14 @@ describe("le coût des frais", () => {
       lignes: [l("ESE.PA", 10000), l("ETZ.PA", 5000), l("AAPL", 3000)],
       fraisParLigne: { "ESE.PA": 0.2 },
     });
-    expect(contient(dits,
-      "Les frais de vos fonds coûtent 20 € par an sur 1 de vos 3 lignes, au niveau actuel."))
-      .toBe(true);
+    const frais = dits.find(d => d.titre === "Ce que coûtent vos fonds")!;
+    expect(memeTexte(frais.description)).toContain("Sur 1 de vos 3 lignes");
+    expect(frais.confiance, "la confiance dit la couverture").toBeCloseTo(1 / 3, 6);
   });
 
   it("se tait quand aucun frais n'est saisi", () => {
     const dits = constatsDuPortefeuille({ lignes: [l("ESE.PA", 10000)] });
-    expect(dits.some(d => /frais/.test(d))).toBe(false);
+    expect(dits.some(d => d.titre === "Ce que coûtent vos fonds")).toBe(false);
   });
 
   it("se tait sous un euro par an", () => {
@@ -109,7 +119,7 @@ describe("le coût des frais", () => {
     const dits = constatsDuPortefeuille({
       lignes: [l("ESE.PA", 200)], fraisParLigne: { "ESE.PA": 0.2 },
     });
-    expect(dits.some(d => /frais/.test(d))).toBe(false);
+    expect(dits.some(d => d.titre === "Ce que coûtent vos fonds")).toBe(false);
   });
 });
 
@@ -119,13 +129,16 @@ describe("ce qui n'est pas investi", () => {
     const dits = constatsDuPortefeuille({
       lignes: [l("ESE.PA", 10600)], liquidites: 5400,
     });
-    expect(contient(dits, "5 400 € ne sont pas investis, soit 34 % du portefeuille."))
-      .toBe(true);
+    const dort = dits.find(d => d.titre === "Ce qu\u2019est pas investi")
+      ?? dits.find(d => /investi/.test(d.titre))!;
+    expect(dort.metrique).toEqual({ libelle: "du portefeuille", valeur: "34 %" });
+    expect(memeTexte(dort.description))
+      .toBe("5 400 € figurent sur vos comptes déclarés, sur un portefeuille de 16 000 €.");
   });
 
   it("se tait sans liquidités déclarées", () => {
     const dits = constatsDuPortefeuille({ lignes: [l("ESE.PA", 10600)] });
-    expect(dits.some(d => /investis/.test(d))).toBe(false);
+    expect(dits.some(d => /investi/.test(d.titre))).toBe(false);
   });
 });
 
@@ -134,7 +147,8 @@ describe("le poids des premières lignes", () => {
     const dits = constatsDuPortefeuille({
       lignes: [l("A", 400), l("B", 300), l("C", 200), l("D", 100)],
     });
-    expect(contient(dits, "Vos trois premières lignes font 90 % de vos titres.")).toBe(true);
+    const poids = dits.find(d => /premières lignes/.test(d.titre))!;
+    expect(poids.metrique).toEqual({ libelle: "de vos titres", valeur: "90 %" });
   });
 
   it("se tait en dessous de quatre lignes", () => {
@@ -142,7 +156,7 @@ describe("le poids des premières lignes", () => {
     const dits = constatsDuPortefeuille({
       lignes: [l("A", 400), l("B", 300), l("C", 200)],
     });
-    expect(dits.some(d => /trois premières/.test(d))).toBe(false);
+    expect(dits.some(d => /premières lignes/.test(d.titre))).toBe(false);
   });
 });
 
@@ -155,7 +169,7 @@ describe("le silence", () => {
     const dits = constatsDuPortefeuille({
       lignes: [l("A", null), l("B", 300), l("C", 200), l("D", 100)],
     });
-    expect(dits.join(" ")).not.toContain("NaN");
+    expect(tout(dits)).not.toContain("NaN");
   });
 
   it("met en tête ce qu'aucun autre endroit de l'écran ne dit", () => {
@@ -169,6 +183,11 @@ describe("le silence", () => {
       fraisParLigne: { A: 1 },
       gainTotal: 100,
     });
-    expect(dits.map(d => d.split(" ")[0])).toEqual(["A", "Les", "500", "Vos"]);
+    expect(dits.map(d => d.titre)).toEqual([
+      "D\u2019où vient votre gain",
+      "Ce que coûtent vos fonds",
+      "Ce qui n\u2019est pas investi",
+      "Le poids de vos premières lignes",
+    ]);
   });
 });

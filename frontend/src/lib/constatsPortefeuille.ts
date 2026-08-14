@@ -21,8 +21,30 @@
  * suggère une précision que le calcul n'a pas — le TER est saisi à la main et la
  * valorisation bouge à chaque cours.
  *
+ * ⚠️ **La forme rendue est celle que `CarteConstats` attend, et non une phrase.** La carte
+ * met un chiffre fort à droite et le commentaire à gauche ; lui donner une phrase entière
+ * l'aurait obligée à y repêcher le nombre, ou à s'en passer. Un `Insight` d'objectif entre
+ * dans la même carte : les deux sortes de constats sont désormais du même moule.
+ *
  * ⚠️ Chemins relatifs et non l'alias « @/ » : Vitest tourne sans configuration.
  */
+
+/**
+ * Un constat, dans la forme que la carte affiche.
+ *
+ * ⚠️ **`confiance` dit la complétude des données, jamais une probabilité.** La plupart de
+ * ces constats sont des divisions de chiffres déjà à l'écran : ils valent 1. Celui des
+ * frais vaut la part des lignes dont le TER est renseigné — c'est le seul qui puisse être
+ * partiel, et le seul qu'il faut savoir lire avec réserve.
+ */
+export type Constat = {
+  titre: string;
+  description: string;
+  metrique?: { libelle: string; valeur: string };
+  confiance: number;
+  motifs: string[];
+  hypotheses: string[];
+};
 
 /** Ce qu'une ligne doit porter pour entrer dans un constat. */
 export type LigneConstat = {
@@ -55,8 +77,8 @@ export function constatsDuPortefeuille({
   /** Le TER saisi par ticker, en pourcentage par an. */
   fraisParLigne?: Record<string, number>;
   gainTotal?: number | null;
-}): string[] {
-  const sortie: string[] = [];
+}): Constat[] {
+  const sortie: Constat[] = [];
   const titres = valeurDe(lignes);
   const total = titres + liquidites;
   if (lignes.length === 0 && liquidites <= 0) return sortie;
@@ -79,10 +101,16 @@ export function constatsDuPortefeuille({
     if (tete) {
       const part = Math.abs(tete.pnlEur!) / Math.abs(gainTotal);
       const mot = gainTotal >= 0 ? "gain" : "perte";
-      sortie.push(
-        `${tete.ticker} porte ${pourcent(Math.min(1, part))} de votre ${mot} `
-        + `de ${euros(Math.abs(gainTotal))}.`,
-      );
+      sortie.push({
+        titre: `D’où vient votre ${mot}`,
+        description: `Sur vos ${euros(Math.abs(gainTotal))} de ${mot}, `
+          + `${euros(Math.abs(tete.pnlEur!))} viennent de ${tete.ticker}.`,
+        metrique: { libelle: `porté par ${tete.ticker}`,
+          valeur: pourcent(Math.min(1, part)) },
+        confiance: 1,
+        motifs: ["valorisation des lignes", "prix de revient de vos opérations"],
+        hypotheses: [],
+      });
     }
   }
 
@@ -98,10 +126,21 @@ export function constatsDuPortefeuille({
     if (cout >= 1) {
       // ⚠️ On dit sur combien de lignes le calcul porte quand il ne les couvre pas toutes :
       // sans cela, un chiffre partiel se lirait comme le total des frais du portefeuille.
-      const couverture = avecFrais.length < lignes.length
-        ? ` sur ${avecFrais.length} de vos ${lignes.length} lignes` : "";
-      sortie.push(`Les frais de vos fonds coûtent ${euros(cout)} par an${couverture}, `
-        + `au niveau actuel.`);
+      const partiel = avecFrais.length < lignes.length;
+      sortie.push({
+        titre: "Ce que coûtent vos fonds",
+        description: partiel
+          ? `Sur ${avecFrais.length} de vos ${lignes.length} lignes, les frais courants `
+            + `prélèvent ${euros(cout)} en douze mois au niveau actuel des encours.`
+          : `Les frais courants de vos fonds prélèvent ${euros(cout)} en douze mois, `
+            + `au niveau actuel de vos encours.`,
+        metrique: { libelle: "par an", valeur: euros(cout) },
+        // ⚠️ La confiance est la couverture : un chiffre calculé sur deux lignes de cinq
+        // est vrai pour ces deux-là et muet sur les trois autres.
+        confiance: avecFrais.length / Math.max(1, lignes.length),
+        motifs: ["les TER que vous avez saisis"],
+        hypotheses: ["encours actuels", "frais inchangés"],
+      });
     }
   }
 
@@ -112,8 +151,15 @@ export function constatsDuPortefeuille({
   // chiffre dort. C'est un fait, pas un reproche : une réserve peut être exactement ce
   // qu'on veut.
   if (liquidites > 0 && total > 0) {
-    sortie.push(`${euros(liquidites)} ne sont pas investis, `
-      + `soit ${pourcent(liquidites / total)} du portefeuille.`);
+    sortie.push({
+      titre: "Ce qui n’est pas investi",
+      description: `${euros(liquidites)} figurent sur vos comptes déclarés, `
+        + `sur un portefeuille de ${euros(total)}.`,
+      metrique: { libelle: "du portefeuille", valeur: pourcent(liquidites / total) },
+      confiance: 1,
+      motifs: ["les soldes que vous avez déclarés"],
+      hypotheses: [],
+    });
   }
 
   // ── 4. Ce que pèsent les premières lignes ───────────────────────────────────
@@ -126,8 +172,15 @@ export function constatsDuPortefeuille({
   // vrai et ne vaut rien.
   if (lignes.length >= 4 && titres > 0) {
     const tete = [...lignes].sort((a, b) => (b.value ?? 0) - (a.value ?? 0)).slice(0, 3);
-    sortie.push(`Vos trois premières lignes font ${pourcent(valeurDe(tete) / titres)} `
-      + `de vos titres.`);
+    sortie.push({
+      titre: "Le poids de vos premières lignes",
+      description: `${tete.map(t => t.ticker).join(", ")} font ensemble `
+        + `${euros(valeurDe(tete))} sur ${euros(titres)} de titres.`,
+      metrique: { libelle: "de vos titres", valeur: pourcent(valeurDe(tete) / titres) },
+      confiance: 1,
+      motifs: ["valorisation des lignes"],
+      hypotheses: [],
+    });
   }
 
   return sortie;
