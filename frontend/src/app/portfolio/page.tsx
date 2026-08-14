@@ -21,7 +21,6 @@ import CarteActif from "@/components/portfolio/CarteActif";
 import FilAriane from "@/components/portfolio/FilAriane";
 import RailHorizontal from "@/components/portfolio/RailHorizontal";
 import AllocationDonut from "@/components/portfolio/AllocationDonut";
-import RecentActivity from "@/components/portfolio/RecentActivity";
 import PortfolioTabs from "@/components/portfolio/PortfolioTabs";
 import { donutArcs } from "@/lib/donut";
 import { constatsDuPortefeuille } from "@/lib/constatsPortefeuille";
@@ -2787,7 +2786,11 @@ function PortfolioPageInner() {
               place revient à l'allocation, dont la légende était rognée. */}
           {/* Allocation. Remplace l'exposition sectorielle, qui rangeait
               tout un portefeuille d'actions dans une barre unique à 100 %. */}
-          <Cadre style={{ padding: "13px 15px", flexShrink: 0, display: "flex", flexDirection: "column", overflow: "hidden" }}>
+          {/* ⚠️ **C'est lui qui prend la hauteur, depuis le départ de l'activité récente.**
+              Sans un panneau qui grandit, la colonne s'arrêtait au milieu de l'écran, un
+              vide sous elle. La légende du camembert y gagne : elle était rognée, c'est
+              même la raison pour laquelle « Mouvements » lui avait déjà cédé sa place. */}
+          <Cadre style={{ padding: "13px 15px", flex: 1, minHeight: 200, display: "flex", flexDirection: "column", overflow: "hidden" }}>
             <AllocationDonut
               assets={enriched.map(a => ({
                 ticker: a.ticker, weight: a.weight, price: a.price,
@@ -2803,16 +2806,13 @@ function PortfolioPageInner() {
               onSeeAll={() => setDashView("analyse")}
             />
           </Cadre>
-          {/* Activité récente. Le « Voir toute l'activité → » de la maquette
-              n'avait aucune destination ; il mène à l'onglet Transactions,
-              qui porte déjà le tableau complet. */}
-          <Cadre style={{ padding: "13px 15px", flex: 1, minHeight: 128, display: "flex", flexDirection: "column", overflow: "hidden" }}>
-            <RecentActivity
-              portfolioId={portfolio?.id}
-              refreshKey={txRefreshKey}
-              onSeeAll={() => setDashView("transactions")}
-            />
-          </Cadre>
+          {/* ⚠️ **« Activité récente » vivait ici, et sa place reste vide à dessein.**
+              Il montrait les quatre dernières écritures — l'onglet Transactions porte le
+              même tableau en entier, à un clic, et depuis que les dossiers affichent ce
+              qu'ils contiennent, « ma saisie est-elle passée ? » se lit sur la rangée
+              elle-même. Le composant est supprimé plutôt que laissé orphelin : `git log`
+              le garde, et du code mort qu'on croit vivant coûte plus cher qu'un
+              rétablissement. */}
         </div>
         </div>
       </div>{/* fin Vue Résumé */}
