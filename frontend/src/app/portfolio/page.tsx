@@ -42,6 +42,7 @@ import ChiffresRoulants from "@/components/ui/ChiffresRoulants";
 import AvatarPortefeuille from "@/components/portfolio/AvatarPortefeuille";
 import AvatarParole from "@/components/AvatarParole";
 import FormulaireCompte, { type SaisieCompte } from "@/components/portfolio/FormulaireCompte";
+import CarteBancaire from "@/components/portfolio/CarteBancaire";
 import {
   type Compte as CompteDeclare, type GenreCompte, creerCompte, fraicheurDuSolde,
   lireComptes, lireGenres, modifierCompte, supprimerCompte, televerserLogo, urlDuLogo,
@@ -2032,41 +2033,51 @@ function PortfolioPageInner() {
                       const depuis = fraicheurDuSolde(c.mis_a_jour_le);
                       return (
                         <CarteCompte key={c.id} nom={c.nom} couleur={c.couleur}
-                          compte={c.libelle_genre}
                           /**
-                           * ⚠️ **Un compte de trésorerie ne compte pas ses lignes.** La
-                           * pastille est pleine quand le dossier porte quelque chose et
-                           * creuse quand il est vide — mais « creuse » promet un
-                           * remplissage, et un livret n'en attend aucun.
-                           */
-                          sansPastille={!c.porte_des_titres}
-                          /**
-                           * ⚠️ **La somme prend la place du contenu, parce qu'elle *est*
-                           * le contenu.** La bande au-dessus du plan montre ce qu'un
-                           * dossier porte ; vide sur un livret, elle disait « à
-                           * remplir ». La date en dessous n'est pas un ornement : ce
-                           * montant entre dans les totaux comme s'il était mesuré, alors
-                           * qu'il a été tapé un jour donné.
-                           */
-                          contenu={!c.porte_des_titres && c.solde != null ? (
+                            * ⚠️ **Le montant va sur le panneau, là où un PEA dit « 3 actifs ».**
+                            * Je l'avais posé dans la bande qui dépasse ; la référence fait
+                            * l'inverse, et elle a raison — cette bande est faite pour laisser
+                            * voir ce que le dossier **range**, le panneau pour dire ce qu'il
+                            * **est**. Sur un compte de trésorerie, ce qu'il est, c'est une
+                            * somme.
+                            *
+                            * ⚠️ **La date sous le montant n'est pas un ornement.** Ce chiffre
+                            * entre dans le total du portefeuille comme s'il était mesuré, alors
+                            * qu'il a été tapé un jour donné.
+                            */
+                          compte={!c.porte_des_titres && c.solde != null ? (
                             <>
-                              <span style={{
-                                fontFamily: FONT, fontSize: 26, fontWeight: 700,
-                                color: "#FFFFFF", letterSpacing: "-0.02em",
-                                lineHeight: 1.1, fontVariantNumeric: "tabular-nums",
+                              <div style={{
+                                fontFamily: FONT, fontSize: 21, fontWeight: 700,
+                                color: "#FFFFFF", letterSpacing: "-0.015em", lineHeight: 1.15,
+                                fontVariantNumeric: "tabular-nums",
                               }}>
                                 {euros(c.solde)}
-                              </span>
+                              </div>
                               {depuis && (
-                                <span style={{
-                                  fontFamily: FONT, fontSize: 10.5, marginTop: 2,
-                                  color: "rgba(255,255,255,0.72)",
-                                }}>
+                                <div style={{ fontSize: 11, color: "rgba(255,255,255,0.68)", marginTop: 1 }}>
                                   Solde déclaré {depuis}
-                                </span>
+                                </div>
                               )}
                             </>
-                          ) : undefined}
+                          ) : c.libelle_genre}
+                          /**
+                            * ⚠️ **Un compte de trésorerie ne compte pas ses lignes.** La
+                            * pastille est pleine quand le dossier porte quelque chose et creuse
+                            * quand il est vide — mais « creuse » promet un remplissage, et un
+                            * livret n'en attend aucun.
+                            */
+                          sansPastille={!c.porte_des_titres}
+                          /**
+                            * ⚠️ **Ce qui dépasse d'un dossier dit ce qu'il range.** Des lignes
+                            * d'actifs pour un compte à titres, une carte bancaire pour un
+                            * compte de trésorerie. Le vide qu'on y voyait se lisait « à
+                            * remplir », alors que ce compte ne recevra jamais de ligne.
+                            */
+                          apercu={!c.porte_des_titres ? [
+                            <CarteBancaire key="carte" couleur={c.couleur}
+                              intitule={c.libelle_genre} mention="Solde disponible" />,
+                          ] : undefined}
                           icone={logo
                             ? <img src={logo} alt="" width={19} height={19}
                                 style={{ borderRadius: 4, objectFit: "cover" }} />

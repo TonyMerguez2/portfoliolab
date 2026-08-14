@@ -93,11 +93,19 @@ const CONTOUR = (() => {
 })();
 
 export default function CarteCompte({
-  nom, compte, couleur, icone, nombre, apercu, contenu, sansPastille, onClick,
+  nom, compte, couleur, icone, nombre, apercu, sansPastille, onClick,
 }: {
   nom: string;
-  /** Ce que la carte annonce sous le nom — « 4 actifs ». */
-  compte: string;
+  /**
+   * Ce que la carte annonce sous le nom — « 4 actifs », ou le montant d'un compte de
+   * trésorerie.
+   *
+   * ⚠️ **Un nœud et non une chaîne, parce que les deux ne pèsent pas pareil.** « 3 actifs »
+   * est une mention ; sur un livret, le montant *est* l'information de la carte, et il doit
+   * s'afficher en conséquence. Contraint au texte, il aurait fallu un second champ, donc
+   * deux mises en page à tenir à jour pour une seule ligne.
+   */
+  compte: React.ReactNode;
   couleur: string;
   icone: React.ReactNode;
   /** Le nombre porté par la pastille de droite, quand il y a lieu. */
@@ -111,15 +119,6 @@ export default function CarteCompte({
    * suffit à savoir ce qu'il contient sans l'ouvrir.
    */
   apercu?: React.ReactNode[];
-  /**
-   * Ce que le dossier laisse voir quand il ne range pas de cartes.
-   *
-   * ⚠️ **Un compte de trésorerie ne contient pas *rien*, il contient une somme.** La zone
-   * au-dessus du plan est faite pour montrer ce qu'un dossier porte ; la laisser vide sur
-   * un livret disait « ce dossier attend qu'on le remplisse », alors qu'il ne recevra
-   * jamais de ligne. C'est la même place, occupée par ce qui, là, tient lieu de contenu.
-   */
-  contenu?: React.ReactNode;
   /**
    * ⚠️ **Trois états, pas deux.** La pastille est pleine quand le dossier porte quelque
    * chose et creuse quand il est vide — mais « creuse » veut dire *pas encore*, et
@@ -188,19 +187,6 @@ export default function CarteCompte({
         </div>
       ))}
 
-      {/* Le contenu de remplacement occupe exactement la bande dégagée : il s'arrête
-          où commence la languette, sinon le plan le recouvrirait par le bas. */}
-      {cartes.length === 0 && contenu && (
-        <div aria-hidden="true" style={{
-          position: "absolute", left: 16, top: 0, pointerEvents: "none",
-          width: CARTE_COMPTE.largeur - 32,
-          height: CARTE_COMPTE.apercu - LANGUETTE.hauteur,
-          display: "flex", flexDirection: "column", justifyContent: "center",
-        }}>
-          {contenu}
-        </div>
-      )}
-
       {/* Le plan du dossier, par-dessus les cartes. */}
       <div style={{
         position: "absolute", left: 0, top: CARTE_COMPTE.apercu - LANGUETTE.hauteur,
@@ -250,7 +236,9 @@ export default function CarteCompte({
                 display: "flex", alignItems: "center", justifyContent: "space-between",
                 marginTop: 3,
               }}>
-                <span style={{ fontSize: 12.5, color: "rgba(255,255,255,0.82)" }}>{compte}</span>
+                <div style={{ fontSize: 12.5, color: "rgba(255,255,255,0.82)", minWidth: 0 }}>
+                  {compte}
+                </div>
                 {/* Le chevron pointe à droite, comme sur la référence, et ne pivote
                     plus : il ne déplie rien sous la carte, il mène dans le dossier. */}
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none"
