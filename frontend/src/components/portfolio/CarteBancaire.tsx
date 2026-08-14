@@ -151,6 +151,43 @@ function Puce() {
   );
 }
 
+/**
+ * Le fond guilloché de la carte.
+ *
+ * ⚠️ **Les arcs sont calés pour traverser la bande visible, pas pour être beaux hors champ.**
+ * Le dossier ne laisse voir que les soixante-huit premiers pixels de la carte : un motif
+ * centré, ou des arcs partant du bas, n'existeraient que dans la partie cachée. Leur centre
+ * est donc posé au-delà du coin inférieur droit et leurs rayons choisis pour que les trois
+ * courbes coupent la bande — mesuré, elles la traversent aux abscisses 181, 98 et 36.
+ *
+ * ⚠️ **En blanc translucide, jamais dans une teinte à soi.** La carte prend la couleur du
+ * dossier, qui est celle que l'épargnant a choisie parmi onze : un motif coloré aurait été
+ * juste sur l'une et faux sur les dix autres. Du blanc à sept pour cent éclaircit la surface
+ * quelle qu'elle soit, sans jamais introduire une seconde teinte.
+ */
+function Guilloche({ id }: { id: string }) {
+  const L = CARTE_ACTIF.largeur, H = CARTE_ACTIF.hauteur;
+  return (
+    <svg viewBox={`0 0 ${L} ${H}`} aria-hidden="true"
+      style={{ position: "absolute", inset: 0, width: "100%", height: "100%",
+        pointerEvents: "none" }}>
+      <defs>
+        <radialGradient id={`lueur-${id}`} cx="0.86" cy="0.04" r="0.75">
+          <stop offset="0%" stopColor="rgba(255,255,255,0.16)" />
+          <stop offset="100%" stopColor="rgba(255,255,255,0)" />
+        </radialGradient>
+      </defs>
+      {/* La lueur du coin haut-droit : elle éclaire la bande visible sans y poser de forme. */}
+      <rect width={L} height={H} fill={`url(#lueur-${id})`} />
+      <g fill="none" stroke="rgba(255,255,255,0.075)" strokeWidth={1.2}>
+        <circle cx={L + 7} cy={H + 19} r={190} />
+        <circle cx={L + 7} cy={H + 19} r={235} />
+        <circle cx={L + 7} cy={H + 19} r={280} />
+      </g>
+    </svg>
+  );
+}
+
 export default function CarteBancaire({
   intitule, couleur, derniers,
 }: {
@@ -169,6 +206,8 @@ export default function CarteBancaire({
    */
   const fond = decalerClarte(couleur, -0.34);
   const arete = decalerClarte(couleur, -0.22);
+  /** Un identifiant par instance : deux cartes voisines partageraient sinon les dégradés. */
+  const id = useId().replace(/:/g, "");
 
   return (
     <div
@@ -193,8 +232,13 @@ export default function CarteBancaire({
          */
         boxShadow: "inset 0 0 0 1px rgba(255,255,255,0.10)",
         display: "flex", flexDirection: "column",
+        /* ⚠️ Le fond est posé en absolu : il faut donc un repère, et les deux rangées
+           doivent se replacer au-dessus de lui. */
+        position: "relative", overflow: "hidden",
       }}
     >
+      <Guilloche id={id} />
+
       {/**
         * La bande du haut : puce, intitulé, mention, pictogramme.
         *
@@ -205,6 +249,7 @@ export default function CarteBancaire({
         * d'actif — la même que celle de son logo.
         */}
       <div style={{
+        position: "relative",
         height: BANDE - CARTE_ACTIF.marge.haut,
         display: "flex", alignItems: "flex-start", gap: CARTE_ACTIF.ecartIdentite,
       }}>
@@ -226,7 +271,7 @@ export default function CarteBancaire({
 
         {/* Le fronton d'une banque : le pictogramme du genre, pas un logo d'établissement —
             celui-là a sa place sur le dossier, où l'épargnant le pose. */}
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.55)"
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.94)"
           strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
           <path d="M3 21h18M3 10h18M5 6l7-3 7 3M4 10v11m16-11v11M8 14v3m4-3v3m4-3v3" />
         </svg>
@@ -234,6 +279,7 @@ export default function CarteBancaire({
 
       {/* Le numéro, dans le prolongement que la languette laisse libre à droite. */}
       <div style={{
+        position: "relative",
         height: CARTE_COMPTE.languette.hauteur, paddingLeft: DEBORD,
         display: "flex", alignItems: "center", justifyContent: "flex-end",
       }}>
