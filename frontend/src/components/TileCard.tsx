@@ -31,6 +31,14 @@ export default function TileCard({ ticker, children, className, radius = 12, sty
   return (
     <div
       className={className}
+      /**
+       * ⚠️ **Le ticker est posé sur la boîte pour que l'animation puisse suivre la carte.**
+       * En ouvrant un dossier, la grille remplace la rangée : ce sont deux rendus distincts,
+       * et rien ne dit que la carte d'avant et celle d'après sont la même — sinon ce
+       * repère. Sans lui il faudrait apparier par l'ordre d'apparition, qui change dès qu'on
+       * trie la grille autrement. Voir `etalement.ts`.
+       */
+      data-carte={ticker}
       onClick={onClick}
       onPointerMove={reflet ? trackSpecular : undefined}
       onPointerLeave={reflet ? releaseSpecular : undefined}

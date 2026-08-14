@@ -1,5 +1,5 @@
 "use client";
-import { useCallback, useEffect, useState, useMemo, useRef, useId, Suspense } from "react";
+import { useCallback, useEffect, useLayoutEffect, useState, useMemo, useRef, useId, Suspense } from "react";
 import type { ReactNode } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { useApp } from "@/lib/AppContext";
@@ -25,6 +25,7 @@ import RecentActivity from "@/components/portfolio/RecentActivity";
 import PortfolioTabs from "@/components/portfolio/PortfolioTabs";
 import { donutArcs } from "@/lib/donut";
 import { operationsDuDossier, repartirEnDossiers } from "@/lib/dossiers";
+import { jouerEtalement, releverLesCartes, type Positions } from "@/lib/etalement";
 import { compteInfere, valoriser, type Enveloppe, type GridAsset } from "@/lib/portfolio";
 import { assetExchange } from "@/lib/assets";
 import RadarChart from "@/components/charts/RadarChart";
@@ -1068,6 +1069,41 @@ function PortfolioPageInner() {
   const dossierActif = compteOuvert != null
     ? (dossiers.find(d => d.cle === compteOuvert) ?? null) : null;
   const compteActif = dossierActif?.cle ?? null;
+
+  /**
+   * Les cartes telles qu'elles étaient **avant** le changement d'écran.
+   *
+   * ⚠️ **Relevées dans le gestionnaire de clic, pas dans un effet.** Ouvrir un dossier
+   * remplace la rangée par la grille : le temps qu'un effet s'exécute, l'ancien écran
+   * n'existe plus et il n'y a plus rien à mesurer. Le seul instant où les deux positions
+   * sont connaissables est celui du geste — juste avant de changer d'état.
+   *
+   * ⚠️ **Une référence et non un état** : la remplir ne doit provoquer aucun rendu, sans
+   * quoi on mesurerait le nouvel écran au lieu de l'ancien.
+   */
+  const cartesAvant = useRef<Positions>(new Map());
+  const zoneDesCartes = useRef<HTMLDivElement>(null);
+
+  /** Retient où sont les cartes, puis laisse l'appelant changer d'écran. */
+  const releverPuis = useCallback((suite: () => void) => {
+    cartesAvant.current = releverLesCartes(zoneDesCartes.current);
+    suite();
+  }, []);
+
+  /**
+   * ⚠️ **`useLayoutEffect`, et non `useEffect`.** L'animation part de la position d'avant :
+   * jouée après que le navigateur a peint, on verrait d'abord les cartes à leur place
+   * définitive, puis sauter en arrière pour revenir. C'est exactement le défaut qu'on
+   * cherche à supprimer.
+   *
+   * ⚠️ **Le relevé se vide après usage.** Sans cela, un rendu ultérieur — un cours qui
+   * bouge, un tri qu'on change — rejouerait l'étalement à partir de positions périmées.
+   */
+  useLayoutEffect(() => {
+    if (cartesAvant.current.size === 0) return;
+    jouerEtalement(cartesAvant.current, zoneDesCartes.current);
+    cartesAvant.current = new Map();
+  }, [compteActif]);
 
   const lignesMontrees = useMemo(
     () => (dossierActif ? dossierActif.lignes : enriched),
@@ -2182,7 +2218,9 @@ function PortfolioPageInner() {
                 un explorateur de fichiers — les dossiers, puis leur contenu à leur place,
                 le chemin servant de retour. Le prix à connaître : sans dossier ouvert, il
                 n'y a plus d'écran qui montre toutes les lignes ensemble. */}
-            <div style={{ flexShrink: 0 }}>
+            {/* ⚠️ La zone commune aux deux écrans : c'est elle qu'on mesure avant et après
+                le remplacement, puisque la rangée de dossiers et la grille s'y succèdent. */}
+            <div ref={zoneDesCartes} style={{ flexShrink: 0 }}>
               {compteActif == null ? (
                 <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
                   {/* ⚠️ Même hauteur que l'en-tête de la grille — 26 pixels, ceux de son
@@ -2344,7 +2382,7 @@ function PortfolioPageInner() {
                              livret » qui aurait quelque chose à dire. */
                           onClick={compte && !d.porteDesTitres
                             ? ouvrirLaCorrection(compte)
-                            : () => setCompteOuvert(d.cle)}
+                            : () => releverPuis(() => setCompteOuvert(d.cle))}
                           onModifier={compte
                             ? ouvrirLaCorrection(compte)
                             /* Un dossier deviné n'a pas été saisi : son nom vient de
@@ -2366,7 +2404,9 @@ function PortfolioPageInner() {
                        dossier deviné du même nom ne s'ouvrent pas l'un pour l'autre. */
                     <FilAriane racine="Vos comptes" courant={dossierActif?.nom ?? ""}
                       couleur={dossierActif?.couleur}
-                      onRacine={() => setCompteOuvert(null)} />
+                      /* Le rassemblement est l'étalement joué dans l'autre sens : mêmes
+                         cartes, mêmes places, mesures inversées. */
+                      onRacine={() => releverPuis(() => setCompteOuvert(null))} />
                   }
                   /**
                     * ⚠️ **Seulement dans un dossier **déclaré** à titres.** Un dossier deviné
