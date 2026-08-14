@@ -327,3 +327,201 @@ def test_couleurs_refusees(client):
     assert r.status_code == 422
 
     assert relire(client, pid).get("couleurs_comptes") in (None, {})
+
+
+# ── Le rattachement d'opérations déjà saisies ─────────────────────────────────
+
+def operation(client, pid, ticker="AAPL", compte=None, quantite=3.0):
+    """Une écriture, rattachée ou non, dont on rend l'identifiant."""
+    corps = {
+        "ticker": ticker, "asset_type": "EQUITY", "side": "BUY",
+        "quantity": quantite, "unit_price": 100.0, "fees": 0.0,
+        "executed_at": "2024-01-10T00:00:00",
+    }
+    if compte:
+        corps["compte_id"] = compte
+    r = client.post(f"/api/v1/portfolios/{pid}/transactions", json=corps)
+    assert r.status_code in (200, 201), r.text
+    return r.json()["id"]
+
+
+def comptes_des_operations(client, pid):
+    """`{id: compte_id}` tel que l'écran le lit."""
+    lot = client.get(f"/api/v1/portfolios/{pid}/transactions").json()
+    lignes = lot if isinstance(lot, list) else lot.get("transactions", [])
+    return {t["id"]: t.get("compte_id") for t in lignes}
+
+
+def test_rattacher_des_operations_deja_saisies(client):
+    """
+    ⚠️ **C'est ce qui permet de déclarer un dossier deviné.** Un compte déclaré ne pouvait
+    contenir que des opérations créées après lui : l'histoire déjà saisie restait rangée
+    par déduction, sans moyen de la reprendre. Déclarer son PEA donnait donc un dossier
+    vide à côté du dossier deviné toujours plein.
+    """
+    pid = creer_portefeuille(client)
+    cid = client.post(f"/api/v1/portfolios/{pid}/comptes", json=compte_valide()).json()["id"]
+    a, b = operation(client, pid), operation(client, pid, ticker="MC.PA")
+
+    r = client.post(f"/api/v1/portfolios/{pid}/comptes/{cid}/operations",
+                    json={"operations": [a, b]})
+    assert r.status_code == 200, r.text
+    assert r.json() == {"rattachees": 2, "deplacees": 0}
+    assert comptes_des_operations(client, pid) == {a: cid, b: cid}
+
+
+def test_le_rattachement_est_idempotent(client):
+    """
+    Rejouer l'appel ne doit ni échouer ni annoncer un déplacement.
+
+    ⚠️ **Et c'est là que `Query.update()` piège.** Il rend le nombre de lignes *appariées*,
+    pas modifiées : compter les déplacements après l'écriture aurait annoncé « déplacée »
+    une opération qui n'avait pas bougé d'un pouce.
+    """
+    pid = creer_portefeuille(client)
+    cid = client.post(f"/api/v1/portfolios/{pid}/comptes", json=compte_valide()).json()["id"]
+    a = operation(client, pid)
+
+    premier = client.post(f"/api/v1/portfolios/{pid}/comptes/{cid}/operations",
+                          json={"operations": [a]}).json()
+    second = client.post(f"/api/v1/portfolios/{pid}/comptes/{cid}/operations",
+                         json={"operations": [a]}).json()
+    assert premier == second == {"rattachees": 1, "deplacees": 0}
+    assert comptes_des_operations(client, pid) == {a: cid}
+
+
+def test_rien_n_est_ecrit_si_une_operation_est_etrangere(client):
+    """
+    ⚠️ **Le test qui vaut le plus cher.** Un rattachement partiel laisserait « trois sur
+    cinq » sans aucun moyen de nommer les deux autres : l'appelant ne saurait pas quoi
+    reprendre, et l'écran afficherait un dossier à moitié rempli sans rien signaler. On
+    vérifie donc que l'opération **valide** du lot est restée détachée.
+    """
+    pid = creer_portefeuille(client)
+    autre = creer_portefeuille(client, nom="Ailleurs")
+    cid = client.post(f"/api/v1/portfolios/{pid}/comptes", json=compte_valide()).json()["id"]
+    mienne = operation(client, pid)
+    etrangere = operation(client, autre)
+
+    r = client.post(f"/api/v1/portfolios/{pid}/comptes/{cid}/operations",
+                    json={"operations": [mienne, etrangere]})
+    assert r.status_code == 400, r.text
+    assert comptes_des_operations(client, pid) == {mienne: None}, "le lot a été écrit à moitié"
+    assert comptes_des_operations(client, autre) == {etrangere: None}
+
+
+def test_un_compte_sans_titres_refuse_les_operations(client):
+    """
+    Un livret n'a pas d'opérations : son solde **est** sa valeur. Y ranger un achat le
+    ferait compter deux fois — une fois dans le solde saisi, une fois dans la valorisation.
+    """
+    pid = creer_portefeuille(client)
+    livret = client.post(f"/api/v1/portfolios/{pid}/comptes",
+                         json=compte_valide(nom="Livret A", genre="epargne",
+                                            solde=5000.0)).json()["id"]
+    a = operation(client, pid)
+
+    r = client.post(f"/api/v1/portfolios/{pid}/comptes/{livret}/operations",
+                    json={"operations": [a]})
+    assert r.status_code == 400, r.text
+    assert comptes_des_operations(client, pid) == {a: None}
+
+
+def test_le_rattachement_deplace_et_le_dit(client):
+    """
+    Une opération qui change de compte quitte le précédent. C'est le seul effet qui puisse
+    surprendre l'appelant, donc le seul qui doive être annoncé.
+    """
+    pid = creer_portefeuille(client)
+    a_cpt = client.post(f"/api/v1/portfolios/{pid}/comptes",
+                        json=compte_valide(nom="PEA A")).json()["id"]
+    b_cpt = client.post(f"/api/v1/portfolios/{pid}/comptes",
+                        json=compte_valide(nom="PEA B")).json()["id"]
+    op = operation(client, pid, compte=a_cpt)
+
+    r = client.post(f"/api/v1/portfolios/{pid}/comptes/{b_cpt}/operations",
+                    json={"operations": [op]})
+    assert r.json() == {"rattachees": 1, "deplacees": 1}
+    assert comptes_des_operations(client, pid) == {op: b_cpt}
+
+
+def test_une_liste_vide_ne_fait_rien_et_ne_rale_pas(client):
+    """Le résultat naturel d'un dossier sans ligne. L'écran n'a pas à le traiter à part."""
+    pid = creer_portefeuille(client)
+    cid = client.post(f"/api/v1/portfolios/{pid}/comptes", json=compte_valide()).json()["id"]
+    r = client.post(f"/api/v1/portfolios/{pid}/comptes/{cid}/operations", json={"operations": []})
+    assert r.status_code == 200, r.text
+    assert r.json() == {"rattachees": 0, "deplacees": 0}
+
+
+def test_le_rattachement_ne_change_ni_les_positions_ni_le_total(client):
+    """
+    ⚠️ **La garde contre le double comptage, et elle est bien moins chère ici qu'à l'écran.**
+    Rattacher ne fait que *ranger* : la valorisation du portefeuille ne regarde pas les
+    dossiers. Si ce test venait à casser, c'est que le rattachement aurait commencé à
+    modifier les opérations elles-mêmes.
+    """
+    pid = creer_portefeuille(client)
+    cid = client.post(f"/api/v1/portfolios/{pid}/comptes", json=compte_valide()).json()["id"]
+    a, b = operation(client, pid), operation(client, pid, ticker="MC.PA")
+
+    avant = client.get(f"/api/v1/portfolios/{pid}/positions").json()
+    client.post(f"/api/v1/portfolios/{pid}/comptes/{cid}/operations",
+                json={"operations": [a, b]})
+    apres = client.get(f"/api/v1/portfolios/{pid}/positions").json()
+
+    assert avant["total_value"] == apres["total_value"]
+    assert avant["total_invested"] == apres["total_invested"]
+    assert ([(p["ticker"], p["quantity"], p["avg_cost"]) for p in avant["positions"]]
+            == [(p["ticker"], p["quantity"], p["avg_cost"]) for p in apres["positions"]])
+
+
+def test_rattacher_ne_vieillit_pas_le_solde(client):
+    """
+    ⚠️ **Un `db.refresh()` inoffensif suffirait à casser ça.** `Compte.mis_a_jour_le` porte
+    un `onupdate` et nourrit la mention « Solde déclaré… » : toucher le compte en rattachant
+    ferait dire « aujourd'hui » à un montant tapé en janvier. On écrit dans `transactions`,
+    on lit dans `comptes`.
+    """
+    pid = creer_portefeuille(client)
+    cid = client.post(f"/api/v1/portfolios/{pid}/comptes",
+                      json=compte_valide(solde=1200.0)).json()["id"]
+    lu = lambda: next(c for c in client.get(f"/api/v1/portfolios/{pid}/comptes").json()
+                      if c["id"] == cid)["mis_a_jour_le"]
+    avant = lu()
+    client.post(f"/api/v1/portfolios/{pid}/comptes/{cid}/operations",
+                json={"operations": [operation(client, pid)]})
+    assert lu() == avant
+
+
+def test_une_operation_ne_se_cree_pas_dans_un_compte_sans_titres(client):
+    """
+    Le même refus, à l'autre bout : à la création comme au rattachement.
+
+    ⚠️ **Deux chemins mènent à `compte_id`, et un seul contrôle les couvre.** Écrite deux
+    fois, la condition n'aurait fini par exister que d'un côté — et un achat serait entré
+    dans un livret par celui qui l'a perdue.
+    """
+    pid = creer_portefeuille(client)
+    livret = client.post(f"/api/v1/portfolios/{pid}/comptes",
+                         json=compte_valide(nom="Livret A", genre="epargne",
+                                            solde=5000.0)).json()["id"]
+    r = client.post(f"/api/v1/portfolios/{pid}/transactions", json={
+        "ticker": "AAPL", "asset_type": "EQUITY", "side": "BUY",
+        "quantity": 3, "unit_price": 100.0, "fees": 0.0,
+        "executed_at": "2024-01-10T00:00:00", "compte_id": livret,
+    })
+    assert r.status_code == 400, r.text
+    assert client.get(f"/api/v1/portfolios/{pid}/transactions").json() == []
+
+
+def test_une_operation_se_cree_toujours_sans_compte(client):
+    """
+    ⚠️ **Le compte ne peut pas être obligatoire côté serveur, et ce test le grave.** La
+    création d'un portefeuille poste ses opérations juste après l'avoir créé, alors qu'il
+    n'a encore aucun compte déclaré. L'exiger ici rendrait tout nouveau portefeuille
+    impossible à remplir. C'est l'écran de saisie qui l'impose, là où un compte existe.
+    """
+    pid = creer_portefeuille(client)
+    a = operation(client, pid)
+    assert comptes_des_operations(client, pid) == {a: None}

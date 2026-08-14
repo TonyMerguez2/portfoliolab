@@ -27,6 +27,10 @@ from sqlalchemy.orm import Session
 
 from app.core.database import Compte, get_db, Portfolio, Transaction
 from app.core.auth import require_auth
+# ⚠️ Importée plutôt que réécrite : le rattachement en masse pose exactement la même
+# question, et deux conditions séparées auraient fini par ne plus dire la même chose — un
+# achat serait alors entré dans un livret par le chemin resté sans contrôle.
+from app.api.routes.comptes import porte_des_titres
 from app.models.user import User
 from app.utils.positions import (
     compute_positions,
@@ -132,6 +136,18 @@ def _compte_du_portefeuille(compte_id: str | None, portfolio_id: str,
 
     ⚠️ **On refuse plutôt que d'ignorer.** Écrire `None` en silence aurait rangé la ligne
     ailleurs que là où l'appelant l'a demandé, sans que rien ne le dise.
+
+    ⚠️ **Un compte de trésorerie est refusé, et pas seulement par principe.** Sur un livret,
+    le solde saisi **est** la valeur du compte : il entre déjà tel quel dans le total du
+    portefeuille. Y ranger un achat ferait compter la même somme deux fois — une fois dans
+    le solde, une fois dans la valorisation de la ligne. Le contrôle est le même que celui
+    du rattachement en masse, et c'est la même fonction qui le porte : écrite deux fois,
+    elle n'aurait fini par exister que d'un côté.
+
+    ⚠️ **Le compte reste facultatif, et il doit le rester.** La création d'un portefeuille
+    poste ses opérations juste après l'avoir créé, alors qu'il n'a encore aucun compte
+    déclaré ; l'exiger ici rendrait tout nouveau portefeuille impossible à remplir. C'est
+    l'écran de saisie qui l'impose, là où un compte existe forcément.
     """
     if not compte_id:
         return None
@@ -141,6 +157,12 @@ def _compte_du_portefeuille(compte_id: str | None, portfolio_id: str,
     if not existe:
         raise HTTPException(status_code=400,
                             detail="Compte inconnu pour ce portefeuille.")
+    if not porte_des_titres(existe):
+        raise HTTPException(
+            status_code=400,
+            detail=f"« {existe.nom} » ne détient pas de titres : son solde est sa valeur, "
+                   "et aucune opération ne s'y range.",
+        )
     return compte_id
 
 

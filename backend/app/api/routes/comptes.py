@@ -102,6 +102,23 @@ def _compte(compte_id: str, p: Portfolio, db: Session) -> Compte:
     return c
 
 
+def porte_des_titres(c: Compte) -> bool:
+    """
+    Ce compte peut-il recevoir des opérations ?
+
+    ⚠️ **Publiée parce qu'elle sert des deux côtés du rattachement.** La route qui rattache
+    en masse et celle qui crée une opération posent la même question, et une seule des deux
+    l'aurait posée si chacune avait écrit sa condition : un livret aurait alors reçu des
+    achats par le chemin resté sans contrôle.
+
+    ⚠️ **Un genre inconnu ne porte pas de titres.** Il n'en existe pas aujourd'hui — le
+    genre est validé à l'écriture — mais si un jour la base en portait un, le repli refuse
+    plutôt qu'il n'accepte : mieux vaut un rattachement impossible qu'un achat rangé dans un
+    compte courant.
+    """
+    return bool(GENRES_COMPTE.get(c.genre, {}).get("titres", False))
+
+
 def _valider(e: CompteEntree) -> None:
     """
     ⚠️ **Le nom est nettoyé puis mesuré, dans cet ordre.** Mesuré d'abord, une saisie
@@ -219,3 +236,72 @@ def supprimer_compte(portfolio_id: str, compte_id: str, db: Session = Depends(ge
     db.delete(c)
     db.commit()
     return {"supprime": True, "operations_detachees": detachees}
+
+
+class Rattachement(BaseModel):
+    operations: list[int] = []
+
+
+@router.post("/{portfolio_id}/comptes/{compte_id}/operations")
+def rattacher_des_operations(portfolio_id: str, compte_id: str, corps: Rattachement,
+                             db: Session = Depends(get_db),
+                             user: User = Depends(require_auth)):
+    """
+    Range des opérations existantes dans ce compte — le geste inverse de la suppression
+    juste au-dessus, et c'est pourquoi les deux se lisent l'un sous l'autre.
+
+    ⚠️ **C'est ce qui permet de *déclarer* un dossier deviné.** Jusqu'ici un compte déclaré
+    ne pouvait contenir que des opérations créées après lui : l'histoire déjà saisie restait
+    rangée par déduction, sans moyen de la reprendre. Un épargnant qui déclarait son PEA
+    obtenait donc un dossier vide à côté du dossier deviné toujours plein.
+
+    ⚠️ **Par identifiants d'opération, jamais par tickers.** « Rattacher AAPL » ne dit pas
+    si l'on parle des opérations d'aujourd'hui ou aussi de celles à venir, et la réponse
+    change le sens de l'appel. Une liste d'identifiants ne veut dire qu'une chose.
+
+    ⚠️ **Tout ou rien.** Les identifiants sont d'abord confrontés au portefeuille ; s'il en
+    manque un, rien n'est écrit. Un rattachement partiel laisserait « trois sur cinq » sans
+    aucun moyen de nommer les deux autres, et l'appelant ne saurait pas quoi reprendre.
+
+    ⚠️ **Aucune ligne de `comptes` n'est touchée, pas même relue pour la forme.**
+    `Compte.mis_a_jour_le` porte un `onupdate` et nourrit la mention « Solde déclaré… » de
+    l'écran : un `db.refresh(c)` inoffensif ferait dire « aujourd'hui » à un montant tapé en
+    janvier. On écrit dans `transactions`, on lit dans `comptes`, jamais l'inverse.
+    """
+    p = _portefeuille(portfolio_id, user, db)
+    c = _compte(compte_id, p, db)
+    if not porte_des_titres(c):
+        raise HTTPException(
+            400,
+            f"« {c.nom} » ne détient pas de titres : son solde est sa valeur, "
+            "et aucune opération ne s'y range.",
+        )
+
+    # ⚠️ Une liste vide est une réponse juste, pas une erreur : c'est ce que rend un dossier
+    # sans ligne, et l'écran n'a pas à traiter ce cas à part.
+    demandees = list(dict.fromkeys(corps.operations))
+    if not demandees:
+        return {"rattachees": 0, "deplacees": 0}
+
+    lignes = (db.query(Transaction)
+              .filter(Transaction.portfolio_id == p.id,
+                      Transaction.id.in_(demandees))
+              .all())
+    if len(lignes) != len(demandees):
+        introuvables = sorted(set(demandees) - {t.id for t in lignes})
+        raise HTTPException(
+            400,
+            "Ces opérations n'appartiennent pas à ce portefeuille : "
+            f"{', '.join(str(i) for i in introuvables)}. Rien n'a été rattaché.",
+        )
+
+    # ⚠️ Compté **avant** l'écriture. `Query.update()` rend le nombre de lignes *appariées*,
+    # pas modifiées : au second appel il vaudrait encore N, et l'on annoncerait un
+    # déplacement qui n'a pas eu lieu. Seul ce chiffre-là peut surprendre l'appelant — une
+    # opération qui change de compte quitte le précédent — donc il doit être exact.
+    deplacees = sum(1 for t in lignes if t.compte_id not in (None, c.id))
+
+    for t in lignes:
+        t.compte_id = c.id
+    db.commit()
+    return {"rattachees": len(lignes), "deplacees": deplacees}
