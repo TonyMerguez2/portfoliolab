@@ -8,7 +8,7 @@ import TransactionModal from "@/components/TransactionModal";
 import TransactionsView from "@/components/portfolio/TransactionsView";
 import AnalyseView from "@/components/portfolio/AnalyseView";
 import { createPortal } from "react-dom";
-import CarteConstats from "@/components/portfolio/CarteConstats";
+import PanneauActivite from "@/components/portfolio/PanneauActivite";
 import PanneauProfil from "@/components/portfolio/PanneauProfil";
 import PanneauFrais from "@/components/portfolio/PanneauFrais";
 import {
@@ -24,7 +24,6 @@ import RailHorizontal from "@/components/portfolio/RailHorizontal";
 import AllocationDonut from "@/components/portfolio/AllocationDonut";
 import PortfolioTabs from "@/components/portfolio/PortfolioTabs";
 import { donutArcs } from "@/lib/donut";
-import { constatsDuPortefeuille } from "@/lib/constatsPortefeuille";
 import { operationsDuDossier, repartirEnDossiers } from "@/lib/dossiers";
 import { jouerEtalement, releverLesCartes, type Positions } from "@/lib/etalement";
 import { compteInfere, valoriser, type Enveloppe, type GridAsset } from "@/lib/portfolio";
@@ -1246,34 +1245,6 @@ function PortfolioPageInner() {
    */
   const [analyse, setAnalyse] = useState<Analyse | null>(null);
   const [etatAnalyse, setEtatAnalyse] = useState<EtatAnalyse>("charge");
-
-  /**
-   * Les constats chiffrés du portefeuille, pour le panneau de droite.
-   *
-   * ⚠️ **Les frais viennent de l'analyse, mais seulement ceux que l'épargnant a saisis.**
-   * Le serveur rend aussi ceux qu'il a devinés chez le fournisseur ; les mêler ferait dire
-   * « vos frais coûtent 38 € » sur un chiffre que personne n'a vérifié. On ne retient donc
-   * que la source « saisi ».
-   */
-  const constats = useMemo(() => {
-    const saisis: Record<string, number> = {};
-    for (const [ticker, f] of Object.entries(analyse?.frais_lignes ?? {})) {
-      if (f?.valeur != null && f.source === "saisi") saisis[ticker] = f.valeur;
-    }
-    return constatsDuPortefeuille({
-      lignes: enriched.map(a => ({ ticker: a.ticker, value: a.value, pnlEur: a.pnlEur })),
-      liquidites: liquiditesDeclarees,
-      fraisParLigne: saisis,
-      /**
-       * ⚠️ **Le gain des titres, jamais le total du portefeuille.** Les liquidités
-       * déclarées entrent dans la valeur totale sans avoir rien gagné : les compter ici
-       * ferait dire « ESE.PA porte 40 % de votre gain » sur un dénominateur gonflé d'une
-       * somme qui n'a pas bougé.
-       */
-      gainTotal: valeurTitres != null && prixDeRevient != null
-        ? valeurTitres - prixDeRevient : null,
-    });
-  }, [enriched, liquiditesDeclarees, analyse?.frais_lignes, valeurTitres, prixDeRevient]);
 
 
   useEffect(() => {
@@ -2511,27 +2482,67 @@ function PortfolioPageInner() {
           ...anim(160),
         }}>
 
+
+          {/* « Mouvements » vivait ici : les trois plus fortes hausses et
+              baisses en contribution. Retiré — chaque carte d'actif affiche
+              déjà sa variation et sa contribution en euros, et le tri par
+              performance de la grille refait le classement à la demande. Sa
+              place revient à l'allocation, dont la légende était rognée. */}
+          {/* Allocation. Remplace l'exposition sectorielle, qui rangeait
+              tout un portefeuille d'actions dans une barre unique à 100 %. */}
           {/**
-            * ⚠️ **La même carte que l'« Aide à la décision » des objectifs, à la lettre.**
-            * Demandé ainsi, et c'est ce qui a fait sortir la coquille dans `CarteConstats` :
-            * recopier sa mise en page — dont des compensations d'encre mesurées au canevas —
-            * aurait donné deux cartes jumelles qui se seraient séparées au premier
-            * ajustement de l'une.
-            *
-            * ⚠️ **Les réglages passent en pied de carte.** Ce panneau reste le **seul** point
-            * d'accès à la saisie des frais et du profil : les perdre en changeant son
-            * contenu aurait dégradé le score pour toujours, sans que rien ne le dise.
+            * ⚠️ **`flex: 1 1 0` sur les deux panneaux, et c'est ce qui les fait de la même
+            * hauteur.** Demandé ainsi. Une base zéro pour chacun leur fait partager la
+            * colonne en deux parts égales quelle que soit sa hauteur ; une base automatique
+            * les aurait dimensionnés sur leur contenu, et le plus bavard aurait gagné des
+            * pixels sur l'autre. C'est le partage qui est réglé ici, jamais une hauteur
+            * écrite quelque part — elle suivrait mal le premier écran d'une autre taille.
             */}
-          <CarteConstats
-            titre="Constats"
-            aides={constats}
-            texteVide={"Rien à mesurer pour l’instant : ces constats se calculent sur vos "
-              + "lignes, vos soldes déclarés et vos opérations."}
-            couleurAvatar={couleurAvatar}
-            formeAvatar={formeAvatar}
-            skinAvatar={skinAvatar}
-            apres={encreCarte => (
-              <>
+          <Cadre style={{ padding: "13px 15px", flex: "1 1 0", minHeight: 0, display: "flex", flexDirection: "column", overflow: "hidden" }}>
+            <AllocationDonut
+              assets={enriched.map(a => ({
+                ticker: a.ticker, weight: a.weight, price: a.price,
+                change: a.change, value: a.value, perfEur: a.perfEur,
+              }))}
+              /* ⚠️ Les titres seuls, sinon les parts ne bouclent plus. Le donut divise
+                 chaque ligne par ce total : y ajouter les liquidités laisserait un
+                 manquant invisible — la somme des parts n'atteindrait plus cent pour cent
+                 et rien à l'écran ne dirait où est passé le reste. Le jour où les espèces
+                 méritent leur part, c'est une tranche qu'il faudra leur donner, pas un
+                 dénominateur. */
+              totalValue={valeurTitres}
+              onSeeAll={() => setDashView("analyse")}
+            />
+          </Cadre>
+          {/* Ce qui vient de se passer, et ce qui va se passer. Même hauteur que la
+              répartition : voir la note sur `flex: 1 1 0` juste au-dessus. */}
+          <Cadre style={{ padding: "13px 15px", flex: "1 1 0", minHeight: 0, display: "flex", flexDirection: "column", overflow: "hidden" }}>
+            <PanneauActivite
+              portfolioId={portfolio?.id}
+              refreshKey={txRefreshKey}
+              onVoirTout={() => setDashView("evenements")}
+            />
+          </Cadre>
+        </div>
+        </div>
+      </div>{/* fin Vue Résumé */}
+
+      {/* ══ VUE ANALYSE ═════════════════════════════════════════════════════════ */}
+      <div style={{ display: dashView === "analyse" ? "flex" : "none", height: "100%", flexDirection: "column", overflow: "hidden" }}>
+        {/**
+          * ⚠️ **Les deux entrées du score vivent ici, et elles ont bien failli disparaître.**
+          * Elles étaient logées dans le panneau latéral du résumé — d'abord « Détail du
+          * score », puis « Constats » — et en étaient le **seul** point d'accès. En vidant
+          * ce panneau pour la troisième fois, on les aurait emportées : le profil de risque
+          * serait resté indéclarable et les frais insaisissables, deux piliers du score
+          * muets pour toujours, sans qu'aucun écran ne le dise.
+          *
+          * ⚠️ **Ici plutôt qu'ailleurs, parce que c'est l'écran qui explique la note.** On y
+          * vient pour comprendre pourquoi elle vaut ce qu'elle vaut ; c'est le moment exact
+          * où l'on veut lui donner ce qui lui manque.
+          */}
+        <div style={{ padding: `0 ${MARGE}px 10px`, flexShrink: 0 }}>
+
             {fraisOuvert && ancreFrais && (
               <PanneauFrais
                 lignes={(analyse?.poids ?? []).map(p => ({ ticker: p.ticker, part: p.part }))}
@@ -2550,23 +2561,23 @@ function PortfolioPageInner() {
               />
             )}
             {etatAnalyse === "charge" && (
-              <p style={{ margin: 0, fontSize: 11.5, color: encreCarte(0.70) }}>Analyse en cours…</p>
+              <p style={{ margin: 0, fontSize: 11.5, color: CLAIR.texteFaible }}>Analyse en cours…</p>
             )}
             {etatAnalyse === "vide" && (
               // Dire **pourquoi** il n'y a pas de note. Un cours manquant et un
               // portefeuille vide n'appellent pas la même action, et les confondre
               // enverrait ajouter des transactions à qui en a déjà.
               analyse?.source === "incomplet" ? (
-                <p style={{ margin: 0, fontSize: 11.5, color: encreCarte(0.70), lineHeight: 1.5 }}>
+                <p style={{ margin: 0, fontSize: 11.5, color: CLAIR.texteFaible, lineHeight: 1.5 }}>
                   Score indisponible : le cours de{" "}
-                  <span style={{ color: encreCarte(1), fontWeight: 600 }}>
+                  <span style={{ color: CLAIR.texte, fontWeight: 600 }}>
                     {(analyse.sans_cours ?? []).join(", ")}
                   </span>{" "}
                   n&apos;a pas pu être lu. Noter sans cette ligne reviendrait à la
                   retirer du portefeuille.
                 </p>
               ) : (
-                <p style={{ margin: 0, fontSize: 11.5, color: encreCarte(0.70), lineHeight: 1.5 }}>
+                <p style={{ margin: 0, fontSize: 11.5, color: CLAIR.texteFaible, lineHeight: 1.5 }}>
                   Pas encore de score : ajoutez des transactions, ou une composition
                   et une valeur totale.
                 </p>
@@ -2638,12 +2649,12 @@ function PortfolioPageInner() {
                         style={{
                           display: "block", width: "100%", textAlign: "left",
                           margin: "0 0 9px", padding: "7px 8px", cursor: "pointer",
-                          borderRadius: RAYONS.xs, background: encreCarte(0.10),
-                          border: `1px solid ${encreCarte(0.20)}`,
-                          fontFamily: FONT, fontSize: 10.5, color: encreCarte(0.74),
+                          borderRadius: RAYONS.xs, background: CLAIR.carteCreuse,
+                          border: `1px solid ${JETONS.bord}`,
+                          fontFamily: FONT, fontSize: 10.5, color: CLAIR.texteAttenue,
                           lineHeight: 1.45,
                         }}>
-                        <span style={{ color: encreCarte(1), fontWeight: 600 }}>
+                        <span style={{ color: CLAIR.texte, fontWeight: 600 }}>
                           Déclarez votre profil de risque
                         </span>{" "}
                         pour que {enAttente.length === 1 ? "ce pilier soit noté" : `ces ${enAttente.length} piliers soient notés`} :{" "}
@@ -2694,12 +2705,12 @@ function PortfolioPageInner() {
                           margin: mesure ? "0 0 6px" : "0 0 9px",
                           padding: mesure ? 0 : "7px 8px", cursor: "pointer",
                           borderRadius: RAYONS.xs,
-                          background: mesure ? "none" : encreCarte(0.10),
-                          border: mesure ? "none" : `1px solid ${encreCarte(0.20)}`,
-                          fontFamily: FONT, fontSize: 10.5, color: encreCarte(0.74),
+                          background: mesure ? "none" : CLAIR.carteCreuse,
+                          border: mesure ? "none" : `1px solid ${JETONS.bord}`,
+                          fontFamily: FONT, fontSize: 10.5, color: CLAIR.texteAttenue,
                           lineHeight: 1.45,
                         }}>
-                        <span style={{ color: encreCarte(1), fontWeight: mesure ? 500 : 600 }}>
+                        <span style={{ color: CLAIR.texte, fontWeight: mesure ? 500 : 600 }}>
                           {mesure ? "Modifier les frais des fonds" : "Saisissez les frais de vos fonds"}
                         </span>
                         {!mesure && (
@@ -2710,8 +2721,8 @@ function PortfolioPageInner() {
                     );
                   })()}
                   {analyse.profil && (
-                    <p style={{ margin: "0 0 9px", fontSize: 10.5, color: encreCarte(0.74), lineHeight: 1.45 }}>
-                      Profil : <span style={{ color: encreCarte(1), fontWeight: 600 }}>
+                    <p style={{ margin: "0 0 9px", fontSize: 10.5, color: CLAIR.texteAttenue, lineHeight: 1.45 }}>
+                      Profil : <span style={{ color: CLAIR.texte, fontWeight: 600 }}>
                         {analyse.profil.horizon_annees} ans, {analyse.profil.tolerance}
                       </span>{" "}
                       — cible {analyse.profil.volatilite.toFixed(0)} % de volatilité.{" "}
@@ -2723,81 +2734,18 @@ function PortfolioPageInner() {
                         }}
                         style={{
                           background: "none", border: "none", padding: 0, cursor: "pointer",
-                          fontFamily: FONT, fontSize: 10.5, color: encreCarte(1),
+                          fontFamily: FONT, fontSize: 10.5, color: CLAIR.texte,
                         }}>Modifier</button>
                     </p>
                   )}
-                  {/* ⚠️ Les sept barres de facteurs ne sont **plus ici**.
-                      Elles vivent dans l'onglet Analyse, avec leurs explications.
-
-                      La vue générale répond à « comment je vais, et qu'est-ce qui
-                      pèse » ; le détail facteur par facteur répond à « pourquoi »,
-                      et c'est une autre question. Sept lignes plus leurs libellés
-                      portaient ce panneau à une hauteur qui écrasait la colonne,
-                      pour une information qu'un clic suffit à atteindre.
-
-                      Ce qui reste suffit à ne pas subir la note : la couverture
-                      dit sur combien de facteurs elle est calculée, et la cause
-                      principale est nommée avec sa mesure. */}
-                  <button type="button" onClick={() => setDashView("analyse")}
-                    style={{
-                      display: "flex", alignItems: "center", gap: 5, marginTop: 10,
-                      background: "none", border: "none", cursor: "pointer", padding: 0,
-                      fontFamily: FONT, fontSize: 11, fontWeight: 500, color: encreCarte(1),
-                    }}>
-                    Voir le détail du score
-                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                      strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                      <path d="M5 12h14M13 6l6 6-6 6" />
-                    </svg>
-                  </button>
+                  {/* ⚠️ **Le lien « Voir le détail du score » a disparu avec le
+                      déménagement, et c'est heureux.** Il menait à cet onglet-ci : resté en
+                      place, il aurait proposé d'aller là où l'on se trouve déjà. Les sept
+                      barres de facteurs qu'il desservait sont juste en dessous. */}
                 </>
               );
             })()}
-              </>
-            )}
-          />
-
-          {/* « Mouvements » vivait ici : les trois plus fortes hausses et
-              baisses en contribution. Retiré — chaque carte d'actif affiche
-              déjà sa variation et sa contribution en euros, et le tri par
-              performance de la grille refait le classement à la demande. Sa
-              place revient à l'allocation, dont la légende était rognée. */}
-          {/* Allocation. Remplace l'exposition sectorielle, qui rangeait
-              tout un portefeuille d'actions dans une barre unique à 100 %. */}
-          {/* ⚠️ **C'est lui qui prend la hauteur, depuis le départ de l'activité récente.**
-              Sans un panneau qui grandit, la colonne s'arrêtait au milieu de l'écran, un
-              vide sous elle. La légende du camembert y gagne : elle était rognée, c'est
-              même la raison pour laquelle « Mouvements » lui avait déjà cédé sa place. */}
-          <Cadre style={{ padding: "13px 15px", flex: 1, minHeight: 200, display: "flex", flexDirection: "column", overflow: "hidden" }}>
-            <AllocationDonut
-              assets={enriched.map(a => ({
-                ticker: a.ticker, weight: a.weight, price: a.price,
-                change: a.change, value: a.value, perfEur: a.perfEur,
-              }))}
-              /* ⚠️ Les titres seuls, sinon les parts ne bouclent plus. Le donut divise
-                 chaque ligne par ce total : y ajouter les liquidités laisserait un
-                 manquant invisible — la somme des parts n'atteindrait plus cent pour cent
-                 et rien à l'écran ne dirait où est passé le reste. Le jour où les espèces
-                 méritent leur part, c'est une tranche qu'il faudra leur donner, pas un
-                 dénominateur. */
-              totalValue={valeurTitres}
-              onSeeAll={() => setDashView("analyse")}
-            />
-          </Cadre>
-          {/* ⚠️ **« Activité récente » vivait ici, et sa place reste vide à dessein.**
-              Il montrait les quatre dernières écritures — l'onglet Transactions porte le
-              même tableau en entier, à un clic, et depuis que les dossiers affichent ce
-              qu'ils contiennent, « ma saisie est-elle passée ? » se lit sur la rangée
-              elle-même. Le composant est supprimé plutôt que laissé orphelin : `git log`
-              le garde, et du code mort qu'on croit vivant coûte plus cher qu'un
-              rétablissement. */}
         </div>
-        </div>
-      </div>{/* fin Vue Résumé */}
-
-      {/* ══ VUE ANALYSE ═════════════════════════════════════════════════════════ */}
-      <div style={{ display: dashView === "analyse" ? "flex" : "none", height: "100%", flexDirection: "column", overflow: "hidden" }}>
         {portfolio && (
           <AnalyseView analyse={analyse} etat={etatAnalyse} />
         )}
