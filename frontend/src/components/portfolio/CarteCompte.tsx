@@ -34,32 +34,38 @@ import { CARTE_ACTIF } from "@/components/portfolio/CarteActif";
  */
 const RAYON = CARTE_ACTIF.rayon;
 /**
- * La languette : sa largeur, et le rayon unique dont tout le reste découle.
+ * La languette : sa largeur, sa hauteur, et le rayon commun à ses deux courbes.
  *
- * ⚠️ **Les trois coins de l'encoche ont le même rayon que les angles du dossier.** C'est la
- * règle la plus simple possible, et c'est celle qui manquait : le coin haut-gauche de la
- * languette est un angle du dossier, donc dix-huit ; le coin haut-droit et le creux qui suit
- * doivent l'être aussi, faute de quoi trois courbures différentes se succèdent sur quinze
- * centimètres et l'œil voit un raccord bricolé sans savoir le nommer.
+ * ⚠️ **Les trois coins de l'encoche ont le rayon des angles du dossier.** Le coin haut-gauche
+ * de la languette *est* un angle du dossier ; le coin haut-droit et le creux qui le suit
+ * doivent l'être aussi, faute de quoi trois courbures se succèdent sur quinze centimètres et
+ * l'œil voit un raccord bricolé sans savoir le nommer.
  *
- * ⚠️ **La hauteur en découle, elle ne se règle plus.** Deux quarts de cercle tangents — l'un
- * bombé, l'autre creusé — descendent chacun de leur rayon : la languette fait donc exactement
- * deux rayons de haut, trente-six. C'est ce que valait la question « si besoin augmente la
- * hauteur » : ce n'était pas un réglage à trouver, c'était une conséquence à accepter. Posée
- * à part, la hauteur pouvait contredire les rayons et la tangence se perdait — ce qui a
- * produit, tour après tour, une marche, un toboggan, une rampe et un coin pincé.
+ * ⚠️ **Le rayon n'impose pourtant pas la hauteur, et c'est ce que j'avais manqué.** Deux
+ * *quarts* de cercle tangents descendent chacun de leur rayon, d'où une languette de deux
+ * rayons — trente-six, jugée trop haute à l'usage. Mais rien n'oblige les arcs à être des
+ * quarts : deux arcs **plus courts**, de même rayon, restent tangents entre eux et
+ * horizontaux à leurs extrémités. La courbure ne change pas — c'est elle qu'on reconnaît —
+ * seule la portion parcourue diminue.
  *
- * ⚠️ **Rien d'autre ne bouge dans la géométrie du dossier.** `apercu` vaut la hauteur de la
- * languette plus la ligne d'identité d'une carte, et le plan commence à `apercu − hauteur` :
- * ces deux-là se compensent, si bien que le plan garde sa position et sa taille. Seule la
- * bande visible à droite de la languette s'allonge, ce qui profite à la carte bancaire.
+ * ⚠️ **C'est alors l'étalement qui se déduit, et il se calcule.** Les deux centres sont
+ * distants de deux rayons, l'un à `rayon` sous le bord haut, l'autre à `rayon` au-dessus du
+ * plan : Pythagore donne la course horizontale. Écrite à la main, elle aurait cessé d'être
+ * juste au premier changement de hauteur, et la tangence se serait perdue sans prévenir —
+ * exactement ce qui a produit, tour après tour, une marche, un toboggan, une rampe et un coin
+ * pincé.
  */
 const LANGUETTE = {
   largeur: 118,
+  /** Réglable librement : les arcs s'accourcissent au lieu de changer de rayon. */
+  hauteur: 26,
   /** Le rayon des trois courbes — celui des angles du dossier, donc celui des cartes. */
   rayon: RAYON,
-  /** Deux quarts de cercle tangents descendent chacun de leur rayon. */
-  get hauteur() { return this.rayon * 2; },
+  /** La course horizontale du raccord, imposée par les deux précédents. */
+  get course() {
+    const r = this.rayon;
+    return Math.sqrt(4 * r * r - (this.hauteur - 2 * r) ** 2);
+  },
 };
 
 /**
@@ -123,14 +129,14 @@ const HAUTEUR = CARTE_COMPTE.apercu + CARTE_COMPTE.panneau;
 const CONTOUR = (() => {
   const l = CARTE_COMPTE.largeur;
   const h = CARTE_COMPTE.panneau + LANGUETTE.hauteur;
-  const { hauteur: hl, largeur: ll, rayon: r } = LANGUETTE;
+  const { hauteur: hl, largeur: ll, rayon: r, course } = LANGUETTE;
   return [
     `M ${RAYON},0`,
-    `L ${ll - r},0`,
-    // Le coin de la languette, bombé.
-    `A ${r},${r} 0 0 1 ${ll},${r}`,
-    // Le creux, de même rayon : vertical là où le bombé finit, horizontal sur le plan.
-    `A ${r},${r} 0 0 0 ${ll + r},${hl}`,
+    `L ${ll},0`,
+    // Le bombé, jusqu'au point où les deux arcs se touchent : à mi-course, à mi-hauteur.
+    `A ${r},${r} 0 0 1 ${ll + course / 2},${hl / 2}`,
+    // Le creux, de même rayon, qui reprend exactement la tangente laissée par le bombé.
+    `A ${r},${r} 0 0 0 ${ll + course},${hl}`,
     `L ${l - RAYON},${hl}`,
     `A ${RAYON},${RAYON} 0 0 1 ${l},${hl + RAYON}`,
     `L ${l},${h - RAYON}`,

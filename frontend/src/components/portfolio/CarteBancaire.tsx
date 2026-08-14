@@ -38,7 +38,7 @@ const BANDE = CARTE_COMPTE.apercu - CARTE_COMPTE.languette.hauteur;
  * bord horizontal qu'au bout du raccord : tant que le creux descend, il recouvre encore la
  * carte. Calé sur la seule largeur, le numéro serait passé sous la courbe.
  */
-const DEBORD = CARTE_COMPTE.languette.largeur + CARTE_COMPTE.languette.rayon - 16;
+const DEBORD = CARTE_COMPTE.languette.largeur + CARTE_COMPTE.languette.course - 16;
 /**
  * Le contact d'une puce à circuit intégré.
  *
