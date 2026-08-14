@@ -16,7 +16,7 @@ import {
 import { bandeDuScore, pilierLePlusFaible } from "@/lib/portfolio-score/types";
 import PerformanceChart from "@/components/portfolio/PerformanceChart";
 import AssetGrid from "@/components/portfolio/AssetGrid";
-import CarteCompte, { CARTE_COMPTE } from "@/components/portfolio/CarteCompte";
+import CarteCompte, { APERCUS_MAX, CARTE_COMPTE } from "@/components/portfolio/CarteCompte";
 import CarteActif from "@/components/portfolio/CarteActif";
 import FilAriane from "@/components/portfolio/FilAriane";
 import RailHorizontal from "@/components/portfolio/RailHorizontal";
@@ -2904,7 +2904,12 @@ const HABILLAGE_COMPTES: Record<Enveloppe, { couleur: string; icone: React.React
  * Trois : au-delà, les tranches empilées se confondent en une masse, et la troisième
  * ne dépasse déjà que de sept pixels. Le compte exact reste sur la pastille.
  */
-const APERCUS_PAR_DOSSIER = 3;
+/**
+ * ⚠️ **Le plafond vient du dossier, il n'est pas redécidé ici.** La largeur d'un dossier se
+ * déduit du nombre de cartes qu'il laisse voir : une seconde constante aurait pu la
+ * contredire, et le dossier aurait alors rogné ses propres aperçus ou gardé du vide.
+ */
+const APERCUS_PAR_DOSSIER = APERCUS_MAX;
 
 /** L'ordre d'affichage, indicatif : ce qui n'y figure pas passe en queue, pas à la trappe. */
 const ORDRE_COMPTES: Enveloppe[] = ["PEA", "CTO", "Crypto"];

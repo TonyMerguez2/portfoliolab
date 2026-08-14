@@ -81,9 +81,39 @@ const LANGUETTE = {
  * d'actif, sans quoi la courbe au-dessus change de taille selon qu'on regarde les
  * dossiers ou leur contenu.
  */
+/** Le retrait de la première carte dans le dossier, et le décalage de chaque suivante. */
+const PAQUET = { retrait: 16, decalage: 14, margeDroite: 12 };
+
+/** Le nombre de cartes qu'un dossier laisse voir au plus. */
+export const APERCUS_MAX = 3;
+
 export const CARTE_COMPTE = {
-  /** De quoi loger une carte d'actif, le décalage du paquet et une marge à droite. */
-  largeur: CARTE_ACTIF.largeur + 56,
+  /**
+   * La largeur d'un dossier qui laisse voir `n` cartes.
+   *
+   * ⚠️ **Elle s'ajuste au contenu, parce qu'un dossier de trésorerie n'en range qu'une.**
+   * Fixée sur trois cartes, elle laissait quarante pixels de vide en haut à droite d'un
+   * compte courant — mesuré — et l'on y voyait le fond de la page à travers la bande qui
+   * dépasse du plan. La largeur suit donc le paquet : le retrait, les décalages, la carte,
+   * et la marge de droite.
+   *
+   * ⚠️ **Bornée à une carte au minimum.** Un compte déclaré sans ligne n'en laisse voir
+   * aucune ; sans plancher, le dossier se serait rétréci en dessous de ce que son propre
+   * texte réclame.
+   */
+  largeurPour(cartes: number): number {
+    const n = Math.min(APERCUS_MAX, Math.max(1, cartes));
+    return PAQUET.retrait + (n - 1) * PAQUET.decalage
+      + CARTE_ACTIF.largeur + PAQUET.margeDroite;
+  },
+  /**
+   * La largeur maximale, celle d'un dossier plein.
+   *
+   * ⚠️ **C'est elle qui règle le pas du rail, et non la largeur d'un dossier donné.** Un pas
+   * qui suivrait chaque dossier ferait atterrir le défilement au milieu du suivant dès que
+   * deux dossiers n'ont pas le même contenu.
+   */
+  get largeur() { return this.largeurPour(APERCUS_MAX); },
   /**
    * Ce qu'on laisse voir des cartes rangées dedans, au-dessus du plan.
    *
@@ -126,8 +156,7 @@ const HAUTEUR = CARTE_COMPTE.apercu + CARTE_COMPTE.panneau;
  * la languette. La cubique part verticale — elle prolonge l'arc du coin sans cassure — et
  * arrive horizontale sur le plan, avec la longueur qu'on lui donne.
  */
-const CONTOUR = (() => {
-  const l = CARTE_COMPTE.largeur;
+const contourDe = (l: number) => {
   const h = CARTE_COMPTE.panneau + LANGUETTE.hauteur;
   const { hauteur: hl, largeur: ll, rayon: r, course } = LANGUETTE;
   return [
@@ -147,7 +176,23 @@ const CONTOUR = (() => {
     `A ${RAYON},${RAYON} 0 0 1 ${RAYON},0`,
     "Z",
   ].join(" ");
-})();
+};
+
+/**
+ * Les contours, calculés une fois par largeur possible.
+ *
+ * ⚠️ **Trois seulement, donc on les garde plutôt que de les recalculer à chaque rendu.** Le
+ * tracé se refait à chaque image sinon, et il change de chaîne à chaque fois — ce qui suffit
+ * à faire recalculer la découpe au navigateur pour rien.
+ */
+const CONTOURS = new Map<number, string>();
+const contourPour = (l: number) => {
+  const connu = CONTOURS.get(l);
+  if (connu) return connu;
+  const trace = contourDe(l);
+  CONTOURS.set(l, trace);
+  return trace;
+};
 
 export default function CarteCompte({
   nom, compte, couleur, icone, nombre, apercu, sansPastille, onClick,
@@ -188,6 +233,9 @@ export default function CarteCompte({
 }) {
   /** Un identifiant par instance : deux dossiers voisins partageraient sinon le dégradé. */
   const idBord = useId().replace(/:/g, "");
+  /** La largeur suit ce que le dossier laisse voir, jamais moins d'une carte. */
+  const largeur = CARTE_COMPTE.largeurPour((apercu ?? []).length);
+  const CONTOUR = contourPour(largeur);
   const tresClair = decalerClarte(couleur, 0.19);
   const clair = decalerClarte(couleur, 0.10);
   const sombre = decalerClarte(couleur, -0.16);
@@ -208,7 +256,7 @@ export default function CarteCompte({
       // dessous, alors que c'est toute la zone qui change.
       aria-label={`Ouvrir ${nom}, ${compte}`}
       style={{
-        position: "relative", width: CARTE_COMPTE.largeur, height: HAUTEUR,
+        position: "relative", width: largeur, height: HAUTEUR,
         padding: 0, border: 0, background: "none", cursor: "pointer",
         textAlign: "left", flexShrink: 0,
       }}
@@ -224,7 +272,7 @@ export default function CarteCompte({
         */}
       <div aria-hidden="true" style={{
         position: "absolute", left: 0, top: CARTE_COMPTE.apercu - LANGUETTE.hauteur,
-        width: CARTE_COMPTE.largeur, height: CARTE_COMPTE.panneau + LANGUETTE.hauteur,
+        width: largeur, height: CARTE_COMPTE.panneau + LANGUETTE.hauteur,
         clipPath: `path("${CONTOUR}")`, background: couleur,
         /**
          * ⚠️ **Le halo est de la couleur du dossier, et c'est lui qui le décolle du fond.**
@@ -254,7 +302,7 @@ export default function CarteCompte({
           pas un compteur, qui dit qu'il y en a plusieurs. */}
       {cartes.map((c, i) => i).reverse().map(i => (
         <div key={i} aria-hidden="true" style={{
-          position: "absolute", left: 16 + i * 14, top: 0,
+          position: "absolute", left: PAQUET.retrait + i * PAQUET.decalage, top: 0,
           pointerEvents: "none",
         }}>
           {cartes[i]}
@@ -264,7 +312,7 @@ export default function CarteCompte({
       {/* Le plan du dossier, par-dessus les cartes. */}
       <div style={{
         position: "absolute", left: 0, top: CARTE_COMPTE.apercu - LANGUETTE.hauteur,
-        width: CARTE_COMPTE.largeur, height: CARTE_COMPTE.panneau + LANGUETTE.hauteur,
+        width: largeur, height: CARTE_COMPTE.panneau + LANGUETTE.hauteur,
       }}>
         <div style={{
           width: "100%", height: "100%",
@@ -395,7 +443,7 @@ export default function CarteCompte({
         * deux fois plus fin en haut qu'en bas. Le décalage le ramène entièrement à
         * l'intérieur.
         */}
-      <svg width={CARTE_COMPTE.largeur} height={CARTE_COMPTE.panneau + LANGUETTE.hauteur}
+      <svg width={largeur} height={CARTE_COMPTE.panneau + LANGUETTE.hauteur}
         aria-hidden="true" style={{
           position: "absolute", left: 0, top: CARTE_COMPTE.apercu - LANGUETTE.hauteur,
           pointerEvents: "none",
