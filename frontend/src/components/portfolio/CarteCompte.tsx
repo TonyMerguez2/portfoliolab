@@ -61,6 +61,16 @@ export const CARTE_COMPTE = {
    * en demande 123 ; en dessous, le nom viendrait toucher le pictogramme.
    */
   panneau: CARTE_ACTIF.hauteur - (LANGUETTE.hauteur + CARTE_ACTIF.identite),
+  /**
+   * La languette, publiée parce que ce qu'on range dedans doit savoir ce qu'elle cache.
+   *
+   * ⚠️ **La bande dégagée n'est pas rectangulaire, et c'est ce qui a piégé la carte
+   * bancaire.** Une carte posée au-dessus du plan est visible sur toute sa largeur jusqu'à
+   * `apercu − languette.hauteur`, soit 46 pixels — puis, de 46 à 68, uniquement à droite de
+   * la languette. Dessinée comme un rectangle de 68 de haut, elle perdait son numéro sous
+   * le coin gauche du plan. Publier la découpe évite de la redécouvrir à l'œil.
+   */
+  languette: LANGUETTE,
 };
 const HAUTEUR = CARTE_COMPTE.apercu + CARTE_COMPTE.panneau;
 
@@ -166,7 +176,21 @@ export default function CarteCompte({
         position: "absolute", left: 0, top: CARTE_COMPTE.apercu - LANGUETTE.hauteur,
         width: CARTE_COMPTE.largeur, height: CARTE_COMPTE.panneau + LANGUETTE.hauteur,
         clipPath: `path("${CONTOUR}")`, background: couleur,
-        filter: `drop-shadow(0 10px 18px ${couleur}4D) drop-shadow(0 2px 3px rgba(4,10,24,0.35))`,
+        /**
+         * ⚠️ **Le halo est de la couleur du dossier, et c'est lui qui le décolle du fond.**
+         * Sur la maquette, chaque dossier pose une lueur de sa propre teinte sous lui : sans
+         * elle, il reste un aplat collé à la page. Trois ombres empilées plutôt qu'une —
+         * une lueur large et diffuse qui porte la couleur, une ombre courte qui donne
+         * l'épaisseur, un contact serré qui pose l'objet. Une seule ombre ne peut pas faire
+         * les trois : large elle flotte, courte elle ne rayonne pas.
+         *
+         * ⚠️ **`drop-shadow` et non `box-shadow`.** Le second suit la boîte, que le
+         * `clip-path` vient justement de tailler : l'ombre débordait dans l'encoche. Le
+         * filtre, lui, suit la silhouette réelle.
+         */
+        filter: `drop-shadow(0 16px 34px ${couleur}59)`
+          + ` drop-shadow(0 6px 12px ${couleur}3D)`
+          + ` drop-shadow(0 2px 3px rgba(4,10,24,0.38))`,
       }} />
 
       {/* Le paquet de cartes, décalé vers la droite.

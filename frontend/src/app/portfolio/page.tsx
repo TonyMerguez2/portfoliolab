@@ -264,6 +264,18 @@ const PERIODS: Period[] = ["24h", "1S", "1M", "3M", "6M", "1A", "3A", "Max"];
 const MARGE = 10;
 
 /**
+ * Un montant en euros, aux centimes près.
+ *
+ * ⚠️ **`euros()` arrondit, et c'est juste pour ce qu'il sert — pas ici.** Il habille des
+ * valorisations, qui bougent à chaque cours et dont le centime n'a pas de sens. Un solde de
+ * compte est un montant exact que l'épargnant a recopié, et la décomposition d'un total doit
+ * pouvoir se vérifier à l'addition. Vu à l'écran : « 4 548 € de titres · 12 451 € de
+ * liquidités » sous un total de 16 998,72 €, alors que la somme des deux fait 16 999.
+ */
+const montantExact = (v: number): string =>
+  v.toLocaleString("fr-FR", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + " €";
+
+/**
  * L'écart entre le personnage, sa parole et le nom du portefeuille, en pixels.
  *
  * ⚠️ **Nommé parce qu'il sert deux fois et doit rester le même.** Il espace la rangée
@@ -1612,8 +1624,16 @@ function PortfolioPageInner() {
       * laisser la composition d'aujourd'hui accolerait deux instants différents.
       */}
     {survolCourbe == null && !masque && liquiditesDeclarees > 0 && valeurTitres != null && (
+      /**
+        * ⚠️ **Les composantes s'écrivent avec les centimes du total, sinon l'addition est
+        * fausse à l'écran.** Vu en vrai : « 4 548 € de titres · 12 451 € de liquidités »
+        * sous un total de 16 998,72 €, alors que 4 548 + 12 451 font 16 999. Chaque nombre
+        * était pourtant correctement arrondi — c'est leur somme qui ne l'était pas, et c'est
+        * elle qu'on lit. Une décomposition dont les termes ne redonnent pas le tout ne
+        * décompose rien : elle jette un doute sur le tout.
+        */
       <div style={{ fontSize: 10, fontFamily: FONT, color: CLAIR.texteAttenue, marginBottom: 3 }}>
-        {euros(valeurTitres)} de titres · {euros(liquiditesDeclarees)} de liquidités
+        {montantExact(valeurTitres)} de titres · {montantExact(liquiditesDeclarees)} de liquidités
       </div>
     )}
     {/* Sous la valeur : le capital engagé et depuis quand.
@@ -2047,12 +2067,17 @@ function PortfolioPageInner() {
                             */
                           compte={!c.porte_des_titres && c.solde != null ? (
                             <>
+                              {/* ⚠️ **Les centimes, et non `euros()`.** Cet arrondi vaut pour
+                                  une valorisation, qui bouge à chaque cours ; un solde de
+                                  compte est un montant exact que l'épargnant a recopié. Vu à
+                                  l'écran : 12 450,80 € s'affichait « 12 451 € », et le chiffre
+                                  cessait de correspondre à ce qu'on venait de taper. */}
                               <div style={{
                                 fontFamily: FONT, fontSize: 21, fontWeight: 700,
                                 color: "#FFFFFF", letterSpacing: "-0.015em", lineHeight: 1.15,
                                 fontVariantNumeric: "tabular-nums",
                               }}>
-                                {euros(c.solde)}
+                                {montantExact(c.solde)}
                               </div>
                               {depuis && (
                                 <div style={{ fontSize: 11, color: "rgba(255,255,255,0.68)", marginTop: 1 }}>

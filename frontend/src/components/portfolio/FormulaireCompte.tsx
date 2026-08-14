@@ -74,7 +74,15 @@ export default function FormulaireCompte({
   const [nom, setNom] = useState(initial?.nom ?? "");
   const [genre, setGenre] = useState<string>(initial?.genre ?? "");
   const [couleur, setCouleur] = useState(initial?.couleur ?? COULEURS[0].hex);
-  const [solde, setSolde] = useState(initial?.solde != null ? String(initial.solde) : "");
+  /**
+   * ⚠️ **Le solde se relit en français, avec ses centimes.** `String(12450.8)` rend
+   * « 12450.8 » : un point décimal dans une saisie française, et le zéro final envolé. Vu à
+   * l'écran après avoir tapé 12450,80. On repasse donc par deux décimales et la virgule —
+   * `enregistrer` refait le chemin inverse, et le champ reste modifiable au clavier puisqu'il
+   * ne porte aucun séparateur de milliers.
+   */
+  const [solde, setSolde] = useState(
+    initial?.solde != null ? initial.solde.toFixed(2).replace(".", ",") : "");
   /**
    * ⚠️ **La suppression demande deux clics, et non une boîte du navigateur.** `confirm()`
    * arrête tout, sort de la page et se présente au nom du site plutôt qu'au nom de
