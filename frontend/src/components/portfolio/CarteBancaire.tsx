@@ -34,11 +34,11 @@ const BANDE = CARTE_COMPTE.apercu - CARTE_COMPTE.languette.hauteur;
 /**
  * À droite de la languette, la carte respire jusqu'au plan.
  *
- * ⚠️ **La pente compte, pas seulement la largeur de la languette.** Le plan ne reprend son
- * bord horizontal qu'au bout du raccord : tant que la pente descend, elle recouvre encore la
+ * ⚠️ **Le creux compte, pas seulement la largeur de la languette.** Le plan ne reprend son
+ * bord horizontal qu'au bout du raccord : tant que le creux descend, il recouvre encore la
  * carte. Calé sur la seule largeur, le numéro serait passé sous la courbe.
  */
-const DEBORD = CARTE_COMPTE.languette.largeur + CARTE_COMPTE.languette.pente - 16;
+const DEBORD = CARTE_COMPTE.languette.largeur + CARTE_COMPTE.languette.creux - 16;
 /**
  * Le contact d'une puce à circuit intégré.
  *

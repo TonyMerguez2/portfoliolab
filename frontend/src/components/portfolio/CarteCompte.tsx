@@ -34,24 +34,23 @@ import { CARTE_ACTIF } from "@/components/portfolio/CarteActif";
  */
 const RAYON = CARTE_ACTIF.rayon;
 /**
- * La languette : sa hauteur au-dessus du plan, sa largeur, et la forme de son raccord.
+ * La languette : sa hauteur au-dessus du plan, sa largeur, et les deux rayons de son raccord.
  *
- * ⚠️ **`pente` est la longueur horizontale du raccord, et elle ne se déduit plus de la
- * hauteur.** Le raccord était fait de deux quarts de cercle de même rayon, ce qui l'obligeait
- * à valoir exactement la moitié de la hauteur de la languette : onze pixels d'étalement pour
- * vingt-deux de descente, soit une pente à quarante-cinq degrés. Sur la maquette elle est
- * bien plus douce, mais pas au point où je l'ai d'abord poussée : une cubique de trente-deux
- * pixels après un coin de neuf faisait quarante-et-un pixels de transition, et le bord se
- * couchait à l'horizontale bien avant d'atteindre le plan — un toboggan plutôt qu'une
- * languette. Signalé à l'usage. Mesurée sur la maquette, la transition entière fait une
- * trentaine de pixels : douze de coin bombé, vingt de raccord.
+ * ⚠️ **Deux arcs de rayons différents, et c'est le creux qui fait la languette.** Trois formes
+ * ont échoué avant celle-ci. Deux quarts de cercle égaux — onze et onze — donnaient une
+ * marche symétrique. Une cubique de trente-deux pixels donnait un toboggan, le bord se
+ * couchant à l'horizontale avant d'atteindre le plan. Une cubique plus courte, à poignées
+ * symétriques, a supprimé le toboggan mais aussi le creux : en répartissant la courbure sur
+ * toute la longueur, elle ne laisse **aucun** endroit franchement concave, et il ne reste
+ * qu'une rampe. Signalé à l'usage, deux fois.
  *
- * ⚠️ **Une Bézier plutôt qu'un second arc, malgré tout.** Deux quarts de cercle accolés
- * obligent l'étalement à valoir le rayon, donc la moitié de la hauteur de la languette : la
- * proportion des deux courbures cesse d'être réglable. La cubique laisse choisir le coin et
- * le raccord séparément.
+ * ⚠️ **La forme juste est asymétrique : petit bombé, grand creux.** Mesuré sur la maquette,
+ * le coin de la languette tourne court et le raccord au plan s'évase largement. Deux arcs
+ * tangents l'un à l'autre le donnent exactement, à condition que leurs rayons s'additionnent
+ * pour valoir la hauteur — c'est ce qui garantit que le premier finit vertical là où le
+ * second commence, sans cassure.
  */
-const LANGUETTE = { hauteur: 22, largeur: 118, courbure: 12, pente: 20 };
+const LANGUETTE = { hauteur: 22, largeur: 118, bombe: 8, creux: 14 };
 
 /**
  * La taille du dossier, déduite de la carte d'actif qu'il doit contenir.
@@ -114,20 +113,13 @@ const HAUTEUR = CARTE_COMPTE.apercu + CARTE_COMPTE.panneau;
 const CONTOUR = (() => {
   const l = CARTE_COMPTE.largeur;
   const h = CARTE_COMPTE.panneau + LANGUETTE.hauteur;
-  const { hauteur: hl, largeur: ll, courbure: c, pente } = LANGUETTE;
+  const { hauteur: hl, largeur: ll, bombe: b, creux: cr } = LANGUETTE;
   return [
     `M ${RAYON},0`,
-    `L ${ll - c},0`,
-    `A ${c},${c} 0 0 1 ${ll},${c}`,          // le coin de la languette, bombé
-    /**
-     * Le raccord au plan : verticale au départ, horizontale à l'arrivée.
-     *
-     * ⚠️ **Les deux poignées sont symétriques, sinon la courbe se couche trop tôt.** La
-     * seconde était posée à 0,46 de la longueur : la Bézier atteignait l'horizontale au
-     * milieu du parcours et finissait par un long plat. À la moitié de chaque côté, la
-     * descente se répartit et l'on obtient un S régulier.
-     */
-    `C ${ll},${c + (hl - c) * 0.5} ${ll + pente * 0.5},${hl} ${ll + pente},${hl}`,
+    `L ${ll - b},0`,
+    `A ${b},${b} 0 0 1 ${ll},${b}`,          // le coin de la languette, bombé — court
+    // Le creux : large, tangent au précédent, et horizontal en arrivant sur le plan.
+    `A ${cr},${cr} 0 0 0 ${ll + cr},${hl}`,
     `L ${l - RAYON},${hl}`,
     `A ${RAYON},${RAYON} 0 0 1 ${l},${hl + RAYON}`,
     `L ${l},${h - RAYON}`,
@@ -282,8 +274,15 @@ export default function CarteCompte({
            * sur les dix autres. Du blanc à quatorze pour cent éclaircit n'importe quelle
            * teinte sans en introduire une seconde.
            */
-          background: `radial-gradient(120% 100% at 8% -8%,`
-            + ` rgba(255,255,255,0.14) 0%, rgba(255,255,255,0) 58%),`
+          /**
+           * ⚠️ **La lumière rentre vers l'intérieur, sinon elle mange le liseré.** Centrée
+           * sur le coin haut-gauche, elle éclaircissait le plan exactement là où passe
+           * l'arête blanche : les deux se confondaient, et le liseré paraissait absent sur
+           * toute la languette. Deux effets blancs superposés ne s'additionnent pas, ils
+           * s'annulent — celui du dessous doit laisser le bord tranquille.
+           */
+          background: `radial-gradient(88% 78% at 26% 12%,`
+            + ` rgba(255,255,255,0.11) 0%, rgba(255,255,255,0) 62%),`
             + ` linear-gradient(148deg, ${tresClair} 0%, ${clair} 26%,`
             + ` ${couleur} 58%, ${sombre} 100%)`,
         }}>
@@ -356,7 +355,14 @@ export default function CarteCompte({
         * rectangle, et traverserait l'encoche de part en part. Le même chemin, tracé sans
         * remplissage, colle exactement au bord — encoche et pente comprises.
         *
-        * ⚠️ **Blanc sur tout le tour, plus vif en haut.** Deux versions ont raté avant celle-ci :
+        * ⚠️ **Il faut le poser franchement, et c'est une mesure qui l'a tranché.** Je l'ai cru
+        * absent alors qu'il était peint : repassé en rouge de quatre pixels le temps d'un
+        * essai, il est apparu net et exactement sur la silhouette. Ce n'était donc ni un
+        * problème d'ordre de rendu ni de découpe, mais d'intensité — un blanc qui descend à
+        * vingt-six pour cent sur un pixel et demi ne se distingue pas d'un plan dont le
+        * dégradé éclaircit déjà le haut. Deux pixels, et rien sous trente-huit pour cent.
+        *
+        * ⚠️ **Blanc sur tout le tour, plus vif en haut.** Deux versions ont raté avant :
         * l'une s'éteignait en transparence vers le bas, l'autre virait au noir. Toutes deux
         * partaient du même raisonnement — imiter une lumière rasante — et toutes deux
         * donnaient un liseré qu'on ne voyait pas, signalé comme « inexistant ». Sur la
@@ -382,7 +388,7 @@ export default function CarteCompte({
   
           </linearGradient>
         </defs>
-        <path d={CONTOUR} fill="none" stroke={`url(#bord-${idBord})`} strokeWidth={1.5}
+        <path d={CONTOUR} fill="none" stroke={`url(#bord-${idBord})`} strokeWidth={2}
           transform="translate(0.5, 0.5) scale(0.9967)" />
       </svg>
     </button>
