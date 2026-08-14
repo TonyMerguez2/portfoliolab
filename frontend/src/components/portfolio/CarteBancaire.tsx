@@ -61,10 +61,21 @@ const DEBORD = CARTE_COMPTE.languette.largeur - 16;
  * pavés d'un seul tenant — clair en haut à gauche, sombre en bas à droite — et par rien
  * d'autre.
  *
- * ⚠️ **Elle garde la boîte du logo qu'elle remplace.** Même côté, même arrondi, même origine
- * que le logo d'une carte d'actif : c'est ce qui aligne les deux cartes lorsqu'elles dépassent
- * côte à côte de deux dossiers voisins.
+ * ⚠️ **Elle garde l'origine du logo qu'elle remplace, plus sa boîte.** Une puce est plus
+ * large que haute — carrée, elle se lit comme une icône d'application. Sa largeur reste celle
+ * du logo d'une carte d'actif et son coin haut-gauche tombe au même endroit : c'est cela qui
+ * aligne les deux cartes lorsqu'elles dépassent côte à côte de deux dossiers voisins, et la
+ * hauteur n'y entre pour rien puisque la rangée s'aligne par le sommet.
  */
+
+/**
+ * Les dimensions de la puce, en pixels.
+ *
+ * ⚠️ **La largeur est celle du logo, la hauteur non.** C'est la largeur qui porte
+ * l'alignement — le coin haut-gauche et la colonne de texte qui suit. La hauteur ne fait que
+ * donner sa forme à la puce, et une puce est un rectangle couché.
+ */
+const PUCE = { largeur: CARTE_ACTIF.logo.cote, hauteur: 26 };
 
 /**
  * La grille des contacts, en unités du repère de 32.
@@ -80,7 +91,14 @@ const DEBORD = CARTE_COMPTE.languette.largeur - 16;
  * le déséquilibre est ce qu'on reconnaît d'un contact sans savoir le nommer.
  */
 const COLONNES = [[-2, 9.0], [9.9, 22.1], [23.0, 34]];
-const RANGEES = [[-2, 9.6], [10.5, 19.7], [20.6, 34]];
+/**
+ * ⚠️ **Les rangées sont recalculées sur la hauteur réduite, pas simplement écrasées.** Un
+ * `viewBox` plus court aurait comprimé les sillons avec les pavés : ils sont taillés dans le
+ * métal, ils n'ont pas de raison de s'amincir quand la puce se couche. Les trois hauteurs
+ * gardent donc leurs proportions — la rangée du bas reste la plus haute — et les sillons
+ * gardent leurs neuf dixièmes d'unité.
+ */
+const RANGEES = [[-2, 7.74], [8.64, 15.94], [16.84, 28]];
 /** Le sillon entre deux pavés, en unités du repère — mesuré sur la photo, il est fin. */
 const ARRONDI_PAVE = 1.3;
 
@@ -91,9 +109,9 @@ function Puce() {
    * rencontrée aux deux, et la première change d'aspect quand la seconde apparaît.
    */
   const id = useId().replace(/:/g, "");
-  const cote = CARTE_ACTIF.logo.cote;
   return (
-    <svg width={cote} height={cote} viewBox="0 0 32 32" aria-hidden="true"
+    <svg width={PUCE.largeur} height={PUCE.hauteur}
+      viewBox={`0 0 ${PUCE.largeur} ${PUCE.hauteur}`} aria-hidden="true"
       style={{ flexShrink: 0 }}>
       <defs>
         {/**
@@ -103,7 +121,7 @@ function Puce() {
           * traverse.
           */}
         <linearGradient id={`puce-${id}`} gradientUnits="userSpaceOnUse"
-          x1="0" y1="0" x2="32" y2="32">
+          x1="0" y1="0" x2={PUCE.largeur} y2={PUCE.hauteur}>
           <stop offset="0%" stopColor="#F4F6F9" />
           <stop offset="34%" stopColor="#D3D8DF" />
           <stop offset="66%" stopColor="#A8AFBA" />
@@ -113,15 +131,15 @@ function Puce() {
 
       <defs>
         <clipPath id={`silhouette-${id}`}>
-          <rect x="0.6" y="0.6" width="30.8" height="30.8"
+          <rect x="0.6" y="0.6" width={PUCE.largeur - 1.2} height={PUCE.hauteur - 1.2}
             rx={CARTE_ACTIF.logo.rayon - 0.6} />
         </clipPath>
       </defs>
 
       {/* Le substrat : ce qui affleure entre les pavés. Sans liseré épais autour — sur la
           photo, le pourtour est fait des pavés eux-mêmes, pas d'un cadre. */}
-      <rect x="0.6" y="0.6" width="30.8" height="30.8" rx={CARTE_ACTIF.logo.rayon - 0.6}
-        fill="#5F656F" />
+      <rect x="0.6" y="0.6" width={PUCE.largeur - 1.2} height={PUCE.hauteur - 1.2}
+        rx={CARTE_ACTIF.logo.rayon - 0.6} fill="#5F656F" />
 
       <g clipPath={`url(#silhouette-${id})`}>
         {RANGEES.map(([y1, y2], r) => COLONNES.map(([x1, x2], c) => (
