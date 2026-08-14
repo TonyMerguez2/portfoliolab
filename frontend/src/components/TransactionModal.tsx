@@ -72,7 +72,33 @@ interface Props {
    * valeur : y ranger un achat compterait la somme deux fois. Le serveur le refuse, mais un
    * choix impossible n'a pas à être proposé.
    */
-  comptes?: { id: string; nom: string; couleur: string }[];
+  comptes?: {
+    /** L'identifiant du compte, ou la clé du dossier deviné qu'il faudra déclarer. */
+    id: string;
+    nom: string;
+    couleur: string;
+    /**
+     * Ce choix est un dossier **deviné** : le retenir le déclarera.
+     *
+     * ⚠️ **Les dossiers devinés figurent dans la liste, et ce n'est pas un raccourci de
+     * confort.** L'écran montre « PEA » et « CTO » sur la vue générale ; répondre ici
+     * « vous n'avez déclaré aucun compte » revient à nier ce qu'il vient d'afficher.
+     * L'épargnant a bien des comptes — ils sont seulement devinés — et la seule chose qui
+     * manquait était de pouvoir les désigner.
+     */
+    aDeclarer?: boolean;
+    /** Combien de lignes la déclaration rattacherait. */
+    lignes?: number;
+  }[];
+  /**
+   * Transforme le choix en un identifiant de compte réel, en le déclarant au besoin.
+   *
+   * ⚠️ **La modale ne sait pas ce que « déclarer » veut dire, et c'est voulu.** Créer un
+   * compte puis lui rattacher les lignes d'un dossier est l'affaire de la page ; la saisie
+   * n'a qu'à savoir dans quel compte écrire. Sans cette couture, elle aurait dû connaître
+   * les genres, les couleurs et la route de rattachement pour poser une opération.
+   */
+  resoudreLeCompte?: (choix: string) => Promise<string>;
   /**
    * Le compte imposé, quand la saisie part de l'intérieur d'un dossier.
    *
@@ -104,7 +130,7 @@ function fmtEur(v: number): string {
 export default function TransactionModal({
   portfolioId, isOpen, onClose, onSuccess, prefillTicker, prefillAsset,
   lockAsset = false, onDraft, initialDraft, embedded = false, hideClose = false,
-  comptes = [], compteImpose, onDeclarerCompte,
+  comptes = [], compteImpose, onDeclarerCompte, resoudreLeCompte,
 }: Props) {
   const [side,           setSide]           = useState<Side>("BUY");
   /**
@@ -314,6 +340,7 @@ export default function TransactionModal({
    * rendre `compte_id` obligatoire côté serveur.
    */
   const compteRequis = !onDraft;
+  const choixCompte = comptes.find(c => c.id === compteId);
   const isValid  = !!selectedAsset && qty > 0 && price > 0
     && (!compteRequis || !!compteId);
 
@@ -347,6 +374,13 @@ export default function TransactionModal({
     setSubmitting(true);
     setError(null);
     try {
+      /**
+       * ⚠️ **Le compte est résolu avant l'écriture, et son échec arrête tout.** Choisir un
+       * dossier deviné le déclare : si cette déclaration manque, poster l'opération quand
+       * même la laisserait sans compte — c'est-à-dire exactement ce que l'écran vient
+       * d'interdire, mais en silence et après coup.
+       */
+      const compteFinal = resoudreLeCompte ? await resoudreLeCompte(compteId) : compteId;
       const res = await fetch(`${API}/api/v1/portfolios/${portfolioId}/transactions`, {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
@@ -359,7 +393,7 @@ export default function TransactionModal({
           fees:        feesVal,
           executed_at: `${date}T00:00:00`,
           note:        note.trim() || null,
-          compte_id:   compteId || null,
+          compte_id:   compteFinal || null,
         }),
       });
       if (!res.ok) {
@@ -713,7 +747,9 @@ export default function TransactionModal({
                         historique déjà mal classé. */}
                     <option value="">Choisissez un compte…</option>
                     {comptes.map(c => (
-                      <option key={c.id} value={c.id}>{c.nom}</option>
+                      <option key={c.id} value={c.id}>
+                        {c.nom}{c.aDeclarer ? " — à déclarer" : ""}
+                      </option>
                     ))}
                   </select>
                 ) : (
@@ -735,6 +771,24 @@ export default function TransactionModal({
                         Déclarer un compte
                       </button>
                     )}
+                  </div>
+                )}
+                {/**
+                  * ⚠️ **Ce que le choix entraîne, dit avant d'enregistrer.** Retenir un
+                  * dossier deviné le déclare : cela crée un compte et lui rattache ses
+                  * lignes. C'est le bon geste — il évite un détour par un autre écran — mais
+                  * il est bien plus lourd que « ranger cette opération », et le découvrir
+                  * après coup serait le pire des deux mondes.
+                  */}
+                {choixCompte?.aDeclarer && (
+                  <div style={{
+                    marginTop: 6, fontSize: 11, lineHeight: 1.45,
+                    color: "rgba(255,255,255,0.62)",
+                  }}>
+                    Ce dossier est deviné : l’enregistrer le déclarera comme compte
+                    {choixCompte.lignes ? `, avec ses ${choixCompte.lignes} ligne${
+                      choixCompte.lignes > 1 ? "s" : ""}` : ""}. Vous pourrez le renommer
+                    ensuite.
                   </div>
                 )}
               </div>

@@ -406,6 +406,8 @@ function PortfolioPageInner() {
    * aurait fait proposer de supprimer un compte qui n'existe pas encore.
    */
   const [prereglage,      setPrereglage]      = useState<SaisieCompte | null>(null);
+  /** La saisie a-t-elle été ouverte **depuis** un dossier, ou depuis l'onglet Transactions ? */
+  const [saisieDansLeDossier, setSaisieDansLeDossier] = useState(false);
   const [aRattacher,      setARattacher]      = useState<number[]>([]);
   const [compteEnCours,   setCompteEnCours]   = useState(false);
   const [erreurCompte,    setErreurCompte]    = useState<string | null>(null);
@@ -1454,6 +1456,36 @@ function PortfolioPageInner() {
    * valider prendrait des lignes que l'épargnant n'a pas vu annoncer — la palette lui a dit
    * « ses 3 lignes seront rattachées », et c'est ces trois-là qui doivent partir.
    */
+  /**
+   * Déclare un dossier deviné sans passer par le formulaire, et rend l'identifiant du
+   * compte créé.
+   *
+   * ⚠️ **Le même geste que le formulaire, sans l'écran.** La saisie d'une opération propose
+   * les dossiers devinés : les choisir doit les déclarer sur place, faute de quoi il
+   * faudrait sortir de la saisie, déclarer, et y revenir. Le nom retenu est celui de
+   * l'enveloppe — « PEA » — et se corrige ensuite par les trois points ; c'est dit à
+   * l'écran avant l'enregistrement.
+   *
+   * ⚠️ **Si le rattachement échoue, on garde quand même le compte.** L'opération qu'on est
+   * en train de saisir a besoin d'un compte : refuser ici la ferait perdre. Les lignes non
+   * rattachées restent devinées, ce qui se rattrape en déclarant à nouveau.
+   */
+  const declarerMaintenant = useCallback(async (cle: string): Promise<string> => {
+    const d = dossiers.find(x => x.cle === cle);
+    if (!d) throw new Error("Ce dossier n'existe plus.");
+    const cree = await creerCompte(String(idPortefeuille), {
+      nom: d.nom, genre: d.genre, couleur: d.couleur, solde: null,
+    });
+    const operations = operationsDuDossier(d, ecritures);
+    if (operations.length > 0) {
+      try {
+        await rattacherOperations(String(idPortefeuille), cree.id, operations);
+      } catch { /* le compte existe : l'opération en cours a de quoi se ranger */ }
+    }
+    rechargerComptes();
+    return cree.id;
+  }, [dossiers, ecritures, idPortefeuille, rechargerComptes]);
+
   const declarerLeDossier = useCallback((cle: string) => {
     const d = dossiers.find(x => x.cle === cle);
     if (!d) return;
@@ -2312,7 +2344,8 @@ function PortfolioPageInner() {
                     * vient de le saisir. C'est pour lever cela que le dossier se déclare.
                     */
                   action={dossierActif?.declare && dossierActif.porteDesTitres && (
-                    <button type="button" onClick={() => setShowTxModal(true)}
+                    <button type="button"
+                      onClick={() => { setSaisieDansLeDossier(true); setShowTxModal(true); }}
                       title={`Saisir une opération dans ${dossierActif.nom}`}
                       style={{
                         display: "flex", alignItems: "center", gap: 5, height: 26,
@@ -3066,14 +3099,40 @@ function PortfolioPageInner() {
         <TransactionModal
           portfolioId={portfolio?.id ?? ""}
           isOpen={showTxModal}
-          onClose={() => setShowTxModal(false)}
-          onSuccess={() => { setShowTxModal(false); setTxRefreshKey(k => k + 1); }}
+          onClose={() => { setShowTxModal(false); setSaisieDansLeDossier(false); }}
+          onSuccess={() => {
+            setShowTxModal(false); setSaisieDansLeDossier(false);
+            setTxRefreshKey(k => k + 1);
+          }}
           /* ⚠️ Les comptes de trésorerie sont écartés : sur un livret, le solde *est* la
              valeur, et y ranger un achat compterait la somme deux fois. Le serveur le
              refuse, mais un choix impossible n'a pas à être proposé. */
-          comptes={comptesDeclares.filter(c => c.porte_des_titres)
-            .map(c => ({ id: c.id, nom: c.nom, couleur: c.couleur }))}
-          compteImpose={dossierActif?.declare && dossierActif.porteDesTitres
+          /**
+            * ⚠️ **Les dossiers devinés figurent dans la liste, aux côtés des comptes
+            * déclarés.** L'écran montre « PEA » et « CTO » : répondre à la saisie « vous
+            * n'avez déclaré aucun compte » revenait à nier ce qu'il venait d'afficher, et à
+            * n'offrir que d'en créer un — signalé à l'usage, à juste titre.
+            *
+            * ⚠️ **Les dossiers de trésorerie sont écartés des deux côtés.** Sur un livret,
+            * le solde *est* la valeur, et y ranger un achat compterait la somme deux fois.
+            */
+          comptes={dossiers.filter(d => d.porteDesTitres).map(d => ({
+            id: d.compteId ?? d.cle,
+            nom: d.nom,
+            couleur: d.couleur,
+            aDeclarer: !d.declare,
+            lignes: d.lignes.length,
+          }))}
+          resoudreLeCompte={async (choix) => (
+            choix.startsWith("deduit:") ? declarerMaintenant(choix) : choix
+          )}
+          /**
+            * ⚠️ **Imposé seulement quand la saisie part d'un dossier, pas parce qu'un
+            * dossier est resté ouvert.** `dossierActif` survit au changement d'onglet :
+            * ouvrir la saisie depuis Transactions aurait alors rangé l'opération dans le
+            * dossier qu'on regardait sur la vue générale, sans l'avoir demandé.
+            */
+          compteImpose={saisieDansLeDossier && dossierActif?.declare && dossierActif.porteDesTitres
             ? { id: dossierActif.compteId!, nom: dossierActif.nom, couleur: dossierActif.couleur }
             : undefined}
           onDeclarerCompte={() => {
