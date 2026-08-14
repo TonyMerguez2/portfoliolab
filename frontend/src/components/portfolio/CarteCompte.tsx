@@ -250,6 +250,15 @@ export default function CarteCompte({
   /** La largeur suit ce que le dossier laisse voir, jamais moins d'une carte. */
   const largeur = CARTE_COMPTE.largeurPour((apercu ?? []).length);
   const CONTOUR = contourPour(largeur);
+  /**
+   * La teinte du liseré : celle du dossier, à peine relevée.
+   *
+   * ⚠️ **Le peu de clarté est volontaire, l'intensité se règle à l'opacité.** Éclaircie de
+   * trente-deux pour cent, elle virait au blanc sur les teintes vives — un détourage plutôt
+   * qu'une arête. Deux réglages pour un seul effet finissent toujours par se contredire :
+   * la teinte reste de la famille du dossier, et c'est le dégradé qui décide où elle se voit.
+   */
+  const ARETE = decalerClarte(couleur, 0.14);
   const tresClair = decalerClarte(couleur, 0.19);
   const clair = decalerClarte(couleur, 0.10);
   const sombre = decalerClarte(couleur, -0.16);
@@ -469,12 +478,26 @@ export default function CarteCompte({
         * vingt-six pour cent sur un pixel et demi ne se distingue pas d'un plan dont le
         * dégradé éclaircit déjà le haut. Deux pixels, et rien sous trente-huit pour cent.
         *
-        * ⚠️ **Blanc sur tout le tour, plus vif en haut.** Deux versions ont raté avant :
-        * l'une s'éteignait en transparence vers le bas, l'autre virait au noir. Toutes deux
-        * partaient du même raisonnement — imiter une lumière rasante — et toutes deux
-        * donnaient un liseré qu'on ne voyait pas, signalé comme « inexistant ». Sur la
-        * maquette, l'arête fait le tour complet : plus vive en tête, jamais absente ailleurs.
-        * Le dégradé ne descend donc plus sous vingt-six pour cent.
+        * ⚠️ **Il ne fait pas le tour, il s'allume sur deux coins opposés — comme celui des
+        * cartes d'actifs.** Posé sur tout le contour et à pleine opacité, il cernait le
+        * dossier d'un trait continu et clair : sur une teinte vive, cela ne se lit plus
+        * comme une arête mais comme un détourage. Les cartes voisines, elles, portent depuis
+        * toujours un bord qui s'éteint en chemin (`.novac-tile::before` dans `globals.css`) ;
+        * deux traitements différents dans la même rangée se voient sans qu'on sache les
+        * nommer.
+        *
+        * ⚠️ **La bande éteinte est centrée sur cinquante pour cent, et ce n'est pas un
+        * réglage à l'œil.** Le dégradé va d'un coin à l'autre en unités de boîte : la valeur
+        * en un point y vaut la projection sur la diagonale, soit `(x + y) / 2`. Le coin
+        * haut-droit et le coin bas-gauche tombent donc tous deux exactement à 0,5, quelles
+        * que soient les proportions. Un creux symétrique autour de 50 % les éteint tous les
+        * deux à la fois — là où la version CSS de la tuile doit calculer 44,1 % et 55,9 %
+        * pour son format, et n'y arrive que sur des tuiles proches du carré.
+        *
+        * ⚠️ **La teinte est plus sourde qu'avant, et c'est un retour en arrière assumé.**
+        * Éclaircie de 32 % et opaque, elle « se voyait trop » sur un dossier vif. Elle est
+        * maintenant portée par l'opacité plutôt que par la clarté : une teinte à peine
+        * relevée, jamais au-delà de la moitié. L'arête se devine au lieu de se déclarer.
         *
         * ⚠️ **Il se peint en dernier, après le plan.** Placé avant, il était recouvert par
         * le plan qu'il est censé cerner — invisible, et je l'ai cru absent avant de
@@ -498,10 +521,18 @@ export default function CarteCompte({
           pointerEvents: "none",
         }}>
         <defs>
-          <linearGradient id={`bord-${idBord}`} x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor={decalerClarte(couleur, 0.32)} />
-            <stop offset="34%" stopColor={decalerClarte(couleur, 0.22)} />
-            <stop offset="100%" stopColor={decalerClarte(couleur, 0.12)} />
+          {/* Les arrêts reprennent ceux de `.novac-tile::before`, à l'opacité près : mêmes
+              paliers, même creux de 38 à 62 %, pour que les deux objets s'éteignent au même
+              endroit de leur diagonale. */}
+          <linearGradient id={`bord-${idBord}`} x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0%" stopColor={ARETE} stopOpacity={0.5} />
+            <stop offset="20%" stopColor={ARETE} stopOpacity={0.38} />
+            <stop offset="32%" stopColor={ARETE} stopOpacity={0.15} />
+            <stop offset="38%" stopColor={ARETE} stopOpacity={0} />
+            <stop offset="62%" stopColor={ARETE} stopOpacity={0} />
+            <stop offset="68%" stopColor={ARETE} stopOpacity={0.15} />
+            <stop offset="80%" stopColor={ARETE} stopOpacity={0.38} />
+            <stop offset="100%" stopColor={ARETE} stopOpacity={0.5} />
           </linearGradient>
         </defs>
         {/* ⚠️ Un pixel, comme l'arête d'une carte bancaire : deux dossiers et une carte

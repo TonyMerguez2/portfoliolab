@@ -205,13 +205,19 @@ export default function CarteBancaire({
   derniers?: string | null;
 }) {
   /**
-   * ⚠️ **La carte est bien plus sombre que son dossier, et c'est ce qui les distingue.**
-   * Posée dans la teinte du dossier, elle s'y fondait : on ne voyait plus qu'un aplat de
-   * couleur dépassant d'un autre aplat de la même couleur. Sur la référence, la carte est
-   * presque noire et le dossier lumineux — deux objets, pas un dégradé.
+   * ⚠️ **La carte est plus sombre que son dossier, et c'est ce qui les distingue.** Posée
+   * dans la teinte du dossier, elle s'y fondait : on ne voyait plus qu'un aplat de couleur
+   * dépassant d'un autre aplat de la même couleur. Il faut donc un écart franc — deux
+   * objets, pas un dégradé.
+   *
+   * ⚠️ **Mais l'écart avait viré au terne, et sur une teinte chaude cela se paie cher.**
+   * À −34 %, un jaune-vert de dossier donnait une carte kaki : plus une couleur assombrie,
+   * une couleur *salie*. Le vert-de-gris n'apparaît que sur les teintes chaudes, ce qui
+   * explique qu'il ait passé les essais faits sur des bleus. Un tiers de moins suffit à
+   * séparer les deux plans, et la carte reste dans sa propre couleur.
    */
-  const fond = decalerClarte(couleur, -0.34);
-  const arete = decalerClarte(couleur, -0.22);
+  const fond = decalerClarte(couleur, -0.23);
+  const arete = decalerClarte(couleur, -0.14);
   /** Un identifiant par instance : deux cartes voisines partageraient sinon les dégradés. */
   const id = useId().replace(/:/g, "");
 
