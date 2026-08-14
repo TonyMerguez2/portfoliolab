@@ -276,6 +276,28 @@ const montantExact = (v: number): string =>
   v.toLocaleString("fr-FR", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + " €";
 
 /**
+ * Ce qu'un dossier annonce sur son panneau : une somme, puis ce qu'elle recouvre.
+ *
+ * ⚠️ **Écrit une fois pour les deux sortes de dossiers.** Un compte déclaré annonce son
+ * solde, un compte déduit la valeur de ses lignes — mais les deux tiennent la même place
+ * dans la même rangée, et deux jeux de styles recopiés auraient divergé au premier
+ * ajustement. Une rangée où le même rôle se dit en deux tailles se lit comme deux objets
+ * différents.
+ *
+ * ⚠️ **`tabular-nums` sur le montant.** Les dossiers sont côte à côte : sans chasse fixe,
+ * les chiffres de l'un ne s'alignent pas sur ceux de l'autre, et la rangée tremble à chaque
+ * cours qui bouge.
+ */
+const ANNONCE_DOSSIER = {
+  montant: {
+    fontFamily: FONT, fontSize: 21, fontWeight: 700,
+    color: "#FFFFFF", letterSpacing: "-0.015em", lineHeight: 1.15,
+    fontVariantNumeric: "tabular-nums",
+  },
+  mention: { fontSize: 11, color: "rgba(255,255,255,0.68)", marginTop: 1 },
+} as const;
+
+/**
  * L'écart entre le personnage, sa parole et le nom du portefeuille, en pixels.
  *
  * ⚠️ **Nommé parce qu'il sert deux fois et doit rester le même.** Il espace la rangée
@@ -2080,15 +2102,11 @@ function PortfolioPageInner() {
                                   compte est un montant exact que l'épargnant a recopié. Vu à
                                   l'écran : 12 450,80 € s'affichait « 12 451 € », et le chiffre
                                   cessait de correspondre à ce qu'on venait de taper. */}
-                              <div style={{
-                                fontFamily: FONT, fontSize: 21, fontWeight: 700,
-                                color: "#FFFFFF", letterSpacing: "-0.015em", lineHeight: 1.15,
-                                fontVariantNumeric: "tabular-nums",
-                              }}>
+                              <div style={ANNONCE_DOSSIER.montant}>
                                 {montantExact(c.solde)}
                               </div>
                               {depuis && (
-                                <div style={{ fontSize: 11, color: "rgba(255,255,255,0.68)", marginTop: 1 }}>
+                                <div style={ANNONCE_DOSSIER.mention}>
                                   Solde déclaré {depuis}
                                 </div>
                               )}
@@ -2128,16 +2146,40 @@ function PortfolioPageInner() {
                           }} />
                       );
                     })}
-                    {comptes.map(c => (
-                      <CarteCompte key={c.cle} nom={c.cle} couleur={c.couleur} icone={c.icone}
-                        compte={`${c.lignes.length} actif${c.lignes.length > 1 ? "s" : ""}`}
-                        nombre={c.lignes.length}
-                        apercu={[...c.lignes]
-                          .sort((a, b) => b.weight - a.weight)
-                          .slice(0, APERCUS_PAR_DOSSIER)
-                          .map(a => <CarteActif key={a.ticker} a={versCarte(a)} inerte />)}
-                        onClick={() => setCompteOuvert(c.cle)} />
-                    ))}
+                    {comptes.map(c => {
+                      /**
+                        * ⚠️ **Le dossier annonce ce qu'il vaut, pas seulement ce qu'il
+                        * contient.** « 3 actifs » ne dit rien du poids du compte : deux
+                        * dossiers de trois lignes peuvent porter cent euros et cinquante
+                        * mille. À côté de comptes déclarés qui affichent, eux, une somme, un
+                        * compte déduit qui n'en affiche pas paraissait vide.
+                        *
+                        * ⚠️ **Arrondi à l'euro, là où un solde déclaré garde ses centimes.**
+                        * Même style, précision différente, et c'est voulu : un solde est un
+                        * montant recopié, exact tant que personne n'y touche, tandis que
+                        * ceci est une valorisation qui suit les cours. En afficher les
+                        * centimes les ferait tourner à chaque sondage — et sur la crypto, à
+                        * chaque cours poussé — pour une précision que le chiffre n'a pas.
+                        */
+                      const valeur = c.lignes.reduce((s, a) => s + (a.value ?? 0), 0);
+                      return (
+                        <CarteCompte key={c.cle} nom={c.cle} couleur={c.couleur} icone={c.icone}
+                          compte={
+                            <>
+                              <div style={ANNONCE_DOSSIER.montant}>{euros(valeur)}</div>
+                              <div style={ANNONCE_DOSSIER.mention}>
+                                {c.lignes.length} actif{c.lignes.length > 1 ? "s" : ""}
+                              </div>
+                            </>
+                          }
+                          nombre={c.lignes.length}
+                          apercu={[...c.lignes]
+                            .sort((a, b) => b.weight - a.weight)
+                            .slice(0, APERCUS_PAR_DOSSIER)
+                            .map(a => <CarteActif key={a.ticker} a={versCarte(a)} inerte />)}
+                          onClick={() => setCompteOuvert(c.cle)} />
+                      );
+                    })}
                   </RailHorizontal>
                 </div>
               ) : (
