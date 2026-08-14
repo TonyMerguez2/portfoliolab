@@ -470,10 +470,17 @@ export default function CarteCompte({
         * le plan qu'il est censé cerner — invisible, et je l'ai cru absent avant de
         * regarder l'ordre de rendu.
         *
-        * ⚠️ **Un demi-pixel de retrait.** Un trait centré sur le chemin déborde de moitié
-        * hors de la silhouette, où le `clip-path` du plan l'a déjà coupé : il paraissait
-        * deux fois plus fin en haut qu'en bas. Le décalage le ramène entièrement à
-        * l'intérieur.
+        * ⚠️ **Un demi-pixel de retrait, et il se calcule par axe.** Un trait centré sur le
+        * chemin déborde de moitié hors de la silhouette, là où le SVG et le `clip-path` du
+        * plan l'ont déjà coupé. Le ramener à l'intérieur demande de rentrer le tracé d'un
+        * demi-pixel **des quatre côtés** : un `translate` de 0,5 s'occupe du haut et de la
+        * gauche, une échelle du bas et de la droite. Une échelle *unique* ne peut pas faire
+        * les deux, puisque le dossier n'est pas carré — réglée sur la largeur (0,9967), elle
+        * envoyait le bord bas à 150,005 sur un SVG haut de 150. Le trait y était donc centré
+        * **sur** la limite du dessin, coupé de moitié, et signalé à l'écran comme « encore un
+        * peu coupé ». D'où deux facteurs, `(côté − 1) / côté`, exacts pour les trois largeurs
+        * possibles. L'anisotropie qu'ils introduisent vaut trois millièmes : le rayon de 18
+        * devient 17,94 dans un sens et 17,88 dans l'autre.
         */}
       <svg width={largeur} height={CARTE_COMPTE.panneau + LANGUETTE.hauteur}
         aria-hidden="true" style={{
@@ -490,7 +497,9 @@ export default function CarteCompte({
         {/* ⚠️ Un pixel, comme l'arête d'une carte bancaire : deux dossiers et une carte
             voisins doivent porter le même trait, sinon le plus épais paraît plus proche. */}
         <path d={CONTOUR} fill="none" stroke={`url(#bord-${idBord})`} strokeWidth={1}
-          transform="translate(0.5, 0.5) scale(0.9967)" />
+          transform={`translate(0.5, 0.5) scale(${(largeur - 1) / largeur}, ${
+            (CARTE_COMPTE.panneau + LANGUETTE.hauteur - 1) / (CARTE_COMPTE.panneau + LANGUETTE.hauteur)
+          })`} />
       </svg>
     </button>
   );
