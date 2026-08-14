@@ -20,6 +20,16 @@ import { CLAIR } from "@/lib/palette";
  * et le même défilement — deux copies auraient divergé, et c'est justement le genre de
  * détail qu'on ne recopie qu'à moitié.
  */
+/**
+ * La place réservée au-dessus des cartes pour qu'elles puissent se soulever.
+ *
+ * ⚠️ **Elle doit valoir au moins la translation appliquée au survol**, définie dans
+ * `globals.css` sous `.novac-dossier-paquet`. Deux nombres réglés séparément, donc : celui-ci
+ * est le plus grand des deux par sécurité, et le dépasser ne coûte rien puisque la marge
+ * négative le reprend aussitôt.
+ */
+const SOULEVEMENT = 10;
+
 export default function RailHorizontal({
   children, cache = false, pasMinimal = 258,
 }: {
@@ -88,10 +98,25 @@ export default function RailHorizontal({
       {!cache && debord.droite && <Fleche sens={1} />}
       {!cache && debord.gauche && voile("gauche")}
       {!cache && debord.droite && voile("droite")}
+      {/**
+        * ⚠️ **Le rail réserve en haut la place de ce qui s'y soulève.** Un conteneur qui
+        * défile en `overflow-x` ne peut pas laisser l'autre axe libre : la spécification
+        * force `overflow-y` à devenir non visible dès que l'un des deux ne l'est pas. Tout
+        * ce qui dépasse par le haut est donc **tranché net** — vu à l'écran sur les cartes
+        * des dossiers, qui s'élèvent de sept pixels au survol et se retrouvaient coupées à
+        * l'horizontale.
+        *
+        * ⚠️ **Le retrait est repris par une marge négative, pour que la rangée ne grandisse
+        * pas.** Le rembourrage donne la place *dans* la zone de défilement ; la marge
+        * l'annule au dehors. Sans elle, réserver de quoi soulever une carte pousserait vers
+        * le bas tout ce qui suit — la courbe, le bandeau — au seul motif qu'une animation
+        * pourrait avoir lieu.
+        */}
       <div ref={rail} className="novac-rail" onScroll={mesurer} style={{
         display: cache ? "none" : "flex",
         gap: 10, overflowX: "auto", overflowY: "hidden",
         scrollbarWidth: "none", paddingBottom: 2,
+        paddingTop: SOULEVEMENT, marginTop: -SOULEVEMENT,
       }}>
         {children}
       </div>

@@ -487,7 +487,9 @@ export default function CarteCompte({
             <stop offset="100%" stopColor={decalerClarte(couleur, 0.12)} />
           </linearGradient>
         </defs>
-        <path d={CONTOUR} fill="none" stroke={`url(#bord-${idBord})`} strokeWidth={2}
+        {/* ⚠️ Un pixel, comme l'arête d'une carte bancaire : deux dossiers et une carte
+            voisins doivent porter le même trait, sinon le plus épais paraît plus proche. */}
+        <path d={CONTOUR} fill="none" stroke={`url(#bord-${idBord})`} strokeWidth={1}
           transform="translate(0.5, 0.5) scale(0.9967)" />
       </svg>
     </button>
