@@ -2129,14 +2129,17 @@ function PortfolioPageInner() {
                             <CarteBancaire key="carte" couleur={c.couleur}
                               intitule={c.libelle_genre} />,
                           ] : undefined}
+                          /**
+                            * ⚠️ **`contain` et non `cover`, depuis que la plaque blanche a
+                            * disparu.** Un logo posé à même le dossier n'a plus de fond pour
+                            * absorber le débord : `cover` remplissait le carré en rognant les
+                            * bords, ce qui coupait les logos larges — la plupart, puisqu'un
+                            * logo bancaire est le plus souvent un mot.
+                            */
                           icone={logo
-                            ? <img src={logo} alt="" width={19} height={19}
-                                style={{ borderRadius: 4, objectFit: "cover" }} />
-                            : <svg width="19" height="19" viewBox="0 0 24 24" fill="none"
-                                stroke="currentColor" strokeWidth={2} strokeLinecap="round"
-                                strokeLinejoin="round" aria-hidden="true">
-                                <path d="M3 7h18v12H3z" /><path d="M3 7l3-3h12l3 3" />
-                              </svg>}
+                            ? <img src={logo} alt="" width={TAILLE_ICONE} height={TAILLE_ICONE}
+                                style={{ borderRadius: 6, objectFit: "contain" }} />
+                            : ICONE_PAR_GENRE[c.genre] ?? ICONE_BANQUE}
                           /* ⚠️ **Le dossier s'ouvre sur sa correction, et c'est ce qui
                              manquait le plus.** Un solde de trésorerie entre dans le total
                              du portefeuille et vieillit tout seul ; sans moyen de le
@@ -2906,6 +2909,65 @@ function PortfolioPageInner() {
 }
 
 /**
+ * Les pictogrammes des dossiers, par nature de compte.
+ *
+ * ⚠️ **Un seul jeu pour les comptes déclarés et pour les comptes déduits.** Les deux
+ * sortes se côtoient dans la même rangée : un PEA deviné et un PEA déclaré doivent porter
+ * le même signe, sinon la rangée raconte une différence qui n'a de sens que pour le code.
+ * Trois dessins servaient auparavant les comptes déduits et un quatrième, à part, les
+ * comptes déclarés — ils avaient déjà divergé.
+ *
+ * ⚠️ **Le PEA et le compte-titres partagent le leur.** Ce sont deux enveloppes fiscales
+ * sur la même chose, des titres : leur différence est un régime d'imposition, pas une
+ * nature d'objet, et aucun pictogramme ne sait dessiner un plafond de versement. Le nom
+ * du dossier suffit à les distinguer.
+ *
+ * ⚠️ **Ils tiennent tous dans la boîte de 24, et se rendent à 28.** Les tracés viennent
+ * d'un même jeu et partagent donc leur graisse optique ; en mélanger d'autres origines
+ * donnerait des traits d'épaisseurs différentes à la même taille.
+ */
+const TAILLE_ICONE = 28;
+
+const ICONE_BANQUE = (
+  <svg width={TAILLE_ICONE} height={TAILLE_ICONE} viewBox="0 0 24 24" fill="none"
+    stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round"
+    aria-hidden="true">
+    <path d="M3 21h18M3 10h18M5 6l7-3 7 3M4 10v11m16-11v11M8 14v3m4-3v3m4-3v3" />
+  </svg>
+);
+
+const ICONE_TITRES = (
+  <svg width={TAILLE_ICONE} height={TAILLE_ICONE} viewBox="0 0 24 24" fill="currentColor"
+    aria-hidden="true">
+    <path d="M19.5 2.25a.75.75 0 0 1 .75.75v3h-1.5V4.856l-.008.01c-.002 0 .002-.003 0 0l-.009.008a24 24 0 0 1-2.603 2.169c-2.373 1.731-6.067 3.894-11.393 5.669a.75.75 0 0 1-.474-1.424c5.174-1.725 8.73-3.812 10.982-5.456a23 23 0 0 0 2.47-2.06l.021-.022H16.5a.75.75 0 0 1 0-1.5zM7.238 20.099c.012-.171.012-.376.012-.599v-3c0-.223 0-.428-.012-.599a1.8 1.8 0 0 0-.12-.57 1.75 1.75 0 0 0-.948-.948 1.8 1.8 0 0 0-.571-.121A9 9 0 0 0 5 14.25c-.223 0-.428 0-.599.012a1.8 1.8 0 0 0-.57.12 1.75 1.75 0 0 0-.948.948 1.8 1.8 0 0 0-.121.571c-.012.171-.012.376-.012.599v3c0 .223 0 .428.012.599.012.177.039.373.12.57.178.43.52.77.948.948.198.082.394.11.571.121.171.012.376.012.599.012s.428 0 .599-.012c.177-.012.373-.039.57-.12a1.75 1.75 0 0 0 .948-.948 1.8 1.8 0 0 0 .121-.571M14.25 19.5c0 .223 0 .428-.012.599a1.8 1.8 0 0 1-.12.57 1.75 1.75 0 0 1-.948.948 1.8 1.8 0 0 1-.571.121c-.171.012-.376.012-.599.012s-.428 0-.599-.012a1.8 1.8 0 0 1-.57-.12 1.75 1.75 0 0 1-.948-.948 1.8 1.8 0 0 1-.121-.571 9 9 0 0 1-.012-.599V14c0-.223 0-.428.012-.599a1.8 1.8 0 0 1 .12-.57 1.75 1.75 0 0 1 .948-.948c.198-.082.394-.11.571-.121.171-.012.376-.012.599-.012s.428 0 .599.012c.177.012.373.039.57.12.43.178.77.52.948.948.082.198.11.394.121.571.012.171.012.376.012.599zM21.238 20.099c.012-.171.012-.376.012-.599v-9c0-.223 0-.428-.012-.599a1.8 1.8 0 0 0-.12-.57 1.75 1.75 0 0 0-.948-.948 1.8 1.8 0 0 0-.571-.121A9 9 0 0 0 19 8.25c-.223 0-.428 0-.599.012a1.8 1.8 0 0 0-.57.12 1.75 1.75 0 0 0-.948.948 1.8 1.8 0 0 0-.121.571 9 9 0 0 0-.012.599v9c0 .223 0 .428.012.599.012.177.039.373.12.57.178.43.52.77.948.948.198.082.394.11.571.121.171.012.376.012.599.012s.428 0 .599-.012c.177-.012.373-.039.57-.12a1.75 1.75 0 0 0 .948-.948c.082-.198.11-.394.121-.571" />
+  </svg>
+);
+
+const ICONE_CRYPTO = (
+  <svg width={TAILLE_ICONE} height={TAILLE_ICONE} viewBox="0 0 24 24" fill="currentColor"
+    aria-hidden="true">
+    <path d="M16.875 3.556A9.75 9.75 0 1 1 2.25 12l.005-.316a9.75 9.75 0 0 1 14.62-8.128m-3.9 2.594a.975.975 0 0 0-.975.975h-.975a.975.975 0 1 0-1.95 0 .975.975 0 1 0 0 1.95v5.85a.975.975 0 1 0 0 1.95c0 1.3 1.95 1.3 1.95 0H12a.975.975 0 1 0 1.95 0v-.146c1.138-.385 1.95-1.49 1.95-2.78l-.005-.17a3 3 0 0 0-.715-1.781c.448-.519.72-1.202.72-1.948 0-1.29-.812-2.395-1.95-2.779v-.146a.975.975 0 0 0-.975-.975m.088 6.825c.48 0 .887.426.887.975s-.407.975-.887.975h-2.038v-1.95zm0-3.9c.48 0 .887.426.887.975 0 .509-.351.913-.786.968l-.101.007h-2.038v-1.95z" />
+  </svg>
+);
+
+/**
+ * Le pictogramme d'un compte **déclaré**, d'après son genre.
+ *
+ * ⚠️ **Indexé sur `string` et non sur une union, parce que les genres viennent du
+ * serveur.** Une union figerait ici une liste que `GENRES_COMPTE` peut allonger sans
+ * toucher au client ; le compilateur garantirait une exhaustivité qui n'existe pas. D'où
+ * le repli sur la banque à l'usage : un genre inconnu porte le signe le plus neutre plutôt
+ * que pas de signe du tout.
+ */
+const ICONE_PAR_GENRE: Record<string, React.ReactNode> = {
+  courant: ICONE_BANQUE,
+  epargne: ICONE_BANQUE,
+  pea: ICONE_TITRES,
+  cto: ICONE_TITRES,
+  crypto: ICONE_CRYPTO,
+};
+
+/**
  * Les comptes, dans l'ordre où on les montre, avec leur couleur et leur pictogramme.
  *
  * ⚠️ **L'ordre est fiscal, pas alphabétique** : le PEA d'abord parce que c'est
@@ -2919,33 +2981,9 @@ function PortfolioPageInner() {
  * range en queue tout compte que cette liste aurait oublié plutôt que de le perdre.
  */
 const HABILLAGE_COMPTES: Record<Enveloppe, { couleur: string; icone: React.ReactNode }> = {
-  PEA: {
-    couleur: "#5B6CF0",
-    icone: (
-      <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-        strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-        <path d="M3 21h18M5 21V8l7-5 7 5v13M9 21v-6h6v6" />
-      </svg>
-    ),
-  },
-  CTO: {
-    couleur: "#9B5BD6",
-    icone: (
-      <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-        strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-        <path d="M3 17l6-6 4 4 7-7M21 8v5h-5" />
-      </svg>
-    ),
-  },
-  Crypto: {
-    couleur: "#E0A23C",
-    icone: (
-      <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-        strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-        <circle cx="12" cy="12" r="9" /><path d="M9 9h5a2.5 2.5 0 0 1 0 5H9m0 0h5.5a2.5 2.5 0 0 1 0 5H9m0-10V6m0 12v-2m3-10V6m0 12v-2" />
-      </svg>
-    ),
-  },
+  PEA: { couleur: "#5B6CF0", icone: ICONE_TITRES },
+  CTO: { couleur: "#9B5BD6", icone: ICONE_TITRES },
+  Crypto: { couleur: "#E0A23C", icone: ICONE_CRYPTO },
 };
 
 /**

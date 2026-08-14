@@ -399,9 +399,28 @@ export default function CarteCompte({
             {/* L'identité du dossier : le repère de l'établissement, puis son nom. */}
             <div>
             <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between" }}>
+              {/**
+                * ⚠️ **Le pictogramme se pose sur le dossier, sans plaque sous lui.** Il
+                * tenait dans un carré blanc de trente-six pixels : une pastille de plus dans
+                * une carte qui en a déjà une à droite, et surtout un objet blanc posé sur un
+                * dossier coloré, donc un troisième plan là où il n'y a que deux matières.
+                *
+                * ⚠️ **Blanc, comme le nom et le montant — et je l'avais d'abord écrit
+                * l'inverse.** Le raisonnement paraissait solide : le plan est clair à cette
+                * hauteur, un blanc devait s'y dissoudre, et une teinte assombrie aurait tenu
+                * sur toute la palette. Comparé à l'écran sur le dossier le plus clair qu'elle
+                * contienne — le citron —, c'est faux : le blanc y reste net, et la teinte
+                * assombrie, elle, paraissait terne. La raison est que le pictogramme
+                * n'appartient pas au plan mais au bloc d'identité, dont le nom et le montant
+                * sont déjà blancs ; le peindre autrement en faisait un objet à part.
+                *
+                * ⚠️ **Vingt-huit pixels, la hauteur exacte de la pastille d'en face.** Sans
+                * plaque, plus rien ne donnait sa mesure à la rangée d'identité ; les deux
+                * bouts s'alignent désormais l'un sur l'autre. Le pictogramme gagne au passage
+                * le bord gauche du texte, dont le carré l'écartait de huit pixels et demi.
+                */}
               <span style={{
-                width: 36, height: 36, borderRadius: 11, flexShrink: 0,
-                background: "rgba(255,255,255,0.94)", color: sombre,
+                width: 28, height: 28, flexShrink: 0, color: "rgba(255,255,255,0.95)",
                 display: "flex", alignItems: "center", justifyContent: "center",
               }}>
                 {icone}
