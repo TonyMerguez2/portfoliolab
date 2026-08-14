@@ -31,8 +31,14 @@ import { FONT, NUM } from "@/lib/typography";
 
 /** Ce qui reste visible sur toute la largeur : la bande au-dessus de la languette. */
 const BANDE = CARTE_COMPTE.apercu - CARTE_COMPTE.languette.hauteur;
-/** À droite de la languette, la carte respire jusqu'au plan. */
-const DEBORD = CARTE_COMPTE.languette.largeur - 16;
+/**
+ * À droite de la languette, la carte respire jusqu'au plan.
+ *
+ * ⚠️ **La pente compte, pas seulement la largeur de la languette.** Le plan ne reprend son
+ * bord horizontal qu'au bout du raccord : tant que la pente descend, elle recouvre encore la
+ * carte. Calé sur la seule largeur, le numéro serait passé sous la courbe.
+ */
+const DEBORD = CARTE_COMPTE.languette.largeur + CARTE_COMPTE.languette.pente - 16;
 /**
  * Le contact d'une puce à circuit intégré.
  *

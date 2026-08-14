@@ -1,3 +1,5 @@
+import { useId } from "react";
+
 import { decalerClarte } from "@/lib/couleur";
 import { CARTE_ACTIF } from "@/components/portfolio/CarteActif";
 
@@ -24,8 +26,18 @@ import { CARTE_ACTIF } from "@/components/portfolio/CarteActif";
 
 /** Le rayon des angles. */
 const RAYON = 22;
-/** La languette : sa hauteur au-dessus du plan, sa largeur, et le rayon de la double courbure. */
-const LANGUETTE = { hauteur: 22, largeur: 118, courbure: 11 };
+/**
+ * La languette : sa hauteur au-dessus du plan, sa largeur, et la forme de son raccord.
+ *
+ * ⚠️ **`pente` est la longueur horizontale du raccord, et elle ne se déduit plus de la
+ * hauteur.** Le raccord était fait de deux quarts de cercle de même rayon, ce qui l'obligeait
+ * à valoir exactement la moitié de la hauteur de la languette : onze pixels d'étalement pour
+ * vingt-deux de descente, soit une pente à quarante-cinq degrés. Sur la maquette elle est
+ * bien plus douce — mesurée, une trentaine de pixels d'étalement pour la même descente. Une
+ * courbe de Bézier remplace donc le second arc : sa longueur devient un réglage, au lieu
+ * d'être une conséquence.
+ */
+const LANGUETTE = { hauteur: 22, largeur: 118, courbure: 9, pente: 32 };
 
 /**
  * La taille du dossier, déduite de la carte d'actif qu'il doit contenir.
@@ -77,19 +89,24 @@ const HAUTEUR = CARTE_COMPTE.apercu + CARTE_COMPTE.panneau;
 /**
  * Le contour du dossier, languette comprise.
  *
- * Décrit une fois pour toutes puisque la taille est fixe. Le sens de parcours est
- * horaire ; seul le raccord de la languette tourne dans l'autre sens (`sweep` à 0),
- * ce qui est exactement ce qui le rend concave.
+ * Décrit une fois pour toutes puisque la taille est fixe. Le sens de parcours est horaire.
+ *
+ * ⚠️ **Le raccord de la languette est une Bézier, plus deux arcs.** Deux quarts de cercle
+ * accolés donnent bien un S, mais un S dont l'étalement vaut forcément le rayon : la pente
+ * était donc à quarante-cinq degrés, sans moyen de l'adoucir sans changer aussi la hauteur de
+ * la languette. La cubique part verticale — elle prolonge l'arc du coin sans cassure — et
+ * arrive horizontale sur le plan, avec la longueur qu'on lui donne.
  */
 const CONTOUR = (() => {
   const l = CARTE_COMPTE.largeur;
   const h = CARTE_COMPTE.panneau + LANGUETTE.hauteur;
-  const { hauteur: hl, largeur: ll, courbure: c } = LANGUETTE;
+  const { hauteur: hl, largeur: ll, courbure: c, pente } = LANGUETTE;
   return [
     `M ${RAYON},0`,
     `L ${ll - c},0`,
     `A ${c},${c} 0 0 1 ${ll},${c}`,          // le coin de la languette, bombé
-    `A ${c},${c} 0 0 0 ${ll + c},${hl}`,     // son raccord au plan, creusé
+    // Le raccord au plan : verticale au départ, horizontale à l'arrivée.
+    `C ${ll},${c + hl * 0.34} ${ll + pente * 0.46},${hl} ${ll + pente},${hl}`,
     `L ${l - RAYON},${hl}`,
     `A ${RAYON},${RAYON} 0 0 1 ${l},${hl + RAYON}`,
     `L ${l},${h - RAYON}`,
@@ -139,6 +156,8 @@ export default function CarteCompte({
   sansPastille?: boolean;
   onClick?: () => void;
 }) {
+  /** Un identifiant par instance : deux dossiers voisins partageraient sinon le dégradé. */
+  const idBord = useId().replace(/:/g, "");
   const clair = decalerClarte(couleur, 0.12);
   const sombre = decalerClarte(couleur, -0.12);
   const cartes = apercu ?? [];
@@ -275,6 +294,43 @@ export default function CarteCompte({
           </div>
         </div>
       </div>
+
+      {/**
+        * Le liseré du pourtour.
+        *
+        * ⚠️ **Un tracé SVG, parce qu'aucun `border` ne suit une découpe.** La silhouette du
+        * dossier vient d'un `clip-path` : un `border` en épouserait la *boîte*, donc un
+        * rectangle, et traverserait l'encoche de part en part. Le même chemin, tracé sans
+        * remplissage, colle exactement au bord — encoche et pente comprises.
+        *
+        * ⚠️ **Blanc en haut, noir en bas — et le noir n'est pas un détail.** Un liseré qui
+        * s'éteint en transparence disparaît sur les couleurs claires : sur un dossier menthe,
+        * un blanc à quinze pour cent ne se distingue plus du dossier. Le bord bas vire donc
+        * au sombre, si bien que l'arête se lit sur les onze teintes — éclairée dessus,
+        * ombrée dessous, comme un objet posé.
+        *
+        * ⚠️ **Il se peint en dernier, après le plan.** Placé avant, il était recouvert par
+        * le plan qu'il est censé cerner — invisible, et je l'ai cru absent avant de
+        * regarder l'ordre de rendu.
+        *
+        * ⚠️ **Un demi-pixel de retrait.** Un trait centré sur le chemin déborde de moitié
+        * hors de la silhouette, où le `clip-path` du plan l'a déjà coupé : il paraissait
+        * deux fois plus fin en haut qu'en bas. Le décalage le ramène entièrement à
+        * l'intérieur.
+        */}
+      <svg width={CARTE_COMPTE.largeur} height={CARTE_COMPTE.panneau + LANGUETTE.hauteur}
+        aria-hidden="true" style={{
+          position: "absolute", left: 0, top: CARTE_COMPTE.apercu - LANGUETTE.hauteur,
+          pointerEvents: "none",
+        }}>
+        <defs>
+          <linearGradient id={`bord-${idBord}`} x1="0" y1="0" x2="0" y2="1">
+  
+          </linearGradient>
+        </defs>
+        <path d={CONTOUR} fill="none" stroke={`url(#bord-${idBord})`} strokeWidth={1}
+          transform="translate(0.5, 0.5) scale(0.9967)" />
+      </svg>
     </button>
   );
 }
