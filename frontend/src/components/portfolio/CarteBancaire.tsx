@@ -57,33 +57,70 @@ export default function CarteBancaire({
       aria-hidden="true"
       style={{
         width: CARTE_ACTIF.largeur, height: CARTE_ACTIF.hauteur,
-        borderRadius: 18, boxSizing: "border-box", padding: "0 17px",
+        /**
+         * ⚠️ **Rayon et marges viennent de la carte d'actif, ils ne sont pas recopiés.**
+         * Les deux cartes se côtoient dans la même rangée de dossiers : deux arrondis
+         * voisins de deux pixels se voient sans qu'on sache les nommer, et deux jeux de
+         * marges auraient divergé au premier ajustement de l'une des deux.
+         */
+        borderRadius: CARTE_ACTIF.rayon, boxSizing: "border-box",
+        padding: `${CARTE_ACTIF.marge.haut}px ${CARTE_ACTIF.marge.cote}px 0`,
         background: `linear-gradient(145deg, ${arete} 0%, ${fond} 62%)`,
-        border: "1px solid rgba(255,255,255,0.10)",
+        /**
+         * ⚠️ **L'arête est une ombre interne, pas un liseré — et ce pixel se voyait.** Sous
+         * `border-box`, un `border` de un pixel rentre le contenu d'autant : la puce tombait
+         * à 15/16 quand le logo d'une carte d'actif est à 14/15. Mesuré côte à côte, l'écart
+         * se remarque sans qu'on sache le nommer. L'ombre interne dessine la même arête sans
+         * toucher au modèle de boîte.
+         */
+        boxShadow: "inset 0 0 0 1px rgba(255,255,255,0.10)",
         display: "flex", flexDirection: "column",
       }}
     >
-      {/* La bande du haut : puce, intitulé, mention, pictogramme. Tout y tient. */}
-      <div style={{ height: BANDE, display: "flex", alignItems: "center", gap: 11 }}>
+      {/**
+        * La bande du haut : puce, intitulé, mention, pictogramme.
+        *
+        * ⚠️ **Alignée par le haut, et non centrée.** Centrée, la pastille du fronton se
+        * plaçait au milieu des deux lignes de texte : son bord supérieur tombait plus bas
+        * que celui du titre, et le titre plus haut que celui de la puce. Trois éléments,
+        * trois marges hautes différentes. Alignés en tête, ils partagent celle de la carte
+        * d'actif — la même que celle de son logo.
+        */}
+      <div style={{
+        height: BANDE - CARTE_ACTIF.marge.haut,
+        display: "flex", alignItems: "flex-start", gap: CARTE_ACTIF.ecartIdentite,
+      }}>
         {/**
           * La puce. Un rectangle arrondi barré de deux traits — c'est le seul détail qui
           * fait lire « carte » plutôt que « rectangle », et il tient en trois lignes de SVG.
           */}
-        <svg width="30" height="23" viewBox="0 0 34 26" aria-hidden="true" style={{ flexShrink: 0 }}>
-          <rect x="0.5" y="0.5" width="33" height="25" rx="5"
-            fill="rgba(255,255,255,0.22)" stroke="rgba(255,255,255,0.30)" />
-          <path d="M12 1v24M22 1v24M1 9h32M1 17h32"
-            stroke="rgba(255,255,255,0.28)" strokeWidth={1.2} />
+        {/**
+          * ⚠️ **Le pavé holographique prend la place d'un logo d'actif.** Même côté, même
+          * arrondi, même origine : posé côte à côte avec un vrai dossier de titres, l'œil
+          * retrouve la même grille. Ses traits sont ceux d'une puce, mais sa boîte est celle
+          * du logo qu'il remplace.
+          */}
+        <svg width={CARTE_ACTIF.logo.cote} height={CARTE_ACTIF.logo.cote}
+          viewBox="0 0 32 32" aria-hidden="true" style={{ flexShrink: 0 }}>
+          <rect x="0.5" y="0.5" width="31" height="31" rx={CARTE_ACTIF.logo.rayon - 0.5}
+            fill="rgba(255,255,255,0.20)" stroke="rgba(255,255,255,0.28)" />
+          <path d="M11 1v30M21 1v30M1 11h30M1 21h30"
+            stroke="rgba(255,255,255,0.26)" strokeWidth={1.2} />
         </svg>
 
         <div style={{ minWidth: 0, flex: 1 }}>
+          {/* Corps et interlignage repris de la ligne d'identité d'une carte d'actif : c'est
+              le même rang de lecture, il doit avoir le même poids. */}
           <div style={{
-            fontFamily: FONT, fontSize: 14, fontWeight: 600, color: "rgba(255,255,255,0.96)",
-            lineHeight: 1.2, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
+            fontFamily: FONT, fontSize: 15, fontWeight: 700, color: "rgba(255,255,255,0.94)",
+            lineHeight: 1.15, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
           }}>
             {intitule}
           </div>
-          <div style={{ fontFamily: FONT, fontSize: 11, color: "rgba(255,255,255,0.52)", marginTop: 1 }}>
+          <div style={{
+            fontFamily: FONT, fontSize: 11.5, fontWeight: 550, color: "rgba(255,255,255,0.45)",
+            lineHeight: 1.2, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
+          }}>
             {mention}
           </div>
         </div>

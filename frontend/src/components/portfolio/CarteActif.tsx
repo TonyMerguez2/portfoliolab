@@ -31,7 +31,25 @@ import { useClignotement, styleClignotement } from "@/lib/clignotement";
  * fixe sa hauteur d'aperçu. Changer le rembourrage ou la taille du logo ci-dessous
  * sans la corriger ici couperait le nom en deux dans les dossiers.
  */
-export const CARTE_ACTIF = { largeur: 248, hauteur: 196, identite: 46 };
+export const CARTE_ACTIF = {
+  largeur: 248, hauteur: 196, identite: 46,
+  /**
+   * Le rayon des angles, et le rembourrage de la ligne d'identité.
+   *
+   * ⚠️ **Publiés parce qu'une autre carte doit s'y aligner.** La carte bancaire d'un dossier
+   * de trésorerie occupe exactement la place d'une carte d'actif : recopiés chez elle, ces
+   * trois nombres auraient divergé au premier ajustement, et deux cartes voisines n'auraient
+   * plus eu ni le même arrondi ni les mêmes marges — un décalage de deux pixels que l'œil
+   * voit sans savoir le nommer.
+   */
+  rayon: 18,
+  /** Le rembourrage : `haut` place le logo et le titre, `cote` les colle au bord. */
+  marge: { haut: 14, cote: 15 },
+  /** Le côté du logo, et son propre arrondi. */
+  logo: { cote: 32, rayon: 8 },
+  /** L'écart entre le logo et le texte de la ligne d'identité. */
+  ecartIdentite: 9,
+};
 
 const eur = (v: number, dec = 2) =>
   v.toLocaleString("fr-FR", { minimumFractionDigits: dec, maximumFractionDigits: dec }) + " €";
@@ -82,7 +100,7 @@ export default function CarteActif({
    * fidélité du rendu, c'est la mesure qui cède.
    */
   return (
-    <TileCard ticker={a.ticker} radius={18} glowStrength={0}
+    <TileCard ticker={a.ticker} radius={CARTE_ACTIF.rayon} glowStrength={0}
       reflet={false}
       className="novac-tile"
       colorHex={brandHex(a.ticker)}
@@ -94,11 +112,13 @@ export default function CarteActif({
         // montrer ce que le dossier contient, et c'est le dossier qu'on ouvre.
         pointerEvents: inerte ? "none" : undefined,
       }}
-      style={{ height: "100%", display: "flex", flexDirection: "column", padding: "14px 15px" }}>
+      style={{ height: "100%", display: "flex", flexDirection: "column",
+        padding: `${CARTE_ACTIF.marge.haut}px ${CARTE_ACTIF.marge.cote}px` }}>
 
       {/* Identité */}
-      <div style={{ display: "flex", alignItems: "center", gap: 9 }}>
-        <AssetLogo ticker={a.ticker} type={a.type || "EQUITY"} size={32} radius={8}
+      <div style={{ display: "flex", alignItems: "center", gap: CARTE_ACTIF.ecartIdentite }}>
+        <AssetLogo ticker={a.ticker} type={a.type || "EQUITY"}
+          size={CARTE_ACTIF.logo.cote} radius={CARTE_ACTIF.logo.rayon}
           fallbackBg="rgba(255,255,255,0.10)" fallbackBorder="rgba(255,255,255,0.16)"
           fallbackTextColor="#fff" bare />
         <div style={{ minWidth: 0, flex: 1 }}>
