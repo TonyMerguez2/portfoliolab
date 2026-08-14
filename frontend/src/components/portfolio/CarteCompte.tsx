@@ -81,8 +81,21 @@ const LANGUETTE = {
  * d'actif, sans quoi la courbe au-dessus change de taille selon qu'on regarde les
  * dossiers ou leur contenu.
  */
-/** Le retrait de la première carte dans le dossier, et le décalage de chaque suivante. */
-const PAQUET = { retrait: 16, decalage: 14, margeDroite: 12 };
+/**
+ * Le paquet de cartes dans le dossier : son retrait, le décalage entre deux cartes.
+ *
+ * ⚠️ **Le retrait vaut la même chose des deux côtés, et il ne le valait pas.** Mesuré sur les
+ * trois dossiers de l'écran : seize pixels avant la première carte, douze après la dernière.
+ * Ces deux marges se voient toutes les deux — la bande qui dépasse du plan laisse voir le
+ * fond de la page de part et d'autre du paquet —, si bien que l'asymétrie était visible sans
+ * être justifiée. Elle venait d'un total posé d'un bloc, cinquante-six, dont personne n'avait
+ * redécoupé les termes.
+ *
+ * ⚠️ **Quatorze de chaque côté, parce que la somme ne change pas.** Seize plus douze font
+ * vingt-huit, comme deux fois quatorze : l'équilibrage se fait donc à largeur constante, et
+ * les trois dossiers gardent leurs 276, 290 et 304 pixels.
+ */
+const PAQUET = { retrait: 14, decalage: 14 };
 
 /** Le nombre de cartes qu'un dossier laisse voir au plus. */
 export const APERCUS_MAX = 3;
@@ -103,8 +116,7 @@ export const CARTE_COMPTE = {
    */
   largeurPour(cartes: number): number {
     const n = Math.min(APERCUS_MAX, Math.max(1, cartes));
-    return PAQUET.retrait + (n - 1) * PAQUET.decalage
-      + CARTE_ACTIF.largeur + PAQUET.margeDroite;
+    return 2 * PAQUET.retrait + (n - 1) * PAQUET.decalage + CARTE_ACTIF.largeur;
   },
   /**
    * La largeur maximale, celle d'un dossier plein.
