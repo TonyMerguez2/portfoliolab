@@ -17,6 +17,15 @@ export type Tx = {
   fees: number;
   executed_at: string;
   note?: string | null;
+  /**
+   * Le compte déclaré où cette écriture est rangée, ou `null` si elle ne l'est pas.
+   *
+   * ⚠️ **Le serveur l'envoie depuis toujours ; c'est l'écran qui le jetait.** La page
+   * portefeuille lit déjà ce journal pour poser les repères de la courbe, et le champ
+   * tombait au `.map`. Le déclarer ici évite d'aller redemander au serveur ce qu'il a déjà
+   * dit — voir `comptesParTicker` dans `dossiers.ts`.
+   */
+  compte_id?: string | null;
 };
 
 /**
