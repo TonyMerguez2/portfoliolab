@@ -1,4 +1,6 @@
 "use client";
+import { useId } from "react";
+
 import { CARTE_ACTIF } from "@/components/portfolio/CarteActif";
 import { CARTE_COMPTE } from "@/components/portfolio/CarteCompte";
 import { decalerClarte } from "@/lib/couleur";
@@ -31,6 +33,56 @@ import { FONT, NUM } from "@/lib/typography";
 const BANDE = CARTE_COMPTE.apercu - CARTE_COMPTE.languette.hauteur;
 /** À droite de la languette, la carte respire jusqu'au plan. */
 const DEBORD = CARTE_COMPTE.languette.largeur - 16;
+/**
+ * Le contact d'une puce à circuit intégré.
+ *
+ * ⚠️ **Trois rangées, et celle du milieu est plus courte : c'est ce qui fait la puce.**
+ * Une grille régulière de neuf cases se lit comme une fenêtre, pas comme un contact. Sur une
+ * vraie puce, la bande centrale est écrasée entre deux rangées plus hautes, ce qui isole un
+ * petit pavé large au milieu — la forme qu'on reconnaît sans savoir la décrire.
+ *
+ * ⚠️ **Du métal, pas un voile blanc.** Le premier jet remplissait la puce d'un blanc à vingt
+ * pour cent barré de traits clairs : cela donnait une grille translucide posée sur la carte.
+ * Ce qu'on reconnaît d'une puce, c'est qu'elle **réfléchit** — un dégradé qui passe du clair
+ * au sombre en diagonale, et des rainures **sombres** entre les pavés, puisque ce sont des
+ * sillons et non des traits tracés.
+ *
+ * ⚠️ **Elle garde la boîte du logo qu'elle remplace.** Même côté, même arrondi, même origine
+ * que le logo d'une carte d'actif : c'est ce qui aligne les deux cartes lorsqu'elles
+ * dépassent côte à côte de deux dossiers voisins.
+ */
+function Puce() {
+  /**
+   * ⚠️ **L'identifiant du dégradé est propre à l'instance.** Deux cartes bancaires côte à
+   * côte partageraient sinon la même définition : le navigateur applique alors la dernière
+   * rencontrée aux deux, et la première change d'aspect quand la seconde apparaît.
+   */
+  const id = useId().replace(/:/g, "");
+  const cote = CARTE_ACTIF.logo.cote;
+  return (
+    <svg width={cote} height={cote} viewBox="0 0 32 32" aria-hidden="true"
+      style={{ flexShrink: 0 }}>
+      <defs>
+        <linearGradient id={`puce-${id}`} x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0%" stopColor="#F2F4F7" />
+          <stop offset="38%" stopColor="#C7CCD4" />
+          <stop offset="62%" stopColor="#9AA1AC" />
+          <stop offset="100%" stopColor="#DDE1E7" />
+        </linearGradient>
+      </defs>
+      <rect x="0.5" y="0.5" width="31" height="31" rx={CARTE_ACTIF.logo.rayon - 0.5}
+        fill={`url(#puce-${id})`} stroke="rgba(0,0,0,0.28)" strokeWidth={1} />
+      {/* Les sillons : deux montants sur toute la hauteur, deux traverses qui écrasent la
+          rangée du milieu à huit unités contre douze pour ses voisines. */}
+      <path d="M10 1v30M22 1v30M1 12h30M1 20h30"
+        stroke="rgba(30,35,45,0.42)" strokeWidth={1.4} strokeLinecap="round" />
+      {/* Le reflet du bord supérieur, celui qui dit que la surface est polie. */}
+      <path d="M4 2.5h24" stroke="rgba(255,255,255,0.65)" strokeWidth={1.1}
+        strokeLinecap="round" />
+    </svg>
+  );
+}
+
 export default function CarteBancaire({
   intitule, mention, couleur, derniers,
 }: {
@@ -94,20 +146,7 @@ export default function CarteBancaire({
           * La puce. Un rectangle arrondi barré de deux traits — c'est le seul détail qui
           * fait lire « carte » plutôt que « rectangle », et il tient en trois lignes de SVG.
           */}
-        {/**
-          * ⚠️ **Le pavé holographique prend la place d'un logo d'actif.** Même côté, même
-          * arrondi, même origine : posé côte à côte avec un vrai dossier de titres, l'œil
-          * retrouve la même grille. Ses traits sont ceux d'une puce, mais sa boîte est celle
-          * du logo qu'il remplace.
-          */}
-        <svg width={CARTE_ACTIF.logo.cote} height={CARTE_ACTIF.logo.cote}
-          viewBox="0 0 32 32" aria-hidden="true" style={{ flexShrink: 0 }}>
-          <rect x="0.5" y="0.5" width="31" height="31" rx={CARTE_ACTIF.logo.rayon - 0.5}
-            fill="rgba(255,255,255,0.20)" stroke="rgba(255,255,255,0.28)" />
-          <path d="M11 1v30M21 1v30M1 11h30M1 21h30"
-            stroke="rgba(255,255,255,0.26)" strokeWidth={1.2} />
-        </svg>
-
+        <Puce />
         <div style={{ minWidth: 0, flex: 1 }}>
           {/* Corps et interlignage repris de la ligne d'identité d'une carte d'actif : c'est
               le même rang de lecture, il doit avoir le même poids. */}
