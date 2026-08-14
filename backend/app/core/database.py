@@ -132,7 +132,7 @@ class Objectif(Base):
 
 class Compte(Base):
     """
-    Un compte **déclaré** par l'épargnant : son nom, son genre, sa couleur, son logo.
+    Un compte **déclaré** par l'épargnant : son nom, son genre, sa couleur.
 
     ⚠️ **Cette table remplace une déduction.** Jusqu'ici l'écran rangeait chaque ligne
     dans « PEA », « CTO » ou « Crypto » d'après sa place de cotation — une inférence, pas
@@ -164,9 +164,6 @@ class Compte(Base):
     #: courant | epargne | pea | cto | crypto — voir `GENRES_COMPTE`.
     genre        = Column(String, nullable=False)
     couleur      = Column(String, nullable=False, default="#6366F1")
-    #: Le logo de l'établissement. Chemin public, comme l'image d'un portefeuille :
-    #: `uploads/` est déjà servi en statique et SQLite grossit mal avec des octets.
-    logo_url     = Column(String, nullable=True)
     #: Les liquidités du compte, en devise du portefeuille.
     #:
     #: ⚠️ **Elles valent pour tous les genres, pas seulement pour le courant.** Un PEA
@@ -222,6 +219,13 @@ class Transaction(Base):
 Base.metadata.create_all(engine)
 
 # Migration douce : ajoute les colonnes si elles n'existent pas encore
+#
+# ⚠️ **Elle n'en retire aucune, et c'est volontaire.** Une colonne supprimée du modèle
+# reste dans les bases déjà créées — `comptes.logo_url` depuis que les logos
+# d'établissement ont été retirés. SQLAlchemy ne la lit plus, elle ne coûte rien, et la
+# faire tomber demanderait un `DROP COLUMN` que les vieilles versions de SQLite ne savent
+# pas faire : la table entière serait reconstruite, données comprises, pour économiser un
+# champ vide. Les bases neuves, elles, ne l'auront jamais.
 for table, col, typedef in [
     ("portfolios",   "total_value",   "REAL"),
     ("portfolios",   "cost_basis",    "REAL"),

@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 
 import type { Compte, CompteASoumettre, GenreCompte } from "@/lib/comptes";
 import { fraicheurDuSolde } from "@/lib/comptes";
@@ -14,7 +14,7 @@ import { FONT, NUM } from "@/lib/typography";
  * Jusqu'ici un compte n'existait qu'en creux : il apparaissait parce qu'une ligne avait été
  * saisie et que sa place de cotation le laissait deviner. Un compte courant, qui ne détient
  * aucun titre, ne pouvait donc jamais exister — et deux PEA chez deux banques n'en faisaient
- * qu'un. On le déclare maintenant d'abord : ce qu'il est, de quelle couleur, sous quel logo.
+ * qu'un. On le déclare maintenant d'abord : ce qu'il est, et de quelle couleur.
  *
  * ⚠️ **Deux temps, parce que ce sont deux questions.** *Qu'est-ce que ce compte* est une
  * description ; *comment ses opérations y entrent* est un mode de fonctionnement. Fondues
@@ -32,8 +32,15 @@ import { FONT, NUM } from "@/lib/typography";
  * déclaration initiale.
  */
 
-/** Ce que le formulaire rend une fois le premier temps rempli. */
-export type SaisieCompte = CompteASoumettre & { logo: File | null };
+/**
+ * Ce que le formulaire rend une fois le premier temps rempli.
+ *
+ * ⚠️ **Un alias, et non plus un type à part.** Il portait un `logo: File | null` que la
+ * soumission au serveur ne contient pas — le fichier partait par une seconde requête. Le
+ * logo retiré, les deux formes se confondent ; l'alias reste parce que c'est le mot que
+ * l'écran emploie, et parce qu'il redeviendra distinct au premier champ propre à la saisie.
+ */
+export type SaisieCompte = CompteASoumettre;
 
 /**
  * Les couleurs proposées pour le dossier.
@@ -90,9 +97,6 @@ export default function FormulaireCompte({
    * formulaire, se défait en fermant, et personne ne supprime un compte en visant mal.
    */
   const [confirmeSuppression, setConfirmeSuppression] = useState(false);
-  const [logo, setLogo] = useState<File | null>(null);
-  const [apercuLogo, setApercuLogo] = useState<string | null>(null);
-  const fichier = useRef<HTMLInputElement>(null);
 
   /**
    * ⚠️ **Le premier genre n'est choisi qu'une fois la liste arrivée.** Poser une valeur en
@@ -102,17 +106,6 @@ export default function FormulaireCompte({
   useEffect(() => {
     if (!genre && genres.length > 0) setGenre(genres[0].cle);
   }, [genres, genre]);
-
-  /**
-   * ⚠️ **L'aperçu du logo se révoque, sinon il fuit.** `createObjectURL` retient le fichier
-   * en mémoire jusqu'à ce qu'on le relâche : choisir cinq logos de suite en garderait cinq.
-   */
-  useEffect(() => {
-    if (!logo) { setApercuLogo(null); return; }
-    const url = URL.createObjectURL(logo);
-    setApercuLogo(url);
-    return () => URL.revokeObjectURL(url);
-  }, [logo]);
 
   const genreChoisi = genres.find(g => g.cle === genre);
   const nomPropre = nom.trim();
@@ -141,7 +134,7 @@ export default function FormulaireCompte({
     && (avecTitres || soldeSaisi);
 
   const enregistrer = () => onEnregistrer({
-    nom: nomPropre, genre, couleur, logo,
+    nom: nomPropre, genre, couleur,
     /**
      * ⚠️ **Un champ vide n'est pas un solde nul.** `parseFloat("")` rend `NaN`, et un zéro
      * posé par défaut ferait déclarer « ce compte est vide » à qui n'a rien saisi. Le serveur
@@ -231,34 +224,6 @@ export default function FormulaireCompte({
                     }} />
                 ))}
               </div>
-            </div>
-
-            <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-              <span style={etiquette}>Logo de l’établissement</span>
-              <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                <div style={{
-                  width: 40, height: 40, borderRadius: RAYONS.xs, flexShrink: 0,
-                  background: apercuLogo ? `center/cover no-repeat url(${apercuLogo})` : couleur,
-                  border: `1px solid ${CLAIR.bord}`,
-                }} />
-                <input ref={fichier} type="file" accept="image/*" hidden
-                  onChange={e => setLogo(e.target.files?.[0] ?? null)} />
-                <button type="button" onClick={() => fichier.current?.click()}
-                  style={{ ...champ, width: "auto", cursor: "pointer",
-                    color: CLAIR.texteSecondaire }}>
-                  {logo ? "Changer" : "Choisir une image"}
-                </button>
-                {logo && (
-                  <button type="button" onClick={() => setLogo(null)}
-                    style={{ background: "none", border: "none", cursor: "pointer",
-                      fontFamily: FONT, fontSize: 11, color: CLAIR.texteFaible }}>
-                    Retirer
-                  </button>
-                )}
-              </div>
-              <span style={{ fontFamily: FONT, fontSize: 10.5, color: CLAIR.texteAttenue }}>
-                Facultatif. À défaut, le dossier porte sa couleur.
-              </span>
             </div>
 
             {/**

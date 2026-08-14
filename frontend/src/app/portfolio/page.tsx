@@ -45,7 +45,7 @@ import FormulaireCompte, { type SaisieCompte } from "@/components/portfolio/Form
 import CarteBancaire from "@/components/portfolio/CarteBancaire";
 import {
   type Compte as CompteDeclare, type GenreCompte, creerCompte, fraicheurDuSolde,
-  lireComptes, lireGenres, modifierCompte, supprimerCompte, televerserLogo, urlDuLogo,
+  lireComptes, lireGenres, modifierCompte, supprimerCompte,
 } from "@/lib/comptes";
 import { BASE_COMPACTE, PLACE_COMPACTE, parleEnContexteDense } from "@/lib/avatarDialogue";
 import { useParoleStable } from "@/lib/useParoleStable";
@@ -1292,16 +1292,6 @@ function PortfolioPageInner() {
 
   useEffect(() => { rechargerComptes(); }, [rechargerComptes]);
 
-  /**
-   * ⚠️ **Le logo part après la création, en deux appels.** Le compte n'a pas d'identifiant
-   * avant d'exister, et le nom du fichier en dérive : c'est ce qui garantit qu'aucune chaîne
-   * reçue du client ne devient un chemin sur le disque. Un envoi en `multipart` d'un seul
-   * tenant aurait supprimé le second aller-retour, au prix de cette garantie.
-   *
-   * ⚠️ **Un logo refusé ne perd pas le compte.** Il est créé, et l'image seule échoue — on
-   * garde donc le compte et l'on dit ce qui n'a pas suivi, plutôt que de tout annuler pour
-   * une image trop lourde.
-   */
   const enregistrerLeCompte = useCallback(async (saisie: SaisieCompte) => {
     if (!idPortefeuille) return;
     setCompteEnCours(true);
@@ -1309,19 +1299,11 @@ function PortfolioPageInner() {
     try {
       /**
        * ⚠️ **Corriger et déclarer suivent le même chemin, à la route près.** Deux fonctions
-       * auraient divergé sur le logo, sur le rechargement, sur la fermeture — et c'est
-       * précisément la moitié rarement exercée qui aurait pris du retard.
+       * auraient divergé sur le rechargement, sur la fermeture — et c'est précisément la
+       * moitié rarement exercée qui aurait pris du retard.
        */
-      const compte = compteEdite
-        ? await modifierCompte(String(idPortefeuille), compteEdite.id, saisie)
-        : await creerCompte(String(idPortefeuille), saisie);
-      if (saisie.logo) {
-        try {
-          await televerserLogo(String(idPortefeuille), compte.id, saisie.logo);
-        } catch {
-          setErreurCompte("Le compte est enregistré, mais le logo n'a pas pu l'être.");
-        }
-      }
+      if (compteEdite) await modifierCompte(String(idPortefeuille), compteEdite.id, saisie);
+      else await creerCompte(String(idPortefeuille), saisie);
       rechargerComptes();
       setFormCompte(false);
       setCompteEdite(null);
@@ -2079,7 +2061,6 @@ function PortfolioPageInner() {
                       * comptes servent à lever.
                       */}
                     {comptesDeclares.map(c => {
-                      const logo = urlDuLogo(c);
                       const depuis = fraicheurDuSolde(c.mis_a_jour_le);
                       return (
                         <CarteCompte key={c.id} nom={c.nom} couleur={c.couleur}
@@ -2130,16 +2111,16 @@ function PortfolioPageInner() {
                               intitule={c.libelle_genre} />,
                           ] : undefined}
                           /**
-                            * ⚠️ **`contain` et non `cover`, depuis que la plaque blanche a
-                            * disparu.** Un logo posé à même le dossier n'a plus de fond pour
-                            * absorber le débord : `cover` remplissait le carré en rognant les
-                            * bords, ce qui coupait les logos larges — la plupart, puisqu'un
-                            * logo bancaire est le plus souvent un mot.
+                            * ⚠️ **Le pictogramme vient du genre, et de rien d'autre.** Un logo
+                            * d'établissement téléversé pouvait le remplacer ; la promesse
+                            * n'était pas tenable. Sans plaque blanche derrière lui, une image
+                            * quelconque tombe sur un dossier coloré — logo carré sur fond blanc
+                            * opaque, capture rognée, PNG sans transparence — et le résultat
+                            * dépendait entièrement du fichier choisi, donc échappait au dessin.
+                            * Cinq dessins d'un même jeu tiennent la rangée ensemble ; une image
+                            * par compte la défaisait.
                             */
-                          icone={logo
-                            ? <img src={logo} alt="" width={TAILLE_ICONE} height={TAILLE_ICONE}
-                                style={{ borderRadius: 6, objectFit: "contain" }} />
-                            : ICONE_PAR_GENRE[c.genre] ?? ICONE_BANQUE}
+                          icone={ICONE_PAR_GENRE[c.genre] ?? ICONE_BANQUE}
                           /* ⚠️ **Le dossier s'ouvre sur sa correction, et c'est ce qui
                              manquait le plus.** Un solde de trésorerie entre dans le total
                              du portefeuille et vieillit tout seul ; sans moyen de le

@@ -23,14 +23,13 @@ from __future__ import annotations
 import re
 import uuid
 
-from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from app.core.auth import require_auth
 from app.core.database import Compte, Portfolio, Transaction, get_db
 from app.models.user import User
-from app.utils.images import ImageRefusee, TAILLE_MAX, enregistrer, supprimer
 
 router = APIRouter(prefix="/api/v1/portfolios", tags=["Comptes"])
 
@@ -43,8 +42,6 @@ router = APIRouter(prefix="/api/v1/portfolios", tags=["Comptes"])
 #: identifiant de portefeuille et rendra 404. Une constante du domaine n'a de toute façon
 #: pas sa place sous le chemin d'un portefeuille : elle n'appartient à aucun.
 constantes = APIRouter(prefix="/api/v1", tags=["Comptes"])
-
-DOSSIER_LOGOS = "uploads"
 
 #: Les genres de compte reconnus, et ce qu'ils peuvent contenir.
 #:
@@ -131,7 +128,6 @@ def _en_dict(c: Compte) -> dict:
         "libelle_genre": GENRES_COMPTE[c.genre]["libelle"] if c.genre in GENRES_COMPTE else c.genre,
         "porte_des_titres": bool(GENRES_COMPTE.get(c.genre, {}).get("titres")),
         "couleur": c.couleur,
-        "logo_url": c.logo_url,
         "solde": c.solde,
         "rang": c.rang,
         "mis_a_jour_le": c.mis_a_jour_le.isoformat() if c.mis_a_jour_le else None,
@@ -220,48 +216,6 @@ def supprimer_compte(portfolio_id: str, compte_id: str, db: Session = Depends(ge
                  .filter(Transaction.portfolio_id == p.id,
                          Transaction.compte_id == c.id)
                  .update({Transaction.compte_id: None}, synchronize_session=False))
-    supprimer(DOSSIER_LOGOS, f"compte-{c.id}")
     db.delete(c)
     db.commit()
     return {"supprime": True, "operations_detachees": detachees}
-
-
-@router.post("/{portfolio_id}/comptes/{compte_id}/logo")
-async def televerser_logo(portfolio_id: str, compte_id: str,
-                          file: UploadFile = File(...),
-                          db: Session = Depends(get_db),
-                          user: User = Depends(require_auth)):
-    """
-    Reçoit le logo de l'établissement.
-
-    ⚠️ **Le nom du fichier vient d'un identifiant interne, jamais de l'appelant.** Le
-    portefeuille puis le compte sont résolus d'abord : c'est ce qui empêche d'écrire dans
-    le dossier d'autrui, et ce qui garantit qu'aucune chaîne reçue ne devient un chemin.
-    Le préfixe `compte-` évite en outre qu'un compte écrase l'image du portefeuille qui
-    porterait le même UUID.
-
-    ⚠️ **La lecture est bornée avant l'écriture.** `UploadFile` n'impose rien de son
-    côté : sans ce garde-fou, la taille écrite serait celle que l'appelant décide.
-    """
-    p = _portefeuille(portfolio_id, user, db)
-    c = _compte(compte_id, p, db)
-    donnees = await file.read(TAILLE_MAX + 1)
-    try:
-        c.logo_url = enregistrer(donnees, DOSSIER_LOGOS, f"compte-{c.id}")
-    except ImageRefusee as e:
-        raise HTTPException(status_code=400, detail=str(e))
-    db.commit()
-    db.refresh(c)
-    return _en_dict(c)
-
-
-@router.delete("/{portfolio_id}/comptes/{compte_id}/logo")
-def retirer_logo(portfolio_id: str, compte_id: str, db: Session = Depends(get_db),
-                 user: User = Depends(require_auth)):
-    p = _portefeuille(portfolio_id, user, db)
-    c = _compte(compte_id, p, db)
-    supprimer(DOSSIER_LOGOS, f"compte-{c.id}")
-    c.logo_url = None
-    db.commit()
-    db.refresh(c)
-    return _en_dict(c)

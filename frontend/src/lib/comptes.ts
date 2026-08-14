@@ -31,7 +31,6 @@ export type Compte = {
   libelle_genre: string;
   porte_des_titres: boolean;
   couleur: string;
-  logo_url: string | null;
   /** Les liquidités déclarées, ou `null` quand rien n'a été saisi. */
   solde: number | null;
   rang: number;
@@ -153,35 +152,3 @@ export async function supprimerCompte(portefeuille: string, id: string): Promise
   if (!r.ok) await ouRaler(r, "Le compte n'a pas pu être supprimé.");
 }
 
-/**
- * Téléverse le logo de l'établissement.
- *
- * ⚠️ **Aucun `Content-Type` posé à la main.** Le navigateur doit écrire lui-même la
- * frontière du `multipart`, qu'il génère : la fixer ici produit un corps que le serveur ne
- * sait plus découper, et l'erreur arrive sous la forme d'un 422 sans rapport apparent.
- */
-export async function televerserLogo(
-  portefeuille: string, id: string, fichier: File,
-): Promise<Compte> {
-  const corps = new FormData();
-  corps.append("file", fichier);
-  const r = await fetch(
-    `${API_URL}/api/v1/portfolios/${encodeURIComponent(portefeuille)}/comptes/${id}/logo`,
-    { method: "POST", headers: enTetesAuth(), body: corps },
-  );
-  if (!r.ok) return ouRaler(r, "Le logo n'a pas pu être enregistré.");
-  return r.json();
-}
-
-/**
- * L'adresse complète d'un logo, ou `null`.
- *
- * Le serveur rend un chemin public relatif ; l'écran a besoin d'une URL absolue quand
- * l'API vit sur une autre origine que le site.
- */
-export function urlDuLogo(compte: Pick<Compte, "logo_url">): string | null {
-  if (!compte.logo_url) return null;
-  return compte.logo_url.startsWith("http")
-    ? compte.logo_url
-    : `${API_URL}/${compte.logo_url.replace(/^\/+/, "")}`;
-}
