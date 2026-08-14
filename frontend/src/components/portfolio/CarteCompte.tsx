@@ -91,11 +91,13 @@ const LANGUETTE = {
  * être justifiée. Elle venait d'un total posé d'un bloc, cinquante-six, dont personne n'avait
  * redécoupé les termes.
  *
- * ⚠️ **Quatorze de chaque côté, parce que la somme ne change pas.** Seize plus douze font
- * vingt-huit, comme deux fois quatorze : l'équilibrage se fait donc à largeur constante, et
- * les trois dossiers gardent leurs 276, 290 et 304 pixels.
+ * ⚠️ **Dix de chaque côté, réglé à l'œil et non déduit.** L'équilibrage s'était d'abord fait
+ * à quatorze — la moitié des vingt-huit pixels que l'ancienne répartition dépensait —, ce qui
+ * gardait les largeurs inchangées mais laissait le paquet trop au large. À dix, le dossier
+ * serre ses cartes et perd huit pixels : 268, 282 et 296 pour une, deux ou trois cartes. La
+ * largeur se recalcule d'elle-même, il n'y a rien d'autre à reprendre.
  */
-const PAQUET = { retrait: 14, decalage: 14 };
+const PAQUET = { retrait: 10, decalage: 14 };
 
 /** Le nombre de cartes qu'un dossier laisse voir au plus. */
 export const APERCUS_MAX = 3;
