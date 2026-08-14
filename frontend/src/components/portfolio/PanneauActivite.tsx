@@ -1,6 +1,8 @@
 "use client";
 import { useEffect, useState } from "react";
 
+import { CountryFlagRounded } from "@appica/country-flags-react";
+
 import AssetLogo from "@/components/AssetLogo";
 import { API_URL } from "@/lib/api";
 import { enTetesAuth } from "@/lib/session";
@@ -216,9 +218,32 @@ export default function PanneauActivite({
           quand={operation ? depuis(operation.executed_at) : undefined}
         />
 
+        {/**
+          * ⚠️ **Le drapeau vient du jeu de 261 pays, pas des quinze fichiers de
+          * `public/drapeaux`.** Ce dossier n'a ni Taïwan, ni la Corée, ni aucun pays
+          * nordique — c'est-à-dire les premières expositions asiatiques d'un vrai PEA, qui
+          * s'affichaient sans rien.
+          *
+          * ⚠️ **La garde sur le code n'est pas une précaution de style.** Mesuré sur ce
+          * composant ailleurs dans l'application : un code inconnu ne dessine **rien** — pas
+          * d'erreur, juste un vide de la taille du drapeau, qui décale la ligne — et un code
+          * `null` lève. D'où le test sur une chaîne de deux lettres, et le repli derrière.
+          */}
         <Ligne
           titre="Prochaine publication économique"
           vide="Rien d’annoncé pour vos zones."
+          gauche={economique && (
+            typeof economique.pays === "string" && economique.pays.length === 2 ? (
+              <CountryFlagRounded code={economique.pays} size={22}
+                title={economique.ticker ?? undefined}
+                style={{ flexShrink: 0, display: "block" }} />
+            ) : (
+              <span style={{
+                width: 22, height: 22, borderRadius: 6, flexShrink: 0,
+                background: CLAIR.carteCreuse, border: `1px solid ${CLAIR.bord}`,
+              }} />
+            )
+          )}
           texte={economique?.libelle}
           sousTexte={economique?.ticker ?? undefined}
           quand={economique ? delai(economique.jours, economique.date) : undefined}
