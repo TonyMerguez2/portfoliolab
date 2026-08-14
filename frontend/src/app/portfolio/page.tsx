@@ -24,6 +24,7 @@ import AllocationDonut from "@/components/portfolio/AllocationDonut";
 import RecentActivity from "@/components/portfolio/RecentActivity";
 import PortfolioTabs from "@/components/portfolio/PortfolioTabs";
 import { donutArcs } from "@/lib/donut";
+import { constatsDuPortefeuille } from "@/lib/constatsPortefeuille";
 import { operationsDuDossier, repartirEnDossiers } from "@/lib/dossiers";
 import { jouerEtalement, releverLesCartes, type Positions } from "@/lib/etalement";
 import { compteInfere, valoriser, type Enveloppe, type GridAsset } from "@/lib/portfolio";
@@ -1245,6 +1246,35 @@ function PortfolioPageInner() {
    */
   const [analyse, setAnalyse] = useState<Analyse | null>(null);
   const [etatAnalyse, setEtatAnalyse] = useState<EtatAnalyse>("charge");
+
+  /**
+   * Les constats chiffrés du portefeuille, pour le panneau de droite.
+   *
+   * ⚠️ **Les frais viennent de l'analyse, mais seulement ceux que l'épargnant a saisis.**
+   * Le serveur rend aussi ceux qu'il a devinés chez le fournisseur ; les mêler ferait dire
+   * « vos frais coûtent 38 € » sur un chiffre que personne n'a vérifié. On ne retient donc
+   * que la source « saisi ».
+   */
+  const constats = useMemo(() => {
+    const saisis: Record<string, number> = {};
+    for (const [ticker, f] of Object.entries(analyse?.frais_lignes ?? {})) {
+      if (f?.valeur != null && f.source === "saisi") saisis[ticker] = f.valeur;
+    }
+    return constatsDuPortefeuille({
+      lignes: enriched.map(a => ({ ticker: a.ticker, value: a.value, pnlEur: a.pnlEur })),
+      liquidites: liquiditesDeclarees,
+      fraisParLigne: saisis,
+      /**
+       * ⚠️ **Le gain des titres, jamais le total du portefeuille.** Les liquidités
+       * déclarées entrent dans la valeur totale sans avoir rien gagné : les compter ici
+       * ferait dire « ESE.PA porte 40 % de votre gain » sur un dénominateur gonflé d'une
+       * somme qui n'a pas bougé.
+       */
+      gainTotal: valeurTitres != null && prixDeRevient != null
+        ? valeurTitres - prixDeRevient : null,
+    });
+  }, [enriched, liquiditesDeclarees, analyse?.frais_lignes, valeurTitres, prixDeRevient]);
+
 
   useEffect(() => {
     const id = portfolio?.id;
@@ -2502,6 +2532,47 @@ function PortfolioPageInner() {
                 ancre={ancreProfil}
               />
             )}
+            {/**
+              * Les constats chiffrés du portefeuille.
+              *
+              * ⚠️ **Ce panneau prend la place du « Détail du score », et c'est un aveu de
+              * redondance.** Sur un portefeuille complet, celui-ci ne portait plus qu'une
+              * ligne neuve — la cause de la note — sous un score déjà écrit dans le
+              * bandeau, trois centimètres plus haut, et au-dessus d'un lien vers l'onglet
+              * qui détaille tout. Un quart de la colonne pour une information.
+              *
+              * ⚠️ **Les constats ne dépendent pas de l'analyse, et c'est ce qui les rend
+              * fiables.** Ils se calculent sur les lignes, les soldes et les opérations
+              * déjà chargés : un cours manquant fait taire le score, pas eux.
+              *
+              * ⚠️ **Aucune phrase ne conseille.** C'est la même règle que l'« Aide à la
+              * décision » des objectifs, qui remplaçait déjà les « Recommandations IA » de
+              * la maquette : « vos trois premières lignes font 74 % » est une mesure,
+              * « allégez-les » serait du conseil en investissement.
+              */}
+            <p style={{ margin: "0 0 10px", fontSize: 12.5, fontWeight: 600, color: CLAIR.texte }}>
+              Constats
+            </p>
+            {constats.length > 0 ? (
+              <ul style={{ margin: "0 0 10px", padding: 0, listStyle: "none",
+                display: "flex", flexDirection: "column", gap: 7 }}>
+                {constats.map(c => (
+                  <li key={c} style={{ fontSize: 11, lineHeight: 1.5, color: CLAIR.texteSecondaire,
+                    display: "flex", gap: 7 }}>
+                    <span aria-hidden="true" style={{ color: CLAIR.accent, flexShrink: 0 }}>·</span>
+                    {c}
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              /* ⚠️ Dire de quoi ils se nourrissent, plutôt que « aucune donnée ». Un
+                 panneau vide sans motif se lit comme une panne. */
+              <p style={{ margin: "0 0 10px", fontSize: 10.5, color: CLAIR.texteAttenue,
+                lineHeight: 1.45 }}>
+                Rien à mesurer pour l’instant : ces constats se calculent sur vos lignes,
+                vos soldes déclarés et vos opérations.
+              </p>
+            )}
             {etatAnalyse === "charge" && (
               <p style={{ margin: 0, fontSize: 11.5, color: CLAIR.texteFaible }}>Analyse en cours…</p>
             )}
@@ -2559,57 +2630,6 @@ function PortfolioPageInner() {
               const confiance = analyse.novac?.confiance ?? null;
               return (
                 <>
-                  <div style={{ display: "flex", alignItems: "center", gap: 5, marginBottom: 10 }}>
-                    <p style={{ margin: 0, fontSize: 12.5, fontWeight: 600, color: CLAIR.texte,
-                                whiteSpace: "nowrap" }}>Détail du score</p>
-                    {/* ⚠️ La liste est **dérivée**, plus écrite à la main. Celle qui
-                        vivait ici citait la corrélation, la sensibilité au marché et
-                        la liquidité : trois facteurs qui ne notaient déjà plus quand
-                        je l'ai lue, et deux qui n'existent plus du tout. Une
-                        énumération figée décrit tôt ou tard un calcul qui n'a plus
-                        lieu, et rien ne le signale. */}
-                    <span title={`Moyenne des cinq piliers mesurés : ${
-                      nomsNotants.join(", ")
-                    }. ${couverture.mesures} sur ${couverture.total} mesurés — les autres sont ignorés plutôt que comptés zéro, et leur poids se répartit sur les piliers disponibles.${
-                      analyse.novac ? ` Méthodologie ${analyse.novac.version_methodologie}.` : ""
-                    }`}
-                      style={{ display: "flex", color: CLAIR.texteFaible, cursor: "help" }}>
-                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
-                        <circle cx="12" cy="12" r="10" /><path d="M12 16v-4M12 8h.01" strokeLinecap="round" />
-                      </svg>
-                    </span>
-                    {/* ⚠️ La confiance s'affiche **à côté** de la couverture, jamais à
-                        la place de la note. Ce sont deux chiffres de natures
-                        différentes : la note dit la qualité du portefeuille, la
-                        confiance celle des données qui ont servi à la calculer. Sans
-                        elle, une note portée par trois piliers ressemble à une note
-                        portée par cinq. */}
-                    {/* ⚠️ `whiteSpace: nowrap` et libellés courts. Trois éléments sur
-                        une ligne de 240 px repliaient chacun sur deux lignes : le titre
-                        « Détail du / score », puis « 5/5 / piliers » et « confiance / 100
-                        % ». L'en-tête faisait trois hauteurs de ligne pour deux chiffres.
-                        « 5/5 » suffit — le mot « piliers » est dans l'infobulle. */}
-                    <span style={{ marginLeft: "auto", display: "flex", alignItems: "baseline",
-                                   gap: 8, fontSize: 10, color: CLAIR.texteFaible,
-                                   whiteSpace: "nowrap", flexShrink: 0 }}>
-                      <span title={`${couverture.mesures} des ${couverture.total} piliers sont mesurés.`}
-                        style={{ cursor: "help" }}>
-                        {couverture.mesures}/{couverture.total}
-                      </span>
-                      {confiance != null && (
-                        <span title={
-                          "La qualité des données, non celle du portefeuille. Les manques "
-                          + "sur une grosse position pèsent plus lourd que sur une petite."
-                          + (analyse.novac?.donnees_manquantes.length
-                            ? ` Absent : ${analyse.novac.donnees_manquantes.join(" · ")}.`
-                            : "")}
-                          style={{ cursor: "help",
-                                   color: confiance >= 80 ? CLAIR.texteFaible : CLAIR.attentionFort }}>
-                          {confiance} %
-                        </span>
-                      )}
-                    </span>
-                  </div>
                   {(() => {
                     /**
                      * L'invite à déclarer son profil, quand il manque.
@@ -2729,27 +2749,6 @@ function PortfolioPageInner() {
                           background: "none", border: "none", padding: 0, cursor: "pointer",
                           fontFamily: FONT, fontSize: 10.5, color: CLAIR.accent,
                         }}>Modifier</button>
-                    </p>
-                  )}
-                  {faible && (
-                    // Nommer la cause : un score sans motif se subit au lieu de
-                    // se corriger.
-                    // ⚠️ La mesure accompagne la note, parce que cette ligne est
-                    // devenue la seule information par facteur de la vue générale.
-                    // « diversification (65/100) » se subit ; « 5,6 secteurs
-                    // équivalents » se vérifie et se corrige.
-                    <p style={{ margin: "0 0 9px", fontSize: 10.5, color: CLAIR.texteAttenue, lineHeight: 1.45 }}>
-                      Ce qui pèse le plus : <span style={{ color: CLAIR.texte, fontWeight: 600 }}>{faible.libelle.toLowerCase()}</span>{" "}
-                      ({faible.score}/100)
-                      {(() => {
-                        // La métrique la plus faible **à l'intérieur** du pilier, avec
-                        // sa lecture brute : « diversification 76 » ne dit pas quoi
-                        // corriger, « 0,91 au plus entre deux lignes » le dit.
-                        const pire = faible.metriques
-                          .filter(m => m.score != null && m.poids > 0)
-                          .sort((x, y) => x.score! - y.score!)[0];
-                        return pire ? <> — {pire.lecture}</> : null;
-                      })()}.
                     </p>
                   )}
                   {/* ⚠️ Les sept barres de facteurs ne sont **plus ici**.
