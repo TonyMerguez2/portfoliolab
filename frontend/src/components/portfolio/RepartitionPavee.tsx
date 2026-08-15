@@ -82,14 +82,7 @@ export default function RepartitionPavee({
   };
 
   const blocs = useMemo(() => {
-    const bruts = blocsDuPortefeuille(dossiers, mode, decalerClarte, brandHex);
-    /**
-     * ⚠️ **On ne regroupe les miettes que dans les modes à plat.** En mode « compte », une
-     * petite ligne reste dans le rectangle de son dossier, où elle a un sens ; la réunir aux
-     * petites lignes des *autres* comptes ferait un bloc « 3 autres » à cheval sur trois
-     * dossiers — exactement ce que ce mode existe pour éviter.
-     */
-    return mode === "compte" ? bruts : regrouperLesMiettes(bruts);
+    return regrouperLesMiettes(blocsDuPortefeuille(dossiers, mode, brandHex));
   }, [dossiers, mode]);
   const total = totalDesBlocs(blocs);
 
@@ -104,48 +97,22 @@ export default function RepartitionPavee({
     if (blocs.length === 0 || boite.l < 40 || boite.h < 40) return [];
 
     /**
-     * ⚠️ **Deux niveaux, et non une liste à plat — c'est l'écran qui l'a dit.** Aplatis, les
-     * blocs d'un même dossier se retrouvaient dispersés : sur le premier essai, deux lignes
-     * du PEA occupaient la gauche et la troisième le coin haut-droit, séparée par le CTO.
-     * Les nuances disaient encore l'appartenance, la géométrie la démentait. Une hiérarchie
-     * enferme chaque groupe dans son propre rectangle, et c'est tout l'intérêt du mode
-     * « compte ».
-     *
-     * ⚠️ **Un bloc sans groupe forme le sien.** En mode actif ou classe il n'y a rien à
-     * regrouper ; leur donner un parent commun les remettrait à plat, ce qui est justement
-     * le comportement voulu là.
+     * ⚠️ **Une hiérarchie plate, depuis que « compte » ne subdivise plus.** Elle a eu deux
+     * niveaux le temps que ce mode découpe chaque dossier par ses lignes ; le second est
+     * parti avec lui. Et il coûtait cher en géométrie : `paddingOuter` s'appliquant autour de
+     * *chaque* groupe, deux blocs voisins de groupes différents étaient séparés de six pixels
+     * quand deux blocs du même groupe l'étaient de deux. Vu à l'écran comme une gouttière au
+     * milieu de l'image.
      */
-    const groupes = new Map<string, Bloc[]>();
-    for (const b of blocs) {
-      const cleGroupe = b.groupe ?? `\u0000${b.cle}`;
-      const vus = groupes.get(cleGroupe);
-      if (vus) vus.push(b); else groupes.set(cleGroupe, [b]);
-    }
-
     type Noeud = { enfants?: Noeud[]; bloc?: Bloc };
     const racine = d3.hierarchy<Noeud>(
-      {
-        enfants: Array.from(groupes.values()).map(membres => ({
-          enfants: membres.map(bloc => ({ bloc })),
-        })),
-      },
-      d => d.enfants,
+      { enfants: blocs.map(bloc => ({ bloc })) }, d => d.enfants,
     ).sum(d => d.bloc?.valeur ?? 0);
 
-    /**
-     * ⚠️ **Un seul passage suffit dès que la hiérarchie a deux niveaux.** J'en avais écrit un
-     * second, censé resserrer chaque groupe : il construisait une hiérarchie neuve, la pavait
-     * et jetait le résultat sans jamais toucher aux feuilles rendues. Du code qui calcule et
-     * n'écrit rien ne se voit pas à l'exécution — il ralentit et fait croire à une étape.
-     *
-     * ⚠️ **`paddingOuter` creuse l'écart entre groupes, `paddingInner` celui entre lignes.**
-     * Deux et trois pixels : c'est ce qui fait voir les dossiers sans les cerner d'un trait,
-     * qui alourdirait une image de trois centimètres de côté.
-     */
     d3.treemap<Noeud>()
       .size([boite.l, boite.h])
-      .paddingOuter(3)
-      .paddingInner(2)
+      // Un seul écart, partout le même : c'est ce qui fait une grille et non un assemblage.
+      .paddingInner(3)
       .round(true)
       .tile(d3.treemapSquarify)(racine);
 
@@ -181,13 +148,12 @@ export default function RepartitionPavee({
           // « ETZ.PA » sans le tronquer et restait pourtant muet, à deux pixels près.
           const nomLisible = l >= 48 && h >= 30;
           const partLisible = l >= 48 && h >= 46;
-          const logoLisible = l >= 68 && h >= 62 && !!b.ticker;
           return (
             <div key={b.cle}
               onMouseEnter={() => setSurvol(b.cle)}
               onMouseLeave={() => setSurvol(s => (s === b.cle ? null : s))}
-              title={`${b.groupe ? `${b.groupe} · ` : ""}${b.nom} — `
-                + `${EUROS.format(Math.round(b.valeur))} € · ${Math.round(part * 100)} %`}
+              title={`${b.nom} — ${EUROS.format(Math.round(b.valeur))} € `
+                + `· ${Math.round(part * 100)} %`}
               style={{
                 position: "absolute", left: n.x0, top: n.y0, width: l, height: h,
                 background: b.couleur, borderRadius: 5, overflow: "hidden",
@@ -199,14 +165,6 @@ export default function RepartitionPavee({
                   ? `inset 0 0 0 999px rgba(255,255,255,0.12)` : "none",
                 transition: "box-shadow 120ms",
               }}>
-              {logoLisible && (
-                <div style={{ position: "absolute", top: 5, left: 6 }}>
-                  <AssetLogo ticker={b.ticker!} size={18} radius={5}
-                    fallbackBg="rgba(255,255,255,0.16)"
-                    fallbackBorder="rgba(255,255,255,0.22)"
-                    fallbackTextColor={encreSur(b.couleur)} bare />
-                </div>
-              )}
               {nomLisible && (
                 <span style={{ fontFamily: FONT, fontSize: 10.5, fontWeight: 700,
                   color: encreSur(b.couleur), lineHeight: 1.2,
@@ -232,26 +190,10 @@ export default function RepartitionPavee({
         )}
       </div>
 
-      {/* ⚠️ **Une seule ligne sous l'image, qui suit le survol.** Une légende complète
-          reprendrait la place que le pavage vient de gagner, et répéterait ce que les blocs
-          disent déjà. Au repos elle donne le tout — sans quoi l'image serait une proportion
-          sans grandeur. */}
-      <div style={{ marginTop: 8, display: "flex", alignItems: "center", gap: 8,
-        minWidth: 0, flexShrink: 0 }}>
-        <span style={{ width: 9, height: 9, borderRadius: 3, flexShrink: 0,
-          background: enAvant?.couleur ?? CLAIR.bord }} />
-        <span style={{ fontFamily: FONT, fontSize: 11, color: CLAIR.texteSecondaire,
-          overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1 }}>
-          {enAvant
-            ? `${enAvant.groupe ? `${enAvant.groupe} · ` : ""}${enAvant.nom}`
-            : `${blocs.length} bloc${blocs.length > 1 ? "s" : ""}`}
-        </span>
-        <span style={{ fontFamily: FONT, fontSize: 11, fontWeight: 600, color: CLAIR.texte,
-          flexShrink: 0 }}>
-          {EUROS.format(Math.round(enAvant?.valeur ?? total))} €
-        </span>
-      </div>
-
+      {/* ⚠️ **Plus de légende sous l'image.** Elle donnait le nombre de blocs et le total,
+          et prenait vingt-cinq pixels sur un panneau qui en a moins de trois cents : le
+          total figure déjà en gros dans le bandeau de tête, et compter les blocs revenait à
+          décrire l'image au lieu de la montrer. Ce qu'un bloc vaut se lit au survol. */}
       {onVoirTout && (
         <button type="button" onClick={onVoirTout}
           style={{

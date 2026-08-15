@@ -66,8 +66,6 @@ export type Bloc = {
   nom: string;
   valeur: number;
   couleur: string;
-  /** Le groupe auquel il appartient — un dossier, une classe — ou rien. */
-  groupe?: string;
   /** Le ticker, pour poser un logo quand le bloc est assez grand. */
   ticker?: string;
 };
@@ -78,10 +76,10 @@ const valeurDe = (lignes: LignePavee[]) =>
   lignes.reduce((s, l) => s + (l.value ?? 0), 0);
 
 /**
- * ⚠️ **Les espèces d'un compte forment un bloc, elles ne se fondent pas dans le sien.**
- * Fondues, un livret de cinq mille euros et un PEA de cinq mille auraient exactement la même
- * apparence, alors que l'un est investi et l'autre non — c'est-à-dire précisément ce que
- * l'image doit montrer.
+ * ⚠️ **Les espèces ont leur bloc dans les modes « actif » et « classe », pas dans
+ * « compte ».** Là, elles font partie de la valeur du compte qui les porte — c'est bien ce
+ * qu'un livret *est*. Ailleurs, elles n'ont ni ticker ni classe : sans bloc à elles, le tout
+ * cesserait de valoir le portefeuille.
  */
 const CLE_ESPECES = "especes";
 
@@ -94,43 +92,25 @@ const CLE_ESPECES = "especes";
  */
 export function blocsDuPortefeuille(
   dossiers: DossierPave[], mode: ModePavage,
-  nuancer: (couleur: string, ecart: number) => string,
   couleurActif: (ticker: string) => string,
 ): Bloc[] {
   const blocs: Bloc[] = [];
 
+  /**
+   * ⚠️ **Un bloc par dossier, sans subdivision — et j'avais fait l'inverse.** Le premier
+   * essai découpait chaque compte par ses lignes, en nuances de sa teinte : l'image mêlait
+   * alors deux niveaux et l'on y lisait « Espèces 47 % » à côté de « ESE.PA 35 % », deux
+   * grandeurs de nature différente dans la même vue. Signalé à l'usage. Un mode répond à une
+   * question : « comment mon argent se répartit entre mes comptes ». Les titres ont le leur.
+   */
   if (mode === "compte") {
     for (const d of dossiers) {
-      /**
-       * ⚠️ **Les nuances s'échelonnent sur le rang, pas sur la valeur.** Réparties selon le
-       * poids, deux lignes voisines auraient des teintes presque identiques et l'on ne
-       * verrait pas la frontière ; sur le rang, l'écart est constant et chaque ligne se
-       * distingue de sa voisine quelle que soit la composition.
-       */
-      const rangees = [...d.lignes].sort((a, b) => (b.value ?? 0) - (a.value ?? 0));
-      rangees.forEach((l, i) => {
-        const ecart = rangees.length <= 1 ? 0
-          : 0.16 - (0.32 * i) / (rangees.length - 1);
-        blocs.push({
-          cle: `${d.cle}/${l.ticker}`,
-          nom: l.ticker.replace(/-USD$/, ""),
-          valeur: l.value ?? 0,
-          couleur: nuancer(d.couleur, ecart),
-          groupe: d.nom,
-          ticker: l.ticker,
-        });
+      blocs.push({
+        cle: d.cle,
+        nom: d.nom,
+        valeur: valeurDe(d.lignes) + (d.especes ?? 0),
+        couleur: d.couleur,
       });
-      if (d.especes && d.especes > 0) {
-        blocs.push({
-          cle: `${d.cle}/${CLE_ESPECES}`,
-          nom: "Espèces",
-          valeur: d.especes,
-          // Assombries franchement : elles ne sont pas une ligne de plus, elles sont l'autre
-          // nature du compte, et l'image doit le dire sans légende.
-          couleur: nuancer(d.couleur, -0.24),
-          groupe: d.nom,
-        });
-      }
     }
     return blocs.filter(b => b.valeur > 0);
   }

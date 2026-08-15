@@ -14,7 +14,6 @@ import {
  * selon l'onglet choisi, et personne ne s'en apercevrait.
  */
 
-const nuancer = (c: string, e: number) => `${c}@${e.toFixed(2)}`;
 const couleurActif = (t: string) => `marque(${t})`;
 
 const dossiers: DossierPave[] = [
@@ -36,7 +35,7 @@ const dossiers: DossierPave[] = [
 ];
 
 const pave = (mode: "compte" | "actif" | "classe", d = dossiers) =>
-  blocsDuPortefeuille(d, mode, nuancer, couleurActif);
+  blocsDuPortefeuille(d, mode, couleurActif);
 
 describe("le tout, dans les trois modes", () => {
   it("vaut toujours la valeur du portefeuille", () => {
@@ -46,54 +45,45 @@ describe("le tout, dans les trois modes", () => {
     }
   });
 
-  it("donne la même part à une ligne quel que soit le mode", () => {
+  it("fait retrouver un compte en additionnant ses lignes dans l'autre mode", () => {
     /**
-     * ⚠️ **C'est la conséquence lisible de l'invariant précédent.** Si les modes ne
-     * partageaient pas le même dénominateur, ESE.PA vaudrait 20 % ici et 34 % là — deux
-     * chiffres justes dans leur repère et incomparables entre eux.
+     * ⚠️ **C'est la conséquence lisible de l'invariant précédent.** Les modes ne montrent
+     * pas les mêmes objets — un dossier ici, des titres là — mais ils taillent la même
+     * surface : le bloc « PEA » doit valoir exactement ses lignes plus ses espèces, telles
+     * que le mode actif les compte. Sans dénominateur commun, une même somme vaudrait 20 %
+     * ici et 34 % là, deux chiffres justes dans leur repère et incomparables entre eux.
      */
-    const part = (mode: "compte" | "actif") => {
-      const blocs = pave(mode);
-      const ese = blocs.find(b => b.ticker === "ESE.PA")!;
-      return ese.valeur / totalDesBlocs(blocs);
-    };
-    expect(part("compte")).toBeCloseTo(part("actif"), 10);
+    const parCompte = pave("compte").find(b => b.nom === "PEA")!;
+    const parActif = pave("actif");
+    const lignesDuPea = ["ESE.PA", "ETZ.PA"]
+      .map(t => parActif.find(b => b.ticker === t)!.valeur)
+      .reduce((a, b) => a + b, 0);
+    expect(parCompte.valeur).toBe(lignesDuPea + 200);
   });
 });
 
 describe("le mode compte", () => {
-  it("détaille chaque dossier par ses lignes, et nomme le groupe", () => {
-    const blocs = pave("compte");
-    expect(blocs.filter(b => b.groupe === "PEA").map(b => b.nom))
-      .toEqual(["ESE.PA", "ETZ.PA", "Espèces"]);
-  });
-
-  it("échelonne les nuances sur le rang, non sur la valeur", () => {
+  it("rend un bloc par dossier, et rien de plus fin", () => {
     /**
-     * ⚠️ **Réparties selon le poids, deux lignes voisines auraient des teintes presque
-     * identiques** et la frontière disparaîtrait. Sur le rang, l'écart est constant : la
-     * première et la dernière sont aux extrêmes, quelle que soit la composition.
+     * ⚠️ **Le premier essai découpait chaque compte par ses lignes, en nuances de sa
+     * teinte.** L'image mêlait alors deux niveaux : « Espèces 47 % » y voisinait avec
+     * « ESE.PA 35 % », deux grandeurs de nature différente dans la même vue. Un mode répond
+     * à une question, et celle-ci est « comment mon argent se répartit entre mes comptes ».
      */
-    const pea = pave("compte").filter(b => b.groupe === "PEA");
-    expect(pea[0].couleur).toBe("#5B6CF0@0.16");
-    expect(pea[1].couleur).toBe("#5B6CF0@-0.16");
+    expect(pave("compte").map(b => [b.nom, b.valeur]))
+      .toEqual([["PEA", 2837], ["CTO", 1220], ["Livret A", 5000]]);
   });
 
-  it("ne nuance pas un dossier d'une seule ligne", () => {
-    // Seule, une ligne n'a personne dont se distinguer : la teinte du dossier suffit.
-    const seul: DossierPave[] = [{ ...dossiers[1], especes: null }];
-    expect(pave("compte", seul)[0].couleur).toBe("#9B5BD6@0.00");
+  it("compte les espèces dans la valeur du compte qui les porte", () => {
+    // C'est ce qu'un livret *est* : sa valeur est son solde. Lui donner un bloc à part
+    // reviendrait à le couper en deux moitiés dont l'une serait vide.
+    const pea = pave("compte").find(b => b.nom === "PEA")!;
+    expect(pea.valeur, "les 200 € d'espèces manquent").toBe(1770 + 867 + 200);
   });
 
-  it("donne aux espèces un bloc à part, assombri", () => {
-    /**
-     * Fondues dans le compte, un livret de 5 000 € et un PEA de 5 000 € auraient la même
-     * apparence — alors que l'un est investi et l'autre non, c'est-à-dire précisément ce que
-     * l'image doit montrer.
-     */
-    const livret = pave("compte").filter(b => b.groupe === "Livret A");
-    expect(livret).toHaveLength(1);
-    expect(livret[0]).toMatchObject({ nom: "Espèces", valeur: 5000, couleur: "#22C55E@-0.24" });
+  it("donne au bloc la couleur du dossier, sans nuance", () => {
+    expect(pave("compte").map(b => b.couleur))
+      .toEqual(["#5B6CF0", "#9B5BD6", "#22C55E"]);
   });
 });
 
@@ -149,13 +139,16 @@ describe("le silence", () => {
   });
 
   it("écarte les blocs de valeur nulle plutôt que de paver du vide", () => {
-    /** Un rectangle de surface zéro n'est pas dessiné, mais il porterait une clé et une
-        entrée de légende — une ligne à 0 € qui n'apprend rien. */
+    /** Un rectangle de surface zéro n'est pas dessiné, mais il porterait une clé et un
+        libellé au survol — une ligne à 0 € qui n'apprend rien. */
     const vide: DossierPave[] = [
       { cle: "a", nom: "A", couleur: "#111111", especes: 0,
         lignes: [{ ticker: "NUL", value: 0 }, { ticker: "VRAI", value: 50 }] },
+      { cle: "b", nom: "Vide", couleur: "#222222", especes: null, lignes: [] },
     ];
-    expect(pave("compte", vide).map(b => b.nom)).toEqual(["VRAI"]);
+    expect(pave("actif", vide).map(b => b.nom)).toEqual(["VRAI"]);
+    expect(pave("compte", vide).map(b => b.nom), "un dossier sans rien reste dessiné")
+      .toEqual(["A"]);
   });
 
   it("traite une valeur manquante comme zéro", () => {
