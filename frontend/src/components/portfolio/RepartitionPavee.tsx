@@ -169,8 +169,16 @@ export default function RepartitionPavee({
    */
   return (
     <>
+      {/**
+        * ⚠️ **La rangée s'aligne sur la barre d'outils de la courbe, à sa gauche.** Les deux
+        * commandent chacune leur image et se font face à travers l'écran : mesurées, elles
+        * étaient décalées de cinq pixels — assez pour se voir, trop peu pour qu'on sache
+        * pourquoi. La hauteur reprise est celle des boutons d'en face, et le retrait négatif
+        * remonte la rangée du même écart, le rembourrage de la carte étant plus généreux que
+        * celui de la courbe.
+        */}
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between",
-        gap: 8, marginBottom: 10, flexShrink: 0 }}>
+        gap: 8, height: 30, marginTop: -5, marginBottom: 5, flexShrink: 0 }}>
         <span style={{ fontFamily: FONT, fontSize: 12.5, fontWeight: 600, color: CLAIR.texte }}>
           Répartition
         </span>
@@ -234,24 +242,20 @@ export default function RepartitionPavee({
           // ⚠️ Le texte n'apparaît que si le bloc peut le porter en entier. Tronqué, il se
           // lit comme un autre ticker — « ESE… » et « ESG… » se ressemblent trop.
           /**
-           * ⚠️ **Les seuils valent ce qu'une ligne de texte réclame, et rien de plus.** Ils
-           * étaient posés à trente-quatre sur vingt-quatre au jugé : un bloc de cent-dix-huit
-           * sur dix-neuf restait muet alors qu'il portait « Crédit Agricole dépôt » sans
-           * peine. Une ligne de neuf pixels en occupe treize avec son interligne ; trois de
-           * rembourrage de part et d'autre, et seize suffisent.
+           * ⚠️ **Un bloc écrit à sa taille normale, ou n'écrit pas — la petite casse a
+           * disparu.** Elle existait pour arracher un nom aux blocs les plus étroits, du
+           * temps où se taire signifiait n'être nommé nulle part. La ligne de lecture ayant
+           * pris ce rôle, tasser du neuf pixels dans une bande de seize ne fait plus que
+           * salir l'image pour une information qui est déjà ailleurs, en plus grand.
            *
-           * ⚠️ **La part demande une seconde ligne, donc bien plus de hauteur.** La donner au
-           * même seuil que le nom ferait déborder l'une des deux — et c'est le nom qui
-           * partirait, étant écrit en premier.
+           * ⚠️ **La part demande une seconde ligne, donc son propre seuil.** Au même que le
+           * nom, l'une des deux déborderait — et ce serait le nom, écrit en premier.
            *
            * ⚠️ **Rien n'est jamais tronqué.** « ESE… » et « ESG… » se ressemblent trop : un
-           * nom coupé se lit comme un autre nom, ce qui est pire que pas de nom du tout. On
-           * rapetisse la casse tant qu'on peut, puis on se tait — et le survol prend le
-           * relais.
+           * nom coupé se lit comme un autre nom, ce qui est pire que pas de nom du tout.
            */
-          const nomLisible = l >= 34 && h >= 16;
-          const nomMenu = l < 60 || h < 34;
-          const partLisible = l >= 48 && h >= 44;
+          const nomLisible = l >= 52 && h >= 28;
+          const partLisible = l >= 52 && h >= 46;
           return (
             <div key={b.cle}
               onMouseEnter={() => setSurvol(b.cle)}
@@ -263,11 +267,10 @@ export default function RepartitionPavee({
                 position: "absolute", left: n.x0, top: n.y0, width: l, height: h,
                 background: b.couleur, borderRadius: 5, overflow: "hidden",
                 display: "flex", flexDirection: "column",
-                // ⚠️ Centré quand le bloc est plat : collé en bas, le texte d'une bande de
-                // dix-neuf pixels touche son bord et paraît déborder.
+                // Centré quand le bloc ne porte qu'une ligne : collée en bas, elle touche le
+                // bord et paraît déborder.
                 justifyContent: partLisible ? "flex-end" : "center",
-                padding: nomLisible ? (partLisible ? "5px 6px" : "2px 5px") : 0,
-                boxSizing: "border-box",
+                padding: nomLisible ? "5px 6px" : 0, boxSizing: "border-box",
                 // ⚠️ Le survol éclaircit au lieu d'agrandir : une tuile qui grandit
                 // recouvre ses voisines et déplace ce qu'on visait.
                 boxShadow: lu?.cle === b.cle
@@ -275,7 +278,7 @@ export default function RepartitionPavee({
                 transition: "box-shadow 120ms",
               }}>
               {nomLisible && (
-                <span style={{ fontFamily: FONT, fontSize: nomMenu ? 9 : 10.5, fontWeight: 700,
+                <span style={{ fontFamily: FONT, fontSize: 10.5, fontWeight: 700,
                   color: encreSur(b.couleur), lineHeight: 1.2,
                   overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                   {b.nom}
