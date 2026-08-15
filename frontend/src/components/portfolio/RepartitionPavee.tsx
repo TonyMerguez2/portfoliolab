@@ -64,6 +64,8 @@ export default function RepartitionPavee({
 }) {
   const [mode, setMode] = useState<ModePavage>("compte");
   const [survol, setSurvol] = useState<string | null>(null);
+  /** Le bloc retenu au clic, qui survit au départ du curseur. */
+  const [choisi, setChoisi] = useState<string | null>(null);
   const zone = useRef<HTMLDivElement>(null);
   /**
    * ⚠️ **La taille se mesure, elle ne se suppose pas.** Le pavage a besoin de pixels : posé
@@ -85,6 +87,12 @@ export default function RepartitionPavee({
     return regrouperLesMiettes(blocsDuPortefeuille(dossiers, mode, brandHex));
   }, [dossiers, mode]);
   const total = totalDesBlocs(blocs);
+  /**
+   * ⚠️ **Le survol prime sur la sélection tant qu'il dure.** L'inverse figerait la ligne sur
+   * le bloc cliqué pendant qu'on en parcourt d'autres — on lirait un nom en en désignant un
+   * second.
+   */
+  const lu = blocs.find(b => b.cle === (survol ?? choisi)) ?? null;
 
   /**
    * Les rectangles, posés par d3.
@@ -171,6 +179,49 @@ export default function RepartitionPavee({
           options={MODES.map(m => ({ valeur: m.valeur, libelle: m.libelle }))} />
       </div>
 
+      {/**
+        * La ligne de lecture du pavage.
+        *
+        * ⚠️ **Une ligne unique et réservée, et non une légende.** La différence n'est pas de
+        * degré : une légende énumère en permanence ce que les blocs portent déjà, et coûte sa
+        * place à chaque instant. Celle-ci ne dit qu'une chose — ce qu'on désigne — et c'est
+        * la seule réponse au problème qu'aucun réglage ne résout : sous trente-quatre pixels
+        * de large, un bloc ne peut rien écrire, quoi qu'on fasse.
+        *
+        * ⚠️ **Sa hauteur est réservée, occupée ou non.** Apparue au survol, elle pousserait
+        * le pavage vers le bas au moment précis où l'on vise un bloc — et le bloc visé
+        * bougerait sous le curseur.
+        *
+        * ⚠️ **Le clic sélectionne, parce que le survol n'existe pas au doigt.** Sans lui, un
+        * bloc trop petit pour s'annoncer resterait anonyme sur tout écran tactile. Le second
+        * clic désélectionne : rien ne doit rester accroché sans moyen de s'en défaire.
+        */}
+      <div style={{ height: 17, marginBottom: 8, display: "flex", alignItems: "center",
+        gap: 6, minWidth: 0, flexShrink: 0 }}>
+        {lu ? (
+          <>
+            <span style={{ width: 8, height: 8, borderRadius: 2, flexShrink: 0,
+              background: lu.couleur }} />
+            <span style={{ fontFamily: FONT, fontSize: 11, fontWeight: 600, color: CLAIR.texte,
+              overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+              {lu.nom}
+            </span>
+            <span style={{ fontFamily: FONT, fontSize: 11, color: CLAIR.texteAttenue,
+              whiteSpace: "nowrap", marginLeft: "auto", flexShrink: 0 }}>
+              {EUROS.format(Math.round(lu.valeur))} €
+              {" · "}
+              {Math.round((total > 0 ? lu.valeur / total : 0) * 100)} %
+            </span>
+          </>
+        ) : (
+          /* ⚠️ Un mot plutôt qu'un vide : une bande grise réservée sans rien dedans se lit
+             comme un défaut d'affichage, et rien n'apprendrait que les blocs répondent. */
+          <span style={{ fontFamily: FONT, fontSize: 10.5, color: CLAIR.texteFaible }}>
+            Touchez un bloc pour le détail
+          </span>
+        )}
+      </div>
+
       {/* ⚠️ **Le pavage prend la place, la légende se réduit à une ligne.** Demandé ainsi, et
           c'est ce qui distingue ce panneau du camembert : l'image *est* l'information. Le
           détail par ligne vit dans l'onglet Analyse, à un clic. */}
@@ -205,6 +256,7 @@ export default function RepartitionPavee({
             <div key={b.cle}
               onMouseEnter={() => setSurvol(b.cle)}
               onMouseLeave={() => setSurvol(s => (s === b.cle ? null : s))}
+              onClick={() => setChoisi(c => (c === b.cle ? null : b.cle))}
               title={`${b.nom} — ${EUROS.format(Math.round(b.valeur))} € `
                 + `· ${Math.round(part * 100)} %`}
               style={{
@@ -218,7 +270,7 @@ export default function RepartitionPavee({
                 boxSizing: "border-box",
                 // ⚠️ Le survol éclaircit au lieu d'agrandir : une tuile qui grandit
                 // recouvre ses voisines et déplace ce qu'on visait.
-                boxShadow: survol === b.cle
+                boxShadow: lu?.cle === b.cle
                   ? `inset 0 0 0 999px rgba(255,255,255,0.12)` : "none",
                 transition: "box-shadow 120ms",
               }}>
