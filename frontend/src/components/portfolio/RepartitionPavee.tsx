@@ -174,22 +174,23 @@ export default function RepartitionPavee({
         * commandent chacune leur image et se font face à travers l'écran ; décalées, elles se
         * voient sans qu'on sache pourquoi.
         *
-        * ⚠️ **Même taille de segments, et non une hauteur imposée par-dessus.** La barre d'en
-        * face est en `md` — vingt-six pixels de bouton, trente de piste. En `sm`, la piste
-        * n'en faisait que vingt-six : les deux marges, haute et basse, tombaient à deux
-        * pixels l'une de l'autre. Forcer la hauteur du conteneur aurait centré les boutons
-        * sans leur donner les mêmes bords ; c'est le composant qui doit être au même
-        * calibre.
+        * ⚠️ **Alignée par le haut, et non par les deux bords.** Prendre le calibre `md` de la
+        * barre d'en face donnait bien des marges identiques en haut et en bas — et une pastille
+        * trop grosse pour un panneau de trois centimètres, où elle pesait autant que l'image
+        * qu'elle commande. Le `sm` revient, et seule l'arête supérieure se cale : c'est celle
+        * qu'on lit, les deux barres étant à la même hauteur d'œil.
         *
-        * ⚠️ **Le retrait négatif reste, et il compense un rembourrage.** La carte est plus
-        * généreuse que celle de la courbe : sans lui la rangée descend de cinq pixels.
+        * ⚠️ **Le retrait négatif compense un rembourrage, et il se mesure.** La carte est plus
+        * généreuse que celle de la courbe ; cinq pixels posent l'arête haute de la piste
+        * exactement sur celle d'en face. Écrit à sept, elle la dépassait de deux — assez pour
+        * se voir, comme l'écart qu'on cherchait à supprimer.
         */}
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between",
         gap: 8, marginTop: -5, marginBottom: 5, flexShrink: 0 }}>
         <span style={{ fontFamily: FONT, fontSize: 12.5, fontWeight: 600, color: CLAIR.texte }}>
           Répartition
         </span>
-        <Segments ariaLabel="Découper la répartition"
+        <Segments taille="sm" ariaLabel="Découper la répartition"
           valeur={mode} onChange={v => setMode(v as ModePavage)}
           options={MODES.map(m => ({ valeur: m.valeur, libelle: m.libelle }))} />
       </div>
