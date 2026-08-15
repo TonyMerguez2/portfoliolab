@@ -284,6 +284,23 @@ const montantExact = (v: number): string =>
   v.toLocaleString("fr-FR", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + " €";
 
 /**
+ * Ce que l'œil barré remplace : la même chose partout.
+ *
+ * ⚠️ **Un seul motif pour tous les montants cachés.** Le grand chiffre du bandeau et les
+ * montants des dossiers étaient masqués par deux écritures indépendantes — la première
+ * existait, la seconde manquait, et le geste ne cachait donc que la moitié de l'écran.
+ * Les faire passer par la même fonction est ce qui empêche qu'un montant soit oublié la
+ * prochaine fois qu'on en ajoute un.
+ *
+ * ⚠️ **Toujours quatre points, quel que soit le montant.** Un masque proportionnel au
+ * nombre de chiffres dirait l'ordre de grandeur — cacher 12 € et 1 200 000 € par des
+ * traînées de longueurs différentes revient à ne pas les cacher.
+ */
+const MONTANT_MASQUE = "•••• €";
+const montantSelonMasque = (v: number, masque: boolean): string =>
+  masque ? MONTANT_MASQUE : montantExact(v);
+
+/**
  * Ce qu'un dossier annonce sur son panneau : une somme, puis ce qu'elle recouvre.
  *
  * ⚠️ **Écrit une fois pour les deux sortes de dossiers.** Un compte déclaré annonce son
@@ -2517,16 +2534,16 @@ function PortfolioPageInner() {
                               ? "Aucun actif"
                               : `${d.lignes.length} actif${d.lignes.length > 1 ? "s" : ""}`,
                             d.especes != null && d.especes !== 0
-                              && `${montantExact(d.especes)} d’espèces`,
+                              && `${montantSelonMasque(d.especes, masque)} d’espèces`,
                           ].filter(Boolean).join(" · ");
                       return (
                         <CarteCompte key={d.cle} nom={d.nom} couleur={d.couleur}
                           icone={ICONE_PAR_GENRE[d.genre] ?? ICONE_BANQUE}
-                          annonce={`${d.nom}, ${montantExact(d.montant)}${mention ? `, ${mention}` : ""}`}
+                          annonce={`${d.nom}, ${montantSelonMasque(d.montant, masque)}${mention ? `, ${mention}` : ""}`}
                           compte={
                             <>
                               <div style={ANNONCE_DOSSIER.montant}>
-                                {montantExact(d.montant)}
+                                {montantSelonMasque(d.montant, masque)}
                               </div>
                               {mention && (
                                 <div style={ANNONCE_DOSSIER.mention}>{mention}</div>
