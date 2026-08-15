@@ -692,7 +692,15 @@ export default function PerformanceChart({
    * gain à l'instant survolé plutôt que d'afficher celui d'aujourd'hui sous une
    * date d'hier.
    */
-  onSurvol?: (p: { valeur: number; date: string; investi?: number } | null) => void;
+  /**
+   * ⚠️ `liquidites` accompagne la valeur, et c'est indispensable au calcul d'un gain.
+   * `valeur` est ce qui est **tracé**, donc le patrimoine — titres plus épargne déclarée.
+   * Retranchée du seul capital investi en titres, elle faisait passer les liquidités pour
+   * une performance : relevé à l'écran, « +5 623,41 € (+145,44 %) » sur un portefeuille
+   * qui n'avait rien gagné de tel. L'appelant a besoin des deux pour isoler ce qui a
+   * réellement travaillé.
+   */
+  onSurvol?: (p: { valeur: number; date: string; investi?: number; liquidites?: number } | null) => void;
 }) {
   // Le thème se lit à la source plutôt que de descendre en props : le
   // graphique est utilisé par la vue générale et par l'onglet Transactions, et
@@ -726,6 +734,7 @@ export default function PerformanceChart({
    */
   const surSurvolRef = useRef(onSurvol);
   surSurvolRef.current = onSurvol;
+  const liquiditesParDateRef = useRef<Map<string, number>>(new Map());
   const investiParDateRef = useRef<Map<string, number>>(new Map());
   /**
    * Le dernier point remonté, pour ne pas le remonter deux fois.
@@ -1887,6 +1896,9 @@ export default function PerformanceChart({
         surSurvolRef.current?.({
           valeur: val, date: quand,
           investi: investiParDateRef.current.get(quand.slice(0, 10)),
+          // Mise à la même échelle que `val`, qui est la valeur tracée.
+          liquidites: (liquiditesParDateRef.current.get(quand.slice(0, 10)) ?? 0)
+                      * echelleStickerRef.current,
         });
       }
 
@@ -2028,6 +2040,11 @@ export default function PerformanceChart({
     investiParDateRef.current = new Map(
       points.filter(p => typeof p.invested === "number")
             .map(p => [p.date.slice(0, 10), p.invested as number]));
+    // Les liquidités du jour, déduites de l'écart entre ce qui est tracé et la valeur des
+    // seuls titres. Voir `onSurvol` : sans elles, l'épargne se lit comme un gain.
+    liquiditesParDateRef.current = new Map(
+      points.filter(p => typeof p.patrimoine === "number")
+            .map(p => [p.date.slice(0, 10), (p.patrimoine as number) - p.value]));
 
     const bougies = mode === "bougie" ? agregerEnBougies(data) : [];
     if (mode === "bougie") {

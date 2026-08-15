@@ -1166,7 +1166,20 @@ function PortfolioPageInner() {
   );
 
   const [survolCourbe, setSurvolCourbe] =
-    useState<{ valeur: number; date: string; investi?: number } | null>(null);
+    useState<{ valeur: number; date: string; investi?: number; liquidites?: number } | null>(null);
+
+  /**
+   * La valeur des seuls titres à la date survolée.
+   *
+   * ⚠️ **Le gain se calcule sur ce qui a travaillé, jamais sur le patrimoine.** La courbe
+   * trace titres plus épargne déclarée ; retrancher de ce total le seul capital investi en
+   * titres faisait passer les liquidités pour une performance — relevé à l'écran,
+   * « +5 623,41 € (+145,44 %) » sur un portefeuille qui n'avait rien gagné de tel. C'est
+   * exactement ce que le projet refuse : verser sur un livret n'est pas un résultat.
+   */
+  const titresSurvoles = survolCourbe
+    ? survolCourbe.valeur - (survolCourbe.liquidites ?? 0)
+    : null;
 
   /**
    * L'avatar réagit au point de la courbe qu'on survole.
@@ -1223,7 +1236,10 @@ function PortfolioPageInner() {
       pointer(null);
       return;
     }
-    const pctSurvol = (survolCourbe.valeur - survolCourbe.investi) / survolCourbe.investi * 100;
+    // ⚠️ Les liquidités sont retranchées ici aussi : sans cela, l'avatar réagissait à une
+    // performance qui n'existait pas, celle de l'épargne comptée comme un gain.
+    const titres = survolCourbe.valeur - (survolCourbe.liquidites ?? 0);
+    const pctSurvol = (titres - survolCourbe.investi) / survolCourbe.investi * 100;
     const pctActuel = prixDeRevient != null && prixDeRevient > 0 && valeurTitres != null
       ? (valeurTitres - prixDeRevient) / prixDeRevient * 100 : 0;
     pointer(etatSelonEcartCourbe(pctSurvol - pctActuel));
@@ -2160,7 +2176,8 @@ function PortfolioPageInner() {
          la route ne le donne pas sur toutes les fenêtres — et on garde alors le
          total, faute de mieux que de mentir. */
       const survolGain = survolCourbe != null && survolCourbe.investi != null
-        ? { eur: survolCourbe.valeur - survolCourbe.investi, base: survolCourbe.investi }
+        ? { eur: (titresSurvoles ?? survolCourbe.valeur) - survolCourbe.investi,
+            base: survolCourbe.investi }
         : null;
       const plEur = survolGain ? survolGain.eur : valeurTitres - cb;
       const plPct = (plEur / (survolGain ? survolGain.base : cb)) * 100;
@@ -2208,118 +2225,13 @@ function PortfolioPageInner() {
       );
     })()}
         </div>
-        <div style={{ width: 1, alignSelf: "stretch", background: CLAIR.carteCreuse }} />
-        <div style={{ minWidth: 120 }}>
-          {/* La période est nommée dans le titre.
-              Ce bloc suit la période choisie sous le graphique, quand « Gains
-              / pertes », à sa gauche, compte toujours depuis l'origine. Rien
-              ne le disait : voir « Total +325 € » à côté d'un « vous » à
-              +247 € donnait deux gains inconciliables pour le même
-              portefeuille, alors que l'un couvrait trois mois et l'autre six.
-              Le libellé repris est celui des boutons — « 3M », « Max » — pour
-              qu'on reconnaisse celui sur lequel on vient de cliquer. */}
-          <p style={{ margin: "0 0 4px", fontSize: 11.5, fontWeight: 500, color: CLAIR.texteSecondaire }}>
-            Comparaison
-            <span style={{ marginLeft: 5, fontWeight: 400, opacity: 0.65 }}>· {period}</span>
-          </p>
-    {/* Le repère, rejoué avec les mêmes versements aux mêmes dates.
-        Opposer deux pourcentages laissait ouvert ce que l'épargnant aurait
-        réellement eu ; en euros, la question ne se pose plus. */}
-    {simRepere != null && gain != null ? (() => {
-      // L'écart se calcule sur les montants *affichés*, arrondis, et non sur
-      // les valeurs exactes : sinon « 85 € » moins « 77 € » peut s'accompagner
-      // d'un « 9 € de mieux », et le lecteur qui refait la soustraction trouve
-      // huit.
-      //
-      // L'arrondi est passé au centime avec le reste de la bande, et la
-      // propriété tient toujours : c'est la même quantification appliquée aux
-      // trois nombres avant qu'on les soustraie.
-      const auCentime = (v: number) => Math.round(v * 100) / 100;
-      const mien = auCentime(gain.eur);
-      const sien = auCentime(simRepere.gain_eur);
-      const ecart = auCentime(mien - sien);
-      const col   = ecart >= 0 ? CLAIR.positif : CLAIR.negatif;
-      return (
-        <div style={{ position: "relative", marginTop: 3 }}
-          onMouseEnter={() => setActiveTooltip("spy")}
-          onMouseLeave={() => setActiveTooltip(null)}>
-          {/* Les deux termes, puis l'écart.
-              Le bloc ne montrait que le repère et la différence : le lecteur
-              reconstituait le troisième nombre en le prenant dans « Gains /
-              pertes », à quatre centimètres de là. Or ces deux mesures ne sont
-              pas la même — l'une est la plus-value latente, l'autre le gain
-              total, réalisé compris — et leur écart vaut exactement le
-              résultat des ventes. Soustraire l'une de l'autre donnait donc un
-              nombre qui ne collait pas, sans que rien n'explique pourquoi.
-              Le bloc porte maintenant ses trois nombres. */}
-          <div style={{
-            display: "grid", gridTemplateColumns: "auto auto", columnGap: 10, rowGap: 2,
-            fontSize: 10, fontFamily: FONT, color: CLAIR.texteAttenue, cursor: "default",
-          }}>
-            <span>Vous</span>
-            <span style={{ color: CLAIR.texteSecondaire, fontWeight: 600, justifySelf: "end" }}>
-              {mien >= 0 ? "+" : ""}{mien.toLocaleString("fr-FR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €
-            </span>
-            <span>Sur S&amp;P 500</span>
-            <span style={{ color: CLAIR.texteSecondaire, fontWeight: 600, justifySelf: "end" }}>
-              {sien >= 0 ? "+" : ""}{sien.toLocaleString("fr-FR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €
-            </span>
-            <span style={{ gridColumn: "1 / -1", marginTop: 1 }}>
-              <span style={{ color: col, fontWeight: 700 }}>
-                {ecart >= 0 ? "+" : "−"}{Math.abs(ecart).toLocaleString("fr-FR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €
-              </span>
-              <span style={{ marginLeft: 3, opacity: 0.8 }}>{ecart >= 0 ? "de mieux" : "de moins"}</span>
-            </span>
-          </div>
-          {activeTooltip === "spy" && (
-            <div style={{
-              position: "absolute", bottom: "calc(100% + 6px)", left: 0, zIndex: 50, width: 252,
-              background: "rgba(4,17,36,0.97)", border: `1px solid ${CLAIR.bordFort}`,
-              borderRadius: RAYONS.sm, padding: "9px 11px", boxShadow: "0 8px 24px rgba(0,0,0,0.50)",
-              pointerEvents: "none",
-            }}>
-              <span style={{ fontSize: 10, color: CLAIR.texteSecondaire, lineHeight: 1.6 }}>
-                Si vous aviez versé les mêmes sommes, aux mêmes dates, sur le
-                S&amp;P 500, vous auriez{" "}
-                <b style={{ color: CLAIR.texte }}>
-                  {Math.round(simRepere.value).toLocaleString("fr-FR")} €
-                </b>{" "}
-                au lieu de{" "}
-                <b style={{ color: CLAIR.texte }}>
-                  {valeurTitres != null ? Math.round(valeurTitres).toLocaleString("fr-FR") : "—"} €
-                </b>.
-                <br />
-                Le repère est libellé en dollars : le change n&apos;est pas neutralisé.
-                {/* Ce qui sépare ce gain de celui de « Gains / pertes ».
-                    Une première version attribuait l'écart au résultat des
-                    ventes. C'était faux : un portefeuille sans aucune vente
-                    montre le même écart, parce que la vraie cause est
-                    ailleurs — les deux blocs ne couvrent pas la même période.
-                    Le calcul d'un « réalisé » par simple soustraction ne
-                    valait donc que sur « Max », et racontait n'importe quoi
-                    partout ailleurs. */}
-                <br />
-                Ce gain porte sur la période choisie sous le graphique
-                {period !== "Max" && <> — <b style={{ color: CLAIR.texte }}>{PERIOD_LABEL[period]}</b></>}.
-                « Gains / pertes » compte, lui, depuis la première opération.
-              </span>
-            </div>
-          )}
-        </div>
-      );
-    })() : reperePeriode != null && perfPeriode != null && (() => {
-      // Sans transactions, on ne peut pas rejouer de versements : on retombe
-      // sur l'écart de pourcentages.
-      const diff    = perfPeriode - reperePeriode;
-      const diffCol = diff >= 0 ? CLAIR.positif : CLAIR.negatif;
-      return (
-        <div style={{ marginTop: 3, fontSize: 10, color: CLAIR.texteAttenue, fontFamily: FONT }}>
-          vs S&amp;P 500&nbsp;
-          <span style={{ color: diffCol, fontWeight: 700 }}>{diff >= 0 ? "+" : ""}{diff.toFixed(2)}%</span>
-        </div>
-      );
-    })()}
-        </div>
+        {/* ⚠️ **Le bloc « Comparaison » est retiré, à la demande.** Il posait face aux
+            gains un second chiffre répondant à la même question sur une autre durée, et
+            l'écart entre les deux demandait une phrase d'explication que le bandeau n'a
+            pas la place de porter. Le repère lui-même n'est pas perdu : la simulation de
+            l'indice reste calculée par `/history` et reste lisible ailleurs. Le jour où
+            il revient, c'est la question du cadre qu'il faudra reprendre, pas la
+            place. */}
         {scoreSante != null && <>
           <div style={{ width: 1, alignSelf: "stretch", background: CLAIR.carteCreuse }} />
           {/* Santé du portefeuille : le titre chiffré passe en tête, la carte
