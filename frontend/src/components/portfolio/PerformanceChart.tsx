@@ -2044,7 +2044,20 @@ export default function PerformanceChart({
        * droit a bougé pour de bon — et sans commune mesure avec un recadrage
        * toutes les dix secondes.
        */
-      const cle = `${period}|${mode}|${nbBarres}`;
+      /**
+       * ⚠️ **`vue` entre dans la clé, et c'est ce qui répare le retour au total.**
+       * Passer par les comptes remplace l'échelle par la leur — elle part de zéro
+       * et monte au plus gros compte. En revenant, la bibliothèque **conserve la
+       * plage courante** puisque plus aucune série n'y contribue au moment du
+       * retrait (la note sur l'axe, plus haut, décrit la même règle) : la courbe
+       * totale se traçait alors au-dessus du cadre, et disparaissait avec son axe.
+       *
+       * Plutôt que de forcer l'échelle à la main, on déclare que la vue fait partie
+       * de ce qui définit un cadrage. Le changement de vue emprunte dès lors le
+       * chemin déjà éprouvé du changement de période : masquage, recadrage,
+       * réaffichage. Signalé à l'usage — la courbe ne revenait pas.
+       */
+      const cle = `${period}|${mode}|${nbBarres}|${vue}`;
 
       const cadrer = (forcer = false) => {
         try {
