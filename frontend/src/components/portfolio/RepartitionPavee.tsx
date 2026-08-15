@@ -94,7 +94,14 @@ export default function RepartitionPavee({
    * précisément le reproche fait à l'ancienne treemap de cette application.
    */
   const rectangles = useMemo(() => {
-    if (blocs.length === 0 || boite.l < 40 || boite.h < 40) return [];
+    /**
+     * ⚠️ **Le pavage se dessine dès qu'une bande de texte y tient, et pas seulement quand
+     * il est confortable.** Le seuil était à quarante pixels, posé au jugé : sur une fenêtre
+     * courte la carte se retrouvait vide **et** silencieuse — ni image, ni message, un cadre
+     * gris. Vingt-quatre suffisent pour que les plus gros blocs portent encore leur nom, et
+     * une image aplatie dit toujours plus qu'un cadre vide.
+     */
+    if (blocs.length === 0 || boite.l < 40 || boite.h < 24) return [];
 
     /**
      * ⚠️ **Une hiérarchie plate, depuis que « compte » ne subdivise plus.** Elle a eu deux
@@ -152,24 +159,6 @@ export default function RepartitionPavee({
    * l'une pour afficher, l'autre pour lister — auraient fini par se contredire : un bloc
    * nommé deux fois, ou pas du tout. Le seuil vit ici, le rendu s'y réfère.
    */
-  const muets = useMemo(
-    () => {
-      /**
-       * ⚠️ **Quand l'image ne peut pas être dessinée, la liste la remplace entièrement.**
-       * Sous une certaine hauteur le pavage renonce — des rectangles de quelques pixels ne
-       * disent rien —, et la carte se retrouvait vide **et** silencieuse : ni image, ni
-       * message, un cadre gris. Vu à l'écran sur une fenêtre de sept cents pixels. Tout
-       * nommer est alors la seule chose vraie qui reste à dire.
-       */
-      if (rectangles.length === 0) return blocs;
-      return rectangles
-        .filter(n => (n.x1 - n.x0) < 34 || (n.y1 - n.y0) < 24)
-        .map(n => n.data.bloc!)
-        .filter(Boolean);
-    },
-    [rectangles, blocs],
-  );
-
   return (
     <>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between",
@@ -194,18 +183,24 @@ export default function RepartitionPavee({
           // ⚠️ Le texte n'apparaît que si le bloc peut le porter en entier. Tronqué, il se
           // lit comme un autre ticker — « ESE… » et « ESG… » se ressemblent trop.
           /**
-           * ⚠️ **Trois paliers, et non un seuil unique.** Un bloc peut porter son nom sans
-           * porter sa part, et son nom en petit sans le porter en grand. Un seuil unique
-           * faisait taire d'un coup des blocs qui avaient la place d'en dire la moitié —
-           * mesuré, un bloc de 52 pixels portait « ETZ.PA » entier et restait muet.
+           * ⚠️ **Les seuils valent ce qu'une ligne de texte réclame, et rien de plus.** Ils
+           * étaient posés à trente-quatre sur vingt-quatre au jugé : un bloc de cent-dix-huit
+           * sur dix-neuf restait muet alors qu'il portait « Crédit Agricole dépôt » sans
+           * peine. Une ligne de neuf pixels en occupe treize avec son interligne ; trois de
+           * rembourrage de part et d'autre, et seize suffisent.
+           *
+           * ⚠️ **La part demande une seconde ligne, donc bien plus de hauteur.** La donner au
+           * même seuil que le nom ferait déborder l'une des deux — et c'est le nom qui
+           * partirait, étant écrit en premier.
            *
            * ⚠️ **Rien n'est jamais tronqué.** « ESE… » et « ESG… » se ressemblent trop : un
            * nom coupé se lit comme un autre nom, ce qui est pire que pas de nom du tout. On
-           * rapetisse la casse tant qu'on peut, puis on se tait.
+           * rapetisse la casse tant qu'on peut, puis on se tait — et le survol prend le
+           * relais.
            */
-          const nomLisible = !muets.includes(b);
-          const nomMenu = l < 48 || h < 34;
-          const partLisible = l >= 48 && h >= 46;
+          const nomLisible = l >= 34 && h >= 16;
+          const nomMenu = l < 60 || h < 34;
+          const partLisible = l >= 48 && h >= 44;
           return (
             <div key={b.cle}
               onMouseEnter={() => setSurvol(b.cle)}
@@ -215,8 +210,12 @@ export default function RepartitionPavee({
               style={{
                 position: "absolute", left: n.x0, top: n.y0, width: l, height: h,
                 background: b.couleur, borderRadius: 5, overflow: "hidden",
-                display: "flex", flexDirection: "column", justifyContent: "flex-end",
-                padding: nomLisible ? "5px 6px" : 0, boxSizing: "border-box",
+                display: "flex", flexDirection: "column",
+                // ⚠️ Centré quand le bloc est plat : collé en bas, le texte d'une bande de
+                // dix-neuf pixels touche son bord et paraît déborder.
+                justifyContent: partLisible ? "flex-end" : "center",
+                padding: nomLisible ? (partLisible ? "5px 6px" : "2px 5px") : 0,
+                boxSizing: "border-box",
                 // ⚠️ Le survol éclaircit au lieu d'agrandir : une tuile qui grandit
                 // recouvre ses voisines et déplace ce qu'on visait.
                 boxShadow: survol === b.cle
@@ -252,30 +251,10 @@ export default function RepartitionPavee({
           et prenait vingt-cinq pixels sur un panneau qui en a moins de trois cents : le
           total figure déjà en gros dans le bandeau de tête, et compter les blocs revenait à
           décrire l'image au lieu de la montrer. Ce qu'un bloc vaut se lit au survol. */}
-      {/**
-        * ⚠️ **Ce que l'image ne peut pas dire, la ligne le dit — et elle n'existe que dans
-        * ce cas.** Une légende complète a été retirée d'ici : elle répétait ce que les blocs
-        * portent déjà et coûtait vingt-cinq pixels en permanence. Celle-ci ne nomme que les
-        * blocs trop petits pour s'annoncer, et disparaît dès qu'ils savent le faire. Sans
-        * elle, un bloc muet n'est nommé qu'au survol — c'est-à-dire jamais, au doigt.
-        */}
-      {muets.length > 0 && (
-        <div style={{ marginTop: 7, display: "flex", alignItems: "center", gap: 6,
-          flexWrap: "wrap", flexShrink: 0 }}>
-          {muets.map(b => (
-            <span key={b.cle} style={{ display: "flex", alignItems: "center", gap: 4,
-              fontFamily: FONT, fontSize: 10, color: CLAIR.texteAttenue, minWidth: 0 }}>
-              <span style={{ width: 7, height: 7, borderRadius: 2, flexShrink: 0,
-                background: b.couleur }} />
-              {b.nom}
-              <span style={{ color: CLAIR.texteFaible }}>
-                {Math.round((total > 0 ? b.valeur / total : 0) * 100)} %
-              </span>
-            </span>
-          ))}
-        </div>
-      )}
-
+      {/* ⚠️ **Pas de légende sous l'image, et c'est demandé deux fois.** J'en ai remis une
+          pour nommer les blocs muets : c'était traiter le symptôme. Un bloc doit parler
+          lui-même dès qu'il en a physiquement la place, et se taire seulement quand il n'en
+          a pas — le survol reste alors le dernier recours. */}
       {onVoirTout && (
         <button type="button" onClick={onVoirTout}
           style={{
