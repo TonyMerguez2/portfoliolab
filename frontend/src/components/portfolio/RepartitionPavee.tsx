@@ -145,7 +145,30 @@ export default function RepartitionPavee({
     return racine.leaves() as d3.HierarchyRectangularNode<Noeud>[];
   }, [blocs, boite]);
 
-  const enAvant = blocs.find(b => b.cle === survol) ?? null;
+  /**
+   * Les blocs que l'image ne peut pas nommer.
+   *
+   * ⚠️ **Le même critère que le rendu, pris au même endroit.** Deux conditions séparées —
+   * l'une pour afficher, l'autre pour lister — auraient fini par se contredire : un bloc
+   * nommé deux fois, ou pas du tout. Le seuil vit ici, le rendu s'y réfère.
+   */
+  const muets = useMemo(
+    () => {
+      /**
+       * ⚠️ **Quand l'image ne peut pas être dessinée, la liste la remplace entièrement.**
+       * Sous une certaine hauteur le pavage renonce — des rectangles de quelques pixels ne
+       * disent rien —, et la carte se retrouvait vide **et** silencieuse : ni image, ni
+       * message, un cadre gris. Vu à l'écran sur une fenêtre de sept cents pixels. Tout
+       * nommer est alors la seule chose vraie qui reste à dire.
+       */
+      if (rectangles.length === 0) return blocs;
+      return rectangles
+        .filter(n => (n.x1 - n.x0) < 34 || (n.y1 - n.y0) < 24)
+        .map(n => n.data.bloc!)
+        .filter(Boolean);
+    },
+    [rectangles, blocs],
+  );
 
   return (
     <>
@@ -170,9 +193,18 @@ export default function RepartitionPavee({
           const part = total > 0 ? b.valeur / total : 0;
           // ⚠️ Le texte n'apparaît que si le bloc peut le porter en entier. Tronqué, il se
           // lit comme un autre ticker — « ESE… » et « ESG… » se ressemblent trop.
-          // ⚠️ Quarante-huit et non cinquante-quatre : mesuré, un bloc de 52 pixels portait
-          // « ETZ.PA » sans le tronquer et restait pourtant muet, à deux pixels près.
-          const nomLisible = l >= 48 && h >= 30;
+          /**
+           * ⚠️ **Trois paliers, et non un seuil unique.** Un bloc peut porter son nom sans
+           * porter sa part, et son nom en petit sans le porter en grand. Un seuil unique
+           * faisait taire d'un coup des blocs qui avaient la place d'en dire la moitié —
+           * mesuré, un bloc de 52 pixels portait « ETZ.PA » entier et restait muet.
+           *
+           * ⚠️ **Rien n'est jamais tronqué.** « ESE… » et « ESG… » se ressemblent trop : un
+           * nom coupé se lit comme un autre nom, ce qui est pire que pas de nom du tout. On
+           * rapetisse la casse tant qu'on peut, puis on se tait.
+           */
+          const nomLisible = !muets.includes(b);
+          const nomMenu = l < 48 || h < 34;
           const partLisible = l >= 48 && h >= 46;
           return (
             <div key={b.cle}
@@ -192,7 +224,7 @@ export default function RepartitionPavee({
                 transition: "box-shadow 120ms",
               }}>
               {nomLisible && (
-                <span style={{ fontFamily: FONT, fontSize: 10.5, fontWeight: 700,
+                <span style={{ fontFamily: FONT, fontSize: nomMenu ? 9 : 10.5, fontWeight: 700,
                   color: encreSur(b.couleur), lineHeight: 1.2,
                   overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                   {b.nom}
@@ -220,6 +252,30 @@ export default function RepartitionPavee({
           et prenait vingt-cinq pixels sur un panneau qui en a moins de trois cents : le
           total figure déjà en gros dans le bandeau de tête, et compter les blocs revenait à
           décrire l'image au lieu de la montrer. Ce qu'un bloc vaut se lit au survol. */}
+      {/**
+        * ⚠️ **Ce que l'image ne peut pas dire, la ligne le dit — et elle n'existe que dans
+        * ce cas.** Une légende complète a été retirée d'ici : elle répétait ce que les blocs
+        * portent déjà et coûtait vingt-cinq pixels en permanence. Celle-ci ne nomme que les
+        * blocs trop petits pour s'annoncer, et disparaît dès qu'ils savent le faire. Sans
+        * elle, un bloc muet n'est nommé qu'au survol — c'est-à-dire jamais, au doigt.
+        */}
+      {muets.length > 0 && (
+        <div style={{ marginTop: 7, display: "flex", alignItems: "center", gap: 6,
+          flexWrap: "wrap", flexShrink: 0 }}>
+          {muets.map(b => (
+            <span key={b.cle} style={{ display: "flex", alignItems: "center", gap: 4,
+              fontFamily: FONT, fontSize: 10, color: CLAIR.texteAttenue, minWidth: 0 }}>
+              <span style={{ width: 7, height: 7, borderRadius: 2, flexShrink: 0,
+                background: b.couleur }} />
+              {b.nom}
+              <span style={{ color: CLAIR.texteFaible }}>
+                {Math.round((total > 0 ? b.valeur / total : 0) * 100)} %
+              </span>
+            </span>
+          ))}
+        </div>
+      )}
+
       {onVoirTout && (
         <button type="button" onClick={onVoirTout}
           style={{
