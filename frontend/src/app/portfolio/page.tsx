@@ -289,15 +289,23 @@ const MARGE = 10;
  * pouvoir se vérifier à l'addition. Vu à l'écran : « 4 548 € de titres · 12 451 € de
  * liquidités » sous un total de 16 998,72 €, alors que la somme des deux fait 16 999.
  */
-/**
- * La hauteur de l'avatar, et donc celle de l'anneau de santé.
- *
- * ⚠️ **Partagée, parce que deux nombres devant rester égaux finissent par diverger.** Les
- * deux ronds du bandeau se font face de part en part de la rangée : dès qu'ils cessent
- * d'avoir le même diamètre, la ligne penche. Écrite ici, la valeur n'a qu'un seul endroit
- * où changer.
- */
+/** La hauteur de l'avatar du portefeuille. */
 const DIAMETRE_ROND = 63;
+
+/**
+ * Le diamètre de l'anneau de score, **calculé pour ne pas grandir la rangée**.
+ *
+ * ⚠️ **Ce n'est pas un choix esthétique mais une contrainte de hauteur.** Depuis que la
+ * maquette place l'anneau *sous* l'intitulé plutôt qu'à côté, il s'ajoute au titre au lieu
+ * de se ranger en face : à 63 px, le bloc mesurait 86 et tirait tout le bandeau de treize
+ * pixels — la courbe en dessous perdait d'autant. Le titre fait 17 px et sa marge 6 ; il
+ * reste donc 50 px pour tenir dans les 73 du plus haut des autres blocs.
+ *
+ * ⚠️ **Il ne suit plus l'avatar, et c'est assumé.** Les deux ronds ne se font plus face
+ * depuis que l'un est passé sous son titre : les égaler ne rangeait plus rien et coûtait
+ * la hauteur du bandeau.
+ */
+const DIAMETRE_ANNEAU_SCORE = 50;
 
 /**
  * La pastille de la maquette : un fond teinté du même ton que son texte.
@@ -2307,7 +2315,7 @@ function PortfolioPageInner() {
                   dit déjà la proportion ; y empiler le dénominateur et le qualificatif
                   aurait demandé trois tailles de texte dans soixante-trois pixels. */}
               <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                <CircleScore score={scoreSante} size={DIAMETRE_ROND} nu chiffreSeul />
+                <CircleScore score={scoreSante} size={DIAMETRE_ANNEAU_SCORE} nu chiffreSeul />
                 <div style={{ display: "flex", flexDirection: "column", gap: 6, alignItems: "flex-start" }}>
                   <span style={{ fontSize: 12, color: CLAIR.texteFaible, fontFamily: FONT }}>/100</span>
                   <span style={pastille(scoreColor(scoreSante))}>
