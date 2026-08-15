@@ -348,13 +348,26 @@ function FlecheTendance({ hausse }: { hausse: boolean }) {
   return (
     /**
      * ⚠️ **La boîte est recadrée sur le tracé, sinon l'alignement ne sert à rien.** Le
-     * concept est dessiné dans un carré de 24 où le triangle n'occupe que la bande
-     * y = 2,25 à 20,75 : gardée telle quelle, la boîte posait sur la ligne de base ses
-     * trois unités de vide, et la forme flottait au-dessus. Le cadrage sur les bornes
-     * réelles du chemin fait coïncider le bas de la boîte et le bas du triangle.
+     * concept est dessiné dans un carré de 24 où le triangle n'occupe qu'une bande : gardée
+     * telle quelle, la boîte posait son vide sur la ligne de base et la forme flottait
+     * au-dessus.
+     *
+     * ⚠️ **Les bornes sont celles que rend `getBBox`, pas celles que je lisais dans le
+     * chemin.** J'avais estimé la bande à y = 2,25–20,75 en parcourant les coordonnées à
+     * l'œil ; le navigateur mesure 3,25–21,75. Un peu moins d'un pixel de décalage à
+     * l'écran, signalé à l'usage — assez pour que le triangle paraisse flotter, pas assez
+     * pour qu'on sache dire pourquoi. Les courbes de Bézier d'un tracé passent rarement par
+     * leurs points de contrôle : les lire ne donne pas ses bornes.
+     *
+     * ⚠️ **Une boîte par sens, parce que les deux formes ne sont pas au même endroit.**
+     * Elles sont symétriques l'une de l'autre dans leur carré : la pointe en haut occupe
+     * y = 2,25–20,75, la pointe en bas y = 3,25–21,75. Un cadrage commun aurait donc posé
+     * l'une des deux à un pixel de la ligne de base — le défaut qu'on vient de corriger,
+     * reparaissant une fois sur deux selon le signe du mois.
      */
-    <svg viewBox="1 2 22 19" fill="currentColor" width={11} height={9.5} aria-hidden="true"
-      style={{ flexShrink: 0 }}>
+    <svg viewBox={hausse ? "1.25 2.25 21.5 18.5" : "1.25 3.25 21.5 18.5"}
+      fill="currentColor" width={11} height={9.47}
+      aria-hidden="true" style={{ flexShrink: 0 }}>
       {hausse ? (
         <path d="M11.95 2.25c-.49 0-.971.124-1.398.359a2.8 2.8 0 0 0-1.038.984L1.59 16.553a2.75 2.75 0 0 0-.02 2.782c.246.425.601.78 1.03 1.028s.919.382 1.417.387h15.856a2.9 2.9 0 0 0 1.416-.381c.43-.246.787-.599 1.035-1.022a2.75 2.75 0 0 0-.005-2.781L14.386 3.598a2.8 2.8 0 0 0-1.038-.987 2.9 2.9 0 0 0-1.399-.361" />
       ) : (
