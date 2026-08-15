@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
-  blocsDuPortefeuille, classeEnClair, regrouperLesMiettes, totalDesBlocs,
+  blocsDuPortefeuille, classeEnClair, poidsLisibles, regrouperLesMiettes, totalDesBlocs,
   type DossierPave,
 } from "./pavage";
 
@@ -220,5 +220,51 @@ describe("la classe d'une ligne", () => {
     expect(classeEnClair(null, "ETF")).toBe("ETF");
     expect(classeEnClair(undefined, "Crypto")).toBe("Crypto");
     expect(classeEnClair("", "Actions")).toBe("Actions");
+  });
+});
+
+describe("les poids de mise en page", () => {
+  const bloc = (nom: string, valeur: number) => ({ cle: nom, nom, valeur, couleur: "#111" });
+
+  it("relève le plus petit jusqu'au plancher, sans toucher à sa valeur", () => {
+    /**
+     * ⚠️ **Le seul endroit où l'image ment un peu.** Un bloc à 2 % voisin d'un bloc à 50 %
+     * devient un filet de vingt pixels sur cinquante : aucune découpe ne le rend compact en
+     * gardant les aires exactes. On relève donc son aire — et lui seul est faussé.
+     */
+    const blocs = [bloc("gros", 5000), bloc("moyen", 4800), bloc("filet", 200)];
+    const poids = poidsLisibles(blocs);
+    expect(poids.find(p => p.bloc.nom === "filet")!.poids).toBeGreaterThan(0.05);
+    expect(poids.find(p => p.bloc.nom === "filet")!.bloc.valeur, "la valeur a bougé").toBe(200);
+  });
+
+  it("fait toujours une surface entière", () => {
+    // Sans renormalisation, relever un bloc ferait déborder le pavage de son cadre.
+    const blocs = [bloc("a", 5000), bloc("b", 4800), bloc("c", 200), bloc("d", 60)];
+    expect(poidsLisibles(blocs).reduce((s, p) => s + p.poids, 0)).toBeCloseTo(1, 10);
+  });
+
+  it("ne touche à rien quand tous les blocs dépassent le plancher", () => {
+    /** La distorsion n'existe que là où elle sert : c'est le cas ordinaire. */
+    const blocs = [bloc("a", 500), bloc("b", 300), bloc("c", 200)];
+    const poids = poidsLisibles(blocs);
+    expect(poids.map(p => +p.poids.toFixed(6))).toEqual([0.5, 0.3, 0.2]);
+  });
+
+  it("borne le plancher à ce que la surface permet", () => {
+    /**
+     * ⚠️ **À vingt blocs, un plancher de 5,5 % en exigerait 110 %.** Sans borne, la
+     * renormalisation les ramènerait tous à la même taille — un damier régulier qui ne
+     * dirait plus rien des poids.
+     */
+    const blocs = Array.from({ length: 20 }, (_, i) => bloc(`t${i}`, i === 0 ? 8000 : 100));
+    const poids = poidsLisibles(blocs);
+    const plusGros = poids.find(p => p.bloc.nom === "t0")!.poids;
+    expect(plusGros, "le plus gros a été nivelé").toBeGreaterThan(0.25);
+  });
+
+  it("ne divise pas par zéro sur un portefeuille vide", () => {
+    expect(poidsLisibles([])).toEqual([]);
+    expect(poidsLisibles([bloc("a", 0)])[0].poids).toBe(0);
   });
 });

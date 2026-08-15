@@ -208,3 +208,40 @@ export function regrouperLesMiettes(
     couleur: "#3A4256",
   }];
 }
+
+/**
+ * Le poids de mise en page de chaque bloc — l'aire qu'il occupera.
+ *
+ * ⚠️ **C'est le seul endroit du module où l'image ment un peu, et il faut le savoir.** Un
+ * bloc à 2 % voisin d'un bloc à 50 % est vingt-cinq fois plus petit : dans un panneau de
+ * trois centimètres, il devient un filet de vingt pixels sur cinquante — signalé à l'usage
+ * comme « une barre toute fine ». Aucune découpe ne le rend compact tout en gardant les
+ * aires exactes ; c'est de l'arithmétique, pas un défaut d'algorithme.
+ *
+ * ⚠️ **On relève donc les plus petits jusqu'à un plancher, et l'on renormalise.** Les gros
+ * blocs cèdent ce qu'il faut, à proportion. La conséquence à assumer : sous le plancher,
+ * l'aire n'est plus fidèle à la part. Au-dessus, elle l'est exactement.
+ *
+ * ⚠️ **Le pourcentage affiché, lui, n'est jamais touché.** C'est ce qui rend le compromis
+ * tenable : l'aire dit la forme, le chiffre dit la vérité, et le chiffre est écrit sur le
+ * bloc. L'inverse — une aire juste et un chiffre arrondi — serait bien pire.
+ *
+ * ⚠️ **Rien ne bouge si tous les blocs sont au-dessus du plancher**, ce qui est le cas
+ * ordinaire. La distorsion n'existe que là où elle sert.
+ */
+export function poidsLisibles(
+  blocs: Bloc[], plancher = 0.055,
+): { bloc: Bloc; poids: number }[] {
+  const total = totalDesBlocs(blocs);
+  if (total <= 0) return blocs.map(bloc => ({ bloc, poids: 0 }));
+
+  // ⚠️ Le plancher ne peut pas dépasser une part égale : à six blocs, un plancher de 5,5 %
+  // laisse de la marge, mais à vingt il exigerait 110 % de la surface. On le borne donc à ce
+  // que la surface permet, faute de quoi la renormalisation les égaliserait tous.
+  const borne = Math.min(plancher, 1 / Math.max(1, blocs.length));
+  const releves = blocs.map(bloc => ({
+    bloc, poids: Math.max(bloc.valeur / total, borne),
+  }));
+  const somme = releves.reduce((s, r) => s + r.poids, 0);
+  return releves.map(r => ({ bloc: r.bloc, poids: r.poids / somme }));
+}

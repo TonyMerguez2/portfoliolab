@@ -5,7 +5,7 @@ import * as d3 from "d3";
 import AssetLogo from "@/components/AssetLogo";
 import Segments from "@/components/ui/Segments";
 import {
-  blocsDuPortefeuille, regrouperLesMiettes, totalDesBlocs,
+  blocsDuPortefeuille, poidsLisibles, regrouperLesMiettes, totalDesBlocs,
   type Bloc, type DossierPave, type ModePavage,
 } from "@/lib/pavage";
 import { decalerClarte } from "@/lib/couleur";
@@ -104,10 +104,19 @@ export default function RepartitionPavee({
      * quand deux blocs du même groupe l'étaient de deux. Vu à l'écran comme une gouttière au
      * milieu de l'image.
      */
-    type Noeud = { enfants?: Noeud[]; bloc?: Bloc };
+    /**
+     * ⚠️ **L'aire suit un poids relevé, jamais la valeur brute.** Un bloc à 2 % voisin d'un
+     * bloc à 50 % devient un filet de vingt pixels sur cinquante — c'est de l'arithmétique,
+     * pas un défaut de découpe. `poidsLisibles` relève les plus petits jusqu'à un plancher
+     * et renormalise : la forme devient lisible, et le pourcentage écrit sur le bloc reste
+     * exact. C'est le seul endroit de ce panneau où l'aire et le chiffre peuvent diverger,
+     * et cela ne concerne que les blocs trop petits pour qu'on mesure leur aire à l'œil.
+     */
+    type Noeud = { enfants?: Noeud[]; bloc?: Bloc; poids?: number };
     const racine = d3.hierarchy<Noeud>(
-      { enfants: blocs.map(bloc => ({ bloc })) }, d => d.enfants,
-    ).sum(d => d.bloc?.valeur ?? 0);
+      { enfants: poidsLisibles(blocs).map(({ bloc, poids }) => ({ bloc, poids })) },
+      d => d.enfants,
+    ).sum(d => d.poids ?? 0);
 
     d3.treemap<Noeud>()
       .size([boite.l, boite.h])
