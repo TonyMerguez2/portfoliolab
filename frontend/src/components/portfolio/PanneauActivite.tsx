@@ -166,51 +166,84 @@ export default function PanneauActivite({
   const economique = aVenir.find(e => e.nature === "economique") ?? null;
   const resultats = aVenir.find(e => e.nature === "resultats") ?? null;
 
-  const etiquette: React.CSSProperties = {
-    fontFamily: FONT, fontSize: 9.5, fontWeight: 600, letterSpacing: "0.07em",
-    color: CLAIR.texteFaible, textTransform: "uppercase", lineHeight: 1.25,
-  };
-  const principal: React.CSSProperties = {
-    fontFamily: FONT, fontSize: 12, fontWeight: 600, color: CLAIR.texte,
-    overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
-  };
-  const secondaire: React.CSSProperties = {
-    fontFamily: FONT, fontSize: 10.5, color: CLAIR.texteAttenue,
-    overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
-  };
-
-  /** Une ligne du panneau : son intitulé, ce qu'elle montre, et quand. */
-  const Ligne = ({ titre, vide, gauche, texte, sousTexte, quand }: {
-    titre: string; vide: string; gauche?: React.ReactNode;
-    texte?: string; sousTexte?: string; quand?: string;
+  /**
+   * Une ligne d'activité : pastille, titre, précision, valeur.
+   *
+   * ⚠️ **Les intitulés en capitales ont disparu.** Chaque ligne en portait un — « DERNIÈRE
+   * OPÉRATION », « PROCHAINE PUBLICATION ÉCONOMIQUE » — soit trois lignes de texte pour
+   * annoncer trois lignes de contenu, dans une carte qui n'en a que pour six. La nature de
+   * chaque ligne se lit maintenant dans sa précision : « Achat », « Économie »,
+   * « Résultats ».
+   *
+   * ⚠️ **La pastille encadre le logo au lieu de le poser nu.** Trois images d'origines
+   * différentes se succèdent — un logo d'ETF, un drapeau, un logo de société — et sans cadre
+   * commun leurs formes et leurs fonds font trois objets sans rapport. Le cadre les met au
+   * même gabarit.
+   */
+  const Ligne = ({ dessin, titre, precision, valeur, teinte, dernier }: {
+    dessin?: React.ReactNode;
+    titre?: string;
+    precision?: string;
+    valeur?: string;
+    /** La couleur du montant, quand il entre plutôt qu'il ne sort. */
+    teinte?: string;
+    vide: string;
+    dernier?: boolean;
   }) => (
-    <div style={{ display: "flex", flexDirection: "column", gap: 2, minWidth: 0 }}>
-      <span style={etiquette}>{titre}</span>
-      {texte ? (
-        <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
-          {gauche}
-          <div style={{ minWidth: 0, flex: 1 }}>
-            <div style={principal}>{texte}</div>
-            {sousTexte && <div style={secondaire}>{sousTexte}</div>}
-          </div>
-          {quand && (
-            <span style={{ ...secondaire, flexShrink: 0, color: CLAIR.texteFaible }}>
-              {quand}
-            </span>
-          )}
+    <div style={{
+      display: "flex", alignItems: "center", gap: 10, minWidth: 0, flex: 1,
+      /**
+       * ⚠️ **Un trait pointillé, et seulement entre les lignes.** Sous la dernière, il
+       * doublerait le bord de la carte à trois pixels de distance — deux traits parallèles
+       * dont l'un ne sépare rien.
+       */
+      borderBottom: dernier ? "none" : `1px dashed ${CLAIR.bord}`,
+    }}>
+      <span style={{
+        width: 32, height: 32, borderRadius: 10, flexShrink: 0,
+        display: "flex", alignItems: "center", justifyContent: "center",
+        background: CLAIR.carteCreuse, border: `1px solid ${CLAIR.bord}`,
+        overflow: "hidden",
+      }}>
+        {dessin}
+      </span>
+      <div style={{ minWidth: 0, flex: 1 }}>
+        <div style={{
+          fontFamily: FONT, fontSize: 12.5, fontWeight: 600, color: CLAIR.texte,
+          overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+        }}>
+          {titre ?? "—"}
         </div>
-      ) : (
-        <span style={secondaire}>{charge ? vide : "…"}</span>
+        <div style={{
+          fontFamily: FONT, fontSize: 10.5, color: CLAIR.texteAttenue, marginTop: 1,
+          overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+        }}>
+          {precision ?? (charge ? "" : "…")}
+        </div>
+      </div>
+      {valeur && (
+        <span style={{
+          fontFamily: FONT, fontSize: 12.5, fontWeight: 600, flexShrink: 0,
+          color: teinte ?? CLAIR.texte, whiteSpace: "nowrap",
+        }}>
+          {valeur}
+        </span>
       )}
     </div>
   );
 
+  /**
+   * ⚠️ **Le signe suit le sens de l'argent, pas celui de l'opération.** Un achat sort des
+   * espèces du compte même s'il fait entrer des titres : l'écrire en positif parce qu'on
+   * « acquiert » quelque chose donnerait une colonne où tout est vert.
+   */
+  const montantOperation = operation
+    ? `${operation.side === "BUY" ? "−" : "+"}${EUROS.format(Math.round(
+        operation.quantity * operation.unit_price + (operation.fees ?? 0)))} €`
+    : undefined;
+
   return (
     <>
-      {/* ⚠️ Les écarts se sont resserrés quand la carte est descendue au niveau des
-          dossiers : à 232 pixels, la troisième ligne — les résultats d'entreprise —
-          disparaissait sous `overflow: hidden`, sans rien pour le signaler. Du contenu qui
-          s'évapore en silence est le pire des défauts de mise en page. */}
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between",
         marginBottom: 8, flexShrink: 0 }}>
         <span style={{ fontFamily: FONT, fontSize: 12.5, fontWeight: 600, color: CLAIR.texte }}>
@@ -218,77 +251,55 @@ export default function PanneauActivite({
         </span>
       </div>
 
-      {/* ⚠️ **Réparties sur toute la hauteur, non empilées en tête.** Ce panneau doit faire
-          la hauteur de son voisin : sans `space-between`, les trois lignes se tassaient en
-          haut et laissaient un grand vide sous elles, ce qui se lit comme un chargement qui
-          n'aboutit pas. */}
       <div style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column",
-        justifyContent: "space-between", gap: 6, overflow: "hidden" }}>
+        overflow: "hidden" }}>
 
         <Ligne
-          titre="Dernière opération"
-          vide="Aucune opération enregistrée."
-          gauche={operation && (
+          vide="Aucune opération"
+          dessin={operation && (
             <AssetLogo ticker={operation.ticker} type={operation.asset_type}
-              size={22} radius={6} {...REPLI_LOGO} />
+              size={32} radius={10} {...REPLI_LOGO} bare />
           )}
-          texte={operation
-            ? `${operation.side === "BUY" ? "Achat" : "Vente"} · ${operation.ticker}`
-            : undefined}
-          sousTexte={operation
-            ? `${EUROS.format(Math.round(
-                operation.quantity * operation.unit_price + (operation.fees ?? 0)))} €`
-            : undefined}
-          quand={operation ? depuis(operation.executed_at) : undefined}
+          titre={operation?.ticker}
+          precision={operation
+            ? `${operation.side === "BUY" ? "Achat" : "Vente"} · ${depuis(operation.executed_at)}`
+            : (charge ? "Aucune opération enregistrée" : undefined)}
+          valeur={montantOperation}
+          // Une vente fait entrer de l'argent : c'est le seul cas vert de la carte.
+          teinte={operation?.side === "SELL" ? CLAIR.positif : undefined}
         />
 
-        {/**
-          * ⚠️ **Le drapeau vient du jeu de 261 pays, pas des quinze fichiers de
-          * `public/drapeaux`.** Ce dossier n'a ni Taïwan, ni la Corée, ni aucun pays
-          * nordique — c'est-à-dire les premières expositions asiatiques d'un vrai PEA, qui
-          * s'affichaient sans rien.
-          *
-          * ⚠️ **La garde sur le code n'est pas une précaution de style.** Mesuré sur ce
-          * composant ailleurs dans l'application : un code inconnu ne dessine **rien** — pas
-          * d'erreur, juste un vide de la taille du drapeau, qui décale la ligne — et un code
-          * `null` lève. D'où le test sur une chaîne de deux lettres, et le repli derrière.
-          */}
         <Ligne
-          titre="Prochaine publication économique"
-          vide="Rien d’annoncé pour vos zones."
-          gauche={economique && (
-            typeof economique.pays === "string" && economique.pays.length === 2 ? (
-              <CountryFlagRounded code={economique.pays} size={22}
-                title={economique.ticker ?? undefined}
-                style={{ flexShrink: 0, display: "block" }} />
-            ) : (
-              <span style={{
-                width: 22, height: 22, borderRadius: 6, flexShrink: 0,
-                background: CLAIR.carteCreuse, border: `1px solid ${CLAIR.bord}`,
-              }} />
-            )
+          vide="Rien d’annoncé"
+          dessin={economique && (
+            typeof economique.pays === "string" && economique.pays.length === 2
+              ? <CountryFlagRounded code={economique.pays} size={32}
+                  style={{ display: "block" }} />
+              : null
           )}
-          texte={economique?.libelle}
-          /* ⚠️ Le nom de la zone est retiré : le drapeau le dit déjà, et cette ligne coûtait
-             les quatorze pixels qui faisaient déborder la carte depuis qu'elle s'aligne sur
-             la rangée des dossiers. Il reste au survol. */
-          quand={economique ? delai(economique.jours, economique.date) : undefined}
+          titre={economique?.libelle}
+          precision={economique
+            ? `Économie${economique.ticker ? ` · ${economique.ticker}` : ""}`
+            : (charge ? "Rien d’annoncé pour vos zones" : undefined)}
+          valeur={economique ? delai(economique.jours, economique.date) : undefined}
         />
 
         {/* ⚠️ Le nom de la société plutôt que son ticker : par transparence, les lignes d'un
             fonds asiatique sortent en « 0700.HK », qui ne désigne rien pour un lecteur. */}
         <Ligne
-          titre="Prochains résultats d’entreprise"
-          vide="Aucune publication attendue."
-          gauche={resultats?.ticker && (
-            <AssetLogo ticker={resultats.ticker} type="EQUITY" size={22} radius={6}
-              {...REPLI_LOGO} />
+          vide="Aucune publication"
+          dernier
+          dessin={resultats?.ticker && (
+            <AssetLogo ticker={resultats.ticker} type="EQUITY" size={32} radius={10}
+              {...REPLI_LOGO} bare />
           )}
-          texte={resultats
+          titre={resultats
             ? (resultats.nom_societe ?? resultats.ticker ?? resultats.libelle) ?? undefined
             : undefined}
-          sousTexte={resultats?.via ? `via ${resultats.via}` : undefined}
-          quand={resultats ? delai(resultats.jours, resultats.date) : undefined}
+          precision={resultats
+            ? `Résultats${resultats.via ? ` · via ${resultats.via}` : ""}`
+            : (charge ? "Aucune publication attendue" : undefined)}
+          valeur={resultats ? delai(resultats.jours, resultats.date) : undefined}
         />
       </div>
 
