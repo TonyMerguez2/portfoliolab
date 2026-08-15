@@ -161,6 +161,64 @@ export async function modifierCompte(
   return r.json();
 }
 
+/**
+ * Un mouvement de trésorerie : un versement ou un retrait, daté.
+ *
+ * ⚠️ `montant` est **signé** — positif pour un versement, négatif pour un retrait. Un
+ * champ de sens à côté aurait permis d'écrire un retrait de −200 €, dont le signe se
+ * serait appliqué deux fois.
+ */
+export type Mouvement = {
+  id: string;
+  date: string;
+  montant: number;
+  note: string | null;
+};
+
+const cheminMouvements = (portefeuille: string, compte: string) =>
+  `${API_URL}/api/v1/portfolios/${encodeURIComponent(portefeuille)}/comptes/${compte}/mouvements`;
+
+export async function listerMouvements(
+  portefeuille: string, compte: string,
+): Promise<Mouvement[]> {
+  const r = await fetch(cheminMouvements(portefeuille, compte), { headers: enTetesAuth() });
+  if (!r.ok) return ouRaler(r, "Le journal du compte n'a pas pu être lu.");
+  return r.json();
+}
+
+/**
+ * Enregistre un versement ou un retrait, et rend le compte **remis à jour**.
+ *
+ * ⚠️ **Le solde change côté serveur, et l'écran doit relire le compte.** Enregistrer un
+ * mouvement dit que l'argent a bougé : la route ajoute le montant au solde. C'est
+ * précisément ce qui distingue ce geste de la correction du solde, qui réécrit le chiffre
+ * sans rien ajouter au journal — corriger veut dire « je m'étais trompé », verser veut
+ * dire « j'ai ajouté ». Le compte rendu ici évite d'aller le redemander.
+ */
+export async function enregistrerMouvement(
+  portefeuille: string, compte: string,
+  mouvement: { date: string; montant: number; note?: string | null },
+): Promise<{ mouvement: Mouvement; compte: Compte }> {
+  const r = await fetch(cheminMouvements(portefeuille, compte), {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...enTetesAuth() },
+    body: JSON.stringify(mouvement),
+  });
+  if (!r.ok) return ouRaler(r, "Le mouvement n'a pas pu être enregistré.");
+  return r.json();
+}
+
+/** Retire un mouvement du journal ; le serveur défait son effet sur le solde. */
+export async function supprimerMouvement(
+  portefeuille: string, compte: string, id: string,
+): Promise<{ compte: Compte }> {
+  const r = await fetch(`${cheminMouvements(portefeuille, compte)}/${id}`, {
+    method: "DELETE", headers: enTetesAuth(),
+  });
+  if (!r.ok) return ouRaler(r, "Le mouvement n'a pas pu être supprimé.");
+  return r.json();
+}
+
 export async function supprimerCompte(portefeuille: string, id: string): Promise<void> {
   const r = await fetch(
     `${API_URL}/api/v1/portfolios/${encodeURIComponent(portefeuille)}/comptes/${id}`,

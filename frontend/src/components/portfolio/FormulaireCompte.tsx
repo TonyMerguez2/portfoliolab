@@ -54,7 +54,7 @@ const champ: React.CSSProperties = {
 };
 
 export default function FormulaireCompte({
-  genres, initial, prerempli, titre, mention, enCours, erreur,
+  genres, initial, prerempli, titre, mention, enCours, erreur, journal,
   onEnregistrer, onSupprimer, onFermer,
 }: {
   /** Les genres publiés par le serveur. Vide tant qu'ils ne sont pas arrivés. */
@@ -78,6 +78,16 @@ export default function FormulaireCompte({
   erreur: string | null;
   onEnregistrer: (s: SaisieCompte) => void;
   onSupprimer?: () => void;
+  /**
+   * Le journal de trésorerie du compte, quand il y a lieu d'en montrer un.
+   *
+   * ⚠️ **Un bloc rendu par le parent, et non des données passées à ce formulaire.** Ce
+   * composant ne sait rien du réseau — il rend une saisie et la remonte. Lui confier le
+   * chargement des mouvements l'aurait obligé à connaître le portefeuille, l'identifiant
+   * du compte et la gestion d'erreur, alors qu'il sert aussi à *créer* un compte qui
+   * n'existe pas encore et n'a donc aucun journal.
+   */
+  journal?: React.ReactNode;
   onFermer: () => void;
 }) {
   const correction = initial != null;
@@ -267,6 +277,13 @@ export default function FormulaireCompte({
                 )}
               </span>
             </div>
+
+            {/* ⚠️ **Le journal vient après le solde, et jamais avant.** Les deux gestes
+                changent le même chiffre : celui du dessus le réécrit, celui du dessous
+                l'augmente à une date. Les présenter dans cet ordre laisse lire la
+                correction comme le geste ordinaire et le versement comme l'ajout — et
+                c'est bien ce rapport-là entre eux. */}
+            {journal}
 
             {/**
               * ⚠️ **La date n'apparaît qu'une fois un solde saisi.** Posée à côté d'un

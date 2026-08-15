@@ -50,7 +50,9 @@ import CarteBancaire from "@/components/portfolio/CarteBancaire";
 import {
   type Compte as CompteDeclare, type GenreCompte, creerCompte, fraicheurDuSolde,
   lireComptes, lireGenres, modifierCompte, rattacherOperations, supprimerCompte,
+  listerMouvements, enregistrerMouvement, supprimerMouvement, type Mouvement,
 } from "@/lib/comptes";
+import JournalCompte from "@/components/portfolio/JournalCompte";
 import { BASE_COMPACTE, PLACE_COMPACTE, parleEnContexteDense } from "@/lib/avatarDialogue";
 import { useParoleStable } from "@/lib/useParoleStable";
 import { useSalutArrivee } from "@/lib/useSalutArrivee";
@@ -413,6 +415,16 @@ function PortfolioPageInner() {
   const [aRattacher,      setARattacher]      = useState<number[]>([]);
   const [compteEnCours,   setCompteEnCours]   = useState(false);
   const [erreurCompte,    setErreurCompte]    = useState<string | null>(null);
+  /**
+   * Le journal de trésorerie du compte en cours de correction.
+   *
+   * ⚠️ **Chargé à l'ouverture de l'écran, pas avec les comptes.** Les comptes sont relus à
+   * chaque cours reçu, toutes les dix secondes ; y accrocher un appel par compte aurait
+   * multiplié les requêtes pour une liste que personne ne regarde la plupart du temps.
+   */
+  const [journal,         setJournal]         = useState<Mouvement[]>([]);
+  const [journalEnCours,  setJournalEnCours]  = useState(false);
+  const [erreurJournal,   setErreurJournal]   = useState<string | null>(null);
   const [txRefreshKey,    setTxRefreshKey]    = useState(0);
   const [positions,       setPositions]       = useState<PositionsData | null>(null);
   const [prenom,          setPrenom]          = useState<string | null>(null);
@@ -1570,6 +1582,65 @@ function PortfolioPageInner() {
     setCompteEdite(null);
     setFormCompte(true);
   }, [dossiers, ecritures]);
+
+  /**
+   * Le journal du compte en correction : chargé à l'ouverture, vidé à la fermeture.
+   *
+   * ⚠️ **Seulement pour un compte qui a un solde.** Un mouvement se retranche du solde
+   * actuel pour remonter le temps ; le serveur refuse d'en enregistrer un sans solde, et
+   * afficher un journal vide sous un champ vide n'aurait proposé qu'une impasse.
+   */
+  useEffect(() => {
+    if (!idPortefeuille || !compteEdite || compteEdite.solde == null) {
+      setJournal([]); setErreurJournal(null);
+      return;
+    }
+    let annule = false;
+    listerMouvements(idPortefeuille, compteEdite.id)
+      .then(m => { if (!annule) setJournal(m); })
+      .catch(() => { if (!annule) setJournal([]); });
+    return () => { annule = true; };
+  }, [idPortefeuille, compteEdite]);
+
+  /**
+   * Enregistre un versement ou un retrait.
+   *
+   * ⚠️ **Le compte rendu par la route remplace celui qu'on éditait.** Son solde a changé —
+   * c'est tout l'intérêt du geste — et sans cette reprise, le champ « solde » du
+   * formulaire aurait continué d'afficher l'ancien montant juste au-dessus du mouvement
+   * qui vient de le démentir.
+   */
+  const verserSurLeCompte = useCallback(async (
+    m: { date: string; montant: number; note: string | null },
+  ) => {
+    if (!idPortefeuille || !compteEdite) return;
+    setJournalEnCours(true); setErreurJournal(null);
+    try {
+      const r = await enregistrerMouvement(idPortefeuille, compteEdite.id, m);
+      setJournal(j => [r.mouvement, ...j]);
+      setCompteEdite(r.compte);
+      rechargerComptes();
+    } catch (e) {
+      setErreurJournal(e instanceof Error ? e.message : "Le mouvement n'a pas pu être enregistré.");
+    } finally {
+      setJournalEnCours(false);
+    }
+  }, [idPortefeuille, compteEdite, rechargerComptes]);
+
+  const retirerUnMouvement = useCallback(async (id: string) => {
+    if (!idPortefeuille || !compteEdite) return;
+    setJournalEnCours(true); setErreurJournal(null);
+    try {
+      const r = await supprimerMouvement(idPortefeuille, compteEdite.id, id);
+      setJournal(j => j.filter(x => x.id !== id));
+      setCompteEdite(r.compte);
+      rechargerComptes();
+    } catch (e) {
+      setErreurJournal(e instanceof Error ? e.message : "Le mouvement n'a pas pu être supprimé.");
+    } finally {
+      setJournalEnCours(false);
+    }
+  }, [idPortefeuille, compteEdite, rechargerComptes]);
 
   const supprimerLeCompte = useCallback(async () => {
     if (!idPortefeuille || !compteEdite) return;
@@ -3081,8 +3152,14 @@ function PortfolioPageInner() {
         <FormulaireCompte
           /* ⚠️ La clé remonte le formulaire d'un compte à l'autre : ses champs sont un état
              local initialisé au montage, et sans elle on rouvrirait « Livret A » rempli avec
-             les valeurs du compte regardé juste avant. */
-          key={compteEdite?.id ?? prereglage?.nom ?? "nouveau"}
+             les valeurs du compte regardé juste avant.
+
+             ⚠️ **Le solde entre dans la clé, et ce n'est pas un raffinement.** Enregistrer un
+             versement change le solde côté serveur ; le champ, lui, gardait la valeur du
+             montage — 5 000 € affichés au-dessus d'un journal annonçant +500 €. Le danger
+             n'était pas l'affichage : c'était qu'un clic sur « Enregistrer » réécrive
+             l'ancien montant et annule le versement en silence. Vu à l'écran. */
+          key={`${compteEdite?.id ?? prereglage?.nom ?? "nouveau"}:${compteEdite?.solde ?? ""}`}
           genres={genresCompte} initial={compteEdite}
           prerempli={prereglage ?? undefined}
           titre={prereglage ? `Déclarer votre ${prereglage.nom}` : undefined}
@@ -3094,6 +3171,18 @@ function PortfolioPageInner() {
           enCours={compteEnCours} erreur={erreurCompte}
           onEnregistrer={enregistrerLeCompte}
           onSupprimer={compteEdite ? supprimerLeCompte : undefined}
+          /* ⚠️ Réservé à la correction d'un compte qui a un solde : on ne peut pas verser
+             sur un compte qui n'existe pas encore, ni sur un compte dont on n'a jamais
+             saisi les liquidités. */
+          journal={compteEdite && compteEdite.solde != null ? (
+            <JournalCompte
+              mouvements={journal}
+              enCours={journalEnCours}
+              erreur={erreurJournal}
+              onEnregistrer={verserSurLeCompte}
+              onSupprimer={retirerUnMouvement}
+            />
+          ) : undefined}
           onFermer={() => {
             setFormCompte(false); setCompteEdite(null); setErreurCompte(null);
             setPrereglage(null); setARattacher([]);
