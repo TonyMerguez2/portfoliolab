@@ -334,45 +334,38 @@ const pastille = (couleur: string): React.CSSProperties => ({
 });
 
 /**
- * Le triangle de tendance qui précède le signe dans la pastille de performance.
+ * La flèche de tendance qui précède le signe dans la pastille de performance.
  *
- * ⚠️ **Il double le signe, et c'est voulu.** Un « + » et un « − » se distinguent mal du
- * coin de l'œil, surtout à 11,5 px : la forme, elle, se lit avant le caractère. La couleur
- * dit déjà la même chose, mais elle seule ne suffit pas — un daltonisme rouge-vert touche
- * environ un homme sur douze, et c'est précisément ce couple-là que la pastille emploie.
+ * ⚠️ **Elle double le signe, et c'est voulu.** Un « + » et un « − » se distinguent mal du
+ * coin de l'œil à 11,5 px, quand une courbe qui monte ou descend se lit avant le
+ * caractère. La couleur dit déjà la même chose, mais elle seule ne suffit pas — un
+ * daltonisme rouge-vert touche environ un homme sur douze, et c'est précisément ce
+ * couple-là que la pastille emploie.
  *
- * ⚠️ `currentColor` : le triangle prend l'encre du texte qui l'entoure, donc la couleur du
- * bandeau. Il n'a pas à connaître le sens de la variation, seulement sa forme.
+ * ⚠️ **La boîte enferme le trait, pas la géométrie.** Le chemin va de x = 3 à 21 et de
+ * y = 7 à 17, mais il est *filaire* : un trait de 1,5 déborde d'une demi-épaisseur de part
+ * et d'autre, et les bouts arrondis n'y changent rien. Le dessin peint donc 2,25–21,75 sur
+ * 6,25–17,75. Cadrer sur la géométrie aurait rogné le trait sur les quatre bords —
+ * l'erreur inverse de celle du triangle précédent, où la boîte était trop grande.
+ *
+ * ⚠️ **La hauteur est celle des chiffres, mesurée et non devinée.** `measureText` donne
+ * 8,479 px au-dessus de la ligne de base pour cette police à cette taille. Posée sur cette
+ * ligne par l'alignement de la pastille, la flèche monte donc exactement au sommet du
+ * chiffre voisin et s'arrête exactement sur son pied. La largeur suit le rapport de la
+ * boîte, faute de quoi le dessin s'étirerait.
+ *
+ * ⚠️ **Un seul cadrage pour les deux sens**, contrairement aux triangles d'avant : ces
+ * deux chemins-ci occupent la même bande, montée et descente confondues. Vérifié plutôt
+ * que supposé.
  */
 function FlecheTendance({ hausse }: { hausse: boolean }) {
   return (
-    /**
-     * ⚠️ **La boîte est recadrée sur le tracé, sinon l'alignement ne sert à rien.** Le
-     * concept est dessiné dans un carré de 24 où le triangle n'occupe qu'une bande : gardée
-     * telle quelle, la boîte posait son vide sur la ligne de base et la forme flottait
-     * au-dessus.
-     *
-     * ⚠️ **Les bornes sont celles que rend `getBBox`, pas celles que je lisais dans le
-     * chemin.** J'avais estimé la bande à y = 2,25–20,75 en parcourant les coordonnées à
-     * l'œil ; le navigateur mesure 3,25–21,75. Un peu moins d'un pixel de décalage à
-     * l'écran, signalé à l'usage — assez pour que le triangle paraisse flotter, pas assez
-     * pour qu'on sache dire pourquoi. Les courbes de Bézier d'un tracé passent rarement par
-     * leurs points de contrôle : les lire ne donne pas ses bornes.
-     *
-     * ⚠️ **Une boîte par sens, parce que les deux formes ne sont pas au même endroit.**
-     * Elles sont symétriques l'une de l'autre dans leur carré : la pointe en haut occupe
-     * y = 2,25–20,75, la pointe en bas y = 3,25–21,75. Un cadrage commun aurait donc posé
-     * l'une des deux à un pixel de la ligne de base — le défaut qu'on vient de corriger,
-     * reparaissant une fois sur deux selon le signe du mois.
-     */
-    <svg viewBox={hausse ? "1.25 2.25 21.5 18.5" : "1.25 3.25 21.5 18.5"}
-      fill="currentColor" width={11} height={9.47}
+    <svg viewBox="2.25 6.25 19.5 11.5" fill="none" stroke="currentColor" strokeWidth={1.5}
+      strokeLinecap="round" strokeLinejoin="round" width={14.38} height={8.48}
       aria-hidden="true" style={{ flexShrink: 0 }}>
-      {hausse ? (
-        <path d="M11.95 2.25c-.49 0-.971.124-1.398.359a2.8 2.8 0 0 0-1.038.984L1.59 16.553a2.75 2.75 0 0 0-.02 2.782c.246.425.601.78 1.03 1.028s.919.382 1.417.387h15.856a2.9 2.9 0 0 0 1.416-.381c.43-.246.787-.599 1.035-1.022a2.75 2.75 0 0 0-.005-2.781L14.386 3.598a2.8 2.8 0 0 0-1.038-.987 2.9 2.9 0 0 0-1.399-.361" />
-      ) : (
-        <path d="M19.932 3.25H4.077a2.9 2.9 0 0 0-1.416.381c-.43.246-.787.599-1.035 1.022a2.75 2.75 0 0 0 .006 2.781l7.93 12.97c.254.41.611.75 1.038.986a2.9 2.9 0 0 0 2.796.002 2.8 2.8 0 0 0 1.04-.983L22.36 7.45a2.75 2.75 0 0 0 .02-2.785 2.8 2.8 0 0 0-1.032-1.028 2.9 2.9 0 0 0-1.416-.386" />
-      )}
+      <path d={hausse
+        ? "m3 17 6-6 4 4 8-8m0 0h-7m7 0v7"
+        : "m3 7 6 6 4-4 8 8m0 0v-7m0 7h-7"} />
     </svg>
   );
 }
