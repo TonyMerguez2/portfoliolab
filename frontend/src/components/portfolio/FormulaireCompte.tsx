@@ -96,6 +96,23 @@ export default function FormulaireCompte({
   const [solde, setSolde] = useState(
     depart?.solde != null ? depart.solde.toFixed(2).replace(".", ",") : "");
   /**
+   * Depuis quand ce solde existe.
+   *
+   * ⚠️ **C'est la question qui permet à la courbe de remonter le temps.** Un solde est un
+   * chiffre sans passé : sans date, le patrimoine tracé n'avait que deux issues, toutes
+   * deux fausses. Supposer l'argent présent depuis toujours ment dès qu'un livret est
+   * récent, et rien à l'écran ne l'aurait dit. Le faire apparaître au jour de la
+   * déclaration dessine une marche verticale que l'œil lit comme une performance.
+   *
+   * ⚠️ **En date du jour par défaut, jamais vide quand un solde est saisi.** Laisser le
+   * champ vide aurait reconduit la supposition qu'on cherche à supprimer ; aujourd'hui est
+   * la seule valeur qu'on puisse proposer sans rien inventer, et elle se corrige d'un
+   * clic. `toISOString().slice(0, 10)` suffit : le champ est en heure locale et la
+   * précision utile est le jour.
+   */
+  const [soldeDepuis, setSoldeDepuis] = useState(
+    depart?.solde_depuis?.slice(0, 10) ?? new Date().toISOString().slice(0, 10));
+  /**
    * ⚠️ **La suppression demande deux clics, et non une boîte du navigateur.** `confirm()`
    * arrête tout, sort de la page et se présente au nom du site plutôt qu'au nom de
    * l'application. Le bouton qui se transforme en son propre garde-fou reste dans le
@@ -146,6 +163,13 @@ export default function FormulaireCompte({
      * distingue les deux ; l'écran doit le lui permettre.
      */
     solde: solde.trim() === "" ? null : Number(solde.replace(",", ".")),
+    /**
+     * ⚠️ **Pas de date sans solde.** Un compte sans liquidités qui porterait une date de
+     * solde laisserait dans la courbe un jalon désignant une somme qui n'existe pas. Les
+     * deux champs vont ensemble ou pas du tout — le serveur écrase aussi avec `null` pour
+     * la même raison.
+     */
+    solde_depuis: solde.trim() === "" ? null : `${soldeDepuis}T00:00:00`,
   });
 
   return (
@@ -243,6 +267,29 @@ export default function FormulaireCompte({
                 )}
               </span>
             </div>
+
+            {/**
+              * ⚠️ **La date n'apparaît qu'une fois un solde saisi.** Posée à côté d'un
+              * champ vide, elle demanderait depuis quand existe une somme qu'on n'a pas
+              * donnée. Elle surgit donc à la frappe, là où la question a un sens.
+              *
+              * ⚠️ **« Depuis quand » et non « saisi le ».** Ce que la courbe a besoin de
+              * savoir, c'est à partir de quand cet argent comptait — pas quand vous l'avez
+              * tapé, que l'application sait déjà toute seule.
+              */}
+            {soldeSaisi && (
+              <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
+                <span style={etiquette}>Depuis quand</span>
+                <input type="date" value={soldeDepuis}
+                  max={new Date().toISOString().slice(0, 10)}
+                  onChange={e => setSoldeDepuis(e.target.value)}
+                  style={{ ...champ, ...NUM }} />
+                <span style={{ fontFamily: FONT, fontSize: 10.5, color: CLAIR.texteAttenue }}>
+                  À partir de cette date, cette somme entre dans la courbe de votre
+                  patrimoine. Avant, elle n’y figure pas.
+                </span>
+              </div>
+            )}
           </>
         ) : (
           <>

@@ -33,6 +33,15 @@ export type Compte = {
   couleur: string;
   /** Les liquidités déclarées, ou `null` quand rien n'a été saisi. */
   solde: number | null;
+  /**
+   * Depuis quand ce solde existe. ISO 8601, ou `null` quand on ne sait pas.
+   *
+   * ⚠️ **À ne pas confondre avec `mis_a_jour_le`.** Celle-ci dit quand le chiffre a été
+   * tapé — l'âge de l'information ; celle-là dit à partir de quand la somme comptait —
+   * l'âge de l'argent. La courbe de patrimoine a besoin de la seconde, la carte affiche
+   * la première, et les intervertir ferait apparaître l'épargne au mauvais endroit.
+   */
+  solde_depuis: string | null;
   rang: number;
   /** Quand le compte a été déclaré ou corrigé. ISO 8601. */
   mis_a_jour_le: string | null;
@@ -75,6 +84,14 @@ export type CompteASoumettre = {
   genre: string;
   couleur: string;
   solde?: number | null;
+  /**
+   * Depuis quand ce solde existe, en ISO — voir `Compte.solde_depuis` côté serveur.
+   *
+   * ⚠️ **Toujours envoyée avec le solde, `null` compris.** Le serveur l'écrase telle
+   * quelle : retirer le solde d'un compte doit en retirer la date, faute de quoi la courbe
+   * de patrimoine garderait un jalon désignant une somme qui n'existe plus.
+   */
+  solde_depuis?: string | null;
 };
 
 /**
