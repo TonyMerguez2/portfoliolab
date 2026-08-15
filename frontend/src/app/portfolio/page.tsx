@@ -308,18 +308,47 @@ const DIAMETRE_ROND = 63;
 const DIAMETRE_ANNEAU_SCORE = 50;
 
 /**
- * La pastille de la maquette : un fond teinté du même ton que son texte.
+ * La pastille de la maquette : un aplat plein, encré de la couleur du bandeau.
  *
- * ⚠️ **Un fond translucide et non une couleur fixe.** La teinte vient du texte qu'elle
- * porte — vert pour un gain, rouge pour une perte, orange pour une note moyenne — et la
- * poser en dur aurait obligé à écrire trois pastilles là où la forme est la même.
+ * ⚠️ **Pleine, et son texte prend le fond du bandeau plutôt qu'un blanc.** Un blanc fixe
+ * aurait tenu sur le vert et le rouge mais serait devenu criard sur l'orange d'une note
+ * moyenne ; reprendre la couleur de la carte donne un texte qui semble découpé dans
+ * l'aplat, et qui reste juste quel que soit le thème puisqu'il suit le même jeton.
+ *
+ * ⚠️ **La teinte vient de ce que la pastille dit** — vert pour un gain, rouge pour une
+ * perte, orange pour une note à revoir. L'écrire trois fois pour une seule géométrie
+ * aurait garanti qu'elles finissent par diverger.
  */
 const pastille = (couleur: string): React.CSSProperties => ({
-  fontFamily: FONT, fontSize: 11.5, fontWeight: 600, color: couleur,
-  background: `color-mix(in srgb, ${couleur} 14%, transparent)`,
-  border: `1px solid color-mix(in srgb, ${couleur} 26%, transparent)`,
-  borderRadius: 999, padding: "3px 9px", whiteSpace: "nowrap", lineHeight: 1.2,
+  fontFamily: FONT, fontSize: 11.5, fontWeight: 700, color: CLAIR.carte,
+  background: couleur, borderRadius: 999, padding: "3px 9px",
+  whiteSpace: "nowrap", lineHeight: 1.2,
+  display: "inline-flex", alignItems: "center", gap: 4,
 });
+
+/**
+ * Le triangle de tendance qui précède le signe dans la pastille de performance.
+ *
+ * ⚠️ **Il double le signe, et c'est voulu.** Un « + » et un « − » se distinguent mal du
+ * coin de l'œil, surtout à 11,5 px : la forme, elle, se lit avant le caractère. La couleur
+ * dit déjà la même chose, mais elle seule ne suffit pas — un daltonisme rouge-vert touche
+ * environ un homme sur douze, et c'est précisément ce couple-là que la pastille emploie.
+ *
+ * ⚠️ `currentColor` : le triangle prend l'encre du texte qui l'entoure, donc la couleur du
+ * bandeau. Il n'a pas à connaître le sens de la variation, seulement sa forme.
+ */
+function FlecheTendance({ hausse }: { hausse: boolean }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="currentColor" width={11} height={11} aria-hidden="true"
+      style={{ flexShrink: 0 }}>
+      {hausse ? (
+        <path d="M11.95 2.25c-.49 0-.971.124-1.398.359a2.8 2.8 0 0 0-1.038.984L1.59 16.553a2.75 2.75 0 0 0-.02 2.782c.246.425.601.78 1.03 1.028s.919.382 1.417.387h15.856a2.9 2.9 0 0 0 1.416-.381c.43-.246.787-.599 1.035-1.022a2.75 2.75 0 0 0-.005-2.781L14.386 3.598a2.8 2.8 0 0 0-1.038-.987 2.9 2.9 0 0 0-1.399-.361" />
+      ) : (
+        <path d="M19.932 3.25H4.077a2.9 2.9 0 0 0-1.416.381c-.43.246-.787.599-1.035 1.022a2.75 2.75 0 0 0 .006 2.781l7.93 12.97c.254.41.611.75 1.038.986a2.9 2.9 0 0 0 2.796.002 2.8 2.8 0 0 0 1.04-.983L22.36 7.45a2.75 2.75 0 0 0 .02-2.785 2.8 2.8 0 0 0-1.032-1.028 2.9 2.9 0 0 0-1.416-.386" />
+      )}
+    </svg>
+  );
+}
 
 const montantExact = (v: number): string =>
   v.toLocaleString("fr-FR", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + " €";
@@ -1993,7 +2022,11 @@ function PortfolioPageInner() {
               )}
             </div>
             </div>
-            <div style={{ minWidth: 0 }}>
+            {/* ⚠️ **Centré en hauteur face à l'avatar.** Le nom et son compte d'actifs
+                forment un couple court à côté d'un rond de 63 px : alignés en haut, ils
+                pendaient dans le vide sous leur propre ligne. L'écart entre les deux
+                lignes ne change pas — c'est le couple entier qui se recentre. */}
+            <div style={{ minWidth: 0, display: "flex", flexDirection: "column", justifyContent: "center", alignSelf: "stretch" }}>
               {/* Le nom seul. Une pastille de la couleur du portefeuille le
                   précédait ; elle est retirée. Elle était le dernier endroit du
                   bandeau où cette couleur paraissait — la vignette ne s'en teinte
@@ -2046,7 +2079,16 @@ function PortfolioPageInner() {
                   </span>
                 )}
               </div>
-              <span style={{ fontSize: 10.5, color: CLAIR.texteAttenue }}>
+              {/* ⚠️ **Une pastille de la couleur du portefeuille devant le compte d'actifs.**
+                  Elle avait été retirée de devant le nom, où elle ne distinguait plus rien
+                  depuis que la vignette avait pris le cuir de la palette. Ici elle
+                  raccroche la ligne à l'avatar qui la précède : c'est le seul endroit du
+                  bandeau où la couleur choisie pour ce portefeuille reparaît. */}
+              <span style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 10.5, color: CLAIR.texteAttenue }}>
+                <span aria-hidden="true" style={{
+                  width: 6, height: 6, borderRadius: "50%", flexShrink: 0,
+                  background: portfolio.color || CLAIR.accent,
+                }} />
                 {enriched.length} actif{enriched.length > 1 ? "s" : ""}
               </span>
             </div>
@@ -2059,7 +2101,10 @@ function PortfolioPageInner() {
             demi-pixel qui faisait mesurer 14,5 en bas contre 14 en haut. */}
         <div style={{ minWidth: 200, alignSelf: "stretch", display: "flex", flexDirection: "column" }}>
     {/* VALEUR TOTALE + édition inline */}
-    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 2 }}>
+    {/* ⚠️ Aucune marge sous l'intitulé : comme dans le bloc de performance, elle vivrait
+        hors du partage des marges automatiques et se lirait comme deux pixels de plus
+        au-dessus du chiffre qu'en dessous. */}
+    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
       <span style={{ display: "flex", alignItems: "center", gap: 6 }}>
         <p style={{ margin: 0, fontSize: 11.5, fontWeight: 500, color: CLAIR.texteSecondaire }}>Valeur totale</p>
         <button onClick={() => setMasque(v => !v)} title={masque ? "Afficher les montants" : "Masquer les montants"}
@@ -2090,7 +2135,10 @@ function PortfolioPageInner() {
     ) : (
       <div style={{
         fontSize: 32, fontWeight: 600, fontFamily: FONT, letterSpacing: "-0.02em",
-        lineHeight: 1, marginBottom: 5, fontVariantNumeric: "tabular-nums",
+        // ⚠️ Marges automatiques hautes et basses : le nombre tient le milieu entre son
+        // intitulé et la ligne du capital investi, comme celui de la performance à sa
+        // droite. Il se posait sous le titre et laissait tout le vide en dessous.
+        lineHeight: 1, marginTop: "auto", marginBottom: "auto", fontVariantNumeric: "tabular-nums",
         // Pas de clignotement sous le curseur : le vert et le rouge disent
         // « ça vient de monter », or rien ne monte — c'est la souris qui se
         // déplace. Le défilement des chiffres, lui, est conservé : il dit
@@ -2153,7 +2201,9 @@ function PortfolioPageInner() {
         })}
       </div>
     ) : surTransactions && prixDeRevient != null ? (
-      <div style={{ marginTop: "auto", fontSize: 11, fontFamily: FONT, color: CLAIR.texteAttenue }}>
+      // La mention reste le dernier enfant du bloc étiré : ce sont les marges du nombre
+      // au-dessus qui absorbent le vide, elle n'a plus à le faire.
+      <div style={{ fontSize: 11, fontFamily: FONT, color: CLAIR.texteAttenue }}>
         {masque ? "•••• €" : `${prixDeRevient.toLocaleString("fr-FR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €`} investis
         {/* ⚠️ Un point médian entre le capital et la date : ce sont deux faits distincts,
             et « 4 959,91 € investis depuis fév. 2026 » se lisait comme une seule phrase où
@@ -2279,7 +2329,10 @@ function PortfolioPageInner() {
           {/* ⚠️ **Le pourcentage devient une pastille.** Entre parenthèses et en gris, il
               se lisait comme une précision de bas de page ; enfermé dans son fond teinté,
               il devient une donnée à part entière sans disputer sa taille au montant. */}
-          <span style={pastille(plCol)}>{plPct >= 0 ? "+" : ""}{plPct.toFixed(2)} %</span>
+          <span style={pastille(plCol)}>
+            <FlecheTendance hausse={plPct >= 0} />
+            {plPct >= 0 ? "+" : ""}{plPct.toFixed(2)} %
+          </span>
           {/* Le crayon disparaît dès que le prix de revient vient des
               écritures : la valeur saisie serait enregistrée puis ignorée,
               le calcul repartant des transactions au rafraîchissement. */}
@@ -2344,7 +2397,11 @@ function PortfolioPageInner() {
                   aurait demandé trois tailles de texte dans soixante-trois pixels. */}
               <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
                 <CircleScore score={scoreSante} size={DIAMETRE_ANNEAU_SCORE} nu chiffreSeul />
-                <div style={{ display: "flex", flexDirection: "column", gap: 6, alignItems: "flex-start" }}>
+                {/* ⚠️ **La colonne s'étire sur la hauteur de l'anneau et écarte ses deux
+                    lignes.** « /100 » se pose alors en haut du cercle et la pastille au
+                    ras de son bas : les deux formes se terminent sur la même ligne au
+                    lieu de flotter au gré de l'écart choisi. */}
+                <div style={{ display: "flex", flexDirection: "column", justifyContent: "space-between", alignSelf: "stretch", alignItems: "flex-start" }}>
                   <span style={{ fontSize: 12, color: CLAIR.texteFaible, fontFamily: FONT }}>/100</span>
                   <span style={pastille(scoreColor(scoreSante))}>
                     {bandeSante ?? scoreLabel(scoreSante)}
