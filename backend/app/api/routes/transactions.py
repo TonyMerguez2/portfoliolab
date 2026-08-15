@@ -1392,12 +1392,19 @@ async def get_history_par_compte(
     suit en découle — en particulier le groupe des opérations non rattachées, qui n'est pas
     un détail d'affichage mais ce qui empêche la somme de mentir.
 
-    ⚠️ **Seuls les comptes à titres reçoivent une courbe, et c'est un refus assumé.** Un
-    livret n'a pas d'historique : son solde est un chiffre saisi un jour donné, sans série.
-    Tracé quand même, il dessinerait un plateau horizontal remontant jusqu'au premier point
-    de la courbe, donnant à croire que l'argent y dormait depuis le début. Les liquidités
-    déclarées sont donc absentes de cette vue ; elles restent dans le pavage de répartition,
-    qui, lui, décrit un instant et non une durée.
+    ⚠️ **Chaque courbe porte les titres du compte *et* ses espèces.** J'avais d'abord
+    refusé toute courbe aux comptes de trésorerie, faute d'historique : un solde est un
+    chiffre saisi un jour donné, et tracé tel quel il dessinait un plateau remontant
+    jusqu'au premier point, donnant à croire que l'argent y dormait depuis le début.
+    `Compte.solde_depuis` a levé l'objection — le solde sait désormais à partir de quand
+    il compte, et vaut zéro avant. Un livret a donc sa courbe, et un PEA sa poche
+    d'espèces à côté de ses lignes.
+
+    ⚠️ **C'est aussi ce qui répare la somme.** La courbe totale trace le patrimoine
+    depuis qu'elle compte les liquidités ; tant que les courbes par compte ignoraient les
+    espèces, les parties ne redonnaient plus le tout et l'épargne disparaissait en
+    changeant de vue. Le test de la somme ne l'avait pas vu : il comparait à `value`, qui
+    ne porte pas les espèces, et non à ce que l'écran affiche.
 
     ⚠️ **Les cours ne sont téléchargés qu'une fois, pour tous les comptes.** Le coût de
     cette route est celui d'un seul appel au fournisseur, quel que soit le nombre de
@@ -1418,6 +1425,7 @@ async def get_history_par_compte(
     import yfinance as yf
 
     from app.services.portfolio_history import courbe_portefeuille
+    from app.services.tresorerie import solde_par_jour
 
     _get_portfolio_or_404(portfolio_id, db, user)
 
@@ -1445,6 +1453,16 @@ async def get_history_par_compte(
         .all()
     )
     porteurs = {c.id: c for c in comptes if porte_des_titres(c)}
+
+    # Le journal des mouvements, groupé par compte : il sert à remonter le solde dans
+    # le temps. Voir `services/tresorerie.py`.
+    mouvements: dict[str, list] = {}
+    if comptes:
+        for m in (db.query(MouvementTresorerie)
+                  .filter(MouvementTresorerie.compte_id.in_([c.id for c in comptes]))
+                  .all()):
+            mouvements.setdefault(m.compte_id, []).append(
+                {"date": m.date, "montant": m.montant})
 
     # ⚠️ **Le groupe « non rattachées » n'est pas facultatif.** Tant que la déclaration des
     # comptes n'est pas faite, la plupart des opérations n'en visent aucun ; sans ce groupe,
@@ -1507,21 +1525,66 @@ async def get_history_par_compte(
             for p in r["points"] if p["date"] >= depart.isoformat()
         ]
 
+    # ⚠️ **Les dates de référence sont celles de la courbe entière, et toutes les
+    # courbes les portent.** Chaque groupe, laissé à lui-même, commence à sa première
+    # opération : les séries n'avaient donc ni la même longueur ni les mêmes jours, et
+    # additionner « la valeur du 3 mars » de chacune revenait à additionner des jours
+    # absents. Un compte vaut zéro avant d'exister, ce qui est aussi bien la vérité que
+    # la condition pour que la somme se vérifie à chaque date.
+    jours_ref = [p["date"] for p in _courbe(txs)]
+    dates_ref = [date.fromisoformat(j[:10]) for j in jours_ref]
+
+    def _serie(lot, compte) -> list[dict]:
+        """
+        La courbe d'un compte : ses titres **plus ses espèces**.
+
+        ⚠️ **C'est la réparation.** La courbe totale trace le patrimoine depuis qu'elle
+        compte les liquidités déclarées ; les courbes par compte, elles, ne
+        connaissaient que les transactions. La somme des parties ne redonnait donc plus
+        le tout, et basculer d'une vue à l'autre faisait disparaître l'épargne sans
+        rien dire. Le test de la somme ne l'avait pas vu : il comparait à `value`, qui
+        n'a jamais porté les espèces, et non à ce que l'écran affiche.
+
+        ⚠️ **Les espèces entrent dans `value`, pas dans `invested`.** `/history` fait le
+        même partage : le patrimoine monte, le capital engagé ne bouge pas. Les compter
+        deux fois aurait déplacé les gains, que cette route n'a pas à toucher.
+        """
+        par_date = {p["date"]: p for p in _courbe(lot)} if lot else {}
+        especes = solde_par_jour(
+            compte.solde if compte is not None else None,
+            compte.solde_depuis if compte is not None else None,
+            mouvements.get(compte.id, []) if compte is not None else [],
+            dates_ref,
+        )
+        out = []
+        for j, d in zip(jours_ref, dates_ref):
+            p = par_date.get(j)
+            out.append({
+                "date": j,
+                "value": (p["value"] if p else 0.0) + especes.get(d, 0.0),
+                "invested": p["invested"] if p else 0.0,
+            })
+        return out
+
     sorties = []
-    for cid, lot in groupes.items():
-        if cid == SANS:
+    for c in comptes:
+        lot = groupes.get(c.id, [])
+        # ⚠️ **Un compte sans titres ni solde n'a rien à tracer**, et un bouton qui ouvre
+        # une ligne plate à zéro ne dit rien à personne.
+        if not lot and c.solde is None:
             continue
-        c = porteurs[cid]
         sorties.append({
             "id": c.id, "nom": c.nom, "couleur": c.couleur,
-            "declare": True, "points": _courbe(lot),
+            "declare": True, "points": _serie(lot, c),
         })
     # ⚠️ Rangé en dernier : c'est le reliquat, pas un compte. Le nommer « Non rattachées »
     # plutôt que « Autres » dit à l'épargnant ce qu'il peut y faire — les rattacher.
+    # Il n'a pas d'espèces : une somme non rattachée n'existe pas, un solde appartient
+    # toujours à un compte déclaré.
     if SANS in groupes:
         sorties.append({
             "id": None, "nom": "Non rattachées", "couleur": "#5A6478",
-            "declare": False, "points": _courbe(groupes[SANS]),
+            "declare": False, "points": _serie(groupes[SANS], None),
         })
 
     return {

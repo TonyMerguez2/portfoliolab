@@ -140,12 +140,26 @@ def test_la_somme_des_courbes_egale_la_courbe_totale(client, cours):
         assert client.post(f"/api/v1/portfolios/{pid}/transactions",
                            json=e).status_code == 201, e
 
+    # ⚠️ **Des espèces sur l'un des comptes, sans quoi le test ne prouve plus grand-chose.**
+    # Sans solde déclaré, `/history` ne rend pas de patrimoine et la comparaison retombe
+    # sur les seuls titres — exactement le cas qui restait vert pendant que l'écran mentait.
+    assert client.put(f"/api/v1/portfolios/{pid}/comptes/{pea}", json={
+        "nom": "PEA", "genre": "pea", "couleur": "#6366F1", "solde": 1200.0,
+        "solde_depuis": "2026-01-06T00:00:00",
+    }).status_code == 200
+
     total = client.get(f"/api/v1/portfolios/{pid}/history?period=max").json()
     decoupe = par_compte(client, pid)
 
+    assert any("patrimoine" in p for p in total["points"]), (
+        "le total doit compter les liquidités, sinon la somme n'est pas mise à l'épreuve")
     assert len(decoupe["comptes"]) == 3, "deux comptes déclarés et le reliquat"
 
-    attendu = {p["date"]: p["value"] for p in total["points"]}
+    # ⚠️ **On compare à ce que l'écran trace, donc au patrimoine quand il existe.**
+    # La première version de ce test comparait à `value`, qui ne porte pas les espèces :
+    # elle est restée verte alors même que la somme des courbes avait cessé de redonner
+    # la courbe affichée, le jour où le total s'est mis à compter les liquidités.
+    attendu = {p["date"]: p.get("patrimoine", p["value"]) for p in total["points"]}
     somme: dict[str, float] = {}
     for c in decoupe["comptes"]:
         for p in c["points"]:
@@ -184,24 +198,53 @@ def test_le_montant_investi_s_additionne_aussi(client, cours):
 
 # ── Les refus, qui sont des décisions ─────────────────────────────────────────
 
-def test_un_compte_de_tresorerie_n_a_pas_de_courbe(client, cours):
+def test_un_compte_de_tresorerie_a_sa_courbe_depuis_sa_date(client, cours):
     """
-    ⚠️ Un livret déclaré à 5 000 € ne doit produire **aucune** courbe : son solde est un
-    chiffre saisi un jour donné, sans série. Tracé, il remonterait à plat jusqu'au premier
-    point et ferait croire que l'argent y était depuis le début.
+    ⚠️ **Le refus d'hier est devenu une courbe, et c'est `solde_depuis` qui l'a permis.**
+    Un livret n'avait pas d'historique tant que son solde était un chiffre sans date : le
+    tracer faisait remonter l'argent à plat jusqu'au premier point. Datée, la somme sait à
+    partir de quand elle compte, et vaut zéro avant.
     """
     pid = creer_portefeuille(client)
     pea = declarer(client, pid, "PEA", "pea")
-    r = client.post(f"/api/v1/portfolios/{pid}/comptes",
-                    json={"nom": "Livret A", "genre": "epargne", "solde": 5000.0})
+    r = client.post(f"/api/v1/portfolios/{pid}/comptes", json={
+        "nom": "Livret A", "genre": "epargne", "solde": 5000.0,
+        "solde_depuis": "2026-01-20T00:00:00",
+    })
     assert r.status_code in (200, 201), r.text
 
     assert client.post(f"/api/v1/portfolios/{pid}/transactions",
                        json=ecriture("AAPL", 10, 100.0, "2026-01-06", pea)).status_code == 201
 
-    noms = [c["nom"] for c in par_compte(client, pid)["comptes"]]
-    assert "Livret A" not in noms, "la trésorerie n'a pas d'historique à tracer"
-    assert noms == ["PEA"], noms
+    comptes = par_compte(client, pid)["comptes"]
+    livret = next(c for c in comptes if c["nom"] == "Livret A")
+    par_date = {p["date"]: p["value"] for p in livret["points"]}
+    assert par_date["2026-01-06"] == 0.0, "le livret n'existait pas encore"
+    assert par_date["2026-01-20"] == pytest.approx(5000.0)
+    # ⚠️ Aucun capital engagé : les espèces montent le patrimoine, pas l'investi. Les
+    # compter deux fois aurait déplacé les gains, que cette route n'a pas à toucher.
+    assert all(p["invested"] == 0.0 for p in livret["points"])
+
+
+def test_les_especes_d_un_compte_a_titres_entrent_dans_sa_courbe(client, cours):
+    """
+    ⚠️ La poche d'espèces d'un PEA est à lui : sans elle, la somme des courbes cesserait
+    de redonner le patrimoine dès qu'un compte à titres déclare des liquidités.
+    """
+    pid = creer_portefeuille(client)
+    pea = declarer(client, pid, "PEA", "pea")
+    assert client.post(f"/api/v1/portfolios/{pid}/transactions",
+                       json=ecriture("AAPL", 10, 100.0, "2026-01-06", pea)).status_code == 201
+    assert client.put(f"/api/v1/portfolios/{pid}/comptes/{pea}", json={
+        "nom": "PEA", "genre": "pea", "couleur": "#6366F1", "solde": 800.0,
+        "solde_depuis": "2026-01-06T00:00:00",
+    }).status_code == 200
+
+    c = par_compte(client, pid)["comptes"][0]
+    titres = client.get(f"/api/v1/portfolios/{pid}/history?period=max").json()["points"]
+    par_date = {p["date"]: p["value"] for p in titres}
+    for p in c["points"]:
+        assert p["value"] == pytest.approx(par_date[p["date"]] + 800.0)
 
 
 def test_les_operations_libres_forment_le_dernier_groupe(client, cours):
