@@ -232,6 +232,18 @@ class MouvementTresorerie(Base):
     investi d'autant : les gains, le TWR et la comparaison au repère n'en bougent pas d'un
     centime. C'est déjà la règle du portefeuille pour un achat de titres, et l'épargne ne
     peut pas y échapper — sans quoi alimenter son livret se lirait comme un résultat.
+
+    ⚠️ **Corriger le solde n'est pas un versement, et ne doit jamais en créer un.**
+    Tranché avec l'épargnant. Passer un livret de 5 000 à 5 500 € par l'écran de
+    correction veut dire « je m'étais trompé », pas « j'ai versé 500 € aujourd'hui ». La
+    conséquence est à connaître : puisqu'on remonte le temps depuis le solde actuel, une
+    correction **réécrit tout le passé** de la courbe — le livret aura toujours valu
+    5 500 €. C'est bien ce qu'une correction signifie.
+
+    Un vrai versement s'enregistre donc ici, explicitement, avec sa date. C'est plus de
+    travail à la saisie, et c'est le prix d'une courbe qui distingue l'argent qu'on ajoute
+    de la faute de frappe qu'on répare. Deviner l'un à partir de l'autre aurait fait
+    apparaître, sur le graphique, des apports que personne n'a faits.
     """
 
     __tablename__ = "mouvements_tresorerie"
