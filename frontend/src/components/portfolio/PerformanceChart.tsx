@@ -1050,7 +1050,19 @@ export default function PerformanceChart({
 
   const ordonnee = useMemo(() => {
     if (!points.length) return null;
-    return (p: HistoryPoint) => p.value * echelle;
+    /**
+     * ⚠️ **La courbe trace le patrimoine dès que la route le donne.** Sans cela, le
+     * grand chiffre du bandeau et le tracé racontaient deux choses différentes :
+     * « Valeur totale » compte les liquidités déclarées, la courbe ne connaissait que
+     * les titres. Tant qu'aucun livret n'est déclaré, les deux coïncident et le défaut
+     * ne se voyait pas ; un livret de 5 000 € affichait 9 536 € au-dessus d'une courbe
+     * finissant à 4 536 €.
+     *
+     * ⚠️ **`value` reste ce que lisent les gains et la comparaison au repère.** Le
+     * repli sur elle n'est donc pas un défaut de zèle : c'est le cas où il n'y a rien
+     * à ajouter, et la route le dit en n'envoyant pas le champ.
+     */
+    return (p: HistoryPoint) => (p.patrimoine ?? p.value) * echelle;
   }, [points, echelle]);
   echelleStickerRef.current = echelle;
 

@@ -25,7 +25,8 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, field_validator
 from sqlalchemy.orm import Session
 
-from app.core.database import Compte, get_db, Portfolio, Transaction
+from app.core.database import Compte, get_db, MouvementTresorerie, Portfolio, Transaction
+from app.services.tresorerie import liquidites_par_jour
 from app.core.auth import require_auth
 # ⚠️ Importée plutôt que réécrite : le rattachement en masse pose exactement la même
 # question, et deux conditions séparées auraient fini par ne plus dire la même chose — un
@@ -748,6 +749,42 @@ async def get_history(
         }
 
     resultat["source"] = "transactions"
+
+    # Le patrimoine : les titres **plus** les liquidités déclarées, jour par jour.
+    #
+    # ⚠️ **Un champ à côté de `value`, et surtout pas à sa place.** `value` nourrit le
+    # TWR, le Dietz, la comparaison au repère et la route par compte ; y verser l'épargne
+    # aurait déplacé les quatre d'un seul geste, et l'argent qui dort se serait lu comme
+    # un résultat. C'est déjà la règle du bandeau, où « Valeur totale » compte les
+    # liquidités quand tout le reste — gains, variation, projection — ne compte que les
+    # titres. La courbe rejoint enfin le grand chiffre sans emporter les mesures.
+    #
+    # ⚠️ **Absent quand aucun compte ne déclare de liquidités**, plutôt qu'égal à `value`.
+    # L'écran sait alors qu'il n'y a rien à montrer de plus, au lieu de tracer une
+    # deuxième courbe rigoureusement superposée à la première.
+    comptes_tres = (
+        db.query(Compte).filter(Compte.portfolio_id == portfolio_id).all()
+    )
+    if any(c.solde is not None for c in comptes_tres):
+        ids = [c.id for c in comptes_tres]
+        mvts = (
+            db.query(MouvementTresorerie)
+            .filter(MouvementTresorerie.compte_id.in_(ids))
+            .all()
+        ) if ids else []
+        par_compte: dict[str, list] = {}
+        for m in mvts:
+            par_compte.setdefault(m.compte_id, []).append(
+                {"date": m.date, "montant": m.montant})
+
+        jours = [date.fromisoformat(p["date"][:10]) for p in resultat["points"]]
+        liquides = liquidites_par_jour(
+            [{"solde": c.solde, "solde_depuis": c.solde_depuis,
+              "mouvements": par_compte.get(c.id, [])} for c in comptes_tres],
+            jours,
+        )
+        for p in resultat["points"]:
+            p["patrimoine"] = p["value"] + liquides.get(date.fromisoformat(p["date"][:10]), 0.0)
 
     # La courbe passe en barres intraday là où `_PAS_INTRADAY` en prévoit une.
     #

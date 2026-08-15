@@ -249,6 +249,60 @@ def test_un_portefeuille_sans_ecriture_ne_rend_rien(client, cours):
     assert d == {"comptes": [], "start": None, "source": "aucune"}
 
 
+def test_le_patrimoine_ajoute_les_liquidites_sans_toucher_a_la_valeur(client, cours):
+    """
+    ⚠️ **Le grand chiffre et la courbe doivent enfin dire la même chose.** « Valeur
+    totale » compte les liquidités déclarées ; la courbe ne traçait que les titres. Le
+    jour où un livret est déclaré, le bandeau annonçait 9 536 € au-dessus d'une courbe
+    finissant à 4 536 €.
+
+    ⚠️ **Et `value` ne bouge pas d'un centime.** C'est elle qui nourrit le TWR, le Dietz
+    et la comparaison au repère : y verser l'épargne aurait fait lire l'argent qui dort
+    comme un résultat.
+    """
+    pid = creer_portefeuille(client)
+    assert client.post(f"/api/v1/portfolios/{pid}/transactions",
+                       json=ecriture("AAPL", 10, 100.0, "2026-01-06")).status_code == 201
+
+    avant = client.get(f"/api/v1/portfolios/{pid}/history?period=max").json()
+    assert all("patrimoine" not in p for p in avant["points"]), (
+        "sans liquidités déclarées, pas de seconde courbe superposée à la première")
+
+    r = client.post(f"/api/v1/portfolios/{pid}/comptes", json={
+        "nom": "Livret A", "genre": "epargne", "solde": 5000.0,
+        "solde_depuis": "2026-01-06T00:00:00",
+    })
+    assert r.status_code in (200, 201), r.text
+    assert r.json()["solde_depuis"].startswith("2026-01-06")
+
+    apres = client.get(f"/api/v1/portfolios/{pid}/history?period=max").json()
+    assert len(apres["points"]) == len(avant["points"])
+    for p, a in zip(apres["points"], avant["points"]):
+        assert p["value"] == pytest.approx(a["value"]), "la valeur des titres est intacte"
+        assert p["patrimoine"] == pytest.approx(p["value"] + 5000.0)
+    assert apres["twr_pct"] == avant["twr_pct"], "l'épargne n'est pas une performance"
+
+
+def test_le_patrimoine_ignore_les_liquidites_avant_leur_date(client, cours):
+    """
+    ⚠️ La raison d'être de `solde_depuis` : un livret ouvert le 20 janvier ne compte pas
+    le 6. Sans elle, l'argent serait apparu avant d'exister.
+    """
+    pid = creer_portefeuille(client)
+    assert client.post(f"/api/v1/portfolios/{pid}/transactions",
+                       json=ecriture("AAPL", 10, 100.0, "2026-01-06")).status_code == 201
+    assert client.post(f"/api/v1/portfolios/{pid}/comptes", json={
+        "nom": "Livret A", "genre": "epargne", "solde": 5000.0,
+        "solde_depuis": "2026-01-20T00:00:00",
+    }).status_code in (200, 201)
+
+    pts = client.get(f"/api/v1/portfolios/{pid}/history?period=max").json()["points"]
+    tot = {p["date"]: p["patrimoine"] - p["value"] for p in pts}
+    assert tot["2026-01-06"] == pytest.approx(0.0), "le livret n'existait pas encore"
+    assert tot["2026-01-20"] == pytest.approx(5000.0)
+    assert tot[pts[-1]["date"]] == pytest.approx(5000.0)
+
+
 def test_une_periode_inconnue_est_refusee(client, cours):
     """Le même refus que `/history`, faute de quoi la période serait silencieusement ignorée."""
     pid = creer_portefeuille(client)

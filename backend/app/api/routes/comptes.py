@@ -22,6 +22,7 @@ from __future__ import annotations
 
 import re
 import uuid
+from datetime import datetime
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
@@ -74,6 +75,14 @@ class CompteEntree(BaseModel):
     genre: str
     couleur: str = "#6366F1"
     solde: float | None = None
+    #: Depuis quand ce solde existe — voir `Compte.solde_depuis`.
+    #:
+    #: ⚠️ **Facultatif dans le contrat, demandé à l'écran.** L'exiger ici ferait échouer
+    #: toutes les déclarations déjà écrites, celles des tests comprises, et rendrait
+    #: impossible de déclarer un compte sans liquidités — pour lequel la question n'a
+    #: aucun sens. C'est le même partage que pour le compte d'une opération : obligatoire
+    #: là où l'épargnant répond, facultatif là où le contrat doit rester tenable.
+    solde_depuis: datetime | None = None
     rang: int | None = None
 
 
@@ -146,6 +155,7 @@ def _en_dict(c: Compte) -> dict:
         "porte_des_titres": bool(GENRES_COMPTE.get(c.genre, {}).get("titres")),
         "couleur": c.couleur,
         "solde": c.solde,
+        "solde_depuis": c.solde_depuis.isoformat() if c.solde_depuis else None,
         "rang": c.rang,
         "mis_a_jour_le": c.mis_a_jour_le.isoformat() if c.mis_a_jour_le else None,
     }
@@ -188,6 +198,7 @@ def creer(portfolio_id: str, data: CompteEntree, db: Session = Depends(get_db),
     c = Compte(
         id=str(uuid.uuid4()), portfolio_id=p.id, nom=data.nom.strip(),
         genre=data.genre, couleur=data.couleur, solde=data.solde,
+        solde_depuis=data.solde_depuis,
         rang=data.rang if data.rang is not None else ((dernier.rang + 1) if dernier else 0),
     )
     db.add(c)
@@ -203,6 +214,10 @@ def modifier(portfolio_id: str, compte_id: str, data: CompteEntree,
     c = _compte(compte_id, p, db)
     _valider(data)
     c.nom, c.genre, c.couleur, c.solde = data.nom.strip(), data.genre, data.couleur, data.solde
+    # ⚠️ Écrasée même par `None` : corriger un compte pour en retirer le solde doit en
+    # retirer la date, sinon le compte garderait une date de solde sans solde — et la
+    # courbe de patrimoine aurait un jalon désignant une somme qui n'existe plus.
+    c.solde_depuis = data.solde_depuis
     if data.rang is not None:
         c.rang = data.rang
     db.commit()

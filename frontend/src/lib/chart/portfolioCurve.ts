@@ -19,5 +19,17 @@ export type HistoryPoint = {
    * mouvements de marché ne se voient plus. Voir `PerformanceChart`.
    */
   invested?: number;
+  /**
+   * Le patrimoine : les titres **plus** les liquidités déclarées, à cet instant.
+   *
+   * ⚠️ **Absent quand aucun compte ne déclare de liquidités**, et c'est voulu : la route
+   * ne renvoie pas une copie de `value`, si bien que la courbe sait qu'il n'y a rien de
+   * plus à montrer plutôt que de tracer deux fois la même chose.
+   *
+   * ⚠️ **`value` reste la valeur des seuls titres**, et c'est elle que lisent les gains,
+   * la variation et la comparaison au repère. L'épargne monte le patrimoine sans être une
+   * performance ; les deux champs existent pour que cette distinction survive au trajet.
+   */
+  patrimoine?: number;
 };
 export type Period = "24h" | "1S" | "1M" | "3M" | "6M" | "1A" | "3A" | "Max";
