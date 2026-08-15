@@ -9,6 +9,8 @@ import TransactionsView from "@/components/portfolio/TransactionsView";
 import AnalyseView from "@/components/portfolio/AnalyseView";
 import { createPortal } from "react-dom";
 import PanneauActivite from "@/components/portfolio/PanneauActivite";
+import RepartitionPavee from "@/components/portfolio/RepartitionPavee";
+import { classeEnClair } from "@/lib/pavage";
 import PanneauProfil from "@/components/portfolio/PanneauProfil";
 import PanneauFrais from "@/components/portfolio/PanneauFrais";
 import {
@@ -21,12 +23,11 @@ import CarteCompte, { APERCUS_MAX, CARTE_COMPTE } from "@/components/portfolio/C
 import CarteActif from "@/components/portfolio/CarteActif";
 import FilAriane from "@/components/portfolio/FilAriane";
 import RailHorizontal from "@/components/portfolio/RailHorizontal";
-import AllocationDonut from "@/components/portfolio/AllocationDonut";
 import PortfolioTabs from "@/components/portfolio/PortfolioTabs";
 import { donutArcs } from "@/lib/donut";
 import { operationsDuDossier, repartirEnDossiers } from "@/lib/dossiers";
 import { jouerEtalement, releverLesCartes, type Positions } from "@/lib/etalement";
-import { compteInfere, valoriser, type Enveloppe, type GridAsset } from "@/lib/portfolio";
+import { assetClass, compteInfere, valoriser, type Enveloppe, type GridAsset } from "@/lib/portfolio";
 import { assetExchange } from "@/lib/assets";
 import RadarChart from "@/components/charts/RadarChart";
 import { enTetesAuth } from "@/lib/session";
@@ -1104,6 +1105,25 @@ function PortfolioPageInner() {
     jouerEtalement(cartesAvant.current, zoneDesCartes.current);
     cartesAvant.current = new Map();
   }, [compteActif]);
+
+  /**
+   * La nature de chaque titre, prise dans le journal.
+   *
+   * ⚠️ **Le champ `type` d'une ligne n'est jamais rempli, et personne ne s'en apercevait.**
+   * `enriched` le déclare mais aucune source ne l'alimente : les positions du serveur ne le
+   * portent pas. Toute la page retombait donc sur `assetClass`, qui reconnaît les fonds à
+   * une liste de tickers écrite en dur — sans un seul ETF européen. Vu à l'écran : un
+   * portefeuille de trois trackers de Paris annoncé « Actions 100 % ».
+   *
+   * ⚠️ **Le journal, lui, le sait** : c'est la nature choisie au moment de la saisie, et
+   * elle est déjà chargée. Un portefeuille valorisé en poids n'a pas d'écritures et retombe
+   * sur la déduction, ce qui est le mieux qu'on puisse faire pour lui.
+   */
+  const typeParTicker = useMemo(() => {
+    const par: Record<string, string> = {};
+    for (const e of ecritures) if (e.asset_type) par[e.ticker] ??= e.asset_type;
+    return par;
+  }, [ecritures]);
 
   const lignesMontrees = useMemo(
     () => (dossierActif ? dossierActif.lignes : enriched),
@@ -2499,19 +2519,23 @@ function PortfolioPageInner() {
             * écrite quelque part — elle suivrait mal le premier écran d'une autre taille.
             */}
           <Cadre style={{ padding: "13px 15px", flex: "1 1 0", minHeight: 0, display: "flex", flexDirection: "column", overflow: "hidden" }}>
-            <AllocationDonut
-              assets={enriched.map(a => ({
-                ticker: a.ticker, weight: a.weight, price: a.price,
-                change: a.change, value: a.value, perfEur: a.perfEur,
+            {/**
+              * ⚠️ **Les liquidités entrent dans le pavage, alors que le camembert les
+              * excluait.** Il divisait chaque ligne par la seule valeur des titres : y
+              * ajouter les espèces aurait laissé un manquant invisible, la somme des parts
+              * n'atteignant plus cent. Le pavage, lui, leur donne un bloc — c'est la
+              * différence entre une part qu'on ne peut pas dessiner et une part qu'on
+              * dessine.
+              */}
+            <RepartitionPavee
+              dossiers={dossiers.map(d => ({
+                cle: d.cle, nom: d.nom, couleur: d.couleur, especes: d.especes,
+                lignes: d.lignes.map(l => ({
+                  ticker: l.ticker, value: l.value,
+                  classe: classeEnClair(typeParTicker[l.ticker], assetClass(l.ticker)),
+                })),
               }))}
-              /* ⚠️ Les titres seuls, sinon les parts ne bouclent plus. Le donut divise
-                 chaque ligne par ce total : y ajouter les liquidités laisserait un
-                 manquant invisible — la somme des parts n'atteindrait plus cent pour cent
-                 et rien à l'écran ne dirait où est passé le reste. Le jour où les espèces
-                 méritent leur part, c'est une tranche qu'il faudra leur donner, pas un
-                 dénominateur. */
-              totalValue={valeurTitres}
-              onSeeAll={() => setDashView("analyse")}
+              onVoirTout={() => setDashView("analyse")}
             />
           </Cadre>
           {/* Ce qui vient de se passer, et ce qui va se passer. Même hauteur que la

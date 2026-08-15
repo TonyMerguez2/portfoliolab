@@ -23,10 +23,17 @@ import { FONT } from "@/lib/typography";
  * douze demandent une lecture — et la place est comptée, puisque ce panneau doit faire
  * exactement la hauteur de son voisin.
  *
- * ⚠️ **Les échéances viennent de la route « transparence », pas de la route simple.** Un
- * portefeuille d'ETF ne publie aucun résultat : ce sont les sociétés détenues *à travers*
- * les fonds qui en publient, et c'est bien le portefeuille qu'elles remuent. La route
- * simple aurait laissé la ligne « résultats » vide sur la plupart des portefeuilles.
+ * ⚠️ **Les deux routes d'échéances sont lues, et fusionnées.** La « transparence » regarde à
+ * travers les fonds : un portefeuille d'ETF ne publie aucun résultat, ce sont les sociétés
+ * détenues qui en publient, et c'est bien le portefeuille qu'elles remuent. La route simple
+ * n'aurait donc jamais rempli la ligne « résultats ».
+ *
+ * ⚠️ **Mais la transparence dépend de la composition des fonds, qui peut manquer.** Vu à
+ * l'écran : 41 échéances côté route simple, zéro côté transparence, et le panneau annonçait
+ * « rien d'annoncé » sur les deux lignes — y compris l'économique, que la route simple avait
+ * en nombre. S'appuyer sur la seule source la plus riche revient à la rendre obligatoire.
+ * Les deux listes se fondent donc, et le doublon se reconnaît à sa nature, sa date et son
+ * titre.
  */
 
 type Evenement = {
@@ -126,7 +133,9 @@ export default function PanneauActivite({
         .then(r => (r.ok ? r.json() : null))
         .catch(() => null);
 
-    Promise.all([lire("/transactions"), lire("/events/transparence")]).then(([tx, ev]) => {
+    Promise.all([
+      lire("/transactions"), lire("/events/transparence"), lire("/events"),
+    ]).then(([tx, parTransparence, simples]) => {
       if (annule) return;
       const liste: Operation[] = Array.isArray(tx) ? tx : (tx?.transactions ?? []);
       // ⚠️ Trié ici plutôt que supposé : la route rend l'ordre qu'elle veut, et « la
@@ -134,7 +143,18 @@ export default function PanneauActivite({
       const triees = [...liste].sort(
         (a, b) => new Date(b.executed_at).getTime() - new Date(a.executed_at).getTime());
       setOperation(triees[0] ?? null);
-      setEvenements(Array.isArray(ev?.evenements) ? ev.evenements : []);
+
+      const fondu = new Map<string, Evenement>();
+      for (const source of [parTransparence, simples]) {
+        for (const e of (Array.isArray(source?.evenements) ? source.evenements : [])) {
+          // La transparence passe en premier : à doublon, c'est sa version qu'on garde,
+          // parce qu'elle porte le fonds par lequel l'échéance nous concerne.
+          const cle = `${e.nature}|${e.date}|${e.ticker ?? e.libelle}`;
+          if (!fondu.has(cle)) fondu.set(cle, e);
+        }
+      }
+      setEvenements(Array.from(fondu.values())
+        .sort((a, b) => (a.jours ?? 9e9) - (b.jours ?? 9e9)));
       setCharge(true);
     });
     return () => { annule = true; };
