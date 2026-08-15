@@ -2267,7 +2267,10 @@ function PortfolioPageInner() {
               /* ⚠️ Les titres seuls : la courbe met une performance à l'échelle d'un
                  montant, et des espèces ne performent pas. Le total y ferait monter et
                  descendre une somme qui, elle, n'a pas bougé. */
-              totalValue={valeurTitres}
+              /* ⚠️ Le patrimoine, et non les seuls titres : c'est le chiffre du bandeau,
+                 et c'est sur lui que le graphique cale la fin de sa courbe. Les deux ne
+                 sont pas deux valeurs qui se ressemblent, c'est la même à deux endroits. */
+              totalValue={valeurTotale}
               period={period}
               onPeriodChange={setPeriod}
               // ⚠️ La courbe prend la couleur de l'avatar, pas celle que l'API garde :

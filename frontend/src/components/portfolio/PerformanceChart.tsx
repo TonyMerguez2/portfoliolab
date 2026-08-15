@@ -1060,7 +1060,21 @@ export default function PerformanceChart({
    */
   const echelle = useMemo(() => {
     if (!points.length) return 1;
-    const dernier = points[points.length - 1].value || 1;
+    /**
+     * ⚠️ **Le facteur se calcule sur la grandeur qu'on trace, et j'avais cassé cela.**
+     * Il était pris sur `value`, la valeur des seuls titres, du temps où la courbe ne
+     * traçait qu'eux. Depuis qu'elle trace le patrimoine, l'appliquer à un patrimoine
+     * revenait à corriger un nombre par le rapport d'un autre : la courbe finissait
+     * 19 € sous le grand chiffre, et l'écart grandissait avec les liquidités déclarées.
+     * Signalé à l'usage — « les deux sont liés entre eux, c'est la même valeur ».
+     *
+     * ⚠️ **Et `totalValue` doit désigner la même chose que le bandeau.** La page passe
+     * donc le patrimoine, liquidités comprises, et non plus les seuls titres. Les deux
+     * moitiés de la règle vont ensemble : un facteur juste appliqué à une cible fausse
+     * n'aurait rien réglé.
+     */
+    const d = points[points.length - 1];
+    const dernier = (d.patrimoine ?? d.value) || 1;
     return (totalValue ?? 0) > 0 ? totalValue! / dernier : 1;
   }, [points, totalValue]);
 
