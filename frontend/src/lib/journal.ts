@@ -40,13 +40,22 @@ export type Tx = {
  * distinction se lit dans la quantité restante, comme celle entre achat et
  * renforcement se lit dans l'ordre chronologique.
  */
-export type TypeOp = "achat" | "renforcement" | "vente" | "vente_partielle";
+/**
+ * ⚠️ **`apport` n'est pas une opération de bourse, et il est pourtant ici.** Un versement
+ * sur un livret n'a ni ticker, ni quantité, ni prix : il ne passe pas par la table des
+ * transactions. Mais il se **dessine** au même endroit — une pastille sur la courbe, à sa
+ * date — et tout ce qui sert à la dessiner (couleur, glyphe, libellé) vit dans ces trois
+ * tables. L'en écarter aurait obligé le graphique à tenir un second jeu de conventions
+ * pour un seul cas, et les deux auraient divergé au premier changement de teinte.
+ */
+export type TypeOp = "achat" | "renforcement" | "vente" | "vente_partielle" | "apport";
 
 export const LIBELLE_OP: Record<TypeOp, string> = {
   achat: "Achat",
   renforcement: "Renforcement",
   vente: "Vente",
   vente_partielle: "Vente partielle",
+  apport: "Versement",
 };
 
 export const COULEUR_OP: Record<TypeOp, string> = {
@@ -57,6 +66,9 @@ export const COULEUR_OP: Record<TypeOp, string> = {
   // sortie partielle se distingue ainsi d'une sortie totale au premier regard,
   // sans introduire une cinquième couleur dans l'application.
   vente_partielle: "#FF8904",
+  // ⚠️ Un violet, hors de l'échelle vert-rouge des opérations : un versement n'est ni
+  // une réussite ni un échec, il n'a pas de sens sur cet axe-là.
+  apport: "#A78BFA",
 };
 
 /**
@@ -72,6 +84,7 @@ export const COULEUR_OP_CLAIR: Record<TypeOp, string> = {
   renforcement: "#2177D1",
   vente: "#EA0B27",
   vente_partielle: "#D64200",
+  apport: "#6D28D9",
 };
 
 /**
@@ -116,6 +129,13 @@ export const GLYPHE_OP: Record<TypeOp, string> = {
     + "2.115l6.328 6.389a1.91 1.91 0 0 0 2.717 0l6.329-6.39a1.958 1.958 0 0 0 "
     + ".417-2.115l-.066-.14a1.93 1.93 0 0 0-.707-.77 1.9 1.9 0 0 0-1.003-.286l-2.485-."
     + "001V4.69a1.95 1.95 0 0 0-.563-1.372 1.91 1.91 0 0 0-1.359-.568z",
+  // Une flèche qui descend dans un réceptacle ouvert : le geste de déposer, sans
+  // référence à la hausse ou à la baisse. Dessinée sur la même boîte de 24 que les
+  // autres, pour que les pastilles gardent le même poids optique.
+  apport:
+    "M12 3a1 1 0 0 1 1 1v7.586l2.293-2.293a1 1 0 1 1 1.414 1.414l-4 4a1 1 0 0 1-1.414 "
+    + "0l-4-4a1 1 0 1 1 1.414-1.414L11 11.586V4a1 1 0 0 1 1-1M4 14a1 1 0 0 1 1 1v3h14v-3a1 "
+    + "1 0 1 1 2 0v4a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1v-4a1 1 0 0 1 1-1"
 };
 
 /** Les écritures, classées de la plus ancienne à la plus récente. */
@@ -269,8 +289,12 @@ export function resume(
 export function repartitionTypes(txs: Tx[]): { type: TypeOp; part: number; nombre: number }[] {
   if (!txs.length) return [];
   const types = typesParOperation(txs);
+  // ⚠️ `apport` est présent et restera à zéro : `typesParOperation` ne le produit jamais,
+  // un versement n'étant pas une transaction. Il figure ici parce que le `Record` typé
+  // l'exige, et le filtre sur `> 0` l'écarte du résultat — la répartition des opérations
+  // ne doit pas se mettre à parler d'épargne.
   const compte: Record<TypeOp, number> = {
-    achat: 0, renforcement: 0, vente_partielle: 0, vente: 0,
+    achat: 0, renforcement: 0, vente_partielle: 0, vente: 0, apport: 0,
   };
   for (const t of txs) compte[types[t.id]] += 1;
 

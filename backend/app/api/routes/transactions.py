@@ -1462,7 +1462,7 @@ async def get_history_par_compte(
                   .filter(MouvementTresorerie.compte_id.in_([c.id for c in comptes]))
                   .all()):
             mouvements.setdefault(m.compte_id, []).append(
-                {"date": m.date, "montant": m.montant})
+                {"id": m.id, "date": m.date, "montant": m.montant, "note": m.note})
 
     # ⚠️ **Le groupe « non rattachées » n'est pas facultatif.** Tant que la déclaration des
     # comptes n'est pas faite, la plupart des opérations n'en visent aucun ; sans ce groupe,
@@ -1576,6 +1576,15 @@ async def get_history_par_compte(
         sorties.append({
             "id": c.id, "nom": c.nom, "couleur": c.couleur,
             "declare": True, "points": _serie(lot, c),
+            # ⚠️ **Le journal voyage avec la courbe qu'il explique.** L'écran pose une
+            # pastille à la date de chaque versement ; aller les chercher compte par
+            # compte aurait multiplié les requêtes pour une donnée déjà chargée ici —
+            # elle sert au calcul du solde jour par jour, deux lignes plus haut.
+            "mouvements": [
+                {"id": m["id"], "date": m["date"].isoformat(), "montant": m["montant"],
+                 "note": m["note"]}
+                for m in mouvements.get(c.id, [])
+            ],
         })
     # ⚠️ Rangé en dernier : c'est le reliquat, pas un compte. Le nommer « Non rattachées »
     # plutôt que « Autres » dit à l'épargnant ce qu'il peut y faire — les rattacher.
@@ -1585,6 +1594,9 @@ async def get_history_par_compte(
         sorties.append({
             "id": None, "nom": "Non rattachées", "couleur": "#5A6478",
             "declare": False, "points": _serie(groupes[SANS], None),
+            # Le reliquat n'a pas de compte, donc pas de journal : un versement se fait
+            # toujours sur un compte déclaré.
+            "mouvements": [],
         })
 
     return {

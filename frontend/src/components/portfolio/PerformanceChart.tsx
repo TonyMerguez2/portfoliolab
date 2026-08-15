@@ -39,6 +39,14 @@ type CourbeCompte = {
   couleur: string;
   declare: boolean;
   points: HistoryPoint[];
+  /**
+   * Les versements et retraits du compte, pour en poser les repères.
+   *
+   * ⚠️ **Livrés avec la courbe, et non demandés à part.** Le serveur les charge déjà pour
+   * calculer le solde jour par jour ; aller les rechercher compte par compte aurait
+   * multiplié les requêtes pour une donnée qui est là.
+   */
+  mouvements?: { id: string; date: string; montant: number; note: string | null }[];
 };
 
 /**
@@ -1636,6 +1644,44 @@ export default function PerformanceChart({
       }
       // Rien n'a changé dans la *composition* de la liste — les positions, elles,
       // viennent d'être écrites dans le DOM : on ne réveille pas React pour rien.
+      /**
+       * Les versements, posés comme les écritures mais d'une autre nature.
+       *
+       * ⚠️ **Seulement en vue par compte.** Un versement appartient à un compte ; sur la
+       * courbe totale il en existerait autant que de comptes, sans que rien ne dise
+       * lequel — et surtout, un virement d'un compte à l'autre y apparaîtrait deux fois
+       * alors qu'il ne change rien au patrimoine. C'est le même écueil que la performance
+       * par compte, et la même réponse : ne pas le montrer là où il induirait en erreur.
+       *
+       * ⚠️ **Ancrés sur la valeur de la courbe à leur date**, comme les écritures, et non
+       * sur leur montant : la pastille dit *quand*, la courbe dit *combien*.
+       */
+      if (vue !== "total" && compteVise?.mouvements?.length) {
+        compteVise.mouvements.forEach((m, i) => {
+          const jour = jourAncre(m.date.slice(0, 10), jours);
+          const ancre = jour == null ? null : ancreAu.get(jour);
+          if (ancre == null || jour == null) return;
+          const x = chart.timeScale().timeToCoordinate(ancre.temps as UTCTimestamp);
+          const y = serieVisee.priceToCoordinate(ancre.valeur);
+          // ⚠️ **Un identifiant négatif, et ce n'est pas une astuce gratuite.** Les
+          // pastilles sont indexées par l'identifiant de l'écriture, un entier positif
+          // rendu par le serveur ; les mouvements portent un UUID, qui n'entre pas dans
+          // cette clé. Les numéroter à rebours garantit qu'aucun ne heurtera jamais une
+          // écriture, sans avoir à élargir le type de la carte des nœuds.
+          const cle = -(i + 1);
+          placer(noeudsPastille, coordsPastille, cle,
+                 x == null || y == null ? null : { x: Math.round(x), y: Math.round(y) });
+          const signe = m.montant > 0 ? "Versement" : "Retrait";
+          out.push({
+            id: cle,
+            titre: `${signe} de ${Math.abs(m.montant).toLocaleString("fr-FR")} \u20AC`
+                   + ` \u2014 ${new Date(m.date).toLocaleDateString("fr-FR")}`
+                   + (m.note ? ` \u00B7 ${m.note}` : ""),
+            nombre: 1, type: "apport", jour,
+          });
+        });
+      }
+
       setPastilles(p => (memeListe(p, out, cléPastille) ? p : out));
 
       // ⚠️ **Les lueurs verte et rouge des extrêmes sont retirées, à la demande.**
