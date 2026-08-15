@@ -168,7 +168,7 @@ export default function PanneauActivite({
 
   const etiquette: React.CSSProperties = {
     fontFamily: FONT, fontSize: 9.5, fontWeight: 600, letterSpacing: "0.07em",
-    color: CLAIR.texteFaible, textTransform: "uppercase",
+    color: CLAIR.texteFaible, textTransform: "uppercase", lineHeight: 1.25,
   };
   const principal: React.CSSProperties = {
     fontFamily: FONT, fontSize: 12, fontWeight: 600, color: CLAIR.texte,
@@ -184,7 +184,7 @@ export default function PanneauActivite({
     titre: string; vide: string; gauche?: React.ReactNode;
     texte?: string; sousTexte?: string; quand?: string;
   }) => (
-    <div style={{ display: "flex", flexDirection: "column", gap: 4, minWidth: 0 }}>
+    <div style={{ display: "flex", flexDirection: "column", gap: 2, minWidth: 0 }}>
       <span style={etiquette}>{titre}</span>
       {texte ? (
         <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
@@ -207,8 +207,12 @@ export default function PanneauActivite({
 
   return (
     <>
+      {/* ⚠️ Les écarts se sont resserrés quand la carte est descendue au niveau des
+          dossiers : à 232 pixels, la troisième ligne — les résultats d'entreprise —
+          disparaissait sous `overflow: hidden`, sans rien pour le signaler. Du contenu qui
+          s'évapore en silence est le pire des défauts de mise en page. */}
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between",
-        marginBottom: 12, flexShrink: 0 }}>
+        marginBottom: 8, flexShrink: 0 }}>
         <span style={{ fontFamily: FONT, fontSize: 12.5, fontWeight: 600, color: CLAIR.texte }}>
           Activité
         </span>
@@ -219,7 +223,7 @@ export default function PanneauActivite({
           haut et laissaient un grand vide sous elles, ce qui se lit comme un chargement qui
           n'aboutit pas. */}
       <div style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column",
-        justifyContent: "space-between", gap: 12, overflow: "hidden" }}>
+        justifyContent: "space-between", gap: 6, overflow: "hidden" }}>
 
         <Ligne
           titre="Dernière opération"
@@ -265,7 +269,9 @@ export default function PanneauActivite({
             )
           )}
           texte={economique?.libelle}
-          sousTexte={economique?.ticker ?? undefined}
+          /* ⚠️ Le nom de la zone est retiré : le drapeau le dit déjà, et cette ligne coûtait
+             les quatorze pixels qui faisaient déborder la carte depuis qu'elle s'aligne sur
+             la rangée des dossiers. Il reste au survol. */
           quand={economique ? delai(economique.jours, economique.date) : undefined}
         />
 
@@ -289,7 +295,7 @@ export default function PanneauActivite({
       {onVoirTout && (
         <button type="button" onClick={onVoirTout}
           style={{
-            display: "flex", alignItems: "center", gap: 5, marginTop: 12, flexShrink: 0,
+            display: "flex", alignItems: "center", gap: 5, marginTop: 8, flexShrink: 0,
             background: "none", border: "none", cursor: "pointer", padding: 0,
             fontFamily: FONT, fontSize: 11, fontWeight: 500, color: CLAIR.accent,
           }}>

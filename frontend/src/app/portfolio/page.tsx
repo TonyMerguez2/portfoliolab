@@ -2511,12 +2511,11 @@ function PortfolioPageInner() {
           {/* Allocation. Remplace l'exposition sectorielle, qui rangeait
               tout un portefeuille d'actions dans une barre unique à 100 %. */}
           {/**
-            * ⚠️ **`flex: 1 1 0` sur les deux panneaux, et c'est ce qui les fait de la même
-            * hauteur.** Demandé ainsi. Une base zéro pour chacun leur fait partager la
-            * colonne en deux parts égales quelle que soit sa hauteur ; une base automatique
-            * les aurait dimensionnés sur leur contenu, et le plus bavard aurait gagné des
-            * pixels sur l'autre. C'est le partage qui est réglé ici, jamais une hauteur
-            * écrite quelque part — elle suivrait mal le premier écran d'une autre taille.
+            * ⚠️ **La répartition prend tout ce que l'activité ne prend pas.** Les deux
+            * panneaux ont partagé la colonne en parts égales un temps ; l'activité descend
+            * désormais au niveau de la rangée des dossiers, et le pavage récupère la
+            * différence — soit soixante pixels de plus, là où une image en profite plus
+            * qu'une liste de trois lignes.
             */}
           <Cadre style={{ padding: "13px 15px", flex: "1 1 0", minHeight: 0, display: "flex", flexDirection: "column", overflow: "hidden" }}>
             {/**
@@ -2538,9 +2537,15 @@ function PortfolioPageInner() {
               onVoirTout={() => setDashView("analyse")}
             />
           </Cadre>
-          {/* Ce qui vient de se passer, et ce qui va se passer. Même hauteur que la
-              répartition : voir la note sur `flex: 1 1 0` juste au-dessus. */}
-          <Cadre style={{ padding: "13px 15px", flex: "1 1 0", minHeight: 0, display: "flex", flexDirection: "column", overflow: "hidden" }}>
+          {/**
+            * ⚠️ **Sa hauteur est celle de la rangée des dossiers, pour que les deux se
+            * touchent à la même ligne.** Les deux colonnes portent le même écart de huit
+            * pixels sous leur premier bloc : à hauteur égale, le haut de cette carte tombe
+            * exactement sur le haut de « Vos comptes », et le bas du pavage sur celui de la
+            * courbe. Un nombre écrit ici aurait cessé d'être vrai au premier ajustement de
+            * l'en-tête ou de la carte — il se déduit donc des deux.
+            */}
+          <Cadre style={{ padding: "13px 15px", flex: "0 0 auto", height: HAUTEUR_DOSSIERS, display: "flex", flexDirection: "column", overflow: "hidden" }}>
             <PanneauActivite
               portfolioId={portfolio?.id}
               refreshKey={txRefreshKey}
@@ -3252,6 +3257,20 @@ const ICONE_PAR_GENRE: Record<string, React.ReactNode> = {
  * cassé au premier nom composé, sans rien dire.
  */
 const GENRE_DE: Record<Enveloppe, string> = { PEA: "pea", CTO: "cto", Crypto: "crypto" };
+
+/**
+ * La hauteur de la rangée des dossiers, en-tête compris.
+ *
+ * ⚠️ **Déduite des trois nombres qui la composent, jamais écrite.** Vingt-six pixels
+ * d'en-tête — ceux du bouton de tri de la grille —, dix d'écart, puis la carte elle-même.
+ * Un 232 posé en dur aurait cessé d'être vrai au premier de ces trois qui bouge, et le
+ * désalignement se serait vu sans qu'on sache d'où il vient.
+ *
+ * ⚠️ **Elle vaut aussi pour la grille d'un dossier ouvert**, dont l'en-tête fait les mêmes
+ * vingt-six pixels et les cartes la même hauteur : c'est l'invariant qui empêche la courbe
+ * de changer de taille quand on ouvre un dossier.
+ */
+const HAUTEUR_DOSSIERS = 26 + 10 + CARTE_COMPTE.hauteur;
 
 const HABILLAGE_COMPTES: Record<Enveloppe, { couleur: string; icone: React.ReactNode }> = {
   PEA: { couleur: "#5B6CF0", icone: ICONE_TITRES },
