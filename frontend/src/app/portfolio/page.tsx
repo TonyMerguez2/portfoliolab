@@ -2053,7 +2053,11 @@ function PortfolioPageInner() {
           </div>
         )}
         <div style={{ width: 1, alignSelf: "stretch", background: CLAIR.carteCreuse }} />
-        <div style={{ minWidth: 200 }}>
+        {/* ⚠️ Étiré comme le bloc de performance, et pour la même raison : sa dernière
+            ligne doit finir à la hauteur des deux autres. Laissé à sa taille naturelle,
+            il s'arrêtait un demi-pixel plus haut — invisible seul, mais c'est ce
+            demi-pixel qui faisait mesurer 14,5 en bas contre 14 en haut. */}
+        <div style={{ minWidth: 200, alignSelf: "stretch", display: "flex", flexDirection: "column" }}>
     {/* VALEUR TOTALE + édition inline */}
     <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 2 }}>
       <span style={{ display: "flex", alignItems: "center", gap: 6 }}>
@@ -2149,7 +2153,7 @@ function PortfolioPageInner() {
         })}
       </div>
     ) : surTransactions && prixDeRevient != null ? (
-      <div style={{ fontSize: 11, fontFamily: FONT, color: CLAIR.texteAttenue }}>
+      <div style={{ marginTop: "auto", fontSize: 11, fontFamily: FONT, color: CLAIR.texteAttenue }}>
         {masque ? "•••• €" : `${prixDeRevient.toLocaleString("fr-FR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €`} investis
         {/* ⚠️ Un point médian entre le capital et la date : ce sont deux faits distincts,
             et « 4 959,91 € investis depuis fév. 2026 » se lisait comme une seule phrase où
@@ -2170,7 +2174,12 @@ function PortfolioPageInner() {
     )}
         </div>
         <div style={{ width: 1, alignSelf: "stretch", background: CLAIR.carteCreuse }} />
-        <div style={{ minWidth: 150 }}>
+        {/* ⚠️ **Le bloc s'étire pour que sa dernière ligne tombe au même niveau que les
+            deux autres.** « Depuis le début », le capital investi et le bas de l'anneau
+            sont trois mentions de même rang : posées à trois hauteurs, elles faisaient
+            trois blocs qui se terminent au hasard de leur contenu. Le bloc prend donc
+            toute la rangée et sa mention descend d'elle-même. */}
+        <div style={{ minWidth: 150, alignSelf: "stretch", display: "flex", flexDirection: "column" }}>
           {/**
             * ⚠️ **La période est écrite dans le titre, comme celle d'à côté.** Ce bloc et
             * « Comparaison » répondent tous deux à « combien ai-je gagné » et affichaient
@@ -2188,7 +2197,11 @@ function PortfolioPageInner() {
               période en incise — « Gains / pertes · depuis le début » — ce qui faisait
               une ligne longue au-dessus d'un chiffre court. Sous le montant, la mention
               se lit après lui, ce qui est l'ordre dans lequel on se pose la question. */}
-          <p style={{ margin: "0 0 4px", fontSize: 11.5, fontWeight: 500, color: CLAIR.texteSecondaire }}>
+          {/* ⚠️ 2 px sous l'intitulé, comme « Valeur totale » à gauche. Les deux blocs
+              montrent un grand chiffre sous un petit titre : un écart de 4 px ici et de
+              2 px là faisait démarrer les deux nombres à deux hauteurs, alors que rien ne
+              les distingue. */}
+          <p style={{ margin: "0 0 2px", fontSize: 11.5, fontWeight: 500, color: CLAIR.texteSecondaire }}>
             Performance
           </p>
     {/* P&L total depuis achat */}
@@ -2242,8 +2255,8 @@ function PortfolioPageInner() {
        * chercher, le pourcentage la précise.
        */
       return (
-        <div>
-        <div style={{ marginTop: 3, fontSize: 18, fontFamily: FONT, color: plCol, fontWeight: 600, display: "flex", alignItems: "center", gap: 8 }}>
+        <div style={{ flex: 1, display: "flex", flexDirection: "column" }}>
+        <div style={{ fontSize: 18, fontFamily: FONT, color: plCol, fontWeight: 600, display: "flex", alignItems: "center", gap: 8 }}>
           {/* Deux décimales, comme la valeur totale juste au-dessus. Arrondi à
               l'euro, ce gain ne se recoupait pas avec elle : 3 447,92 € moins
               3 256,73 € de capital font 191,19 €, pas 191. */}
@@ -2281,7 +2294,9 @@ function PortfolioPageInner() {
             deux blocs se répondent alors : un grand chiffre, puis la phrase qui dit de
             quoi il parle. Au survol, la mention change de question — ce n'est plus
             « depuis quand » mais « quand ». */}
-        <div style={{ marginTop: 4, fontSize: 11, fontFamily: FONT, color: CLAIR.texteAttenue }}>
+        {/* `marginTop: auto` : la mention se pose au bas du bloc étiré, donc sur la même
+            ligne que le capital investi à sa gauche. */}
+        <div style={{ marginTop: "auto", paddingTop: 4, fontSize: 11, fontFamily: FONT, color: CLAIR.texteAttenue }}>
           {survolGain ? "À cette date" : "Depuis le début"}
         </div>
         </div>
