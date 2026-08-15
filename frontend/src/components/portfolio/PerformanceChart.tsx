@@ -656,6 +656,14 @@ export default function PerformanceChart({
    */
   operations?: {
     id: number; ticker: string; executed_at: string; type: string;
+    /**
+     * Le compte où l'écriture est rangée, quand elle l'est.
+     *
+     * ⚠️ **`null` veut dire « pas encore rattachée », et non « inconnue ».** C'est ce
+     * qui permet aux repères de suivre la courbe qu'on regarde : en vue par compte, une
+     * écriture libre appartient au groupe « Non rattachées » et pas au compte affiché.
+     */
+    compte_id?: string | null;
     couleur: string; libelle: string;
     /**
      * Quantité, prix unitaire et frais — facultatifs, et lus seulement par
@@ -1522,22 +1530,32 @@ export default function PerformanceChart({
   useEffect(() => {
     const chart = chartRef.current, serie = serieRef.current, el = plotRef.current;
     /**
-     * ⚠️ **Aucun repère en vue par compte, et c'est un retrait volontaire.** Leur
-     * ordonnée vient de `serie.priceToCoordinate(ancre.valeur)` : la valeur du
-     * portefeuille **entier**, lue sur l'échelle courante. Or cette échelle n'est
-     * plus celle du total dès qu'on découpe — elle part de zéro et monte au plus
-     * gros compte. Une pastille d'achat se serait donc posée à une hauteur qui ne
-     * correspond à aucune des courbes dessinées, et elle aurait eu l'air de
-     * désigner celle qui passe par là.
+     * ⚠️ **Chaque repère est porté par la courbe qu'il concerne.** L'ordonnée vient
+     * de `priceToCoordinate`, donc de l'échelle en cours : en vue par compte, celle-ci
+     * part de zéro et monte au plus gros compte, si bien qu'un repère converti sur la
+     * valeur du portefeuille entier se serait posé à une hauteur ne correspondant à
+     * aucune courbe dessinée — en ayant l'air de désigner celle qui passe par là.
+     * Les repères avaient d'abord été retirés de cette vue pour cette raison ; ils
+     * reviennent maintenant qu'ils savent à quelle série se raccrocher.
      *
-     * La suite naturelle est de rattacher chaque repère à la courbe de *son*
-     * compte — `compte_id` est désormais porté par chaque opération, donc la
-     * donnée est là. C'est un travail à part : il faut choisir la série avant de
-     * convertir, et regrouper les écritures par compte et par jour plutôt que par
-     * jour seul. En attendant, ne rien montrer vaut mieux que montrer à côté.
+     * ⚠️ **Et seules les écritures du compte regardé sont montrées.** Une pastille
+     * d'achat d'AAPL sur la courbe du PEA désignerait un achat qui n'y a pas eu lieu,
+     * à une hauteur qui plus est arbitraire. `compte_id` est porté par chaque
+     * opération : le tri se fait donc sur la donnée, pas sur une approximation.
      */
-    if (!chart || !serie || !el || !points.length || !ordonnee || !cadrePret
-        || vue !== "total") {
+    const serieVisee = vue === "total"
+      ? serie
+      : seriesComptesRef.current.get(vue) ?? null;
+    const compteVise = vue === "total"
+      ? null
+      : courbesComptes.find(c => (c.id ?? "__libre__") === vue) ?? null;
+    const pointsVises = vue === "total" ? points : (compteVise?.points ?? []);
+    const opsVisees = vue === "total"
+      ? operations
+      : operations.filter(o => (o.compte_id ?? "__libre__") === vue);
+
+    if (!chart || !serie || !serieVisee || !el || !pointsVises.length
+        || !ordonnee || !cadrePret) {
       setPastilles([]);
       return;
     }
@@ -1548,8 +1566,8 @@ export default function PerformanceChart({
     // eux seuls survivaient aux fenêtres tracées en barres intraday.
     //
     // L'ordonnée est celle de la courbe, et non un second calcul : voir `ordonnee`.
-    const ancreAu = ancresParJour(points, ordonnee);
-    const jours = joursSerie;
+    const ancreAu = ancresParJour(pointsVises, ordonnee);
+    const jours = pointsVises.map(p => p.date.slice(0, 10));
 
     const calculer = () => {
       /**
@@ -1573,7 +1591,7 @@ export default function PerformanceChart({
        * son glyphe.
        */
       const groupes = new Map<string, { ops: typeof operations; jour: string }>();
-      for (const op of operations) {
+      for (const op of opsVisees) {
         const jour = op.executed_at.slice(0, 10);
         // Hors du cadre — antérieure ou postérieure à la fenêtre — l'écriture est
         // écartée plutôt que rapprochée du bord : voir `jourAncre`.
@@ -1591,7 +1609,7 @@ export default function PerformanceChart({
         const ancre = ancreAu.get(g.jour);
         const x = ancre == null ? null
           : chart.timeScale().timeToCoordinate(ancre.temps as UTCTimestamp);
-        const y = ancre == null ? null : serie.priceToCoordinate(ancre.valeur);
+        const y = ancre == null ? null : serieVisee.priceToCoordinate(ancre.valeur);
         const tete = g.ops.reduce(dominante);
         const quand = new Date(tete.executed_at).toLocaleDateString("fr-FR");
         const tickers = Array.from(new Set(g.ops.map(o => o.ticker)));
@@ -1718,7 +1736,7 @@ export default function PerformanceChart({
       if (trame) cancelAnimationFrame(trame);
       ro.disconnect();
     };
-  }, [operations, points, joursSerie, totalValue, mode, ordonnee, cadrePret, stickers, echelle, tempsSerie, vue]);
+  }, [operations, points, joursSerie, totalValue, mode, ordonnee, cadrePret, stickers, echelle, tempsSerie, vue, courbesComptes, traceAffichee]);
 
   // ── Création du graphique ──────────────────────────────────────────────────
   useEffect(() => {

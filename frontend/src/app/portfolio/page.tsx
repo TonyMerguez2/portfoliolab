@@ -707,6 +707,10 @@ function PortfolioPageInner() {
     const types = typesParOperation(ecritures);
     return ecritures.map(t => ({
       id: t.id, ticker: t.ticker, executed_at: t.executed_at,
+      // ⚠️ Le compte accompagne le repère : en vue par compte, le graphique ne montre
+      // que les écritures du compte regardé. Sans lui, un achat fait au CTO se serait
+      // posé sur la courbe du PEA.
+      compte_id: t.compte_id ?? null,
       type: types[t.id], couleur: COULEUR_OP[types[t.id]], libelle: LIBELLE_OP[types[t.id]],
       // Quantité, prix et frais : lus par l'encart de survol du graphique, qui détaille
       // l'écriture sous le curseur. Sans eux il ne pourrait annoncer qu'un libellé et une date.
