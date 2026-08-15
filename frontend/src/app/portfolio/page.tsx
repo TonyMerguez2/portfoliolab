@@ -393,6 +393,8 @@ function PortfolioPageInner() {
   const [genresCompte,    setGenresCompte]    = useState<GenreCompte[]>([]);
   const [formCompte,      setFormCompte]      = useState(false);
   /** Le compte en cours de correction, ou `null` quand on en déclare un nouveau. */
+  const [renomme,         setRenomme]         = useState(false);
+  const [nomSaisi,        setNomSaisi]        = useState("");
   const [compteEdite,     setCompteEdite]     = useState<CompteDeclare | null>(null);
   /**
    * Le dossier **déduit** dont on règle la couleur, désigné par sa clé préfixée.
@@ -1646,6 +1648,35 @@ function PortfolioPageInner() {
     }
   }, [idPortefeuille, compteEdite, rechargerComptes]);
 
+  /**
+   * Enregistre le nouveau nom du portefeuille.
+   *
+   * ⚠️ **Le nom est posé à l'écran avant la réponse du serveur.** Renommer est un geste
+   * dont on connaît déjà le résultat ; attendre l'aller-retour aurait laissé l'ancien nom
+   * une demi-seconde de trop, juste après l'avoir corrigé. Si l'appel échoue, on remet
+   * celui d'avant — c'est le seul cas où le nom doit reculer sous les yeux.
+   *
+   * ⚠️ **Un nom vide est refusé sans le dire.** Il n'y a rien à expliquer : le champ se
+   * referme sur l'ancien nom, et l'on comprend seul qu'un portefeuille en a besoin d'un.
+   */
+  const validerLeNom = useCallback(async () => {
+    setRenomme(false);
+    const propre = nomSaisi.trim();
+    if (!idPortefeuille || !propre || propre === portfolio?.name) return;
+    const avant = portfolio?.name;
+    setPortfolio(p => (p ? { ...p, name: propre } : p));
+    try {
+      const r = await fetch(`${API_URL}/api/v1/portfolios/${idPortefeuille}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json", ...enTetesAuth() },
+        body: JSON.stringify({ name: propre }),
+      });
+      if (!r.ok) throw new Error(String(r.status));
+    } catch {
+      setPortfolio(p => (p && avant ? { ...p, name: avant } : p));
+    }
+  }, [nomSaisi, idPortefeuille, portfolio?.name]);
+
   const supprimerLeCompte = useCallback(async () => {
     if (!idPortefeuille || !compteEdite) return;
     setCompteEnCours(true);
@@ -1877,10 +1908,52 @@ function PortfolioPageInner() {
                   bandeau où cette couleur paraissait — la vignette ne s'en teinte
                   plus depuis qu'elle a pris le cuir de la palette — donc elle ne
                   distinguait plus rien de rien. */}
+              {/**
+                * Le nom se corrige sur place, d'un double-clic.
+                *
+                * ⚠️ **Sur place, et non dans un formulaire.** Renommer un portefeuille est
+                * un geste d'un mot : ouvrir une fenêtre pour un champ unique aurait coûté
+                * plus de clics que la correction elle-même. Le champ prend exactement la
+                * place du titre, si bien que rien ne bouge autour — le bandeau garde sa
+                * hauteur, et la courbe en dessous ne se recadre pas.
+                *
+                * ⚠️ **Double-clic et non simple clic.** Le nom est au milieu d'un bandeau
+                * qu'on parcourt à la souris ; un simple clic aurait ouvert un champ à
+                * chaque passage distrait, et la première frappe suivante aurait renommé le
+                * portefeuille sans qu'on l'ait voulu.
+                *
+                * ⚠️ **Entrée valide, Échap renonce, et perdre le focus valide aussi.** Un
+                * champ qu'on quitte en cliquant ailleurs doit garder ce qu'on vient d'y
+                * écrire : l'inverse jette une saisie sans le dire.
+                */}
               <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                <span style={{ fontSize: 13, fontWeight: 700, color: CLAIR.texte, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-                  {portfolio.name}
-                </span>
+                {renomme ? (
+                  <input
+                    autoFocus
+                    value={nomSaisi}
+                    onChange={e => setNomSaisi(e.target.value)}
+                    onBlur={validerLeNom}
+                    onKeyDown={e => {
+                      if (e.key === "Enter") { e.preventDefault(); validerLeNom(); }
+                      if (e.key === "Escape") { e.preventDefault(); setRenomme(false); }
+                    }}
+                    maxLength={60}
+                    aria-label="Nom du portefeuille"
+                    style={{
+                      fontFamily: "inherit", fontSize: 13, fontWeight: 700,
+                      color: CLAIR.texte, background: CLAIR.carteCreuse,
+                      border: `1px solid ${CLAIR.bordFort}`, borderRadius: 6,
+                      padding: "1px 6px", outline: "none", width: "100%", minWidth: 0,
+                    }}
+                  />
+                ) : (
+                  <span
+                    onDoubleClick={() => { setNomSaisi(portfolio.name); setRenomme(true); }}
+                    title="Double-cliquez pour renommer"
+                    style={{ fontSize: 13, fontWeight: 700, color: CLAIR.texte, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", cursor: "text" }}>
+                    {portfolio.name}
+                  </span>
+                )}
               </div>
               <span style={{ fontSize: 10.5, color: CLAIR.texteAttenue }}>
                 {enriched.length} actif{enriched.length > 1 ? "s" : ""}

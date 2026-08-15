@@ -214,12 +214,12 @@ const GLYPHE = DISQUE - 4;
 /**
  * Écritures détaillées au plus dans l'encart, les suivantes étant comptées.
  *
- * Trois lignes, et non cinq : au-delà, l'encart devient un tableau posé sur la
- * courbe qu'il commente — les lignes du bas débordent du bandeau de tête et
- * recouvrent le tracé. Le compte des restantes suffit à dire qu'il y en a, et le
- * clic sur la bulle ouvre l'onglet Transactions, qui les porte toutes.
+ * ⚠️ **Deux lignes, ramenées de trois.** L'encart s'ouvre sous la pastille de
+ * découpage, dans un bandeau qui n'a pas grandi : à trois lignes il descendait sur le
+ * tracé qu'il commente. Le compte des restantes suffit à dire qu'il y en a d'autres, et
+ * le clic sur la bulle ouvre l'onglet Transactions, qui les porte toutes.
  */
-const MAX_LIGNES_ENCART = 3;
+const MAX_LIGNES_ENCART = 2;
 
 /**
  * Pictogramme d'une opération.
@@ -2436,10 +2436,11 @@ export default function PerformanceChart({
         {/**
           * Le découpage de la courbe, à l'opposé des outils de tracé.
           *
-          * ⚠️ `taille="md"` comme la piste d'en face : 26 px de pastille et 2 px de
-          * creux font les 30 px des boutons voisins, et les deux extrémités du
-          * bandeau se posent alors sur la même ligne. `sm` en aurait fait 26 et
-          * aurait laissé la gauche flotter au-dessus de la droite.
+          * ⚠️ `taille="sm"`, celle de la pastille de la carte Répartition. Elle était
+          * en `md` pour s'aligner sur la piste des outils, à 30 px ; demandé à l'usage,
+          * les deux pastilles de choix se lisent maintenant à la même échelle d'un
+          * panneau à l'autre. L'alignement du haut est repris ci-dessous, la pastille
+          * étant devenue plus courte que ses voisines.
           *
           * ⚠️ **Absente hors suivi par transactions.** Un portefeuille décrit en
           * poids n'a pas d'opérations, donc pas de comptes : la bascule ne pourrait
@@ -2478,7 +2479,7 @@ export default function PerformanceChart({
             scrollbarWidth: "none",
           }}>
             <Segments
-              taille="md"
+              taille="sm"
               ariaLabel="Découpage de la courbe"
               valeur={vue}
               onChange={setVue}
