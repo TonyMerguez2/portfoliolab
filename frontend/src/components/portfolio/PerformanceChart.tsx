@@ -2443,7 +2443,26 @@ export default function PerformanceChart({
           * courbe, donc quand le choix existe vraiment.
           */}
         {surTransactions && portfolioId && courbesComptes.length > 0 && (
-          <div ref={pastilleVueRef} style={{ marginRight: "auto", display: "flex" }}>
+          <div ref={pastilleVueRef} style={{
+            marginRight: "auto", display: "flex",
+            /**
+             * ⚠️ **La pastille glisse au lieu de déborder, et c'est mesuré.** À cinq
+             * comptes déclarés plus le reliquat, elle atteignait 538 px dans un bandeau
+             * de 576 : posée à droite des outils, elle repartait vers la gauche jusqu'à
+             * −48 px, et « Total » comme le premier compte sortaient du cadre — donc
+             * devenaient incliquables. `minWidth: 0` est ce qui l'autorise à se
+             * rétrécir, un enfant de boîte flexible refusant par défaut de passer sous
+             * sa taille de contenu.
+             *
+             * ⚠️ **Le rembourrage vertical n'est pas décoratif.** `overflowX: auto`
+             * rend l'axe vertical non visible : l'ombre du segment actif se serait
+             * coupée net en haut et en bas. On réserve donc la place puis on la reprend
+             * par une marge négative, pour que la rangée garde ses 30 px.
+             */
+            minWidth: 0, maxWidth: "58%", overflowX: "auto",
+            paddingTop: 6, paddingBottom: 6, marginTop: -6, marginBottom: -6,
+            scrollbarWidth: "none",
+          }}>
             <Segments
               taille="md"
               ariaLabel="Découpage de la courbe"
