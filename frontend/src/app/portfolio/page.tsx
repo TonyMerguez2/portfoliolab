@@ -2085,9 +2085,14 @@ function PortfolioPageInner() {
                   raccroche la ligne à l'avatar qui la précède : c'est le seul endroit du
                   bandeau où la couleur choisie pour ce portefeuille reparaît. */}
               <span style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 10.5, color: CLAIR.texteAttenue }}>
+                {/* ⚠️ `couleurAvatar` et non `portfolio.color` : ce sont deux teintes
+                    distinctes. L'épargnant choisit celle de son avatar dans la palette de
+                    la vignette, quand `color` reste celle du portefeuille en base — celle
+                    de la courbe. Les deux coïncident tant qu'on n'a rien choisi, ce qui
+                    rendait l'erreur invisible ici et fausse partout ailleurs. */}
                 <span aria-hidden="true" style={{
                   width: 6, height: 6, borderRadius: "50%", flexShrink: 0,
-                  background: portfolio.color || CLAIR.accent,
+                  background: couleurAvatar,
                 }} />
                 {enriched.length} actif{enriched.length > 1 ? "s" : ""}
               </span>
