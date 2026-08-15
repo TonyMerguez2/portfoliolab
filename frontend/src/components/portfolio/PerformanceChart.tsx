@@ -3,7 +3,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { couleurGrille, ecrireStyleGrille, lireStyleGrille, LIBELLE_GRILLE, STYLES_GRILLE, type StyleGrille } from "@/lib/grille";
 import {
-  createChart, AreaSeries, CandlestickSeries, ColorType, CrosshairMode, LineStyle,
+  createChart, AreaSeries, CandlestickSeries, LineSeries, ColorType, CrosshairMode, LineStyle,
   type Logical, type MouseEventParams,
   type IChartApi, type ISeriesApi, type UTCTimestamp,
 } from "lightweight-charts";
@@ -25,6 +25,21 @@ import Segments from "@/components/ui/Segments";
 import { API_URL as API } from "@/lib/api";
 
 export type { HistoryPoint, Period };
+
+/**
+ * Une courbe de compte, telle que `/history/comptes` la rend.
+ *
+ * ⚠️ `id: null` désigne le reliquat des opérations non rattachées, que le serveur
+ * range en dernier. Ce n'est pas un compte : on ne lui propose donc ni couleur
+ * choisie ni ouverture, et son nom dit ce qu'on peut en faire — les rattacher.
+ */
+type CourbeCompte = {
+  id: string | null;
+  nom: string;
+  couleur: string;
+  declare: boolean;
+  points: HistoryPoint[];
+};
 
 /**
  * Courbe de valeur du portefeuille.
@@ -722,6 +737,43 @@ export default function PerformanceChart({
    */
   const [mode, setMode] = useState<"ligne" | "bougie">("ligne");
 
+  /**
+   * Le tout, ou compte par compte.
+   *
+   * ⚠️ **Deux lectures d'une même chose, et le serveur en répond.** La route
+   * `/history/comptes` garantit que la somme de ses courbes redonne la courbe
+   * totale à chaque date — c'est ce qui autorise à présenter les deux vues comme
+   * un simple changement de focale plutôt que comme deux graphiques différents.
+   * Si cette garantie tombait, il faudrait retirer la bascule, pas la corriger
+   * ici : recoller les morceaux à l'écran masquerait l'écart au lieu de le dire.
+   *
+   * ⚠️ **Réservé au suivi par transactions.** Un portefeuille décrit en poids n'a
+   * pas d'opérations, donc pas de comptes : la pastille n'a rien à proposer et ne
+   * paraît pas. Un bouton qui ne peut mener qu'à une vue vide est pire qu'absent.
+   */
+  const [vue, setVue] = useState<"total" | "comptes">("total");
+
+  /**
+   * La largeur de la pastille de gauche, mesurée.
+   *
+   * ⚠️ **L'encart de lecture d'une écriture occupe déjà ce coin.** Il est posé en
+   * absolu à `left: 0` dans le bandeau de tête, c'est-à-dire exactement là où va la
+   * pastille : au survol d'un point d'opération, son texte se serait posé sur les
+   * boutons. On le décale donc de la largeur réellement occupée plutôt que d'une
+   * valeur devinée — les deux libellés n'ont pas la même longueur, et la police
+   * n'est pas garantie chargée au premier rendu.
+   */
+  const pastilleVueRef = useRef<HTMLDivElement>(null);
+  const [reserveVue, setReserveVue] = useState(0);
+  useEffect(() => {
+    const el = pastilleVueRef.current;
+    if (!el) { setReserveVue(0); return; }
+    const mesurer = () => setReserveVue(el.getBoundingClientRect().width);
+    mesurer();
+    const ro = new ResizeObserver(mesurer);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [surTransactions, portfolioId]);
 
   /**
    * Réglages d'apparence, retenus d'une visite à l'autre.
@@ -1150,6 +1202,138 @@ export default function PerformanceChart({
     return () => { cancelled = true; };
   }, [key, period, portfolioId, surTransactions]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  /**
+   * Les courbes par compte, chargées **seulement quand on les regarde**.
+   *
+   * ⚠️ **Un appel distinct, et non un champ de plus sur `/history`.** La route par
+   * compte revalorise autant de portefeuilles qu'il y a de dossiers ; l'attacher à
+   * la réponse du total aurait alourdi le premier tracé de la page pour une vue
+   * que la plupart des visites n'ouvrent jamais. Ici elle ne coûte que si l'on
+   * bascule, et le coût est celui d'un seul téléchargement de cours, quel que
+   * soit le nombre de comptes — le serveur les partage.
+   *
+   * ⚠️ **Vidée en repassant au total.** Sans cela, les séries resteraient créées
+   * dans le graphique, invisibles mais toujours comptées par l'échelle.
+   */
+  const [courbesComptes, setCourbesComptes] = useState<CourbeCompte[]>([]);
+
+  useEffect(() => {
+    if (vue !== "comptes" || !surTransactions || !portfolioId) {
+      setCourbesComptes([]);
+      return;
+    }
+    let annule = false;
+    fetch(`${API}/api/v1/portfolios/${portfolioId}/history/comptes?period=${PERIOD_API[period]}`,
+          { headers: enTetesAuth() })
+      .then(r => r.json())
+      .then((d: { comptes?: CourbeCompte[] }) => {
+        if (!annule) setCourbesComptes(Array.isArray(d.comptes) ? d.comptes : []);
+      })
+      .catch(() => { if (!annule) setCourbesComptes([]); });
+    return () => { annule = true; };
+  }, [vue, period, portfolioId, surTransactions]);
+
+  /** Les courbes mises en forme pour le tracé, aux mêmes règles que la principale. */
+  const traceComptes = useMemo(() => courbesComptes.map(c => ({
+    cle: c.id ?? "__libre__",
+    nom: c.nom,
+    couleur: c.couleur,
+    data: c.points
+      .map(p => ({
+        time: Math.floor(new Date(p.date).getTime() / 1000) as UTCTimestamp,
+        value: p.value * echelle,
+      }))
+      .filter(d => isFinite(d.time) && isFinite(d.value))
+      // Même exigence que la série principale : un temps strictement croissant,
+      // faute de quoi la série entière est refusée par la bibliothèque.
+      .filter((d, i, arr) => i === 0 || d.time > arr[i - 1].time),
+  })), [courbesComptes, echelle]);
+
+  /**
+   * L'échelle de la vue par compte — **et elle part de zéro**.
+   *
+   * ⚠️ **C'est la seule différence de traitement avec la courbe totale, et elle est
+   * délibérée.** Une courbe seule se lit dans le temps : lui donner une échelle
+   * serrée sur ses propres extrêmes est juste, puisqu'on y compare un jour à un
+   * autre jour de la même courbe. Plusieurs courbes côte à côte se lisent aussi
+   * *entre elles* — et là, une échelle tronquée ment : un compte à 3 800 € et un
+   * compte à 4 000 € apparaîtraient l'un au ras du cadre et l'autre au sommet,
+   * suggérant un rapport de un à dix. Partir de zéro rend les hauteurs
+   * comparables, ce qui est précisément ce que la vue promet.
+   *
+   * Le prix à payer est assumé : un petit compte à côté d'un gros s'écrase près de
+   * l'axe. C'est vrai, et c'est l'information.
+   */
+  const bornesComptes = useMemo(() => {
+    const vals = traceComptes.flatMap(t => t.data.map(d => d.value));
+    if (!vals.length) return null;
+    const haut = Math.max(...vals);
+    return { min: 0, max: haut + (haut * 0.05 || 1) };
+  }, [traceComptes]);
+  const bornesComptesRef = useRef<{ min: number; max: number } | null>(null);
+  bornesComptesRef.current = bornesComptes;
+
+  const seriesComptesRef = useRef<Map<string, ISeriesApi<"Line">>>(new Map());
+
+  /**
+   * Création, mise à jour et retrait des séries par compte.
+   *
+   * ⚠️ **Par différence, et non en rasant tout à chaque passage.** Le nombre de
+   * comptes change rarement, les données souvent : détruire et recréer les séries
+   * à chaque rafraîchissement emporterait le cadrage avec elles — c'est la raison
+   * pour laquelle la série bougies est déjà créée d'emblée puis simplement
+   * alimentée. On applique ici la même règle à un nombre de séries variable.
+   */
+  useEffect(() => {
+    const chart = chartRef.current;
+    if (!chart) return;
+    const vivantes = seriesComptesRef.current;
+    const voulues = new Set(traceComptes.map(t => t.cle));
+
+    for (const [cle, s] of Array.from(vivantes)) {
+      if (voulues.has(cle)) continue;
+      chart.removeSeries(s);
+      vivantes.delete(cle);
+    }
+
+    for (const t of traceComptes) {
+      let s = vivantes.get(t.cle);
+      if (!s) {
+        s = chart.addSeries(LineSeries, {
+          lineWidth: 2,
+          /**
+           * ⚠️ **Chaque courbe porte son nom sur l'axe, et c'est indispensable.**
+           * Une première version les traçait sans étiquette, pour éviter que
+           * quatre pastilles se chevauchent : à l'écran, on obtenait des lignes
+           * de couleur que rien ne désignait. Les teintes viennent pourtant des
+           * dossiers affichés juste en dessous, mais faire lever les yeux d'une
+           * rangée à l'autre pour lire un graphique, c'est le rendre illisible.
+           *
+           * `title` est le moyen que la bibliothèque prévoit pour cela : le nom
+           * s'affiche contre la valeur de fin, au bout de la ligne, sans rien
+           * ajouter au-dessus du tracé — donc sans la légende séparée qui aurait
+           * repris de la hauteur au graphique.
+           */
+          title: t.nom,
+          lastValueVisible: true,
+          priceLineVisible: false,
+          crosshairMarkerVisible: false,
+          priceFormat: { type: "price", precision: 0, minMove: 1 },
+          autoscaleInfoProvider: () => {
+            const b = bornesComptesRef.current;
+            return b ? { priceRange: { minValue: b.min, maxValue: b.max } } : null;
+          },
+        });
+        vivantes.set(t.cle, s);
+      }
+      // Le nom et la couleur sont réappliqués et non seulement posés à la
+      // création : renommer ou recolorer un compte ne change pas sa clé, et la
+      // série survivrait donc avec l'ancien habillage.
+      s.applyOptions({ color: t.couleur, title: t.nom, visible: cadrePret });
+      s.setData(t.data);
+    }
+  }, [traceComptes, cadrePret]);
+
   // ── Rendements par période ─────────────────────────────────────────────────
   //
   // Un appel par période, et non une seule série Max qu'on découperait.
@@ -1298,7 +1482,23 @@ export default function PerformanceChart({
    */
   useEffect(() => {
     const chart = chartRef.current, serie = serieRef.current, el = plotRef.current;
-    if (!chart || !serie || !el || !points.length || !ordonnee || !cadrePret) {
+    /**
+     * ⚠️ **Aucun repère en vue par compte, et c'est un retrait volontaire.** Leur
+     * ordonnée vient de `serie.priceToCoordinate(ancre.valeur)` : la valeur du
+     * portefeuille **entier**, lue sur l'échelle courante. Or cette échelle n'est
+     * plus celle du total dès qu'on découpe — elle part de zéro et monte au plus
+     * gros compte. Une pastille d'achat se serait donc posée à une hauteur qui ne
+     * correspond à aucune des courbes dessinées, et elle aurait eu l'air de
+     * désigner celle qui passe par là.
+     *
+     * La suite naturelle est de rattacher chaque repère à la courbe de *son*
+     * compte — `compte_id` est désormais porté par chaque opération, donc la
+     * donnée est là. C'est un travail à part : il faut choisir la série avant de
+     * convertir, et regrouper les écritures par compte et par jour plutôt que par
+     * jour seul. En attendant, ne rien montrer vaut mieux que montrer à côté.
+     */
+    if (!chart || !serie || !el || !points.length || !ordonnee || !cadrePret
+        || vue !== "total") {
       setPastilles([]);
       return;
     }
@@ -1479,7 +1679,7 @@ export default function PerformanceChart({
       if (trame) cancelAnimationFrame(trame);
       ro.disconnect();
     };
-  }, [operations, points, joursSerie, totalValue, mode, ordonnee, cadrePret, stickers, echelle, tempsSerie]);
+  }, [operations, points, joursSerie, totalValue, mode, ordonnee, cadrePret, stickers, echelle, tempsSerie, vue]);
 
   // ── Création du graphique ──────────────────────────────────────────────────
   useEffect(() => {
@@ -1742,10 +1942,24 @@ export default function PerformanceChart({
       serie.setData(data);
     }
 
-    // Les deux séries suivent `cadrePret` : invisibles tant que le cadrage n'est
-    // pas confirmé. Voir la note sur cet état.
-    serie.applyOptions({ visible: cadrePret });
-    bougieRef.current?.applyOptions({ visible: cadrePret });
+    /**
+     * Les deux séries suivent `cadrePret` : invisibles tant que le cadrage n'est
+     * pas confirmé. Voir la note sur cet état.
+     *
+     * ⚠️ **Et elles s'effacent en vue par compte, sans être vidées pour autant.**
+     * Les masquer les sort du calcul d'échelle — ce qu'on veut, l'échelle par
+     * compte partant de zéro — mais leurs données restent en place : c'est elles
+     * que lit le réticule pour annoncer la valeur survolée, et les repères
+     * d'opération y sont accrochés. Un `setData([])` aurait éteint les deux.
+     *
+     * ⚠️ Cette ligne est la seule à disputer la visibilité aux séries par compte,
+     * et c'est pourquoi elle connaît `vue` : cet effet rejoue à chaque
+     * rafraîchissement des cours, et sans cette condition la courbe totale
+     * réapparaîtrait toutes les dix secondes par-dessus le découpage.
+     */
+    const totalVisible = cadrePret && vue === "total";
+    serie.applyOptions({ visible: totalVisible });
+    bougieRef.current?.applyOptions({ visible: totalVisible });
 
     // Le cadrage porte sur la série réellement affichée : les bougies sont
     // agrégées, donc bien moins nombreuses que les points de la ligne. Régler
@@ -1944,7 +2158,7 @@ export default function PerformanceChart({
       return () => { cancelAnimationFrame(id); cancelAnimationFrame(id2); cancelAnimationFrame(id3); ro?.disconnect(); };
     }
     chart.timeScale().fitContent();
-  }, [points, totalValue, mode, operations, ordonnee, period, cadrePret, data]);
+  }, [points, totalValue, mode, operations, ordonnee, period, cadrePret, data, vue]);
 
   // L'heure ne s'affiche que sur la journée. Sur une série journalière,
   // `timeVisible` intercalait des numéros de jour entre les noms de mois —
@@ -2090,6 +2304,38 @@ export default function PerformanceChart({
         position: "relative", minHeight: 30,
       }}>
         {/**
+          * Le découpage de la courbe, à l'opposé des outils de tracé.
+          *
+          * ⚠️ `taille="md"` comme la piste d'en face : 26 px de pastille et 2 px de
+          * creux font les 30 px des boutons voisins, et les deux extrémités du
+          * bandeau se posent alors sur la même ligne. `sm` en aurait fait 26 et
+          * aurait laissé la gauche flotter au-dessus de la droite.
+          *
+          * ⚠️ **Absente hors suivi par transactions.** Un portefeuille décrit en
+          * poids n'a pas d'opérations, donc pas de comptes : la bascule ne pourrait
+          * mener qu'à un cadre vide.
+          *
+          * ⚠️ `display: flex` sur l'enveloppe, et ce n'est pas décoratif : un
+          * `<button>` est de niveau ligne, il se poserait sur la ligne de base d'un
+          * conteneur bloc et ajouterait sept pixels sous la rangée.
+          */}
+        {surTransactions && portfolioId && (
+          <div ref={pastilleVueRef} style={{ marginRight: "auto", display: "flex" }}>
+            <Segments
+              taille="md"
+              ariaLabel="Découpage de la courbe"
+              valeur={vue}
+              onChange={setVue}
+              options={[
+                { valeur: "total" as const, libelle: "Total",
+                  titre: "La valeur du portefeuille entier" },
+                { valeur: "comptes" as const, libelle: "Par compte",
+                  titre: "Une courbe par compte déclaré" },
+              ]}
+            />
+          </div>
+        )}
+        {/**
           * L'encart de lecture, dans le bandeau de tête et non dans le cadre.
           *
           * Il ne dit **rien sur la date ni sur la valeur**, que la bande de tête
@@ -2112,9 +2358,11 @@ export default function PerformanceChart({
           */}
         {opsVisees.length > 0 && cadrePret && (
           <div style={{
-            // `top: 0 ; left: 0` : le coin du bandeau, donc la marge même des
-            // boutons qui le terminent à droite.
-            position: "absolute", top: 0, left: 0, zIndex: 20, pointerEvents: "none",
+            // `top: 0` : le coin du bandeau, donc la marge même des boutons qui le
+            // terminent à droite — décalé de la pastille de découpage quand elle
+            // occupe ce coin, faute de quoi le texte se poserait sur ses boutons.
+            position: "absolute", top: 0, left: reserveVue ? reserveVue + 10 : 0,
+            zIndex: 20, pointerEvents: "none",
             fontFamily: FONT, lineHeight: 1.5, maxWidth: "62%",
             // L'écart entre les lignes vient du conteneur, pour que la première
             // n'hérite pas d'une marge haute qui la décollerait du bord.
