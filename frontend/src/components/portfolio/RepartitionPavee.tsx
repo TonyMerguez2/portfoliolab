@@ -171,18 +171,25 @@ export default function RepartitionPavee({
     <>
       {/**
         * ⚠️ **La rangée s'aligne sur la barre d'outils de la courbe, à sa gauche.** Les deux
-        * commandent chacune leur image et se font face à travers l'écran : mesurées, elles
-        * étaient décalées de cinq pixels — assez pour se voir, trop peu pour qu'on sache
-        * pourquoi. La hauteur reprise est celle des boutons d'en face, et le retrait négatif
-        * remonte la rangée du même écart, le rembourrage de la carte étant plus généreux que
-        * celui de la courbe.
+        * commandent chacune leur image et se font face à travers l'écran ; décalées, elles se
+        * voient sans qu'on sache pourquoi.
+        *
+        * ⚠️ **Même taille de segments, et non une hauteur imposée par-dessus.** La barre d'en
+        * face est en `md` — vingt-six pixels de bouton, trente de piste. En `sm`, la piste
+        * n'en faisait que vingt-six : les deux marges, haute et basse, tombaient à deux
+        * pixels l'une de l'autre. Forcer la hauteur du conteneur aurait centré les boutons
+        * sans leur donner les mêmes bords ; c'est le composant qui doit être au même
+        * calibre.
+        *
+        * ⚠️ **Le retrait négatif reste, et il compense un rembourrage.** La carte est plus
+        * généreuse que celle de la courbe : sans lui la rangée descend de cinq pixels.
         */}
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between",
-        gap: 8, height: 30, marginTop: -5, marginBottom: 5, flexShrink: 0 }}>
+        gap: 8, marginTop: -5, marginBottom: 5, flexShrink: 0 }}>
         <span style={{ fontFamily: FONT, fontSize: 12.5, fontWeight: 600, color: CLAIR.texte }}>
           Répartition
         </span>
-        <Segments taille="sm" ariaLabel="Découper la répartition"
+        <Segments ariaLabel="Découper la répartition"
           valeur={mode} onChange={v => setMode(v as ModePavage)}
           options={MODES.map(m => ({ valeur: m.valeur, libelle: m.libelle }))} />
       </div>
