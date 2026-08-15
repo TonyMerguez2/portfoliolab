@@ -320,10 +320,17 @@ const DIAMETRE_ANNEAU_SCORE = 50;
  * aurait garanti qu'elles finissent par diverger.
  */
 const pastille = (couleur: string): React.CSSProperties => ({
-  fontFamily: FONT, fontSize: 11.5, fontWeight: 700, color: CLAIR.carte,
+  fontFamily: FONT, fontSize: 11.5, fontWeight: 600, color: CLAIR.carte,
   background: couleur, borderRadius: 999, padding: "3px 9px",
   whiteSpace: "nowrap", lineHeight: 1.2,
-  display: "inline-flex", alignItems: "center", gap: 4,
+  /**
+   * ⚠️ **Alignement sur la ligne de base, et non au centre.** Un pictogramme centré
+   * verticalement flotte à côté de chiffres qui, eux, reposent sur leur ligne de base :
+   * le triangle paraissait glisser vers le haut. En `baseline`, un élément remplacé comme
+   * un SVG pose son bord inférieur sur cette ligne — la base du triangle et le pied des
+   * chiffres tombent donc au même niveau.
+   */
+  display: "inline-flex", alignItems: "baseline", gap: 4,
 });
 
 /**
@@ -339,7 +346,14 @@ const pastille = (couleur: string): React.CSSProperties => ({
  */
 function FlecheTendance({ hausse }: { hausse: boolean }) {
   return (
-    <svg viewBox="0 0 24 24" fill="currentColor" width={11} height={11} aria-hidden="true"
+    /**
+     * ⚠️ **La boîte est recadrée sur le tracé, sinon l'alignement ne sert à rien.** Le
+     * concept est dessiné dans un carré de 24 où le triangle n'occupe que la bande
+     * y = 2,25 à 20,75 : gardée telle quelle, la boîte posait sur la ligne de base ses
+     * trois unités de vide, et la forme flottait au-dessus. Le cadrage sur les bornes
+     * réelles du chemin fait coïncider le bas de la boîte et le bas du triangle.
+     */
+    <svg viewBox="1 2 22 19" fill="currentColor" width={11} height={9.5} aria-hidden="true"
       style={{ flexShrink: 0 }}>
       {hausse ? (
         <path d="M11.95 2.25c-.49 0-.971.124-1.398.359a2.8 2.8 0 0 0-1.038.984L1.59 16.553a2.75 2.75 0 0 0-.02 2.782c.246.425.601.78 1.03 1.028s.919.382 1.417.387h15.856a2.9 2.9 0 0 0 1.416-.381c.43-.246.787-.599 1.035-1.022a2.75 2.75 0 0 0-.005-2.781L14.386 3.598a2.8 2.8 0 0 0-1.038-.987 2.9 2.9 0 0 0-1.399-.361" />
