@@ -208,7 +208,14 @@ function degradeDuScore(score: number): [string, string] {
   ];
 }
 
-function CircleScore({ score, size = 88, nu = false }: { score: number; size?: number; nu?: boolean }) {
+/**
+ * ⚠️ **Trois façons d'habiller le même anneau, et elles ne sont pas interchangeables.**
+ * `nu` ne rend que le cercle, pour qui pose ses propres chiffres à côté ; `chiffreSeul`
+ * met la note au centre et laisse « /100 » et la mention au parent ; par défaut, tout est
+ * empilé dedans. La carte d'analyse et le bandeau n'ont pas la même place, et un seul
+ * habillage aurait obligé l'un des deux à réécrire l'anneau.
+ */
+function CircleScore({ score, size = 88, nu = false, chiffreSeul = false }: { score: number; size?: number; nu?: boolean; chiffreSeul?: boolean }) {
   const color = scoreColor(score);
   const atteint = Math.max(0, Math.min(100, score));
   const idDegrade = useId();
@@ -247,17 +254,19 @@ function CircleScore({ score, size = 88, nu = false }: { score: number; size?: n
               style={{ transition: "stroke-dasharray 700ms cubic-bezier(0.4, 0, 0.2, 1)" }} />
           )}
         </svg>
-        {!nu && (
+        {(!nu || chiffreSeul) && (
           <div style={{
             position: "absolute", inset: 0, display: "flex", flexDirection: "column",
             alignItems: "center", justifyContent: "center", pointerEvents: "none",
           }}>
             <span style={{ fontSize: size * 0.30, fontWeight: 800, fontFamily: FONT, color: CLAIR.texte, lineHeight: 1 }}>{score}</span>
-            <span style={{ fontSize: Math.max(8, size * 0.10), color: CLAIR.texteFaible, letterSpacing: "0.04em" }}>/100</span>
+            {!chiffreSeul && (
+              <span style={{ fontSize: Math.max(8, size * 0.10), color: CLAIR.texteFaible, letterSpacing: "0.04em" }}>/100</span>
+            )}
           </div>
         )}
       </div>
-      {!nu && <span style={{ fontSize: 11, fontWeight: 700, color, letterSpacing: "0.02em" }}>{scoreLabel(score)}</span>}
+      {!nu && !chiffreSeul && <span style={{ fontSize: 11, fontWeight: 700, color, letterSpacing: "0.02em" }}>{scoreLabel(score)}</span>}
     </div>
   );
 }
@@ -289,6 +298,20 @@ const MARGE = 10;
  * où changer.
  */
 const DIAMETRE_ROND = 63;
+
+/**
+ * La pastille de la maquette : un fond teinté du même ton que son texte.
+ *
+ * ⚠️ **Un fond translucide et non une couleur fixe.** La teinte vient du texte qu'elle
+ * porte — vert pour un gain, rouge pour une perte, orange pour une note moyenne — et la
+ * poser en dur aurait obligé à écrire trois pastilles là où la forme est la même.
+ */
+const pastille = (couleur: string): React.CSSProperties => ({
+  fontFamily: FONT, fontSize: 11.5, fontWeight: 600, color: couleur,
+  background: `color-mix(in srgb, ${couleur} 14%, transparent)`,
+  border: `1px solid color-mix(in srgb, ${couleur} 26%, transparent)`,
+  borderRadius: 999, padding: "3px 9px", whiteSpace: "nowrap", lineHeight: 1.2,
+});
 
 const montantExact = (v: number): string =>
   v.toLocaleString("fr-FR", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + " €";
@@ -2120,7 +2143,10 @@ function PortfolioPageInner() {
     ) : surTransactions && prixDeRevient != null ? (
       <div style={{ fontSize: 11, fontFamily: FONT, color: CLAIR.texteAttenue }}>
         {masque ? "•••• €" : `${prixDeRevient.toLocaleString("fr-FR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €`} investis
-        {origine && ` ${libellePeriode.toLowerCase()}`}
+        {/* ⚠️ Un point médian entre le capital et la date : ce sont deux faits distincts,
+            et « 4 959,91 € investis depuis fév. 2026 » se lisait comme une seule phrase où
+            la somme semblait porter sur la période plutôt que sur le total. */}
+        {origine && <><span style={{ opacity: 0.5 }}> · </span>{libellePeriode.toLowerCase()}</>}
       </div>
     ) : gainAffiche != null && (
       <div style={{ fontSize: 11, fontFamily: FONT, color: gainAffiche.eur >= 0 ? CLAIR.positif : CLAIR.negatif, fontWeight: 600 }}>
@@ -2150,9 +2176,12 @@ function PortfolioPageInner() {
             * pense pas à survoler, c'est-à-dire à qui se pose justement la question. Le
             * dire dans le titre coûte quatre mots et se lit sans geste.
             */}
+          {/* ⚠️ **« Performance », et la durée passe en dessous.** Le titre portait sa
+              période en incise — « Gains / pertes · depuis le début » — ce qui faisait
+              une ligne longue au-dessus d'un chiffre court. Sous le montant, la mention
+              se lit après lui, ce qui est l'ordre dans lequel on se pose la question. */}
           <p style={{ margin: "0 0 4px", fontSize: 11.5, fontWeight: 500, color: CLAIR.texteSecondaire }}>
-            Gains / pertes
-            <span style={{ marginLeft: 5, fontWeight: 400, opacity: 0.65 }}>· depuis le début</span>
+            Performance
           </p>
     {/* P&L total depuis achat */}
     {valeurTitres != null && (() => {
@@ -2205,8 +2234,8 @@ function PortfolioPageInner() {
        * chercher, le pourcentage la précise.
        */
       return (
-        <div style={{ marginTop: 3, fontSize: 18, fontFamily: FONT, color: plCol, fontWeight: 600, display: "flex", alignItems: "baseline", gap: 6 }}>
-          {survolGain ? "À cette date" : "Total"}
+        <div>
+        <div style={{ marginTop: 3, fontSize: 18, fontFamily: FONT, color: plCol, fontWeight: 600, display: "flex", alignItems: "center", gap: 8 }}>
           {/* Deux décimales, comme la valeur totale juste au-dessus. Arrondi à
               l'euro, ce gain ne se recoupait pas avec elle : 3 447,92 € moins
               3 256,73 € de capital font 191,19 €, pas 191. */}
@@ -2217,7 +2246,10 @@ function PortfolioPageInner() {
           <span>{masque ? MONTANT_MASQUE
             : `${plEur >= 0 ? "+" : ""}${plEur.toLocaleString("fr-FR", {
                 minimumFractionDigits: 2, maximumFractionDigits: 2 })} €`}</span>
-          <span style={{ opacity: 0.55, fontSize: 12 }}>({plPct >= 0 ? "+" : ""}{plPct.toFixed(2)}%)</span>
+          {/* ⚠️ **Le pourcentage devient une pastille.** Entre parenthèses et en gris, il
+              se lisait comme une précision de bas de page ; enfermé dans son fond teinté,
+              il devient une donnée à part entière sans disputer sa taille au montant. */}
+          <span style={pastille(plCol)}>{plPct >= 0 ? "+" : ""}{plPct.toFixed(2)} %</span>
           {/* Le crayon disparaît dès que le prix de revient vient des
               écritures : la valeur saisie serait enregistrée puis ignorée,
               le calcul repartant des transactions au rafraîchissement. */}
@@ -2236,6 +2268,14 @@ function PortfolioPageInner() {
               <span style={{ fontSize: 10, color: CLAIR.texteAttenue }}>€</span>
             </div>
           )}
+        </div>
+        {/* ⚠️ **La durée sous le montant, comme le capital investi sous la valeur.** Les
+            deux blocs se répondent alors : un grand chiffre, puis la phrase qui dit de
+            quoi il parle. Au survol, la mention change de question — ce n'est plus
+            « depuis quand » mais « quand ». */}
+        <div style={{ marginTop: 4, fontSize: 11, fontFamily: FONT, color: CLAIR.texteAttenue }}>
+          {survolGain ? "À cette date" : "Depuis le début"}
+        </div>
         </div>
       );
     })()}
@@ -2261,21 +2301,20 @@ function PortfolioPageInner() {
             * avec les intitulés de section.
             */}
           <div style={{ display: "flex", alignSelf: "stretch", alignItems: "flex-start", gap: 12, minWidth: 170 }}>
-            <div style={{ display: "flex", alignItems: "center", alignSelf: "stretch" }}>
-              <CircleScore score={scoreSante} size={DIAMETRE_ROND} nu />
-            </div>
             <div>
-              <p style={{ margin: "0 0 3px", fontSize: 11.5, fontWeight: 500, color: CLAIR.texteSecondaire }}>Santé du patrimoine</p>
-              <div style={{ display: "flex", alignItems: "baseline", gap: 3 }}>
-                {/* ⚠️ Ramené de 20 px à 15 : une note reste un résumé de mesures, pas
-                    un fait. Elle passait devant le gain dans la hiérarchie du bandeau,
-                    et l'anneau à côté suffit à la rendre trouvable. */}
-                <span style={{ fontSize: 15, fontWeight: 700, fontFamily: FONT, color: CLAIR.texte, lineHeight: 1 }}>{scoreSante}</span>
-                <span style={{ fontSize: 10, color: CLAIR.texteFaible }}>/100</span>
+              <p style={{ margin: "0 0 6px", fontSize: 11.5, fontWeight: 500, color: CLAIR.texteSecondaire }}>Santé du patrimoine</p>
+              {/* ⚠️ **La note est dans l'anneau, « /100 » et la mention dehors.** L'anneau
+                  dit déjà la proportion ; y empiler le dénominateur et le qualificatif
+                  aurait demandé trois tailles de texte dans soixante-trois pixels. */}
+              <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                <CircleScore score={scoreSante} size={DIAMETRE_ROND} nu chiffreSeul />
+                <div style={{ display: "flex", flexDirection: "column", gap: 6, alignItems: "flex-start" }}>
+                  <span style={{ fontSize: 12, color: CLAIR.texteFaible, fontFamily: FONT }}>/100</span>
+                  <span style={pastille(scoreColor(scoreSante))}>
+                    {bandeSante ?? scoreLabel(scoreSante)}
+                  </span>
+                </div>
               </div>
-              <span style={{ fontSize: 11, fontWeight: 600, color: scoreColor(scoreSante) }}>
-                {bandeSante ?? scoreLabel(scoreSante)}
-              </span>
             </div>
           </div>
         </>}
