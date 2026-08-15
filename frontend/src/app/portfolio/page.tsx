@@ -2197,11 +2197,15 @@ function PortfolioPageInner() {
               période en incise — « Gains / pertes · depuis le début » — ce qui faisait
               une ligne longue au-dessus d'un chiffre court. Sous le montant, la mention
               se lit après lui, ce qui est l'ordre dans lequel on se pose la question. */}
-          {/* ⚠️ 2 px sous l'intitulé, comme « Valeur totale » à gauche. Les deux blocs
-              montrent un grand chiffre sous un petit titre : un écart de 4 px ici et de
-              2 px là faisait démarrer les deux nombres à deux hauteurs, alors que rien ne
-              les distingue. */}
-          <p style={{ margin: "0 0 2px", fontSize: 11.5, fontWeight: 500, color: CLAIR.texteSecondaire }}>
+          {/**
+            * ⚠️ **Aucune marge sous l'intitulé, parce que le montant se centre.** Ce bloc
+            * ne pose plus son chiffre sous le titre comme celui de gauche : il le place à
+            * mi-hauteur entre le titre et la mention du bas, par deux marges automatiques.
+            * Or celles-ci ne partagent que l'espace du conteneur qui les porte — une marge
+            * ici resterait en dehors du partage et se lirait comme deux pixels de plus
+            * au-dessus du chiffre qu'en dessous. Mesuré : 7,3 contre 5,3.
+            */}
+          <p style={{ margin: 0, fontSize: 11.5, fontWeight: 500, color: CLAIR.texteSecondaire }}>
             Performance
           </p>
     {/* P&L total depuis achat */}
@@ -2256,7 +2260,12 @@ function PortfolioPageInner() {
        */
       return (
         <div style={{ flex: 1, display: "flex", flexDirection: "column" }}>
-        <div style={{ fontSize: 18, fontFamily: FONT, color: plCol, fontWeight: 600, display: "flex", alignItems: "center", gap: 8 }}>
+        {/* ⚠️ **Deux marges automatiques, donc un centrage et non un empilement.** Le
+            montant se posait sous l'intitulé et laissait tout le vide entre lui et la
+            mention du bas. Les marges hautes et basses en `auto` se partagent l'espace
+            libre à parts égales : le chiffre se place au milieu de ce qui reste entre le
+            titre et « Depuis le début », quelle que soit la hauteur de la rangée. */}
+        <div style={{ marginTop: "auto", marginBottom: "auto", fontSize: 18, fontFamily: FONT, color: plCol, fontWeight: 600, display: "flex", alignItems: "center", gap: 8 }}>
           {/* Deux décimales, comme la valeur totale juste au-dessus. Arrondi à
               l'euro, ce gain ne se recoupait pas avec elle : 3 447,92 € moins
               3 256,73 € de capital font 191,19 €, pas 191. */}
@@ -2294,9 +2303,13 @@ function PortfolioPageInner() {
             deux blocs se répondent alors : un grand chiffre, puis la phrase qui dit de
             quoi il parle. Au survol, la mention change de question — ce n'est plus
             « depuis quand » mais « quand ». */}
-        {/* `marginTop: auto` : la mention se pose au bas du bloc étiré, donc sur la même
-            ligne que le capital investi à sa gauche. */}
-        <div style={{ marginTop: "auto", paddingTop: 4, fontSize: 11, fontFamily: FONT, color: CLAIR.texteAttenue }}>
+        {/* La mention reste le dernier enfant du bloc étiré, donc au bas de la rangée et
+            sur la même ligne que le capital investi à sa gauche. Elle n'a plus besoin de
+            `marginTop: auto` : ce sont les marges du montant qui absorbent le vide. */}
+        {/* ⚠️ Aucun rembourrage haut : il s'ajoutait à l'espace sous le montant et faussait
+            le partage des marges automatiques — 5 px au-dessus du chiffre contre 3 en
+            dessous, alors qu'elles sont censées être égales par construction. */}
+        <div style={{ fontSize: 11, fontFamily: FONT, color: CLAIR.texteAttenue }}>
           {survolGain ? "À cette date" : "Depuis le début"}
         </div>
         </div>
