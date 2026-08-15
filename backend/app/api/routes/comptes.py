@@ -29,7 +29,8 @@ from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from app.core.auth import require_auth
-from app.core.database import Compte, Portfolio, Transaction, get_db
+from app.core.database import (Compte, MouvementTresorerie, Portfolio,
+                                Transaction, get_db)
 from app.models.user import User
 
 router = APIRouter(prefix="/api/v1/portfolios", tags=["Comptes"])
@@ -248,9 +249,21 @@ def supprimer_compte(portfolio_id: str, compte_id: str, db: Session = Depends(ge
                  .filter(Transaction.portfolio_id == p.id,
                          Transaction.compte_id == c.id)
                  .update({Transaction.compte_id: None}, synchronize_session=False))
+    # ⚠️ **Le journal part avec le compte, et il faut l'effacer à la main.** Même raison
+    # que le détachement ci-dessus : `ondelete="CASCADE"` est déclaré sur la colonne, mais
+    # SQLite n'applique les clés étrangères que si on le lui demande, et la migration douce
+    # de ce projet ne sait qu'ajouter des colonnes. Sans cette ligne, les mouvements
+    # survivaient à leur compte — vérifié par un test qui échouait.
+    #
+    # ⚠️ **On supprime, là où les opérations sont détachées.** Une opération est un fait :
+    # l'achat a eu lieu, et la valorisation du portefeuille en dépend. Un mouvement de
+    # trésorerie ne décrit que ce compte-là ; sans lui, il ne dit plus rien.
+    mouvements_effaces = (db.query(MouvementTresorerie)
+                          .filter(MouvementTresorerie.compte_id == c.id).delete())
     db.delete(c)
     db.commit()
-    return {"supprime": True, "operations_detachees": detachees}
+    return {"supprime": True, "operations_detachees": detachees,
+            "mouvements_effaces": mouvements_effaces}
 
 
 class Rattachement(BaseModel):
@@ -320,3 +333,118 @@ def rattacher_des_operations(portfolio_id: str, compte_id: str, corps: Rattachem
         t.compte_id = c.id
     db.commit()
     return {"rattachees": len(lignes), "deplacees": deplacees}
+
+
+# ── Les mouvements de trésorerie ──────────────────────────────────────────────
+#
+# ⚠️ **Un virement entre deux comptes ne demande aucun type particulier.** C'est un
+# retrait sur l'un et un versement sur l'autre : la somme fait zéro, et le patrimoine ne
+# bouge pas de lui-même. Un champ « nature » distinguant l'apport extérieur du transfert
+# interne aurait donc décrit ce que l'arithmétique dit déjà — et il aurait fallu le tenir
+# à jour, donc le voir se tromper.
+
+class MouvementEntree(BaseModel):
+    #: Quand le mouvement a eu lieu, et non quand on le saisit.
+    date: datetime
+    #: Signé : positif pour un versement, négatif pour un retrait.
+    montant: float
+    note: str | None = None
+
+
+def _mouvement_en_dict(m: MouvementTresorerie) -> dict:
+    return {
+        "id": m.id,
+        "date": m.date.isoformat() if m.date else None,
+        "montant": m.montant,
+        "note": m.note,
+    }
+
+
+def _mouvements_du_compte(c: Compte, db: Session) -> list[MouvementTresorerie]:
+    return (db.query(MouvementTresorerie)
+            .filter(MouvementTresorerie.compte_id == c.id)
+            .order_by(MouvementTresorerie.date.desc()).all())
+
+
+@router.get("/{portfolio_id}/comptes/{compte_id}/mouvements")
+def lister_les_mouvements(portfolio_id: str, compte_id: str,
+                          db: Session = Depends(get_db),
+                          user: User = Depends(require_auth)):
+    """Le journal du compte, du plus récent au plus ancien."""
+    p = _portefeuille(portfolio_id, user, db)
+    c = _compte(compte_id, p, db)
+    return [_mouvement_en_dict(m) for m in _mouvements_du_compte(c, db)]
+
+
+@router.post("/{portfolio_id}/comptes/{compte_id}/mouvements", status_code=201)
+def enregistrer_un_mouvement(portfolio_id: str, compte_id: str, corps: MouvementEntree,
+                             db: Session = Depends(get_db),
+                             user: User = Depends(require_auth)):
+    """
+    Enregistre un versement ou un retrait, et **met le solde à jour d'autant**.
+
+    ⚠️ **Le solde bouge, parce qu'un mouvement dit que l'argent a bougé.** C'est toute la
+    différence avec l'écran de correction, qui réécrit le solde sans rien ajouter au
+    journal : corriger veut dire « je m'étais trompé » et réécrit le passé de la courbe,
+    verser veut dire « j'ai ajouté » et ne touche qu'à partir de la date du versement. Les
+    deux gestes existent parce qu'ils ne racontent pas la même histoire, et deviner l'un à
+    partir de l'autre aurait fait apparaître des apports que personne n'a faits.
+
+    ⚠️ **Refusé sur un compte sans solde déclaré.** Un mouvement se retranche du solde
+    actuel pour remonter le temps ; sans solde, il n'y a rien dont le retrancher, et le
+    compte afficherait un journal sans jamais rien valoir. Déclarer le solde d'abord est
+    aussi le seul moyen d'obtenir la date à partir de laquelle il compte.
+
+    ⚠️ **Un montant nul est refusé.** Il n'ajouterait rien à la courbe et poserait une
+    pastille sur le graphique désignant un événement sans effet.
+    """
+    p = _portefeuille(portfolio_id, user, db)
+    c = _compte(compte_id, p, db)
+
+    if c.solde is None:
+        raise HTTPException(
+            400, "Ce compte n'a pas de solde déclaré : un mouvement n'aurait rien à "
+                 "quoi se rapporter.")
+    if corps.montant == 0:
+        raise HTTPException(400, "Un mouvement de zéro euro ne dit rien.")
+
+    m = MouvementTresorerie(
+        id=str(uuid.uuid4()), compte_id=c.id,
+        date=corps.date, montant=corps.montant,
+        note=(corps.note or "").strip() or None,
+    )
+    db.add(m)
+    # ⚠️ Le solde suit le mouvement : il reste la vérité du présent, et le journal ne
+    # façonne que le passé. Voir `MouvementTresorerie`.
+    c.solde = (c.solde or 0.0) + corps.montant
+    db.commit()
+    db.refresh(m)
+    db.refresh(c)
+    return {"mouvement": _mouvement_en_dict(m), "compte": _en_dict(c)}
+
+
+@router.delete("/{portfolio_id}/comptes/{compte_id}/mouvements/{mouvement_id}")
+def supprimer_un_mouvement(portfolio_id: str, compte_id: str, mouvement_id: str,
+                           db: Session = Depends(get_db),
+                           user: User = Depends(require_auth)):
+    """
+    Retire un mouvement du journal **et défait son effet sur le solde**.
+
+    ⚠️ **Sans le défaire, supprimer une erreur de saisie en créerait une autre.** Le solde
+    porte la somme du mouvement depuis son enregistrement ; l'effacer du journal seulement
+    laisserait un compte plus riche qu'il ne l'est, sans plus rien pour expliquer d'où
+    vient l'écart.
+    """
+    p = _portefeuille(portfolio_id, user, db)
+    c = _compte(compte_id, p, db)
+    m = (db.query(MouvementTresorerie)
+         .filter(MouvementTresorerie.id == mouvement_id,
+                 MouvementTresorerie.compte_id == c.id).first())
+    if not m:
+        raise HTTPException(404, "Mouvement introuvable pour ce compte")
+
+    c.solde = (c.solde or 0.0) - m.montant
+    db.delete(m)
+    db.commit()
+    db.refresh(c)
+    return {"supprime": mouvement_id, "compte": _en_dict(c)}
