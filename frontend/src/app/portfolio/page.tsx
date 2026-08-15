@@ -362,7 +362,18 @@ function FlecheTendance({ hausse }: { hausse: boolean }) {
   return (
     <svg viewBox="2.25 6.25 19.5 11.5" fill="none" stroke="currentColor" strokeWidth={1.5}
       strokeLinecap="round" strokeLinejoin="round" width={14.38} height={8.48}
-      aria-hidden="true" style={{ flexShrink: 0 }}>
+      /**
+       * ⚠️ **`overflow: visible`, sinon le trait est rasé sur ses quatre bords.** Un SVG
+       * masque par défaut ce qui dépasse de sa boîte. Or celle-ci épouse le dessin au
+       * millième près : les bouts arrondis arrivent *pile* sur le bord, et le demi-pixel
+       * d'antialiasing qui les adoucit tombe du mauvais côté de la limite. Signalé à
+       * l'usage — la flèche paraissait coupée à droite.
+       *
+       * Élargir la boîte aurait aussi réglé le rognage, mais en désaccordant la hauteur
+       * du dessin de celle des chiffres : c'est le masquage qu'il faut lever, pas le
+       * cadrage qu'il faut fausser.
+       */
+      aria-hidden="true" style={{ flexShrink: 0, overflow: "visible" }}>
       <path d={hausse
         ? "m3 17 6-6 4 4 8-8m0 0h-7m7 0v7"
         : "m3 7 6 6 4-4 8 8m0 0v-7m0 7h-7"} />
