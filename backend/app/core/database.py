@@ -196,6 +196,58 @@ class Compte(Base):
     #: d'hier d'un solde de l'an dernier.
     mis_a_jour_le = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
+    #: Depuis quand ce solde existe — **et non quand il a été saisi**.
+    #:
+    #: ⚠️ **C'est ce qui autorise la courbe à parler de patrimoine.** Un solde est un
+    #: chiffre sans passé : pour le tracer dans le temps, il faut savoir à partir de quand
+    #: il compte. Sans cette date, les deux seules issues étaient de supposer l'argent
+    #: présent depuis toujours — faux dès qu'un livret est récent, et rien à l'écran ne
+    #: l'aurait dit — ou de le faire apparaître le jour de la déclaration, ce qui dessine
+    #: une marche verticale que l'œil lit comme une performance.
+    #:
+    #: ⚠️ **Nullable, et ce `NULL` veut dire « on ne sait pas ».** Les comptes déclarés
+    #: avant cette colonne n'ont pas pu répondre à la question ; la courbe les traite comme
+    #: présents depuis son origine, faute de mieux, et c'est le seul endroit du calcul qui
+    #: repose sur une supposition. Un compte déclaré depuis, lui, porte toujours la date.
+    solde_depuis  = Column(DateTime, nullable=True, default=None)
+
+
+class MouvementTresorerie(Base):
+    """
+    Un versement ou un retrait sur un compte, daté.
+
+    ⚠️ **C'est le passé du solde, et rien d'autre.** `Compte.solde` reste la vérité du
+    présent — c'est lui qui s'affiche partout et qui entre dans les totaux. Ces mouvements
+    ne le remplacent pas : ils disent comment on en est arrivé là, ce qui permet de
+    remonter la courbe en arrière (solde à une date = solde actuel moins les mouvements
+    postérieurs). Faire du solde une somme de mouvements aurait été plus pur, mais aurait
+    obligé à réécrire tous les comptes déjà déclarés à partir d'un historique qui n'existe
+    pas.
+
+    ⚠️ **Une seule source pour le présent, un seul journal pour le passé.** Si les deux
+    devaient diverger, `solde` gagne : il est le chiffre que l'épargnant relit sur son
+    relevé, et c'est celui qu'on lui montre. Le journal ne façonne que ce qui précède.
+
+    ⚠️ **Un mouvement n'est jamais un gain.** Verser 500 € monte la valeur *et* le montant
+    investi d'autant : les gains, le TWR et la comparaison au repère n'en bougent pas d'un
+    centime. C'est déjà la règle du portefeuille pour un achat de titres, et l'épargne ne
+    peut pas y échapper — sans quoi alimenter son livret se lirait comme un résultat.
+    """
+
+    __tablename__ = "mouvements_tresorerie"
+    id         = Column(String, primary_key=True)
+    compte_id  = Column(String, ForeignKey("comptes.id", ondelete="CASCADE"),
+                        nullable=False, index=True)
+    #: Quand le mouvement a eu lieu, et non quand il a été saisi.
+    date       = Column(DateTime, nullable=False, index=True)
+    #: Signé : positif pour un versement, négatif pour un retrait.
+    #:
+    #: ⚠️ **Un seul champ signé plutôt qu'un montant et un sens.** Deux champs auraient
+    #: permis d'écrire un retrait de −200 €, dont le signe se serait appliqué deux fois.
+    montant    = Column(Float, nullable=False)
+    note       = Column(String, nullable=True)
+    cree_le    = Column(DateTime, default=datetime.utcnow)
+
 
 class Transaction(Base):
     __tablename__ = "transactions"
@@ -253,6 +305,7 @@ for table, col, typedef in [
     ("objectifs",    "verse_deja",     "REAL"),
     ("transactions", "compte_id",      "TEXT"),
     ("comptes",      "mis_a_jour_le",  "TIMESTAMP"),
+    ("comptes",      "solde_depuis",   "TIMESTAMP"),
 ]:
     try:
         with engine.connect() as conn:
