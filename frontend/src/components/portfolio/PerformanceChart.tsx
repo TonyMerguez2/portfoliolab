@@ -751,7 +751,7 @@ export default function PerformanceChart({
    * pas d'opérations, donc pas de comptes : la pastille n'a rien à proposer et ne
    * paraît pas. Un bouton qui ne peut mener qu'à une vue vide est pire qu'absent.
    */
-  const [vue, setVue] = useState<"total" | "comptes">("total");
+  const [vue, setVue] = useState<string>("total");
 
   /**
    * La largeur de la pastille de gauche, mesurée.
@@ -1215,22 +1215,25 @@ export default function PerformanceChart({
   }, [key, period, portfolioId, surTransactions]); // eslint-disable-line react-hooks/exhaustive-deps
 
   /**
-   * Les courbes par compte, chargées **seulement quand on les regarde**.
+   * Les courbes par compte, chargées d'emblée.
+   *
+   * ⚠️ **Chargées avant qu'on les demande, parce qu'elles nomment les boutons.**
+   * La pastille porte le nom de chaque compte, et ces noms ne sont connus que
+   * d'ici : c'est la seule réponse qui donne à la fois les comptes déclarés *et*
+   * le reliquat des opérations libres, lequel n'existe dans aucune table. Attendre
+   * un clic aurait exigé une pastille qui ne sait pas encore quoi proposer.
    *
    * ⚠️ **Un appel distinct, et non un champ de plus sur `/history`.** La route par
    * compte revalorise autant de portefeuilles qu'il y a de dossiers ; l'attacher à
-   * la réponse du total aurait alourdi le premier tracé de la page pour une vue
-   * que la plupart des visites n'ouvrent jamais. Ici elle ne coûte que si l'on
-   * bascule, et le coût est celui d'un seul téléchargement de cours, quel que
-   * soit le nombre de comptes — le serveur les partage.
-   *
-   * ⚠️ **Vidée en repassant au total.** Sans cela, les séries resteraient créées
-   * dans le graphique, invisibles mais toujours comptées par l'échelle.
+   * la réponse du total aurait retardé le premier tracé de la page. Séparée, elle
+   * arrive quand elle arrive, et la courbe totale n'attend personne. Son coût est
+   * celui d'un seul téléchargement de cours quel que soit le nombre de comptes —
+   * le serveur les partage.
    */
   const [courbesComptes, setCourbesComptes] = useState<CourbeCompte[]>([]);
 
   useEffect(() => {
-    if (vue !== "comptes" || !surTransactions || !portfolioId) {
+    if (!surTransactions || !portfolioId) {
       setCourbesComptes([]);
       return;
     }
@@ -1243,9 +1246,15 @@ export default function PerformanceChart({
       })
       .catch(() => { if (!annule) setCourbesComptes([]); });
     return () => { annule = true; };
-  }, [vue, period, portfolioId, surTransactions]);
+  }, [period, portfolioId, surTransactions]);
 
-  /** Les courbes mises en forme pour le tracé, aux mêmes règles que la principale. */
+  /**
+   * Les courbes mises en forme pour le tracé, aux mêmes règles que la principale.
+   *
+   * ⚠️ Toutes sont préparées, **une seule sera posée** : voir `traceAffichee`. Les
+   * garder toutes ici évite de refaire la mise en forme à chaque changement de
+   * compte, qui ne change pas les données mais seulement celle qu'on montre.
+   */
   const traceComptes = useMemo(() => courbesComptes.map(c => ({
     cle: c.id ?? "__libre__",
     nom: c.nom,
@@ -1276,12 +1285,30 @@ export default function PerformanceChart({
    * Le prix à payer est assumé : un petit compte à côté d'un gros s'écrase près de
    * l'axe. C'est vrai, et c'est l'information.
    */
+  /**
+   * La seule courbe posée sur le graphique : celle du compte choisi.
+   *
+   * ⚠️ **Un compte à la fois, et non plus tous ensemble.** La première version les
+   * traçait toutes sous un bouton unique nommé « Par compte ». Demandé à l'usage :
+   * « faut donner le nom du compte ». Un bouton par compte dit ce qu'on regarde
+   * avant de cliquer, là où un terme générique obligeait à lire les étiquettes du
+   * tracé pour savoir ce qu'on avait sous les yeux.
+   *
+   * ⚠️ **Vide en vue totale**, ce qui suffit à retirer les séries : la mécanique de
+   * synchronisation ci-dessous travaille par différence et n'a besoin d'aucun cas
+   * particulier pour cela.
+   */
+  const traceAffichee = useMemo(
+    () => (vue === "total" ? [] : traceComptes.filter(t => t.cle === vue)),
+    [traceComptes, vue],
+  );
+
   const bornesComptes = useMemo(() => {
-    const vals = traceComptes.flatMap(t => t.data.map(d => d.value));
+    const vals = traceAffichee.flatMap(t => t.data.map(d => d.value));
     if (!vals.length) return null;
     const haut = Math.max(...vals);
     return { min: 0, max: haut + (haut * 0.05 || 1) };
-  }, [traceComptes]);
+  }, [traceAffichee]);
   const bornesComptesRef = useRef<{ min: number; max: number } | null>(null);
   bornesComptesRef.current = bornesComptes;
 
@@ -1300,7 +1327,7 @@ export default function PerformanceChart({
     const chart = chartRef.current;
     if (!chart) return;
     const vivantes = seriesComptesRef.current;
-    const voulues = new Set(traceComptes.map(t => t.cle));
+    const voulues = new Set(traceAffichee.map(t => t.cle));
 
     for (const [cle, s] of Array.from(vivantes)) {
       if (voulues.has(cle)) continue;
@@ -1308,7 +1335,7 @@ export default function PerformanceChart({
       vivantes.delete(cle);
     }
 
-    for (const t of traceComptes) {
+    for (const t of traceAffichee) {
       let s = vivantes.get(t.cle);
       if (!s) {
         s = chart.addSeries(LineSeries, {
@@ -1344,7 +1371,7 @@ export default function PerformanceChart({
       s.applyOptions({ color: t.couleur, title: t.nom, visible: cadrePret });
       s.setData(t.data);
     }
-  }, [traceComptes, cadrePret]);
+  }, [traceAffichee, cadrePret]);
 
   // ── Rendements par période ─────────────────────────────────────────────────
   //
@@ -2344,7 +2371,14 @@ export default function PerformanceChart({
           * `<button>` est de niveau ligne, il se poserait sur la ligne de base d'un
           * conteneur bloc et ajouterait sept pixels sous la rangée.
           */}
-        {surTransactions && portfolioId && (
+        {/**
+          * ⚠️ **Absente tant qu'il n'y a rien à choisir.** Sur un portefeuille sans
+          * compte déclaré et sans opération, la pastille se réduirait au seul bouton
+          * « Total » — une bascule qui ne bascule vers rien, et qui laisse croire
+          * qu'un réglage manque. Elle paraît quand la réponse porte au moins une
+          * courbe, donc quand le choix existe vraiment.
+          */}
+        {surTransactions && portfolioId && courbesComptes.length > 0 && (
           <div ref={pastilleVueRef} style={{ marginRight: "auto", display: "flex" }}>
             <Segments
               taille="md"
@@ -2352,10 +2386,22 @@ export default function PerformanceChart({
               valeur={vue}
               onChange={setVue}
               options={[
-                { valeur: "total" as const, libelle: "Total",
+                { valeur: "total", libelle: "Total",
                   titre: "La valeur du portefeuille entier" },
-                { valeur: "comptes" as const, libelle: "Par compte",
-                  titre: "Une courbe par compte déclaré" },
+                /**
+                 * ⚠️ **Le reliquat garde sa place, bien qu'il ne soit pas un compte.**
+                 * Sur un portefeuille en cours de reprise, il porte l'essentiel de la
+                 * valeur : l'écarter au motif qu'il n'a pas d'identifiant aurait offert
+                 * de tout voir sauf le principal. Son libellé dit ce qu'il est, et son
+                 * infobulle ce qu'on peut en faire.
+                 */
+                ...courbesComptes.map(c => ({
+                  valeur: c.id ?? "__libre__",
+                  libelle: c.nom,
+                  titre: c.declare
+                    ? `La valeur de ${c.nom} seul`
+                    : "Les opérations qui ne sont rattachées à aucun compte",
+                })),
               ]}
             />
           </div>
