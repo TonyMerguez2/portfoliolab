@@ -196,8 +196,13 @@ export default function PanneauActivite({
        * ⚠️ **Un trait pointillé, et seulement entre les lignes.** Sous la dernière, il
        * doublerait le bord de la carte à trois pixels de distance — deux traits parallèles
        * dont l'un ne sépare rien.
+       *
+       * ⚠️ **`bordFort` et non `bord`.** Le second vaut `#101828` en thème sombre, à peine
+       * distinct du fond de la carte : un pointillé y disparaissait, signalé à l'usage. Le
+       * premier, `#1E2939`, se voit sans se mettre en avant — un séparateur doit se
+       * remarquer quand on le cherche, pas quand on lit la ligne au-dessus.
        */
-      borderBottom: dernier ? "none" : `1px dashed ${CLAIR.bord}`,
+      borderBottom: dernier ? "none" : `1px dashed ${CLAIR.bordFort}`,
     }}>
       <span style={{
         width: 32, height: 32, borderRadius: 10, flexShrink: 0,
