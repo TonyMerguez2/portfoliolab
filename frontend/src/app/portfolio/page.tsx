@@ -280,6 +280,16 @@ const MARGE = 10;
  * pouvoir se vérifier à l'addition. Vu à l'écran : « 4 548 € de titres · 12 451 € de
  * liquidités » sous un total de 16 998,72 €, alors que la somme des deux fait 16 999.
  */
+/**
+ * La hauteur de l'avatar, et donc celle de l'anneau de santé.
+ *
+ * ⚠️ **Partagée, parce que deux nombres devant rester égaux finissent par diverger.** Les
+ * deux ronds du bandeau se font face de part en part de la rangée : dès qu'ils cessent
+ * d'avoir le même diamètre, la ligne penche. Écrite ici, la valeur n'a qu'un seul endroit
+ * où changer.
+ */
+const DIAMETRE_ROND = 63;
+
 const montantExact = (v: number): string =>
   v.toLocaleString("fr-FR", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + " €";
 
@@ -1861,7 +1871,7 @@ function PortfolioPageInner() {
                   et il faut le savoir : `ImagePortefeuille` était aussi le téléverseur
                   d'image, recadrage compris. Le composant reste entier dans le code —
                   rien ne l'appelle plus ici, c'est tout. */}
-              <AvatarPortefeuille portefeuille={portfolio} taille={63}
+              <AvatarPortefeuille portefeuille={portfolio} taille={DIAMETRE_ROND}
                 couleur={couleurAvatar} onCouleur={choisirCouleurAvatar}
                 forme={formeAvatar} onForme={choisirForme}
                 skin={skinAvatar} onSkin={choisirSkin} />
@@ -2239,12 +2249,23 @@ function PortfolioPageInner() {
             place. */}
         {scoreSante != null && <>
           <div style={{ width: 1, alignSelf: "stretch", background: CLAIR.carteCreuse }} />
-          {/* Santé du portefeuille : le titre chiffré passe en tête, la carte
+          {/* Santé du patrimoine : le titre chiffré passe en tête, la carte
               de droite ne garde que le détail par critère. */}
-          <div style={{ display: "flex", alignItems: "center", gap: 12, minWidth: 170 }}>
-            <CircleScore score={scoreSante} size={64} nu />
+          {/**
+            * ⚠️ **L'anneau se centre dans la rangée, le titre reste sur sa ligne.** Les deux
+            * exigences se contredisent si le bloc s'aligne d'un seul tenant : centré, son
+            * titre descendait sous les trois autres ; aligné en haut, l'anneau montait au
+            * ras du bord. Le bloc s'étire donc sur toute la hauteur de la rangée, et
+            * chacun de ses deux enfants prend l'alignement qui lui convient — l'anneau au
+            * milieu, comme l'avatar qui lui fait face à l'autre bout ; le texte en haut,
+            * avec les intitulés de section.
+            */}
+          <div style={{ display: "flex", alignSelf: "stretch", alignItems: "flex-start", gap: 12, minWidth: 170 }}>
+            <div style={{ display: "flex", alignItems: "center", alignSelf: "stretch" }}>
+              <CircleScore score={scoreSante} size={DIAMETRE_ROND} nu />
+            </div>
             <div>
-              <p style={{ margin: "0 0 3px", fontSize: 11.5, fontWeight: 500, color: CLAIR.texteSecondaire }}>Santé du portefeuille</p>
+              <p style={{ margin: "0 0 3px", fontSize: 11.5, fontWeight: 500, color: CLAIR.texteSecondaire }}>Santé du patrimoine</p>
               <div style={{ display: "flex", alignItems: "baseline", gap: 3 }}>
                 {/* ⚠️ Ramené de 20 px à 15 : une note reste un résumé de mesures, pas
                     un fait. Elle passait devant le gain dans la hiérarchie du bandeau,
