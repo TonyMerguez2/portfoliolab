@@ -2165,15 +2165,27 @@ function PortfolioPageInner() {
       const plEur = survolGain ? survolGain.eur : valeurTitres - cb;
       const plPct = (plEur / (survolGain ? survolGain.base : cb)) * 100;
       const plCol = plEur >= 0 ? CLAIR.positif : CLAIR.negatif;
+      /**
+       * ⚠️ **Le gain passe devant la note, et c'était l'inverse.** Mesuré dans le
+       * bandeau : le score de santé s'affichait en 20 px de graisse 800, le gain en
+       * 11 px — le deuxième élément le plus voyant de la rangée était donc une note
+       * dérivée, presque deux fois plus grosse que ce que l'épargnant a réellement
+       * gagné. Or après « combien je possède », la question suivante est « combien
+       * j'ai gagné », pas « quelle note ai-je ».
+       *
+       * ⚠️ **Le pourcentage reste petit à côté du montant.** Deux nombres de même
+       * taille se disputeraient le regard ; l'euro est la grandeur qu'on vient
+       * chercher, le pourcentage la précise.
+       */
       return (
-        <div style={{ marginTop: 3, fontSize: 11, fontFamily: FONT, color: plCol, fontWeight: 600, display: "flex", alignItems: "center", gap: 6 }}>
+        <div style={{ marginTop: 3, fontSize: 18, fontFamily: FONT, color: plCol, fontWeight: 600, display: "flex", alignItems: "baseline", gap: 6 }}>
           {survolGain ? "À cette date" : "Total"}
           {/* Deux décimales, comme la valeur totale juste au-dessus. Arrondi à
               l'euro, ce gain ne se recoupait pas avec elle : 3 447,92 € moins
               3 256,73 € de capital font 191,19 €, pas 191. */}
           <span>{plEur >= 0 ? "+" : ""}{plEur.toLocaleString("fr-FR", {
             minimumFractionDigits: 2, maximumFractionDigits: 2 })} €</span>
-          <span style={{ opacity: 0.55 }}>({plPct >= 0 ? "+" : ""}{plPct.toFixed(2)}%)</span>
+          <span style={{ opacity: 0.55, fontSize: 12 }}>({plPct >= 0 ? "+" : ""}{plPct.toFixed(2)}%)</span>
           {/* Le crayon disparaît dès que le prix de revient vient des
               écritures : la valeur saisie serait enregistrée puis ignorée,
               le calcul repartant des transactions au rafraîchissement. */}
@@ -2317,7 +2329,10 @@ function PortfolioPageInner() {
             <div>
               <p style={{ margin: "0 0 3px", fontSize: 11.5, fontWeight: 500, color: CLAIR.texteSecondaire }}>Santé du portefeuille</p>
               <div style={{ display: "flex", alignItems: "baseline", gap: 3 }}>
-                <span style={{ fontSize: 20, fontWeight: 800, fontFamily: FONT, color: CLAIR.texte, lineHeight: 1 }}>{scoreSante}</span>
+                {/* ⚠️ Ramené de 20 px à 15 : une note reste un résumé de mesures, pas
+                    un fait. Elle passait devant le gain dans la hiérarchie du bandeau,
+                    et l'anneau à côté suffit à la rendre trouvable. */}
+                <span style={{ fontSize: 15, fontWeight: 700, fontFamily: FONT, color: CLAIR.texte, lineHeight: 1 }}>{scoreSante}</span>
                 <span style={{ fontSize: 10, color: CLAIR.texteFaible }}>/100</span>
               </div>
               <span style={{ fontSize: 11, fontWeight: 600, color: scoreColor(scoreSante) }}>
