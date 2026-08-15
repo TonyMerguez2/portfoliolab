@@ -1778,15 +1778,32 @@ function PortfolioPageInner() {
           remontée au niveau de la page, la bande avait perdu le retrait de la
           vue Résumé et touchait les deux bords. */}
       <div style={{ padding: `0 ${MARGE}px`, flexShrink: 0 }}>
-      <Cadre style={{ padding: "13px 18px", flexShrink: 0, display: "flex", alignItems: "center", gap: 22, flexWrap: "wrap" }}>
+      {/**
+        * ⚠️ **Les blocs s'alignent par le haut, et non par le milieu.** Leurs quatre
+        * titres — « Valeur totale », « Gains / pertes », « Comparaison », « Santé du
+        * portefeuille » — partagent police, graisse et couleur : l'œil les lit comme une
+        * rangée d'intitulés de section et attend donc une ligne. Centrés, ils flottaient
+        * à trois hauteurs différentes, mesurées à 83, 87 et 101 px, parce que les blocs
+        * n'ont pas la même hauteur de contenu — 38 px pour les gains, 73 pour la valeur.
+        * Rien ne le nomme quand on regarde, mais la rangée paraît bricolée.
+        *
+        * ⚠️ **Le premier bloc garde son centrage.** Il porte l'avatar, une forme et non
+        * un titre : aligné par le haut, il montait de cinq pixels au-dessus d'une rangée
+        * de textes, et c'est lui qui aurait alors paru décalé.
+        */}
+      <Cadre style={{ padding: "13px 18px", flexShrink: 0, display: "flex", alignItems: "flex-start", gap: 22, flexWrap: "wrap" }}>
         {/* Identité du portefeuille. La maquette met ici une illustration
             décorative ; elle ne dit rien qu'on ne sache déjà. Ces pixels
             répondent plutôt à une question que la mise en page a fait
             disparaître : depuis que la pastille est partie à droite du
             bandeau, la bande n'indiquait plus de quel portefeuille il s'agit.
             Les logos empilés montrent en plus ce qu'il contient. */}
+        {/* ⚠️ `alignSelf: center` sur le bloc d'identité : il porte l'avatar, une forme et
+            non un titre. La rangée s'aligne par le haut pour que les quatre intitulés de
+            section tiennent sur une ligne ; l'avatar, lui, n'appartient pas à cette
+            ligne-là et se serait mis à flotter au-dessus d'elle. */}
         {portfolio && (
-          <div style={{ display: "flex", alignItems: "center", gap: ECART_IDENTITE, minWidth: 0, flexShrink: 0 }}>
+          <div style={{ display: "flex", alignItems: "center", alignSelf: "center", gap: ECART_IDENTITE, minWidth: 0, flexShrink: 0 }}>
             {/* Le personnage et ce qu'il dit ne font qu'une case pour la rangée : un seul
                 écart avant le nom, que la parole soit ouverte ou fermée. */}
             <div style={{ display: "flex", alignItems: "center", flexShrink: 0 }}>
@@ -2094,7 +2111,23 @@ function PortfolioPageInner() {
         </div>
         <div style={{ width: 1, alignSelf: "stretch", background: CLAIR.carteCreuse }} />
         <div style={{ minWidth: 150 }}>
-          <p style={{ margin: "0 0 4px", fontSize: 11.5, fontWeight: 500, color: CLAIR.texteSecondaire }}>Gains / pertes</p>
+          {/**
+            * ⚠️ **La période est écrite dans le titre, comme celle d'à côté.** Ce bloc et
+            * « Comparaison » répondent tous deux à « combien ai-je gagné » et affichaient
+            * deux nombres différents — relevé à l'écran : −1 220 € ici, −958 € là, sans
+            * que rien n'explique l'écart. La cause est que les deux ne couvrent pas la
+            * même durée : celui-ci compte depuis la première opération, l'autre sur la
+            * fenêtre choisie sous le graphique.
+            *
+            * ⚠️ **L'explication existait déjà, mais dans un survol.** Un écart qui ne se
+            * lève qu'en pointant la souris n'est pas expliqué : il est caché à qui ne
+            * pense pas à survoler, c'est-à-dire à qui se pose justement la question. Le
+            * dire dans le titre coûte quatre mots et se lit sans geste.
+            */}
+          <p style={{ margin: "0 0 4px", fontSize: 11.5, fontWeight: 500, color: CLAIR.texteSecondaire }}>
+            Gains / pertes
+            <span style={{ marginLeft: 5, fontWeight: 400, opacity: 0.65 }}>· depuis le début</span>
+          </p>
     {/* P&L total depuis achat */}
     {valeurTitres != null && (() => {
       const cb = prixDeRevient;
