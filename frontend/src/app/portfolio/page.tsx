@@ -2200,8 +2200,13 @@ function PortfolioPageInner() {
           {/* Deux décimales, comme la valeur totale juste au-dessus. Arrondi à
               l'euro, ce gain ne se recoupait pas avec elle : 3 447,92 € moins
               3 256,73 € de capital font 191,19 €, pas 191. */}
-          <span>{plEur >= 0 ? "+" : ""}{plEur.toLocaleString("fr-FR", {
-            minimumFractionDigits: 2, maximumFractionDigits: 2 })} €</span>
+          {/* ⚠️ **Le montant se masque, le pourcentage reste.** Un pourcentage ne dit rien
+              de ce qu'on possède : on peut montrer sa performance sans montrer sa
+              fortune, et c'est exactement ce que l'œil barré sert à faire. Le cacher
+              aussi n'aurait rien protégé de plus et aurait vidé le bloc. */}
+          <span>{masque ? MONTANT_MASQUE
+            : `${plEur >= 0 ? "+" : ""}${plEur.toLocaleString("fr-FR", {
+                minimumFractionDigits: 2, maximumFractionDigits: 2 })} €`}</span>
           <span style={{ opacity: 0.55, fontSize: 12 }}>({plPct >= 0 ? "+" : ""}{plPct.toFixed(2)}%)</span>
           {/* Le crayon disparaît dès que le prix de revient vient des
               écritures : la valeur saisie serait enregistrée puis ignorée,
@@ -2332,6 +2337,7 @@ function PortfolioPageInner() {
               operations={reperesOperations}
               onOperationClick={(id) => { setOperationVisee(id); setDashView("transactions"); }}
               onSurvol={setSurvolCourbe}
+              masque={masque}
             />
             </div>
           </div>

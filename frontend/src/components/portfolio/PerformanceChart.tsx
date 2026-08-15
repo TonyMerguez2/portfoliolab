@@ -638,6 +638,7 @@ const PERIOD_SECS: Record<Period, number | null> = {
 export default function PerformanceChart({
   assets, totalValue, period, onPeriodChange, color = "var(--nv-accent)", height,
   portfolioId, surTransactions = false, operations = [], onOperationClick, onSurvol,
+  masque = false,
 }: {
   assets: { ticker: string; weight: number }[];
   totalValue: number | null;
@@ -701,6 +702,14 @@ export default function PerformanceChart({
    * réellement travaillé.
    */
   onSurvol?: (p: { valeur: number; date: string; investi?: number; liquidites?: number } | null) => void;
+  /**
+   * Les montants sont-ils censurés ? Celui de l'axe l'est alors aussi.
+   *
+   * ⚠️ **L'axe est le plus bavard de l'écran, et il échappait au masque.** Cacher le grand
+   * chiffre et les dossiers pendant que la graduation annonce « 30 000 » et que le badge de
+   * fin donne le total au chiffre près ne cache rien du tout : il suffit de lire à droite.
+   */
+  masque?: boolean;
 }) {
   // Le thème se lit à la source plutôt que de descendre en props : le
   // graphique est utilisé par la vue générale et par l'onglet Transactions, et
@@ -1331,6 +1340,27 @@ export default function PerformanceChart({
   bornesComptesRef.current = bornesComptes;
 
   const seriesComptesRef = useRef<Map<string, ISeriesApi<"Line">>>(new Map());
+
+  /**
+   * Le format des prix suit la censure.
+   *
+   * ⚠️ **Un formateur, et non un masquage du badge.** Éteindre `lastValueVisible` aurait
+   * retiré le badge mais laissé la graduation — 20 000, 30 000 — qui donne l'ordre de
+   * grandeur à elle seule. Le formateur porte sur l'échelle entière : badge et
+   * graduations disent la même chose, et donc se taisent ensemble.
+   *
+   * ⚠️ **Appliqué après coup et non à la création des séries.** Elles ne sont construites
+   * qu'une fois, alors que la censure se bascule à volonté.
+   */
+  useEffect(() => {
+    const format = masque
+      ? { type: "custom" as const, formatter: () => "••••", minMove: 1 }
+      : { type: "price" as const, precision: 0, minMove: 1 };
+    serieRef.current?.applyOptions({ priceFormat: format });
+    bougieRef.current?.applyOptions({ priceFormat: format });
+    seriesComptesRef.current.forEach(s => s.applyOptions({ priceFormat: format }));
+  }, [masque, courbesComptes]);
+
 
   /**
    * Création, mise à jour et retrait des séries par compte.
