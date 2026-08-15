@@ -1,0 +1,258 @@
+"""
+La courbe découpée par compte.
+
+⚠️ **Un seul de ces tests compte vraiment : celui de la somme.** Le reste décrit des
+refus (pas de trésorerie, pas de mesure de performance) qui sont des choix, et qu'on
+peut revoir. La somme, elle, est la promesse faite à l'écran : basculer de « total » à
+« par compte » ne doit pas changer la hauteur de la courbe. Si elle tombe, la vue ment
+et il faut la retirer, pas l'ajuster.
+
+⚠️ **Les cours sont simulés, et c'est nécessaire à la valeur du test.** Avec de vrais
+cours, la somme des courbes et la courbe totale seraient calculées sur deux
+téléchargements distincts, donc potentiellement sur deux calendriers de séances
+différents : le test échouerait au gré du réseau et l'on prendrait l'habitude de le
+relancer. Ici, un jeu de cours fixe rend l'égalité exacte ou fausse, jamais « à peu près ».
+"""
+
+import os
+import tempfile
+
+import pandas as pd
+import pytest
+from types import SimpleNamespace
+from fastapi.testclient import TestClient
+from sqlalchemy import create_engine
+from sqlalchemy.orm import Session
+
+
+@pytest.fixture(name="client")
+def client_fixture():
+    """Application montée sur une base jetable, avec un compte de test."""
+    fichier = tempfile.NamedTemporaryFile(suffix=".db", delete=False)
+    fichier.close()
+    engine = create_engine(f"sqlite:///{fichier.name}",
+                           connect_args={"check_same_thread": False})
+
+    from app.main import app
+    from app.core.database import get_db, Base
+    from app.core.auth import require_auth
+
+    Base.metadata.create_all(engine)
+
+    def get_db_test():
+        with Session(engine) as session:
+            yield session
+
+    compte = SimpleNamespace(id="user-test", email="test@novac.local", username="Test",
+                             avatar_url=None, devise=None)
+
+    app.dependency_overrides[get_db] = get_db_test
+    app.dependency_overrides[require_auth] = lambda: compte
+
+    with TestClient(app) as c:
+        yield c
+
+    app.dependency_overrides.clear()
+    engine.dispose()
+    os.unlink(fichier.name)
+
+
+def creer_portefeuille(client, nom="Courbes"):
+    r = client.post("/api/v1/portfolios", json={
+        "name": nom, "assets": [{"ticker": "AAPL", "weight": 100}], "color": "#5B8DEF",
+    })
+    assert r.status_code in (200, 201), r.text
+    return r.json()["id"]
+
+
+def ecriture(ticker, qty, prix, date, compte_id=None):
+    e = {
+        "ticker": ticker, "asset_type": "EQUITY", "side": "BUY",
+        "quantity": qty, "unit_price": prix, "fees": 0.0,
+        "executed_at": f"{date}T00:00:00", "note": None,
+    }
+    if compte_id:
+        e["compte_id"] = compte_id
+    return e
+
+
+def declarer(client, pid, nom, genre, couleur="#6366F1"):
+    r = client.post(f"/api/v1/portfolios/{pid}/comptes",
+                    json={"nom": nom, "genre": genre, "couleur": couleur})
+    assert r.status_code in (200, 201), r.text
+    return r.json()["id"]
+
+
+@pytest.fixture
+def cours(monkeypatch):
+    """
+    Un jeu de cours fixe, servi à toutes les routes qui téléchargent.
+
+    Les prix montent d'un euro par séance : une courbe plate ne distinguerait pas une
+    somme juste d'une somme qui ignore un compte, puisque tout vaudrait pareil.
+    """
+    import yfinance
+    from app.api.routes.transactions import _BENCHMARK
+
+    idx = pd.date_range("2026-01-05", periods=40, freq="B")
+    colonnes = ["AAPL", "MSFT", "ESE.PA", _BENCHMARK]
+    df = pd.DataFrame({c: [100.0 + i for i in range(len(idx))] for c in colonnes},
+                      index=idx)
+
+    def faux(tickers, **kw):
+        # ⚠️ **Rendre une Series pour un ticker seul, un DataFrame au-delà.** yfinance fait
+        # cette distinction et le code appelant s'y fie : `brut.to_frame(...)`. Une première
+        # version de cette simulation rendait toujours le tableau entier, et les routes qui
+        # ne demandent qu'un titre — la valorisation à la saisie — tombaient sur un
+        # `AttributeError` qui n'avait rien à voir avec ce que le test mesure.
+        noms = [tickers] if isinstance(tickers, str) else list(tickers)
+        connus = [t for t in noms if t in df.columns]
+        if len(noms) == 1:
+            return {"Close": df[connus[0]] if connus else pd.Series(dtype=float)}
+        return {"Close": df[connus]}
+
+    monkeypatch.setattr(yfinance, "download", faux)
+    return df
+
+
+def par_compte(client, pid, period="max"):
+    r = client.get(f"/api/v1/portfolios/{pid}/history/comptes?period={period}")
+    assert r.status_code == 200, r.text
+    return r.json()
+
+
+# ── La promesse ───────────────────────────────────────────────────────────────
+
+def test_la_somme_des_courbes_egale_la_courbe_totale(client, cours):
+    """
+    ⚠️ **Le test qui justifie la route.** Deux comptes déclarés, une opération restée
+    libre : à chaque date, la somme des trois courbes doit redonner au centime la courbe
+    de `/history`. C'est ce qui autorise l'écran à proposer les deux vues comme deux
+    lectures d'une même chose.
+    """
+    pid = creer_portefeuille(client)
+    pea = declarer(client, pid, "PEA", "pea")
+    cto = declarer(client, pid, "CTO", "cto")
+
+    for e in [ecriture("AAPL", 10, 100.0, "2026-01-06", pea),
+              ecriture("MSFT", 5, 100.0, "2026-01-07", cto),
+              ecriture("ESE.PA", 8, 100.0, "2026-01-08")]:
+        assert client.post(f"/api/v1/portfolios/{pid}/transactions",
+                           json=e).status_code == 201, e
+
+    total = client.get(f"/api/v1/portfolios/{pid}/history?period=max").json()
+    decoupe = par_compte(client, pid)
+
+    assert len(decoupe["comptes"]) == 3, "deux comptes déclarés et le reliquat"
+
+    attendu = {p["date"]: p["value"] for p in total["points"]}
+    somme: dict[str, float] = {}
+    for c in decoupe["comptes"]:
+        for p in c["points"]:
+            somme[p["date"]] = somme.get(p["date"], 0.0) + p["value"]
+
+    assert set(somme) == set(attendu), "les courbes doivent couvrir les mêmes séances"
+    for jour, valeur in attendu.items():
+        assert somme[jour] == pytest.approx(valeur, abs=0.01), (
+            f"le {jour} : {somme[jour]} par compte contre {valeur} au total"
+        )
+
+
+def test_le_montant_investi_s_additionne_aussi(client, cours):
+    """
+    L'investi suit la même règle que la valeur : c'est une somme de versements, et un
+    versement appartient à un compte et un seul.
+    """
+    pid = creer_portefeuille(client)
+    pea = declarer(client, pid, "PEA", "pea")
+
+    for e in [ecriture("AAPL", 10, 100.0, "2026-01-06", pea),
+              ecriture("MSFT", 5, 100.0, "2026-01-07")]:
+        assert client.post(f"/api/v1/portfolios/{pid}/transactions",
+                           json=e).status_code == 201
+
+    total = client.get(f"/api/v1/portfolios/{pid}/history?period=max").json()
+    decoupe = par_compte(client, pid)
+
+    dernier = total["points"][-1]["date"]
+    investi = sum(
+        p["invested"] for c in decoupe["comptes"] for p in c["points"] if p["date"] == dernier
+    )
+    attendu = next(p["invested"] for p in total["points"] if p["date"] == dernier)
+    assert investi == pytest.approx(attendu, abs=0.01)
+
+
+# ── Les refus, qui sont des décisions ─────────────────────────────────────────
+
+def test_un_compte_de_tresorerie_n_a_pas_de_courbe(client, cours):
+    """
+    ⚠️ Un livret déclaré à 5 000 € ne doit produire **aucune** courbe : son solde est un
+    chiffre saisi un jour donné, sans série. Tracé, il remonterait à plat jusqu'au premier
+    point et ferait croire que l'argent y était depuis le début.
+    """
+    pid = creer_portefeuille(client)
+    pea = declarer(client, pid, "PEA", "pea")
+    r = client.post(f"/api/v1/portfolios/{pid}/comptes",
+                    json={"nom": "Livret A", "genre": "epargne", "solde": 5000.0})
+    assert r.status_code in (200, 201), r.text
+
+    assert client.post(f"/api/v1/portfolios/{pid}/transactions",
+                       json=ecriture("AAPL", 10, 100.0, "2026-01-06", pea)).status_code == 201
+
+    noms = [c["nom"] for c in par_compte(client, pid)["comptes"]]
+    assert "Livret A" not in noms, "la trésorerie n'a pas d'historique à tracer"
+    assert noms == ["PEA"], noms
+
+
+def test_les_operations_libres_forment_le_dernier_groupe(client, cours):
+    """
+    Le reliquat existe, il est nommé, et il vient en dernier : c'est un reste, pas un
+    compte. Sans lui, un portefeuille repris — où rien n'est encore déclaré — afficherait
+    une vue vide au lieu de sa courbe.
+    """
+    pid = creer_portefeuille(client)
+    assert client.post(f"/api/v1/portfolios/{pid}/transactions",
+                       json=ecriture("AAPL", 10, 100.0, "2026-01-06")).status_code == 201
+
+    comptes = par_compte(client, pid)["comptes"]
+    assert len(comptes) == 1
+    assert comptes[-1]["id"] is None
+    assert comptes[-1]["declare"] is False
+    assert comptes[-1]["nom"] == "Non rattachées"
+    assert comptes[-1]["points"], "le reliquat porte bien une courbe"
+
+
+def test_aucune_mesure_de_performance_par_compte(client, cours):
+    """
+    ⚠️ Ni TWR ni gain par compte : un virement d'un compte à l'autre serait un versement
+    pour l'un et un retrait pour l'autre, alors qu'il n'est ni l'un ni l'autre pour
+    l'épargnant. Les deux performances seraient fausses en sens contraire.
+    """
+    pid = creer_portefeuille(client)
+    pea = declarer(client, pid, "PEA", "pea")
+    assert client.post(f"/api/v1/portfolios/{pid}/transactions",
+                       json=ecriture("AAPL", 10, 100.0, "2026-01-06", pea)).status_code == 201
+
+    decoupe = par_compte(client, pid)
+    interdits = {"twr_pct", "gain_pct", "gain_eur", "taux_pct", "benchmark"}
+    assert not (interdits & set(decoupe)), decoupe.keys()
+    for c in decoupe["comptes"]:
+        assert not (interdits & set(c)), c.keys()
+        for p in c["points"]:
+            assert set(p) == {"date", "value", "invested"}, p
+
+
+def test_un_portefeuille_sans_ecriture_ne_rend_rien(client, cours):
+    """Le cas nu : aucune opération, aucune courbe, et surtout aucune erreur."""
+    pid = creer_portefeuille(client)
+    d = par_compte(client, pid)
+    assert d == {"comptes": [], "start": None, "source": "aucune"}
+
+
+def test_une_periode_inconnue_est_refusee(client, cours):
+    """Le même refus que `/history`, faute de quoi la période serait silencieusement ignorée."""
+    pid = creer_portefeuille(client)
+    assert client.post(f"/api/v1/portfolios/{pid}/transactions",
+                       json=ecriture("AAPL", 10, 100.0, "2026-01-06")).status_code == 201
+    r = client.get(f"/api/v1/portfolios/{pid}/history/comptes?period=depuis-toujours")
+    assert r.status_code == 400

@@ -1338,6 +1338,162 @@ def _details_titre(ticker: str) -> dict:
     return d
 
 
+@router.get("/{portfolio_id}/history/comptes")
+async def get_history_par_compte(
+    portfolio_id: str,
+    period:       str     = Query("max"),
+    db:           Session = Depends(get_db),
+    user:         User    = Depends(require_auth),
+):
+    """
+    La même courbe que `/history`, mais découpée par compte déclaré.
+
+    ⚠️ **L'invariant est que la somme des courbes redonne la courbe totale, à chaque
+    date.** C'est la seule promesse qui rend le découpage lisible : sans elle, passer de
+    « total » à « par compte » ferait changer la hauteur de l'ensemble sans rien dire, et
+    l'écran raconterait deux portefeuilles différents selon le bouton pressé. Tout ce qui
+    suit en découle — en particulier le groupe des opérations non rattachées, qui n'est pas
+    un détail d'affichage mais ce qui empêche la somme de mentir.
+
+    ⚠️ **Seuls les comptes à titres reçoivent une courbe, et c'est un refus assumé.** Un
+    livret n'a pas d'historique : son solde est un chiffre saisi un jour donné, sans série.
+    Tracé quand même, il dessinerait un plateau horizontal remontant jusqu'au premier point
+    de la courbe, donnant à croire que l'argent y dormait depuis le début. Les liquidités
+    déclarées sont donc absentes de cette vue ; elles restent dans le pavage de répartition,
+    qui, lui, décrit un instant et non une durée.
+
+    ⚠️ **Les cours ne sont téléchargés qu'une fois, pour tous les comptes.** Le coût de
+    cette route est celui d'un seul appel au fournisseur, quel que soit le nombre de
+    comptes : `courbe_portefeuille` est rejouée par groupe sur le *même* jeu de cours et le
+    *même* calendrier. Un téléchargement par compte aurait multiplié la latence par le
+    nombre de dossiers et, les séances n'étant pas garanties identiques d'un appel à
+    l'autre, aurait pu produire des courbes qui ne s'additionnent plus.
+
+    ⚠️ **Aucune mesure de performance n'est renvoyée par compte.** Ni TWR, ni Dietz, ni
+    comparaison au repère. Ces grandeurs se calculent sur des flux entrants et sortants, et
+    un virement d'un compte à l'autre est un flux pour chacun des deux alors qu'il n'en est
+    pas un pour l'épargnant : le PEA afficherait un versement le jour où le CTO afficherait
+    un retrait, et les deux « performances » seraient fausses en sens contraire. Cette route
+    ne rend que des valeurs et des montants investis, qui eux s'additionnent sans réserve.
+    """
+    from datetime import date, timedelta
+
+    import yfinance as yf
+
+    from app.services.portfolio_history import courbe_portefeuille
+
+    _get_portfolio_or_404(portfolio_id, db, user)
+
+    txs = (
+        db.query(Transaction)
+        .filter(Transaction.portfolio_id == portfolio_id)
+        .order_by(Transaction.executed_at.asc())
+        .all()
+    )
+    if not txs:
+        return {"comptes": [], "start": None, "source": "aucune"}
+
+    if period not in _HISTO_JOURS:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Période inconnue : « {period} ». Attendu : "
+                   f"{', '.join(_HISTO_JOURS)}.",
+        )
+
+    # Les comptes à titres du portefeuille, dans l'ordre où l'écran les range déjà.
+    comptes = (
+        db.query(Compte)
+        .filter(Compte.portfolio_id == portfolio_id)
+        .order_by(Compte.rang.asc(), Compte.cree_le.asc())
+        .all()
+    )
+    porteurs = {c.id: c for c in comptes if porte_des_titres(c)}
+
+    # ⚠️ **Le groupe « non rattachées » n'est pas facultatif.** Tant que la déclaration des
+    # comptes n'est pas faite, la plupart des opérations n'en visent aucun ; sans ce groupe,
+    # la vue par compte serait vide sur un portefeuille repris, ou — pire — n'en montrerait
+    # qu'une partie sans dire laquelle manque. Une opération visant un compte supprimé ou
+    # sans titres y retombe aussi, pour la même raison : rien ne doit sortir de la somme.
+    SANS = "__sans_compte__"
+    groupes: dict[str, list] = {}
+    for t in txs:
+        cle = t.compte_id if t.compte_id in porteurs else SANS
+        groupes.setdefault(cle, []).append(t)
+
+    debut_reel = min(t.executed_at for t in txs).date()
+    jours = _HISTO_JOURS[period]
+    depart = debut_reel if jours is None else max(debut_reel,
+                                                  date.today() - timedelta(days=jours))
+    tickers = sorted({t.ticker for t in txs})
+
+    try:
+        brut = yf.download(
+            tickers, start=debut_reel - timedelta(days=7),
+            progress=False, auto_adjust=True, threads=True,
+        )["Close"]
+    except Exception as exc:                                  # pragma: no cover
+        logger.warning("history/comptes: téléchargement impossible (%s)", exc)
+        return {"comptes": [], "start": debut_reel.isoformat(), "source": "indisponible"}
+    if brut is None or len(brut) == 0:                        # pragma: no cover
+        return {"comptes": [], "start": debut_reel.isoformat(), "source": "indisponible"}
+
+    if len(tickers) == 1:
+        brut = brut.to_frame(tickers[0])
+    cours: dict[str, dict] = {}
+    for tk in tickers:
+        if tk not in brut:
+            continue
+        serie = brut[tk].dropna()
+        cours[tk] = {idx.date(): float(v) for idx, v in serie.items()}
+    calendrier = sorted({j for m in cours.values() for j in m})
+
+    def _courbe(lot) -> list[dict]:
+        r = courbe_portefeuille(
+            [
+                {
+                    "ticker":      t.ticker,
+                    "side":        t.side,
+                    "quantity":    t.quantity,
+                    "unit_price":  t.unit_price,
+                    "fees":        t.fees or 0.0,
+                    "executed_at": t.executed_at,
+                }
+                for t in lot
+            ],
+            cours,
+            calendrier,
+        )
+        # ⚠️ Mêmes clés que `/history` après filtrage : `ret` et `flow` servent au TWR, que
+        # cette route ne calcule pas. Les laisser aurait invité l'écran à s'en servir.
+        return [
+            {k: v for k, v in p.items() if k not in ("ret", "flow")}
+            for p in r["points"] if p["date"] >= depart.isoformat()
+        ]
+
+    sorties = []
+    for cid, lot in groupes.items():
+        if cid == SANS:
+            continue
+        c = porteurs[cid]
+        sorties.append({
+            "id": c.id, "nom": c.nom, "couleur": c.couleur,
+            "declare": True, "points": _courbe(lot),
+        })
+    # ⚠️ Rangé en dernier : c'est le reliquat, pas un compte. Le nommer « Non rattachées »
+    # plutôt que « Autres » dit à l'épargnant ce qu'il peut y faire — les rattacher.
+    if SANS in groupes:
+        sorties.append({
+            "id": None, "nom": "Non rattachées", "couleur": "#5A6478",
+            "declare": False, "points": _courbe(groupes[SANS]),
+        })
+
+    return {
+        "comptes": sorties,
+        "start": depart.isoformat(),
+        "source": "transactions",
+    }
+
+
 @router.get("/{portfolio_id}/analysis")
 async def get_analysis(
     portfolio_id: str,
