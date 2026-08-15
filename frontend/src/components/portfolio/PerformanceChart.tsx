@@ -769,27 +769,6 @@ export default function PerformanceChart({
    */
   const [vue, setVue] = useState<string>("total");
 
-  /**
-   * La largeur de la pastille de gauche, mesurée.
-   *
-   * ⚠️ **L'encart de lecture d'une écriture occupe déjà ce coin.** Il est posé en
-   * absolu à `left: 0` dans le bandeau de tête, c'est-à-dire exactement là où va la
-   * pastille : au survol d'un point d'opération, son texte se serait posé sur les
-   * boutons. On le décale donc de la largeur réellement occupée plutôt que d'une
-   * valeur devinée — les deux libellés n'ont pas la même longueur, et la police
-   * n'est pas garantie chargée au premier rendu.
-   */
-  const pastilleVueRef = useRef<HTMLDivElement>(null);
-  const [reserveVue, setReserveVue] = useState(0);
-  useEffect(() => {
-    const el = pastilleVueRef.current;
-    if (!el) { setReserveVue(0); return; }
-    const mesurer = () => setReserveVue(el.getBoundingClientRect().width);
-    mesurer();
-    const ro = new ResizeObserver(mesurer);
-    ro.observe(el);
-    return () => ro.disconnect();
-  }, [surTransactions, portfolioId]);
 
   /**
    * Réglages d'apparence, retenus d'une visite à l'autre.
@@ -2458,7 +2437,7 @@ export default function PerformanceChart({
           * courbe, donc quand le choix existe vraiment.
           */}
         {surTransactions && portfolioId && courbesComptes.length > 0 && (
-          <div ref={pastilleVueRef} style={{
+          <div style={{
             marginRight: "auto", display: "flex",
             /**
              * ⚠️ **La pastille glisse au lieu de déborder, et c'est mesuré.** À cinq
@@ -2527,10 +2506,18 @@ export default function PerformanceChart({
           */}
         {opsVisees.length > 0 && cadrePret && (
           <div style={{
-            // `top: 0` : le coin du bandeau, donc la marge même des boutons qui le
-            // terminent à droite — décalé de la pastille de découpage quand elle
-            // occupe ce coin, faute de quoi le texte se poserait sur ses boutons.
-            position: "absolute", top: 0, left: reserveVue ? reserveVue + 10 : 0,
+            /**
+             * ⚠️ **Sous la rangée de commandes, et non à côté.** L'encart occupait le
+             * coin du bandeau ; depuis que la pastille de découpage y est posée, son
+             * texte se couchait sur les boutons — vu à l'écran, « Renforcement PAEJ.PA »
+             * écrit en travers de « Total ». Le décaler de la largeur de la pastille ne
+             * réglait rien : à cinq comptes elle prend toute la ligne.
+             *
+             * Il descend donc d'un cran. Il déborde alors sur le haut du tracé, ce qui
+             * était déjà son cas quand il portait plusieurs lignes — d'où son halo, qui
+             * détache chaque lettre du fond sans masquer la courbe.
+             */
+            position: "absolute", top: "100%", marginTop: 4, left: 0,
             zIndex: 20, pointerEvents: "none",
             fontFamily: FONT, lineHeight: 1.5, maxWidth: "62%",
             // L'écart entre les lignes vient du conteneur, pour que la première
@@ -2632,7 +2619,7 @@ export default function PerformanceChart({
             // second cas rien ne rappelait qu'on était encore armé.
             background: stickersOuverts || stickerArme ? JETONS.segmentActif : JETONS.segmentPiste,
             border: `1px solid ${stickersOuverts || stickerArme ? JETONS.segmentActif : JETONS.bord}`,
-            borderRadius: RAYONS.sm, width: 30, height: 30, cursor: "pointer", flexShrink: 0,
+            borderRadius: RAYONS.sm, width: 26, height: 26, cursor: "pointer", flexShrink: 0,
             display: "flex", alignItems: "center", justifyContent: "center",
             color: stickersOuverts || stickerArme ? JETONS.segmentEncre : JETONS.texteFort,
             boxShadow: stickersOuverts || stickerArme ? JETONS.segmentOmbre : "none",
@@ -2685,7 +2672,7 @@ export default function PerformanceChart({
           style={{
             background: grilleOuverte ? JETONS.segmentActif : JETONS.segmentPiste,
             border: `1px solid ${grilleOuverte ? JETONS.segmentActif : JETONS.bord}`,
-            borderRadius: RAYONS.sm, width: 30, height: 30, cursor: "pointer", flexShrink: 0,
+            borderRadius: RAYONS.sm, width: 26, height: 26, cursor: "pointer", flexShrink: 0,
             display: "flex", alignItems: "center", justifyContent: "center",
             color: grilleOuverte ? JETONS.segmentEncre : JETONS.texteFort,
             boxShadow: grilleOuverte ? JETONS.segmentOmbre : "none",
@@ -2725,7 +2712,7 @@ export default function PerformanceChart({
           style={{
             background: reglagesOuverts ? JETONS.segmentActif : JETONS.segmentPiste,
             border: `1px solid ${reglagesOuverts ? JETONS.segmentActif : JETONS.bord}`,
-            borderRadius: RAYONS.sm, width: 30, height: 30, cursor: "pointer", flexShrink: 0,
+            borderRadius: RAYONS.sm, width: 26, height: 26, cursor: "pointer", flexShrink: 0,
             display: "flex", alignItems: "center", justifyContent: "center",
             color: reglagesOuverts ? JETONS.segmentEncre : JETONS.texteFort,
             boxShadow: reglagesOuverts ? JETONS.segmentOmbre : "none",
@@ -2753,9 +2740,16 @@ export default function PerformanceChart({
             pastille plus 2 px de creux de chaque côté font exactement les 30 px
             des boutons voisins, là où `sm` en aurait fait 26 et aurait désaligné
             la rangée. `picto` carre les pastilles, le rembourrage par défaut
-            étant réglé sur des mots et non sur des icônes. */}
+            étant réglé sur des mots et non sur des icônes.
+
+            ⚠️ **Toute la rangée est passée de 30 à 26 px**, la taille des pastilles de
+            la carte Répartition. Demandé pour la cohérence d'un panneau à l'autre : deux
+            commandes de même nature ne peuvent pas se lire à deux échelles selon la
+            carte qui les porte. Les boutons ronds voisins suivent, sans quoi la piste
+            aurait flotté au milieu d'eux. */}
         <Segments
           picto
+          taille="sm"
           ariaLabel="Type de tracé"
           valeur={mode}
           onChange={setMode}
