@@ -269,8 +269,11 @@ export default function RepartitionPavee({
               onMouseEnter={() => setSurvol(b.cle)}
               onMouseLeave={() => setSurvol(s => (s === b.cle ? null : s))}
               onClick={() => setChoisi(c => (c === b.cle ? null : b.cle))}
-              title={`${b.nom} — ${EUROS.format(Math.round(b.valeur))} € `
-                + `· ${Math.round(part * 100)} %`}
+              /* ⚠️ **Pas de `title` : l'infobulle du navigateur est un encadré gris qui
+                 apparaît près du curseur après un délai qu'on ne règle pas, dans une
+                 typographie qui n'est pas la nôtre. Elle avait un sens tant que les blocs
+                 muets n'étaient nommés nulle part ; la ligne de lecture le fait désormais,
+                 au même endroit à chaque fois et sans attendre. */
               style={{
                 position: "absolute", left: n.x0, top: n.y0, width: l, height: h,
                 background: b.couleur, borderRadius: 5, overflow: "hidden",
