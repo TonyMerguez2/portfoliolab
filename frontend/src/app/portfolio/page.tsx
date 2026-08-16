@@ -1277,9 +1277,16 @@ function PortfolioPageInner() {
    * titres faisait passer les liquidités pour une performance — relevé à l'écran,
    * « +5 623,41 € (+145,44 %) » sur un portefeuille qui n'avait rien gagné de tel. C'est
    * exactement ce que le projet refuse : verser sur un livret n'est pas un résultat.
+   *
+   * ⚠️ **Le repli est le solde déclaré, jamais zéro.** Quand la courbe ne sait pas dire ce
+   * que valait l'épargne à la date survolée, retrancher zéro revient à affirmer qu'il n'y
+   * en avait pas — l'hypothèse la plus fausse des deux, et celle qui gonfle le gain.
+   * Retrancher le solde d'aujourd'hui peut se tromper de quelques euros si l'épargne a
+   * bougé, mais jamais de sa totalité. Relevé à l'écran avant ce repli : +115 % annoncés
+   * sur un portefeuille dont la moitié dort sur un livret.
    */
   const titresSurvoles = survolCourbe
-    ? survolCourbe.valeur - (survolCourbe.liquidites ?? 0)
+    ? survolCourbe.valeur - (survolCourbe.liquidites ?? liquiditesDeclarees)
     : null;
 
   /**
@@ -1337,14 +1344,15 @@ function PortfolioPageInner() {
       pointer(null);
       return;
     }
-    // ⚠️ Les liquidités sont retranchées ici aussi : sans cela, l'avatar réagissait à une
-    // performance qui n'existait pas, celle de l'épargne comptée comme un gain.
-    const titres = survolCourbe.valeur - (survolCourbe.liquidites ?? 0);
+    // ⚠️ Les liquidités sont retranchées ici aussi, et avec le même repli : sans cela,
+    // l'avatar réagissait à une performance qui n'existait pas, celle de l'épargne comptée
+    // comme un gain.
+    const titres = survolCourbe.valeur - (survolCourbe.liquidites ?? liquiditesDeclarees);
     const pctSurvol = (titres - survolCourbe.investi) / survolCourbe.investi * 100;
     const pctActuel = prixDeRevient != null && prixDeRevient > 0 && valeurTitres != null
       ? (valeurTitres - prixDeRevient) / prixDeRevient * 100 : 0;
     pointer(etatSelonEcartCourbe(pctSurvol - pctActuel));
-  }, [survolCourbe, valeurTitres, prixDeRevient, pointer]);
+  }, [survolCourbe, valeurTitres, prixDeRevient, pointer, liquiditesDeclarees]);
 
   const weightedChange = enriched.reduce((s, a) => {
     if (a.change === null) return s;

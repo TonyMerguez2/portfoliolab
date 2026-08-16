@@ -1688,8 +1688,19 @@ export default function PerformanceChart({
        * ⚠️ **Ancrés sur la valeur de la courbe à leur date**, comme les écritures, et non
        * sur leur montant : la pastille dit *quand*, la courbe dit *combien*.
        */
-      if (vue !== "total" && compteVise?.mouvements?.length) {
-        compteVise.mouvements.forEach((m, i) => {
+      /**
+       * ⚠️ **Les apports paraissent aussi sur le total, à la demande.** Je les en avais
+       * écartés parce qu'un virement d'un compte à l'autre y figurerait deux fois sans rien
+       * changer au patrimoine. L'objection tient toujours, mais elle pèse moins que le
+       * défaut inverse : sans ces repères, la courbe monte d'un cran sans que rien ne dise
+       * que l'argent vient d'être versé, et l'œil lit une performance. Le jour où la saisie
+       * distinguera l'apport extérieur du virement interne, c'est ici qu'on filtrera.
+       */
+      const apports = vue === "total"
+        ? courbesComptes.flatMap(c => c.mouvements ?? [])
+        : (compteVise?.mouvements ?? []);
+      if (apports.length) {
+        apports.forEach((m, i) => {
           const jour = jourAncre(m.date.slice(0, 10), jours);
           const ancre = jour == null ? null : ancreAu.get(jour);
           if (ancre == null || jour == null) return;
@@ -1926,9 +1937,18 @@ export default function PerformanceChart({
         surSurvolRef.current?.({
           valeur: val, date: quand,
           investi: investiParDateRef.current.get(quand.slice(0, 10)),
-          // Mise à la même échelle que `val`, qui est la valeur tracée.
-          liquidites: (liquiditesParDateRef.current.get(quand.slice(0, 10)) ?? 0)
-                      * echelleStickerRef.current,
+          /**
+           * ⚠️ **Absente plutôt que nulle quand on ne sait pas.** Elle valait `?? 0`, ce
+           * qui annonçait « ce jour-là il n'y avait pas d'épargne » alors que le sens était
+           * « je l'ignore ». L'appelant retranchait donc zéro et le gain reprenait toute la
+           * trésorerie — relevé à l'écran, +115 % sur un portefeuille dont la moitié dort
+           * sur un livret. Laissée indéfinie, elle laisse l'appelant se rabattre sur ce
+           * qu'il sait, lui, des soldes déclarés.
+           */
+          liquidites: (() => {
+            const l = liquiditesParDateRef.current.get(quand.slice(0, 10));
+            return l == null ? undefined : l * echelleStickerRef.current;
+          })(),
         });
       }
 
