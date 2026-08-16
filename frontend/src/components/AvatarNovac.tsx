@@ -458,6 +458,14 @@ export default function AvatarNovac({
           * qui montre un avatar, alors qu'en fichier il se charge une fois et se met en
           * cache.
           *
+          * ⚠️ **Le placement est relevé sur une maquette, pas ajusté à l'œil.** En
+          * rapportant les deux images au diamètre du crâne : la casquette y vaut 1,12
+          * fois ce diamètre en largeur, et son point le plus bas — la pointe de la
+          * visière — tombe à −44, soit à peine plus bas que le quart supérieur de la
+          * sphère. Un premier essai la faisait descendre jusqu'à l'équateur : elle
+          * mangeait la tête au lieu de la coiffer, et l'erreur ne se voyait pas sans
+          * repère puisqu'une silhouette sombre sur fond sombre ne montre pas ses bords.
+          *
           * ⚠️ **Posé dans le groupe animé, après les yeux.** Dans le groupe, la casquette
           * suit l'écrasement du rebond au lieu de flotter au-dessus d'une tête qui bouge.
           * Après les yeux, elle les recouvre si elle descend trop bas — ce qui est le bon
@@ -465,7 +473,7 @@ export default function AvatarNovac({
           */}
         {accessoire === "casquette" && FAMILLE_AVATAR[forme] === "sphere" && (
           <image href="/avatars/casquette.svg"
-            x={-112} y={-116} width={224} height={117}
+            x={-114} y={-157} width={224} height={117}
             style={{ pointerEvents: "none" }} />
         )}
       </g>
