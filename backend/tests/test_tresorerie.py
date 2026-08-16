@@ -105,3 +105,19 @@ def test_le_calendrier_commande_les_jours_rendus():
     """Aucun jour inventé : la courbe n'a de points que là où elle en a déjà."""
     s = solde_par_jour(100.0, datetime(2026, 1, 1), [], [date(2026, 3, 10)])
     assert list(s) == [date(2026, 3, 10)]
+
+
+def test_un_solde_declare_apres_la_derniere_seance_parait_quand_meme():
+    """
+    ⚠️ **Le défaut le plus déroutant qu'ait connu ce calcul.** Le champ « Depuis quand »
+    propose aujourd'hui par défaut, et la courbe s'arrête à la dernière séance close. Un
+    livret déclaré aujourd'hui tombait donc après tous les points : il valait zéro partout,
+    et n'apparaissait ni dans la courbe, ni dans les repères, ni dans le gain. L'épargnant
+    saisissait cinq mille euros et ne voyait « rien du tout ».
+
+    C'est le solde qui a raison : l'argent est là aujourd'hui, et le retard du calendrier
+    boursier n'est pas un fait sur le patrimoine.
+    """
+    s = solde_par_jour(5000.0, datetime(2026, 4, 2), [], CAL)
+    assert s[date(2026, 3, 31)] == 5000.0, "le dernier jour tracé doit porter le solde"
+    assert s[date(2026, 3, 1)] == 0.0, "les jours antérieurs restent à zéro"

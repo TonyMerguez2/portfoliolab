@@ -58,6 +58,21 @@ def solde_par_jour(
         return {}
 
     debut = _jour(solde_depuis) if solde_depuis is not None else None
+    # ⚠️ **Une date postérieure au dernier jour tracé est ramenée à ce jour.**
+    #
+    # Le champ « Depuis quand » propose aujourd'hui par défaut, et la courbe s'arrête à la
+    # dernière séance close — hier, le plus souvent. Un solde déclaré aujourd'hui tombait
+    # donc *après* tous les points, et la garde ci-dessous le ramenait à zéro partout : le
+    # compte n'apparaissait ni dans la courbe, ni dans les repères, ni dans le gain. Vu à
+    # l'écran, et signalé avec raison comme « rien du tout ».
+    #
+    # ⚠️ **C'est le solde qui a raison, pas le calendrier boursier.** `solde` est la vérité
+    # du présent : l'argent est là aujourd'hui. Que le dernier point de la courbe porte la
+    # date d'hier est une contrainte du fournisseur de cours, pas un fait sur le patrimoine.
+    # Ramener la date au dernier jour tracé fait dire à la courbe ce que l'épargnant sait
+    # être vrai, plutôt que de lui cacher son propre argent pour un jour d'écart.
+    if debut is not None and calendrier and debut > calendrier[-1]:
+        debut = calendrier[-1]
     mvts = sorted(((_jour(m["date"]), float(m["montant"])) for m in mouvements),
                   key=lambda t: t[0])
 
