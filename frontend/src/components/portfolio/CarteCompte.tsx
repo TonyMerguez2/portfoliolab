@@ -296,6 +296,21 @@ export default function CarteCompte({
    * la teinte reste de la famille du dossier, et c'est le dégradé qui décide où elle se voit.
    */
   const ARETE = decalerClarte(couleur, 0.14);
+  /**
+   * La teinte du liseré **du côté éclairé**, plus haute que celle du côté sombre.
+   *
+   * ⚠️ **Un liseré ne se voit que s'il est plus clair que ce qu'il borde.** Le panneau
+   * tourne du clair au sombre en diagonale : il vaut `tresClair`, soit +0,19, dans le coin
+   * haut-gauche. Le liseré à +0,14 y était donc *plus sombre que son fond* — l'arête
+   * existait, elle était simplement invisible, et seul le bas-droit paraissait ourlé.
+   * Signalé à l'usage.
+   *
+   * ⚠️ **+0,26 et pas davantage.** Le commentaire ci-dessus retient la leçon d'un essai à
+   * +0,32, qui virait au blanc sur les teintes vives et détourait la carte au lieu de
+   * l'ourler. Il faut passer au-dessus de 0,19 pour se détacher, et rester en deçà de 0,32
+   * pour rester de la famille du dossier.
+   */
+  const ARETE_CLAIRE = decalerClarte(couleur, 0.26);
   const tresClair = decalerClarte(couleur, 0.19);
   const clair = decalerClarte(couleur, 0.10);
   const sombre = decalerClarte(couleur, -0.16);
@@ -591,9 +606,9 @@ export default function CarteCompte({
               paliers, même creux de 38 à 62 %, pour que les deux objets s'éteignent au même
               endroit de leur diagonale. */}
           <linearGradient id={`bord-${idBord}`} x1="0" y1="0" x2="1" y2="1">
-            <stop offset="0%" stopColor={ARETE} stopOpacity={0.5} />
-            <stop offset="20%" stopColor={ARETE} stopOpacity={0.38} />
-            <stop offset="32%" stopColor={ARETE} stopOpacity={0.15} />
+            <stop offset="0%" stopColor={ARETE_CLAIRE} stopOpacity={0.75} />
+            <stop offset="20%" stopColor={ARETE_CLAIRE} stopOpacity={0.5} />
+            <stop offset="32%" stopColor={ARETE_CLAIRE} stopOpacity={0.18} />
             <stop offset="38%" stopColor={ARETE} stopOpacity={0} />
             <stop offset="62%" stopColor={ARETE} stopOpacity={0} />
             <stop offset="68%" stopColor={ARETE} stopOpacity={0.15} />
