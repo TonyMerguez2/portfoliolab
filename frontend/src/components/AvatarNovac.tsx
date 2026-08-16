@@ -143,7 +143,6 @@ export default function AvatarNovac({
   suivi = true,
   amplitude = VIE_REFERENCE.amplitude,
   forme = "sphere",
-  accessoire = null,
   skin = "uni",
   vivant = true,
   titre,
@@ -205,16 +204,6 @@ export default function AvatarNovac({
    * fait tourner le solide, ce qui rend la surface rigide et fait respirer la silhouette.
    */
   forme?: FormeAvatar;
-  /**
-   * L'accessoire posé sur la tête, ou rien.
-   *
-   * ⚠️ **Réservé à la sphère pour l'instant, et le composant le fait respecter lui-même.**
-   * Une casquette dessinée pour un crâne rond se pose de travers sur un cube ou une
-   * goutte : il faudrait un placement par forme, donc huit réglages. Plutôt que de laisser
-   * l'appelant se souvenir de la condition, elle vit ici — le jour où les autres formes
-   * seront réglées, il n'y aura qu'un endroit à reprendre.
-   */
-  accessoire?: "casquette" | null;
   titre?: string;
   style?: React.CSSProperties;
 }) {
@@ -451,31 +440,6 @@ export default function AvatarNovac({
         )}
         <path d={oeil(vie.fermetureGauche, -1)} fill={yeuxRendus} />
         <path d={oeil(vie.fermetureDroite, 1)} fill={yeuxRendus} />
-        {/**
-          * ⚠️ **Un fichier référencé, et non des tracés recopiés ici.** Le dessin fait
-          * 108 Ko à lui seul — c'est une image vectorisée, aux milliers de segments.
-          * Embarqué dans le composant, il aurait alourdi d'autant le paquet de chaque page
-          * qui montre un avatar, alors qu'en fichier il se charge une fois et se met en
-          * cache.
-          *
-          * ⚠️ **Le placement est relevé sur une maquette, pas ajusté à l'œil.** En
-          * rapportant les deux images au diamètre du crâne : la casquette y vaut 1,12
-          * fois ce diamètre en largeur, et son point le plus bas — la pointe de la
-          * visière — tombe à −44, soit à peine plus bas que le quart supérieur de la
-          * sphère. Un premier essai la faisait descendre jusqu'à l'équateur : elle
-          * mangeait la tête au lieu de la coiffer, et l'erreur ne se voyait pas sans
-          * repère puisqu'une silhouette sombre sur fond sombre ne montre pas ses bords.
-          *
-          * ⚠️ **Posé dans le groupe animé, après les yeux.** Dans le groupe, la casquette
-          * suit l'écrasement du rebond au lieu de flotter au-dessus d'une tête qui bouge.
-          * Après les yeux, elle les recouvre si elle descend trop bas — ce qui est le bon
-          * ordre : un couvre-chef passe devant le visage, pas derrière.
-          */}
-        {accessoire === "casquette" && FAMILLE_AVATAR[forme] === "sphere" && (
-          <image href="/avatars/casquette.svg"
-            x={-126} y={-157} width={224} height={117}
-            style={{ pointerEvents: "none" }} />
-        )}
       </g>
     </svg>
   );

@@ -144,9 +144,6 @@ export default function AvatarPortefeuille({
           couleur={couleur}
           forme={forme}
           skin={skin}
-          // Posée en dur le temps de juger de l'effet : l'accessoire n'est pas encore un
-          // choix de l'épargnant, et il ne se pose que sur la forme ronde.
-          accessoire="casquette"
           etat={expression.cle}
           impulsion={expression.jeton}
           titre={portefeuille.name ?? "Novac"}
