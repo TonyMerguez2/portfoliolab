@@ -203,6 +203,27 @@ def creer(portfolio_id: str, data: CompteEntree, db: Session = Depends(get_db),
         rang=data.rang if data.rang is not None else ((dernier.rang + 1) if dernier else 0),
     )
     db.add(c)
+
+    # ⚠️ **Le solde d'ouverture entre au journal comme un apport, et c'est une seule
+    # mécanique au lieu de deux.** Déclarer un compte avec 5 000 € est un apport de capital
+    # daté, exactement comme un versement fait plus tard : le ranger à part, dans un champ
+    # du compte, laissait la plus grosse marche de la courbe sans repère — celle de la
+    # déclaration — alors que les versements suivants en avaient un. Signalé à l'usage.
+    #
+    # ⚠️ **L'arithmétique du solde n'en est pas affectée.** `solde_par_jour` remonte le
+    # temps en retranchant du solde actuel les mouvements *postérieurs* à la date lue ; un
+    # mouvement posé à `solde_depuis` n'est jamais postérieur à une date qui le suit, et les
+    # dates antérieures sont déjà ramenées à zéro par la garde. L'ajout ne fait donc
+    # qu'exister pour l'affichage, sans déplacer un centime.
+    #
+    # ⚠️ **Rien n'est écrit sans date.** Un apport sans date ne se placerait nulle part sur
+    # la courbe, et le compte garde alors son solde sans journal — le cas des comptes
+    # déclarés avant que la date n'existe.
+    if c.solde is not None and c.solde_depuis is not None:
+        db.add(MouvementTresorerie(
+            id=str(uuid.uuid4()), compte_id=c.id,
+            date=c.solde_depuis, montant=c.solde, note="Solde d'ouverture"))
+
     db.commit()
     db.refresh(c)
     return _en_dict(c)

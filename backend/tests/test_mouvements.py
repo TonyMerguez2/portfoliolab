@@ -73,6 +73,17 @@ def mouvements(client, pid, cid):
     return r.json()
 
 
+def saisis(client, pid, cid):
+    """
+    Le journal **sans le solde d'ouverture**.
+
+    ⚠️ **Déclarer un compte écrit désormais un apport daté.** Les tests qui vérifient ce
+    qu'un geste ajoute au journal doivent donc écarter ce qui s'y trouvait déjà, faute de
+    quoi ils mesurent la création du compte en croyant mesurer le geste.
+    """
+    return [m for m in mouvements(client, pid, cid) if m["note"] != "Solde d'ouverture"]
+
+
 # ── La distinction qui fonde tout ─────────────────────────────────────────────
 
 def test_verser_monte_le_solde_et_laisse_une_trace(client):
@@ -86,7 +97,7 @@ def test_verser_monte_le_solde_et_laisse_une_trace(client):
     assert r.status_code == 201, r.text
     assert r.json()["compte"]["solde"] == pytest.approx(5500.0)
 
-    j = mouvements(client, pid, cid)
+    j = saisis(client, pid, cid)
     assert len(j) == 1
     assert j[0]["montant"] == pytest.approx(500.0)
     assert j[0]["note"] == "Prime"
@@ -108,8 +119,52 @@ def test_corriger_le_solde_ne_cree_aucun_mouvement(client):
     })
     assert r.status_code == 200, r.text
     assert r.json()["solde"] == pytest.approx(5500.0)
-    assert mouvements(client, pid, cid) == [], (
+    assert saisis(client, pid, cid) == [], (
         "corriger un solde n'est pas verser : aucune trace au journal")
+
+
+def test_le_solde_d_ouverture_entre_au_journal(client):
+    """
+    ⚠️ **Déclarer un compte avec un solde est un apport, pas un réglage.** Le geste range
+    une somme datée dans le patrimoine, exactement comme un versement fait plus tard. Rangé
+    à part, il laissait la plus grosse marche de la courbe — celle de la déclaration — sans
+    repère, quand les versements suivants en avaient un. Signalé à l'usage.
+    """
+    pid = creer_portefeuille(client)
+    cid = livret(client, pid, solde=5000.0, depuis="2026-02-10T00:00:00")
+
+    j = mouvements(client, pid, cid)
+    assert len(j) == 1, "le solde d'ouverture doit figurer au journal"
+    assert j[0]["montant"] == pytest.approx(5000.0)
+    assert j[0]["date"].startswith("2026-02-10")
+    assert j[0]["note"] == "Solde d'ouverture"
+
+
+def test_le_solde_d_ouverture_ne_deplace_pas_le_solde(client):
+    """
+    ⚠️ L'ajout n'existe que pour l'affichage. `solde_par_jour` remonte le temps en
+    retranchant les mouvements *postérieurs* à la date lue : un mouvement posé à
+    `solde_depuis` n'est jamais postérieur à une date qui le suit. Le compte doit donc
+    valoir exactement ce qui a été déclaré.
+    """
+    pid = creer_portefeuille(client)
+    cid = livret(client, pid, solde=5000.0, depuis="2026-02-10T00:00:00")
+    r = client.get(f"/api/v1/portfolios/{pid}/comptes")
+    c = next(x for x in r.json() if x["id"] == cid)
+    assert c["solde"] == pytest.approx(5000.0)
+
+
+def test_sans_date_aucun_solde_d_ouverture_n_est_ecrit(client):
+    """
+    ⚠️ Un apport sans date ne se placerait nulle part sur la courbe. C'est le cas des
+    comptes déclarés avant que la date n'existe : ils gardent leur solde, sans journal.
+    """
+    pid = creer_portefeuille(client)
+    r = client.post(f"/api/v1/portfolios/{pid}/comptes", json={
+        "nom": "Ancien livret", "genre": "epargne", "couleur": "#6366F1", "solde": 3000.0,
+    })
+    assert r.status_code in (200, 201), r.text
+    assert mouvements(client, pid, r.json()["id"]) == []
 
 
 def test_un_retrait_est_un_montant_negatif(client):
@@ -138,7 +193,7 @@ def test_supprimer_un_mouvement_defait_son_effet(client):
         f"/api/v1/portfolios/{pid}/comptes/{cid}/mouvements/{m['mouvement']['id']}")
     assert r.status_code == 200, r.text
     assert r.json()["compte"]["solde"] == pytest.approx(5000.0)
-    assert mouvements(client, pid, cid) == []
+    assert saisis(client, pid, cid) == []
 
 
 # ── Les refus ─────────────────────────────────────────────────────────────────
