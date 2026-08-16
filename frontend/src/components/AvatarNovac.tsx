@@ -473,7 +473,7 @@ export default function AvatarNovac({
           */}
         {accessoire === "casquette" && FAMILLE_AVATAR[forme] === "sphere" && (
           <image href="/avatars/casquette.svg"
-            x={-114} y={-157} width={224} height={117}
+            x={-126} y={-157} width={224} height={117}
             style={{ pointerEvents: "none" }} />
         )}
       </g>
