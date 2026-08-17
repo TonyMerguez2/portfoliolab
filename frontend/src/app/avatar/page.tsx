@@ -884,9 +884,14 @@ export default function AvatarProceduralPage() {
                       </radialGradient>
                     ))}
                     {yeuxDuSkin?.lueur && (
-                      /* ⚠️ La boîte du filtre est élargie : rogné à celle des capsules, le
-                         flou serait coupé net et donnerait un halo carré. */
-                      <filter id="av-lueur" x="-120%" y="-120%" width="340%" height="340%">
+                      /* ⚠️ Région fixée dans le repère de la tête, pas sur la boîte des
+                         yeux. Cadrée sur eux, elle se déplaçait à chaque image et laissait
+                         des pixels périmés derrière le regard — voir la note du composant,
+                         qui porte le détail. La marge reste ample : rogné à la boîte des
+                         capsules, le flou donnerait un halo carré. */
+                      <filter id="av-lueur" filterUnits="userSpaceOnUse"
+                        x={-RAYON_TETE} y={-RAYON_TETE}
+                        width={RAYON_TETE * 2} height={RAYON_TETE * 2}>
                         <feGaussianBlur stdDeviation={yeuxDuSkin.lueur.rayon} result="flou" />
                         <feFlood floodColor={yeuxDuSkin.lueur.couleur} result="teinte" />
                         <feComposite in="teinte" in2="flou" operator="in" result="halo" />

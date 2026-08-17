@@ -504,12 +504,29 @@ export default function AvatarNovac({
             ))}
             {yeuxDuSkin?.lueur && (
               /**
-               * ⚠️ **La lueur déborde de sa boîte, il faut donc l'agrandir.** Un filtre est
-               * rogné à la boîte de son objet : à taille par défaut, le flou serait coupé
-               * net au bord des capsules et donnerait un halo carré. Les yeux sont petits,
-               * la marge peut donc être large sans rien coûter.
+               * ⚠️ **La région du filtre est fixée dans le repère de la tête, pas sur la
+               * boîte des yeux — et c'est une correction de bug, pas un réglage.** Par
+               * défaut un filtre se cadre sur la boîte englobante de son objet
+               * (`objectBoundingBox`) : les yeux bougeant en permanence, la région se
+               * déplaçait avec eux à chaque image. Le navigateur en tire une zone à
+               * repeindre qui suit ce cadre mouvant, et laisse derrière lui des pixels
+               * périmés — une **traînée** derrière le regard, signalée à l'usage et
+               * invisible sur une capture, parce qu'elle vit dans la composition et non
+               * dans le rendu.
+               *
+               * ⚠️ **Bornée à la tête, ce qui est plus petit qu'avant.** L'ancienne région
+               * valait 340 % d'une boîte d'environ 68 × 74, soit 231 × 251 unités ; celle-ci
+               * en fait 200 × 200 et couvre tout le viewBox. On corrige donc l'artefact en
+               * calculant *moins* — le bon sens d'un compromis.
+               *
+               * ⚠️ **Il fallait bien une marge, cela dit.** Un filtre est rogné à sa région :
+               * à taille par défaut, le flou serait coupé net au bord des capsules et
+               * donnerait un halo carré. Les yeux vivent loin des bords de la tête, qui leur
+               * en laisse largement.
                */
-              <filter id={`lueur-${marque}`} x="-120%" y="-120%" width="340%" height="340%">
+              <filter id={`lueur-${marque}`} filterUnits="userSpaceOnUse"
+                x={-RAYON_TETE} y={-RAYON_TETE}
+                width={RAYON_TETE * 2} height={RAYON_TETE * 2}>
                 <feGaussianBlur stdDeviation={yeuxDuSkin.lueur.rayon} result="flou" />
                 <feFlood floodColor={yeuxDuSkin.lueur.couleur} result="teinte" />
                 <feComposite in="teinte" in2="flou" operator="in" result="halo" />
