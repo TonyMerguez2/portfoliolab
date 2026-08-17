@@ -961,35 +961,6 @@ const CASQUE = {
   cerclage: 13,
   /** Le bouton du menton, seul détail de la coque. */
   bouton: { x: 52, y: 82, r: 8.5 },
-  /**
-   * Les deux lanières qui rejoignent le bord de la coque, à hauteur des yeux.
-   *
-   * ⚠️ **Elles partent de *sous* le cerclage, pas de son bord.** `depuis` vaut 70 quand le
-   * cerclage commence à 78 : les huit unités de recouvrement sont ce qui fait passer la
-   * sangle *derrière* l'anneau plutôt que de l'y aboucher. Calées bord à bord, le moindre
-   * arrondi d'antialiasing laissait paraître un cheveu de coque entre les deux, et la
-   * lanière se lisait comme une pièce rapportée.
-   *
-   * ⚠️ **Elles débordent la silhouette de cinq unités.** Le détourage les coupe net contre
-   * l'arête : sans ce débord, leur extrémité arrondie restait visible et la sangle semblait
-   * s'arrêter juste avant le bord, ce qui est exactement l'inverse de ce qu'on veut dire.
-   *
-   * ⚠️ **Centrées sur le regard, et de sa hauteur.** Les yeux tiennent dans
-   * `y ∈ [−35 ; 38,7]` ; la lanière occupe le tiers médian, ce qui la fait passer *au
-   * niveau* du regard. Plus haute, elle deviendrait une visière dans la visière ; plus
-   * basse, une mentonnière.
-   */
-  laniere: { y: -22, hauteur: 46, rayon: 10, depuis: 70, debord: 5 },
-};
-
-/** Une lanière, d'un côté ou de l'autre. `cote` vaut −1 à gauche, 1 à droite. */
-const laniere = (cote: -1 | 1, retrait = 0) => {
-  const l = CASQUE.laniere;
-  const bout = 100 + l.debord;
-  const large = bout - l.depuis;
-  return rectangle(cote === -1 ? -bout + retrait : l.depuis + retrait,
-                   l.y + retrait, large - 2 * retrait,
-                   l.hauteur - 2 * retrait, Math.max(0, l.rayon - retrait));
 };
 
 /**
@@ -1118,31 +1089,6 @@ const ASTRONAUTE: Skin = {
         { a: 1, couleur: chromeDe(p.tete).creux },
       ],
     },
-    /**
-     * Les lanières, vues comme des cylindres couchés — **un dégradé par côté**.
-     *
-     * ⚠️ **Un dégradé radial ne peut pas éclairer deux objets éloignés de son centre.** La
-     * première version en partageait un, calé près de l'axe : mesuré, les deux sangles y
-     * tombaient entre 128 % et 155 % du rayon, c'est-à-dire au-delà du dernier arrêt. Elles
-     * prenaient donc uniformément la couleur du creux — deux barres presque noires, tout
-     * l'inverse du métal recherché. C'est la limite propre au radial, et c'est pourquoi il en
-     * faut deux : chacun centré juste au-dessus de sa sangle, chacune retrouve sa chute
-     * complète du vif au creux.
-     *
-     * ⚠️ **Resserré sur sa hauteur, pas sur celle de la tête.** Les dégradés du cerclage
-     * s'étalent sur trois cent quarante unités ; sur les quarante-six d'une sangle, ils n'en
-     * traverseraient qu'un dixième et la laisseraient presque unie.
-     */
-    ...([-1, 1] as const).map(cote => ({
-      id: cote === -1 ? "chromeLaniereG" : "chromeLaniereD",
-      cx: cote * 88, cy: -46, r: 78,
-      arrets: [
-        { a: 0, couleur: chromeDe(p.tete).vif },
-        { a: 0.4, couleur: chromeDe(p.tete).clair },
-        { a: 0.48, couleur: chromeDe(p.tete).sombre },
-        { a: 1, couleur: chromeDe(p.tete).creux },
-      ],
-    })),
     {
       /**
        * Le ciel dans la visière : une lueur froide au sommet du verre.
@@ -1201,10 +1147,11 @@ const ASTRONAUTE: Skin = {
     decoupe: "visiere",
   }),
   /**
-   * ⚠️ **La région `metal` a disparu avec le reflet qu'elle bornait.** Elle réunissait le
-   * cerclage et les deux lanières pour qu'une même lueur les parcoure d'un seul tenant.
-   * Depuis que chaque pièce porte son propre dégradé de matière, cette lueur d'ensemble ne
-   * servait plus qu'à aplatir ce que les autres venaient de creuser.
+   * ⚠️ **Une seule région : le casque n'a que sa visière à borner.** Il y en a eu une
+   * seconde, `metal`, qui réunissait le cerclage et deux lanières latérales pour qu'un même
+   * reflet les parcoure d'un seul tenant. Les lanières sont retirées, et chaque pièce porte
+   * désormais son propre dégradé de matière : cette lueur d'ensemble ne servait plus qu'à
+   * aplatir ce que les autres venaient de creuser.
    */
   decoupes: () => [{ id: "visiere", d: visiere() }],
   plats: p => {
@@ -1253,27 +1200,6 @@ const ASTRONAUTE: Skin = {
        */
       { d: ellipse(0, 0, 150, 150), couleur: coque },
       { d: ellipse(0, 0, 150, 150), degrade: "coque" },
-      /**
-       * Les deux lanières, **avant** le cerclage.
-       *
-       * ⚠️ **L'ordre fait tout le récit ici.** Dessinées après, elles chevaucheraient
-       * l'anneau et se liraient comme deux pattes collées par-dessus ; dessinées avant, le
-       * cerclage les recouvre et l'œil conclut qu'elles passent derrière lui — une seule
-       * sangle qui traverse le casque, plutôt que deux morceaux.
-       */
-      ...([-1, 1] as const).flatMap(cote => [
-        { d: laniere(cote, -2.5), couleur: logement },
-        /**
-         * ⚠️ **Une seule pièce, là où elle en avait trois.** La sangle reprenait le
-         * feuilletage du cerclage ; sur quarante-six unités de haut, trois bandes se
-         * réduisent à des rayures et c'est précisément ce qu'on nous reprochait. Un
-         * cylindre n'a pas de gorges : un dégradé du vif au creux sur sa hauteur suffit à
-         * le galber, et il tient encore à quarante pixels quand trois bandes n'y survivent
-         * pas.
-         */
-        { d: laniere(cote),
-          degrade: cote === -1 ? "chromeLaniereG" : "chromeLaniereD" },
-      ]),
       /* Le logement, débordant de trois unités : la rainure où le cerclage s'assied. */
       { d: rectangle(-100 + h.cote - 3, -100 + h.haut - 3,
                      200 - 2 * h.cote + 6, 200 - h.haut - h.bas + 6, h.rayon + 3),
