@@ -573,6 +573,34 @@ const vitre = (marge = 0) => {
 };
 
 /**
+ * Deux traits de lumière en biais : le reflet d'une fenêtre sur une vitre.
+ *
+ * ⚠️ **C'est ce qui fait lire du *verre* plutôt qu'un trou peint.** La dalle du terminal et
+ * la visière du casque étaient toutes deux des aplats très sombres nuancés au centre — donc
+ * des surfaces mates. Un halo dit « ça éclaire », un vignettage dit « c'est bombé » ; seul
+ * un reflet dit « il y a quelque chose *devant* ». C'est la couche qui manquait aux deux, et
+ * c'est la même : partagée plutôt que recopiée, elle ne peut pas diverger.
+ *
+ * ⚠️ **Deux traits inégaux, jamais un seul, jamais trois.** Un trait unique se lit comme une
+ * rayure ou comme un défaut de rendu. Deux — un large et un fin, parallèles — se lisent
+ * immédiatement comme le montant et la traverse d'une fenêtre : c'est un idiome, et l'œil le
+ * décode sans y penser. Au-delà de deux, on retombe sur des rayures.
+ *
+ * ⚠️ **Ils traversent de part en part, en débordant largement.** Ils courent de −110 à 110
+ * quand la vitre en fait à peine 130 : c'est le détourage qui décide où ils commencent et
+ * finissent. Bornés à la vitre, leurs quatre coins seraient visibles et le reflet se lirait
+ * comme un ruban collé dessus.
+ *
+ * ⚠️ **Vingt-sept degrés de la verticale, et cette valeur n'est pas libre.** Trop droit, le
+ * reflet devient une bande de balayage de plus ; trop couché, il devient un horizon. Cette
+ * pente-là est celle d'une vitre debout éclairée par une fenêtre haute — c'est aussi, à peu
+ * près, celle de tous les reflets d'icône, ce qui la rend familière.
+ */
+const refletDeVitre = () =>
+  "M-72 -110L-30 -110L30 110L-12 110Z"
+  + "M-16 -110L0 -110L60 110L44 110Z";
+
+/**
  * Une matière : la *teinte* choisie, à la clarté et à la saturation qu'on lui impose.
  *
  * ⚠️ **Désaturer est le geste qui fait le métal.** `decalerClarte` seul rendait un vert
@@ -676,6 +704,27 @@ const TERMINAL: Skin = {
         arrets: [
           { a: 0, couleur: phosphore, opacite: 0.16 },
           { a: 1, couleur: phosphore, opacite: 0 },
+        ],
+      },
+      {
+        /**
+         * Le reflet, qui s'éteint en descendant vers la droite.
+         *
+         * ⚠️ **Blanc, et non phosphore, contrairement à tout le reste de ce skin.** Un
+         * reflet n'est pas de la lumière *émise* par l'écran, c'est de la lumière ambiante
+         * renvoyée par sa vitre : lui donner la teinte du tube en aurait fait une troisième
+         * source verte, et l'écran aurait paru s'allumer par plaques. C'est le raisonnement
+         * qui laisse déjà le balayage en noir pur — une ombre n'a pas de teinte.
+         *
+         * ⚠️ **Deux fois plus faible que celui du casque.** La dalle porte déjà un halo, une
+         * bande lente et un peigne ; un reflet appuyé y aurait fait une quatrième chose à
+         * regarder. La visière du casque, elle, est nue : elle peut le porter franchement.
+         */
+        id: "reflet", cx: -58, cy: -84, r: 190,
+        arrets: [
+          { a: 0, couleur: "#FFFFFF", opacite: 0.055 },
+          { a: 0.55, couleur: "#FFFFFF", opacite: 0.02 },
+          { a: 1, couleur: "#FFFFFF", opacite: 0 },
         ],
       },
       {
@@ -812,6 +861,16 @@ const TERMINAL: Skin = {
        */
       { d: ellipse(0, -150, 150, 26), degrade: "bande", classe: "novac-crt-bande",
         decoupe: "dalle" },
+      /**
+       * Le reflet de la vitre, **sous** le vignettage.
+       *
+       * ⚠️ **Sous lui, alors qu'une vitre est physiquement devant.** Posé par-dessus, le
+       * reflet gardait toute sa force jusqu'à l'arête de la dalle et s'y coupait net, ce qui
+       * le faisait paraître collé. Le vignettage l'éteint dans les angles, exactement comme
+       * le ferait la courbure du verre. On perd une vérité optique, on gagne l'impression
+       * qu'on cherchait — et c'est l'impression qui est le sujet.
+       */
+      { d: refletDeVitre(), degrade: "reflet", decoupe: "dalle" },
       // Le vignettage par-dessus les lignes : il assombrit les bords, lignes comprises.
       { d: ellipse(0, 0, 150, 150), degrade: "vignette", decoupe: "dalle" },
       ...barres,
@@ -1002,6 +1061,23 @@ const ASTRONAUTE: Skin = {
       ],
     },
     {
+      /**
+       * Le reflet sur la visière : la même fenêtre que sur l'écran du terminal.
+       *
+       * ⚠️ **Deux fois plus fort que celui du terminal, et c'est voulu.** La visière est
+       * nue — pas de balayage, pas de bande qui descend, rien qu'un verre noir. Elle peut
+       * porter un reflet franc, là où la dalle du terminal aurait eu une quatrième chose à
+       * montrer. Une même couche, deux intensités : c'est la surface qui décide, pas
+       * l'envie d'uniformiser.
+       */
+      id: "reflet", cx: -58, cy: -84, r: 190,
+      arrets: [
+        { a: 0, couleur: "#FFFFFF", opacite: 0.11 },
+        { a: 0.55, couleur: "#FFFFFF", opacite: 0.04 },
+        { a: 1, couleur: "#FFFFFF", opacite: 0 },
+      ],
+    },
+    {
       /** Le vignettage de la visière, qui la bombe en la fermant sur ses bords. */
       id: "creuxVisiere", cx: 0, cy: -14, r: 104,
       arrets: [
@@ -1098,6 +1174,9 @@ const ASTRONAUTE: Skin = {
       // La visière opaque : à partir d'ici, tout est détouré par elle.
       { d: visiere(), couleur: verre },
       { d: ellipse(0, 0, 150, 150), degrade: "verre", decoupe: "visiere" },
+      /* Le reflet sous le vignettage, pour la raison dite au terminal : c'est lui qui
+         l'éteint dans les angles au lieu de le laisser s'y couper net. */
+      { d: refletDeVitre(), degrade: "reflet", decoupe: "visiere" },
       { d: ellipse(0, 0, 150, 150), degrade: "creuxVisiere", decoupe: "visiere" },
       /**
        * Le bouton du menton — un anneau creux, jamais une pastille pleine.

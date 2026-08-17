@@ -319,6 +319,33 @@ describe("skins", () => {
     expect(ecartAuGris(coque("#C09A4A"))).toBeGreaterThan(15);
   });
 
+  /**
+   * ⚠️ **Le reflet est *une* couche employée deux fois, pas deux couches qui se
+   * ressemblent.** C'est la leçon la plus chère de ce fichier : chaque fois qu'un même
+   * dessin a été recopié — les `<defs>` du banc, le liseré des cartes, le conteneur des
+   * fenêtres — les copies ont fini par diverger, et toujours à l'écran plutôt qu'en test.
+   * Ce test tient le partage lui-même : si quelqu'un remplace un appel par un tracé écrit à
+   * la main pour « juste ajuster un peu », il échoue.
+   *
+   * ⚠️ **Et il vérifie que les deux intensités restent ordonnées.** La dalle du terminal
+   * porte déjà un halo, une bande et un peigne ; sa vitre doit renvoyer moins que la
+   * visière du casque, qui est nue. Uniformiser les deux serait le réflexe de quelqu'un qui
+   * range, et ferait une quatrième chose à regarder sur un écran qui en a déjà trois.
+   */
+  it("pose le même reflet sur la dalle du terminal et sur la visière du casque", () => {
+    const couche = (cle: string) => {
+      const s = skinParCle(cle);
+      return s.plats!(s.palette).find(m => m.degrade === "reflet")!;
+    };
+    expect(couche("terminal").d).toBe(couche("astronaute").d);
+
+    const force = (cle: string) => {
+      const s = skinParCle(cle);
+      return s.degrades!(s.palette).find(g => g.id === "reflet")!.arrets[0].opacite!;
+    };
+    expect(force("terminal")).toBeLessThan(force("astronaute"));
+  });
+
   it("retombe sur l'uni pour une clé inconnue, au lieu de lever", () => {
     expect(skinParCle("n'existe pas").cle).toBe("uni");
   });
