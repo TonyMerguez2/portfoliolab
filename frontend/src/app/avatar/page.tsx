@@ -455,6 +455,24 @@ export default function AvatarProceduralPage() {
     return s.decoupes ? s.decoupes(palette) : [];
   }, [skin, palette]);
 
+  /**
+   * Le traitement des yeux demandé par le skin — sa teinte, et sa lueur.
+   *
+   * ⚠️ **Le banc peignait `palette.yeux` brut, donc il mentait.** Vu à l'écran : « quand je
+   * mets skin terminal, affiche la bonne couleur des yeux comme dans le header, car ce
+   * n'est pas la bonne couleur là ». Le terminal dérive ses yeux de la couleur réglée
+   * (`decalerClarte(tete, 0.38)`) et leur pose un halo ; ignorer `Skin.yeux` donnait donc
+   * une teinte étrangère et aucun rayonnement. C'est la troisième couche que cette copie du
+   * rendu oublie après les dégradés et les découpes — la même cause à chaque fois.
+   */
+  const yeuxDuSkin = useMemo(() => {
+    const s = skinParCle(skin);
+    return s.yeux ? s.yeux(palette) : null;
+  }, [skin, palette]);
+
+  /** ⚠️ La teinte du skin l'emporte, la palette reste le repli. Voir `AvatarNovac`. */
+  const couleurYeuxFinale = yeuxDuSkin?.couleur ?? palette.yeux;
+
   /** Les aplats plats du skin, détourés par la silhouette et jamais recalculés. */
   const aplats = useMemo(() => {
     const s = skinParCle(skin);
@@ -814,7 +832,7 @@ export default function AvatarProceduralPage() {
                 * flotteraient à l'intérieur du disque et se liraient comme des taches
                 * posées dessus, jamais comme un globe.
                 */}
-              {aplats.length > 0 && (
+              {(aplats.length > 0 || yeuxDuSkin?.lueur) && (
                 <>
                   <defs>
                     <clipPath id="av-tete">
@@ -845,6 +863,20 @@ export default function AvatarProceduralPage() {
                         ))}
                       </radialGradient>
                     ))}
+                    {yeuxDuSkin?.lueur && (
+                      /* ⚠️ La boîte du filtre est élargie : rogné à celle des capsules, le
+                         flou serait coupé net et donnerait un halo carré. */
+                      <filter id="av-lueur" x="-120%" y="-120%" width="340%" height="340%">
+                        <feGaussianBlur stdDeviation={yeuxDuSkin.lueur.rayon} result="flou" />
+                        <feFlood floodColor={yeuxDuSkin.lueur.couleur} result="teinte" />
+                        <feComposite in="teinte" in2="flou" operator="in" result="halo" />
+                        <feMerge>
+                          <feMergeNode in="halo" />
+                          <feMergeNode in="halo" />
+                          <feMergeNode in="SourceGraphic" />
+                        </feMerge>
+                      </filter>
+                    )}
                   </defs>
                   <g clipPath="url(#av-tete)">
                     {aplats.map((m, i) => (
@@ -928,8 +960,17 @@ export default function AvatarProceduralPage() {
                   })}
                 </g>
               )}
-              <path d={oeilGauche} fill={palette.yeux} />
-              <path d={oeilDroit} fill={palette.yeux} />
+              {/**
+                * ⚠️ **Détourés par la silhouette seulement quand ils rayonnent.** Un halo
+                * non contenu déborderait du carré et en trahirait le contour. Sans lueur le
+                * détourage ne changerait rien et coûterait un groupe de plus.
+                */}
+              <g clipPath={yeuxDuSkin?.lueur ? "url(#av-tete)" : undefined}
+                filter={yeuxDuSkin?.lueur ? "url(#av-lueur)" : undefined}
+                className={yeuxDuSkin?.classe}>
+                <path d={oeilGauche} fill={couleurYeuxFinale} />
+                <path d={oeilDroit} fill={couleurYeuxFinale} />
+              </g>
               {/**
                 * L'accessoire en dernier, et dans le même groupe que le reste.
                 *
