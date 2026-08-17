@@ -1460,12 +1460,20 @@ const CHEVALIER: Skin = {
     const a = acierDe(p.tete);
     const rivets: MotifPlat[] = [];
     /**
-     * Les rivets, en deux touches chacun.
+     * Les rivets : un logement sombre, une tête claire, **concentriques**.
      *
-     * ⚠️ **Un disque sombre puis un disque clair décalé, jamais un cercle contourné.** Un
-     * contour donne un anneau, c'est-à-dire un trou ; un disque clair posé en haut à gauche
-     * d'un disque sombre donne une tête bombée qui capte la même lumière que le reste. Deux
-     * tracés de plus par rivet, et l'objet cesse d'être percé pour être assemblé.
+     * ⚠️ **La tête était décalée de (−0,7 ; −0,9) pour figurer un bombé, et c'était une
+     * faute.** Sur un logement de 5,6 unités et une tête de 4,2, ce décalage laissait
+     * l'anneau à 2,54 unités d'un côté contre 0,26 de l'autre : un rapport de dix pour un.
+     * À la taille rendue, personne n'y lit un dôme — on y lit une pièce mal posée, et c'est
+     * exactement ce qui a été signalé. L'œil juge très finement l'égalité de deux distances,
+     * et très mal la direction d'un éclairage sur douze pixels.
+     *
+     * ⚠️ **Un relief se peint, il ne se décale pas.** C'est la même erreur que le cheveu
+     * blanc du terminal et que le filet clair de la lèvre de fente : simuler un volume par
+     * un artifice de position ou de trait, là où seule la valeur peut le dire. À cette
+     * échelle un rivet n'est qu'un disque clair cerné de sombre — et le dégradé général du
+     * heaume suffit à ce que ceux du haut soient plus clairs que ceux du bas.
      */
     /**
      * ⚠️ **Chaque rivet est centré dans la plaque qu'il tient, et pas seulement en `x`.**
@@ -1480,7 +1488,7 @@ const CHEVALIER: Skin = {
     for (const [x, y] of [[-72, -58], [-44, -58], [44, -58], [72, -58],
                           [-76, 20], [76, 20], [-74, 63], [74, 63]] as const) {
       rivets.push({ d: ellipse(x, y, 5.6, 5.6), couleur: a.creux });
-      rivets.push({ d: ellipse(x - 0.7, y - 0.9, 4.2, 4.2), couleur: a.clair });
+      rivets.push({ d: ellipse(x, y, 4.3, 4.3), couleur: a.clair });
     }
     const v = HEAUME.ventail;
     const fentes: MotifPlat[] = [];
