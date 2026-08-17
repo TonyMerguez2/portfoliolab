@@ -17,7 +17,7 @@ import {
 import {
   ACCESSOIRES, CASQUETTE_REFERENCE, type FamilleAccessoire, cheminsCasquette, contraste,
 } from "@/lib/avatarAccessoires";
-import { PRESETS, SKINS, type Palette, skinParCle } from "@/lib/avatarSkins";
+import { PRESETS, SKINS, type Palette, skinParCle, skinPourForme } from "@/lib/avatarSkins";
 import { type EtatVie, VIE_AU_REPOS, creerVie } from "@/lib/avatarVie";
 import { useMorphose } from "@/lib/useMorphose";
 import { ETATS } from "@/lib/avatarEtats";
@@ -231,14 +231,6 @@ export default function AvatarProceduralPage() {
   const [tangage, setTangage] = useState(0);
   const [roulis, setRoulis] = useState(0);
   const [grille, setGrille] = useState(true);
-  /**
-   * L'arrondi de la silhouette : 1 pour la sphère, moins pour le carré à coins ronds.
-   *
-   * ⚠️ Un seul nombre, et non une liste de formes. Le disque et le carré sont les deux
-   * bouts d'un même réglage, ce qui rend toutes les valeurs intermédiaires disponibles
-   * — et surtout animables, le jour où la tête devra passer de l'une à l'autre.
-   */
-  const [silhouette, setSilhouette] = useState(ARRONDI_REFERENCE);
   const [formeTete, setFormeTete] = useState<FamilleSolide>("sphere");
   /** Le solide tourne-t-il pour de bon, ou seule son image est-elle étirée ? */
   const [vraie3D, setVraie3D] = useState(false);
@@ -253,7 +245,13 @@ export default function AvatarProceduralPage() {
    */
   const morphose = useMorphose(formeTete);
   const solideDe = useCallback(
-    (f: FamilleSolide) => solideDepuis(f, f === "sphere" ? 1 : silhouette), [silhouette]);
+    /**
+     * ⚠️ **L'arrondi est celui de référence, il ne se règle plus.** La sphère reste à 1 —
+     * c'est sa définition, pas un choix — et les autres formes prennent la valeur que
+     * l'application emploie partout ailleurs. Le banc montre donc ce que le portefeuille
+     * montrera, ce qui n'était pas garanti tant qu'un curseur pouvait les désaccorder.
+     */
+    (f: FamilleSolide) => solideDepuis(f, f === "sphere" ? 1 : ARRONDI_REFERENCE), []);
   const solideTete = useMemo(
     () => (morphose
       ? melangerSolides(solideDe(morphose.de), solideDe(formeTete), morphose.part)
@@ -306,7 +304,7 @@ export default function AvatarProceduralPage() {
    * peut changer *après* le choix du skin, la sélection doit aussi savoir se retirer.
    */
   const skinsOfferts = useMemo(
-    () => SKINS.filter(x => !x.rond || formeTete === "sphere"),
+    () => SKINS.filter(x => skinPourForme(x, formeTete)),
     [formeTete]);
   const [palette, setPalette] = useState<Palette>(skinParCle("uni").palette);
 
@@ -445,6 +443,18 @@ export default function AvatarProceduralPage() {
     })),
     [motifs, solideTete, vraie3D]);
 
+  /** Les dégradés que les aplats désignent par leur nom. */
+  const degrades = useMemo(() => {
+    const s = skinParCle(skin);
+    return s.degrades ? s.degrades(palette) : [];
+  }, [skin, palette]);
+
+  /** Les régions nommées du skin — la dalle du terminal, par exemple. */
+  const decoupes = useMemo(() => {
+    const s = skinParCle(skin);
+    return s.decoupes ? s.decoupes(palette) : [];
+  }, [skin, palette]);
+
   /** Les aplats plats du skin, détourés par la silhouette et jamais recalculés. */
   const aplats = useMemo(() => {
     const s = skinParCle(skin);
@@ -457,11 +467,11 @@ export default function AvatarProceduralPage() {
     setPalette(skinParCle(cle).palette);
   }, []);
 
-  /** Changer de forme retire le skin s'il ne valait que pour la sphère. */
+  /** Changer de forme retire le skin s'il ne vaut pas pour la nouvelle. */
   const choisirForme = useCallback((cle: FamilleSolide) => {
     setFormeTete(cle);
     setSkin(courant => {
-      if (cle === "sphere" || !skinParCle(courant).rond) return courant;
+      if (skinPourForme(skinParCle(courant), cle)) return courant;
       setPalette(skinParCle("uni").palette);
       return "uni";
     });
@@ -810,10 +820,39 @@ export default function AvatarProceduralPage() {
                     <clipPath id="av-tete">
                       <path d={contourTete} />
                     </clipPath>
+                    {/**
+                      * ⚠️ **Le banc doit monter les mêmes `<defs>` que le composant, parce
+                      * qu'il a sa propre copie du rendu.** Il n'emploie pas `AvatarNovac` —
+                      * il lui faut le maillage, les axes et la morphose, que le composant
+                      * n'a pas — et cette copie a un coût : un skin qui gagne des dégradés
+                      * ne les gagne qu'à moitié. Sans ces trois lignes, le terminal s'y
+                      * affichait sans son halo ni son vignettage, et l'écran de réglage
+                      * mentait sur ce que l'application montrerait.
+                      *
+                      * ⚠️ Les identifiants ne sont pas préfixés ici, contrairement au
+                      * composant : le banc n'affiche qu'un seul avatar, et deux instances
+                      * ne peuvent pas s'y voler leur dégradé.
+                      */}
+                    {decoupes.map(c => (
+                      <clipPath key={c.id} id={c.id}><path d={c.d} /></clipPath>
+                    ))}
+                    {degrades.map(g => (
+                      <radialGradient key={g.id} id={g.id} gradientUnits="userSpaceOnUse"
+                        cx={g.cx} cy={g.cy} r={g.r}>
+                        {g.arrets.map((a, i) => (
+                          <stop key={i} offset={a.a} stopColor={a.couleur}
+                            stopOpacity={a.opacite ?? 1} />
+                        ))}
+                      </radialGradient>
+                    ))}
                   </defs>
                   <g clipPath="url(#av-tete)">
                     {aplats.map((m, i) => (
-                      <path key={i} d={m.d} fill={m.couleur}
+                      <path key={i} d={m.d}
+                        fill={m.degrade ? `url(#${m.degrade})` : (m.couleur ?? "none")}
+                        opacity={m.opacite} className={m.classe}
+                        fillRule={m.regleDeRemplissage}
+                        clipPath={m.decoupe ? `url(#${m.decoupe})` : undefined}
                         stroke={m.trait ?? "none"} strokeWidth={m.epaisseur ?? 0}
                         strokeLinejoin="round" strokeLinecap="round" />
                     ))}
@@ -1350,29 +1389,18 @@ export default function AvatarProceduralPage() {
               </p>
             </div>
 
-            {formeTete !== "sphere" && (
-              <div style={{ marginTop: 16 }}>
-                <Curseur libelle="Arrondi de la silhouette" valeur={silhouette}
-                  affichage={`${Math.round(silhouette * 100)} %`}
-                  min={0} max={1} pas={0.01} onChange={setSilhouette} />
-                <p style={{ margin: "2px 0 0", color: DOUX, fontSize: 12, lineHeight: 1.5 }}>
-                  {vraie3D ? (<>
-                    <b>Le solide tourne pour de bon.</b> Ce qui est peint dessus devient
-                    rigide — la grille et les yeux ne se déforment plus, seule la
-                    perspective les raccourcit. En échange la silhouette respire :
-                    mesuré, environ +20 % d’aire à 45° de lacet. C’est le compromis, et
-                    il n’y a pas de troisième voie : la sphère est la seule forme où la
-                    silhouette et la surface tiennent en place toutes les deux.
-                  </>) : (<>
-                    À 100 %, c’est la sphère. La forme reste inscrite dans le même carré :
-                    elle touche le cercle aux quatre milieux et ne pousse que vers les
-                    coins, si bien que la tête ne change pas de taille en changeant de
-                    forme. En revanche ce qui est peint dessus se tord en tournant —
-                    mesuré, 21,4 % d’écart de gonflement sur un même point.
-                  </>)}
-                </p>
-              </div>
-            )}
+            {/**
+              * ⚠️ **Le curseur d'arrondi de silhouette est retiré, à la demande.** Il
+              * laissait régler la « rondeur » de chaque forme entre le disque et l'angle
+              * vif. Ce qu'il coûtait : toutes les silhouettes étaient recalculées à chaque
+              * cran, et le solide reconstruit avec — pour un réglage dont aucune valeur
+              * intermédiaire n'a jamais servi. Chaque forme garde donc la sienne,
+              * `ARRONDI_REFERENCE`, celle que l'application employait déjà.
+              *
+              * Ce qu'on perd, et qu'il faut savoir : la morphose d'une forme à l'autre
+              * passait par ce même nombre, et reste possible — c'est le curseur qui part,
+              * pas la mécanique.
+              */}
           </Carte>
 
           <Carte

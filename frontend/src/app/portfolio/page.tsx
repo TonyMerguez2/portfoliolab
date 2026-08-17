@@ -58,7 +58,7 @@ import JournalCompte from "@/components/portfolio/JournalCompte";
 import { BASE_COMPACTE, PLACE_COMPACTE, parleEnContexteDense } from "@/lib/avatarDialogue";
 import { useParoleStable } from "@/lib/useParoleStable";
 import { useSalutArrivee } from "@/lib/useSalutArrivee";
-import { skinParCle } from "@/lib/avatarSkins";
+import { skinParCle, skinPourForme } from "@/lib/avatarSkins";
 import {
   type FormeAvatar, useCouleurAvatar, useFormeAvatar, useSkinAvatar,
 } from "@/lib/useCouleurAvatar";
@@ -506,7 +506,7 @@ function PortfolioPageInner() {
 
   const choisirForme = useCallback((v: FormeAvatar) => {
     choisirFormeAvatar(v);
-    if (v !== "sphere" && skinParCle(skinAvatar).rond) choisirSkinAvatar("uni");
+    if (!skinPourForme(skinParCle(skinAvatar), v)) choisirSkinAvatar("uni");
   }, [choisirFormeAvatar, choisirSkinAvatar, skinAvatar]);
 
   const [prices,        setPrices]        = useState<Record<string, PriceData>>({});

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { HAUT_FOND, SKINS, TERRES, contourTerre, skinParCle } from "./avatarSkins";
+import { HAUT_FOND, TERRES, contourTerre, skinParCle, skinPourForme } from "./avatarSkins";
 
 /**
  * La Terre se lit-elle comme une planète ?
@@ -132,8 +132,9 @@ describe("le skin", () => {
     }
   });
 
-  it("se déclare réservé à la sphère, et reste le seul", () => {
-    expect(skinParCle("terre").rond).toBe(true);
-    expect(SKINS.filter(s => s.rond).map(s => s.cle)).toEqual(["terre"]);
+  it("se déclare réservé à la sphère", () => {
+    expect(skinParCle("terre").formes).toEqual(["sphere"]);
+    expect(skinPourForme(skinParCle("terre"), "sphere")).toBe(true);
+    expect(skinPourForme(skinParCle("terre"), "carre")).toBe(false);
   });
 });

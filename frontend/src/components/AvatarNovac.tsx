@@ -393,6 +393,37 @@ export default function AvatarNovac({
       : [];
   }, [skin, teteRendue, yeuxRendus]);
 
+  /** Les dégradés que les aplats désignent, et le traitement des yeux du skin. */
+  const degrades = useMemo(() => {
+    const s = skinParCle(skin);
+    return s.degrades
+      ? s.degrades({ tete: teteRendue, accent: s.palette.accent, yeux: yeuxRendus }) : [];
+  }, [skin, teteRendue, yeuxRendus]);
+
+  const decoupes = useMemo(() => {
+    const s = skinParCle(skin);
+    return s.decoupes
+      ? s.decoupes({ tete: teteRendue, accent: s.palette.accent, yeux: yeuxRendus }) : [];
+  }, [skin, teteRendue, yeuxRendus]);
+
+  const yeuxDuSkin = useMemo(() => {
+    const s = skinParCle(skin);
+    return s.yeux
+      ? s.yeux({ tete: teteRendue, accent: s.palette.accent, yeux: yeuxRendus }) : null;
+  }, [skin, teteRendue, yeuxRendus]);
+
+  /**
+   * ⚠️ **Le remplissage d'un aplat : son dégradé s'il en nomme un, sa couleur sinon.**
+   * L'identifiant est préfixé par `marque`, pour la raison dite plus haut — deux avatars
+   * sur la même page partageraient sinon le premier dégradé déclaré.
+   */
+  const remplissage = useCallback(
+    (m: { degrade?: string; couleur?: string }) =>
+      m.degrade ? `url(#${m.degrade}-${marque})` : (m.couleur ?? "none"),
+    [marque]);
+
+  const couleurYeuxFinale = yeuxDuSkin?.couleur ?? yeuxRendus;
+
   const oeil = useCallback((fermeture: number, cote: -1 | 1) => {
     // ⚠️ La taille globale multiplie **aussi** l'écart : ne redimensionner que les
     // capsules resserrerait le regard à mesure qu'il grandit.
@@ -424,22 +455,65 @@ export default function AvatarNovac({
           reste une sphère, et c'est son image qu'on comprime le temps d'un rebond. */}
       <g transform={`scale(${vie.echelleX.toFixed(4)} ${vie.echelleY.toFixed(4)})`}>
         <path d={contourTete} fill={teteRendue} />
-        {aplats.length > 0 && (
-          <>
-            <defs>
-              <clipPath id={`tete-${marque}`}><path d={contourTete} /></clipPath>
-            </defs>
-            <g clipPath={`url(#tete-${marque})`}>
-              {aplats.map((m, i) => (
-                <path key={i} d={m.d} fill={m.couleur}
-                  stroke={m.trait ?? "none"} strokeWidth={m.epaisseur ?? 0}
-                  strokeLinejoin="round" strokeLinecap="round" />
-              ))}
-            </g>
-          </>
+        {(aplats.length > 0 || yeuxDuSkin?.lueur) && (
+          <defs>
+            <clipPath id={`tete-${marque}`}><path d={contourTete} /></clipPath>
+            {degrades.map(g => (
+              <radialGradient key={g.id} id={`${g.id}-${marque}`}
+                gradientUnits="userSpaceOnUse" cx={g.cx} cy={g.cy} r={g.r}>
+                {g.arrets.map((a, i) => (
+                  <stop key={i} offset={a.a} stopColor={a.couleur}
+                    stopOpacity={a.opacite ?? 1} />
+                ))}
+              </radialGradient>
+            ))}
+            {decoupes.map(c => (
+              <clipPath key={c.id} id={`${c.id}-${marque}`}><path d={c.d} /></clipPath>
+            ))}
+            {yeuxDuSkin?.lueur && (
+              /**
+               * ⚠️ **La lueur déborde de sa boîte, il faut donc l'agrandir.** Un filtre est
+               * rogné à la boîte de son objet : à taille par défaut, le flou serait coupé
+               * net au bord des capsules et donnerait un halo carré. Les yeux sont petits,
+               * la marge peut donc être large sans rien coûter.
+               */
+              <filter id={`lueur-${marque}`} x="-120%" y="-120%" width="340%" height="340%">
+                <feGaussianBlur stdDeviation={yeuxDuSkin.lueur.rayon} result="flou" />
+                <feFlood floodColor={yeuxDuSkin.lueur.couleur} result="teinte" />
+                <feComposite in="teinte" in2="flou" operator="in" result="halo" />
+                <feMerge>
+                  <feMergeNode in="halo" />
+                  <feMergeNode in="halo" />
+                  <feMergeNode in="SourceGraphic" />
+                </feMerge>
+              </filter>
+            )}
+          </defs>
         )}
-        <path d={oeil(vie.fermetureGauche, -1)} fill={yeuxRendus} />
-        <path d={oeil(vie.fermetureDroite, 1)} fill={yeuxRendus} />
+        {aplats.length > 0 && (
+          <g clipPath={`url(#tete-${marque})`}>
+            {aplats.map((m, i) => (
+              <path key={i} d={m.d} fill={remplissage(m)} className={m.classe}
+                opacity={m.opacite} fillRule={m.regleDeRemplissage}
+                clipPath={m.decoupe ? `url(#${m.decoupe}-${marque})` : undefined}
+                stroke={m.trait ?? "none"} strokeWidth={m.epaisseur ?? 0}
+                strokeLinejoin="round" strokeLinecap="round" />
+            ))}
+          </g>
+        )}
+        {/**
+          * ⚠️ **Les yeux qui rayonnent sont détourés par la silhouette, les autres non.**
+          * Un halo non contenu déborderait du carré et en trahirait le contour — c'est
+          * précisément ce qu'on s'est interdit de toucher. Le détourage n'est posé que
+          * lorsqu'il y a une lueur : sans elle, il ne changerait rien et ajouterait un
+          * groupe à chaque avatar de la page.
+          */}
+        <g clipPath={yeuxDuSkin?.lueur ? `url(#tete-${marque})` : undefined}
+          filter={yeuxDuSkin?.lueur ? `url(#lueur-${marque})` : undefined}
+          className={yeuxDuSkin?.classe}>
+          <path d={oeil(vie.fermetureGauche, -1)} fill={couleurYeuxFinale} />
+          <path d={oeil(vie.fermetureDroite, 1)} fill={couleurYeuxFinale} />
+        </g>
       </g>
     </svg>
   );

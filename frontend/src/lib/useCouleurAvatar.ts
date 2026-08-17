@@ -1,8 +1,14 @@
 "use client";
 import { useCallback, useEffect, useState } from "react";
 
-import { COULEUR_PAR_DEFAUT, estCouleurValide } from "@/lib/avatarCouleur";
-import { SKINS } from "@/lib/avatarSkins";
+/**
+ * ⚠️ **Chemins relatifs et non l'alias « @/ ».** Vitest tourne sans configuration dans ce
+ * dépôt et ne le résout pas : un test qui importe d'ici échouait au chargement, sur une
+ * erreur de paquet introuvable qui ne disait rien du vrai problème. C'est déjà la règle
+ * de `dossiers.ts`, pour la même raison.
+ */
+import { COULEUR_PAR_DEFAUT, estCouleurValide } from "./avatarCouleur";
+import { SKINS } from "./avatarSkins";
 
 /**
  * L'apparence d'un portefeuille, telle que son avatar la porte : sa couleur, sa forme.

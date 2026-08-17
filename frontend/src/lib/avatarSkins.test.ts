@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 
-import { PRESETS, SKINS, skinParCle } from "./avatarSkins";
+import { ECRAN, PRESETS, SKINS, skinParCle, skinPourForme } from "./avatarSkins";
+import { FORMES_AVATAR } from "./useCouleurAvatar";
+import { clartePercue, contraste } from "./couleur";
 import {
   RAYON_TETE, type Vec3, carreauCube, cheminSurLaTete, cheminsSurLaTete,
   grandCercle, ruban,
@@ -124,9 +126,150 @@ describe("carreauCube", () => {
   });
 });
 
+/** La couleur d'essai du terminal, et les couches qu'on lui compare. */
+const TERMINAL_ESSAI = { tete: "#5C8A3C", accent: "#000000", yeux: "#000000" };
+
+/**
+ * Le plus bas relevé des yeux, sur cinquante images — clignements et regard compris.
+ *
+ * ⚠️ **Une mesure, pas une estimation.** La valeur vient d'un relevé de l'enveloppe des
+ * yeux pendant l'animation : `x ∈ [−38,3 ; 31,3]`, `y ∈ [−35 ; 38,7]`. Elle est écrite ici
+ * pour que le jour où quelqu'un rétrécit la dalle afin d'élargir le bandeau, le test
+ * échoue avant que les yeux ne soient rognés à l'écran.
+ */
+const OEIL_LE_PLUS_BAS = 38.7;
+
+/**
+ * Le boîtier et la dalle du terminal, retrouvés par leur géométrie et non par leur rang.
+ *
+ * ⚠️ **La dalle est l'aplat opaque dont le tracé est exactement la région découpée.** C'est
+ * la seule caractérisation stable : elle survit à l'insertion d'une couche, alors qu'un
+ * index se décale au premier ajout — ce qui vient précisément d'arriver deux fois.
+ */
+function couchesDuTerminal() {
+  const skin = skinParCle("terminal");
+  const plats = skin.plats!(TERMINAL_ESSAI);
+  const region = skin.decoupes!(TERMINAL_ESSAI)[0].d;
+  return {
+    boitier: plats[0].couleur!,
+    dalle: plats.find(m => m.d === region && m.couleur)!.couleur!,
+  };
+}
+
 describe("skins", () => {
-  it("propose l'uni, les trois ballons et la Terre", () => {
-    expect(SKINS.map(s => s.cle)).toEqual(["uni", "basket", "volley", "tennis", "terre"]);
+  it("propose l'uni, les trois ballons, la Terre et le terminal", () => {
+    expect(SKINS.map(s => s.cle))
+      .toEqual(["uni", "basket", "volley", "tennis", "terre", "terminal"]);
+  });
+
+  /**
+   * ⚠️ **Le terminal est réservé au carré arrondi, et c'est une demande explicite.** Son
+   * écran — vignettage, halo, balayage — est composé pour une surface à peu près carrée ;
+   * détouré par un triangle ou une goutte, il ne raconte plus un moniteur. Le laisser
+   * partout aurait produit des images fausses sur sept formes pour en servir une.
+   */
+  it("réserve le terminal au carré arrondi", () => {
+    expect(skinPourForme(skinParCle("terminal"), "carre")).toBe(true);
+    /**
+     * ⚠️ **Le nom de la géométrie compte autant que celui des réglages.** Le carré
+     * s'appelle `cube` côté solides, et le banc d'essai parle cette langue-là : sans la
+     * table de synonymes, le skin y était introuvable — constaté à l'écran, aucun message.
+     */
+    expect(skinPourForme(skinParCle("terminal"), "cube")).toBe(true);
+    for (const f of ["sphere", "coussin", "hexagone", "triangle", "etoile", "goutte"]) {
+      expect(skinPourForme(skinParCle("terminal"), f)).toBe(false);
+    }
+  });
+
+  /**
+   * ⚠️ Les clés de forme ne sont pas vérifiées par le compilateur — voir la note sur
+   * `Skin.formes`. Ce test tient ce rôle : une faute de frappe rendrait le skin
+   * introuvable sur toutes les formes, sans qu'aucune erreur ne le signale.
+   */
+  it("ne nomme que des formes qui existent", () => {
+    for (const s of SKINS) {
+      for (const f of s.formes ?? []) expect(FORMES_AVATAR).toContain(f);
+    }
+  });
+
+  /**
+   * ⚠️ **Tout l'écran se déduit de la couleur choisie, rien n'est écrit en dur.** C'est ce
+   * qui permet au terminal d'être ambre ou bleu sans qu'on y retouche : un skin qui
+   * poserait ses propres teintes rendrait le réglage de couleur sans effet sur lui.
+   *
+   * ⚠️ **Le test nomme les couches qu'il compare, au lieu de toutes les balayer.** Sa
+   * première version exigeait qu'aucune couleur ne soit commune aux deux versions, et
+   * tombait sur les noirs du balayage et du cadre — qui sont volontairement fixes, parce
+   * qu'une ombre n'a pas de teinte. Comparer en bloc, c'était comparer ce qui ne doit pas
+   * changer.
+   *
+   * ⚠️ **Le halo se cherche par son identifiant, pas par son rang.** Il était lu à
+   * `degrades[0]` ; l'ajout de l'éclairage du boîtier en tête de liste a fait échouer ce
+   * test sur une couche volontairement achromatique — un faux négatif provoqué par une
+   * insertion, pas par une régression. Un dégradé porte déjà un nom pour être désigné par
+   * les aplats : s'en servir ici rend le test insensible à l'ordre.
+   */
+  it("accorde le fond, le halo et les yeux à la couleur choisie", () => {
+    const skin = skinParCle("terminal");
+    const pour = (tete: string) => {
+      const p = { tete, accent: "#000000", yeux: "#000000" };
+      return {
+        fond: skin.plats!(p)[0].couleur!,
+        halo: skin.degrades!(p).find(g => g.id === "halo")!.arrets[0].couleur,
+        yeux: skin.yeux!(p).couleur,
+      };
+    };
+    const vert = pour("#5C8A3C");
+    const ambre = pour("#B08A2E");
+    expect(vert.fond).not.toBe(ambre.fond);
+    expect(vert.halo).not.toBe(ambre.halo);
+    expect(vert.yeux).not.toBe(ambre.yeux);
+  });
+
+  /**
+   * ⚠️ **L'écran éteint est presque noir, et les yeux nettement plus clairs que lui.**
+   * C'est ce qui distingue un moniteur d'une pastille colorée : la teinte réglée ne peint
+   * pas la dalle, elle dit ce qui s'y allume. Sans cet écart, le symbole redevient un carré
+   * vert uni sur lequel les yeux ne se détachent plus.
+   */
+  it("garde le fond du terminal presque noir et les yeux lumineux", () => {
+    const { dalle } = couchesDuTerminal();
+    const yeux = skinParCle("terminal").yeux!(TERMINAL_ESSAI).couleur;
+    expect(clartePercue(dalle)).toBeLessThan(clartePercue("#5C8A3C"));
+    expect(clartePercue(yeux)).toBeGreaterThan(clartePercue(dalle) + 40);
+  });
+
+  /**
+   * ⚠️ **Le défaut que ce test retient est passé deux fois.** Le tour du terminal a d'abord
+   * été peint *plus sombre* que la dalle — `#070A04` contre `#10180B`, un rapport de 1,10 —
+   * au motif qu'un cadre sombre « laisse la dalle être la seule chose qu'on regarde ». À
+   * l'écran il n'existait pas : l'utilisateur a signalé deux fois qu'il n'y avait « que
+   * l'écran sur toute la forme ». Un skin peut se tromper de teinte sans qu'aucun test ne
+   * s'en aperçoive, parce qu'un hexadécimal différent suffit à faire croire à une
+   * différence ; c'est le *contraste* qu'il faut mesurer, jamais l'égalité des chaînes.
+   *
+   * ⚠️ **Deux pour la carrosserie, et l'ordre du rapport est vérifié aussi.** Sans la
+   * seconde assertion, un boîtier redevenu plus sombre passerait le seuil et le défaut
+   * reviendrait à l'identique. Le rapport de contraste est symétrique : il dit qu'elles
+   * diffèrent, pas laquelle est la plus claire.
+   */
+  it("rend le boîtier du terminal nettement plus clair que sa dalle", () => {
+    const { boitier, dalle } = couchesDuTerminal();
+    expect(contraste(boitier, dalle)).toBeGreaterThanOrEqual(2);
+    expect(clartePercue(boitier)).toBeGreaterThan(clartePercue(dalle));
+  });
+
+  /**
+   * ⚠️ **La dalle ne descend pas jusqu'aux yeux, et c'est mesuré, pas supposé.** Sur
+   * cinquante relevés — clignements et regard compris — les yeux tiennent dans
+   * `y ∈ [−35 ; 38,7]`. Rétrécir la vitre pour agrandir le bandeau finirait par leur
+   * couper le bas, et la consigne était explicite : ne pas toucher à leur géométrie. Ce
+   * test transforme cette marge en invariant, pour que le prochain réglage de proportion
+   * échoue ici plutôt qu'à l'écran.
+   */
+  it("laisse la dalle du terminal déborder sous les yeux", () => {
+    /* Le repère va de −100 à 100 : le bas de la vitre est à 100 moins son retrait. */
+    expect(100 - ECRAN.dalle.bas).toBeGreaterThan(OEIL_LE_PLUS_BAS + 10);
   });
 
   it("retombe sur l'uni pour une clé inconnue, au lieu de lever", () => {

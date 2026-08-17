@@ -1,6 +1,9 @@
 import {
   type Vec3, carreauCube, grandCercle, ruban, tournerTete,
 } from "./avatarSpherique";
+import {
+  decalerClarte, hexVersRvb, rvbVersHex, rvbVersTsl, tslVersRvb,
+} from "./couleur";
 
 /**
  * Les habillages de la tête — et pourquoi ce ne sont pas des images.
@@ -41,9 +44,76 @@ export type Palette = { tete: string; accent: string; yeux: string };
 export type MotifPlat = {
   /** Le tracé, en unités de surface sur une tête de rayon 100. */
   d: string;
-  couleur: string;
+  /** La couleur de remplissage. Omise quand `degrade` prend sa place. */
+  couleur?: string;
   trait?: string;
   epaisseur?: number;
+  /**
+   * Le dégradé qui remplit l'aplat, à la place de `couleur`.
+   *
+   * ⚠️ **Une clé, pas une valeur.** Un dégradé SVG vit dans les `<defs>` et se désigne par
+   * un identifiant ; or cet identifiant doit être unique **par avatar**, sans quoi deux
+   * portefeuilles affichés côte à côte se partagent le premier déclaré. Le skin nomme donc
+   * son dégradé localement, et c'est le rendu qui préfixe.
+   */
+  degrade?: string;
+  opacite?: number;
+  /** Une classe CSS, pour les animations qui vivent dans la feuille globale. */
+  classe?: string;
+  /**
+   * La règle de remplissage, quand un tracé se creuse d'un trou.
+   *
+   * ⚠️ **`evenodd` sert à faire un tour sans le dessiner.** Un grand rectangle et une dalle
+   * dans le même `d` : la seconde perce le premier, et ce qui reste est exactement la bande
+   * qui les sépare. Sans elle, la règle par défaut remplirait tout et la dalle
+   * disparaîtrait sous le tour.
+   */
+  regleDeRemplissage?: "evenodd";
+  /**
+   * Un détourage nommé, en plus de celui de la silhouette.
+   *
+   * ⚠️ **Parce qu'un skin peut avoir des régions, pas seulement des couches.** Le terminal
+   * en a deux : la dalle, où vivent le balayage et le halo, et le boîtier qui l'entoure.
+   * Sans cette découpe, les lignes couraient sur le boîtier aussi — et c'est exactement ce
+   * qui faisait lire l'objet comme un écran nu plutôt que comme un appareil.
+   */
+  decoupe?: string;
+};
+
+/** Une région nommée, découpée dans la silhouette. Voir `MotifPlat.decoupe`. */
+export type Decoupe = { id: string; d: string };
+
+/**
+ * Un dégradé radial déclaré par un skin.
+ *
+ * ⚠️ **Radial seulement, et c'est suffisant.** Les deux besoins d'un écran — la lueur qui
+ * rayonne du centre et le vignettage qui assombrit les bords — sont le même objet vu dans
+ * les deux sens. Un dégradé linéaire n'aurait servi à rien ici, et un type qui prévoit
+ * tout se paie en cas jamais empruntés.
+ */
+export type Degrade = {
+  /** Nom local ; le rendu le préfixe par avatar. Voir `MotifPlat.degrade`. */
+  id: string;
+  /** Centre et rayon, en unités de surface sur une tête de rayon 100. */
+  cx: number;
+  cy: number;
+  r: number;
+  arrets: { a: number; couleur: string; opacite?: number }[];
+};
+
+/**
+ * Le traitement des yeux, quand un skin en demande un autre que le contraste par défaut.
+ *
+ * ⚠️ **La couleur seulement, jamais la géométrie.** Forme, taille, écart, inclinaison et
+ * position restent l'affaire du composant : un skin qui pourrait les déplacer finirait par
+ * le faire, et les yeux sont ce qui rend ce symbole reconnaissable.
+ */
+export type Yeux = {
+  couleur: string;
+  /** Une émission lumineuse autour des yeux, en unités de surface. */
+  lueur?: { rayon: number; couleur: string };
+  /** Une classe CSS posée sur le groupe des yeux, pour animer cette lueur. */
+  classe?: string;
 };
 
 /** Un aplat découpé sur la sphère, éventuellement en plusieurs morceaux jointifs. */
@@ -59,21 +129,37 @@ export type Skin = {
   cle: string;
   libelle: string;
   /**
-   * Vrai si le skin n'a de sens que sur la sphère.
+   * Les formes sur lesquelles ce skin a un sens. Absent : toutes.
    *
    * ⚠️ **Parce qu'un décor peut dépendre de la forme, alors que les autres n'en dépendent
    * pas.** Les coutures d'un ballon restent des coutures sur n'importe quel volume, un
    * peu tordues mais lisibles. Une carte du monde, non : détourée par un triangle, elle
-   * n'est plus un globe. Le picker le retire donc des choix dès que la tête n'est plus
-   * ronde, plutôt que de laisser produire une image fausse.
+   * n'est plus un globe. Le sélecteur retire donc le skin des choix dès que la tête prend
+   * une forme qu'il ne prévoit pas, plutôt que de laisser produire une image fausse.
+   *
+   * ⚠️ **Une liste, là où il n'y avait qu'un booléen `rond`.** Celui-ci ne savait exprimer
+   * qu'une seule restriction — « la sphère et rien d'autre » — et le terminal en demande
+   * une autre : le carré, et rien d'autre. Ajouter un second drapeau aurait fait deux
+   * mécanismes pour une même question, et le troisième cas les aurait départagés mal.
+   *
+   * ⚠️ **Typée `readonly string[]` et non `FormeAvatar[]`, à contrecœur.** Le type des
+   * formes vit dans `useCouleurAvatar`, qui importe déjà `SKINS` d'ici : le nommer
+   * fermerait un cycle d'imports. Les clés sont vérifiées par un test plutôt que par le
+   * compilateur, ce qui est le prix de ce découpage-là.
    */
-  rond?: boolean;
+  formes?: readonly string[];
   /** La palette proposée au moment où l'on choisit ce skin. Ensuite, à la main. */
   palette: Palette;
   /** Les découpes posées sur la surface, du fond vers le dessus. Vide pour une tête unie. */
   motifs: (p: Palette) => Motif[];
   /** Les aplats plats, détourés par la silhouette. */
   plats?: (p: Palette) => MotifPlat[];
+  /** Les dégradés que les aplats désignent par leur nom. */
+  degrades?: (p: Palette) => Degrade[];
+  /** Les régions que les aplats désignent par leur nom. */
+  decoupes?: (p: Palette) => Decoupe[];
+  /** De quoi peindre les yeux autrement — leur couleur, et une lueur. */
+  yeux?: (p: Palette) => Yeux;
 };
 
 const rad = (d: number) => (d * Math.PI) / 180;
@@ -385,7 +471,7 @@ export function contourTerre(t: Terre, parSegment: number = 10): [number, number
 const TERRE: Skin = {
   cle: "terre",
   libelle: "Terre",
-  rond: true,
+  formes: ["sphere"],
   palette: { tete: "#4A78A8", accent: "#7CC24A", yeux: "#1B2733" },
   motifs: () => [],
   plats: p => {
@@ -398,6 +484,338 @@ const TERRE: Skin = {
   },
 };
 
+/**
+ * Un terminal à tube : une carrosserie, une vitre encastrée, et du phosphore dedans.
+ *
+ * ⚠️ **Un habillage, jamais une forme.** La silhouette appartient à la forme choisie : ses
+ * proportions, son rayon d'angle et la géométrie des yeux ne bougent pas d'un pixel. Ce qui
+ * change est la surface. Le boîtier dessiné ci-dessous est peint *à l'intérieur* du carré,
+ * il ne l'élargit pas et ne l'arrondit pas autrement.
+ *
+ * ⚠️ **Tout est *plat*, et c'est la seule construction juste.** Un écran se peint sur la
+ * vitre, pas sur le volume : le balayage reste horizontal quoi que fasse la tête. C'est ce
+ * que `MotifPlat` garantit — détouré par la silhouette, jamais emporté par la rotation.
+ * Posé sur la sphère comme les coutures d'un ballon, le tube se serait mis à rouler.
+ *
+ * ⚠️ **Les teintes se déduisent de la couleur choisie.** La palette propose un vert de
+ * phosphore, mais les terminaux ambre ont existé : chaque couche est cette même teinte
+ * décalée en clarté, et le boîtier la même désaturée. L'habillage suit la couleur au lieu
+ * de la contredire.
+ *
+ * ⚠️ **Deux régions, et c'est la correction principale de cette passe.** La première
+ * version faisait de la forme entière un écran : le balayage courait jusqu'à l'arête, et
+ * l'on voyait une dalle nue plutôt qu'un appareil. Il y a désormais un *boîtier* et une
+ * *dalle* encastrée dedans, la seconde bornant strictement les couches lumineuses — voir
+ * `decoupes`. Un moniteur se reconnaît à sa carrosserie autant qu'à sa lueur.
+ */
+export const ECRAN = {
+  /** L'écart entre deux lignes de balayage, sur une tête de rayon 100. */
+  pas: 7,
+  /**
+   * ⚠️ **Bien sous la moitié du pas.** Au-delà, le sombre l'emporte et l'on ne lit plus
+   * des lignes sur un écran mais un écran sombre rayé de clair. Deux pixels sur sept
+   * laissent les cinq septièmes du phosphore visibles — un peigne, pas une grille.
+   */
+  trait: 2,
+  /**
+   * La dalle : ses retraits dans un repère qui va de −100 à 100, et son rayon d'angle.
+   *
+   * ⚠️ **Le tour n'est pas d'épaisseur égale : le bas est deux fois et demie plus large.**
+   * C'est la proportion qui *dit* « appareil ». Un cadre régulier se lit comme une marge ;
+   * un bandeau sous la vitre se lit comme la face avant d'un boîtier, celle qui porte les
+   * commandes. Le modèle le montre, et c'est le seul endroit où loger les détails.
+   *
+   * ⚠️ **Mesuré sur les yeux avant d'être choisi.** Sur cinquante relevés, clignements et
+   * regard compris, ils tiennent dans `x ∈ [−38,3 ; 31,3]` et `y ∈ [−35 ; 38,7]`. La dalle
+   * descend à 54 : quinze unités de garde sous l'œil le plus bas. La consigne « ne pas
+   * toucher à leur géométrie » interdisait de les remonter, donc c'est le bandeau qui
+   * s'arrête là où ils commencent, et non l'inverse.
+   *
+   * ⚠️ **Le rayon de la dalle est bien plus petit que celui de la silhouette.** Une vitre
+   * aussi arrondie que le boîtier ne se distingue plus de lui ; un verre est toujours plus
+   * anguleux que la matière qui le tient.
+   */
+  dalle: { cote: 18, haut: 18, bas: 46, rayon: 24 },
+  /*
+   * ⚠️ **Exporté pour être vérifié, pas pour être lu ailleurs.** Aucun composant ne s'en
+   * sert : seul le test des marges y accède, parce que retrouver le bas de la dalle en
+   * relisant le tracé SVG demanderait d'interpréter des `v` et des arcs relatifs — un test
+   * qui casserait au premier changement de construction plutôt qu'au premier changement de
+   * proportion. Une constante nommée est la bonne forme d'une spécification chiffrée.
+   */
+  /** Le bandeau sous la vitre : la grille de gauche s'y borne. */
+  bandeau: { grille: { x: -58, y: 64, largeur: 50, pas: 6, trait: 2.4, nombre: 4 } },
+};
+
+/** Une ellipse, en tracé : deux arcs d'un demi-tour. */
+const ellipse = (cx: number, cy: number, rx: number, ry: number) =>
+  `M${cx - rx} ${cy}a${rx} ${ry} 0 1 0 ${2 * rx} 0a${rx} ${ry} 0 1 0 ${-2 * rx} 0Z`;
+
+/** Un rectangle à coins arrondis, en tracé. */
+const rectangle = (x: number, y: number, l: number, h: number, r: number) =>
+  `M${x + r} ${y}h${l - 2 * r}a${r} ${r} 0 0 1 ${r} ${r}v${h - 2 * r}`
+  + `a${r} ${r} 0 0 1 ${-r} ${r}h${-(l - 2 * r)}a${r} ${r} 0 0 1 ${-r} ${-r}`
+  + `v${-(h - 2 * r)}a${r} ${r} 0 0 1 ${r} ${-r}Z`;
+
+/**
+ * La dalle, en tracé — la même géométrie pour la peindre et pour la détourer.
+ *
+ * ⚠️ **Une fonction, pas une constante.** Elle est appelée au rendu, donc un changement de
+ * `ECRAN.dalle` se propage partout sans qu'aucune copie ne subsiste. Le `retrait` grandi de
+ * quelques unités sert au creux : c'est le seul endroit qui s'en écarte, et il le fait par
+ * un calcul lisible plutôt que par un second tracé écrit à la main.
+ */
+const vitre = (marge = 0) => {
+  const d = ECRAN.dalle;
+  return rectangle(-100 + d.cote - marge, -100 + d.haut - marge,
+                   200 - 2 * d.cote + 2 * marge,
+                   200 - d.haut - d.bas + 2 * marge, d.rayon + marge);
+};
+
+/**
+ * La teinte du boîtier : la couleur choisie, désaturée et ramenée à une clarté donnée.
+ *
+ * ⚠️ **Désaturer est le geste qui fait le métal.** `decalerClarte` seul rendait un vert
+ * sombre — la première version du tour valait `#070A04` contre `#10180B` pour la dalle,
+ * cinq pour cent d'écart, et l'utilisateur ne l'a pas vu du tout. Un boîtier n'est pas la
+ * même matière que le phosphore : il ne rougeoie pas, il *reflète*. On garde donc la teinte
+ * à un dixième de sa saturation — assez pour que la couleur réglée le colore encore, trop
+ * peu pour qu'il ait l'air allumé — et c'est la clarté seule qui le sépare de l'écran.
+ *
+ * ⚠️ **Plus clair que la dalle, jamais plus sombre.** C'est la leçon de la version
+ * précédente : un tour plus sombre que l'écran ne se lit pas comme un cadre, il se lit
+ * comme du vide, et l'objet redevient une dalle flottante.
+ */
+const metal = (hex: string, clarte: number): string => {
+  const [teinte, saturation] = rvbVersTsl(hexVersRvb(hex));
+  return rvbVersHex(tslVersRvb([teinte, saturation * 0.1, clarte]));
+};
+
+const TERMINAL: Skin = {
+  cle: "terminal",
+  libelle: "Terminal",
+  /**
+   * ⚠️ **Réservé au carré arrondi, et à lui seul.** L'appareil est composé pour une surface
+   * à peu près carrée : le bandeau suppose un bord bas droit, le vignettage suit les quatre
+   * côtés de la vitre, et le balayage a besoin d'une largeur constante pour se lire comme un
+   * peigne. Détouré par un triangle ou une goutte, il ne raconte plus un moniteur — le
+   * bandeau se pince en pointe et la grille sort de la silhouette. Sept images fausses pour
+   * en servir une : c'est ce que `formes` existe pour empêcher.
+   */
+  formes: ["carre"],
+  /**
+   * Le vert d'un tube au phosphore.
+   *
+   * ⚠️ **C'est la teinte *allumée* qui est réglée, pas le fond.** L'écran éteint est
+   * presque noir, et sa couleur ne vient que de ce qui s'y allume : régler le noir aurait
+   * été régler ce qu'on ne voit pas. Le fond et le boîtier se déduisent donc de cette
+   * teinte — voir `plats`.
+   */
+  palette: { tete: "#5C8A3C", accent: "#7CFF9B", yeux: "#8BFFA8" },
+  motifs: () => [],
+  degrades: p => {
+    const phosphore = decalerClarte(p.tete, 0.3);
+    return [
+      {
+        /**
+         * La lumière qui tombe sur le boîtier : claire en haut à gauche, éteinte en bas.
+         *
+         * ⚠️ **Une seule source, en haut à gauche, comme partout ailleurs dans
+         * l'application.** Les cartes, les pastilles et les liserés supposent tous cette
+         * direction ; un boîtier éclairé d'ailleurs se serait remarqué sans qu'on sache dire
+         * pourquoi. L'écart reste faible : il s'agit de donner du volume à la carrosserie,
+         * pas d'y dessiner un reflet qui concurrencerait l'écran.
+         */
+        id: "boitier", cx: -70, cy: -95, r: 235,
+        arrets: [
+          { a: 0, couleur: "#FFFFFF", opacite: 0.13 },
+          { a: 0.55, couleur: "#FFFFFF", opacite: 0.03 },
+          { a: 1, couleur: "#000000", opacite: 0.16 },
+        ],
+      },
+      {
+        /**
+         * Le halo du centre : le faisceau qui insiste au milieu de la dalle.
+         *
+         * ⚠️ **Centré sur la dalle, pas sur la tête.** La vitre n'est plus concentrique à la
+         * silhouette depuis que le bandeau lui prend le bas : son milieu est à −14. Un halo
+         * resté à zéro aurait éclairé le bord bas et laissé le haut terne, ce qui se lit
+         * comme une tache et non comme un faisceau.
+         */
+        id: "halo", cx: 0, cy: -20, r: 96,
+        arrets: [
+          { a: 0, couleur: phosphore, opacite: 0.22 },
+          { a: 0.45, couleur: phosphore, opacite: 0.1 },
+          { a: 1, couleur: phosphore, opacite: 0 },
+        ],
+      },
+      {
+        /**
+         * La bande du balayage lent : une lueur large et molle qui descend l'écran.
+         *
+         * ⚠️ **Étirée en ellipse plate plutôt que peinte en bande nette.** Un rectangle
+         * clair qui descend se lit comme un objet qui passe devant l'écran ; une lueur sans
+         * bord se lit comme une brillance *dans* le tube, ce qui est le phénomène qu'on
+         * imite. Le dégradé s'éteint à 100 %, donc la bande n'a aucune arête.
+         */
+        id: "bande", cx: 0, cy: 0, r: 55,
+        arrets: [
+          { a: 0, couleur: phosphore, opacite: 0.16 },
+          { a: 1, couleur: phosphore, opacite: 0 },
+        ],
+      },
+      {
+        /**
+         * Le vignettage, qui va dans l'autre sens : transparent au centre, sombre au bord.
+         *
+         * ⚠️ **Il commence tard — à 55 % — et c'est ce qui le rend discret.** Amorcé au
+         * centre, il grise toute la dalle et l'écran paraît sale plutôt que courbe.
+         */
+        id: "vignette", cx: 0, cy: -14, r: 100,
+        arrets: [
+          { a: 0, couleur: "#000000", opacite: 0 },
+          { a: 0.55, couleur: "#000000", opacite: 0 },
+          { a: 1, couleur: "#000000", opacite: 0.5 },
+        ],
+      },
+    ];
+  },
+  /**
+   * ⚠️ **Les yeux ne sont plus des trous, ce sont des pixels allumés.** C'est la seule
+   * entorse assumée à la règle des préréglages — « les yeux sont des trous, une teinte vive
+   * en fait des pupilles peintes ». Sur un écran, l'inverse est vrai : ce qui se voit est
+   * ce qui émet, et un trou noir sur une dalle noire ne se verrait pas du tout. Leur
+   * géométrie, elle, n'est pas touchée : `Yeux` ne porte qu'une couleur et une lueur.
+   */
+  yeux: p => ({
+    couleur: decalerClarte(p.tete, 0.38),
+    lueur: { rayon: 3.4, couleur: decalerClarte(p.tete, 0.3) },
+    classe: "novac-crt-yeux",
+  }),
+  /**
+   * La dalle, comme région : ce qui est peint dedans n'en sort pas.
+   *
+   * ⚠️ **Déclarée ici et non recopiée dans chaque aplat.** Quatre couches s'y détourent — le
+   * halo, le peigne, la bande, le vignettage. Écrite quatre fois, la géométrie de l'écran
+   * aurait quatre occasions de diverger au premier changement de proportion ; passant par
+   * `vitre()`, qui sert aussi à *peindre* la dalle, le trou et le verre ne peuvent pas se
+   * désaligner.
+   */
+  decoupes: () => [{ id: "dalle", d: vitre() }],
+  plats: p => {
+    /**
+     * ⚠️ **Tout se déduit de la couleur choisie, rien n'est écrit en dur.** La dalle est
+     * cette teinte très assombrie, le phosphore la même éclaircie, le boîtier la même
+     * désaturée : un terminal ambre ou bleu s'obtient en changeant la couleur, sans toucher
+     * à ce fichier. Un skin qui poserait ses propres teintes rendrait le réglage de couleur
+     * sans effet sur lui.
+     */
+    const dalle = decalerClarte(p.tete, -0.32);
+    const phosphore = decalerClarte(p.tete, 0.3);
+    /**
+     * Les deux clartés du boîtier : sa masse, et ses creux.
+     *
+     * ⚠️ **Le relief se fait par l'ombre seule, jamais par une arête claire.** Il y a eu
+     * une troisième valeur — un cheveu clair posé au-dessus de la vitre, sous les fentes de
+     * la grille, en haut de la touche — pour imiter un bord biseauté. À l'écran ce n'étaient
+     * pas des arêtes, c'étaient des **lignes blanches translucides** posées sur l'objet, et
+     * l'utilisateur les a vues comme telles. La raison tient à l'échelle : un biseau
+     * n'existe qu'au-dessus d'une certaine largeur de trait, et en dessous il ne reste que
+     * le trait. Le creux sombre suffit à enfoncer la vitre — c'est l'ombre qui porte le
+     * relief, la lumière n'était qu'un doublon coûteux.
+     *
+     * ⚠️ **Le rapport de contraste entre le corps et la dalle vaut 2,02, et un test le
+     * garde.** Le premier tour valait 1,10 : mathématiquement différent, visuellement rien.
+     * Deux aplats sombres voisins ont besoin d'à peu près 2 pour se séparer à soixante-trois
+     * pixels — la taille du bandeau, là où cet avatar est le plus souvent regardé.
+     */
+    const corps = metal(p.tete, 0.28);
+    const creux = metal(p.tete, 0.16);
+    const lignes: MotifPlat[] = [];
+    /**
+     * ⚠️ **Le peigne déborde largement de la dalle, et il le faut.** Il court de −130 à 130
+     * quand la vitre s'arrête à 54 : le détourage le coupe, et les lignes des extrémités
+     * restent entières. Bornées au cadre, la dernière paraissait rognée.
+     */
+    for (let y = -130; y <= 130; y += ECRAN.pas) {
+      lignes.push({ d: `M-140 ${y}h280v${ECRAN.trait}h-280Z`, couleur: "#000000",
+                    opacite: 0.22, decoupe: "dalle" });
+    }
+    const g = ECRAN.bandeau.grille;
+    const barres: MotifPlat[] = [];
+    /**
+     * La grille du bandeau : quelques traits fins, sous la vitre, à gauche.
+     *
+     * ⚠️ **Des traits, et pas un haut-parleur dessiné.** Le modèle porte une grille percée,
+     * des vis et une molette ; reproduits, ils tombent sous le pixel à quarante et
+     * deviennent une bouillie grise. Quatre lignes espacées de six unités survivent à la
+     * réduction en devenant une *texture* — on ne les compte plus, mais on lit encore
+     * « surface travaillée », ce qui est tout ce qu'on leur demande.
+     *
+     * ⚠️ **Un seul trait sombre par fente, sans reflet dessous.** Le doublage clair censé
+     * les creuser produisait quatre lignes blanches translucides en travers du bandeau —
+     * bien plus visibles que les fentes qu'elles devaient souligner.
+     */
+    for (let i = 0; i < g.nombre; i++) {
+      barres.push({ d: rectangle(g.x, g.y + i * g.pas, g.largeur, g.trait, g.trait / 2),
+                    couleur: creux });
+    }
+    return [
+      /**
+       * ⚠️ **Le boîtier est peint par le skin, il n'est pas la couleur de la tête.** La
+       * silhouette est remplie par le composant avec la teinte réglée ; ce premier aplat
+       * opaque, détouré comme les autres, la recouvre entièrement. C'est ce qui permet à
+       * l'appareil d'être gris tout en suivant la couleur choisie — sans quoi il aurait
+       * fallu donner aux skins le droit de repeindre la tête, c'est-à-dire de défaire un
+       * réglage de l'utilisateur.
+       */
+      { d: ellipse(0, 0, 150, 150), couleur: corps },
+      // La lumière sur la carrosserie, avant que la vitre ne s'y encastre.
+      { d: ellipse(0, 0, 150, 150), degrade: "boitier" },
+      /**
+       * Le creux où la vitre est posée : la dalle élargie de trois unités, en plus sombre.
+       *
+       * ⚠️ **Un aplat derrière, et non un contour.** Un `stroke` se serait centré sur le
+       * tracé, donc à moitié caché sous la vitre — invisible pour cette moitié-là, et
+       * d'épaisseur variable à l'écran selon la taille de rendu. Un rectangle débordant de
+       * trois unités donne une rainure d'épaisseur exacte que la dalle recouvre proprement.
+       */
+      { d: vitre(3), couleur: creux },
+      // La dalle éteinte, opaque : à partir d'ici, tout est détouré par elle.
+      { d: vitre(), couleur: dalle },
+      // Le halo ensuite : la lueur du faisceau, sous le balayage.
+      { d: ellipse(0, 0, 150, 150), degrade: "halo", classe: "novac-crt-halo",
+        decoupe: "dalle" },
+      // Le balayage, qui traverse la lueur au lieu de s'y interrompre.
+      ...lignes,
+      /**
+       * La bande lente, entre le balayage et le vignettage.
+       *
+       * ⚠️ **Sous le vignettage, sinon elle éclaire les coins en passant.** Le vignettage
+       * doit rester la dernière parole sur les bords : une lueur qui repasse par-dessus lui
+       * ferait clignoter les angles à chaque tour, ce qui est exactement le genre de détail
+       * qu'on ne remarque qu'après l'avoir vu vingt fois.
+       */
+      { d: ellipse(0, -150, 150, 26), degrade: "bande", classe: "novac-crt-bande",
+        decoupe: "dalle" },
+      // Le vignettage par-dessus les lignes : il assombrit les bords, lignes comprises.
+      { d: ellipse(0, 0, 150, 150), degrade: "vignette", decoupe: "dalle" },
+      ...barres,
+      /**
+       * La touche et son témoin, à droite du bandeau.
+       *
+       * ⚠️ **Un seul point allumé, et il emprunte la couleur du phosphore.** Une seconde
+       * source lumineuse d'une autre teinte aurait concurrencé les yeux, qui sont le sujet.
+       * En reprenant exactement la teinte de l'écran, le témoin passe pour une diode du même
+       * appareil, et l'avatar garde une seule couleur — ce qui compte d'autant plus qu'il
+       * est le plus souvent affiché à quarante pixels.
+       */
+      { d: rectangle(10, g.y - 2, 42, 20, 7), couleur: creux },
+      { d: ellipse(70, g.y + 8, 5.5, 5.5), couleur: creux },
+      { d: ellipse(70, g.y + 8, 3, 3), couleur: phosphore, opacite: 0.75 },
+    ];
+  },
+};
 const UNI: Skin = {
   cle: "uni",
   libelle: "Uni",
@@ -405,7 +823,33 @@ const UNI: Skin = {
   motifs: () => [],
 };
 
-export const SKINS: Skin[] = [UNI, BASKET, VOLLEY, TENNIS, TERRE];
+export const SKINS: Skin[] = [UNI, BASKET, VOLLEY, TENNIS, TERRE, TERMINAL];
+
+/**
+ * Ce skin convient-il à cette forme ?
+ *
+ * ⚠️ **Une seule fonction pour trois appelants.** La question se posait à trois endroits —
+ * la liste proposée par le banc d'essai, et les deux endroits où changer de forme doit
+ * retirer un skin devenu impossible — chacun avec sa propre écriture du test. Trois
+ * copies d'une condition finissent par diverger, et celle-ci décide de ce qu'on voit.
+ */
+/**
+ * ⚠️ **Le carré porte deux noms dans ce dépôt, et il a fallu s'y heurter pour le voir.**
+ * Les réglages l'appellent `carre` — c'est ce que lit un portefeuille — quand la géométrie
+ * l'appelle `cube`, nom de la famille de solides dont il est tiré. Le banc d'essai parle la
+ * seconde langue, l'application la première. Un skin déclaré sur `carre` disparaissait donc
+ * du banc sans qu'aucune erreur ne le dise.
+ *
+ * La table ne répare pas la cause : deux vocabulaires pour une même forme restent deux
+ * vocabulaires, et les renommer touche à la couche géométrique. Elle la contient à un seul
+ * endroit, celui où la question se pose, et les skins n'écrivent que le nom des réglages.
+ */
+const SYNONYMES_DE_FORME: Record<string, string> = { cube: "carre" };
+
+export function skinPourForme(s: Skin, forme: string): boolean {
+  const nom = SYNONYMES_DE_FORME[forme] ?? forme;
+  return !s.formes || s.formes.indexOf(nom) >= 0;
+}
 
 export function skinParCle(cle: string): Skin {
   for (let i = 0; i < SKINS.length; i++) if (SKINS[i].cle === cle) return SKINS[i];

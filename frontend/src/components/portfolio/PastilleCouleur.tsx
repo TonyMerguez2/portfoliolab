@@ -1,4 +1,7 @@
+import { useId } from "react";
+
 import { decalerClarte } from "@/lib/couleur";
+import type { Decoupe, Degrade, MotifPlat } from "@/lib/avatarSkins";
 
 /**
  * Une pastille de couleur bombée, comme sur la référence.
@@ -124,18 +127,49 @@ export function PastillePlus({
  * rayonner, et lui en imposer une aurait teinté l'océan ou les terres au hasard.
  */
 export function PastilleSkin({
-  contour, aplats, fond, taille = 34, retenue = false, titre, onClick,
+  contour, aplats, fond, degrades = [], decoupes = [], rayon = "50%",
+  taille = 34, retenue = false, titre, onClick,
 }: {
   /** La silhouette, dans un repère centré de rayon 100. */
   contour: string;
-  aplats: { d: string; couleur: string; trait?: string; epaisseur?: number }[];
+  /**
+   * ⚠️ **Le type partagé, et non une copie de sa forme.** Il était réécrit ici à
+   * l'identique ; le jour où `MotifPlat` a gagné un dégradé et une opacité, la copie ne le
+   * savait pas et la compilation s'est arrêtée là — ce qui est la meilleure façon de
+   * découvrir une copie, mais pas la plus économique.
+   */
+  aplats: MotifPlat[];
   /** Le fond sur lequel les aplats se posent — l'océan, pour la Terre. */
   fond: string;
+  /**
+   * Les dégradés et les régions que les aplats désignent par leur nom.
+   *
+   * ⚠️ **Ils étaient volontairement ignorés, et c'est ce qui interdisait le terminal.**
+   * L'aperçu ne servait qu'à la Terre, dont les aplats sont unis ; monter des `<defs>` pour
+   * un bouton de trente-quatre pixels paraissait cher. Le terminal est presque entièrement
+   * fait de dégradés et d'une découpe : sans eux sa pastille était un carré noir. Le coût
+   * réel s'est révélé être une dizaine de lignes, contre une rangée de réglages qui aurait
+   * dû rester incomplète pour toujours.
+   */
+  degrades?: Degrade[];
+  decoupes?: Decoupe[];
+  /**
+   * Le rayon du bouton — rond par défaut.
+   *
+   * ⚠️ **Un habillage se montre sur la silhouette à laquelle il s'applique.** Le globe est
+   * rond et sa pastille l'est aussi ; le terminal n'existe que sur le carré arrondi, et
+   * enfermé dans un disque il perdrait ses quatre coins, c'est-à-dire précisément le
+   * boîtier qu'on veut montrer. La pastille prend donc la forme de ce qu'elle annonce.
+   */
+  rayon?: string;
   taille?: number;
   retenue?: boolean;
   titre?: string;
   onClick?: () => void;
 }) {
+  /** ⚠️ Les identifiants sont uniques par pastille : deux aperçus voisins se
+      partageraient sinon le premier dégradé déclaré, comme dans l'avatar. */
+  const marque = useId().replace(/:/g, "");
   return (
     <button
       type="button"
@@ -144,7 +178,7 @@ export function PastilleSkin({
       aria-label={titre}
       aria-pressed={retenue}
       style={{
-        width: taille, height: taille, borderRadius: "50%", padding: 0, border: 0,
+        width: taille, height: taille, borderRadius: rayon, padding: 0, border: 0,
         cursor: "pointer", flexShrink: 0, position: "relative", overflow: "hidden",
         background: fond,
         boxShadow: [
@@ -158,10 +192,33 @@ export function PastilleSkin({
     >
       <svg viewBox="-100 -100 200 200" width={taille} height={taille}
         aria-hidden="true" style={{ display: "block" }}>
-        <clipPath id={`past-${titre ?? "skin"}`}><path d={contour} /></clipPath>
-        <g clipPath={`url(#past-${titre ?? "skin"})`}>
+        <defs>
+          {degrades.map(g => (
+            <radialGradient key={g.id} id={`${g.id}-${marque}`}
+              gradientUnits="userSpaceOnUse" cx={g.cx} cy={g.cy} r={g.r}>
+              {g.arrets.map((a, i) => (
+                <stop key={i} offset={a.a} stopColor={a.couleur} stopOpacity={a.opacite} />
+              ))}
+            </radialGradient>
+          ))}
+          {decoupes.map(c => (
+            <clipPath key={c.id} id={`${c.id}-${marque}`}><path d={c.d} /></clipPath>
+          ))}
+        </defs>
+        <clipPath id={`past-${marque}`}><path d={contour} /></clipPath>
+        <g clipPath={`url(#past-${marque})`}>
           {aplats.map((m, i) => (
-            <path key={i} d={m.d} fill={m.couleur}
+            /**
+             * ⚠️ **Aucune animation ici : `classe` n'est pas reprise.** Les couches du
+             * terminal qui respirent — le halo, la bande de balayage — porteraient leur
+             * animation jusque dans la rangée de réglages, où trente-quatre pixels
+             * clignoteraient à côté des couleurs. Un aperçu montre le résultat, il ne le
+             * joue pas ; c'est déjà la règle des vignettes de silhouette juste en dessous.
+             */
+            <path key={i} d={m.d} opacity={m.opacite}
+              fill={m.degrade ? `url(#${m.degrade}-${marque})` : m.couleur ?? "none"}
+              clipPath={m.decoupe ? `url(#${m.decoupe}-${marque})` : undefined}
+              fillRule={m.regleDeRemplissage}
               stroke={m.trait ?? "none"} strokeWidth={m.epaisseur ?? 0}
               strokeLinejoin="round" strokeLinecap="round" />
           ))}

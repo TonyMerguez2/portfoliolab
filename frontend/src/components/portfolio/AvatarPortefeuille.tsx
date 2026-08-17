@@ -7,7 +7,7 @@ import PastilleCouleur, {
   PastilleSkin, PastillePlus,
 } from "@/components/portfolio/PastilleCouleur";
 import { COULEURS_AVATAR } from "@/lib/avatarCouleur";
-import { skinParCle } from "@/lib/avatarSkins";
+import { SKINS, skinParCle, skinPourForme } from "@/lib/avatarSkins";
 import { FORMES_AVATAR, type FormeAvatar } from "@/lib/useCouleurAvatar";
 import { useAvatar } from "@/lib/AvatarContext";
 
@@ -76,11 +76,41 @@ export default function AvatarPortefeuille({
    * chose : ce que porte la tête. Sans cela, on cliquerait une couleur sans rien voir
    * changer — le globe la recouvre — et la sélection montrerait deux marques à la fois.
    */
-  /** L'aperçu du globe, calculé une fois : il ne dépend d'aucun réglage. */
-  const apercuTerre = useMemo(() => {
-    const s = skinParCle("terre");
-    return { aplats: s.plats ? s.plats(s.palette) : [], fond: s.palette.tete };
-  }, []);
+  /**
+   * Les habillages proposés pour la silhouette portée, aperçus compris.
+   *
+   * ⚠️ **Une règle, là où il y avait un cas particulier.** Le globe était écrit en dur —
+   * `forme === "sphere" && <PastilleSkin terre>` — ce qui a fait exactement ce qu'un cas
+   * particulier fait toujours : le terminal, ajouté ensuite, n'est jamais apparu dans le
+   * panneau. Chaque skin dit déjà sur quelles formes il a un sens, dans `formes` ; la
+   * rangée n'a plus qu'à le lui demander, et le prochain habillage s'y montrera seul.
+   *
+   * ⚠️ **Chacun est aperçu dans sa propre palette, pas dans la couleur en cours.** C'est le
+   * même raisonnement qu'au banc d'essai : la pastille annonce ce qu'on obtiendra en
+   * cliquant, or cliquer *propose* aussi sa couleur — voir `choisirSkin` dans la page. Un
+   * aperçu teinté du portefeuille aurait promis autre chose que ce que le clic donne.
+   *
+   * ⚠️ **Seuls les habillages *plats* entrent ici, et c'est une limite assumée.** Le ballon
+   * de basket, le volley et le tennis sont découpés sur la sphère : leurs morceaux sont des
+   * points en trois dimensions qu'il faut projeter, ce que seul l'avatar sait faire. La
+   * pastille ne pose que des tracés déjà plats ; les admettre sans les projeter les aurait
+   * montrés comme trois disques unis, c'est-à-dire trois boutons indiscernables. Mesuré :
+   * la première version de ce filtre les laissait passer, et la rangée offrait « Basket »,
+   * « Volley » et « Tennis » sous la forme du même rond orange.
+   */
+  const habillages = useMemo(
+    () => SKINS.filter(s => s.cle !== "uni" && s.plats && skinPourForme(s, forme)).map(s => ({
+      cle: s.cle,
+      libelle: s.libelle,
+      fond: s.palette.tete,
+      aplats: s.plats ? s.plats(s.palette) : [],
+      degrades: s.degrades ? s.degrades(s.palette) : [],
+      decoupes: s.decoupes ? s.decoupes(s.palette) : [],
+      /* Le carré du terminal garde ses coins ; le globe reste rond. */
+      rayon: s.formes && s.formes.indexOf("sphere") < 0 ? "30%" : "50%",
+    })),
+    [forme],
+  );
 
   const choisirCouleur = useCallback((hex: string) => {
     onCouleur(hex);
@@ -227,25 +257,30 @@ export default function AvatarPortefeuille({
                   onClick={() => choisirCouleur(c.hex)} />
               ))}
               {/**
-                * ⚠️ **Le globe est une pastille parmi les couleurs, pas un réglage à
-                * part.** C'est une décision d'usage : il n'y a rien à composer entre une
+                * ⚠️ **Les habillages sont des pastilles parmi les couleurs, pas un réglage
+                * à part.** C'est une décision d'usage : il n'y a rien à composer entre une
                 * couleur et un habillage — l'un recouvre l'autre. Les mettre dans la même
                 * rangée dit exactement cela, un choix unique, là où deux réglages séparés
                 * auraient laissé croire qu'ils se combinent.
                 *
-                * ⚠️ Il ne paraît que sur la forme ronde : détouré par un triangle, il
-                * n'est plus un globe. Et comme la forme peut changer après, le réglage
-                * sait aussi se défaire — voir la page, qui le tient.
+                * ⚠️ Ils ne paraissent que sur les silhouettes qui les portent : le globe
+                * détouré par un triangle n'est plus un globe, le terminal détouré par une
+                * goutte n'est plus un appareil. Et comme la forme peut changer après, le
+                * réglage sait aussi se défaire — voir la page, qui le tient.
                 */}
-              {forme === "sphere" && (
+              {habillages.map(h => (
                 <PastilleSkin
-                  contour={contourDeForme("sphere")}
-                  aplats={apercuTerre.aplats}
-                  fond={apercuTerre.fond}
-                  retenue={skin === "terre"}
-                  titre="Terre"
-                  onClick={() => onSkin("terre")} />
-              )}
+                  key={h.cle}
+                  contour={contourDeForme(forme)}
+                  aplats={h.aplats}
+                  degrades={h.degrades}
+                  decoupes={h.decoupes}
+                  fond={h.fond}
+                  rayon={h.rayon}
+                  retenue={skin === h.cle}
+                  titre={h.libelle}
+                  onClick={() => onSkin(h.cle)} />
+              ))}
             </div>
 
             {/**
@@ -295,8 +330,13 @@ export default function AvatarPortefeuille({
                       * côté attirent l'œil sur le choix qu'on n'a pas encore fait ; un
                       * aperçu est une image de ce qu'on obtiendra, pas une créature.
                       */}
+                    {/* ⚠️ L'habillage n'est repris que là où il tient : ailleurs la
+                        vignette montre la tête unie, c'est-à-dire ce qu'on obtiendra
+                        vraiment en choisissant cette silhouette — la page défait le
+                        réglage au même moment. Le test était écrit `cle === "sphere"`,
+                        ce qui aurait laissé le terminal hors de son propre carré. */}
                     <AvatarNovac taille={26} forme={cle} couleur={couleur}
-                      skin={cle === "sphere" ? skin : "uni"}
+                      skin={skinPourForme(skinParCle(skin), cle) ? skin : "uni"}
                       suivi={false} vivant={false} titre={nom} />
                   </button>
                 );

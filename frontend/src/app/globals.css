@@ -1235,3 +1235,38 @@ canvas + div {
    respirent de six centièmes. Chaque valeur a été baissée jusqu'à ce que le
    mouvement cesse d'attirer le regard tout en restant perceptible si on le
    cherche. */
+
+/* La luminosité du tube, qui n'est jamais parfaitement stable. */
+@keyframes novac-crt-souffle {
+  0%, 100% { opacity: 0.93; }
+  50%      { opacity: 1; }
+}
+
+/* La bande lente qui descend l'écran, puis recommence en haut.
+   ⚠️ Elle part et revient **hors** du cadre : le détourage la fait disparaître
+   avant qu'elle ne se replie, sinon on verrait un saut à chaque tour. */
+@keyframes novac-crt-descente {
+  from { transform: translateY(0); }
+  to   { transform: translateY(310px); }
+}
+
+/* La respiration des yeux — la seule chose vivante de l'écran. */
+@keyframes novac-crt-pupille {
+  0%, 100% { opacity: 0.94; }
+  50%      { opacity: 1; }
+}
+
+.novac-crt-halo   { animation: novac-crt-souffle 6.1s ease-in-out infinite; }
+.novac-crt-bande  { animation: novac-crt-descente 9.7s linear infinite; }
+.novac-crt-yeux   { animation: novac-crt-pupille 4.3s ease-in-out infinite; }
+
+@media (prefers-reduced-motion: reduce) {
+  /* ⚠️ **L'écran reste allumé, il cesse seulement de bouger.** Couper l'animation
+     rend chaque couche à son état de repos, qui est bien l'état visible — le halo
+     à pleine opacité, les yeux allumés. Seule la bande doit être écartée : son
+     repos la place en haut de l'écran, où elle ferait une tache claire immobile
+     que rien n'expliquerait. */
+  .novac-crt-halo,
+  .novac-crt-yeux { animation: none; }
+  .novac-crt-bande { animation: none; opacity: 0; }
+}
