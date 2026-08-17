@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import { ECRAN, PRESETS, SKINS, skinParCle, skinPourForme } from "./avatarSkins";
 import { FORMES_AVATAR } from "./useCouleurAvatar";
-import { clartePercue, contraste } from "./couleur";
+import { clartePercue, contraste, hexVersRvb } from "./couleur";
 import {
   RAYON_TETE, type Vec3, carreauCube, cheminSurLaTete, cheminsSurLaTete,
   grandCercle, ruban,
@@ -157,9 +157,9 @@ function couchesDuTerminal() {
 }
 
 describe("skins", () => {
-  it("propose l'uni, les trois ballons, la Terre et le terminal", () => {
+  it("propose l'uni, les trois ballons, la Terre, le terminal et l'astronaute", () => {
     expect(SKINS.map(s => s.cle))
-      .toEqual(["uni", "basket", "volley", "tennis", "terre", "terminal"]);
+      .toEqual(["uni", "basket", "volley", "tennis", "terre", "terminal", "astronaute"]);
   });
 
   /**
@@ -168,8 +168,12 @@ describe("skins", () => {
    * détouré par un triangle ou une goutte, il ne raconte plus un moniteur. Le laisser
    * partout aurait produit des images fausses sur sept formes pour en servir une.
    */
-  it("réserve le terminal au carré arrondi", () => {
+  it("réserve le terminal et l'astronaute au carré arrondi", () => {
     expect(skinPourForme(skinParCle("terminal"), "carre")).toBe(true);
+    expect(skinPourForme(skinParCle("astronaute"), "carre")).toBe(true);
+    for (const f of ["sphere", "coussin", "hexagone", "triangle", "etoile", "goutte"]) {
+      expect(skinPourForme(skinParCle("astronaute"), f)).toBe(false);
+    }
     /**
      * ⚠️ **Le nom de la géométrie compte autant que celui des réglages.** Le carré
      * s'appelle `cube` côté solides, et le banc d'essai parle cette langue-là : sans la
@@ -270,6 +274,49 @@ describe("skins", () => {
   it("laisse la dalle du terminal déborder sous les yeux", () => {
     /* Le repère va de −100 à 100 : le bas de la vitre est à 100 moins son retrait. */
     expect(100 - ECRAN.dalle.bas).toBeGreaterThan(OEIL_LE_PLUS_BAS + 10);
+  });
+
+  /**
+   * ⚠️ **L'astronaute inverse la valeur du terminal, et c'est ce qui les distingue.** Coque
+   * claire, visière noire, là où le terminal est sombre et lumineux au centre. Posés côte à
+   * côte dans la rangée de réglages ils ne peuvent pas se confondre — ce qu'on ne pourrait
+   * pas dire de deux écrans de teintes différentes. Ce test tient cette inversion : une
+   * coque qui s'assombrirait au fil des retouches ramènerait les deux habillages au même
+   * objet sans que rien ne le signale.
+   */
+  it("garde la coque de l'astronaute claire et sa visière noire", () => {
+    const skin = skinParCle("astronaute");
+    const p = { tete: "#4FA3E3", accent: "#000000", yeux: "#000000" };
+    const plats = skin.plats!(p);
+    const region = skin.decoupes!(p).find(c => c.id === "visiere")!.d;
+    const coque = plats[0].couleur!;
+    const visiere = plats.find(m => m.d === region && m.couleur)!.couleur!;
+    expect(clartePercue(coque)).toBeGreaterThan(80);
+    expect(clartePercue(visiere)).toBeLessThan(12);
+    /* Les yeux doivent se détacher du verre : c'est le seul objet lumineux du casque. */
+    expect(contraste(skin.yeux!(p).couleur, visiere)).toBeGreaterThan(6);
+  });
+
+  /**
+   * ⚠️ **Une couleur presque grise doit donner un casque presque gris.** Les matières de
+   * l'astronaute *imposent* leur saturation au lieu d'en garder une fraction — sans quoi
+   * l'ivoire du modèle était inatteignable à clarté 0,86, la chroma y étant déjà bornée par
+   * le modèle TSL. Mais une teinte reste définie même pour un neutre : `#8E8E93` est
+   * « bleu » à 3 %, et l'imposer à 26 % l'amplifierait huit fois. Le plafond à quatre fois
+   * la saturation d'origine retient les gris ; ce test le vérifie, parce qu'une constante
+   * de ce genre se supprime facilement en croyant simplifier.
+   */
+  it("ne colore pas le casque quand la couleur réglée est presque neutre", () => {
+    const skin = skinParCle("astronaute");
+    const coque = (tete: string) =>
+      skin.plats!({ tete, accent: "#000000", yeux: "#000000" })[0].couleur!;
+    const ecartAuGris = (hex: string) => {
+      const [r, v, b] = hexVersRvb(hex);
+      return Math.max(r, v, b) - Math.min(r, v, b);
+    };
+    /* Le gris reste sage, la couleur franche atteint bien son pigment. */
+    expect(ecartAuGris(coque("#8E8E93"))).toBeLessThan(10);
+    expect(ecartAuGris(coque("#C09A4A"))).toBeGreaterThan(15);
   });
 
   it("retombe sur l'uni pour une clé inconnue, au lieu de lever", () => {

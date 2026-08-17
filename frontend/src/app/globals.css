@@ -1256,9 +1256,22 @@ canvas + div {
   50%      { opacity: 1; }
 }
 
+/* Le clignotement de veille du casque : une diode, pas un tube.
+
+   ⚠️ **Plus lent et plus creusé que celui du terminal.** Le phosphore d'un tube
+   respire vite et peu — c'est l'alimentation qui ondule. Une diode derrière un
+   verre ne fait pas cela : elle tient sa valeur puis retombe franchement, comme
+   un témoin de veille. Reprendre la même animation aurait donné deux objets qui
+   clignent à l'unisson, ce qui les aurait fait paraître de la même matière. */
+@keyframes novac-casque-veille {
+  0%, 62%, 100% { opacity: 1; }
+  80%           { opacity: 0.72; }
+}
+
 .novac-crt-halo   { animation: novac-crt-souffle 6.1s ease-in-out infinite; }
 .novac-crt-bande  { animation: novac-crt-descente 9.7s linear infinite; }
 .novac-crt-yeux   { animation: novac-crt-pupille 4.3s ease-in-out infinite; }
+.novac-casque-yeux { animation: novac-casque-veille 7.4s ease-in-out infinite; }
 
 @media (prefers-reduced-motion: reduce) {
   /* ⚠️ **L'écran reste allumé, il cesse seulement de bouger.** Couper l'animation
@@ -1267,6 +1280,7 @@ canvas + div {
      repos la place en haut de l'écran, où elle ferait une tache claire immobile
      que rien n'expliquerait. */
   .novac-crt-halo,
-  .novac-crt-yeux { animation: none; }
+  .novac-crt-yeux,
+  .novac-casque-yeux { animation: none; }
   .novac-crt-bande { animation: none; opacity: 0; }
 }

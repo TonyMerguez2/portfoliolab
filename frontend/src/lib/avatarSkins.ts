@@ -573,7 +573,7 @@ const vitre = (marge = 0) => {
 };
 
 /**
- * La teinte du boîtier : la couleur choisie, désaturée et ramenée à une clarté donnée.
+ * Une matière : la *teinte* choisie, à la clarté et à la saturation qu'on lui impose.
  *
  * ⚠️ **Désaturer est le geste qui fait le métal.** `decalerClarte` seul rendait un vert
  * sombre — la première version du tour valait `#070A04` contre `#10180B` pour la dalle,
@@ -585,10 +585,24 @@ const vitre = (marge = 0) => {
  * ⚠️ **Plus clair que la dalle, jamais plus sombre.** C'est la leçon de la version
  * précédente : un tour plus sombre que l'écran ne se lit pas comme un cadre, il se lit
  * comme du vide, et l'objet redevient une dalle flottante.
+ *
+ * ⚠️ **La saturation est *imposée*, elle n'est pas une fraction de celle d'origine.** La
+ * première version gardait un dixième de la saturation source, et cela s'est effondré sur
+ * la coque claire de l'astronaute : à clarté 0,86, la chroma disponible est déjà bornée par
+ * le modèle TSL, si bien que multiplier une saturation faible ne produisait plus aucune
+ * teinte visible. Mesuré : l'ivoire du modèle (`#E3DED2`) s'écarte du gris de 14,5 unités
+ * RVB, la version proportionnelle n'atteignait que 2,2. Une matière a sa propre force de
+ * pigment ; ce qu'elle emprunte à la couleur réglée, c'est sa **teinte**.
+ *
+ * ⚠️ **Bornée à quatre fois la saturation d'origine, et c'est ce qui sauve les gris.** Une
+ * couleur presque neutre garde une teinte au sens TSL — `#8E8E93` est « bleu » à 3 % — et
+ * l'imposer à 26 % l'amplifierait huit fois : un réglage gris donnerait un casque bleu
+ * pâle, ce que personne n'a demandé. Le plafond laisse les couleurs franches atteindre leur
+ * pigment et retient les neutres près du neutre.
  */
-const metal = (hex: string, clarte: number): string => {
-  const [teinte, saturation] = rvbVersTsl(hexVersRvb(hex));
-  return rvbVersHex(tslVersRvb([teinte, saturation * 0.1, clarte]));
+const matiere = (hex: string, clarte: number, saturation: number): string => {
+  const [teinte, source] = rvbVersTsl(hexVersRvb(hex));
+  return rvbVersHex(tslVersRvb([teinte, Math.min(saturation, source * 4), clarte]));
 };
 
 const TERMINAL: Skin = {
@@ -729,8 +743,8 @@ const TERMINAL: Skin = {
      * Deux aplats sombres voisins ont besoin d'à peu près 2 pour se séparer à soixante-trois
      * pixels — la taille du bandeau, là où cet avatar est le plus souvent regardé.
      */
-    const corps = metal(p.tete, 0.28);
-    const creux = metal(p.tete, 0.16);
+    const corps = matiere(p.tete, 0.28, 0.04);
+    const creux = matiere(p.tete, 0.16, 0.04);
     const lignes: MotifPlat[] = [];
     /**
      * ⚠️ **Le peigne déborde largement de la dalle, et il le faut.** Il court de −130 à 130
@@ -816,6 +830,232 @@ const TERMINAL: Skin = {
     ];
   },
 };
+/**
+ * Un casque d'astronaute : coque claire, cerclage de métal, visière noire.
+ *
+ * ⚠️ **Le frère du terminal, et volontairement.** Même construction — un boîtier, une
+ * ouverture encastrée, un regard derrière —, mêmes contraintes : la silhouette, ses
+ * proportions, son rayon d'angle et la géométrie des yeux ne bougent pas d'un pixel. Ce qui
+ * change est la *matière*. Deux habillages qui partagent leur ossature valent mieux que
+ * deux constructions différentes pour un même objet, parce que le jour où l'ouverture doit
+ * remonter, la question ne se pose qu'une fois.
+ *
+ * ⚠️ **Il inverse la valeur, et c'est tout son intérêt.** Le terminal est sombre et sa
+ * lumière vient du centre ; le casque est clair et sa visière est le seul trou noir de la
+ * composition. Posés côte à côte dans la rangée de réglages, ils ne peuvent pas se
+ * confondre — ce qu'on ne pourrait pas dire de deux écrans de teintes différentes.
+ *
+ * ⚠️ **Le cerclage est fait d'anneaux pleins, sans un seul dégradé linéaire.** Un chrome se
+ * peint d'ordinaire par une bande de reflets orientée, et le type `Degrade` ne connaît que
+ * le radial. Plutôt que d'ouvrir le type — et de devoir suivre ce changement dans les
+ * *trois* copies du rendu, dette déjà signalée —, trois anneaux concentriques de clartés
+ * alternées font le même travail : clair au bord, sombre au milieu, clair à l'intérieur.
+ * C'est ainsi qu'on lit un métal tourné, et cela survit mieux à la réduction qu'un dégradé,
+ * qui à quarante pixels se moyenne en un gris unique.
+ */
+const CASQUE = {
+  /** Le hublot : où commence le cerclage, dans un repère qui va de −100 à 100. */
+  hublot: { cote: 22, haut: 21, bas: 33, rayon: 40 },
+  /**
+   * L'épaisseur des trois anneaux, du bord vers la visière.
+   *
+   * ⚠️ **Treize unités en tout, soit six et demi pour cent du côté.** En deçà, le cerclage
+   * devient un liseré et le casque un simple écran clair ; au-delà, la visière se referme
+   * sur les yeux. La borne basse est la même que pour le terminal, la borne haute est
+   * donnée par l'enveloppe mesurée du regard — voir `bas`.
+   */
+  anneaux: [0, 4, 9] as const,
+  cerclage: 13,
+  /** Le bouton du menton, seul détail de la coque. */
+  bouton: { x: 52, y: 82, r: 8.5 },
+};
+
+/** La visière, en tracé — la même géométrie pour la peindre et pour la détourer. */
+const visiere = (marge = 0) => {
+  const h = CASQUE.hublot;
+  const d = CASQUE.cerclage - marge;
+  return rectangle(-100 + h.cote + d, -100 + h.haut + d,
+                   200 - 2 * h.cote - 2 * d, 200 - h.haut - h.bas - 2 * d,
+                   h.rayon - d);
+};
+
+/** Le hublot entier, cerclage compris — la région où vivent les reflets du métal. */
+const hublot = () => {
+  const h = CASQUE.hublot;
+  return rectangle(-100 + h.cote, -100 + h.haut,
+                   200 - 2 * h.cote, 200 - h.haut - h.bas, h.rayon);
+};
+
+const ASTRONAUTE: Skin = {
+  cle: "astronaute",
+  libelle: "Astronaute",
+  /**
+   * ⚠️ **Réservé au carré arrondi, pour les mêmes raisons que le terminal.** Le cerclage
+   * suit les quatre côtés d'un hublot à peu près carré et le bouton suppose un bord bas
+   * droit ; détouré par une goutte ou un triangle, l'anneau se pince en pointe et le casque
+   * n'est plus un casque.
+   */
+  formes: ["carre"],
+  /**
+   * Le bleu d'une visite au clair de Terre.
+   *
+   * ⚠️ **C'est encore la teinte *allumée* qui est réglée.** La coque est presque blanche et
+   * la visière presque noire : ni l'une ni l'autre ne porte vraiment de couleur. Ce qu'on
+   * règle est ce qui brille — le regard — et tout le reste en descend par la saturation et
+   * la clarté. Régler le crème aurait donné un casque dont les yeux ne suivraient pas.
+   */
+  palette: { tete: "#4FA3E3", accent: "#9BD4FF", yeux: "#BFE6FF" },
+  motifs: () => [],
+  degrades: p => [
+    {
+      /**
+       * La lumière sur la coque : franche en haut à gauche, éteinte en bas à droite.
+       *
+       * ⚠️ **Bien plus marquée que sur le terminal, parce qu'une surface claire le
+       * demande.** Un boîtier sombre se contente de six centièmes de clarté pour paraître
+       * bombé ; sur un blanc cassé, le même écart disparaît — l'œil juge le relief sur le
+       * contraste *relatif*, et il reste peu de marge vers le haut quand on part déjà de
+       * 0,87. On descend donc plutôt qu'on ne monte : la lumière est presque neutre, et
+       * c'est l'ombre du bas qui fait le volume.
+       *
+       * ⚠️ **Mesuré : la première version montait à 0,50 de blanc et délavait tout.** Sur
+       * un aplat déjà à 0,87 de clarté, un demi-blanc sature — la coque, le logement et les
+       * trois anneaux se rejoignaient au même blanc et le cerclage disparaissait. Sur une
+       * matière claire, l'éclairage doit être *plus faible* que sur une matière sombre, pas
+       * plus fort : c'est le contraire de l'intuition, et c'est pour cela que c'est noté.
+       */
+      id: "coque", cx: -62, cy: -88, r: 245,
+      arrets: [
+        { a: 0, couleur: "#FFFFFF", opacite: 0.2 },
+        { a: 0.45, couleur: "#FFFFFF", opacite: 0.04 },
+        { a: 1, couleur: "#2A2620", opacite: 0.2 },
+      ],
+    },
+    {
+      /**
+       * Le reflet qui court sur le métal, posé sur le cerclage entier.
+       *
+       * ⚠️ **Décentré vers le haut à gauche, et il s'éteint avant le bord.** Un reflet
+       * centré illuminerait l'anneau tout autour et le rendrait plat — un tore ne brille
+       * jamais partout à la fois. Le dégradé meurt à 80 %, si bien que le bas droit du
+       * cerclage reste dans l'ombre : c'est cette dissymétrie qui le fait tourner.
+       */
+      id: "chrome", cx: -55, cy: -70, r: 165,
+      arrets: [
+        { a: 0, couleur: "#FFFFFF", opacite: 0.26 },
+        { a: 0.4, couleur: "#FFFFFF", opacite: 0.08 },
+        { a: 0.8, couleur: "#000000", opacite: 0.14 },
+        { a: 1, couleur: "#000000", opacite: 0.3 },
+      ],
+    },
+    {
+      /**
+       * Le ciel dans la visière : une lueur froide au sommet du verre.
+       *
+       * ⚠️ **C'est un *reflet*, donc il est en haut et il ne se voit qu'à peine.** Le noir
+       * de la visière doit rester la valeur la plus sombre de l'objet, sans quoi les yeux
+       * cessent de s'en détacher. Seize centièmes suffisent à dire « c'est du verre, pas un
+       * trou » — au-delà, la visière prend la couleur du reflet et l'on ne sait plus si
+       * elle est teintée.
+       */
+      id: "verre", cx: -18, cy: -78, r: 118,
+      arrets: [
+        { a: 0, couleur: decalerClarte(p.tete, 0.24), opacite: 0.16 },
+        { a: 0.5, couleur: decalerClarte(p.tete, 0.1), opacite: 0.05 },
+        { a: 1, couleur: "#000000", opacite: 0 },
+      ],
+    },
+    {
+      /** Le vignettage de la visière, qui la bombe en la fermant sur ses bords. */
+      id: "creuxVisiere", cx: 0, cy: -14, r: 104,
+      arrets: [
+        { a: 0, couleur: "#000000", opacite: 0 },
+        { a: 0.6, couleur: "#000000", opacite: 0 },
+        { a: 1, couleur: "#000000", opacite: 0.55 },
+      ],
+    },
+  ],
+  /**
+   * ⚠️ **Les yeux rayonnent, comme sur le terminal, et pour la même raison.** Ce sont des
+   * pixels allumés derrière un verre, pas des trous : sur une visière noire, un trou noir
+   * ne se verrait pas. La lueur est plus serrée qu'au terminal — un phosphore bave, une
+   * diode derrière du verre non — et sa géométrie n'est toujours pas touchée.
+   */
+  yeux: p => ({
+    couleur: decalerClarte(p.tete, 0.12),
+    lueur: { rayon: 2.6, couleur: p.tete },
+    classe: "novac-casque-yeux",
+  }),
+  decoupes: () => [
+    { id: "hublot", d: hublot() },
+    { id: "visiere", d: visiere() },
+  ],
+  plats: p => {
+    /**
+     * ⚠️ **Quatre matières, une seule couleur d'origine.** La coque garde huit centièmes de
+     * pigment — assez pour qu'un casque bleu ne soit pas le même blanc qu'un casque ambre,
+     * et calé sur l'ivoire du modèle —, le chrome n'en porte presque aucun puisqu'il
+     * reflète au lieu de teindre, et la visière beaucoup, parce qu'un noir teinté est
+     * précisément ce qui distingue un verre d'un trou percé dans la coque.
+     */
+    const coque = matiere(p.tete, 0.86, 0.26);
+    /** Le logement du hublot : la coque assombrie, pour que le cerclage y paraisse posé. */
+    const logement = matiere(p.tete, 0.64, 0.14);
+    const chromeClair = matiere(p.tete, 0.72, 0.05);
+    const chromeSombre = matiere(p.tete, 0.42, 0.06);
+    const verre = matiere(p.tete, 0.07, 0.5);
+    const h = CASQUE.hublot;
+    /**
+     * Les trois anneaux du cerclage, du bord vers la visière.
+     *
+     * ⚠️ **Peints pleins et empilés, pas creusés en couronnes.** Chacun recouvre le
+     * précédent en s'y encastrant, et la visière recouvre le dernier : aucun `evenodd`,
+     * aucune couronne à recalculer si l'épaisseur change. Le tracé est le même appel avec
+     * une marge différente, ce qui rend impossible qu'un anneau se désaligne d'un autre.
+     */
+    const cerclage = CASQUE.anneaux.map((retrait, i) => ({
+      d: rectangle(-100 + h.cote + retrait, -100 + h.haut + retrait,
+                   200 - 2 * h.cote - 2 * retrait,
+                   200 - h.haut - h.bas - 2 * retrait,
+                   h.rayon - retrait),
+      couleur: i === 1 ? chromeSombre : chromeClair,
+    }));
+    const b = CASQUE.bouton;
+    return [
+      /**
+       * ⚠️ **La coque est peinte par le skin, elle n'est pas la couleur de la tête.** La
+       * silhouette est remplie par le composant avec la teinte réglée ; ce premier aplat
+       * opaque la recouvre entièrement. C'est ce qui permet au casque d'être blanc cassé
+       * tout en suivant la couleur choisie — sans quoi il aurait fallu donner aux skins le
+       * droit de repeindre la tête, c'est-à-dire de défaire un réglage de l'utilisateur.
+       */
+      { d: ellipse(0, 0, 150, 150), couleur: coque },
+      { d: ellipse(0, 0, 150, 150), degrade: "coque" },
+      /* Le logement, débordant de trois unités : la rainure où le cerclage s'assied. */
+      { d: rectangle(-100 + h.cote - 3, -100 + h.haut - 3,
+                     200 - 2 * h.cote + 6, 200 - h.haut - h.bas + 6, h.rayon + 3),
+        couleur: logement },
+      ...cerclage,
+      /* Le reflet, borné au hublot : sur la coque il ferait un second soleil. */
+      { d: ellipse(0, 0, 150, 150), degrade: "chrome", decoupe: "hublot" },
+      // La visière opaque : à partir d'ici, tout est détouré par elle.
+      { d: visiere(), couleur: verre },
+      { d: ellipse(0, 0, 150, 150), degrade: "verre", decoupe: "visiere" },
+      { d: ellipse(0, 0, 150, 150), degrade: "creuxVisiere", decoupe: "visiere" },
+      /**
+       * Le bouton du menton — un anneau creux, jamais une pastille pleine.
+       *
+       * ⚠️ **Le seul détail de la coque, et il ne s'allume pas.** Le terminal a une grille,
+       * une touche et une diode ; le casque n'a que cela, parce que sa coque est claire et
+       * que tout ce qu'on y pose s'y voit trois fois plus. Un témoin lumineux y aurait
+       * concurrencé les yeux, qui sont déjà les seuls objets brillants sur du noir.
+       */
+      { d: ellipse(b.x, b.y, b.r, b.r), couleur: logement },
+      { d: ellipse(b.x, b.y, b.r - 1.6, b.r - 1.6), couleur: coque },
+    ];
+  },
+};
+
 const UNI: Skin = {
   cle: "uni",
   libelle: "Uni",
@@ -823,7 +1063,7 @@ const UNI: Skin = {
   motifs: () => [],
 };
 
-export const SKINS: Skin[] = [UNI, BASKET, VOLLEY, TENNIS, TERRE, TERMINAL];
+export const SKINS: Skin[] = [UNI, BASKET, VOLLEY, TENNIS, TERRE, TERMINAL, ASTRONAUTE];
 
 /**
  * Ce skin convient-il à cette forme ?
