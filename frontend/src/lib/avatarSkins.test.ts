@@ -159,7 +159,8 @@ function couchesDuTerminal() {
 describe("skins", () => {
   it("propose l'uni, les trois ballons, la Terre, le terminal et l'astronaute", () => {
     expect(SKINS.map(s => s.cle))
-      .toEqual(["uni", "basket", "volley", "tennis", "terre", "terminal", "astronaute"]);
+      .toEqual(["uni", "basket", "volley", "tennis", "terre", "terminal",
+                "astronaute", "chevalier"]);
   });
 
   /**
@@ -368,7 +369,8 @@ describe("skins", () => {
    * message, sur le seul skin concerné — le genre de panne qu'on ne trouve qu'à l'œil.
    */
   it("enferme le regard des appareils dans leur vitre", () => {
-    for (const [cle, region] of [["terminal", "dalle"], ["astronaute", "visiere"]] as const) {
+    for (const [cle, region] of [["terminal", "dalle"], ["astronaute", "visiere"],
+                                 ["chevalier", "fente"]] as const) {
       const skin = skinParCle(cle);
       expect(skin.yeux!(skin.palette).decoupe).toBe(region);
       expect(skin.decoupes!(skin.palette).map(c => c.id)).toContain(region);

@@ -1225,6 +1225,275 @@ const ASTRONAUTE: Skin = {
   },
 };
 
+/**
+ * Un heaume de chevalier : acier sombre, crête centrale, fente de vue et ventail.
+ *
+ * ⚠️ **Le troisième de la même famille, et il en réemploie toute l'ossature.** Terminal,
+ * casque d'astronaute, heaume : un boîtier, une ouverture, un regard derrière. Ce qui change
+ * est la matière et le découpage. Trois constructions différentes auraient voulu dire poser
+ * trois fois les mêmes questions de proportion, et les résoudre trois fois différemment.
+ *
+ * ⚠️ **La crête est peinte *devant* le regard, et c'est indispensable.** Le nasal d'un heaume
+ * passe entre les yeux : il doit donc être posé après eux, sinon un œil qui dérive vers le
+ * centre lui passe par-dessus et le heaume se démonte. C'est exactement ce que
+ * `MotifPlat.devant` sert à dire — le même mécanisme que le reflet des vitres.
+ *
+ * ⚠️ **La largeur de la crête n'est pas un choix esthétique, c'est une mesure.** Relevé sur
+ * deux cents images, l'espace libre entre les deux yeux vaut **17,7 unités**, centré sur
+ * `x = −3,2` — et non sur zéro, le regard ne dérivant pas symétriquement. La crête en fait
+ * douze : deux unités et demie de garde de chaque côté. Plus large, elle mord sur l'œil au
+ * moment précis où le regard part sur le côté.
+ */
+const HEAUME = {
+  /** L'espace libre entre les deux yeux, et son milieu. Mesuré, voir l'en-tête. */
+  entreLesYeux: { milieu: -3.2, largeur: 12 },
+  /** La fente de vue : sa lèvre haute, ses épaules, et la pointe de son V. */
+  fente: { haut: -46, epaule: 8, pointe: 64, bord: 82 },
+  /** Le bandeau de front, au-dessus de la fente. */
+  bandeau: { haut: -68, bas: -48 },
+  /** Les fentes de ventilation du ventail : trois par côté. */
+  ventail: { x: 36, pas: 12, largeur: 7, haut: 56, hauteur: 28 },
+};
+
+/**
+ * La fente de vue, en tracé : une bande large que le bas referme en V.
+ *
+ * ⚠️ **Le V est ce qui distingue un heaume d'un masque de plongée.** Une ouverture
+ * rectangulaire donne un bandeau ; deux joues qui remontent vers les tempes donnent un
+ * casque fermé sur un visage. La pointe descend à 64 alors que les yeux s'arrêtent à 38,5 :
+ * six unités de garde au point le plus serré, mesurées sur l'œil droit à `x = 31`.
+ */
+const fenteDeVue = () => {
+  const f = HEAUME.fente;
+  const m = HEAUME.entreLesYeux.milieu;
+  return `M${-f.bord} ${f.haut}L${f.bord} ${f.haut}L${f.bord} ${f.epaule}`
+    + `L${m + 7} ${f.pointe}L${m - 7} ${f.pointe}L${-f.bord} ${f.epaule}Z`;
+};
+
+/**
+ * La crête, du cimier au menton.
+ *
+ * ⚠️ **Étranglée sur la traversée du regard, évasée au-dessus et au-dessous.** C'est la
+ * forme même d'un nasal : il n'a de place qu'entre les yeux, et rien ne l'empêche de
+ * s'élargir là où il n'y a plus d'œil à éviter. Une bande de largeur constante aurait été
+ * soit trop grêle en haut, soit impossible au milieu.
+ */
+const creteDuHeaume = () => {
+  const { milieu: m, largeur: l } = HEAUME.entreLesYeux;
+  const g = m - l / 2;
+  const d = m + l / 2;
+  return `M${m} -106L${d + 13} -72L${d} -40L${d} 46L${d + 21} 88`
+    + `L${g - 21} 88L${g} 46L${g} -40L${g - 13} -72Z`;
+};
+
+/** Les quatre valeurs d'un acier forgé, de l'arête éclairée au fond de gorge. */
+const acierDe = (hex: string) => ({
+  vif: matiere(hex, 0.62, 0.03),
+  clair: matiere(hex, 0.44, 0.04),
+  sombre: matiere(hex, 0.26, 0.05),
+  creux: matiere(hex, 0.15, 0.07),
+});
+
+const CHEVALIER: Skin = {
+  cle: "chevalier",
+  libelle: "Chevalier",
+  /**
+   * ⚠️ **Réservé au carré arrondi, comme ses deux frères.** Le bandeau de front suppose un
+   * bord haut droit, le ventail un bord bas droit, et la fente de vue s'appuie sur les deux
+   * côtés. Détouré par une goutte, le heaume perd ses appuis et devient une tache grise.
+   */
+  formes: ["carre"],
+  /**
+   * La braise d'un regard sous l'acier.
+   *
+   * ⚠️ **C'est encore la teinte *allumée* qui est réglée.** L'acier n'a pas de couleur
+   * propre — il prend celle de ce qui l'éclaire — et le fond de la fente est presque noir.
+   * Ce qu'on règle est la braise ; l'armure en descend par la saturation et la clarté.
+   */
+  palette: { tete: "#E8781E", accent: "#FFB169", yeux: "#FFD1A3" },
+  motifs: () => [],
+  degrades: p => [
+    {
+      /**
+       * La lumière sur le heaume : franche en haut à gauche, éteinte en bas à droite.
+       *
+       * ⚠️ **Plus contrastée que sur le casque blanc, et pour la raison inverse.** Une coque
+       * claire sature dès qu'on l'éclaire ; un acier sombre, lui, a toute la place vers le
+       * haut. C'est la même règle appliquée dans l'autre sens : l'amplitude disponible
+       * dépend de la clarté de départ, jamais de l'envie de faire ressortir la pièce.
+       */
+      id: "heaume", cx: -58, cy: -92, r: 250,
+      arrets: [
+        { a: 0, couleur: "#FFFFFF", opacite: 0.3 },
+        { a: 0.42, couleur: "#FFFFFF", opacite: 0.08 },
+        { a: 1, couleur: "#000000", opacite: 0.34 },
+      ],
+    },
+    {
+      /**
+       * Les plaques d'acier : arête claire en haut, gorge sombre en bas.
+       *
+       * ⚠️ **Le même artifice que le cerclage du casque, horizon compris.** L'acier poli
+       * bascule du ciel au sol en quelques centièmes de course au lieu de dégrader
+       * régulièrement ; sans cette cassure, les plaques redeviennent des aplats gris. Les
+       * arrêts sont recalés sur la plage réellement parcourue par la zone visible.
+       */
+      id: "plaque", cx: -30, cy: -210, r: 350,
+      arrets: [
+        { a: 0.3, couleur: acierDe(p.tete).vif },
+        { a: 0.46, couleur: acierDe(p.tete).clair },
+        { a: 0.52, couleur: acierDe(p.tete).sombre },
+        { a: 0.8, couleur: acierDe(p.tete).creux },
+      ],
+    },
+    {
+      /**
+       * Le ventail : la même chute, recalée sur *sa* portion de course.
+       *
+       * ⚠️ **Un second dégradé plutôt qu'un seul étiré, et c'est la même leçon qu'au
+       * casque.** Mesuré depuis le centre commun : le bandeau de front est parcouru entre
+       * 41 % et 47 % du rayon, le ventail entre 64 % et 92 %. Les arrêts du premier plaçaient
+       * donc tout le second au-delà de l'horizon, dans le seul fond de gorge : la plaque du
+       * bas ressortait en aplat mort, et ses fentes de ventilation, de la même valeur,
+       * disparaissaient entièrement. Une pièce éloignée d'une source a besoin de sa propre
+       * échelle, pas d'une rampe plus longue.
+       */
+      id: "plaqueBasse", cx: -30, cy: -210, r: 350,
+      arrets: [
+        { a: 0.62, couleur: acierDe(p.tete).vif },
+        { a: 0.68, couleur: acierDe(p.tete).clair },
+        { a: 0.72, couleur: acierDe(p.tete).sombre },
+        { a: 0.92, couleur: acierDe(p.tete).creux },
+      ],
+    },
+    {
+      /**
+       * La crête, éclairée sur son flanc gauche.
+       *
+       * ⚠️ **Un dégradé de flanc, pas de hauteur.** Le nasal est une arête verticale : ce
+       * qui la fait saillir est le passage brutal du clair au sombre *en travers*, pas de
+       * haut en bas. Lui donner le dégradé des plaques l'aurait aplatie contre elles au
+       * lieu de l'en détacher.
+       */
+      id: "crete", cx: -26, cy: -60, r: 62,
+      arrets: [
+        { a: 0, couleur: acierDe(p.tete).vif },
+        { a: 0.5, couleur: acierDe(p.tete).clair },
+        { a: 0.62, couleur: acierDe(p.tete).sombre },
+        { a: 1, couleur: acierDe(p.tete).creux },
+      ],
+    },
+    {
+      /**
+       * Le fond de la fente : noir au centre, plus noir encore sur les bords.
+       *
+       * ⚠️ **Il descend vers l'extérieur, à l'inverse du vignettage d'un écran.** Une dalle
+       * s'éteint sur ses bords parce qu'elle est bombée ; une fente s'assombrit parce qu'on
+       * y voit *moins loin* de biais. Même dégradé, deux raisons — et la seconde demande
+       * qu'il commence plus tôt, sans quoi la fente paraît éclairée de l'intérieur.
+       */
+      id: "fond", cx: 0, cy: -6, r: 96,
+      arrets: [
+        { a: 0, couleur: "#000000", opacite: 0.1 },
+        { a: 0.35, couleur: "#000000", opacite: 0.34 },
+        { a: 1, couleur: "#000000", opacite: 0.72 },
+      ],
+    },
+  ],
+  /**
+   * ⚠️ **Une braise, pas une diode ni un phosphore.** Le halo est plus large que celui du
+   * casque et plus chaud que celui du terminal : ce qui brille ici est censé être une
+   * lumière *derrière* l'acier, pas une source posée dessus. Leur géométrie n'est toujours
+   * pas touchée.
+   */
+  yeux: p => ({
+    couleur: decalerClarte(p.tete, 0.16),
+    lueur: { rayon: 4.2, couleur: p.tete },
+    classe: "novac-braise",
+    /* Le regard n'existe que dans la fente : ailleurs il n'y a que de l'acier. */
+    decoupe: "fente",
+  }),
+  decoupes: () => [{ id: "fente", d: fenteDeVue() }],
+  plats: p => {
+    const a = acierDe(p.tete);
+    const rivets: MotifPlat[] = [];
+    /**
+     * Les rivets, en deux touches chacun.
+     *
+     * ⚠️ **Un disque sombre puis un disque clair décalé, jamais un cercle contourné.** Un
+     * contour donne un anneau, c'est-à-dire un trou ; un disque clair posé en haut à gauche
+     * d'un disque sombre donne une tête bombée qui capte la même lumière que le reste. Deux
+     * tracés de plus par rivet, et l'objet cesse d'être percé pour être assemblé.
+     */
+    /* ⚠️ Aucun rivet sous la crête : le premier jeu en plaçait un au centre à `y = 74`,
+       où le nasal, peint après, le recouvrait entièrement. Deux tracés pour rien. */
+    for (const [x, y] of [[-72, -58], [-44, -58], [44, -58], [72, -58],
+                          [-76, 22], [76, 22], [-74, 62], [74, 62]] as const) {
+      rivets.push({ d: ellipse(x, y, 5.6, 5.6), couleur: a.creux });
+      rivets.push({ d: ellipse(x - 0.7, y - 0.9, 4.2, 4.2), couleur: a.clair });
+    }
+    const v = HEAUME.ventail;
+    const fentes: MotifPlat[] = [];
+    /**
+     * Les fentes du ventail : trois de chaque côté, sous la pointe du V.
+     *
+     * ⚠️ **Creusées d'une seule couleur, sans reflet dessous.** Le doublage clair censé
+     * suggérer un biseau a déjà été essayé sur la grille du terminal : à cette échelle il ne
+     * produit pas une arête mais une ligne blanche translucide, et il a fallu le retirer.
+     * La leçon vaut ici sans qu'on ait à la réapprendre.
+     */
+    for (const cote of [-1, 1] as const) {
+      for (let i = 0; i < 3; i++) {
+        fentes.push({
+          d: rectangle(cote * (v.x + i * v.pas) - (cote < 0 ? v.largeur : 0), v.haut,
+                       v.largeur, v.hauteur, v.largeur / 2),
+          /* ⚠️ Plus sombre que le fond de gorge de l'acier, et non égal : peintes en
+             `creux`, elles se confondaient exactement avec la plaque qui les porte. Un trou
+             est toujours plus noir que le creux le plus profond de la pièce percée. */
+          couleur: matiere(p.tete, 0.05, 0.2),
+        });
+      }
+    }
+    const b = HEAUME.bandeau;
+    return [
+      /* L'acier, peint par le skin : la tête garde sa couleur réglée pour la braise. */
+      { d: ellipse(0, 0, 150, 150), couleur: a.sombre },
+      { d: ellipse(0, 0, 150, 150), degrade: "heaume" },
+      /**
+       * Le bandeau de front, en plaque rapportée.
+       *
+       * ⚠️ **Débordant largement des deux côtés, pour être coupé par la silhouette.** Une
+       * plaque qui s'arrêterait juste avant l'arête laisserait un liseré d'acier derrière
+       * elle et se lirait comme une étiquette collée. Rivetée d'un bord à l'autre, elle
+       * ceinture le heaume.
+       */
+      { d: rectangle(-110, b.haut, 220, b.bas - b.haut, 3), degrade: "plaque" },
+      { d: rectangle(-110, b.bas - 2.5, 220, 2.5, 0), couleur: a.creux, opacite: 0.55 },
+      /* Le ventail : la plaque du bas, sous la pointe de la fente. */
+      { d: `M-110 ${HEAUME.fente.epaule + 4}L${HEAUME.entreLesYeux.milieu} ${HEAUME.fente.pointe + 6}`
+           + `L110 ${HEAUME.fente.epaule + 4}L110 110L-110 110Z`, degrade: "plaqueBasse" },
+      ...fentes,
+      // La fente de vue, creusée dans l'acier, puis son fond qui s'enfonce.
+      { d: fenteDeVue(), couleur: matiere(p.tete, 0.06, 0.3) },
+      { d: ellipse(0, 0, 150, 150), degrade: "fond", decoupe: "fente" },
+      ...rivets,
+      /**
+       * La crête, **devant le regard**.
+       *
+       * ⚠️ **Après les yeux, sinon le heaume se démonte.** Le nasal passe entre eux : peint
+       * avant, un œil qui dérive vers le centre lui passerait par-dessus et l'on verrait une
+       * braise flotter sur l'acier. C'est le même besoin que le reflet des vitres, et le même
+       * drapeau y répond.
+       */
+      { d: creteDuHeaume(), degrade: "crete", devant: true },
+      /* L'arête vive de la crête : un filet clair sur son flanc gauche seulement. */
+      { d: `M${HEAUME.entreLesYeux.milieu - 6} -40L${HEAUME.entreLesYeux.milieu - 4} -40`
+           + `L${HEAUME.entreLesYeux.milieu - 4} 46L${HEAUME.entreLesYeux.milieu - 6} 46Z`,
+        couleur: a.vif, opacite: 0.5, devant: true },
+    ];
+  },
+};
+
 const UNI: Skin = {
   cle: "uni",
   libelle: "Uni",
@@ -1232,7 +1501,9 @@ const UNI: Skin = {
   motifs: () => [],
 };
 
-export const SKINS: Skin[] = [UNI, BASKET, VOLLEY, TENNIS, TERRE, TERMINAL, ASTRONAUTE];
+export const SKINS: Skin[] = [
+  UNI, BASKET, VOLLEY, TENNIS, TERRE, TERMINAL, ASTRONAUTE, CHEVALIER,
+];
 
 /**
  * Ce skin convient-il à cette forme ?

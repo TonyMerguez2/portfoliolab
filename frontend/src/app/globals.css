@@ -1263,6 +1263,18 @@ canvas + div {
    verre ne fait pas cela : elle tient sa valeur puis retombe franchement, comme
    un témoin de veille. Reprendre la même animation aurait donné deux objets qui
    clignent à l'unisson, ce qui les aurait fait paraître de la même matière. */
+/* Le souffle d'une braise : irrégulier, contrairement à une diode.
+
+   ⚠️ **Trois arrêts inégaux plutôt qu'un aller-retour.** Un `0 % / 50 % / 100 %`
+   donne une pulsation métronomique qu'on finit par compter ; du feu ne bat pas la
+   mesure. Les paliers décalés suffisent à casser la régularité sans qu'aucune
+   image ne coûte davantage. */
+@keyframes novac-braise-souffle {
+  0%, 100% { opacity: 0.86; }
+  38%      { opacity: 1; }
+  71%      { opacity: 0.92; }
+}
+
 @keyframes novac-casque-veille {
   0%, 62%, 100% { opacity: 1; }
   80%           { opacity: 0.72; }
@@ -1272,6 +1284,7 @@ canvas + div {
 .novac-crt-bande  { animation: novac-crt-descente 9.7s linear infinite; }
 .novac-crt-yeux   { animation: novac-crt-pupille 4.3s ease-in-out infinite; }
 .novac-casque-yeux { animation: novac-casque-veille 7.4s ease-in-out infinite; }
+.novac-braise      { animation: novac-braise-souffle 3.8s ease-in-out infinite; }
 
 @media (prefers-reduced-motion: reduce) {
   /* ⚠️ **L'écran reste allumé, il cesse seulement de bouger.** Couper l'animation
@@ -1281,6 +1294,7 @@ canvas + div {
      que rien n'expliquerait. */
   .novac-crt-halo,
   .novac-crt-yeux,
-  .novac-casque-yeux { animation: none; }
+  .novac-casque-yeux,
+  .novac-braise { animation: none; }
   .novac-crt-bande { animation: none; opacity: 0; }
 }
