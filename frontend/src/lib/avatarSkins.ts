@@ -868,6 +868,35 @@ const CASQUE = {
   cerclage: 13,
   /** Le bouton du menton, seul détail de la coque. */
   bouton: { x: 52, y: 82, r: 8.5 },
+  /**
+   * Les deux lanières qui rejoignent le bord de la coque, à hauteur des yeux.
+   *
+   * ⚠️ **Elles partent de *sous* le cerclage, pas de son bord.** `depuis` vaut 70 quand le
+   * cerclage commence à 78 : les huit unités de recouvrement sont ce qui fait passer la
+   * sangle *derrière* l'anneau plutôt que de l'y aboucher. Calées bord à bord, le moindre
+   * arrondi d'antialiasing laissait paraître un cheveu de coque entre les deux, et la
+   * lanière se lisait comme une pièce rapportée.
+   *
+   * ⚠️ **Elles débordent la silhouette de cinq unités.** Le détourage les coupe net contre
+   * l'arête : sans ce débord, leur extrémité arrondie restait visible et la sangle semblait
+   * s'arrêter juste avant le bord, ce qui est exactement l'inverse de ce qu'on veut dire.
+   *
+   * ⚠️ **Centrées sur le regard, et de sa hauteur.** Les yeux tiennent dans
+   * `y ∈ [−35 ; 38,7]` ; la lanière occupe le tiers médian, ce qui la fait passer *au
+   * niveau* du regard. Plus haute, elle deviendrait une visière dans la visière ; plus
+   * basse, une mentonnière.
+   */
+  laniere: { y: -22, hauteur: 46, rayon: 10, depuis: 70, debord: 5 },
+};
+
+/** Une lanière, d'un côté ou de l'autre. `cote` vaut −1 à gauche, 1 à droite. */
+const laniere = (cote: -1 | 1, retrait = 0) => {
+  const l = CASQUE.laniere;
+  const bout = 100 + l.debord;
+  const large = bout - l.depuis;
+  return rectangle(cote === -1 ? -bout + retrait : l.depuis + retrait,
+                   l.y + retrait, large - 2 * retrait,
+                   l.hauteur - 2 * retrait, Math.max(0, l.rayon - retrait));
 };
 
 /** La visière, en tracé — la même géométrie pour la peindre et pour la détourer. */
@@ -939,13 +968,20 @@ const ASTRONAUTE: Skin = {
        * centré illuminerait l'anneau tout autour et le rendrait plat — un tore ne brille
        * jamais partout à la fois. Le dégradé meurt à 80 %, si bien que le bas droit du
        * cerclage reste dans l'ombre : c'est cette dissymétrie qui le fait tourner.
+       *
+       * ⚠️ **Son rayon a dû grandir de 165 à 225 quand les lanières sont apparues.** Mesuré
+       * depuis le centre du dégradé : la sangle de gauche tombait à 48 % du rayon, celle de
+       * droite à 97 % — c'est-à-dire dans le noir final. Les deux flancs du même objet
+       * n'avaient plus rien à voir, et la lanière droite se lisait comme une pièce sale
+       * plutôt que comme du métal. Une source de lumière doit couvrir tout ce qu'elle
+       * éclaire : agrandir le rayon était plus juste que de rattraper la teinte à la main.
        */
-      id: "chrome", cx: -55, cy: -70, r: 165,
+      id: "chrome", cx: -55, cy: -70, r: 225,
       arrets: [
         { a: 0, couleur: "#FFFFFF", opacite: 0.26 },
         { a: 0.4, couleur: "#FFFFFF", opacite: 0.08 },
-        { a: 0.8, couleur: "#000000", opacite: 0.14 },
-        { a: 1, couleur: "#000000", opacite: 0.3 },
+        { a: 0.8, couleur: "#000000", opacite: 0.1 },
+        { a: 1, couleur: "#000000", opacite: 0.2 },
       ],
     },
     {
@@ -987,7 +1023,13 @@ const ASTRONAUTE: Skin = {
     classe: "novac-casque-yeux",
   }),
   decoupes: () => [
-    { id: "hublot", d: hublot() },
+    /**
+     * ⚠️ **Tout le métal en une région, cerclage et lanières ensemble.** Le reflet doit les
+     * parcourir d'un seul tenant : borné au seul hublot, il s'arrêtait net à l'aplomb de
+     * l'anneau et les sangles restaient plates, comme peintes. Trois sous-tracés dans un
+     * même `d` forment leur réunion, ce qui est exactement ce qu'on veut dire.
+     */
+    { id: "metal", d: `${hublot()}${laniere(-1)}${laniere(1)}` },
     { id: "visiere", d: visiere() },
   ],
   plats: p => {
@@ -1031,13 +1073,28 @@ const ASTRONAUTE: Skin = {
        */
       { d: ellipse(0, 0, 150, 150), couleur: coque },
       { d: ellipse(0, 0, 150, 150), degrade: "coque" },
+      /**
+       * Les deux lanières, **avant** le cerclage.
+       *
+       * ⚠️ **L'ordre fait tout le récit ici.** Dessinées après, elles chevaucheraient
+       * l'anneau et se liraient comme deux pattes collées par-dessus ; dessinées avant, le
+       * cerclage les recouvre et l'œil conclut qu'elles passent derrière lui — une seule
+       * sangle qui traverse le casque, plutôt que deux morceaux.
+       */
+      ...([-1, 1] as const).flatMap(cote => [
+        { d: laniere(cote, -2.5), couleur: logement },
+        ...CASQUE.anneaux.map((retrait, i) => ({
+          d: laniere(cote, retrait),
+          couleur: i === 1 ? chromeSombre : chromeClair,
+        })),
+      ]),
       /* Le logement, débordant de trois unités : la rainure où le cerclage s'assied. */
       { d: rectangle(-100 + h.cote - 3, -100 + h.haut - 3,
                      200 - 2 * h.cote + 6, 200 - h.haut - h.bas + 6, h.rayon + 3),
         couleur: logement },
       ...cerclage,
-      /* Le reflet, borné au hublot : sur la coque il ferait un second soleil. */
-      { d: ellipse(0, 0, 150, 150), degrade: "chrome", decoupe: "hublot" },
+      /* Le reflet, borné au métal : sur la coque il ferait un second soleil. */
+      { d: ellipse(0, 0, 150, 150), degrade: "chrome", decoupe: "metal" },
       // La visière opaque : à partir d'ici, tout est détouré par elle.
       { d: visiere(), couleur: verre },
       { d: ellipse(0, 0, 150, 150), degrade: "verre", decoupe: "visiere" },
