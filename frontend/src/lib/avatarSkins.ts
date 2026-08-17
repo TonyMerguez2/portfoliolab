@@ -1238,15 +1238,23 @@ const ASTRONAUTE: Skin = {
  * centre lui passe par-dessus et le heaume se démonte. C'est exactement ce que
  * `MotifPlat.devant` sert à dire — le même mécanisme que le reflet des vitres.
  *
- * ⚠️ **La largeur de la crête n'est pas un choix esthétique, c'est une mesure.** Relevé sur
- * deux cents images, l'espace libre entre les deux yeux vaut **17,7 unités**, centré sur
- * `x = −3,2` — et non sur zéro, le regard ne dérivant pas symétriquement. La crête en fait
- * douze : deux unités et demie de garde de chaque côté. Plus large, elle mord sur l'œil au
- * moment précis où le regard part sur le côté.
+ * ⚠️ **Le nasal est centré sur l'axe du heaume, et il occulte : c'est ce que fait un
+ * nasal.** Une première version le décalait à `x = −3,2` pour se glisser entre les yeux,
+ * d'après un relevé de deux cents images qui donnait un couloir libre de 17,7 unités. Ce
+ * relevé était faux : trois secondes et demie, alors que la dérive de la tête a des périodes
+ * de 2,9 à 4,3 secondes — j'avais mesuré une phase, pas une enveloppe. Repris sur **mille
+ * huit cents images**, le milieu de l'écart oscille de −6 à +11,1 et l'écart libre minimal
+ * tombe à **4,8 unités** : aucun couloir fixe n'existe, parce que la rotation de la tête
+ * change l'écartement *apparent* des yeux. Un nasal de quatre unités aurait été un fil.
+ *
+ * ⚠️ **Donc tout est symétrique autour de zéro, l'axe du heaume.** Le décalage laissait les
+ * boulons alignés sur l'axe de la silhouette pendant que la crête s'en écartait de trois
+ * unités : deux symétries concurrentes, et l'œil ne voyait que la faute. Une pièce n'a qu'un
+ * axe.
  */
 const HEAUME = {
-  /** L'espace libre entre les deux yeux, et son milieu. Mesuré, voir l'en-tête. */
-  entreLesYeux: { milieu: -3.2, largeur: 12 },
+  /** L'axe du heaume et la largeur du nasal. Tout s'y rapporte — voir l'en-tête. */
+  axe: { milieu: 0, largeur: 14 },
   /** La fente de vue : sa lèvre haute, ses épaules, et la pointe de son V. */
   fente: { haut: -46, epaule: 8, pointe: 64, bord: 82 },
   /** Le bandeau de front, au-dessus de la fente. */
@@ -1265,7 +1273,7 @@ const HEAUME = {
  */
 const fenteDeVue = () => {
   const f = HEAUME.fente;
-  const m = HEAUME.entreLesYeux.milieu;
+  const m = HEAUME.axe.milieu;
   return `M${-f.bord} ${f.haut}L${f.bord} ${f.haut}L${f.bord} ${f.epaule}`
     + `L${m + 7} ${f.pointe}L${m - 7} ${f.pointe}L${-f.bord} ${f.epaule}Z`;
 };
@@ -1286,7 +1294,7 @@ const fenteDeVue = () => {
  * version, à un seul dégradé, se lisait comme un tuyau collé sur le heaume.
  */
 const flancDeCrete = (cote: -1 | 1) => {
-  const { milieu: m, largeur: l } = HEAUME.entreLesYeux;
+  const { milieu: m, largeur: l } = HEAUME.axe;
   const b = m + cote * (l / 2);
   return `M${m} -106L${m + cote * 13} -72L${b} -40L${b} 46L${b + cote * 21} 88`
     + `L${m} 88L${m} 46L${m} -40Z`;
@@ -1459,10 +1467,18 @@ const CHEVALIER: Skin = {
      * d'un disque sombre donne une tête bombée qui capte la même lumière que le reste. Deux
      * tracés de plus par rivet, et l'objet cesse d'être percé pour être assemblé.
      */
-    /* ⚠️ Aucun rivet sous la crête : le premier jeu en plaçait un au centre à `y = 74`,
-       où le nasal, peint après, le recouvrait entièrement. Deux tracés pour rien. */
+    /**
+     * ⚠️ **Chaque rivet est centré dans la plaque qu'il tient, et pas seulement en `x`.**
+     * Ceux du bandeau tombaient juste — il court de −68 à −48, ils sont à −58. Les autres
+     * étaient posés à vue : ceux des tempes deux unités trop bas dans leur bandeau, ceux du
+     * ventail une trop haut. Un rivet décentré se remarque avant tout le reste, parce que
+     * l'œil compare des distances égales bien mieux qu'il n'évalue une distance seule.
+     *
+     * ⚠️ Aucun rivet sous la crête : le premier jeu en plaçait un au centre à `y = 74`, où
+     * le nasal, peint après, le recouvrait entièrement. Deux tracés pour rien.
+     */
     for (const [x, y] of [[-72, -58], [-44, -58], [44, -58], [72, -58],
-                          [-76, 22], [76, 22], [-74, 62], [74, 62]] as const) {
+                          [-76, 20], [76, 20], [-74, 63], [74, 63]] as const) {
       rivets.push({ d: ellipse(x, y, 5.6, 5.6), couleur: a.creux });
       rivets.push({ d: ellipse(x - 0.7, y - 0.9, 4.2, 4.2), couleur: a.clair });
     }
@@ -1515,8 +1531,8 @@ const CHEVALIER: Skin = {
        */
       ...([-1, 1] as const).map(cote => ({
         d: `M${cote * 110} ${HEAUME.fente.epaule + 4}`
-          + `L${HEAUME.entreLesYeux.milieu} ${HEAUME.fente.pointe + 6}`
-          + `L${HEAUME.entreLesYeux.milieu} 110L${cote * 110} 110Z`,
+          + `L${HEAUME.axe.milieu} ${HEAUME.fente.pointe + 6}`
+          + `L${HEAUME.axe.milieu} 110L${cote * 110} 110Z`,
         degrade: cote === -1 ? "plaqueBasse" : "plaqueBasseOmbre",
       })),
       ...fentes,
