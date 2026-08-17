@@ -6,8 +6,9 @@ import { CLAIR, RAYONS } from "@/lib/palette";
 /**
  * Barre d'onglets du portefeuille.
  *
- * Reprend la maquette : icône, libellé, soulignement de l'onglet actif, et un
- * filet continu qui court sous toute la barre pour l'ancrer au contenu.
+ * Reprend la maquette : icône, libellé, et soulignement de l'onglet actif. Le
+ * filet continu qui courait sous toute la barre a été retiré — voir la note à
+ * l'endroit où il vivait.
  *
  * Elle occupe toute la largeur, au-dessus du graphique, plutôt que d'être
  * tassée à droite du sous-en-tête. C'est la navigation principale de la page :
@@ -48,9 +49,12 @@ export default function PortfolioTabs({
     <nav aria-label="Sections du portefeuille"
       data-avatar="curieux" style={{
       display: "flex", alignItems: "stretch", gap: 4,
-      // Le filet est porté par la barre, pas par chaque onglet : il reste
-      // continu sous les intervalles, et le soulignement actif s'y pose.
-      borderBottom: `1px solid ${CLAIR.bord}`,
+      // ⚠️ **Le filet continu est retiré, à la demande.** Un trait d'un pixel courait sous
+      // toute la barre pour l'ancrer au contenu. Il tenait à une époque où la page
+      // enchaînait des blocs sans cadre ; depuis que le contenu vit dans des panneaux qui
+      // portent leur propre bord, ce trait s'ajoutait au leur quelques pixels plus bas —
+      // deux lignes parallèles pour une seule séparation. Reste le soulignement de
+      // l'onglet actif, qui dit lequel on regarde et non où la barre s'arrête.
       padding: "0 4px", flexShrink: 0,
       // Retour à la ligne plutôt que défilement : `overflow-x: auto` fait
       // apparaître une barre dès que la largeur manque d'un pixel, et une
@@ -72,9 +76,8 @@ export default function PortfolioTabs({
               // variante d'onglets « line » : `foreground-strong` au repos,
               // `foreground-intense` une fois retenu.
               color: actif ? CLAIR.texteIntense : CLAIR.texteFort,
-              // Décalé d'un pixel pour couvrir le filet de la barre plutôt que
-              // de s'empiler dessus, ce qui épaississait le trait.
-              marginBottom: -1,
+              // ⚠️ Le décalage d'un pixel part avec le filet qu'il servait à recouvrir :
+              // sans lui, il ne faisait plus que descendre le soulignement sous la barre.
               position: "relative",
               transition: "color 160ms",
             }}

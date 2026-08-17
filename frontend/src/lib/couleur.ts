@@ -193,6 +193,60 @@ export function encreSur(fond: string): string {
 }
 
 /**
+ * La même couleur, assombrie juste assez pour porter du texte blanc.
+ *
+ * ⚠️ **Assombrir le fond plutôt que retourner l'encre, et c'est le contraire de
+ * `encreSur`.** Celle-ci choisit la meilleure des deux encres pour un fond donné, et sa
+ * propre note en pose la limite : 4,33:1 au pire, ce qui suffit aux capitales d'avatar
+ * et aux pastilles, pas à un libellé de onze pixels — le seuil y est de 4,5. Sur un fond
+ * qu'on ne maîtrise pas, aucune encre unie ne s'en sort. Mais ici on maîtrise le fond :
+ * c'est lui qui cède, et le blanc reste blanc.
+ *
+ * ⚠️ **Le blanc est tenu, il n'est pas négocié.** Un bouton dont l'encre bascule au noir
+ * selon la couleur d'avatar choisie serait deux boutons différents : l'œil apprend une
+ * forme, pas une règle de contraste. La teinte et la saturation sont donc conservées, et
+ * seule la clarté descend — la couleur reste reconnaissable, elle devient seulement plus
+ * profonde.
+ *
+ * ⚠️ **Par dichotomie, et j'avais d'abord écrit le contraire.** Un balayage par pas de un
+ * centième était plus simple, et je l'avais justifié en écrivant que chercher le point
+ * exact ne rapporterait « qu'un gain invisible à l'œil ». C'est faux, et c'est l'œil qui
+ * l'a démenti : sur l'indigo d'un avatar, `#6366F1` manque la cible de 0,033 seulement,
+ * mais le premier pas d'un centième l'emmène à 4,71 — soit **ΔE 3,59** du point de
+ * départ, un écart que l'on voit côte à côte, et qui s'est vu. La dichotomie s'arrête à
+ * 4,515 et ne s'éloigne que de **ΔE 0,72**, sous le seuil de perception.
+ *
+ * Le pas grossier ne coûtait donc pas de la précision, il coûtait de la fidélité : la
+ * couleur rendue n'était plus celle qu'on avait choisie. Vingt-quatre tours bornent la
+ * recherche bien en dessous de ce que l'arrondi sur huit bits sait représenter.
+ *
+ * ⚠️ **Une couleur déjà lisible est rendue telle quelle**, sans repasser par la
+ * conversion : c'est ce qui garantit qu'un choix déjà bon n'est pas déplacé d'un poil.
+ *
+ * ⚠️ **La teinte est reprise de l'original à chaque essai, et non du pas précédent.**
+ * Enchaîner les `decalerClarte` repassait par le hexadécimal à chaque tour, et l'arrondi
+ * sur huit bits s'y accumulait : mesuré, 1,67° de dérive sur un jaune vif au bout d'une
+ * quinzaine de pas.
+ */
+export function assombrirPourBlanc(hex: string, cible = 4.5): string {
+  if (contraste(hex, "#FFFFFF") >= cible) return hex;
+
+  const [h, s, l] = rvbVersTsl(hexVersRvb(hex));
+  const auContraste = (clarte: number) =>
+    contraste(rvbVersHex(tslVersRvb([h, s, clarte])), "#FFFFFF") >= cible;
+
+  // `bas` est toujours une clarté qui convient — le noir convient toujours —, `haut` une
+  // qui ne convient pas. On resserre jusqu'à tenir la plus claire des acceptables.
+  let bas = 0;
+  let haut = l;
+  for (let i = 0; i < 24; i++) {
+    const milieu = (bas + haut) / 2;
+    if (auContraste(milieu)) bas = milieu; else haut = milieu;
+  }
+  return rvbVersHex(tslVersRvb([h, s, bas]));
+}
+
+/**
  * Poids d'un groupe de pixels dans le choix de la couleur dominante.
  *
  * Compter les pixels seuls fait gagner les grandes plages ternes : le pelage

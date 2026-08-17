@@ -35,7 +35,9 @@ import { typesParOperation, COULEUR_OP, LIBELLE_OP, type Tx } from "@/lib/journa
 import { FONT } from "@/lib/typography";
 import type { Period } from "@/lib/chart/portfolioCurve";
 import { JETONS, CLAIR, RAYON, couleurMontant, RAYONS, styleCadreExterieur, styleCarteInterieure } from "@/lib/palette";
-import { hexVersRvb, rvbVersHex, rvbVersTsl, tslVersRvb } from "@/lib/couleur";
+import {
+  assombrirPourBlanc, decalerClarte, hexVersRvb, rvbVersHex, rvbVersTsl, tslVersRvb,
+} from "@/lib/couleur";
 import { resoudreJeton, useTheme } from "@/lib/theme";
 import { useClignotement, styleClignotement } from "@/lib/clignotement";
 import { CADENCE_COURS_MS } from "@/lib/cadence";
@@ -455,6 +457,29 @@ function PortfolioPageInner() {
    * comme un défaut, et deux états séparés auraient fini par diverger.
    */
   const [couleurAvatar, choisirCouleurAvatar] = useCouleurAvatar(portfolio);
+
+  /**
+   * Le fond du bouton « Ajouter un compte », accordé à l'avatar.
+   *
+   * ⚠️ **La couleur suit celle que l'épargnant a choisie, elle n'est plus posée en dur.**
+   * Un violet fixe faisait du bouton la seule tache de la page qui n'obéisse à personne :
+   * l'avatar, la pastille du bandeau et la courbe portent déjà cette teinte, et lui seul
+   * s'en écartait.
+   *
+   * ⚠️ **Assombri autant qu'il faut pour que le blanc tienne, et pas plus.** Le libellé
+   * fait onze pixels — seuil de lisibilité à 4,5:1 — et rien n'empêche de choisir un
+   * jaune pâle pour son avatar. Plutôt que de retourner l'encre au noir sur les teintes
+   * claires, ce qui ferait deux boutons différents selon l'humeur du jour, c'est le fond
+   * qui cède : la teinte reste reconnaissable, elle devient seulement plus profonde. Voir
+   * `assombrirPourBlanc`, dont le test balaie tout le cube sRGB.
+   *
+   * ⚠️ **Le survol éclaircit plutôt qu'il ne fonce.** Sur un fond déjà assombri pour le
+   * contraste, foncer encore rapprocherait le bouton du fond de la page au lieu de l'en
+   * détacher — l'inverse de ce qu'un survol doit faire.
+   */
+  const fondBouton = useMemo(() => assombrirPourBlanc(couleurAvatar), [couleurAvatar]);
+  const fondBoutonSurvol = useMemo(() => decalerClarte(fondBouton, 0.07), [fondBouton]);
+
   // ⚠️ La forme ne va qu'à l'avatar, là où la couleur va aussi à la courbe : une courbe
   // ne peut pas être carrée, et rien d'autre sur la page ne porte de silhouette.
   const [formeAvatar, choisirFormeAvatar] = useFormeAvatar(portfolio);
@@ -2579,8 +2604,32 @@ function PortfolioPageInner() {
                       bouton de tri. Un simple libellé en fait 18, et la courbe au-dessus
                       gagnait huit pixels à la vue des dossiers pour les reperdre à
                       l'ouverture de l'un d'eux. */}
-                  <div style={{ height: 26, display: "flex", alignItems: "center", flexShrink: 0 }}>
-                    <span style={{ fontFamily: FONT, fontSize: 12.5, fontWeight: 600, color: CLAIR.surFond }}>
+                  {/**
+                    * ⚠️ **Le titre s'aligne sur l'onglet actif, et le décalage se calcule.**
+                    * Il commençait quatre pixels à gauche de « Vue générale » — assez pour
+                    * qu'on voie deux amorces au lieu d'une colonne. Le rang d'onglets porte
+                    * quatre pixels de retrait, chaque onglet quatorze de plus : dix-huit
+                    * séparent donc le bord commun du premier pictogramme. Mesuré à l'écran
+                    * plutôt que deviné — le titre était à 78, l'icône de l'onglet à 96.
+                    */}
+                  <div style={{ height: 26, display: "flex", alignItems: "center",
+                                gap: 7, paddingLeft: 18, flexShrink: 0 }}>
+                    {/**
+                      * ⚠️ **Le dossier vient du bouton d'à côté, il n'est pas nouveau.** Il y
+                      * disait ce qu'on ajoute ; il dit ici ce qu'on regarde, ce qui est sa
+                      * place naturelle — le bouton n'a plus qu'à porter le geste, et un
+                      * « + » y suffit. Taillé à 15 comme celui de l'onglet, pour que les deux
+                      * amorces de colonne pèsent pareil.
+                      */}
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor"
+                      aria-hidden="true" style={{ color: CLAIR.texteIntense, flexShrink: 0 }}>
+                      <path d="M9.075 3.25c.214 0 .423.07.593.2l.097.084 2.639 2.628h6.421c.746 0 1.464.283 2.007.793s.87 1.206.913 1.948l.005.17v7.765c0 .743-.285 1.458-.797 1.998a2.93 2.93 0 0 1-1.956.91l-.172.004H5.175a2.93 2.93 0 0 1-2.007-.793 2.9 2.9 0 0 1-.913-1.948l-.005-.17V6.161c0-.743.285-1.458.797-1.998a2.93 2.93 0 0 1 1.956-.91l.172-.004z" />
+                    </svg>
+                    {/* ⚠️ `texteIntense` et non `surFond` : c'est l'encre de l'onglet actif,
+                        et les deux titres se lisent maintenant comme deux repères de même
+                        rang. Mesuré : rgb(209,213,220) contre le blanc de « Vue générale ». */}
+                    <span style={{ fontFamily: FONT, fontSize: 12.5, fontWeight: 600,
+                                   color: CLAIR.texteIntense }}>
                       Vos comptes
                     </span>
                     {/**
@@ -2601,29 +2650,95 @@ function PortfolioPageInner() {
                       * cotation, si bien qu'un compte n'apparaissait qu'en y détenant
                       * quelque chose — et qu'un compte courant, qui ne détient aucun titre,
                       * ne pouvait pas exister du tout. Les comptes se déclarent désormais.
+                      *
+                      * ⚠️ **Une pilule pleine à liseré clair, reproduite d'une référence
+                      * fournie.** Il était en gris sur fond creux avec un bord neutre — le
+                      * vêtement d'un champ de saisie, pas d'une action. Trois traits font
+                      * l'essentiel du modèle : le rayon plein, qui le distingue de tout ce qui
+                      * est rectangulaire autour ; l'aplat saturé, qui le pose *au-dessus* du
+                      * fond au lieu de s'y creuser ; et le contenu en blanc franc, pictogramme
+                      * comme texte, qui est ce qui rend un bouton pressable au premier regard.
+                      *
+                      * ⚠️ **Le liseré est celui des cartes d'actif, et non un bord de plus.**
+                      * Il portait d'abord une bordure blanche uniforme ; c'est le même tracé
+                      * que les tuiles qui est employé maintenant — un pixel constant, masqué
+                      * en `xor`, qui s'éteint avant l'angle haut-droit et avant l'angle
+                      * bas-gauche. Le dégradé vit dans `globals.css`, partagé avec
+                      * `.novac-tile` pour que les deux ne divergent pas.
+                      *
+                      * ⚠️ **Seul l'angle change, et il se calcule.** Les arrêts des tuiles
+                      * valent pour des proportions proches du carré ; sur cette pilule de
+                      * 143 × 22, l'angle de 135° placerait les deux coins à 86,7 % et 13,3 %,
+                      * en pleine partie éclairée — le liseré y serait à pleine force au lieu
+                      * de s'y éteindre. L'axe doit être perpendiculaire à la diagonale des
+                      * coins à éteindre, soit 180° − atan(h / w) = 171°, où ils retombent à
+                      * 50,7 % et 49,3 %. Voir le calcul complet dans `globals.css`.
+                      *
+                      * ⚠️ **La teinte est celle de la référence, et non l'accent de la page.**
+                      * Le violet ne vient d'aucun jeton : il est posé ici en clair, ce qui est
+                      * assumé et réversible. Deux jetons suffiraient à le ramener au bleu de
+                      * la maison le jour où l'on préfèrera la cohérence à la référence.
+                      *
+                      * ⚠️ **Vingt-six pixels, comme les deux sélecteurs de la page.** Il en
+                      * faisait vingt-deux, ce qui est la hauteur de leurs *segments* — mais
+                      * ce que l'œil compare, c'est le **rail** qui les contient, et celui-ci
+                      * ajoute deux pixels de retrait de chaque côté. Mesuré : segments à 22,
+                      * rails à 26, bouton à 22. Il paraissait donc quatre pixels trop court
+                      * en face de « Total » et de « Compte », alors même qu'il tombait juste
+                      * sur une autre mesure.
+                      *
+                      * ⚠️ **La contrainte de la rangée est respectée, elle n'est pas levée.**
+                      * Ces vingt-six pixels sont ceux de la rangée elle-même — celle du
+                      * bouton de tri de la grille, qu'il ne faut pas dépasser sous peine de
+                      * faire respirer la courbe puis de la reprendre au premier clic. Le
+                      * bouton la remplit exactement au lieu de flotter dedans : rien ne
+                      * bouge au-dessus.
                       */}
                     <button type="button" onClick={() => { setErreurCompte(null); setFormCompte(true); }}
                       title="Déclarer un compte : son genre, sa couleur, son logo."
+                      className="novac-lisere"
                       style={{
-                        marginLeft: "auto", height: 22, display: "flex", alignItems: "center",
-                        gap: 5, padding: "0 9px", borderRadius: RAYONS.xs,
-                        background: CLAIR.carteCreuse, border: `1px solid ${CLAIR.bord}`,
-                        color: CLAIR.texteSecondaire, fontFamily: FONT, fontSize: 11,
-                        fontWeight: 500, cursor: "pointer", flexShrink: 0,
-                        transition: "color 150ms, border-color 150ms",
+                        marginLeft: "auto", height: 26, display: "flex", alignItems: "center",
+                        gap: 6, padding: "0 12px", borderRadius: RAYONS.plein,
+                        background: fondBouton, border: "none",
+                        // ⚠️ Le liseré se peint sur `currentColor` : c'est le blanc du texte
+                        // qui le teinte, et les deux restent donc accordés sans le redire.
+                        // ⚠️ 170° et non 171° : l'angle suit les proportions, et la pilule
+                        // vient de gagner quatre pixels de haut. 180° − atan(26/141) = 169,6°,
+                        // qui place les coins à 48,9 % et 51,1 % — contre 46,2 % et 53,8 % si
+                        // l'on gardait l'ancienne valeur. Voir le calcul dans `globals.css`.
+                        ["--nv-lisere-angle" as string]: "170deg",
+                        // L'ombre portée décolle la pilule du fond ; la lumière du bord haut,
+                        // elle, est désormais l'affaire du liseré.
+                        boxShadow: "0 1px 3px rgba(0,0,0,0.30)",
+                        color: "#FFFFFF", fontFamily: FONT, fontSize: 11,
+                        fontWeight: 700, cursor: "pointer", flexShrink: 0,
+                        transition: "background 150ms, box-shadow 150ms",
                       }}
                       onMouseEnter={e => {
-                        e.currentTarget.style.color = CLAIR.texte;
-                        e.currentTarget.style.borderColor = CLAIR.bordFort;
+                        e.currentTarget.style.background = fondBoutonSurvol;
+                        e.currentTarget.style.boxShadow = "0 2px 6px rgba(0,0,0,0.35)";
                       }}
                       onMouseLeave={e => {
-                        e.currentTarget.style.color = CLAIR.texteSecondaire;
-                        e.currentTarget.style.borderColor = CLAIR.bord;
+                        e.currentTarget.style.background = fondBouton;
+                        e.currentTarget.style.boxShadow = "0 1px 3px rgba(0,0,0,0.30)";
                       }}>
-                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none"
-                        stroke="currentColor" strokeWidth={2.2} strokeLinecap="round"
+                      {/**
+                        * ⚠️ **Un « plus », le dossier ayant rejoint le titre.** Les deux
+                        * pictogrammes se répétaient à quelques centimètres, et celui qui
+                        * nomme la section n'a rien à faire sur le bouton qui l'alimente : là
+                        * on dit *ce qu'on regarde*, ici *ce qu'on fait*. Le signe redevient
+                        * donc le geste, et le dossier reste l'objet.
+                        *
+                        * ⚠️ **Rendu à 14 et non à 24.** La taille d'export du modèle
+                        * dépasserait la pilule, dont les 22 pixels tiennent la hauteur de
+                        * toute la rangée.
+                        */}
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
+                        stroke="currentColor" strokeWidth={1.5}
+                        strokeLinecap="round" strokeLinejoin="round"
                         aria-hidden="true">
-                        <path d="M12 5v14M5 12h14" />
+                        <path d="M12 5v14m-7-7h14" />
                       </svg>
                       Ajouter un compte
                     </button>
@@ -2767,21 +2882,46 @@ function PortfolioPageInner() {
                     * atterrirait dans le CTO et disparaîtrait sous les yeux de celui qui
                     * vient de le saisir. C'est pour lever cela que le dossier se déclare.
                     */
+                  /**
+                    * ⚠️ **La jumelle de « Ajouter un compte », et pas une cousine.** Les deux
+                    * boutons font le même geste à un rang près — déclarer une chose de plus —
+                    * et se succèdent à l'écran quand on ouvre un dossier : le premier
+                    * disparaît, le second prend sa place au même endroit. Ils portaient deux
+                    * habits différents, ce qui donnait à croire à deux natures d'action. Même
+                    * fond tiré de l'avatar, même liseré, même rayon plein, même blanc.
+                    *
+                    * ⚠️ L'angle du liseré suit les proportions : ~160 × 26 donne
+                    * 180° − atan(26/160) = 171°, et non les 170° de la pilule d'à côté, qui
+                    * est plus courte. Voir le calcul dans `globals.css`.
+                    */
                   action={dossierActif?.declare && dossierActif.porteDesTitres && (
                     <button type="button"
                       onClick={() => { setSaisieDansLeDossier(true); setShowTxModal(true); }}
                       title={`Saisir une opération dans ${dossierActif.nom}`}
+                      className="novac-lisere"
                       style={{
-                        display: "flex", alignItems: "center", gap: 5, height: 26,
-                        padding: "0 10px", borderRadius: RAYONS.sm, cursor: "pointer",
-                        border: "none", background: CLAIR.carte, color: CLAIR.texte,
-                        fontFamily: FONT, fontSize: 11.5, fontWeight: 500,
+                        display: "flex", alignItems: "center", gap: 6, height: 26,
+                        padding: "0 12px", borderRadius: RAYONS.plein, cursor: "pointer",
+                        border: "none", background: fondBouton, color: "#FFFFFF",
+                        ["--nv-lisere-angle" as string]: "171deg",
+                        boxShadow: "0 1px 3px rgba(0,0,0,0.30)",
+                        fontFamily: FONT, fontSize: 11, fontWeight: 700,
                         whiteSpace: "nowrap", flexShrink: 0,
+                        transition: "background 150ms, box-shadow 150ms",
+                      }}
+                      onMouseEnter={e => {
+                        e.currentTarget.style.background = fondBoutonSurvol;
+                        e.currentTarget.style.boxShadow = "0 2px 6px rgba(0,0,0,0.35)";
+                      }}
+                      onMouseLeave={e => {
+                        e.currentTarget.style.background = fondBouton;
+                        e.currentTarget.style.boxShadow = "0 1px 3px rgba(0,0,0,0.30)";
                       }}>
-                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none"
-                        stroke="currentColor" strokeWidth={2.2} strokeLinecap="round"
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
+                        stroke="currentColor" strokeWidth={1.5}
+                        strokeLinecap="round" strokeLinejoin="round"
                         aria-hidden="true">
-                        <path d="M12 5v14M5 12h14" />
+                        <path d="M12 5v14m-7-7h14" />
                       </svg>
                       Ajouter une opération
                     </button>

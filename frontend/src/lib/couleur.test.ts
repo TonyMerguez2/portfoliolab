@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest";
 import {
   hexVersRvb, rvbVersHex, rvbVersTsl, tslVersRvb, pourFondSombre, poidsGroupe,
   CLARTE_MIN, CLARTE_MAX, SATURATION_MIN, luminance, contraste, encreSur,
-  decalerClarte,
+  decalerClarte, assombrirPourBlanc,
 } from "./couleur";
 
 describe("conversions", () => {
@@ -181,5 +181,73 @@ describe("decalerClarte", () => {
 
   it("un décalage nul ne change rien", () => {
     expect(decalerClarte("#4aa8f0", 0)).toBe("#4aa8f0");
+  });
+});
+
+describe("assombrirPourBlanc", () => {
+  /**
+   * ⚠️ **La promesse tient sur tout le cube, pas sur trois exemples.** Le pire cas de
+   * `encreSur` — 4,33:1 sur les verts moyens — n'a été trouvé qu'en balayant toutes les
+   * couleurs ; se contenter d'un jaune et d'un bleu ici laisserait passer la même
+   * famille de fonds médians, qui est exactement celle qui pose problème.
+   */
+  it("rend un fond qui porte du blanc, quelle que soit la couleur de départ", () => {
+    for (let r = 0; r < 256; r += 17) {
+      for (let v = 0; v < 256; v += 17) {
+        for (let b = 0; b < 256; b += 17) {
+          const depart = rvbVersHex([r, v, b]);
+          expect(contraste(assombrirPourBlanc(depart), "#FFFFFF")).toBeGreaterThanOrEqual(4.5);
+        }
+      }
+    }
+  });
+
+  it("ne touche pas une couleur déjà assez sombre", () => {
+    // Le bleu marine de l'avatar par défaut porte déjà du blanc : rien à corriger.
+    const marine = "#24446F";
+    expect(contraste(marine, "#FFFFFF")).toBeGreaterThanOrEqual(4.5);
+    expect(assombrirPourBlanc(marine)).toBe(marine);
+  });
+
+  /**
+   * ⚠️ **Ce test-là vient d'un défaut vu à l'écran, pas d'une exigence théorique.**
+   * Un balayage par pas de un centième satisfaisait le contraste mais dépassait la
+   * cible : sur l'indigo d'un avatar, il rendait 4,71 au lieu de 4,50 et s'éloignait
+   * de ΔE 3,59 — assez pour qu'on remarque que le bouton n'a « pas exactement » la
+   * couleur choisie. Atteindre le seuil ne suffit donc pas : il faut l'atteindre en
+   * bougeant le moins possible.
+   */
+  it("s'arrête au seuil au lieu de le dépasser", () => {
+    for (const depart of ["#6366F1", "#4B8746", "#0EA5E9", "#A0A0C8"]) {
+      // ⚠️ Ces quatre-là sont trop clairs au départ : ce sont eux que la fonction doit
+      // corriger, et donc les seuls sur qui la minimalité veut dire quelque chose. Une
+      // couleur déjà lisible — #E11D48 est à 4,70 — est rendue telle quelle, et lui
+      // demander de descendre sous 4,57 reviendrait à exiger qu'on l'abîme.
+      expect(contraste(depart, "#FFFFFF")).toBeLessThan(4.5);
+
+      const c = contraste(assombrirPourBlanc(depart), "#FFFFFF");
+      expect(c).toBeGreaterThanOrEqual(4.5);
+      /**
+       * ⚠️ La borne vient d'un balayage, pas d'un chiffre rond. Le dépassement maximal
+       * mesuré vaut 4,563 — sur #A0A0C8 — soit 1,4 % au-dessus de la cible. Ce reliquat
+       * est celui de la quantification sur huit bits, pas de la recherche : la clarté
+       * exacte est trouvée, c'est l'hexadécimal qui ne sait pas la dire. À comparer aux
+       * 4,71 du balayage par pas de un centième, qui était, lui, évitable.
+       */
+      expect(c).toBeLessThan(4.57);
+    }
+  });
+
+  it("rend intacte une couleur déjà lisible plutôt que de la corriger", () => {
+    // ⚠️ Le pendant du test précédent : ne rien faire est parfois la bonne réponse.
+    expect(assombrirPourBlanc("#E11D48")).toBe("#E11D48");
+  });
+
+  it("garde la teinte en descendant la clarté", () => {
+    // ⚠️ Un jaune vif doit rester jaune : c'est la couleur choisie par l'épargnant, et
+    // seule sa profondeur change. La teinte est conservée à un degré près.
+    const [teinteAvant] = rvbVersTsl(hexVersRvb("#FFD400"));
+    const [teinteApres] = rvbVersTsl(hexVersRvb(assombrirPourBlanc("#FFD400")));
+    expect(Math.abs(teinteApres - teinteAvant)).toBeLessThan(1 / 360);
   });
 });

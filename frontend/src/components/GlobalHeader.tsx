@@ -20,6 +20,7 @@ import { assetExchange } from "@/lib/assets";
  */
 const VIGNETTE = 48;
 import { JETONS, RAYONS, rayonVignette } from "@/lib/palette";
+import Cadre from "@/components/ui/Cadre";
 import { initiale } from "@/lib/initiale";
 import { encreSur } from "@/lib/couleur";
 import { API_URL } from "@/lib/api";
@@ -485,11 +486,30 @@ export default function GlobalHeader() {
           // l'intérieur de la page, où il y a la place. C'est la même erreur qu'au
           // déplacement précédent, en miroir : le champ avait bougé, pas l'ancrage — et le
           // panneau passait alors sous la barre latérale, qu'il recouvrait.
-          <div style={{
-            position:"absolute", top:"calc(100% + 6px)", right:0, width:"420px",
-            background:"rgba(4,17,36,0.97)", border:"1px solid rgba(255,255,255,0.1)",
-            borderRadius:"12px", overflow:"hidden", boxShadow:"0 16px 48px rgba(0,0,0,0.5)", zIndex:60,
-          }} onMouseDown={e => e.preventDefault()}>
+          /**
+           * ⚠️ **Le panneau prend le cadre de la page, comme les fenêtres.** Il portait un
+           * bleu translucide, un bord blanc à 10 %, un rayon de 12 et une ombre écrite ici
+           * — quatre valeurs propres à ce seul endroit. C'est la troisième surface flottante
+           * de l'application, et la dernière à ne pas ressembler aux deux autres.
+           *
+           * ⚠️ **Il naît de son ancrage, pas de son centre.** L'animation partagée avec les
+           * fenêtres est reprise avec une origine en haut à droite : le panneau est accroché
+           * au champ de recherche, et grandir depuis son milieu le ferait venir d'ailleurs
+           * que de l'endroit qu'on vient de toucher.
+           *
+           * ⚠️ **Un porteur enveloppe `Cadre` au lieu de lui passer sa place.** Ce composant
+           * répartit le style entre ses deux couches d'après une liste de clés de
+           * placement, où ne figurent ni `position`, ni `top`, ni `zIndex` : elles
+           * seraient tombées sur la carte intérieure, qui se serait décrochée de son
+           * anneau resté, lui, dans le flux. Le porteur prend donc la place et
+           * l'animation ; `Cadre` ne fait que dessiner.
+           *
+           * ⚠️ **`overflow: hidden` va bien à la carte**, elle : c'est elle qui porte le
+           * rayon, donc elle qui doit rogner la liste qui la déborde.
+           */
+          <div onMouseDown={e => e.preventDefault()} className="novac-panneau-ancre"
+            style={{ position:"absolute", top:"calc(100% + 6px)", right:0, width:"420px", zIndex:60 }}>
+          <Cadre style={{ overflow:"hidden" }}>
             <div style={{ display:"flex", gap:"2px", padding:"6px 8px", borderBottom:"1px solid rgba(255,255,255,0.06)" }}>
               {[{id:"all",label:"Tous"},{id:"EQUITY",label:"Actions"},{id:"ETF",label:"Fonds"},{id:"INDEX",label:"Indices"},{id:"CRYPTOCURRENCY",label:"Crypto"}].map(cat => (
                 <button key={cat.id} onClick={() => { setCategory(cat.id); setDisplayCount(20); }}
@@ -521,6 +541,7 @@ export default function GlobalHeader() {
                 <div style={{ padding:"18px 14px", textAlign:"center", color:"rgba(255,255,255,0.25)", fontSize:"11px" }}>Aucun résultat</div>
               )}
             </div>
+          </Cadre>
           </div>
         )}
         </div>

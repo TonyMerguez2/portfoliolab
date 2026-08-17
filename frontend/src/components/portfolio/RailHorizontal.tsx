@@ -93,7 +93,13 @@ export default function RailHorizontal({
       style={{
         position: "absolute", top: "50%", transform: "translateY(-50%)",
         [sens < 0 ? "left" : "right"]: 2, zIndex: 3,
-        width: 28, height: 28, borderRadius: "50%", cursor: "pointer",
+        // ⚠️ **Vingt-six, comme toutes les commandes de la vue générale.** Elles y font 26
+        // sans exception — sélecteur de dossier, type de tracé, découpage de la
+        // répartition, bouton de tri de la grille, pilule d'ajout — et ces flèches étaient
+        // les seules à 28. L'écart ne se voit pas de front, puisqu'elles flottent sur les
+        // cartes au lieu de tenir une rangée ; il se voyait à la mesure, et deux pixels
+        // suffisent à trahir un contrôle venu d'ailleurs.
+        width: 26, height: 26, borderRadius: "50%", cursor: "pointer",
         display: "flex", alignItems: "center", justifyContent: "center",
         background: "rgba(8,20,42,0.88)", border: "1px solid rgba(255,255,255,0.14)",
         color: "rgba(255,255,255,0.75)", backdropFilter: "blur(8px)",

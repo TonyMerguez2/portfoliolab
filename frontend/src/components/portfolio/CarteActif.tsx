@@ -111,6 +111,20 @@ export default function CarteActif({
         // Une carte d'aperçu ne se clique pas et ne se survole pas : elle est là pour
         // montrer ce que le dossier contient, et c'est le dossier qu'on ouvre.
         pointerEvents: inerte ? "none" : undefined,
+        /**
+         * ⚠️ **Et elle ne porte pas d'ombre non plus.** Une tuile pose une ombre noire de
+         * quarante-quatre pixels de flou, décalée de quatorze vers le bas : sur la grille
+         * elle tombe sur le fond de page et donne son relief à la carte. Dans un dossier,
+         * elle tombe sur le **plan du dossier**, qui commence quelques pixels plus bas —
+         * une grande tache sombre en travers de la pochette, qu'on remarque bien avant de
+         * comprendre d'où elle vient. Relevé à l'écran : `0 14px 44px rgba(0,0,0,0.28)`
+         * portée par la carte d'aperçu, pas par le dossier.
+         *
+         * Le dossier a déjà son propre halo pour se détacher ; les cartes qu'il range n'ont
+         * rien à en dire — dans la vie non plus, le contenu d'une pochette n'a pas d'ombre
+         * sur sa couverture.
+         */
+        ...(inerte ? { boxShadow: "none" } : {}),
       }}
       style={{ height: "100%", display: "flex", flexDirection: "column",
         padding: `${CARTE_ACTIF.marge.haut}px ${CARTE_ACTIF.marge.cote}px` }}>

@@ -3,10 +3,9 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import ReactionAvatar from "@/components/ReactionAvatar";
 import CarteActif from "@/components/portfolio/CarteActif";
 import RailHorizontal from "@/components/portfolio/RailHorizontal";
-import { arrange, assetClass, type GridAsset, type SortKey } from "@/lib/portfolio";
+import { arrange, type GridAsset, type SortKey } from "@/lib/portfolio";
 import { FONT, NUM } from "@/lib/typography";
 import { CLAIR, RAYONS } from "@/lib/palette";
-import Segments from "@/components/ui/Segments";
 
 export type { GridAsset, SortKey };
 
@@ -55,29 +54,20 @@ export default function AssetGrid({
    */
   action?: React.ReactNode;
 }) {
-  const [filter, setFilter] = useState("Tous");
   const [sort, setSort] = useState<SortKey>("poids");
   const [menuTri, setMenuTri] = useState(false);
 
-  // Seules les classes réellement présentes sont proposées : un onglet « Crypto »
-  // sur un portefeuille d'actions ne mène qu'à une grille vide.
-  const classes = useMemo(() => {
-    const present = new Set(assets.map(a => assetClass(a.ticker)));
-    return ["Tous", ...(["Actions", "ETF", "Crypto"] as const).filter(c => present.has(c))];
-  }, [assets]);
-
   /**
-   * Le filtre réellement appliqué.
+   * ⚠️ **Le filtre par classe est parti, et sa mécanique avec lui.** Il restait sinon un
+   * état `filter` que plus personne ne changeait, la liste des classes présentes, et la
+   * garde qui ramenait à « Tous » quand le choix perdait son sens — trois rouages entiers
+   * pour une valeur devenue constante. Du code mort ne protège de rien et se relit comme
+   * une intention.
    *
-   * ⚠️ **Dérivé, parce que la liste des classes bouge sous lui.** Un dossier ouvert
-   * au-dessus rétrécit `assets`, donc `classes` : choisir « Actions » puis ouvrir
-   * « Crypto » laissait une grille vide, sans onglet marqué, sans rien qui explique
-   * pourquoi — mesuré, 0 carte pour 3 attendues. On retombe sur « Tous » tant que le
-   * choix n'a plus de sens, sans l'effacer : refermer le dossier le rend.
+   * `arrange` garde son paramètre : il sert au tri, et « Tous » y veut dire « ne retire
+   * personne ». La grille montre donc tout le dossier, qui est déjà un filtre à lui seul.
    */
-  const filtreActif = classes.indexOf(filter) >= 0 ? filter : "Tous";
-
-  const shown = useMemo(() => arrange(assets, filtreActif, sort), [assets, filtreActif, sort]);
+  const shown = useMemo(() => arrange(assets, "Tous", sort), [assets, sort]);
 
   /**
    * La variation moyenne des lignes montrées, qui sert de repère à l'avatar.
@@ -97,14 +87,18 @@ export default function AssetGrid({
           concept. Le titre vivait au-dessus, dans une barre séparée qui
           portait aussi une infobulle et un bouton d'ajout absents du concept. */}
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, flexShrink: 0 }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-          <span style={{ fontFamily: FONT, fontSize: 12.5, fontWeight: 600, color: CLAIR.surFond, whiteSpace: "nowrap" }}>
-            {titre}
-          </span>
-        <Segments taille="sm" ariaLabel="Filtrer par classe d'actif"
-          valeur={filtreActif} onChange={setFilter}
-          options={classes.map(c => ({ valeur: c, libelle: c }))} />
-        </div>
+        {/**
+          * ⚠️ **Le filtre par classe est retiré, à la demande.** Il proposait « Tous »,
+          * « Actions », « ETF », « Crypto » à côté du chemin. Ce qu'on perd est réel — sur
+          * un dossier mêlant actions et crypto, il n'y a plus de façon de n'en voir qu'une
+          * — mais un dossier est déjà un filtre, et deux découpages superposés dans la
+          * même barre demandaient de comprendre lequel commande l'autre. La grille montre
+          * donc tout le dossier, et le tri reste pour l'ordonner.
+          */}
+        <span style={{ fontFamily: FONT, fontSize: 12.5, fontWeight: 600, color: CLAIR.surFond,
+                       whiteSpace: "nowrap", minWidth: 0 }}>
+          {titre}
+        </span>
         <div style={{ display: "flex", alignItems: "center", gap: 6, position: "relative", flexShrink: 0 }}>
           {/**
             * ⚠️ **L'action tient dans les 26 pixels de cette rangée, et ce n'est pas
@@ -120,9 +114,21 @@ export default function AssetGrid({
           </span>
           <button type="button" onClick={() => setMenuTri(v => !v)}
             aria-haspopup="listbox" aria-expanded={menuTri}
+            className="novac-lisere"
+            /**
+             * ⚠️ **Même fabrication que la pilule d'ajout, teinte à part.** Rayon plein,
+             * 26 pixels, le liseré des tuiles : les deux se ressemblent assez pour se lire
+             * comme une même famille. Mais le fond reste celui d'une carte et l'encre
+             * normale, parce qu'une action qui *crée* et un réglage qui *ordonne* ne
+             * doivent pas peser pareil à l'œil. Tranché avec l'épargnant.
+             *
+             * ⚠️ L'angle du liseré suit les proportions : ~86 × 26 donne
+             * 180° − atan(26/86) = 163°. Voir le calcul dans `globals.css`.
+             */
             style={{
-              display: "flex", alignItems: "center", gap: 6, height: 26, padding: "0 10px",
-              borderRadius: RAYONS.sm, cursor: "pointer", border: "none",
+              display: "flex", alignItems: "center", gap: 6, height: 26, padding: "0 12px",
+              borderRadius: RAYONS.plein, cursor: "pointer", border: "none",
+              ["--nv-lisere-angle" as string]: "163deg",
               background: menuTri ? CLAIR.carteCreuse : CLAIR.carte,
               color: CLAIR.texte, fontFamily: FONT, fontSize: 11.5, fontWeight: 500,
               transition: "background 140ms",
@@ -137,9 +143,16 @@ export default function AssetGrid({
           {menuTri && (
             <>
               <div style={{ position: "fixed", inset: 0, zIndex: 40 }} onClick={() => setMenuTri(false)} />
+              {/**
+                * ⚠️ **Le bord est celui des cartes, pas un gris plus clair.** La liste
+                * portait `bordFort` — rgb(30,41,57) — quand tout panneau de la page porte
+                * `bord`, rgb(16,24,40). Le fond, lui, était déjà le bon : c'est le seul
+                * trait qui la désignait comme venue d'ailleurs. Un menu qui s'ouvre est un
+                * conteneur de plus, il n'a pas à s'annoncer par une arête plus vive.
+                */}
               <div role="listbox" style={{
                 position: "absolute", top: "calc(100% + 5px)", right: 0, zIndex: 41, minWidth: 132,
-                background: CLAIR.carte, border: `1px solid ${CLAIR.bordFort}`,
+                background: CLAIR.carte, border: `1px solid ${CLAIR.bord}`,
                 borderRadius: RAYONS.md, padding: 4, boxShadow: CLAIR.ombre,
               }}>
                 {(Object.keys(TRIS) as SortKey[]).map(k => (

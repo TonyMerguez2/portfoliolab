@@ -37,12 +37,25 @@ export default function PastillesCouleur({
            * pastille de vingt-deux pixels, un bord de la même famille que le fond
            * disparaît ; l'anneau passe par la couleur de la carte, donc se voit sur
            * n'importe quelle teinte.
+           *
+           * ⚠️ **Et il se creuse à l'intérieur, au lieu de pousser vers l'extérieur.**
+           * Il était porté par deux ombres externes de deux et quatre pixels : la pastille
+           * retenue débordait donc de quatre pixels de chaque côté, soit davantage que les
+           * six qui la séparent de sa voisine. Elle paraissait plus grosse que les autres
+           * et venait mordre sur elles — un choix ne devrait pas déformer la rangée où il
+           * se fait.
+           *
+           * ⚠️ **Deux ombres internes, et leur ordre fait tout le dessin.** La liste se
+           * peint de la première à la dernière, la première **au-dessus** : les deux pixels
+           * de couleur recouvrent le bord de la bande sombre de quatre, ce qui laisse lire
+           * un anneau de la teinte, un intervalle sombre, puis le cœur resté plein. Le tout
+           * dans les vingt-deux pixels d'origine, sans qu'un seul pixel n'en sorte.
            */
           style={{
             width: cote, height: cote, borderRadius: "50%", cursor: "pointer",
             background: c.hex, border: "none",
             boxShadow: couleur === c.hex
-              ? `0 0 0 2px ${CLAIR.carte}, 0 0 0 4px ${c.hex}` : "none",
+              ? `inset 0 0 0 2px ${c.hex}, inset 0 0 0 4px ${CLAIR.carte}` : "none",
           }} />
       ))}
     </div>

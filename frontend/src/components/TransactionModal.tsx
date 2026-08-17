@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
 import AssetLogo from "@/components/AssetLogo";
+import FenetreModale from "@/components/ui/FenetreModale";
 import { FONT } from "@/lib/typography";
 import { API_URL as API } from "@/lib/api";
 
@@ -163,7 +164,6 @@ export default function TransactionModal({
   const [saisieEn,       setSaisieEn]       = useState<"quantite" | "montant">("quantite");
   const [montant,        setMontant]        = useState("");
   const [focusedField,   setFocusedField]   = useState<string | null>(null);
-  const [cardVisible,    setCardVisible]    = useState(false);
 
   const debounceRef   = useRef<NodeJS.Timeout | undefined>(undefined);
   const searchInputRef = useRef<HTMLInputElement>(null);
@@ -173,12 +173,6 @@ export default function TransactionModal({
    */
   const prixEdite     = useRef(false);
 
-  // ── Animation d'entrée (remplace le @keyframes CSS) ─────────────────────────
-  useEffect(() => {
-    if (!isOpen) { setCardVisible(false); return; }
-    const raf = requestAnimationFrame(() => setCardVisible(true));
-    return () => cancelAnimationFrame(raf);
-  }, [isOpen]);
 
   // ── Escape to close ──────────────────────────────────────────────────────────
   useEffect(() => {
@@ -835,38 +829,29 @@ export default function TransactionModal({
 
   if (embedded) return contenu;
 
+  /**
+   * ⚠️ **La fenêtre est celle de tout le monde, elle n'a plus la sienne.** Elle portait un
+   * fond translucide bleuté, un bord blanc à 10 %, un rayon de 16, une ombre écrite à la
+   * main et un flou de 32 — cinq valeurs qui ne se retrouvaient nulle part ailleurs dans
+   * l'application. Le cadre double de la page les remplace toutes.
+   *
+   * ⚠️ **Son animation en JavaScript disparaît avec.** Elle existait « pour éviter un
+   * `<style>` global », ce qui était la bonne objection au moment de l'écrire ; la feuille
+   * globale porte désormais ces images-clés pour les trois fenêtres, et un état React
+   * remis à zéro à chaque ouverture ne rend plus service à personne. Ce qu'on y gagne :
+   * `prefers-reduced-motion` s'applique enfin ici aussi, ce qu'un `transition` en ligne ne
+   * savait pas faire.
+   *
+   * ⚠️ **`handleCardKey` reste sur le contenu**, et non sur le voile : il sert aux touches
+   * de la saisie, pas à la fermeture, que la coquille prend en charge.
+   */
   return (
-    <>
-      {/* Voile */}
-      <div
-        onClick={onClose}
-        style={{
-          position: "fixed", inset: 0, zIndex: 200,
-          background: "rgba(0,0,0,0.60)",
-          backdropFilter: "blur(4px)", WebkitBackdropFilter: "blur(4px)",
-        }}
-      />
-      {/* Fenêtre — animation en JS pour éviter un <style> global */}
-      <div
-        onKeyDown={handleCardKey}
-        onClick={e => e.stopPropagation()}
-        style={{
-          position: "fixed", top: "50%", left: "50%", zIndex: 201,
-          transform: `translate(-50%,-50%) scale(${cardVisible ? 1 : 0.97})`,
-          opacity: cardVisible ? 1 : 0,
-          transition: "opacity 180ms ease, transform 180ms cubic-bezier(0.34,1,0.56,1)",
-          width: 440, maxWidth: "calc(100vw - 32px)",
-          background: "rgba(4,17,36,0.97)",
-          border: "1px solid rgba(255,255,255,0.10)",
-          backdropFilter: "blur(32px)", WebkitBackdropFilter: "blur(32px)",
-          borderRadius: 16,
-          boxShadow: "0 32px 80px rgba(0,0,0,0.65), 0 1px 0 rgba(255,255,255,0.07) inset",
-          fontFamily: FONT,
-          padding: "20px 24px 24px",
-        }}
-      >
+    <FenetreModale onFermer={onClose} largeur={440} zIndex={200}
+      etiquette="Saisir une opération"
+      style={{ padding: "20px 24px 24px", fontFamily: FONT }}>
+      <div onKeyDown={handleCardKey} style={{ display: "contents" }}>
         {contenu}
       </div>
-    </>
+    </FenetreModale>
   );
 }

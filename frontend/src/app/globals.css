@@ -53,7 +53,20 @@
   }
 }
 
-/* Custom scrollbar */
+/* Barre de défilement.
+
+   ⚠️ **Le pouce suit le thème, il n'est plus posé en clair.** Il valait #cbd5e1 —
+   un gris pâle hérité du gabarit de départ, écrit avant que les thèmes n'existent.
+   Sur le thème sombre il tranchait franchement : relevé sur la saisie d'une
+   opération, une barre lumineuse le long du bord droit de la fenêtre, qu'on prend
+   pour un défaut de tracé avant de comprendre que c'est une barre. Le défaut
+   existait partout où quelque chose défilait ; il ne s'était vu nulle part parce
+   qu'aucune de ces zones n'était bordée d'assez près pour qu'on la remarque.
+
+   Les jetons le rendent discret sur les deux thèmes sans qu'on ait à choisir : sur
+   fond sombre, `bord-fort` est un gris bleuté à peine détaché ; sur fond clair, il
+   redevient un gris pâle. C'est la même intention dans les deux cas — se voir quand
+   on la cherche, s'oublier sinon. */
 ::-webkit-scrollbar {
   width: 6px;
   height: 6px;
@@ -62,8 +75,11 @@
   background: transparent;
 }
 ::-webkit-scrollbar-thumb {
-  background: #cbd5e1;
+  background: var(--nv-bord-fort);
   border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--nv-texte-attenue);
 }
 
 /* ── Jetons Novac ──────────────────────────────────────────────────────────
@@ -772,7 +788,12 @@ canvas + div {
    avoir laissées locales à la page graphique est précisément ce qui les
    avait fait diverger.
    ───────────────────────────────────────────────────────────── */
-.novac-tile::before {
+/* Le tracé, commun à la tuile et à la pilule : un pixel constant, découpé en anneau par
+   un masque `xor`, et teinté par `currentColor` — c'est ce qui accorde le liseré à ce
+   qu'il entoure sans qu'on ait à le redire. Les arrêts, eux, dépendent des proportions
+   et sont donnés séparément plus bas. */
+.novac-tile::before,
+.novac-lisere::before {
   content: '';
   position: absolute;
   z-index: 4;
@@ -781,6 +802,12 @@ canvas + div {
   border-radius: inherit;
   padding: 1px;
   pointer-events: none;
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+}
+
+.novac-tile::before {
   /* Les arrêts sont **symétriques autour de 50 %**, et ce n'est pas une préférence
      esthétique : c'est ce qui fait que le liseré s'éteint avant l'angle haut-droit
      *et* avant l'angle bas-gauche, au lieu d'un seul des deux.
@@ -801,7 +828,12 @@ canvas + div {
      angles avec de la marge. ⚠️ Cette marge dépend des proportions : un élément
      beaucoup plus large que haut ramènerait ses angles vers 25 % et 75 %, hors de la
      plage, et le liseré les atteindrait de nouveau. La règle vaut pour des tuiles
-     proches du carré, ce qu'elles sont toutes ici. */
+     proches du carré, ce qu'elles sont toutes ici.
+
+     ⚠️ **Les arrêts valent pour la tuile, le tracé est partagé plus bas.** Un élément
+     très large emprunte la même technique — un pixel, masque `xor`, `currentColor` —
+     mais ni le même angle ni les mêmes arrêts, pour la raison qui précède. Voir
+     `.novac-lisere::before`. */
   background: linear-gradient(135deg,
     color-mix(in srgb, currentColor 44%, transparent) 0%,
     color-mix(in srgb, currentColor 34%, transparent) 20%,
@@ -811,9 +843,53 @@ canvas + div {
     color-mix(in srgb, currentColor 14%, transparent) 68%,
     color-mix(in srgb, currentColor 34%, transparent) 80%,
     color-mix(in srgb, currentColor 44%, transparent) 100%);
-  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
-  -webkit-mask-composite: xor;
-  mask-composite: exclude;
+}
+
+/* Le même liseré sur un élément très large — la pilule d'action.
+
+   ⚠️ **L'angle se calcule, il ne s'estime pas.** Les deux angles opposés étant
+   symétriques du centre, ils se projettent toujours symétriquement autour de 50 % :
+   reste à les en rapprocher. L'axe doit être perpendiculaire à la diagonale joignant
+   les coins qu'on veut éteindre, soit 180° − atan(h / w). Sur une pilule de 141 × 22
+   cela fait 171°, où les angles retombent à 50,7 % et 49,3 % ; à 135° ils tomberaient à
+   86,7 % et 13,3 %, en pleine partie éclairée. Le défaut vaut 135° pour qu'un élément
+   proche du carré n'ait rien à déclarer.
+
+   ⚠️ **Les arrêts de la tuile y donnaient une arête, et c'est une affaire de longueur.**
+   La ligne de dégradé mesure |w·sin θ| + |h·cos θ| : 314 px sur la tuile, mais seulement
+   **44 px** ici, l'axe étant presque vertical sur vingt-deux pixels de haut. Les mêmes
+   pourcentages y couvrent donc sept fois moins de matière — la descente de 14 % à zéro,
+   large de six points, tenait en 2,6 pixels et se lisait comme une coupure. Relevé à
+   l'écran : « trop net ».
+
+   D'où deux corrections. La descente s'étale sur toute la moitié du parcours, en cinq
+   paliers rapprochés plutôt qu'en trois écarts, ce qui donne vingt-deux pixels de fondu
+   de chaque côté au lieu de deux et demi. Et le maximum tombe de 44 % à 24 % : sur un
+   aplat saturé, le liseré n'a pas à souligner le bord, seulement à le laisser deviner. */
+.novac-lisere::before {
+  background: linear-gradient(var(--nv-lisere-angle, 135deg),
+    color-mix(in srgb, currentColor 24%, transparent) 0%,
+    color-mix(in srgb, currentColor 20%, transparent) 14%,
+    color-mix(in srgb, currentColor 15%, transparent) 26%,
+    color-mix(in srgb, currentColor 10%, transparent) 35%,
+    color-mix(in srgb, currentColor 5%, transparent) 43%,
+    transparent 50%,
+    color-mix(in srgb, currentColor 5%, transparent) 57%,
+    color-mix(in srgb, currentColor 10%, transparent) 65%,
+    color-mix(in srgb, currentColor 15%, transparent) 74%,
+    color-mix(in srgb, currentColor 20%, transparent) 86%,
+    color-mix(in srgb, currentColor 24%, transparent) 100%);
+}
+
+/* Le liseré seul, sans le fond ni le tramage de la tuile.
+
+   `.novac-tile` apporte trois couches : le liseré, un fond en lavis et un grain. Un
+   bouton n'a besoin que de la première — son aplat est posé en ligne et le grain n'a
+   rien à dissoudre sur vingt-deux pixels de haut. La classe ne porte donc que
+   l'ancrage ; le tracé, lui, est partagé avec la tuile juste au-dessus, pour que les
+   deux ne puissent pas diverger comme l'avaient fait les versions locales à chaque page. */
+.novac-lisere {
+  position: relative;
 }
 
 /* Il n'y a pas non plus de couche de reflet, et c'est délibéré.
@@ -989,3 +1065,173 @@ canvas + div {
     --novac-verre: 207deg;
   }
 }
+
+/* ── Apparition des fenêtres et des panneaux ───────────────────────────────
+   Le voile et la fenêtre entrent séparément, et c'est ce qui rend le geste
+   lisible : l'assombrissement pose le décor, la fenêtre y arrive ensuite.
+
+   ⚠️ **Un ressort amorti, et non une courbe qui freine.** Le réglage précédent
+   était un `cubic-bezier` décélérant : il arrivait *à* sa taille finale sans
+   jamais la dépasser, ce qui est propre mais inerte. Ce qu'on cherche est le
+   geste d'un widget d'iOS — la fenêtre dépasse d'un cheveu, puis revient se
+   poser. C'est ce dépassement, et lui seul, qui fait croire à une masse.
+
+   ⚠️ **Les images-clés sont calculées, pas dessinées à la main.** Elles sont la
+   réponse indicielle d'un ressort amorti, à la façon de SwiftUI :
+
+       x(t) = 1 - e^(-Zwn*t) * [cos(wd*t) + (Zwn/wd)*sin(wd*t)]
+
+   avec une réponse de 0,34 s et un amortissement de 0,50 pour la fenêtre. Le
+   dépassement qui en résulte vaut **+1,3 %** : l'échelle culmine à 1,013 vers
+   40 % du parcours, puis retombe. Mesuré sur plusieurs réglages avant de
+   choisir — à 0,62 d'amortissement le dépassement tombe à 0,5 %, invisible ; à
+   0,45 il monte à 1,6 % et commence à faire caoutchouc. Un rebond « léger » se
+   situe entre les deux, et c'est une valeur, pas une impression.
+
+   ⚠️ **L'opacité arrive avant la forme.** Elle est pleine dès 20 % du parcours,
+   quand l'échelle en est encore à 0,976. Sans cela, on voit la fenêtre finir de
+   grandir en même temps qu'elle finit d'apparaître, et les deux mouvements se
+   brouillent : le rebond ne se lit que sur une forme déjà opaque.
+
+   ⚠️ **Le déplacement reste de dix pixels.** Au-delà, l'œil suit la trajectoire
+   au lieu de regarder ce qui arrive, et l'ouverture d'une fenêtre devient un
+   petit spectacle qu'on subit plusieurs fois par minute.
+
+   ⚠️ **`both` retient les deux bouts.** Sans lui, la première image du panneau
+   est son état final : il apparaît en pleine lumière, puis recule pour rejouer
+   son entrée. Un clignotement d'une trame, mais qui se voit. */
+@keyframes novac-voile-entree {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+@keyframes novac-fenetre-entree {
+  0%   { opacity: 0.000; transform: translateY(10.00px) scale(0.9200); }
+  10%  { opacity: 0.556; transform: translateY(7.47px)  scale(0.9402); }
+  20%  { opacity: 1.000; transform: translateY(3.06px)  scale(0.9755); }
+  30%  { opacity: 1.000; transform: translateY(-0.22px) scale(1.0018); }
+  40%  { opacity: 1.000; transform: translateY(-1.55px) scale(1.0124); }
+  50%  { opacity: 1.000; transform: translateY(-1.44px) scale(1.0115); }
+  60%  { opacity: 1.000; transform: translateY(-0.76px) scale(1.0060); }
+  70%  { opacity: 1.000; transform: translateY(-0.12px) scale(1.0010); }
+  80%  { opacity: 1.000; transform: translateY(0.21px)  scale(0.9983); }
+  90%  { opacity: 1.000; transform: translateY(0.26px)  scale(0.9979); }
+  100% { opacity: 1.000; transform: translateY(0)       scale(1); }
+}
+
+/* Le même ressort, plus serré : réponse 0,28 s, amortissement 0,62, soit
+   +0,3 % de dépassement. Un panneau accroché à un champ accompagne une frappe,
+   il ne ponctue pas une décision — le rebond doit s'y deviner plutôt que s'y
+   voir, et le trajet est deux fois plus court. */
+@keyframes novac-panneau-entree {
+  0%   { opacity: 0.000; transform: translateY(6.00px)  scale(0.9600); }
+  10%  { opacity: 0.413; transform: translateY(4.87px)  scale(0.9675); }
+  20%  { opacity: 1.000; transform: translateY(2.82px)  scale(0.9812); }
+  30%  { opacity: 1.000; transform: translateY(1.05px)  scale(0.9930); }
+  40%  { opacity: 1.000; transform: translateY(-0.02px) scale(1.0001); }
+  50%  { opacity: 1.000; transform: translateY(-0.45px) scale(1.0030); }
+  60%  { opacity: 1.000; transform: translateY(-0.48px) scale(1.0032); }
+  70%  { opacity: 1.000; transform: translateY(-0.34px) scale(1.0022); }
+  80%  { opacity: 1.000; transform: translateY(-0.17px) scale(1.0011); }
+  90%  { opacity: 1.000; transform: translateY(-0.04px) scale(1.0003); }
+  100% { opacity: 1.000; transform: translateY(0)       scale(1); }
+}
+
+.novac-voile-modale {
+  animation: novac-voile-entree 200ms ease-out both;
+}
+
+/* ⚠️ **`linear`, et ce n'est pas un oubli.** L'amortissement vit déjà dans les
+   images-clés : une courbe d'accélération par-dessus les déformerait, et le
+   ressort calculé ne serait plus celui qu'on voit. */
+.novac-fenetre-modale {
+  animation: novac-fenetre-entree 450ms linear both;
+}
+
+/* Un panneau ancré à un champ — la recherche, un menu — plutôt qu'une fenêtre
+   centrée. Il naît de son point d'ancrage : l'origine de la transformation le
+   dit, sans quoi il grandirait depuis son centre et semblerait venir d'ailleurs
+   que du champ qu'on vient de toucher. */
+.novac-panneau-ancre {
+  transform-origin: top right;
+  animation: novac-panneau-entree 320ms linear both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  /* ⚠️ Les fenêtres restent, seule leur arrivée est coupée : `animation: none`
+     rendrait l'élément à son état de repos, qui est bien l'état visible — c'est
+     `both` qui l'exigeait, et c'est lui qui rend cette coupure sûre. */
+  .novac-voile-modale,
+  .novac-fenetre-modale,
+  .novac-panneau-ancre { animation: none; }
+}
+
+/* ── Surfaces de saisie ────────────────────────────────────────────────────
+   Les champs et les choix d'une fenêtre : là où l'on écrit, et là où l'on
+   prend une décision d'un clic.
+
+   ⚠️ **Leur fond est le gris du liseré, pas un creux translucide.** Ils
+   portaient `carte-creuse`, un voile qui laisse passer ce qu'il y a dessous :
+   sur le fond d'une carte, cela donne une surface indécise, ni creusée ni
+   posée. `--nv-bord` est la valeur qui cerne déjà tous les panneaux ; l'employer
+   en aplat fait des champs qui appartiennent visiblement au même jeu.
+
+   ⚠️ **Trois états, et l'écart entre eux se mesure en un pixel.** Au repos le
+   bord est transparent — la surface se suffit. Au survol un liseré paraît, pour
+   dire que c'est vivant. Au clic il s'épaissit : c'est ce qui répond « je vous
+   écoute » sans faire clignoter quoi que ce soit.
+
+   ⚠️ **L'épaisseur du focus vient d'une ombre, pas d'un bord plus large.**
+   Passer de 1 à 2 pixels de bordure décale le contenu d'un pixel au moment
+   précis où l'on commence à taper — le curseur saute. Une ombre portée sans
+   flou se peint **hors** de la boîte : le trait fait deux pixels, et rien ne
+   bouge. */
+.novac-surface-saisie {
+  background: var(--nv-bord);
+  border: 1px solid transparent;
+  transition: background 150ms, border-color 150ms, box-shadow 150ms;
+}
+
+.novac-surface-saisie:hover {
+  border-color: var(--nv-bord-fort);
+}
+
+/* ⚠️ **Au clic, le fond passe à celui du conteneur : le champ se creuse.** Au
+   repos il est *posé* — un aplat plus clair que la carte qui le porte —, et le
+   bord épaissi ne suffisait pas à dire qu'on y écrit maintenant : il restait une
+   plaque, simplement cerclée. En prenant la couleur du panneau, il devient un
+   trou dans la surface, et le trait qui l'entoure se lit comme le bord de ce
+   trou. C'est le même renversement que celui du cadre des cartes, où le liseré
+   éclaire pendant que l'anneau se creuse. */
+.novac-surface-saisie:focus,
+.novac-surface-saisie:focus-visible,
+.novac-surface-saisie:focus-within {
+  background: var(--nv-carte);
+  border-color: var(--nv-bord-fort);
+  box-shadow: 0 0 0 1px var(--nv-bord-fort);
+  outline: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .novac-surface-saisie { transition: none; }
+}
+
+/* ── Écran du terminal ─────────────────────────────────────────────────────
+   Trois mouvements, tous conçus pour ne pas se voir directement — on doit
+   remarquer que l'écran est *allumé*, jamais qu'il est *animé*.
+
+   ⚠️ **Les durées sont volontairement mal accordées entre elles.** 6,1 s, 9,7 s
+   et 4,3 s : aucune n'est un multiple d'une autre, si bien que les trois ne se
+   retrouvent jamais en phase. Des durées rondes — 4, 8, 12 — auraient produit un
+   battement commun toutes les vingt-quatre secondes, et c'est ce battement que
+   l'œil finit par attendre.
+
+   ⚠️ **Aucune n'anime une propriété qui déclenche une mise en page.** Opacité et
+   `transform` seulement : le compositeur s'en charge, et un avatar reste un
+   avatar même à dix exemplaires sur la vue générale.
+
+   ⚠️ **Les amplitudes sont minuscules et c'est le sujet.** Le halo varie de sept
+   centièmes d'opacité, la bande traverse l'écran en dix secondes, les yeux
+   respirent de six centièmes. Chaque valeur a été baissée jusqu'à ce que le
+   mouvement cesse d'attirer le regard tout en restant perceptible si on le
+   cherche. */

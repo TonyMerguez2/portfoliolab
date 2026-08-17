@@ -32,11 +32,22 @@ export default function FilAriane({
   };
   return (
     <nav aria-label="Chemin" style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
+      {/**
+        * ⚠️ **Le retour est en négatif, et c'est ce qui le fait exister.** Il portait le
+        * fond creux et l'encre secondaire de tout ce qui l'entoure : sur une barre déjà
+        * pleine de gris, le seul geste qui *sort* de l'écran était le moins visible de
+        * tous. Un disque blanc à flèche noire ne demande aucune couleur et se trouve du
+        * premier coup d'œil.
+        *
+        * ⚠️ **Le noir est celui de l'encre, pas un noir pur.** `#0B1220` est la teinte que
+        * `couleur.ts` pose déjà sur les fonds vifs, pour la raison qu'il y donne : le noir
+        * absolu pique sur une surface claire.
+        */}
       <button type="button" onClick={onRacine} aria-label={`Revenir à ${racine}`}
         style={{
           width: 24, height: 24, borderRadius: "50%", flexShrink: 0, border: 0,
           display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer",
-          background: CLAIR.carteCreuse, color: CLAIR.texteSecondaire,
+          background: "#FFFFFF", color: "#0B1220",
         }}>
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
           strokeWidth={2.4} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
