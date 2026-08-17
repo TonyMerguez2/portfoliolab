@@ -1271,19 +1271,25 @@ const fenteDeVue = () => {
 };
 
 /**
- * La crête, du cimier au menton.
+ * La crête, **en deux flancs** — `cote` vaut −1 à gauche de l'arête, 1 à droite.
  *
  * ⚠️ **Étranglée sur la traversée du regard, évasée au-dessus et au-dessous.** C'est la
  * forme même d'un nasal : il n'a de place qu'entre les yeux, et rien ne l'empêche de
  * s'élargir là où il n'y a plus d'œil à éviter. Une bande de largeur constante aurait été
  * soit trop grêle en haut, soit impossible au milieu.
+ *
+ * ⚠️ **Deux tracés qui se partagent l'axe, et non un seul rempli d'un dégradé.** Un dégradé
+ * en travers d'une bande produit un tube : la valeur y varie *continûment*, ce que fait un
+ * cylindre et jamais une arête. Une arête, c'est deux plans qui se rencontrent, donc une
+ * **discontinuité** de valeur exactement sur l'axe. C'est la différence entre une pièce
+ * forgée et une pièce dessinée, et aucune finesse de dégradé ne la remplace : la première
+ * version, à un seul dégradé, se lisait comme un tuyau collé sur le heaume.
  */
-const creteDuHeaume = () => {
+const flancDeCrete = (cote: -1 | 1) => {
   const { milieu: m, largeur: l } = HEAUME.entreLesYeux;
-  const g = m - l / 2;
-  const d = m + l / 2;
-  return `M${m} -106L${d + 13} -72L${d} -40L${d} 46L${d + 21} 88`
-    + `L${g - 21} 88L${g} 46L${g} -40L${g - 13} -72Z`;
+  const b = m + cote * (l / 2);
+  return `M${m} -106L${m + cote * 13} -72L${b} -40L${b} 46L${b + cote * 21} 88`
+    + `L${m} 88L${m} 46L${m} -40Z`;
 };
 
 /** Les quatre valeurs d'un acier forgé, de l'arête éclairée au fond de gorge. */
@@ -1368,19 +1374,47 @@ const CHEVALIER: Skin = {
     },
     {
       /**
-       * La crête, éclairée sur son flanc gauche.
+       * La joue droite du ventail : la même chute, d'un demi-ton en dessous.
        *
-       * ⚠️ **Un dégradé de flanc, pas de hauteur.** Le nasal est une arête verticale : ce
-       * qui la fait saillir est le passage brutal du clair au sombre *en travers*, pas de
-       * haut en bas. Lui donner le dégradé des plaques l'aurait aplatie contre elles au
-       * lieu de l'en détacher.
+       * ⚠️ **Un demi-ton, pas un ton entier.** La première version descendait franchement,
+       * et la joue droite fusionnait avec le flanc sombre du nasal en une seule masse noire :
+       * on ne lisait plus deux joues rivetées mais un heaume à moitié éteint. Deux plans
+       * voisins doivent se distinguer *assez pour qu'on voie la couture*, pas au point que
+       * l'un disparaisse — la couture est l'information, l'obscurité n'en est pas une.
        */
-      id: "crete", cx: -26, cy: -60, r: 62,
+      id: "plaqueBasseOmbre", cx: -30, cy: -210, r: 350,
       arrets: [
-        { a: 0, couleur: acierDe(p.tete).vif },
-        { a: 0.5, couleur: acierDe(p.tete).clair },
-        { a: 0.62, couleur: acierDe(p.tete).sombre },
-        { a: 1, couleur: acierDe(p.tete).creux },
+        { a: 0.62, couleur: matiere(p.tete, 0.53, 0.035) },
+        { a: 0.7, couleur: matiere(p.tete, 0.35, 0.045) },
+        { a: 0.92, couleur: matiere(p.tete, 0.135, 0.07) },
+      ],
+    },
+    {
+      /**
+       * Le flanc **gauche** du nasal : celui qui regarde la lumière.
+       *
+       * ⚠️ **Chaque flanc a sa propre rampe, et elles ne se rejoignent pas sur l'axe.**
+       * C'est tout l'objet de la séparation : la rupture de valeur au milieu *est* l'arête.
+       * Un dégradé continu en travers aurait donné un cylindre, jamais une crête.
+       *
+       * ⚠️ **Il s'assombrit en descendant, comme le reste du heaume.** Un flanc éclairé
+       * d'une seule valeur sur toute sa longueur se lit comme un ruban de papier ; c'est la
+       * chute vers le menton qui lui donne sa longueur.
+       */
+      id: "creteGauche", cx: -34, cy: -180, r: 300,
+      arrets: [
+        { a: 0.24, couleur: acierDe(p.tete).vif },
+        { a: 0.52, couleur: acierDe(p.tete).clair },
+        { a: 0.86, couleur: acierDe(p.tete).sombre },
+      ],
+    },
+    {
+      /** Le flanc **droit**, dans l'ombre : il commence là où le gauche finit. */
+      id: "creteDroite", cx: -34, cy: -180, r: 300,
+      arrets: [
+        { a: 0.24, couleur: matiere(p.tete, 0.33, 0.045) },
+        { a: 0.62, couleur: matiere(p.tete, 0.23, 0.055) },
+        { a: 0.86, couleur: matiere(p.tete, 0.16, 0.07) },
       ],
     },
     {
@@ -1470,12 +1504,37 @@ const CHEVALIER: Skin = {
       { d: rectangle(-110, b.haut, 220, b.bas - b.haut, 3), degrade: "plaque" },
       { d: rectangle(-110, b.bas - 2.5, 220, 2.5, 0), couleur: a.creux, opacite: 0.55 },
       /* Le ventail : la plaque du bas, sous la pointe de la fente. */
-      { d: `M-110 ${HEAUME.fente.epaule + 4}L${HEAUME.entreLesYeux.milieu} ${HEAUME.fente.pointe + 6}`
-           + `L110 ${HEAUME.fente.epaule + 4}L110 110L-110 110Z`, degrade: "plaqueBasse" },
+      /**
+       * Le ventail, en **deux joues** qui se rejoignent sur l'axe.
+       *
+       * ⚠️ **Même raison que pour le nasal : une pièce d'armure est faite de plans.** Une
+       * seule plaque en V, si bien dégradée soit-elle, garde la même valeur de part et
+       * d'autre du milieu et se lit comme une découpe dans une tôle. Deux joues dont l'une
+       * est un ton plus sombre disent qu'elles sont *rivetées ensemble*, ce qui est
+       * exactement ce que montre le modèle.
+       */
+      ...([-1, 1] as const).map(cote => ({
+        d: `M${cote * 110} ${HEAUME.fente.epaule + 4}`
+          + `L${HEAUME.entreLesYeux.milieu} ${HEAUME.fente.pointe + 6}`
+          + `L${HEAUME.entreLesYeux.milieu} 110L${cote * 110} 110Z`,
+        degrade: cote === -1 ? "plaqueBasse" : "plaqueBasseOmbre",
+      })),
       ...fentes,
       // La fente de vue, creusée dans l'acier, puis son fond qui s'enfonce.
       { d: fenteDeVue(), couleur: matiere(p.tete, 0.06, 0.3) },
       { d: ellipse(0, 0, 150, 150), degrade: "fond", decoupe: "fente" },
+      /**
+       * L'ombre que le bandeau porte dans la fente, sur sa lèvre haute.
+       *
+       * ⚠️ **Une ombre portée, et surtout pas un filet clair.** L'envie était d'éclairer la
+       * lèvre pour marquer l'épaisseur de l'acier ; c'est exactement le cheveu blanc
+       * translucide qu'il a fallu retirer du terminal, et il aurait produit ici le même
+       * effet — une ligne posée sur l'image plutôt qu'une arête. Une ouverture creusée dans
+       * une plaque épaisse ne montre pas de lumière en haut : elle montre l'ombre de ce qui
+       * la surplombe. Six unités de dégradé noir suffisent à donner l'épaisseur.
+       */
+      { d: rectangle(-84, HEAUME.fente.haut, 168, 7, 0), couleur: "#000000",
+        opacite: 0.5, decoupe: "fente" },
       ...rivets,
       /**
        * La crête, **devant le regard**.
@@ -1485,11 +1544,8 @@ const CHEVALIER: Skin = {
        * braise flotter sur l'acier. C'est le même besoin que le reflet des vitres, et le même
        * drapeau y répond.
        */
-      { d: creteDuHeaume(), degrade: "crete", devant: true },
-      /* L'arête vive de la crête : un filet clair sur son flanc gauche seulement. */
-      { d: `M${HEAUME.entreLesYeux.milieu - 6} -40L${HEAUME.entreLesYeux.milieu - 4} -40`
-           + `L${HEAUME.entreLesYeux.milieu - 4} 46L${HEAUME.entreLesYeux.milieu - 6} 46Z`,
-        couleur: a.vif, opacite: 0.5, devant: true },
+      { d: flancDeCrete(1), degrade: "creteDroite", devant: true },
+      { d: flancDeCrete(-1), degrade: "creteGauche", devant: true },
     ];
   },
 };
