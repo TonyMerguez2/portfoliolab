@@ -374,8 +374,31 @@ export default function AvatarNovac({
    * exactement le même contour, et tout le mouvement se lit sur ce qui est peint dessus.
    * Le banc d'essai propose l'autre parti, où le solide tourne pour de bon.
    */
+  /**
+   * Le contour de la tête, et le nombre de points qui le décrivent.
+   *
+   * ⚠️ **Échantillonné selon la taille rendue, comme les yeux le sont déjà.** Cent quatre-
+   * vingts points étaient posés quelle que soit la taille : à trente-huit pixels, le
+   * périmètre en fait cent vingt, soit une point et demi par pixel — on payait un calcul que
+   * l'écran ne peut pas montrer. Le raisonnement était écrit à côté, pour `ECHANTILLONS`, et
+   * n'avait jamais été appliqué ici.
+   *
+   * ⚠️ **Ce n'est gratuit qu'en dehors d'une morphose, et c'est là tout l'intérêt.** À forme
+   * fixe le contour est mémoïsé et ne coûte rien ; pendant un changement de forme, `solide`
+   * change à chaque image et il est **recalculé soixante fois par seconde**. La morphose est
+   * donc le seul moment où ce nombre pèse — et le seul moment où l'on a signalé des
+   * saccades. Mesuré : sur le banc, où un seul avatar existe, la morphose ne perd aucune
+   * image ; sur la page du portefeuille, dix sur soixante passaient au-dessus de vingt
+   * millisecondes.
+   *
+   * ⚠️ **Il ne dépend que de `taille`, jamais de l'état de la morphose.** Un nombre de points
+   * qui changerait en cours de route ferait sauter la silhouette à la dernière image, au
+   * moment précis où l'œil la suit.
+   */
   const contourTete = useMemo(
-    () => cheminSvg(contourSilhouette(solide, RAYON_TETE, 180)), [solide]);
+    () => cheminSvg(contourSilhouette(
+      solide, RAYON_TETE, borner(Math.round(taille * 1.4), 72, 180))),
+    [solide, taille]);
 
   /**
    * Les aplats de l'habillage, et l'identifiant de leur détourage.

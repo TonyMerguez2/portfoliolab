@@ -39,7 +39,21 @@ export type Morphose<T> = { de: T; part: number };
 type Etat<T> = {
   /** La forme telle que le crochet l'a vue au dernier rendu. */
   vue: T;
-  passage: { de: T; depart: number } | null;
+  /**
+   * Le passage en cours. **Il ne porte pas d'instant de départ**, et c'est un correctif.
+   *
+   * ⚠️ **Le chronomètre partait pendant le rendu, donc avant le travail du rendu.** Le
+   * changement de forme provoque un rendu de la page entière ; mesuré sur le portefeuille,
+   * l'image du clic dure **100 millisecondes**. Le départ étant daté *avant* elle, la
+   * première image visible de la morphose arrivait avec un quart de la durée déjà écoulé :
+   * la silhouette sautait à 24 % puis reprenait son cours. C'est ce saut initial qu'on
+   * ressentait comme une saccade — la suite du relevé est parfaitement régulière à 16,7 ms.
+   *
+   * ⚠️ **L'instant de départ appartient donc à la première image, pas à l'état.** Il est
+   * capté dans la boucle, à la première exécution : quoi qu'il se soit passé entre le clic
+   * et elle, l'animation commence à zéro sur l'image où on la voit commencer.
+   */
+  passage: { de: T } | null;
   part: number;
 };
 
@@ -74,7 +88,7 @@ export function useMorphose<T>(forme: T, anime: boolean = true): Morphose<T> | n
      */
     setEtat({
       vue: forme,
-      passage: anime ? { de: etat.vue, depart: performance.now() } : null,
+      passage: anime ? { de: etat.vue } : null,
       part: 0,
     });
   }
@@ -83,8 +97,11 @@ export function useMorphose<T>(forme: T, anime: boolean = true): Morphose<T> | n
   useEffect(() => {
     if (!passage) return;
     let image = 0;
+    /* ⚠️ Daté à la première image et non au changement d'état : voir `Etat.passage`. */
+    let depart = 0;
     const avancer = (t: number) => {
-      const u = Math.min(1, (t - passage.depart) / DUREE_MORPHOSE);
+      if (!depart) depart = t;
+      const u = Math.min(1, (t - depart) / DUREE_MORPHOSE);
       if (u >= 1) setEtat(e => (e.passage === passage ? { ...e, passage: null, part: 1 } : e));
       else {
         setEtat(e => (e.passage === passage ? { ...e, part: u } : e));
