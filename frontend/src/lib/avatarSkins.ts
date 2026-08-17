@@ -771,8 +771,11 @@ const TERMINAL: Skin = {
          * ⚠️ **Deux fois plus faible que celui du casque.** La dalle porte déjà un halo, une
          * bande lente et un peigne ; un reflet appuyé y aurait fait une quatrième chose à
          * regarder. La visière du casque, elle, est nue : elle peut le porter franchement.
+         *
+         * ⚠️ **Resserré dans le coin, parce qu'il longeait le regard.** Voir la note du
+         * casque : même correction, même raison, mêmes coordonnées.
          */
-        id: "reflet", cx: -58, cy: -84, r: 190,
+        id: "reflet", cx: -66, cy: -96, r: 120,
         arrets: [
           { a: 0, couleur: "#FFFFFF", opacite: 0.055 },
           { a: 0.55, couleur: "#FFFFFF", opacite: 0.02 },
@@ -1135,8 +1138,22 @@ const ASTRONAUTE: Skin = {
        * porter un reflet franc, là où la dalle du terminal aurait eu une quatrième chose à
        * montrer. Une même couche, deux intensités : c'est la surface qui décide, pas
        * l'envie d'uniformiser.
+       *
+       * ⚠️ **Resserré vers le coin, parce qu'il longeait le regard : c'était ça, la
+       * « traînée ».** Étalé sur cent quatre-vingt-dix unités depuis (−58, −84), il
+       * délivrait encore 4 à 6 % de blanc à l'aplomb des yeux. Six pour cent ne se voient
+       * pas sur un aplat ; le long d'une capsule vive posée sur un noir de visière, ils font
+       * une bande qui semble *sortir* de l'œil. Ramené à cent vingt unités depuis (−66,
+       * −96), le reflet garde 7,2 % dans le coin haut gauche — où l'on attend un éclat sur
+       * du verre — et tombe à 0,3 % au centre du regard.
+       *
+       * ⚠️ **Estomper le bord n'avait pas suffi, et il fallait le constater.** La première
+       * correction fondait les arêtes du tracé : juste, mais insuffisant. Ce n'était pas
+       * seulement la netteté de la bande qui gênait, c'était sa *présence* à cet endroit-là.
+       * Un défaut peut avoir deux causes ; n'en traiter qu'une le rend plus discret, pas
+       * absent.
        */
-      id: "reflet", cx: -58, cy: -84, r: 190,
+      id: "reflet", cx: -66, cy: -96, r: 120,
       arrets: [
         { a: 0, couleur: "#FFFFFF", opacite: 0.11 },
         { a: 0.55, couleur: "#FFFFFF", opacite: 0.04 },
