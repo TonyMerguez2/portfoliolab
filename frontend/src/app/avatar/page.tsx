@@ -7,7 +7,7 @@ import {
 } from "@/lib/avatarSpherique";
 import { type FamilleSolide, melangerSolides, solideDepuis } from "@/lib/avatarVolume";
 import {
-  ARRONDI_REFERENCE, OEIL_REFERENCE, TAILLE_REFERENCE, VIE_REFERENCE,
+  ARRONDI_REFERENCE, HALO, OEIL_REFERENCE, TAILLE_REFERENCE, VIE_REFERENCE,
 } from "@/lib/avatarReglages";
 import { grilleSpherique } from "@/lib/avatarGrille";
 import {
@@ -883,25 +883,6 @@ export default function AvatarProceduralPage() {
                         ))}
                       </radialGradient>
                     ))}
-                    {yeuxDuSkin?.lueur && (
-                      /* ⚠️ Région fixée dans le repère de la tête, pas sur la boîte des
-                         yeux. Cadrée sur eux, elle se déplaçait à chaque image et laissait
-                         des pixels périmés derrière le regard — voir la note du composant,
-                         qui porte le détail. La marge reste ample : rogné à la boîte des
-                         capsules, le flou donnerait un halo carré. */
-                      <filter id="av-lueur" filterUnits="userSpaceOnUse"
-                        x={-RAYON_TETE} y={-RAYON_TETE}
-                        width={RAYON_TETE * 2} height={RAYON_TETE * 2}>
-                        <feGaussianBlur stdDeviation={yeuxDuSkin.lueur.rayon} result="flou" />
-                        <feFlood floodColor={yeuxDuSkin.lueur.couleur} result="teinte" />
-                        <feComposite in="teinte" in2="flou" operator="in" result="halo" />
-                        <feMerge>
-                          <feMergeNode in="halo" />
-                          <feMergeNode in="halo" />
-                          <feMergeNode in="SourceGraphic" />
-                        </feMerge>
-                      </filter>
-                    )}
                   </defs>
                   <g clipPath="url(#av-tete)">
                     {aplats.filter(m => !m.devant).map(peindreAplat)}
@@ -978,16 +959,28 @@ export default function AvatarProceduralPage() {
                 </g>
               )}
               {/**
+                * ⚠️ **Le halo est peint en contours empilés, plus par un filtre.** Un
+                * `feGaussianBlur` sur des yeux qui bougent à chaque image laissait une
+                * traînée derrière le regard — voir la note du composant, qui porte le
+                * détail. Trois traits de plus en plus larges suivent la même forme sans
+                * garder mémoire de l'image précédente.
+                *
                 * ⚠️ **Détourés par leur région si le skin en nomme une, par la silhouette
                 * s'ils rayonnent, par rien sinon.** Un halo non contenu déborderait du carré
                 * et en trahirait le contour ; et sur un appareil, un œil qui glisse hors de
-                * sa vitre doit passer *derrière* le cadre, pas se poser dessus. Sans lueur
-                * ni région, le détourage ne changerait rien et coûterait un groupe de plus.
+                * sa vitre doit passer *derrière* le cadre, pas se poser dessus.
                 */}
               <g clipPath={yeuxDuSkin?.decoupe ? `url(#${yeuxDuSkin.decoupe})`
                 : (yeuxDuSkin?.lueur ? "url(#av-tete)" : undefined)}
-                filter={yeuxDuSkin?.lueur ? "url(#av-lueur)" : undefined}
                 className={yeuxDuSkin?.classe}>
+                {yeuxDuSkin?.lueur && HALO.map(([largeur, opacite], i) => (
+                  <g key={i} fill="none" stroke={yeuxDuSkin.lueur!.couleur}
+                    strokeWidth={yeuxDuSkin.lueur!.rayon * largeur} strokeLinejoin="round"
+                    opacity={opacite}>
+                    <path d={oeilGauche} />
+                    <path d={oeilDroit} />
+                  </g>
+                ))}
                 <path d={oeilGauche} fill={couleurYeuxFinale} />
                 <path d={oeilDroit} fill={couleurYeuxFinale} />
               </g>

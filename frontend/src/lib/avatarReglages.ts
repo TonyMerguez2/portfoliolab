@@ -50,3 +50,22 @@ export const VIE_REFERENCE = {
   clignement: true,
   cadenceClignement: 4.5,
 };
+
+/**
+ * La lueur des yeux, en trois contours : leur largeur en multiples du rayon réglé, et leur
+ * opacité.
+ *
+ * ⚠️ **Cinq paliers, et non trois.** À trois, la marche se voyait : sur le heaume, dont le
+ * rayon de lueur est le plus large, on lisait trois anneaux concentriques autour de la
+ * braise au lieu d'un halo. Le nombre de paliers nécessaires dépend du rayon — plus la
+ * lueur est ample, plus l'écart entre deux contours est visible — et cinq couvre le plus
+ * exigeant des trois skins. Composées, les opacités donnent 0,07 au bord extérieur et 0,45
+ * contre la capsule, une chute proche de celle d'un flou gaussien.
+ *
+ * ⚠️ **Exportée parce que le banc d'essai a sa propre copie du rendu.** C'est la sixième
+ * fois que les deux doivent bouger ensemble ; autant ne pas y ajouter une table de valeurs
+ * en double, qui divergerait au premier réglage. La dette de fond reste entière — voir la
+ * tâche d'extraction posée à ce sujet.
+ */
+export const HALO: readonly (readonly [number, number])[] =
+  [[6, 0.07], [4.4, 0.08], [3.1, 0.1], [2, 0.12], [1, 0.15]];

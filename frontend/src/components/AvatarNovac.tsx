@@ -6,7 +6,7 @@ import {
 } from "@/lib/avatarSpherique";
 import { type FamilleSolide, melangerSolides, solideDepuis } from "@/lib/avatarVolume";
 import {
-  ARRONDI_REFERENCE, OEIL_REFERENCE, TAILLE_REFERENCE, VIE_REFERENCE,
+  ARRONDI_REFERENCE, HALO, OEIL_REFERENCE, TAILLE_REFERENCE, VIE_REFERENCE,
 } from "@/lib/avatarReglages";
 import { type EtatVie, VIE_AU_REPOS, creerVie } from "@/lib/avatarVie";
 import { COULEUR_PAR_DEFAUT, couleurDesYeux } from "@/lib/avatarCouleur";
@@ -473,6 +473,9 @@ export default function AvatarNovac({
     }, orientation, cote, RAYON_TETE, ECHANTILLONS, solide);
   }, [vie, orientation, solide]);
 
+  const cheminGauche = oeil(vie.fermetureGauche, -1);
+  const cheminDroit = oeil(vie.fermetureDroite, 1);
+
   return (
     <svg
       ref={svgRef}
@@ -487,7 +490,7 @@ export default function AvatarNovac({
           reste une sphère, et c'est son image qu'on comprime le temps d'un rebond. */}
       <g transform={`scale(${vie.echelleX.toFixed(4)} ${vie.echelleY.toFixed(4)})`}>
         <path d={contourTete} fill={teteRendue} />
-        {(aplats.length > 0 || yeuxDuSkin?.lueur) && (
+        {aplats.length > 0 && (
           <defs>
             <clipPath id={`tete-${marque}`}><path d={contourTete} /></clipPath>
             {degrades.map(g => (
@@ -502,62 +505,45 @@ export default function AvatarNovac({
             {decoupes.map(c => (
               <clipPath key={c.id} id={`${c.id}-${marque}`}><path d={c.d} /></clipPath>
             ))}
-            {yeuxDuSkin?.lueur && (
-              /**
-               * ⚠️ **La région du filtre est fixée dans le repère de la tête, pas sur la
-               * boîte des yeux — et c'est une correction de bug, pas un réglage.** Par
-               * défaut un filtre se cadre sur la boîte englobante de son objet
-               * (`objectBoundingBox`) : les yeux bougeant en permanence, la région se
-               * déplaçait avec eux à chaque image. Le navigateur en tire une zone à
-               * repeindre qui suit ce cadre mouvant, et laisse derrière lui des pixels
-               * périmés — une **traînée** derrière le regard, signalée à l'usage et
-               * invisible sur une capture, parce qu'elle vit dans la composition et non
-               * dans le rendu.
-               *
-               * ⚠️ **Bornée à la tête, ce qui est plus petit qu'avant.** L'ancienne région
-               * valait 340 % d'une boîte d'environ 68 × 74, soit 231 × 251 unités ; celle-ci
-               * en fait 200 × 200 et couvre tout le viewBox. On corrige donc l'artefact en
-               * calculant *moins* — le bon sens d'un compromis.
-               *
-               * ⚠️ **Il fallait bien une marge, cela dit.** Un filtre est rogné à sa région :
-               * à taille par défaut, le flou serait coupé net au bord des capsules et
-               * donnerait un halo carré. Les yeux vivent loin des bords de la tête, qui leur
-               * en laisse largement.
-               */
-              <filter id={`lueur-${marque}`} filterUnits="userSpaceOnUse"
-                x={-RAYON_TETE} y={-RAYON_TETE}
-                width={RAYON_TETE * 2} height={RAYON_TETE * 2}>
-                <feGaussianBlur stdDeviation={yeuxDuSkin.lueur.rayon} result="flou" />
-                <feFlood floodColor={yeuxDuSkin.lueur.couleur} result="teinte" />
-                <feComposite in="teinte" in2="flou" operator="in" result="halo" />
-                <feMerge>
-                  <feMergeNode in="halo" />
-                  <feMergeNode in="halo" />
-                  <feMergeNode in="SourceGraphic" />
-                </feMerge>
-              </filter>
-            )}
           </defs>
         )}
         {derriere.length > 0 && (
           <g clipPath={`url(#tete-${marque})`}>{derriere.map(peindre)}</g>
         )}
         {/**
+          * ⚠️ **Le halo est *peint*, il n'est plus un filtre — et c'est la correction du
+          * défaut le plus tenace de la session.** Un `feGaussianBlur` sur un élément qui
+          * bouge à chaque image laissait une traînée derrière le regard : le navigateur
+          * recalcule la zone à repeindre d'après la région du filtre et n'efface pas tout
+          * ce qu'il devrait. Fixer cette région dans le repère de la tête n'a pas suffi.
+          * Un filtre posé sur un contenu animé soixante fois par seconde est fragile par
+          * nature ; on ne le règle pas, on s'en passe.
+          *
+          * ⚠️ **Trois traits de plus en plus larges autour du même tracé.** Un contour épais
+          * et translucide suit exactement la forme de la capsule, ce qu'un flou fait aussi —
+          * mais sans mémoire d'une image à l'autre. Empilés, ils composent une chute en
+          * trois marches au lieu d'un dégradé continu : le même compromis que l'estompe du
+          * reflet, pour la même raison, et il tient mieux à quarante pixels qu'un flou de
+          * deux unités.
+          *
           * ⚠️ **Les yeux qui rayonnent sont détourés par la silhouette, les autres non.**
           * Un halo non contenu déborderait du carré et en trahirait le contour — c'est
           * précisément ce qu'on s'est interdit de toucher. Le détourage n'est posé que
           * lorsqu'il y a une lueur : sans elle, il ne changerait rien et ajouterait un
           * groupe à chaque avatar de la page.
           */}
-        <g clipPath={detourageDesYeux}
-          filter={yeuxDuSkin?.lueur ? `url(#lueur-${marque})` : undefined}
-          className={yeuxDuSkin?.classe}>
-          <path d={oeil(vie.fermetureGauche, -1)} fill={couleurYeuxFinale} />
-          <path d={oeil(vie.fermetureDroite, 1)} fill={couleurYeuxFinale} />
+        <g clipPath={detourageDesYeux} className={yeuxDuSkin?.classe}>
+          {yeuxDuSkin?.lueur && HALO.map(([largeur, opacite], i) => (
+            <g key={i} fill="none" stroke={yeuxDuSkin.lueur!.couleur}
+              strokeWidth={yeuxDuSkin.lueur!.rayon * largeur} strokeLinejoin="round"
+              opacity={opacite}>
+              <path d={cheminGauche} />
+              <path d={cheminDroit} />
+            </g>
+          ))}
+          <path d={cheminGauche} fill={couleurYeuxFinale} />
+          <path d={cheminDroit} fill={couleurYeuxFinale} />
         </g>
-        {/**
-          * Ce qui se peint **sur** la vitre, donc après le regard. Voir `MotifPlat.devant`.
-          */}
         {devant.length > 0 && (
           <g clipPath={`url(#tete-${marque})`}>{devant.map(peindre)}</g>
         )}

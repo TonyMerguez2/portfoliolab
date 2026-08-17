@@ -772,10 +772,10 @@ const TERMINAL: Skin = {
          * bande lente et un peigne ; un reflet appuyé y aurait fait une quatrième chose à
          * regarder. La visière du casque, elle, est nue : elle peut le porter franchement.
          *
-         * ⚠️ **Resserré dans le coin, parce qu'il longeait le regard.** Voir la note du
-         * casque : même correction, même raison, mêmes coordonnées.
+         * ⚠️ **Resserré puis rétabli : voir la note du casque.** La traînée venait du
+         * filtre de lueur, pas d'ici.
          */
-        id: "reflet", cx: -66, cy: -96, r: 120,
+        id: "reflet", cx: -58, cy: -84, r: 190,
         arrets: [
           { a: 0, couleur: "#FFFFFF", opacite: 0.055 },
           { a: 0.55, couleur: "#FFFFFF", opacite: 0.02 },
@@ -1139,21 +1139,15 @@ const ASTRONAUTE: Skin = {
        * montrer. Une même couche, deux intensités : c'est la surface qui décide, pas
        * l'envie d'uniformiser.
        *
-       * ⚠️ **Resserré vers le coin, parce qu'il longeait le regard : c'était ça, la
-       * « traînée ».** Étalé sur cent quatre-vingt-dix unités depuis (−58, −84), il
-       * délivrait encore 4 à 6 % de blanc à l'aplomb des yeux. Six pour cent ne se voient
-       * pas sur un aplat ; le long d'une capsule vive posée sur un noir de visière, ils font
-       * une bande qui semble *sortir* de l'œil. Ramené à cent vingt unités depuis (−66,
-       * −96), le reflet garde 7,2 % dans le coin haut gauche — où l'on attend un éclat sur
-       * du verre — et tombe à 0,3 % au centre du regard.
-       *
-       * ⚠️ **Estomper le bord n'avait pas suffi, et il fallait le constater.** La première
-       * correction fondait les arêtes du tracé : juste, mais insuffisant. Ce n'était pas
-       * seulement la netteté de la bande qui gênait, c'était sa *présence* à cet endroit-là.
-       * Un défaut peut avoir deux causes ; n'en traiter qu'une le rend plus discret, pas
-       * absent.
+       * ⚠️ **Il a été resserré dans le coin, puis rétabli — et l'aller-retour a servi.**
+       * On lui a imputé la traînée derrière le regard : réduit à cent vingt unités, il ne
+       * délivrait plus que 0,3 % de blanc au centre des yeux, et la traînée est restée. La
+       * cause était ailleurs — la région du filtre de lueur, voir `AvatarNovac`. Le reflet
+       * retrouve donc sa course : étranglé, il ne balayait plus la vitre et se réduisait à
+       * une tache d'angle. Une correction qui ne corrige rien doit être défaite, pas gardée
+       * « au cas où » : elle laisserait croire qu'elle sert.
        */
-      id: "reflet", cx: -66, cy: -96, r: 120,
+      id: "reflet", cx: -58, cy: -84, r: 190,
       arrets: [
         { a: 0, couleur: "#FFFFFF", opacite: 0.11 },
         { a: 0.55, couleur: "#FFFFFF", opacite: 0.04 },
@@ -1487,7 +1481,9 @@ const CHEVALIER: Skin = {
    */
   yeux: p => ({
     couleur: decalerClarte(p.tete, 0.16),
-    lueur: { rayon: 4.2, couleur: p.tete },
+    /* ⚠️ Rayon ramené de 4,2 à 3 : le halo est peint en contours empilés, pas flouté, et
+       au-delà de trois unités ses paliers se lisent comme des anneaux. */
+    lueur: { rayon: 3, couleur: p.tete },
     classe: "novac-braise",
     /* Le regard n'existe que dans la fente : ailleurs il n'y a que de l'acier. */
     decoupe: "fente",
