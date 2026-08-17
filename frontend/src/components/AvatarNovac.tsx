@@ -10,7 +10,7 @@ import {
 } from "@/lib/avatarReglages";
 import { type EtatVie, VIE_AU_REPOS, creerVie } from "@/lib/avatarVie";
 import { COULEUR_PAR_DEFAUT, couleurDesYeux } from "@/lib/avatarCouleur";
-import { skinParCle } from "@/lib/avatarSkins";
+import { type MotifPlat, skinParCle } from "@/lib/avatarSkins";
 import type { FormeAvatar } from "@/lib/useCouleurAvatar";
 import { useMorphose } from "@/lib/useMorphose";
 
@@ -425,6 +425,25 @@ export default function AvatarNovac({
   const couleurYeuxFinale = yeuxDuSkin?.couleur ?? yeuxRendus;
 
   /**
+   * Les aplats, séparés en ce qui passe derrière le regard et ce qui passe devant.
+   *
+   * ⚠️ **Une partition, pas deux sources.** L'ordre d'écriture du skin reste l'ordre de
+   * peinture à l'intérieur de chaque groupe : `filter` le préserve. Demander au skin deux
+   * listes séparées aurait obligé à raisonner sur leur ordre relatif à chaque relecture.
+   */
+  const derriere = useMemo(() => aplats.filter(m => !m.devant), [aplats]);
+  const devant = useMemo(() => aplats.filter(m => m.devant), [aplats]);
+
+  /** Un aplat, peint. Partagé par les deux groupes pour qu'ils ne divergent pas. */
+  const peindre = useCallback((m: MotifPlat, i: number) => (
+    <path key={i} d={m.d} fill={remplissage(m)} className={m.classe}
+      opacity={m.opacite} fillRule={m.regleDeRemplissage}
+      clipPath={m.decoupe ? `url(#${m.decoupe}-${marque})` : undefined}
+      stroke={m.trait ?? "none"} strokeWidth={m.epaisseur ?? 0}
+      strokeLinejoin="round" strokeLinecap="round" />
+  ), [remplissage, marque]);
+
+  /**
    * Ce qui borne le regard : sa région s'il en demande une, la silhouette s'il rayonne,
    * rien du tout sinon.
    *
@@ -503,16 +522,8 @@ export default function AvatarNovac({
             )}
           </defs>
         )}
-        {aplats.length > 0 && (
-          <g clipPath={`url(#tete-${marque})`}>
-            {aplats.map((m, i) => (
-              <path key={i} d={m.d} fill={remplissage(m)} className={m.classe}
-                opacity={m.opacite} fillRule={m.regleDeRemplissage}
-                clipPath={m.decoupe ? `url(#${m.decoupe}-${marque})` : undefined}
-                stroke={m.trait ?? "none"} strokeWidth={m.epaisseur ?? 0}
-                strokeLinejoin="round" strokeLinecap="round" />
-            ))}
-          </g>
+        {derriere.length > 0 && (
+          <g clipPath={`url(#tete-${marque})`}>{derriere.map(peindre)}</g>
         )}
         {/**
           * ⚠️ **Les yeux qui rayonnent sont détourés par la silhouette, les autres non.**
@@ -527,6 +538,12 @@ export default function AvatarNovac({
           <path d={oeil(vie.fermetureGauche, -1)} fill={couleurYeuxFinale} />
           <path d={oeil(vie.fermetureDroite, 1)} fill={couleurYeuxFinale} />
         </g>
+        {/**
+          * Ce qui se peint **sur** la vitre, donc après le regard. Voir `MotifPlat.devant`.
+          */}
+        {devant.length > 0 && (
+          <g clipPath={`url(#tete-${marque})`}>{devant.map(peindre)}</g>
+        )}
       </g>
     </svg>
   );

@@ -339,6 +339,16 @@ describe("skins", () => {
     };
     expect(couche("terminal").d).toBe(couche("astronaute").d);
 
+    /**
+     * ⚠️ **Et il passe devant le regard, sur les deux.** Un reflet est sur la face avant du
+     * verre : peint dessous, il donnait un verre derrière lequel les yeux flottaient sans
+     * être couverts, ce qui trahit qu'il n'y a pas vraiment de vitre. C'est le genre de
+     * détail qu'on remet dans le mauvais ordre en réorganisant une liste d'aplats, sans
+     * que rien ne le signale.
+     */
+    expect(couche("terminal").devant).toBe(true);
+    expect(couche("astronaute").devant).toBe(true);
+
     const force = (cle: string) => {
       const s = skinParCle(cle);
       return s.degrades!(s.palette).find(g => g.id === "reflet")!.arrets[0].opacite!;

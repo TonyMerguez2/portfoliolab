@@ -17,7 +17,9 @@ import {
 import {
   ACCESSOIRES, CASQUETTE_REFERENCE, type FamilleAccessoire, cheminsCasquette, contraste,
 } from "@/lib/avatarAccessoires";
-import { PRESETS, SKINS, type Palette, skinParCle, skinPourForme } from "@/lib/avatarSkins";
+import {
+  PRESETS, SKINS, type MotifPlat, type Palette, skinParCle, skinPourForme,
+} from "@/lib/avatarSkins";
 import { type EtatVie, VIE_AU_REPOS, creerVie } from "@/lib/avatarVie";
 import { useMorphose } from "@/lib/useMorphose";
 import { ETATS } from "@/lib/avatarEtats";
@@ -449,6 +451,24 @@ export default function AvatarProceduralPage() {
     return s.degrades ? s.degrades(palette) : [];
   }, [skin, palette]);
 
+  /**
+   * Un aplat, peint — la même fonction pour ce qui passe derrière le regard et devant.
+   *
+   * ⚠️ **Écrite une fois, sinon les deux groupes divergent.** C'est le défaut qui a déjà
+   * frappé quatre fois entre ce banc et le composant : deux endroits qui peignent la même
+   * chose finissent par ne plus la peindre pareil. À l'intérieur d'un même fichier, la même
+   * règle vaut.
+   */
+  const peindreAplat = useCallback((m: MotifPlat, i: number) => (
+    <path key={i} d={m.d}
+      fill={m.degrade ? `url(#${m.degrade})` : (m.couleur ?? "none")}
+      opacity={m.opacite} className={m.classe}
+      fillRule={m.regleDeRemplissage}
+      clipPath={m.decoupe ? `url(#${m.decoupe})` : undefined}
+      stroke={m.trait ?? "none"} strokeWidth={m.epaisseur ?? 0}
+      strokeLinejoin="round" strokeLinecap="round" />
+  ), []);
+
   /** Les régions nommées du skin — la dalle du terminal, par exemple. */
   const decoupes = useMemo(() => {
     const s = skinParCle(skin);
@@ -879,15 +899,7 @@ export default function AvatarProceduralPage() {
                     )}
                   </defs>
                   <g clipPath="url(#av-tete)">
-                    {aplats.map((m, i) => (
-                      <path key={i} d={m.d}
-                        fill={m.degrade ? `url(#${m.degrade})` : (m.couleur ?? "none")}
-                        opacity={m.opacite} className={m.classe}
-                        fillRule={m.regleDeRemplissage}
-                        clipPath={m.decoupe ? `url(#${m.decoupe})` : undefined}
-                        stroke={m.trait ?? "none"} strokeWidth={m.epaisseur ?? 0}
-                        strokeLinejoin="round" strokeLinecap="round" />
-                    ))}
+                    {aplats.filter(m => !m.devant).map(peindreAplat)}
                   </g>
                 </>
               )}
@@ -974,6 +986,13 @@ export default function AvatarProceduralPage() {
                 <path d={oeilGauche} fill={couleurYeuxFinale} />
                 <path d={oeilDroit} fill={couleurYeuxFinale} />
               </g>
+              {/* Ce qui se peint **sur** la vitre, donc après le regard. Voir
+                  `MotifPlat.devant`. */}
+              {aplats.some(m => m.devant) && (
+                <g clipPath="url(#av-tete)">
+                  {aplats.filter(m => m.devant).map(peindreAplat)}
+                </g>
+              )}
               {/**
                 * L'accessoire en dernier, et dans le même groupe que le reste.
                 *

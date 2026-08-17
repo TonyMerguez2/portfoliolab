@@ -78,6 +78,22 @@ export type MotifPlat = {
    * qui faisait lire l'objet comme un écran nu plutôt que comme un appareil.
    */
   decoupe?: string;
+  /**
+   * Peint **après** les yeux, et non avant comme tout le reste.
+   *
+   * ⚠️ **Parce qu'un reflet est sur la face avant du verre.** Les aplats d'un skin sont ce
+   * qu'il y a *derrière* le regard — un fond d'écran, un balayage, un vignettage — et sont
+   * donc posés avant lui. Un reflet, lui, est ce qu'on voit *sur* la vitre : il doit passer
+   * par-dessus tout ce qui est dedans, yeux compris. Peint dessous, il donnait un verre
+   * derrière lequel les yeux flottaient sans être couverts, ce qui trahissait qu'il n'y a
+   * pas vraiment de vitre.
+   *
+   * ⚠️ **Un drapeau, et non une seconde liste `platsDevant`.** Deux listes auraient obligé
+   * chaque rendu à les traiter séparément et à garder leur ordre relatif en tête ; un
+   * drapeau se partitionne en une ligne et laisse l'ordre d'écriture faire foi. Les rendus
+   * qui ne dessinent pas d'yeux — la pastille de réglage — peuvent l'ignorer entièrement.
+   */
+  devant?: boolean;
 };
 
 /** Une région nommée, découpée dans la silhouette. Voir `MotifPlat.decoupe`. */
@@ -879,16 +895,6 @@ const TERMINAL: Skin = {
        */
       { d: ellipse(0, -150, 150, 26), degrade: "bande", classe: "novac-crt-bande",
         decoupe: "dalle" },
-      /**
-       * Le reflet de la vitre, **sous** le vignettage.
-       *
-       * ⚠️ **Sous lui, alors qu'une vitre est physiquement devant.** Posé par-dessus, le
-       * reflet gardait toute sa force jusqu'à l'arête de la dalle et s'y coupait net, ce qui
-       * le faisait paraître collé. Le vignettage l'éteint dans les angles, exactement comme
-       * le ferait la courbure du verre. On perd une vérité optique, on gagne l'impression
-       * qu'on cherchait — et c'est l'impression qui est le sujet.
-       */
-      { d: refletDeVitre(), degrade: "reflet", decoupe: "dalle" },
       // Le vignettage par-dessus les lignes : il assombrit les bords, lignes comprises.
       { d: ellipse(0, 0, 150, 150), degrade: "vignette", decoupe: "dalle" },
       ...barres,
@@ -904,6 +910,16 @@ const TERMINAL: Skin = {
       { d: rectangle(10, g.y - 2, 42, 20, 7), couleur: creux },
       { d: ellipse(70, g.y + 8, 5.5, 5.5), couleur: creux },
       { d: ellipse(70, g.y + 8, 3, 3), couleur: phosphore, opacite: 0.75 },
+      /**
+       * Le reflet de la vitre, **en dernier et devant les yeux**.
+       *
+       * ⚠️ **Il était sous le vignettage, pour que celui-ci éteigne ses angles.** Son propre
+       * dégradé le fait déjà : mesuré, il est retombé à moins d'un centième d'opacité aux
+       * quatre coins de la dalle, où le vignettage ne trouvait donc rien à éteindre. La
+       * précaution ne coûtait rien mais ne servait rien non plus — et elle plaçait la vitre
+       * derrière le regard, ce qui est le contraire d'une vitre.
+       */
+      { d: refletDeVitre(), degrade: "reflet", decoupe: "dalle", devant: true },
     ];
   },
 };
@@ -1266,9 +1282,6 @@ const ASTRONAUTE: Skin = {
       // La visière opaque : à partir d'ici, tout est détouré par elle.
       { d: visiere(), couleur: verre },
       { d: ellipse(0, 0, 150, 150), degrade: "verre", decoupe: "visiere" },
-      /* Le reflet sous le vignettage, pour la raison dite au terminal : c'est lui qui
-         l'éteint dans les angles au lieu de le laisser s'y couper net. */
-      { d: refletDeVitre(), degrade: "reflet", decoupe: "visiere" },
       { d: ellipse(0, 0, 150, 150), degrade: "creuxVisiere", decoupe: "visiere" },
       /**
        * Le bouton du menton — un anneau creux, jamais une pastille pleine.
@@ -1280,6 +1293,8 @@ const ASTRONAUTE: Skin = {
        */
       { d: ellipse(b.x, b.y, b.r, b.r), couleur: logement },
       { d: ellipse(b.x, b.y, b.r - 1.6, b.r - 1.6), couleur: coque },
+      /* Le reflet en dernier et devant les yeux, pour la raison dite au terminal. */
+      { d: refletDeVitre(), degrade: "reflet", decoupe: "visiere", devant: true },
     ];
   },
 };
