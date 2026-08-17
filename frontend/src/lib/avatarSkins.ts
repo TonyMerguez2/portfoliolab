@@ -976,6 +976,25 @@ const laniere = (cote: -1 | 1, retrait = 0) => {
                    l.hauteur - 2 * retrait, Math.max(0, l.rayon - retrait));
 };
 
+/**
+ * Les quatre valeurs d'un chrome, de l'éclat au creux.
+ *
+ * ⚠️ **Partagées entre les dégradés et les aplats, parce qu'elles servent aux deux.** Les
+ * anneaux sont désormais *remplis* par un dégradé de ces tons ; les recopier d'un côté et de
+ * l'autre aurait fait deux tables à garder d'accord, pour un habillage dont tout le sujet
+ * est justement que les valeurs se répondent.
+ *
+ * ⚠️ **La saturation reste au plancher.** Un chrome ne porte pas de couleur, il en reflète :
+ * cinq centièmes suffisent à ce qu'un casque bleu ne renvoie pas exactement le même gris
+ * qu'un casque ambre, et pas un de plus.
+ */
+const chromeDe = (hex: string) => ({
+  vif: matiere(hex, 0.9, 0.04),
+  clair: matiere(hex, 0.72, 0.05),
+  sombre: matiere(hex, 0.45, 0.06),
+  creux: matiere(hex, 0.3, 0.06),
+});
+
 /** La visière, en tracé — la même géométrie pour la peindre et pour la détourer. */
 const visiere = (marge = 0) => {
   const h = CASQUE.hublot;
@@ -983,13 +1002,6 @@ const visiere = (marge = 0) => {
   return rectangle(-100 + h.cote + d, -100 + h.haut + d,
                    200 - 2 * h.cote - 2 * d, 200 - h.haut - h.bas - 2 * d,
                    h.rayon - d);
-};
-
-/** Le hublot entier, cerclage compris — la région où vivent les reflets du métal. */
-const hublot = () => {
-  const h = CASQUE.hublot;
-  return rectangle(-100 + h.cote, -100 + h.haut,
-                   200 - 2 * h.cote, 200 - h.haut - h.bas, h.rayon);
 };
 
 const ASTRONAUTE: Skin = {
@@ -1039,28 +1051,82 @@ const ASTRONAUTE: Skin = {
     },
     {
       /**
-       * Le reflet qui court sur le métal, posé sur le cerclage entier.
+       * Le flanc **extérieur** de la moulure : clair en haut, sombre en bas.
        *
-       * ⚠️ **Décentré vers le haut à gauche, et il s'éteint avant le bord.** Un reflet
-       * centré illuminerait l'anneau tout autour et le rendrait plat — un tore ne brille
-       * jamais partout à la fois. Le dégradé meurt à 80 %, si bien que le bas droit du
-       * cerclage reste dans l'ombre : c'est cette dissymétrie qui le fait tourner.
+       * ⚠️ **C'est l'inversion entre ce dégradé et le suivant qui fait le métal.** Trois
+       * aplats de valeurs fixes restent trois bordures empilées, quelle qu'en soit la
+       * teinte — c'est exactement ce qu'on voyait. Une moulure de métal, elle, a des flancs
+       * qui regardent dans des directions opposées : sous une lumière venue d'en haut, le
+       * flanc extérieur s'allume en haut et s'éteint en bas, le flanc intérieur fait
+       * précisément le contraire. Cette contradiction locale est le seul indice dont l'œil
+       * a besoin pour conclure « c'est tourné dans la masse » plutôt que « c'est dessiné ».
        *
-       * ⚠️ **Son rayon a dû grandir de 165 à 225 quand les lanières sont apparues.** Mesuré
-       * depuis le centre du dégradé : la sangle de gauche tombait à 48 % du rayon, celle de
-       * droite à 97 % — c'est-à-dire dans le noir final. Les deux flancs du même objet
-       * n'avaient plus rien à voir, et la lanière droite se lisait comme une pièce sale
-       * plutôt que comme du métal. Une source de lumière doit couvrir tout ce qu'elle
-       * éclaire : agrandir le rayon était plus juste que de rattraper la teinte à la main.
+       * ⚠️ **Radial très éloigné, faute de linéaire.** Le type `Degrade` ne connaît que le
+       * radial, et l'ouvrir obligerait à suivre le changement dans les trois copies du
+       * rendu. Un centre placé loin au-dessus donne une chute quasi verticale sur la zone
+       * utile ; le peu de courbure qui reste tombe bien, puisqu'un anneau est courbe.
+       *
+       * ⚠️ **Deux arrêts presque confondus au milieu : c'est l'horizon, et c'est ce qui
+       * sépare un chrome d'un aluminium brossé.** Un métal poli ne dégrade pas, il
+       * *réfléchit* : il montre le ciel au-dessus d'une certaine inclinaison et le sol en
+       * dessous, avec une bascule brutale entre les deux. Une rampe régulière du clair au
+       * sombre donne une matière mate et plastique — c'était le cas de la première version
+       * à dégradés, qui restait terne malgré l'inversion.
+       *
+       * ⚠️ **Les bornes sont mesurées, pas choisies.** Sur la zone visible du cerclage, ce
+       * dégradé n'est parcouru qu'entre 34 % et 76 % de son rayon : des arrêts posés de 0 à
+       * 1 laissaient donc le vif et le creux inatteignables, et l'anneau n'employait que le
+       * tiers médian de sa propre gamme. Tous les arrêts ci-dessous sont recalés sur la
+       * plage réellement traversée.
+       *
+       * ⚠️ **Décentré vers la gauche, comme toute la lumière de ce fichier.** Cartes,
+       * pastilles et liserés supposent une source en haut à gauche ; un anneau éclairé
+       * d'ailleurs se remarquerait sans qu'on sache dire pourquoi.
        */
-      id: "chrome", cx: -55, cy: -70, r: 225,
+      id: "chromeHaut", cx: -34, cy: -190, r: 340,
       arrets: [
-        { a: 0, couleur: "#FFFFFF", opacite: 0.26 },
-        { a: 0.4, couleur: "#FFFFFF", opacite: 0.08 },
-        { a: 0.8, couleur: "#000000", opacite: 0.1 },
-        { a: 1, couleur: "#000000", opacite: 0.2 },
+        { a: 0.32, couleur: chromeDe(p.tete).vif },
+        { a: 0.48, couleur: chromeDe(p.tete).clair },
+        /* L'horizon : deux arrêts presque confondus, donc une bascule franche. */
+        { a: 0.54, couleur: chromeDe(p.tete).sombre },
+        { a: 0.78, couleur: chromeDe(p.tete).creux },
       ],
     },
+    {
+      /** Le flanc **intérieur**, la gorge : sombre en haut, clair en bas. L'inverse. */
+      id: "chromeBas", cx: 34, cy: 258, r: 340,
+      arrets: [
+        { a: 0.55, couleur: chromeDe(p.tete).vif },
+        { a: 0.7, couleur: chromeDe(p.tete).clair },
+        { a: 0.76, couleur: chromeDe(p.tete).sombre },
+        { a: 1, couleur: chromeDe(p.tete).creux },
+      ],
+    },
+    /**
+     * Les lanières, vues comme des cylindres couchés — **un dégradé par côté**.
+     *
+     * ⚠️ **Un dégradé radial ne peut pas éclairer deux objets éloignés de son centre.** La
+     * première version en partageait un, calé près de l'axe : mesuré, les deux sangles y
+     * tombaient entre 128 % et 155 % du rayon, c'est-à-dire au-delà du dernier arrêt. Elles
+     * prenaient donc uniformément la couleur du creux — deux barres presque noires, tout
+     * l'inverse du métal recherché. C'est la limite propre au radial, et c'est pourquoi il en
+     * faut deux : chacun centré juste au-dessus de sa sangle, chacune retrouve sa chute
+     * complète du vif au creux.
+     *
+     * ⚠️ **Resserré sur sa hauteur, pas sur celle de la tête.** Les dégradés du cerclage
+     * s'étalent sur trois cent quarante unités ; sur les quarante-six d'une sangle, ils n'en
+     * traverseraient qu'un dixième et la laisseraient presque unie.
+     */
+    ...([-1, 1] as const).map(cote => ({
+      id: cote === -1 ? "chromeLaniereG" : "chromeLaniereD",
+      cx: cote * 88, cy: -46, r: 78,
+      arrets: [
+        { a: 0, couleur: chromeDe(p.tete).vif },
+        { a: 0.4, couleur: chromeDe(p.tete).clair },
+        { a: 0.48, couleur: chromeDe(p.tete).sombre },
+        { a: 1, couleur: chromeDe(p.tete).creux },
+      ],
+    })),
     {
       /**
        * Le ciel dans la visière : une lueur froide au sommet du verre.
@@ -1118,16 +1184,13 @@ const ASTRONAUTE: Skin = {
     /* Le regard vit derrière le verre : le cerclage le masque au lieu de le porter. */
     decoupe: "visiere",
   }),
-  decoupes: () => [
-    /**
-     * ⚠️ **Tout le métal en une région, cerclage et lanières ensemble.** Le reflet doit les
-     * parcourir d'un seul tenant : borné au seul hublot, il s'arrêtait net à l'aplomb de
-     * l'anneau et les sangles restaient plates, comme peintes. Trois sous-tracés dans un
-     * même `d` forment leur réunion, ce qui est exactement ce qu'on veut dire.
-     */
-    { id: "metal", d: `${hublot()}${laniere(-1)}${laniere(1)}` },
-    { id: "visiere", d: visiere() },
-  ],
+  /**
+   * ⚠️ **La région `metal` a disparu avec le reflet qu'elle bornait.** Elle réunissait le
+   * cerclage et les deux lanières pour qu'une même lueur les parcoure d'un seul tenant.
+   * Depuis que chaque pièce porte son propre dégradé de matière, cette lueur d'ensemble ne
+   * servait plus qu'à aplatir ce que les autres venaient de creuser.
+   */
+  decoupes: () => [{ id: "visiere", d: visiere() }],
   plats: p => {
     /**
      * ⚠️ **Quatre matières, une seule couleur d'origine.** La coque garde huit centièmes de
@@ -1139,8 +1202,6 @@ const ASTRONAUTE: Skin = {
     const coque = matiere(p.tete, 0.86, 0.26);
     /** Le logement du hublot : la coque assombrie, pour que le cerclage y paraisse posé. */
     const logement = matiere(p.tete, 0.64, 0.14);
-    const chromeClair = matiere(p.tete, 0.72, 0.05);
-    const chromeSombre = matiere(p.tete, 0.42, 0.06);
     const verre = matiere(p.tete, 0.07, 0.5);
     const h = CASQUE.hublot;
     /**
@@ -1150,13 +1211,20 @@ const ASTRONAUTE: Skin = {
      * précédent en s'y encastrant, et la visière recouvre le dernier : aucun `evenodd`,
      * aucune couronne à recalculer si l'épaisseur change. Le tracé est le même appel avec
      * une marge différente, ce qui rend impossible qu'un anneau se désaligne d'un autre.
+     *
+     * ⚠️ **Remplis d'un dégradé, plus d'un aplat, et l'anneau médian prend l'autre sens.**
+     * Trois valeurs fixes donnaient trois bordures empilées : chaque bande gardait la même
+     * clarté sur tout son tour, ce qu'aucun métal ne fait. Chacune porte maintenant la chute
+     * de lumière d'un flanc de moulure, et celle du milieu la porte à l'envers. En haut de
+     * l'anneau on lit donc clair / sombre / clair, en bas sombre / clair / sombre : c'est
+     * cette contradiction qui se lit comme du tourné plutôt que comme du dessiné.
      */
     const cerclage = CASQUE.anneaux.map((retrait, i) => ({
       d: rectangle(-100 + h.cote + retrait, -100 + h.haut + retrait,
                    200 - 2 * h.cote - 2 * retrait,
                    200 - h.haut - h.bas - 2 * retrait,
                    h.rayon - retrait),
-      couleur: i === 1 ? chromeSombre : chromeClair,
+      degrade: i === 1 ? "chromeBas" : "chromeHaut",
     }));
     const b = CASQUE.bouton;
     return [
@@ -1179,18 +1247,22 @@ const ASTRONAUTE: Skin = {
        */
       ...([-1, 1] as const).flatMap(cote => [
         { d: laniere(cote, -2.5), couleur: logement },
-        ...CASQUE.anneaux.map((retrait, i) => ({
-          d: laniere(cote, retrait),
-          couleur: i === 1 ? chromeSombre : chromeClair,
-        })),
+        /**
+         * ⚠️ **Une seule pièce, là où elle en avait trois.** La sangle reprenait le
+         * feuilletage du cerclage ; sur quarante-six unités de haut, trois bandes se
+         * réduisent à des rayures et c'est précisément ce qu'on nous reprochait. Un
+         * cylindre n'a pas de gorges : un dégradé du vif au creux sur sa hauteur suffit à
+         * le galber, et il tient encore à quarante pixels quand trois bandes n'y survivent
+         * pas.
+         */
+        { d: laniere(cote),
+          degrade: cote === -1 ? "chromeLaniereG" : "chromeLaniereD" },
       ]),
       /* Le logement, débordant de trois unités : la rainure où le cerclage s'assied. */
       { d: rectangle(-100 + h.cote - 3, -100 + h.haut - 3,
                      200 - 2 * h.cote + 6, 200 - h.haut - h.bas + 6, h.rayon + 3),
         couleur: logement },
       ...cerclage,
-      /* Le reflet, borné au métal : sur la coque il ferait un second soleil. */
-      { d: ellipse(0, 0, 150, 150), degrade: "chrome", decoupe: "metal" },
       // La visière opaque : à partir d'ici, tout est détouré par elle.
       { d: visiere(), couleur: verre },
       { d: ellipse(0, 0, 150, 150), degrade: "verre", decoupe: "visiere" },
