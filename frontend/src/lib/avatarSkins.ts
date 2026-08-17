@@ -628,29 +628,17 @@ const vitre = (marge = 0) => {
  * pente-là est celle d'une vitre debout éclairée par une fenêtre haute — c'est aussi, à peu
  * près, celle de tous les reflets d'icône, ce qui la rend familière.
  *
- * ⚠️ **`elargir` sert à en fondre le bord, et ce bord était le vrai défaut.** Le tracé n'a
- * qu'une arête nette de chaque côté. Sur la vitre sombre elle passe pour le montant d'une
- * fenêtre ; en travers d'une capsule claire, elle coupe la couleur en deux tons et se lit
- * comme une bavure — signalée telle quelle, « un bug sur les yeux, genre une traînée »,
- * dès que le reflet est passé *devant* le regard. Un vrai reflet n'a pas d'arête : la vitre
- * n'est pas optiquement plane et la fenêtre reflétée n'est pas nette.
- *
- * ⚠️ **Fondu par empilement plutôt que par flou.** Trois copies de largeurs croissantes et
- * d'opacités égales composent une rampe en trois marches — 38 %, 62 %, 76 % — au lieu d'une
- * arête. Un `feGaussianBlur` aurait donné un vrai dégradé, au prix d'un filtre par avatar
- * sur une page dont on vient de mesurer le budget d'images. Trois tracés ne coûtent rien et
- * survivent à la réduction, là où un flou de deux unités disparaît à quarante pixels.
+ * ⚠️ **Deux bandes nettes, et surtout pas une estompe.** Il y a eu une version où chaque
+ * bande était triplée en largeurs croissantes, pour fondre son arête. Le résultat faisait
+ * l'inverse de ce qu'on cherchait : trois parallélogrammes à bord franc, ce sont **trois**
+ * arêtes au lieu d'une, donc un empilement de bandes visible au lieu d'un dégradé. On ne
+ * fond pas un bord en le répétant. Le tracé est revenu à sa forme d'origine, celle qui
+ * plaisait — c'est la traînée du filtre de lueur qu'on cherchait alors, et elle venait
+ * d'ailleurs.
  */
-const refletDeVitre = (elargir = 0) =>
-  `M${-72 - elargir} -110L${-30 + elargir} -110L${30 + elargir} 110L${-12 - elargir} 110Z`
-  + `M${-16 - elargir} -110L${0 + elargir} -110L${60 + elargir} 110L${44 - elargir} 110Z`;
-
-/** Le reflet et ses deux voiles d'estompe, du plus large au plus net. */
-const refletsDeVitre = (region: string): MotifPlat[] =>
-  [11, 5, 0].map(elargir => ({
-    d: refletDeVitre(elargir), degrade: "reflet", opacite: 0.38,
-    decoupe: region, devant: true,
-  }));
+const refletDeVitre = () =>
+  "M-72 -110L-30 -110L30 110L-12 110Z"
+  + "M-16 -110L0 -110L60 110L44 110Z";
 
 /**
  * Une matière : la *teinte* choisie, à la clarté et à la saturation qu'on lui impose.
@@ -942,7 +930,7 @@ const TERMINAL: Skin = {
        * précaution ne coûtait rien mais ne servait rien non plus — et elle plaçait la vitre
        * derrière le regard, ce qui est le contraire d'une vitre.
        */
-      ...refletsDeVitre("dalle"),
+      { d: refletDeVitre(), degrade: "reflet", decoupe: "dalle", devant: true },
     ];
   },
 };
@@ -1251,7 +1239,7 @@ const ASTRONAUTE: Skin = {
       { d: ellipse(b.x, b.y, b.r, b.r), couleur: logement },
       { d: ellipse(b.x, b.y, b.r - 1.6, b.r - 1.6), couleur: coque },
       /* Le reflet en dernier et devant les yeux, pour la raison dite au terminal. */
-      ...refletsDeVitre("visiere"),
+      { d: refletDeVitre(), degrade: "reflet", decoupe: "visiere", devant: true },
     ];
   },
 };

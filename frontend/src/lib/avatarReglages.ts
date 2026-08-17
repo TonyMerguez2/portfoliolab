@@ -52,20 +52,41 @@ export const VIE_REFERENCE = {
 };
 
 /**
- * La lueur des yeux, en trois contours : leur largeur en multiples du rayon réglé, et leur
- * opacité.
+ * La lueur des yeux, peinte en contours empilés : largeur en multiples du rayon réglé, et
+ * opacité de chacun.
  *
- * ⚠️ **Cinq paliers, et non trois.** À trois, la marche se voyait : sur le heaume, dont le
- * rayon de lueur est le plus large, on lisait trois anneaux concentriques autour de la
- * braise au lieu d'un halo. Le nombre de paliers nécessaires dépend du rayon — plus la
- * lueur est ample, plus l'écart entre deux contours est visible — et cinq couvre le plus
- * exigeant des trois skins. Composées, les opacités donnent 0,07 au bord extérieur et 0,45
- * contre la capsule, une chute proche de celle d'un flou gaussien.
+ * ⚠️ **Ce n'est pas le nombre de traits qui se voit, c'est la *marche* entre deux.** Il y en
+ * a eu trois, puis cinq : à chaque fois on lisait des anneaux concentriques autour de la
+ * capsule plutôt qu'un halo, d'autant plus nets que l'avatar est affiché grand. Mesuré sur
+ * la visière de l'astronaute — fond `#09131B`, lueur `#4FA3E3` — la version à cinq paliers
+ * franchissait **3,2 à 3,9 de clarté perçue** d'un anneau au suivant, quand l'œil en
+ * distingue environ 1 sur un fond sombre. Ajouter deux ou trois traits n'y pouvait rien :
+ * il fallait diviser la marche par trois.
  *
- * ⚠️ **Exportée parce que le banc d'essai a sa propre copie du rendu.** C'est la sixième
- * fois que les deux doivent bouger ensemble ; autant ne pas y ajouter une table de valeurs
- * en double, qui divergerait au premier réglage. La dette de fond reste entière — voir la
- * tâche d'extraction posée à ce sujet.
+ * ⚠️ **Douze paliers pour un pic à 22 %, et les deux nombres sont liés.** La marche vaut le
+ * pic divisé par le nombre de paliers : on ne peut pas garder une lueur forte *et* peu de
+ * traits. Ce couple donne un écart maximal de **1,42**, soit le seuil, pour douze tracés par
+ * œil. Monter le pic à 30 % demanderait seize paliers pour le même résultat — plus de
+ * tracés pour une lueur que rien n'exige plus vive.
+ *
+ * ⚠️ **Largeurs en progression géométrique, pas régulière.** Un flou gaussien décroît vite
+ * près de la source et lentement au loin ; les contours se resserrent donc en approchant de
+ * la capsule, là où la pente est raide et où une marche se verrait la première.
+ *
+ * ⚠️ **Calculées plutôt qu'écrites.** Une table de douze couples posée à la main aurait
+ * caché sa règle, et personne n'aurait su lequel des douze corriger. Ici les trois nombres
+ * qui décident — la largeur maximale, la minimale, le pic — sont les seuls qu'on relise.
  */
-export const HALO: readonly (readonly [number, number])[] =
-  [[6, 0.07], [4.4, 0.08], [3.1, 0.1], [2, 0.12], [1, 0.15]];
+const HALO_LARGE = 5.6;
+const HALO_ETROIT = 0.8;
+const HALO_PALIERS = 12;
+const HALO_PIC = 0.22;
+
+export const HALO: readonly (readonly [number, number])[] = Array.from(
+  { length: HALO_PALIERS },
+  (_, i) => [
+    HALO_LARGE * Math.pow(HALO_ETROIT / HALO_LARGE, i / (HALO_PALIERS - 1)),
+    /* L'opacité unitaire qui, composée `HALO_PALIERS` fois, atteint exactement le pic. */
+    1 - Math.pow(1 - HALO_PIC, 1 / HALO_PALIERS),
+  ] as const,
+);
