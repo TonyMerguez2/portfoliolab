@@ -4,7 +4,7 @@
  * Le journal d'un compte : enregistrer un versement ou un retrait, et relire les
  * mouvements déjà saisis.
  *
- * ⚠️ **Enregistrer un versement n'est pas corriger le solde, et l'écran doit le dire.**
+ * ⚠️ **Enregistrer un versement n'est pas corriger un apport, et l'écran doit le dire.**
  * Les deux gestes changent le même chiffre, et rien ne les distingue une fois écrits.
  * Corriger veut dire « je m'étais trompé » : le nouveau montant vaut alors pour tout le
  * passé, et la courbe de patrimoine se réécrit entièrement. Verser veut dire « j'ai
@@ -12,6 +12,12 @@
  * choisit au hasard entre deux gestes dont il ne peut pas deviner la différence — et il
  * ne s'en apercevrait que des mois plus tard, sur une courbe qui a bougé là où il ne
  * fallait pas.
+ *
+ * ⚠️ **Ce journal est désormais le seul endroit où l'argent d'un compte s'écrit.** La
+ * phrase ci-dessus renvoyait à un champ « solde » posé au-dessus, dans le formulaire du
+ * compte : c'est lui qui a été retiré, parce qu'il tenait le même montant que ce journal
+ * et que les deux ont fini par diverger — mesuré sur cinq comptes sur six, jusqu'à
+ * 12 000 € d'écart. Corriger se fait donc sur la ligne fautive, ici même.
  *
  * ⚠️ **Deux boutons plutôt qu'un montant signé.** L'API attend un montant signé, mais
  * taper « −200 » est une convention d'informaticien : personne n'écrit son retrait avec
@@ -81,8 +87,8 @@ export default function JournalCompte({
           margin: 0, fontFamily: FONT, fontSize: 10.5, lineHeight: 1.45,
           color: CLAIR.texteAttenue,
         }}>
-          Un versement ne change votre patrimoine qu’à partir de sa date. Corriger le
-          solde plus haut, au contraire, réécrit tout son passé.
+          Un versement ne change votre patrimoine qu’à partir de sa date. Corriger un
+          apport déjà saisi, au contraire, réécrit tout son passé.
         </p>
       </div>
 

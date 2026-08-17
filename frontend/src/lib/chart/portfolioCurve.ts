@@ -31,5 +31,18 @@ export type HistoryPoint = {
    * performance ; les deux champs existent pour que cette distinction survive au trajet.
    */
   patrimoine?: number;
+  /**
+   * Les liquidités déclarées à cet instant : `patrimoine − value`, mais dit par la route.
+   *
+   * ⚠️ **Publié plutôt que déduit, parce que la déduction avait un angle mort.** L'écran
+   * l'obtenait par soustraction, ce qui donnait zéro quand `patrimoine` manquait — donc
+   * « il n'y avait pas d'épargne ce jour-là » là où le sens est « je l'ignore ». Le gain
+   * retranchait alors zéro et reprenait la trésorerie entière : « +115,66 % » relevé à
+   * l'écran sur un patrimoine dont la moitié dormait sur un livret.
+   *
+   * ⚠️ **Absentes, comme `patrimoine`, quand aucun compte ne déclare d'espèces.**
+   * L'absence se distingue de zéro, et c'est toute la valeur de ce champ.
+   */
+  liquidites?: number;
 };
 export type Period = "24h" | "1S" | "1M" | "3M" | "6M" | "1A" | "3A" | "Max";

@@ -78,8 +78,21 @@ def relire(client, pid):
     return next(p for p in lot if p["id"] == pid)
 
 
+#: La date d'un apport, quand le test ne s'intéresse pas à laquelle.
+#:
+#: ⚠️ **Un apport sans date est refusé, et c'est voulu.** Il ne se placerait nulle part sur
+#: la courbe — le défaut même que la refonte du journal répare. Les tests qui déclarent de
+#: l'argent doivent donc dire quand, comme l'écran l'exige.
+QUAND = "2026-01-05T00:00:00"
+
+
 def compte_valide(**ecrase):
     return {"nom": "PEA Boursorama", "genre": "pea", "couleur": "#22C55E", **ecrase}
+
+
+def avec_apport(montant, quand=QUAND, **ecrase):
+    """Un compte valide qui porte de l'argent, daté."""
+    return compte_valide(apport_initial=montant, apport_le=quand, **ecrase)
 
 
 # ── Le parcours ordinaire ─────────────────────────────────────────────────────
@@ -87,7 +100,7 @@ def compte_valide(**ecrase):
 def test_creation_lecture_modification(client):
     pid = creer_portefeuille(client)
 
-    r = client.post(f"/api/v1/portfolios/{pid}/comptes", json=compte_valide(solde=1200.0))
+    r = client.post(f"/api/v1/portfolios/{pid}/comptes", json=avec_apport(1200.0))
     assert r.status_code == 200, r.text
     c = r.json()
     assert c["nom"] == "PEA Boursorama"
@@ -111,38 +124,42 @@ def test_un_compte_sans_titres_se_declare_aussi(client):
     """
     ⚠️ **C'est le cas que l'inférence ne pouvait pas atteindre.** Un livret ne détient
     aucune ligne, donc aucune place de cotation ne le révèle : il n'existait tout
-    simplement pas dans l'écran des comptes. Sa valeur est son solde, et le drapeau
-    `porte_des_titres` est ce qui empêche de l'additionner comme un portefeuille.
+    simplement pas dans l'écran des comptes. Sa valeur est la somme de ses apports, et le
+    drapeau `porte_des_titres` est ce qui empêche de l'additionner comme un portefeuille.
     """
     pid = creer_portefeuille(client)
     r = client.post(f"/api/v1/portfolios/{pid}/comptes",
-                    json={"nom": "Livret A", "genre": "epargne",
-                          "couleur": "#F59E0B", "solde": 8400.0})
+                    json={"nom": "Livret A", "genre": "epargne", "couleur": "#F59E0B",
+                          "apport_initial": 8400.0, "apport_le": QUAND})
     assert r.status_code == 200, r.text
     assert r.json()["porte_des_titres"] is False
+    # ⚠️ Le solde rendu est calculé depuis le journal, il n'est plus stocké nulle part.
     assert r.json()["solde"] == 8400.0
 
 
 def test_la_date_de_saisie_est_rendue_et_suit_les_corrections(client):
     """
-    ⚠️ **Un solde saisi à la main vieillit, et cette date est la seule chose qui le dise.**
-    Sur un livret, le montant *est* la valeur du compte : il entre dans les totaux comme
-    s'il était mesuré, alors qu'il a été tapé un jour donné. Sans elle, rien ne distingue
-    un solde d'hier d'un solde de l'an dernier.
+    ⚠️ **La date de déclaration du compte, à ne pas confondre avec celle de son argent.**
+    Chaque apport porte désormais la sienne, ce qui répond à « depuis quand » bien mieux
+    que ce champ ne le faisait. Reste ce qu'il dit vraiment : quand la fiche du compte a
+    été touchée pour la dernière fois — son nom, sa couleur, son rang.
     """
     from datetime import datetime
 
     pid = creer_portefeuille(client)
     c = client.post(f"/api/v1/portfolios/{pid}/comptes",
-                    json={"nom": "Livret A", "genre": "epargne",
-                          "couleur": "#F59E0B", "solde": 8400.0}).json()
+                    json={"nom": "Livret A", "genre": "epargne", "couleur": "#F59E0B",
+                          "apport_initial": 8400.0, "apport_le": QUAND}).json()
     assert c["mis_a_jour_le"], "aucune date de saisie rendue"
     pose = datetime.fromisoformat(c["mis_a_jour_le"])
 
     corrige = client.put(f"/api/v1/portfolios/{pid}/comptes/{c['id']}",
-                         json={"nom": "Livret A", "genre": "epargne",
-                               "couleur": "#F59E0B", "solde": 8600.0}).json()
+                         json={"nom": "Livret bleu", "genre": "epargne",
+                               "couleur": "#F59E0B"}).json()
     assert datetime.fromisoformat(corrige["mis_a_jour_le"]) >= pose
+    # ⚠️ **L'argent n'a pas bougé, et c'est la garde de la refonte.** Modifier la fiche
+    # d'un compte ne touche plus à son journal : la somme reste celle qu'on a apportée.
+    assert corrige["solde"] == 8400.0
 
 
 def test_le_rang_range_en_queue(client):
@@ -175,7 +192,13 @@ def test_les_genres_sont_publies(client):
     ({"nom": "A", "genre": "assurance-vie", "couleur": "#22C55E"}, "genre inconnu"),
     ({"nom": "A", "genre": "pea", "couleur": "vert"}, "couleur non hexadécimale"),
     ({"nom": "A", "genre": "pea", "couleur": "#22C5"}, "couleur trop courte"),
-    ({"nom": "A", "genre": "pea", "couleur": "#22C55E", "solde": -1}, "solde négatif"),
+    ({"nom": "A", "genre": "pea", "couleur": "#22C55E",
+      "apport_initial": -1, "apport_le": QUAND}, "apport négatif"),
+    # ⚠️ **Un apport sans date se perdrait sur la courbe**, et c'est très exactement le
+    # défaut que la refonte répare : un montant qu'on ne sait pas placer ne se dessine
+    # nulle part, et le compte vaut alors zéro partout tout en affichant sa somme.
+    ({"nom": "A", "genre": "pea", "couleur": "#22C55E",
+      "apport_initial": 500.0}, "apport sans date"),
 ])
 def test_saisies_refusees(client, charge, motif):
     """
@@ -417,8 +440,8 @@ def test_un_compte_sans_titres_refuse_les_operations(client):
     """
     pid = creer_portefeuille(client)
     livret = client.post(f"/api/v1/portfolios/{pid}/comptes",
-                         json=compte_valide(nom="Livret A", genre="epargne",
-                                            solde=5000.0)).json()["id"]
+                         json=avec_apport(5000.0, nom="Livret A",
+                                          genre="epargne")).json()["id"]
     a = operation(client, pid)
 
     r = client.post(f"/api/v1/portfolios/{pid}/comptes/{livret}/operations",
@@ -485,7 +508,7 @@ def test_rattacher_ne_vieillit_pas_le_solde(client):
     """
     pid = creer_portefeuille(client)
     cid = client.post(f"/api/v1/portfolios/{pid}/comptes",
-                      json=compte_valide(solde=1200.0)).json()["id"]
+                      json=avec_apport(1200.0)).json()["id"]
     lu = lambda: next(c for c in client.get(f"/api/v1/portfolios/{pid}/comptes").json()
                       if c["id"] == cid)["mis_a_jour_le"]
     avant = lu()
@@ -504,8 +527,8 @@ def test_une_operation_ne_se_cree_pas_dans_un_compte_sans_titres(client):
     """
     pid = creer_portefeuille(client)
     livret = client.post(f"/api/v1/portfolios/{pid}/comptes",
-                         json=compte_valide(nom="Livret A", genre="epargne",
-                                            solde=5000.0)).json()["id"]
+                         json=avec_apport(5000.0, nom="Livret A",
+                                          genre="epargne")).json()["id"]
     r = client.post(f"/api/v1/portfolios/{pid}/transactions", json={
         "ticker": "AAPL", "asset_type": "EQUITY", "side": "BUY",
         "quantity": 3, "unit_price": 100.0, "fees": 0.0,

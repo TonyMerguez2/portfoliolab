@@ -2,7 +2,7 @@
 import { useEffect, useState } from "react";
 
 import type { Compte, CompteASoumettre, GenreCompte } from "@/lib/comptes";
-import { fraicheurDuSolde } from "@/lib/comptes";
+import FenetreModale from "@/components/ui/FenetreModale";
 import PastillesCouleur, { COULEURS_DOSSIER } from "@/components/portfolio/PastillesCouleur";
 import { CLAIR, RAYONS } from "@/lib/palette";
 import { FONT, NUM } from "@/lib/typography";
@@ -47,10 +47,25 @@ const etiquette: React.CSSProperties = {
   color: CLAIR.texteFaible, textTransform: "uppercase",
 };
 
+/**
+ * Le rayon de tout ce qui se pose **dans** la fenêtre.
+ *
+ * ⚠️ **Celui du conteneur, et non un rayon d'élément.** Les champs et les choix portaient
+ * `xs`, soit 6 : une pastille anguleuse dans un panneau très arrondi, et l'œil lit deux
+ * langages dans le même cadre. `Cadre` donne à sa carte intérieure `RAYON − CADRE`, soit
+ * 24 − 6 = 18 ; les surfaces qu'elle contient reprennent cette valeur.
+ */
+const RAYON_SAISIE = RAYONS.lg;
+
+/**
+ * ⚠️ **Le fond, le bord et les états vivent dans `.novac-surface-saisie`.** Seule la
+ * géométrie reste ici : un `:hover` ne s'écrit pas en style en ligne, et les trois états
+ * de ces surfaces sont précisément ce qu'on veut voir. Voir `globals.css`.
+ */
 const champ: React.CSSProperties = {
   width: "100%", boxSizing: "border-box", fontFamily: FONT, fontSize: 12.5,
-  padding: "8px 10px", borderRadius: RAYONS.xs, background: CLAIR.carteCreuse,
-  border: `1px solid ${CLAIR.bord}`, color: CLAIR.texte, outline: "none",
+  padding: "9px 12px", borderRadius: RAYON_SAISIE,
+  color: CLAIR.texte, outline: "none",
 };
 
 export default function FormulaireCompte({
@@ -97,31 +112,32 @@ export default function FormulaireCompte({
   const [genre, setGenre] = useState<string>(depart?.genre ?? "");
   const [couleur, setCouleur] = useState(depart?.couleur ?? COULEURS_DOSSIER[0].hex);
   /**
-   * ⚠️ **Le solde se relit en français, avec ses centimes.** `String(12450.8)` rend
+   * L'argent qu'on met sur le compte en le déclarant.
+   *
+   * ⚠️ **Le montant se relit en français, avec ses centimes.** `String(12450.8)` rend
    * « 12450.8 » : un point décimal dans une saisie française, et le zéro final envolé. Vu à
    * l'écran après avoir tapé 12450,80. On repasse donc par deux décimales et la virgule —
    * `enregistrer` refait le chemin inverse, et le champ reste modifiable au clavier puisqu'il
    * ne porte aucun séparateur de milliers.
    */
-  const [solde, setSolde] = useState(
-    depart?.solde != null ? depart.solde.toFixed(2).replace(".", ",") : "");
+  const [apport, setApport] = useState(
+    prerempli?.apport_initial != null
+      ? prerempli.apport_initial.toFixed(2).replace(".", ",") : "");
   /**
-   * Depuis quand ce solde existe.
+   * Quand cet argent est arrivé sur le compte.
    *
-   * ⚠️ **C'est la question qui permet à la courbe de remonter le temps.** Un solde est un
-   * chiffre sans passé : sans date, le patrimoine tracé n'avait que deux issues, toutes
-   * deux fausses. Supposer l'argent présent depuis toujours ment dès qu'un livret est
-   * récent, et rien à l'écran ne l'aurait dit. Le faire apparaître au jour de la
-   * déclaration dessine une marche verticale que l'œil lit comme une performance.
+   * ⚠️ **« Il n'y a pas de depuis quand, juste la date. »** Le mot de l'épargnant, et la
+   * refonte tient dedans. On ne demande plus depuis quand un solde vaut ce qu'il vaut —
+   * question à laquelle un chiffre ne peut pas répondre — mais à quelle date on apporte
+   * ce capital. Exactement ce qu'on demande pour un achat d'actions, et le repère que
+   * l'apport laisse sur la courbe est le même.
    *
-   * ⚠️ **En date du jour par défaut, jamais vide quand un solde est saisi.** Laisser le
-   * champ vide aurait reconduit la supposition qu'on cherche à supprimer ; aujourd'hui est
-   * la seule valeur qu'on puisse proposer sans rien inventer, et elle se corrige d'un
-   * clic. `toISOString().slice(0, 10)` suffit : le champ est en heure locale et la
-   * précision utile est le jour.
+   * ⚠️ **En date du jour par défaut, jamais vide.** C'est la seule valeur qu'on puisse
+   * proposer sans rien inventer, et elle se corrige d'un clic. `toISOString().slice(0, 10)`
+   * suffit : le champ est en heure locale et la précision utile est le jour.
    */
-  const [soldeDepuis, setSoldeDepuis] = useState(
-    depart?.solde_depuis?.slice(0, 10) ?? new Date().toISOString().slice(0, 10));
+  const [apportLe, setApportLe] = useState(
+    prerempli?.apport_le?.slice(0, 10) ?? new Date().toISOString().slice(0, 10));
   /**
    * ⚠️ **La suppression demande deux clics, et non une boîte du navigateur.** `confirm()`
    * arrête tout, sort de la page et se présente au nom du site plutôt qu'au nom de
@@ -156,46 +172,38 @@ export default function FormulaireCompte({
    */
   const avecTitres = genreChoisi?.titres ?? true;
   /**
-   * ⚠️ **Le solde est exigé quand il est toute la valeur du compte.** Un livret déclaré
-   * sans solde ne vaut rien et ne dit rien : la carte porterait un nom et un vide. Sur un
+   * ⚠️ **L'apport est exigé quand il est toute la valeur du compte.** Un livret déclaré
+   * sans un euro ne vaut rien et ne dit rien : la carte porterait un nom et un vide. Sur un
    * compte à titres, en revanche, il reste facultatif — les espèces non investies peuvent
    * être nulles, et surtout on les ignore souvent au moment de déclarer.
+   *
+   * ⚠️ **Et seulement à la déclaration.** En correction, l'argent ne passe plus par ce
+   * formulaire : exiger un montant qu'il n'affiche pas bloquerait le bouton sans rien dire.
    */
-  const soldeSaisi = solde.trim() !== "" && Number.isFinite(Number(solde.replace(",", ".")));
+  const apportSaisi = apport.trim() !== "" && Number.isFinite(Number(apport.replace(",", ".")));
   const peutContinuer = nomPropre.length > 0 && genre.length > 0
-    && (avecTitres || soldeSaisi);
+    && (correction || avecTitres || apportSaisi);
 
   const enregistrer = () => onEnregistrer({
     nom: nomPropre, genre, couleur,
     /**
-     * ⚠️ **Un champ vide n'est pas un solde nul.** `parseFloat("")` rend `NaN`, et un zéro
+     * ⚠️ **Un champ vide n'est pas un apport nul.** `parseFloat("")` rend `NaN`, et un zéro
      * posé par défaut ferait déclarer « ce compte est vide » à qui n'a rien saisi. Le serveur
      * distingue les deux ; l'écran doit le lui permettre.
+     *
+     * ⚠️ **Rien n'est envoyé en correction.** Le serveur ignore ces champs sur un compte
+     * existant — l'argent ne s'écrit que dans le journal — et les envoyer quand même
+     * laisserait croire, en lisant ce code, qu'ils peuvent encore agir.
      */
-    solde: solde.trim() === "" ? null : Number(solde.replace(",", ".")),
-    /**
-     * ⚠️ **Pas de date sans solde.** Un compte sans liquidités qui porterait une date de
-     * solde laisserait dans la courbe un jalon désignant une somme qui n'existe pas. Les
-     * deux champs vont ensemble ou pas du tout — le serveur écrase aussi avec `null` pour
-     * la même raison.
-     */
-    solde_depuis: solde.trim() === "" ? null : `${soldeDepuis}T00:00:00`,
+    ...(correction ? {} : {
+      apport_initial: apport.trim() === "" ? null : Number(apport.replace(",", ".")),
+      apport_le: apport.trim() === "" ? null : `${apportLe}T00:00:00`,
+    }),
   });
 
   return (
-    <div onClick={onFermer}
-      style={{
-        position: "fixed", inset: 0, zIndex: 60, display: "flex",
-        alignItems: "center", justifyContent: "center", padding: 20,
-        background: "rgba(0,0,0,0.55)", backdropFilter: "blur(2px)",
-      }}>
-      <div onClick={e => e.stopPropagation()}
-        style={{
-          width: 460, maxWidth: "100%", maxHeight: "90vh", overflowY: "auto",
-          background: CLAIR.carte, border: `1px solid ${CLAIR.bord}`,
-          borderRadius: RAYONS.sm, padding: "18px 20px",
-          display: "flex", flexDirection: "column", gap: 14,
-        }}>
+    <FenetreModale onFermer={onFermer} largeur={460}
+      etiquette={correction ? "Modifier le compte" : "Nouveau compte"}>
 
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
           <span style={{ fontFamily: FONT, fontSize: 13.5, fontWeight: 700, color: CLAIR.texte }}>
@@ -213,7 +221,7 @@ export default function FormulaireCompte({
             <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
               <span style={etiquette}>Nom</span>
               <input autoFocus value={nom} onChange={e => setNom(e.target.value)}
-                placeholder="PEA Boursorama" maxLength={60} style={champ} />
+                placeholder="PEA Boursorama" maxLength={60} className="novac-surface-saisie" style={champ} />
             </div>
 
             <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
@@ -225,15 +233,23 @@ export default function FormulaireCompte({
                 */}
               <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
                 {genres.map(g => (
+                  /**
+                    * ⚠️ **Le choix retenu sort de la surface commune, les autres y restent.**
+                    * `novac-surface-saisie` porte le fond gris et les deux liserés ; le
+                    * genre choisi les recouvre en ligne — le style en ligne l'emporte sur la
+                    * classe — pour prendre la couleur du dossier. C'est ce qui fait qu'un
+                    * seul des cinq se détache, sans qu'aucun ne change de forme.
+                    */
                   <button key={g.cle} type="button" onClick={() => setGenre(g.cle)}
+                    className="novac-surface-saisie"
                     style={{
-                      fontFamily: FONT, fontSize: 12, padding: "6px 11px",
-                      borderRadius: RAYONS.xs, cursor: "pointer",
-                      background: genre === g.cle ? couleur : CLAIR.carteCreuse,
-                      border: `1px solid ${genre === g.cle ? couleur : CLAIR.bord}`,
+                      fontFamily: FONT, fontSize: 12, padding: "7px 13px",
+                      borderRadius: RAYON_SAISIE, cursor: "pointer",
                       color: genre === g.cle ? "#FFFFFF" : CLAIR.texteSecondaire,
                       fontWeight: genre === g.cle ? 600 : 500,
-                      transition: "background 150ms, color 150ms",
+                      ...(genre === g.cle
+                        ? { background: couleur, border: `1px solid ${couleur}` }
+                        : {}),
                     }}>
                     {g.libelle}
                   </button>
@@ -253,60 +269,66 @@ export default function FormulaireCompte({
             </div>
 
             {/**
+              * ⚠️ **L'argent ne se saisit qu'à la déclaration, et jamais plus ici.**
+              * Ce champ réécrivait un solde posé à côté du journal, et les deux ont fini
+              * par diverger sur cinq comptes sur six — jusqu'à 12 000 € d'écart. Le compte
+              * n'ayant plus de solde propre, corriger se fait sur l'apport lui-même, dans
+              * le journal juste en dessous. Un seul endroit où l'argent s'écrit.
+              *
               * ⚠️ **L'étiquette suit le genre, et ce n'est pas de la cosmétique.**
               * « Liquidités » est le mot juste en finance, et il a quand même échoué :
               * il a fallu demander ce qu'il désignait. Sur un compte courant, personne ne
-              * dit « mes liquidités » — on dit son solde ; et sur un PEA, le mot ne dit
-              * pas qu'il s'agit de la part *non investie*, ce qui est pourtant tout le
-              * sens du champ.
+              * dit « mes liquidités » — on dit ce qu'on y met ; et sur un PEA, le mot ne
+              * dit pas qu'il s'agit de la part *non investie*, ce qui est tout le sens
+              * du champ.
               */}
-            <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
-              <span style={etiquette}>{avecTitres ? "Espèces non investies" : "Solde"}</span>
-              <input value={solde} onChange={e => setSolde(e.target.value)}
-                inputMode="decimal"
-                placeholder={avecTitres ? "Facultatif" : "Ex : 8 400"}
-                style={{ ...champ, ...NUM }} />
-              <span style={{ fontFamily: FONT, fontSize: 10.5, color: CLAIR.texteAttenue }}>
-                {avecTitres
-                  ? "La part en euros qui dort à côté de vos titres. Facultatif."
-                  : "Ce que contient le compte aujourd’hui."}
-                {/* ⚠️ **L'âge du solde s'affiche là où on le corrige.** Sur la carte, il
-                    informe ; ici, il justifie le geste qu'on est en train de faire. */}
-                {correction && initial?.mis_a_jour_le && (
-                  <> Dernière saisie {fraicheurDuSolde(initial.mis_a_jour_le)}.</>
+            {!correction && (
+              <>
+                <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
+                  <span style={etiquette}>
+                    {avecTitres ? "Espèces non investies" : "Apport initial"}
+                  </span>
+                  <input value={apport} onChange={e => setApport(e.target.value)}
+                    inputMode="decimal"
+                    placeholder={avecTitres ? "Facultatif" : "Ex : 8 400"}
+                    className="novac-surface-saisie" style={{ ...champ, ...NUM }} />
+                  <span style={{ fontFamily: FONT, fontSize: 10.5, color: CLAIR.texteAttenue }}>
+                    {avecTitres
+                      ? "La part en euros qui dort à côté de vos titres. Facultatif."
+                      : "Ce que vous mettez sur ce compte."}
+                  </span>
+                </div>
+
+                {/**
+                  * ⚠️ **La date n'apparaît qu'une fois un montant saisi.** Posée à côté
+                  * d'un champ vide, elle demanderait quand est arrivée une somme qu'on n'a
+                  * pas donnée. Elle surgit à la frappe, là où la question a un sens.
+                  *
+                  * ⚠️ **« À quelle date » et non « depuis quand ».** C'est le mot de
+                  * l'épargnant : on ne demande pas depuis quand un solde vaut ce qu'il
+                  * vaut, on demande quand le capital est apporté. Comme pour un achat
+                  * d'actions.
+                  */}
+                {apportSaisi && (
+                  <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
+                    <span style={etiquette}>À quelle date</span>
+                    <input type="date" value={apportLe}
+                      max={new Date().toISOString().slice(0, 10)}
+                      onChange={e => setApportLe(e.target.value)}
+                      className="novac-surface-saisie" style={{ ...champ, ...NUM }} />
+                    <span style={{ fontFamily: FONT, fontSize: 10.5, color: CLAIR.texteAttenue }}>
+                      Cette somme entre dans la courbe de votre patrimoine à cette date, et
+                      y laisse un repère. Avant, elle n’y figure pas.
+                    </span>
+                  </div>
                 )}
-              </span>
-            </div>
-
-            {/* ⚠️ **Le journal vient après le solde, et jamais avant.** Les deux gestes
-                changent le même chiffre : celui du dessus le réécrit, celui du dessous
-                l'augmente à une date. Les présenter dans cet ordre laisse lire la
-                correction comme le geste ordinaire et le versement comme l'ajout — et
-                c'est bien ce rapport-là entre eux. */}
-            {journal}
-
-            {/**
-              * ⚠️ **La date n'apparaît qu'une fois un solde saisi.** Posée à côté d'un
-              * champ vide, elle demanderait depuis quand existe une somme qu'on n'a pas
-              * donnée. Elle surgit donc à la frappe, là où la question a un sens.
-              *
-              * ⚠️ **« Depuis quand » et non « saisi le ».** Ce que la courbe a besoin de
-              * savoir, c'est à partir de quand cet argent comptait — pas quand vous l'avez
-              * tapé, que l'application sait déjà toute seule.
-              */}
-            {soldeSaisi && (
-              <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
-                <span style={etiquette}>Depuis quand</span>
-                <input type="date" value={soldeDepuis}
-                  max={new Date().toISOString().slice(0, 10)}
-                  onChange={e => setSoldeDepuis(e.target.value)}
-                  style={{ ...champ, ...NUM }} />
-                <span style={{ fontFamily: FONT, fontSize: 10.5, color: CLAIR.texteAttenue }}>
-                  À partir de cette date, cette somme entre dans la courbe de votre
-                  patrimoine. Avant, elle n’y figure pas.
-                </span>
-              </div>
+              </>
             )}
+
+            {/* ⚠️ **Le journal est désormais le seul endroit où l'argent d'un compte
+                existant se touche.** Il n'y a plus de champ au-dessus qui réécrive le
+                total : on ajoute un apport, ou l'on corrige celui qu'on avait mal saisi. */}
+            {journal}
           </>
         ) : (
           <>
@@ -325,7 +347,7 @@ export default function FormulaireCompte({
 
             <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
               <div style={{
-                padding: "12px 13px", borderRadius: RAYONS.xs,
+                padding: "12px 14px", borderRadius: RAYON_SAISIE,
                 background: CLAIR.carteCreuse, border: `1px solid ${couleur}`,
               }}>
                 <div style={{ fontFamily: FONT, fontSize: 12.5, fontWeight: 600, color: CLAIR.texte }}>
@@ -361,7 +383,7 @@ export default function FormulaireCompte({
                 * intégration entière, pas un réglage. Le dire ici évite qu'on l'attende.
                 */}
               <div aria-disabled style={{
-                padding: "12px 13px", borderRadius: RAYONS.xs,
+                padding: "12px 14px", borderRadius: RAYON_SAISIE,
                 background: CLAIR.carteCreuse, border: `1px solid ${CLAIR.bord}`,
                 opacity: 0.55, cursor: "not-allowed",
               }}>
@@ -396,7 +418,7 @@ export default function FormulaireCompte({
             <button type="button" disabled={enCours}
               onClick={() => (confirmeSuppression ? onSupprimer() : setConfirmeSuppression(true))}
               style={{
-                fontFamily: FONT, fontSize: 12, padding: "8px 14px", borderRadius: RAYONS.xs,
+                fontFamily: FONT, fontSize: 12, padding: "9px 16px", borderRadius: RAYON_SAISIE,
                 cursor: enCours ? "default" : "pointer", background: "transparent",
                 border: `1px solid ${confirmeSuppression ? CLAIR.negatif : CLAIR.bord}`,
                 color: confirmeSuppression ? CLAIR.negatif : CLAIR.texteFaible,
@@ -407,7 +429,7 @@ export default function FormulaireCompte({
           ) : (
             <button type="button" onClick={() => (etape === 1 ? onFermer() : setEtape(1))}
               style={{
-                fontFamily: FONT, fontSize: 12, padding: "8px 14px", borderRadius: RAYONS.xs,
+                fontFamily: FONT, fontSize: 12, padding: "9px 16px", borderRadius: RAYON_SAISIE,
                 cursor: "pointer", background: "transparent",
                 border: `1px solid ${CLAIR.bord}`, color: CLAIR.texteSecondaire,
               }}>
@@ -417,8 +439,8 @@ export default function FormulaireCompte({
           <button type="button" disabled={!peutContinuer || enCours}
             onClick={() => (correction || etape === 2 ? enregistrer() : setEtape(2))}
             style={{
-              fontFamily: FONT, fontSize: 12, fontWeight: 600, padding: "8px 16px",
-              borderRadius: RAYONS.xs, border: "none", color: "#FFFFFF",
+              fontFamily: FONT, fontSize: 12, fontWeight: 600, padding: "9px 18px",
+              borderRadius: RAYON_SAISIE, border: "none", color: "#FFFFFF",
               background: couleur, opacity: !peutContinuer || enCours ? 0.45 : 1,
               cursor: !peutContinuer || enCours ? "default" : "pointer",
             }}>
@@ -427,7 +449,6 @@ export default function FormulaireCompte({
               : etape === 1 ? "Continuer" : "Créer le compte"}
           </button>
         </div>
-      </div>
-    </div>
+    </FenetreModale>
   );
 }

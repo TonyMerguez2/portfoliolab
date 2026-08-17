@@ -32,6 +32,7 @@ from app.core.auth import require_auth
 from app.core.database import (Compte, MouvementTresorerie, Portfolio,
                                 Transaction, get_db)
 from app.models.user import User
+from app.services.tresorerie import solde_actuel
 
 router = APIRouter(prefix="/api/v1/portfolios", tags=["Comptes"])
 
@@ -75,15 +76,19 @@ class CompteEntree(BaseModel):
     nom: str
     genre: str
     couleur: str = "#6366F1"
-    solde: float | None = None
-    #: Depuis quand ce solde existe — voir `Compte.solde_depuis`.
+    #: L'argent qu'on met sur le compte en le déclarant, et la date à laquelle on l'y met.
     #:
-    #: ⚠️ **Facultatif dans le contrat, demandé à l'écran.** L'exiger ici ferait échouer
-    #: toutes les déclarations déjà écrites, celles des tests comprises, et rendrait
-    #: impossible de déclarer un compte sans liquidités — pour lequel la question n'a
-    #: aucun sens. C'est le même partage que pour le compte d'une opération : obligatoire
-    #: là où l'épargnant répond, facultatif là où le contrat doit rester tenable.
-    solde_depuis: datetime | None = None
+    #: ⚠️ **Un apport daté, et non plus un solde.** C'est la refonte, et elle tient dans le
+    #: nom de ces deux champs : « il n'y a pas de depuis quand, juste la date ». Déclarer un
+    #: livret à 5 000 € au 12 mars, c'est apporter 5 000 € le 12 mars — le même geste qu'un
+    #: achat de titres, écrit au même endroit, et qui laisse le même repère sur la courbe.
+    #: Le solde n'est plus saisi nulle part : il est la somme du journal.
+    #:
+    #: ⚠️ **Facultatifs dans le contrat, demandés à l'écran.** Les exiger ici rendrait
+    #: impossible de déclarer un compte sans liquidités — un PEA dont on ne connaît que les
+    #: lignes — pour lequel la question n'a aucun sens.
+    apport_initial: float | None = None
+    apport_le: datetime | None = None
     rang: int | None = None
 
 
@@ -143,11 +148,32 @@ def _valider(e: CompteEntree) -> None:
         raise HTTPException(400, f"Genre inconnu. Attendu : {', '.join(GENRES_COMPTE)}.")
     if not COULEUR.match(e.couleur or ""):
         raise HTTPException(400, "Couleur attendue au format #RRGGBB.")
-    if e.solde is not None and e.solde < 0:
-        raise HTTPException(400, "Un solde ne peut pas être négatif.")
+    if e.apport_initial is not None and e.apport_initial < 0:
+        raise HTTPException(400, "Un apport initial ne peut pas être négatif.")
+    # ⚠️ Un apport sans date ne se placerait nulle part sur la courbe. Le refuser à la
+    # saisie vaut mieux que l'écrire pour le perdre ensuite : c'est très exactement le
+    # défaut que cette refonte répare.
+    if e.apport_initial is not None and e.apport_le is None:
+        raise HTTPException(400, "Un apport a besoin de sa date.")
 
 
-def _en_dict(c: Compte) -> dict:
+def _en_dict(c: Compte, db: Session) -> dict:
+    """
+    Le compte tel que l'écran le lit, **solde compris**.
+
+    ⚠️ **`solde` est calculé, il n'est plus stocké.** La colonne existe encore en base —
+    SQLite n'a pas de migration dans ce projet, et la retirer demanderait de reconstruire
+    la table — mais plus rien ne la lit. La somme du journal est la seule vérité, et la
+    rendre sous le nom que l'écran connaît déjà évite de propager la refonte jusque dans
+    les composants qui n'ont aucune raison de la connaître.
+
+    ⚠️ **`dernier_apport_le` remplace `mis_a_jour_le` pour dire l'âge d'un solde.** La
+    carte d'un livret annonçait « Solde déclaré il y a 8 mois » d'après la date de dernière
+    retouche de la *fiche* — renommer le compte rajeunissait donc son solde. La question que
+    l'écran pose vraiment est : depuis quand cet argent n'a-t-il pas bougé ? Le journal y
+    répond exactement, et c'est désormais un fait plutôt qu'un indice.
+    """
+    journal = _mouvements_du_compte(c, db)
     return {
         "id": c.id,
         "nom": c.nom,
@@ -155,8 +181,9 @@ def _en_dict(c: Compte) -> dict:
         "libelle_genre": GENRES_COMPTE[c.genre]["libelle"] if c.genre in GENRES_COMPTE else c.genre,
         "porte_des_titres": bool(GENRES_COMPTE.get(c.genre, {}).get("titres")),
         "couleur": c.couleur,
-        "solde": c.solde,
-        "solde_depuis": c.solde_depuis.isoformat() if c.solde_depuis else None,
+        "solde": solde_actuel([{"montant": m.montant} for m in journal]),
+        # `_mouvements_du_compte` trie du plus récent au plus ancien : le premier est le dernier.
+        "dernier_apport_le": journal[0].date.isoformat() if journal else None,
         "rang": c.rang,
         "mis_a_jour_le": c.mis_a_jour_le.isoformat() if c.mis_a_jour_le else None,
     }
@@ -183,7 +210,7 @@ def lister(portfolio_id: str, db: Session = Depends(get_db),
                .filter(Compte.portfolio_id == p.id)
                .order_by(Compte.rang, Compte.cree_le)
                .all())
-    return [_en_dict(c) for c in comptes]
+    return [_en_dict(c, db) for c in comptes]
 
 
 @router.post("/{portfolio_id}/comptes")
@@ -198,35 +225,26 @@ def creer(portfolio_id: str, data: CompteEntree, db: Session = Depends(get_db),
                .order_by(Compte.rang.desc()).first())
     c = Compte(
         id=str(uuid.uuid4()), portfolio_id=p.id, nom=data.nom.strip(),
-        genre=data.genre, couleur=data.couleur, solde=data.solde,
-        solde_depuis=data.solde_depuis,
+        genre=data.genre, couleur=data.couleur,
         rang=data.rang if data.rang is not None else ((dernier.rang + 1) if dernier else 0),
     )
     db.add(c)
 
-    # ⚠️ **Le solde d'ouverture entre au journal comme un apport, et c'est une seule
-    # mécanique au lieu de deux.** Déclarer un compte avec 5 000 € est un apport de capital
-    # daté, exactement comme un versement fait plus tard : le ranger à part, dans un champ
-    # du compte, laissait la plus grosse marche de la courbe sans repère — celle de la
-    # déclaration — alors que les versements suivants en avaient un. Signalé à l'usage.
-    #
-    # ⚠️ **L'arithmétique du solde n'en est pas affectée.** `solde_par_jour` remonte le
-    # temps en retranchant du solde actuel les mouvements *postérieurs* à la date lue ; un
-    # mouvement posé à `solde_depuis` n'est jamais postérieur à une date qui le suit, et les
-    # dates antérieures sont déjà ramenées à zéro par la garde. L'ajout ne fait donc
-    # qu'exister pour l'affichage, sans déplacer un centime.
-    #
-    # ⚠️ **Rien n'est écrit sans date.** Un apport sans date ne se placerait nulle part sur
-    # la courbe, et le compte garde alors son solde sans journal — le cas des comptes
-    # déclarés avant que la date n'existe.
-    if c.solde is not None and c.solde_depuis is not None:
+    # ⚠️ **Déclarer un compte avec de l'argent dessus, c'est écrire un apport, et rien
+    # d'autre.** Il n'y a plus de champ de solde à remplir à côté : le compte n'a que son
+    # journal, et son solde en est la somme. C'est ce qui fait qu'un apport d'ouverture
+    # laisse sur la courbe le même repère qu'un versement fait six mois plus tard — les
+    # deux gestes sont désormais le même objet, ce qu'ils n'ont jamais cessé d'être pour
+    # l'épargnant.
+    if data.apport_initial is not None and data.apport_le is not None:
         db.add(MouvementTresorerie(
             id=str(uuid.uuid4()), compte_id=c.id,
-            date=c.solde_depuis, montant=c.solde, note="Solde d'ouverture"))
+            date=data.apport_le, montant=data.apport_initial,
+            note="Apport initial"))
 
     db.commit()
     db.refresh(c)
-    return _en_dict(c)
+    return _en_dict(c, db)
 
 
 @router.put("/{portfolio_id}/comptes/{compte_id}")
@@ -235,16 +253,21 @@ def modifier(portfolio_id: str, compte_id: str, data: CompteEntree,
     p = _portefeuille(portfolio_id, user, db)
     c = _compte(compte_id, p, db)
     _valider(data)
-    c.nom, c.genre, c.couleur, c.solde = data.nom.strip(), data.genre, data.couleur, data.solde
-    # ⚠️ Écrasée même par `None` : corriger un compte pour en retirer le solde doit en
-    # retirer la date, sinon le compte garderait une date de solde sans solde — et la
-    # courbe de patrimoine aurait un jalon désignant une somme qui n'existe plus.
-    c.solde_depuis = data.solde_depuis
+    c.nom, c.genre, c.couleur = data.nom.strip(), data.genre, data.couleur
+    # ⚠️ **Modifier un compte ne touche plus à son argent, et c'est le cœur de la refonte.**
+    # Le formulaire réécrivait `solde` sans rien ajouter au journal, ce qui voulait dire
+    # « je m'étais trompé » et réécrivait tout le passé de la courbe. Un apport se corrige
+    # maintenant là où il est écrit — dans le journal, par `PUT .../mouvements/{id}` —
+    # exactement comme on corrige un achat de titres mal saisi. Un compte n'a plus de solde
+    # propre à corriger : il a des apports, et ce sont eux qu'on rectifie.
+    #
+    # `apport_initial` est donc ignoré ici. Le laisser agir aurait rouvert la couture que
+    # tout ce chantier ferme : deux chemins pour écrire la même somme.
     if data.rang is not None:
         c.rang = data.rang
     db.commit()
     db.refresh(c)
-    return _en_dict(c)
+    return _en_dict(c, db)
 
 
 @router.delete("/{portfolio_id}/comptes/{compte_id}")
@@ -387,6 +410,32 @@ def _mouvements_du_compte(c: Compte, db: Session) -> list[MouvementTresorerie]:
             .order_by(MouvementTresorerie.date.desc()).all())
 
 
+@router.get("/{portfolio_id}/mouvements")
+def lister_les_mouvements_du_portefeuille(portfolio_id: str,
+                                          db: Session = Depends(get_db),
+                                          user: User = Depends(require_auth)):
+    """
+    Tous les apports du portefeuille, comptes confondus, du plus récent au plus ancien.
+
+    ⚠️ **Une route à part parce que l'onglet Transactions n'a pas à payer une courbe.**
+    Les apports voyagent déjà avec `/history/comptes`, qui les rend compte par compte — mais
+    cette route-là télécharge l'historique des cours de tous les titres. Les demander pour
+    remplir une liste d'écritures aurait fait dépendre l'affichage d'un journal du réseau du
+    fournisseur, et attendre plusieurs secondes pour des lignes déjà en base.
+
+    ⚠️ **`compte_id` accompagne chaque apport.** C'est ce qui permet de les ranger par
+    dossier au même titre que les opérations, qui le portent depuis toujours.
+    """
+    p = _portefeuille(portfolio_id, user, db)
+    ids = [c.id for c in db.query(Compte).filter(Compte.portfolio_id == p.id).all()]
+    if not ids:
+        return []
+    lot = (db.query(MouvementTresorerie)
+           .filter(MouvementTresorerie.compte_id.in_(ids))
+           .order_by(MouvementTresorerie.date.desc()).all())
+    return [{**_mouvement_en_dict(m), "compte_id": m.compte_id} for m in lot]
+
+
 @router.get("/{portfolio_id}/comptes/{compte_id}/mouvements")
 def lister_les_mouvements(portfolio_id: str, compte_id: str,
                           db: Session = Depends(get_db),
@@ -402,19 +451,17 @@ def enregistrer_un_mouvement(portfolio_id: str, compte_id: str, corps: Mouvement
                              db: Session = Depends(get_db),
                              user: User = Depends(require_auth)):
     """
-    Enregistre un versement ou un retrait, et **met le solde à jour d'autant**.
+    Enregistre un versement ou un retrait.
 
-    ⚠️ **Le solde bouge, parce qu'un mouvement dit que l'argent a bougé.** C'est toute la
-    différence avec l'écran de correction, qui réécrit le solde sans rien ajouter au
-    journal : corriger veut dire « je m'étais trompé » et réécrit le passé de la courbe,
-    verser veut dire « j'ai ajouté » et ne touche qu'à partir de la date du versement. Les
-    deux gestes existent parce qu'ils ne racontent pas la même histoire, et deviner l'un à
-    partir de l'autre aurait fait apparaître des apports que personne n'a faits.
+    ⚠️ **Rien à mettre à jour à côté.** Le solde du compte est la somme de son journal :
+    écrire l'apport *est* le changement de solde. La ligne qui ajoutait le montant à
+    `Compte.solde` a disparu avec la colonne qu'elle entretenait, et avec elle le risque
+    que les deux chiffres divergent — ce qu'ils faisaient, mesuré sur cinq comptes sur six.
 
-    ⚠️ **Refusé sur un compte sans solde déclaré.** Un mouvement se retranche du solde
-    actuel pour remonter le temps ; sans solde, il n'y a rien dont le retrancher, et le
-    compte afficherait un journal sans jamais rien valoir. Déclarer le solde d'abord est
-    aussi le seul moyen d'obtenir la date à partir de laquelle il compte.
+    ⚠️ **Plus de refus sur un compte « sans solde déclaré ».** L'ancienne version l'exigeait
+    parce qu'un mouvement se retranchait d'un solde qui devait exister d'abord. Le cumul
+    n'a besoin de rien : le premier apport déclare les espèces, et un compte peut donc
+    commencer nu puis recevoir de l'argent, ce qui est l'ordre naturel des choses.
 
     ⚠️ **Un montant nul est refusé.** Il n'ajouterait rien à la courbe et poserait une
     pastille sur le graphique désignant un événement sans effet.
@@ -422,10 +469,6 @@ def enregistrer_un_mouvement(portfolio_id: str, compte_id: str, corps: Mouvement
     p = _portefeuille(portfolio_id, user, db)
     c = _compte(compte_id, p, db)
 
-    if c.solde is None:
-        raise HTTPException(
-            400, "Ce compte n'a pas de solde déclaré : un mouvement n'aurait rien à "
-                 "quoi se rapporter.")
     if corps.montant == 0:
         raise HTTPException(400, "Un mouvement de zéro euro ne dit rien.")
 
@@ -435,13 +478,48 @@ def enregistrer_un_mouvement(portfolio_id: str, compte_id: str, corps: Mouvement
         note=(corps.note or "").strip() or None,
     )
     db.add(m)
-    # ⚠️ Le solde suit le mouvement : il reste la vérité du présent, et le journal ne
-    # façonne que le passé. Voir `MouvementTresorerie`.
-    c.solde = (c.solde or 0.0) + corps.montant
     db.commit()
     db.refresh(m)
     db.refresh(c)
-    return {"mouvement": _mouvement_en_dict(m), "compte": _en_dict(c)}
+    return {"mouvement": _mouvement_en_dict(m), "compte": _en_dict(c, db)}
+
+
+@router.put("/{portfolio_id}/comptes/{compte_id}/mouvements/{mouvement_id}")
+def corriger_un_mouvement(portfolio_id: str, compte_id: str, mouvement_id: str,
+                          corps: MouvementEntree,
+                          db: Session = Depends(get_db),
+                          user: User = Depends(require_auth)):
+    """
+    Corrige un apport mal saisi : son montant, sa date ou sa note.
+
+    ⚠️ **C'est ici que « je m'étais trompé » se dit désormais.** L'écran de correction du
+    compte réécrivait le solde sans rien ajouter au journal, ce qui était le seul moyen de
+    rectifier une faute de frappe sans inventer un versement. Le compte n'ayant plus de
+    solde propre, la correction retrouve sa place : sur l'écriture fautive elle-même,
+    comme pour un achat de titres dont on a tapé le mauvais prix.
+
+    ⚠️ **Corriger n'est toujours pas verser, et la distinction survit à la refonte.**
+    Passer un apport de 5 000 à 5 500 € veut dire qu'il valait 5 500 € depuis le début, et
+    réécrit donc la courbe à partir de sa date. Ajouter 500 € aujourd'hui se fait en
+    enregistrant un second apport. Les deux gestes ne racontent pas la même histoire, et
+    ils ont maintenant deux verbes distincts au lieu de deux écrans qui se ressemblaient.
+    """
+    p = _portefeuille(portfolio_id, user, db)
+    c = _compte(compte_id, p, db)
+    m = (db.query(MouvementTresorerie)
+         .filter(MouvementTresorerie.id == mouvement_id,
+                 MouvementTresorerie.compte_id == c.id).first())
+    if not m:
+        raise HTTPException(404, "Mouvement introuvable pour ce compte")
+    if corps.montant == 0:
+        raise HTTPException(400, "Un mouvement de zéro euro ne dit rien.")
+
+    m.date, m.montant = corps.date, corps.montant
+    m.note = (corps.note or "").strip() or None
+    db.commit()
+    db.refresh(m)
+    db.refresh(c)
+    return {"mouvement": _mouvement_en_dict(m), "compte": _en_dict(c, db)}
 
 
 @router.delete("/{portfolio_id}/comptes/{compte_id}/mouvements/{mouvement_id}")
@@ -449,12 +527,12 @@ def supprimer_un_mouvement(portfolio_id: str, compte_id: str, mouvement_id: str,
                            db: Session = Depends(get_db),
                            user: User = Depends(require_auth)):
     """
-    Retire un mouvement du journal **et défait son effet sur le solde**.
+    Retire un apport du journal.
 
-    ⚠️ **Sans le défaire, supprimer une erreur de saisie en créerait une autre.** Le solde
-    porte la somme du mouvement depuis son enregistrement ; l'effacer du journal seulement
-    laisserait un compte plus riche qu'il ne l'est, sans plus rien pour expliquer d'où
-    vient l'écart.
+    ⚠️ **Il n'y a plus rien à défaire à côté.** L'ancienne version retranchait le montant
+    de `Compte.solde`, faute de quoi le compte serait resté plus riche qu'il ne l'est. Le
+    solde étant la somme du journal, retirer la ligne suffit — et l'oubli qui guettait
+    cette route ne peut plus se produire.
     """
     p = _portefeuille(portfolio_id, user, db)
     c = _compte(compte_id, p, db)
@@ -464,8 +542,7 @@ def supprimer_un_mouvement(portfolio_id: str, compte_id: str, mouvement_id: str,
     if not m:
         raise HTTPException(404, "Mouvement introuvable pour ce compte")
 
-    c.solde = (c.solde or 0.0) - m.montant
     db.delete(m)
     db.commit()
     db.refresh(c)
-    return {"supprime": mouvement_id, "compte": _en_dict(c)}
+    return {"supprime": mouvement_id, "compte": _en_dict(c, db)}

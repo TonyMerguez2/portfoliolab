@@ -1,25 +1,31 @@
 """
 Le solde d'un compte au fil du temps.
 
-⚠️ **On remonte le temps depuis aujourd'hui, on ne l'additionne pas depuis le début.**
-`Compte.solde` est la vérité du présent : c'est le chiffre que l'épargnant relit sur son
-relevé et celui qui s'affiche partout. Le solde d'hier s'en déduit en retirant ce qui a
-bougé depuis. L'autre sens — partir de zéro et empiler les mouvements — aurait exigé un
-journal complet depuis l'ouverture du compte, que personne ne possède : le solde d'un
-livret ouvert il y a douze ans ne se reconstitue pas.
+⚠️ **Un compte n'a pas de solde : il a des apports datés, et son solde en est la somme.**
+C'est la refonte de ce module, et elle vient d'une phrase de l'épargnant : « il n'y a pas
+de depuis quand, juste la date. Quand est-ce qu'on veut mettre l'apport du capital, à
+quelle date ? Et c'est tout. Comme pour l'achat d'actions, comme pour tout. » Un apport de
+trésorerie est donc le même objet qu'un achat de titres — une écriture datée — et le solde
+s'en déduit comme la position se déduit des opérations.
 
-⚠️ **Avant `solde_depuis`, le compte vaut zéro et non « on ne sait pas ».** Zéro est ici
-la bonne réponse pour la courbe : le patrimoine tracé est celui qu'on peut justifier, et
-un livret déclaré comme datant de mars n'était pas là en février. La nuance compte parce
-que l'alternative — étendre le solde à toute la courbe — ferait apparaître de l'argent
-avant qu'il n'existe, ce qui est précisément ce que cette date sert à empêcher.
+⚠️ **On cumule vers l'avant, on ne soustrait plus à rebours.** La version précédente
+partait de `Compte.solde`, « vérité du présent », et retranchait les mouvements
+postérieurs pour remonter le temps. Ce sens de lecture exigeait deux représentations du
+même fait — un montant dans la table des comptes, un journal à côté — et toute la couture
+entre les deux a fini par se déchirer : un apport d'ouverture daté d'aujourd'hui était à
+la fois le solde *et* un mouvement postérieur au dernier jour tracé, donc retranché de
+lui-même. Mesuré sur un livret réel de 5 000 € : zéro sur tous les jours de la courbe.
 
-⚠️ **Sans `solde_depuis`, le solde vaut depuis toujours, et c'est une supposition.** Les
-comptes déclarés avant l'existence de cette colonne n'ont pas pu répondre. Les faire
-apparaître au jour de leur déclaration aurait dessiné une marche verticale qui se lit
-comme une performance ; les supposer présents depuis l'origine ne déforme, au pire, que le
-début de la courbe. C'est le seul endroit du calcul qui repose sur une hypothèse, et il
-est appelé à se vider à mesure que les comptes se déclarent avec leur date.
+⚠️ **Avant le premier apport, le compte vaut zéro — et cela ne se garde plus.** C'était
+la raison d'être de `solde_depuis`, et d'une garde explicite qui ramenait à zéro tout ce
+qui précédait cette date. La somme cumulée le fait d'elle-même : une somme vide vaut
+zéro. La règle n'a pas changé, c'est le code qui a cessé d'avoir à la dire.
+
+⚠️ **Journal vide et solde nul sont deux faits différents.** Un compte sans le moindre
+apport ne déclare aucune espèce : il ne rend rien, et l'appelant sait qu'il n'a pas à
+tracer de poche de liquidités. Un compte dont les apports s'annulent vaut zéro euro, ce
+qui est une information. Les confondre ferait apparaître une ligne plate à zéro sous
+chaque PEA qui n'a pas d'espèces.
 """
 
 from __future__ import annotations
@@ -37,9 +43,18 @@ def _jour(v) -> date:
     return datetime.fromisoformat(str(v).replace("Z", "+00:00")).date()
 
 
+def solde_actuel(mouvements: Iterable[Mapping]) -> float | None:
+    """
+    Ce que vaut le compte aujourd'hui : la somme de ses apports.
+
+    Rend `None` sur un journal vide — « aucune espèce déclarée », et non « zéro euro ».
+    Voir l'en-tête du module.
+    """
+    montants = [float(m["montant"]) for m in mouvements]
+    return sum(montants) if montants else None
+
+
 def solde_par_jour(
-    solde_actuel: float | None,
-    solde_depuis,
     mouvements: Iterable[Mapping],
     calendrier: Sequence[date],
 ) -> dict[date, float]:
@@ -49,41 +64,26 @@ def solde_par_jour(
     `mouvements` porte des dictionnaires `{"date": …, "montant": …}`, le montant étant
     signé — positif pour un versement, négatif pour un retrait.
 
-    ⚠️ **Un mouvement compte à partir de son jour, pas le lendemain.** Verser 500 € le
+    ⚠️ **Un apport compte à partir de son jour, pas le lendemain.** Verser 500 € le
     12 mars veut dire que le solde du 12 mars les contient : c'est la lecture qu'aurait
-    l'épargnant de son relevé. La borne est donc stricte du côté des mouvements
-    *postérieurs* qu'on retranche.
+    l'épargnant de son relevé. La borne est donc inclusive.
     """
-    if solde_actuel is None:
-        return {}
-
-    debut = _jour(solde_depuis) if solde_depuis is not None else None
-    # ⚠️ **Une date postérieure au dernier jour tracé est ramenée à ce jour.**
-    #
-    # Le champ « Depuis quand » propose aujourd'hui par défaut, et la courbe s'arrête à la
-    # dernière séance close — hier, le plus souvent. Un solde déclaré aujourd'hui tombait
-    # donc *après* tous les points, et la garde ci-dessous le ramenait à zéro partout : le
-    # compte n'apparaissait ni dans la courbe, ni dans les repères, ni dans le gain. Vu à
-    # l'écran, et signalé avec raison comme « rien du tout ».
-    #
-    # ⚠️ **C'est le solde qui a raison, pas le calendrier boursier.** `solde` est la vérité
-    # du présent : l'argent est là aujourd'hui. Que le dernier point de la courbe porte la
-    # date d'hier est une contrainte du fournisseur de cours, pas un fait sur le patrimoine.
-    # Ramener la date au dernier jour tracé fait dire à la courbe ce que l'épargnant sait
-    # être vrai, plutôt que de lui cacher son propre argent pour un jour d'écart.
-    if debut is not None and calendrier and debut > calendrier[-1]:
-        debut = calendrier[-1]
     mvts = sorted(((_jour(m["date"]), float(m["montant"])) for m in mouvements),
                   key=lambda t: t[0])
+    if not mvts:
+        return {}
 
     out: dict[date, float] = {}
+    cumul = 0.0
+    i = 0
+    # Le calendrier est croissant : un seul passage suffit, le curseur `i` avançant sur
+    # les apports déjà absorbés. Resommer le journal à chaque jour donnait le même
+    # résultat au prix d'un produit du nombre de jours par le nombre d'apports.
     for j in calendrier:
-        if debut is not None and j < debut:
-            out[j] = 0.0
-            continue
-        # Ce qui a bougé *après* ce jour-là est retranché du solde d'aujourd'hui.
-        posterieurs = sum(montant for quand, montant in mvts if quand > j)
-        out[j] = solde_actuel - posterieurs
+        while i < len(mvts) and mvts[i][0] <= j:
+            cumul += mvts[i][1]
+            i += 1
+        out[j] = cumul
     return out
 
 
@@ -94,7 +94,7 @@ def liquidites_par_jour(
     """
     La somme des soldes de tous les comptes, jour par jour.
 
-    `comptes` porte des dictionnaires `{"solde": …, "solde_depuis": …, "mouvements": [...]}`.
+    `comptes` porte des dictionnaires `{"mouvements": [...]}`.
 
     ⚠️ **Tous les comptes, y compris ceux qui portent des titres.** Un PEA a une poche
     d'espèces à côté de ses lignes ; l'exclure ferait manquer au patrimoine une somme que
@@ -102,8 +102,6 @@ def liquidites_par_jour(
     """
     total = {j: 0.0 for j in calendrier}
     for c in comptes:
-        par_jour = solde_par_jour(
-            c.get("solde"), c.get("solde_depuis"), c.get("mouvements") or [], calendrier)
-        for j, v in par_jour.items():
+        for j, v in solde_par_jour(c.get("mouvements") or [], calendrier).items():
             total[j] += v
     return total

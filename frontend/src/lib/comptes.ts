@@ -31,17 +31,28 @@ export type Compte = {
   libelle_genre: string;
   porte_des_titres: boolean;
   couleur: string;
-  /** Les liquidités déclarées, ou `null` quand rien n'a été saisi. */
+  /**
+   * Les liquidités du compte, ou `null` quand aucun apport n'a été saisi.
+   *
+   * ⚠️ **Calculé par le serveur, jamais stocké.** C'est la somme des apports du compte.
+   * Le champ garde son nom parce que c'est ce que l'écran affiche, mais il n'y a plus de
+   * solde quelque part qu'on pourrait corriger : pour changer ce nombre, on touche au
+   * journal.
+   *
+   * ⚠️ **`null` n'est pas zéro.** Un PEA dont on ne connaît que les lignes ne déclare
+   * aucune espèce, ce qui n'est pas déclarer zéro euro — et c'est la différence qui
+   * empêche de lui dessiner une poche de liquidités plate.
+   */
   solde: number | null;
   /**
-   * Depuis quand ce solde existe. ISO 8601, ou `null` quand on ne sait pas.
+   * Quand le dernier apport a eu lieu. ISO 8601, ou `null` si le journal est vide.
    *
-   * ⚠️ **À ne pas confondre avec `mis_a_jour_le`.** Celle-ci dit quand le chiffre a été
-   * tapé — l'âge de l'information ; celle-là dit à partir de quand la somme comptait —
-   * l'âge de l'argent. La courbe de patrimoine a besoin de la seconde, la carte affiche
-   * la première, et les intervertir ferait apparaître l'épargne au mauvais endroit.
+   * ⚠️ **C'est l'âge de l'argent, là où `mis_a_jour_le` est l'âge de la fiche.** La carte
+   * disait « Solde déclaré il y a 8 mois » d'après la seconde : renommer un livret
+   * rajeunissait son solde sans qu'un euro ait bougé. Celle-ci répond à la question qu'on
+   * se pose vraiment devant un compte de trésorerie.
    */
-  solde_depuis: string | null;
+  dernier_apport_le: string | null;
   rang: number;
   /** Quand le compte a été déclaré ou corrigé. ISO 8601. */
   mis_a_jour_le: string | null;
@@ -83,15 +94,19 @@ export type CompteASoumettre = {
   nom: string;
   genre: string;
   couleur: string;
-  solde?: number | null;
   /**
-   * Depuis quand ce solde existe, en ISO — voir `Compte.solde_depuis` côté serveur.
+   * L'argent qu'on met sur le compte en le déclarant, et la date à laquelle on l'y met.
    *
-   * ⚠️ **Toujours envoyée avec le solde, `null` compris.** Le serveur l'écrase telle
-   * quelle : retirer le solde d'un compte doit en retirer la date, faute de quoi la courbe
-   * de patrimoine garderait un jalon désignant une somme qui n'existe plus.
+   * ⚠️ **Un apport daté, et non un solde.** « Il n'y a pas de depuis quand, juste la
+   * date » : déclarer un livret à 5 000 € au 12 mars, c'est apporter 5 000 € le 12 mars.
+   * Le même geste qu'un achat de titres, qui laisse le même repère sur la courbe.
+   *
+   * ⚠️ **Ignorés à la modification.** Le serveur ne les lit qu'à la création : corriger un
+   * apport se fait sur l'apport lui-même, dans le journal. C'est ce qui empêche de rouvrir
+   * la couture — deux chemins pour écrire la même somme, qui finissaient par diverger.
    */
-  solde_depuis?: string | null;
+  apport_initial?: number | null;
+  apport_le?: string | null;
 };
 
 /**
@@ -183,6 +198,24 @@ export async function listerMouvements(
 ): Promise<Mouvement[]> {
   const r = await fetch(cheminMouvements(portefeuille, compte), { headers: enTetesAuth() });
   if (!r.ok) return ouRaler(r, "Le journal du compte n'a pas pu être lu.");
+  return r.json();
+}
+
+/** Un apport, tel que la route du portefeuille le rend : avec le compte qui le porte. */
+export type ApportRange = Mouvement & { compte_id: string };
+
+/**
+ * Tous les apports du portefeuille, comptes confondus.
+ *
+ * ⚠️ **Et non `/history/comptes`, qui les porte aussi.** Cette dernière télécharge
+ * l'historique des cours de tous les titres avant de répondre : s'en servir pour remplir
+ * une liste d'écritures ferait dépendre l'affichage d'un journal du réseau du fournisseur.
+ * Ici, une requête sur une table déjà en base.
+ */
+export async function listerLesApports(portefeuille: string): Promise<ApportRange[]> {
+  const r = await fetch(`${API_URL}/api/v1/portfolios/${portefeuille}/mouvements`,
+    { headers: enTetesAuth() });
+  if (!r.ok) return ouRaler(r, "Les apports du portefeuille n'ont pas pu être lus.");
   return r.json();
 }
 

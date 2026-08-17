@@ -83,6 +83,21 @@ def declarer(client, pid, nom, genre, couleur="#6366F1"):
     return r.json()["id"]
 
 
+def verser(client, pid, cid, montant, quand):
+    """
+    Poser de l'argent daté sur un compte déjà déclaré.
+
+    ⚠️ **Par le journal, parce qu'il n'y a plus d'autre chemin.** Ces tests passaient par
+    `PUT /comptes/{id}` avec un solde ; ce formulaire ne touche plus à l'argent, seul le
+    journal l'écrit. C'est précisément la couture que la refonte a supprimée — deux
+    chemins pour poser la même somme, qui finissaient par ne plus dire la même chose.
+    """
+    r = client.post(f"/api/v1/portfolios/{pid}/comptes/{cid}/mouvements",
+                    json={"date": quand, "montant": montant, "note": "Apport initial"})
+    assert r.status_code == 201, r.text
+    return r.json()
+
+
 @pytest.fixture
 def cours(monkeypatch):
     """
@@ -141,12 +156,9 @@ def test_la_somme_des_courbes_egale_la_courbe_totale(client, cours):
                            json=e).status_code == 201, e
 
     # ⚠️ **Des espèces sur l'un des comptes, sans quoi le test ne prouve plus grand-chose.**
-    # Sans solde déclaré, `/history` ne rend pas de patrimoine et la comparaison retombe
+    # Sans apport déclaré, `/history` ne rend pas de patrimoine et la comparaison retombe
     # sur les seuls titres — exactement le cas qui restait vert pendant que l'écran mentait.
-    assert client.put(f"/api/v1/portfolios/{pid}/comptes/{pea}", json={
-        "nom": "PEA", "genre": "pea", "couleur": "#6366F1", "solde": 1200.0,
-        "solde_depuis": "2026-01-06T00:00:00",
-    }).status_code == 200
+    verser(client, pid, pea, 1200.0, "2026-01-06T00:00:00")
 
     total = client.get(f"/api/v1/portfolios/{pid}/history?period=max").json()
     decoupe = par_compte(client, pid)
@@ -200,7 +212,7 @@ def test_le_montant_investi_s_additionne_aussi(client, cours):
 
 def test_un_compte_de_tresorerie_a_sa_courbe_depuis_sa_date(client, cours):
     """
-    ⚠️ **Le refus d'hier est devenu une courbe, et c'est `solde_depuis` qui l'a permis.**
+    ⚠️ **Le refus d'hier est devenu une courbe, et c'est le journal daté qui l'a permis.**
     Un livret n'avait pas d'historique tant que son solde était un chiffre sans date : le
     tracer faisait remonter l'argent à plat jusqu'au premier point. Datée, la somme sait à
     partir de quand elle compte, et vaut zéro avant.
@@ -208,8 +220,8 @@ def test_un_compte_de_tresorerie_a_sa_courbe_depuis_sa_date(client, cours):
     pid = creer_portefeuille(client)
     pea = declarer(client, pid, "PEA", "pea")
     r = client.post(f"/api/v1/portfolios/{pid}/comptes", json={
-        "nom": "Livret A", "genre": "epargne", "solde": 5000.0,
-        "solde_depuis": "2026-01-20T00:00:00",
+        "nom": "Livret A", "genre": "epargne", "apport_initial": 5000.0,
+        "apport_le": "2026-01-20T00:00:00",
     })
     assert r.status_code in (200, 201), r.text
 
@@ -235,10 +247,7 @@ def test_les_especes_d_un_compte_a_titres_entrent_dans_sa_courbe(client, cours):
     pea = declarer(client, pid, "PEA", "pea")
     assert client.post(f"/api/v1/portfolios/{pid}/transactions",
                        json=ecriture("AAPL", 10, 100.0, "2026-01-06", pea)).status_code == 201
-    assert client.put(f"/api/v1/portfolios/{pid}/comptes/{pea}", json={
-        "nom": "PEA", "genre": "pea", "couleur": "#6366F1", "solde": 800.0,
-        "solde_depuis": "2026-01-06T00:00:00",
-    }).status_code == 200
+    verser(client, pid, pea, 800.0, "2026-01-06T00:00:00")
 
     c = par_compte(client, pid)["comptes"][0]
     titres = client.get(f"/api/v1/portfolios/{pid}/history?period=max").json()["points"]
@@ -312,11 +321,11 @@ def test_le_patrimoine_ajoute_les_liquidites_sans_toucher_a_la_valeur(client, co
         "sans liquidités déclarées, pas de seconde courbe superposée à la première")
 
     r = client.post(f"/api/v1/portfolios/{pid}/comptes", json={
-        "nom": "Livret A", "genre": "epargne", "solde": 5000.0,
-        "solde_depuis": "2026-01-06T00:00:00",
+        "nom": "Livret A", "genre": "epargne", "apport_initial": 5000.0,
+        "apport_le": "2026-01-06T00:00:00",
     })
     assert r.status_code in (200, 201), r.text
-    assert r.json()["solde_depuis"].startswith("2026-01-06")
+    assert r.json()["solde"] == pytest.approx(5000.0)
 
     apres = client.get(f"/api/v1/portfolios/{pid}/history?period=max").json()
     assert len(apres["points"]) == len(avant["points"])
@@ -328,15 +337,16 @@ def test_le_patrimoine_ajoute_les_liquidites_sans_toucher_a_la_valeur(client, co
 
 def test_le_patrimoine_ignore_les_liquidites_avant_leur_date(client, cours):
     """
-    ⚠️ La raison d'être de `solde_depuis` : un livret ouvert le 20 janvier ne compte pas
-    le 6. Sans elle, l'argent serait apparu avant d'exister.
+    ⚠️ La règle que portait `solde_depuis`, désormais tenue par la somme cumulée
+    elle-même : un livret ouvert le 20 janvier ne compte pas le 6. Sans elle, l'argent
+    serait apparu avant d'exister.
     """
     pid = creer_portefeuille(client)
     assert client.post(f"/api/v1/portfolios/{pid}/transactions",
                        json=ecriture("AAPL", 10, 100.0, "2026-01-06")).status_code == 201
     assert client.post(f"/api/v1/portfolios/{pid}/comptes", json={
-        "nom": "Livret A", "genre": "epargne", "solde": 5000.0,
-        "solde_depuis": "2026-01-20T00:00:00",
+        "nom": "Livret A", "genre": "epargne", "apport_initial": 5000.0,
+        "apport_le": "2026-01-20T00:00:00",
     }).status_code in (200, 201)
 
     pts = client.get(f"/api/v1/portfolios/{pid}/history?period=max").json()["points"]

@@ -1515,6 +1515,37 @@ export default function PerformanceChart({
   }, [operations, joursSerie]);
 
   /**
+   * Les apports du jour, pour que leur pastille dise ce qu'elle porte.
+   *
+   * ⚠️ **Une carte à part, et non des apports glissés parmi les opérations.** L'encart lit
+   * quantité et prix unitaire pour composer « 12 × 34,50 € » ; un versement n'a ni l'un ni
+   * l'autre. Le faire passer pour une opération aurait demandé de lui inventer une quantité
+   * de 1 et un prix unitaire égal au montant — un « 1 × 5 000,00 € » qui décrit un achat
+   * imaginaire. Les deux natures se rendent donc côte à côte, chacune avec ses mots.
+   *
+   * ⚠️ **Le même ancrage que les pastilles, et il faut que ce soit le même.** `jourAncre`
+   * reporte une écriture du samedi sur le lundi qui la porte ; lire la date brute ici
+   * ferait apparaître l'encart sur un jour sans pastille et manquer celui qui en a une.
+   */
+  const apportsParJour = useMemo(() => {
+    const compte = vue === "total"
+      ? null : courbesComptes.find(c => (c.id ?? "__libre__") === vue) ?? null;
+    const lot = vue === "total"
+      ? courbesComptes.flatMap(c => (c.mouvements ?? []).map(m => ({ m, nom: c.nom })))
+      : (compte?.mouvements ?? []).map(m => ({ m, nom: compte?.nom ?? "" }));
+
+    const carte = new Map<string, { id: string; nom: string; montant: number; note: string | null }[]>();
+    for (const { m, nom } of lot) {
+      const jour = jourAncre(m.date.slice(0, 10), joursSerie);
+      if (!jour) continue;
+      const ligne = { id: m.id, nom, montant: m.montant, note: m.note };
+      const liste = carte.get(jour);
+      if (liste) liste.push(ligne); else carte.set(jour, [ligne]);
+    }
+    return carte;
+  }, [vue, courbesComptes, joursSerie]);
+
+  /**
    * Les nœuds des repères et leur dernière position connue.
    *
    * Deux registres par famille : le nœud, pour écrire dedans sans passer par
@@ -2090,11 +2121,19 @@ export default function PerformanceChart({
     investiParDateRef.current = new Map(
       points.filter(p => typeof p.invested === "number")
             .map(p => [p.date.slice(0, 10), p.invested as number]));
-    // Les liquidités du jour, déduites de l'écart entre ce qui est tracé et la valeur des
-    // seuls titres. Voir `onSurvol` : sans elles, l'épargne se lit comme un gain.
+    // Les liquidités du jour. Voir `onSurvol` : sans elles, l'épargne se lit comme un gain.
+    //
+    // ⚠️ **Lues telles quelles, et déduites seulement à défaut.** La route les publie
+    // désormais à côté du patrimoine ; les recalculer par `patrimoine − value` marchait,
+    // mais rendait la page tributaire de la présence des deux champs et donnait zéro là où
+    // il fallait comprendre « je l'ignore ». Le repli reste pour les réponses d'une version
+    // antérieure du serveur, qui ne portent que `patrimoine`.
     liquiditesParDateRef.current = new Map(
-      points.filter(p => typeof p.patrimoine === "number")
-            .map(p => [p.date.slice(0, 10), (p.patrimoine as number) - p.value]));
+      points.filter(p => typeof p.liquidites === "number" || typeof p.patrimoine === "number")
+            .map(p => [p.date.slice(0, 10),
+                       typeof p.liquidites === "number"
+                         ? p.liquidites
+                         : (p.patrimoine as number) - p.value]));
 
     const bougies = mode === "bougie" ? agregerEnBougies(data) : [];
     if (mode === "bougie") {
@@ -2385,6 +2424,7 @@ export default function PerformanceChart({
    * détail de l'écriture, quand on pointe la bulle qui la porte.
    */
   const opsVisees = jourSurvole ? opsParJour.get(jourSurvole) ?? [] : [];
+  const apportsVises = jourSurvole ? apportsParJour.get(jourSurvole) ?? [] : [];
 
   const montantOp = (o: { quantity?: number; unit_price?: number; fees?: number }) =>
     o.quantity != null && o.unit_price != null
@@ -2571,7 +2611,7 @@ export default function PerformanceChart({
           * Il ne paraît qu'une fois le cadrage confirmé, comme les courbes : une
           * ligne lisible au-dessus d'un cadre vide n'aurait rien désigné.
           */}
-        {opsVisees.length > 0 && cadrePret && (
+        {(opsVisees.length > 0 || apportsVises.length > 0) && cadrePret && (
           <div style={{
             /**
              * ⚠️ **Sous la rangée de commandes, et non à côté.** L'encart occupait le
@@ -2648,6 +2688,41 @@ export default function PerformanceChart({
                 </div>
               );
             })}
+            {/* Les apports du jour, dans la même liste et avec leurs propres mots.
+                ⚠️ Le nom du compte tient la place du ticker : c'est ce qui répond à
+                « où est allé cet argent », qui est la question qu'on se pose devant un
+                versement. Ni quantité ni prix — il n'y en a pas, et l'encart ne les
+                invente pas. */}
+            {apportsVises.slice(0, MAX_LIGNES_ENCART).map(a => {
+              const verse = a.montant >= 0;
+              return (
+                <div key={a.id} style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                  <span style={{
+                    width: DISQUE, height: DISQUE, borderRadius: "50%", flexShrink: 0,
+                    background: couleurOp("apport", clair),
+                    display: "flex", alignItems: "center", justifyContent: "center",
+                    color: clair ? "#FFFFFF" : "rgba(6,20,42,0.96)",
+                  }}>
+                    <Pictogramme type="apport" />
+                  </span>
+                  <span style={{ fontSize: 11, color: JETONS.texteFort, whiteSpace: "nowrap" }}>
+                    {verse ? "Versement" : "Retrait"}{" "}
+                    <strong style={{ color: JETONS.texteIntense }}>{a.nom}</strong>
+                  </span>
+                  <span style={{ ...NUM, fontSize: 11, fontWeight: 700, color: JETONS.texteFort, whiteSpace: "nowrap" }}>
+                    {verse ? "+" : "−"}
+                    {Math.abs(a.montant).toLocaleString("fr-FR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €
+                  </span>
+                  {a.note && (
+                    <span style={{ fontSize: 10.5, color: JETONS.texteAttenue, whiteSpace: "nowrap",
+                                   overflow: "hidden", textOverflow: "ellipsis" }}>
+                      · {a.note}
+                    </span>
+                  )}
+                </div>
+              );
+            })}
+
             {/* Le reste, compté et non énuméré.
                 Aligné sur la colonne du texte des lignes au-dessus — la largeur
                 du disque plus l'écart qui le sépare de son libellé — pour que le

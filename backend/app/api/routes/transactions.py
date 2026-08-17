@@ -612,6 +612,111 @@ def _points_intraday(tickers: list[str], txs: list, period: str, depart) -> list
     return pts
 
 
+def _calendrier_du_patrimoine(cours: dict, jours_d_apport=()) -> list:
+    """
+    Les jours sur lesquels la courbe a quelque chose à dire.
+
+    ⚠️ **Ce calendrier n'est plus celui de la Bourse, c'est celui du patrimoine.** Il était
+    bâti sur les seules séances cotées, et s'arrêtait donc à la dernière clôture — hier en
+    semaine, vendredi un dimanche. Deux faits s'en trouvaient niés, et l'épargnant a signalé
+    les deux.
+
+    ⚠️ **Le premier : l'argent qu'on déclare aujourd'hui existe aujourd'hui.** Un livret de
+    5 000 € saisi un dimanche tombait après le dernier point tracé, et n'apparaissait donc
+    ni sur la courbe, ni dans les repères, ni en déduction du gain — qui reprenait la
+    trésorerie entière et annonçait +110 %. Que le fournisseur de cours ait un jour ouvré
+    de retard est une contrainte technique, pas un fait sur le patrimoine.
+
+    ⚠️ **Le second : le bitcoin cote le dimanche.** Ses jours entrent déjà dans l'union des
+    jours cotés, mais la courbe s'arrêtait quand même avec les actions dès lors qu'un titre
+    parisien terminait plus tard. Une performance crypto doit s'afficher marché actions
+    fermé.
+
+    ⚠️ **Rien n'est inventé sur les jours ajoutés.** `_cours_du_jour` reporte le dernier
+    cours connu vers l'avant, et seulement vers l'avant : les titres y sont valorisés à
+    leur dernière clôture, ce qui est ce qu'ils valent quand la place est fermée. La
+    trésorerie, elle, est connue exactement.
+
+    ⚠️ **Jamais au-delà d'aujourd'hui.** Un apport mal daté dans l'avenir étirerait sinon
+    la courbe jusqu'à lui, et le portefeuille afficherait une valeur pour un jour qui n'a
+    pas eu lieu.
+    """
+    from datetime import date as _date
+
+    aujourdhui = _date.today()
+    jours = {j for m in cours.values() for j in m}
+    jours |= {j for j in jours_d_apport if j <= aujourdhui}
+    jours.add(aujourdhui)
+    return sorted(jours)
+
+
+def _courbe_sans_operation(journal: dict, depart) -> list[dict]:
+    """
+    La courbe d'un patrimoine qui n'est fait que de trésorerie.
+
+    ⚠️ **Un portefeuille sans opération avait droit à rien, pas même à une ligne plate.**
+    Les deux routes d'historique renonçaient avant d'avoir regardé le journal, parce que la
+    courbe se définissait comme « la trajectoire déduite des transactions ». C'était
+    cohérent tant qu'un solde n'était qu'un chiffre posé dans la table des comptes ; depuis
+    que l'épargne est faite d'apports datés — le même objet qu'un achat de titres — c'est
+    une asymétrie qui ne se défend plus. Les mêmes 8 400 € déclarés le même jour donnaient
+    une courbe complète si le portefeuille détenait par ailleurs une seule action, et une
+    page vide sinon.
+
+    ⚠️ **Le calendrier est quotidien, faute d'avoir des séances à suivre.** Il n'y a aucun
+    cours à télécharger, donc aucun jour coté sur quoi s'appuyer : on va du premier apport à
+    aujourd'hui, jour par jour. Une épargne a un solde le dimanche, ce qui rend ce
+    calendrier plus juste ici qu'il ne le serait ailleurs.
+
+    ⚠️ **`value` et `invested` valent zéro, et ce ne sont pas des trous.** Aucun titre n'est
+    détenu et aucun capital n'est engagé : le patrimoine est entièrement liquide. C'est ce
+    qui fait que le gain sort à zéro euro et le pourcentage à `None` — voir
+    `dietz_sur_fenetre`, dont la garde sur un capital engagé nul donne déjà la bonne réponse
+    sans qu'on ait à l'écrire ici. **Mettre de l'argent de côté n'est pas une performance**,
+    et c'est le cas où la règle est la plus exposée puisqu'il n'y a rien d'autre à montrer.
+    """
+    from datetime import date as _date, timedelta as _td
+
+    jours_d_apport = sorted({m["date"].date() if hasattr(m["date"], "date") else m["date"]
+                             for lot in journal.values() for m in lot})
+    if not jours_d_apport:
+        return []
+
+    # ⚠️ **`depart` est un plancher, pas un début.** Sur « max » il vaut `date.min`, et le
+    # confondre avec le premier jour à tracer faisait courir le calendrier depuis l'an 1 :
+    # 739 844 points mesurés pour un livret ouvert en juillet. C'est le premier apport qui
+    # commande, borné par la fenêtre demandée.
+    debut = max(jours_d_apport[0], depart)
+    fin = _date.today()
+    if debut > fin:
+        return []
+
+    # ⚠️ **Les apports antérieurs au début comptent quand même.** `solde_par_jour` cumule
+    # tout ce qui est daté d'avant le jour lu, qu'il figure ou non au calendrier : une
+    # fenêtre d'un mois montre donc le solde entier, et non les seuls versements du mois.
+    calendrier = [debut + _td(days=i) for i in range((fin - debut).days + 1)]
+    liquides = liquidites_par_jour(
+        [{"mouvements": lot} for lot in journal.values()], calendrier)
+    return [
+        {"date": j.isoformat(), "value": 0.0, "invested": 0.0,
+         "liquidites": liquides.get(j, 0.0), "patrimoine": liquides.get(j, 0.0)}
+        for j in calendrier
+    ]
+
+
+def _journal_par_compte(comptes, db) -> dict:
+    """Le journal des apports, groupé par compte. Voir `services/tresorerie.py`."""
+    ids = [c.id for c in comptes]
+    if not ids:
+        return {}
+    par_compte: dict[str, list] = {}
+    for m in (db.query(MouvementTresorerie)
+              .filter(MouvementTresorerie.compte_id.in_(ids)).all()):
+        par_compte.setdefault(m.compte_id, []).append(
+            {"id": m.id, "date": m.date, "montant": m.montant, "note": m.note})
+    return par_compte
+
+
 @router.get("/{portfolio_id}/history")
 async def get_history(
     portfolio_id: str,
@@ -643,13 +748,13 @@ async def get_history(
         .order_by(Transaction.executed_at.asc())
         .all()
     )
-    if not txs:
-        return {"points": [], "start": None, "twr_pct": None, "pnl_eur": None, "source": "aucune"}
 
-    debut_reel = min(t.executed_at for t in txs).date()
     # Refuser une période inconnue plutôt que la traiter comme « max ». C'est
     # ce repli silencieux qui a laissé « 1d » se comporter en « max » sans que
     # rien ne le dise ; une faute de frappe dans un appel doit se voir.
+    #
+    # ⚠️ **Contrôlée avant le renoncement**, sans quoi un portefeuille de pure trésorerie
+    # accepterait en silence une période que le même appel refuse ailleurs.
     if period not in _HISTO_JOURS:
         raise HTTPException(
             status_code=400,
@@ -657,6 +762,37 @@ async def get_history(
                    + ", ".join(_HISTO_JOURS),
         )
     jours = _HISTO_JOURS[period]
+
+    # ⚠️ **Le journal est lu avant de renoncer.** Sans opération, la route rendait
+    # « aucune » sans avoir regardé si le portefeuille contenait de l'argent : un livret
+    # déclaré à 8 400 €, apport daté à l'appui, ne donnait aucune courbe. Voir
+    # `_courbe_sans_operation`.
+    comptes_tres = (
+        db.query(Compte).filter(Compte.portfolio_id == portfolio_id).all()
+    )
+    journal = _journal_par_compte(comptes_tres, db)
+
+    if not txs:
+        depart_tres = (date.min if jours is None
+                       else date.today() - timedelta(days=jours))
+        points = _courbe_sans_operation(journal, depart_tres)
+        if not points:
+            return {"points": [], "start": None, "twr_pct": None, "pnl_eur": None,
+                    "source": "aucune"}
+        # ⚠️ **Aucune performance, et surtout pas zéro pour cent affiché comme un résultat.**
+        # Le gain est nul en euros — verser n'est pas gagner — et le pourcentage n'existe
+        # pas, faute de capital engagé. `None` dit « il n'y a rien à mesurer », là où `0.0`
+        # affirmerait « vos fonds n'ont pas bougé » à quelqu'un qui n'en a aucun.
+        return {
+            "points": points, "start": points[0]["date"],
+            "twr_pct": None, "pnl_eur": 0.0,
+            "gain_eur": 0.0, "gain_pct": None, "taux_pct": None,
+            "source": "tresorerie",
+            "benchmark": _BENCHMARK, "benchmark_pct": None,
+            "benchmark_sim": {"value": None, "gain_eur": None, "gain_pct": None},
+        }
+
+    debut_reel = min(t.executed_at for t in txs).date()
     depart = debut_reel if jours is None else max(debut_reel, date.today() - timedelta(days=jours))
 
     tickers = sorted({t.ticker for t in txs})
@@ -687,7 +823,15 @@ async def get_history(
         serie = brut[tk].dropna()
         cours[tk] = {idx.date(): float(v) for idx, v in serie.items()}
 
-    calendrier = sorted({j for m in cours.values() for j in m})
+    # Le journal, déjà chargé plus haut, fait partie du calendrier : un apport daté d'un
+    # jour sans cotation doit avoir son point, sans quoi la marche qu'il dessine n'a nulle
+    # part où se poser.
+    jours_d_apport = {m["date"].date() if hasattr(m["date"], "date") else m["date"]
+                      for lot in journal.values() for m in lot}
+
+    # Les seules séances réellement cotées, gardées à part : « 24 h » s'y adosse plus bas.
+    jours_cotes = sorted({j for m in cours.values() for j in m})
+    calendrier = _calendrier_du_patrimoine(cours, jours_d_apport)
     resultat = courbe_portefeuille(
         [
             {
@@ -715,8 +859,16 @@ async def get_history(
     #
     # L'avant-dernier point de la courbe est la veille au sens boursier, qui
     # est le seul sens utile ici.
-    if period == "1d" and len(resultat["points"]) >= 2:
-        depart = date.fromisoformat(resultat["points"][-2]["date"])
+    #
+    # ⚠️ **Adossé aux séances cotées, et non plus à l'avant-dernier point.** Depuis que le
+    # calendrier va jusqu'à aujourd'hui, l'avant-dernier point peut être un jour sans
+    # cotation dont les cours sont reportés de la veille : un dimanche, la fenêtre allait
+    # de vendredi à dimanche, deux jours de valeur identique, et « 24 h » annonçait 0,00 %
+    # tout en ayant l'air de fonctionner. Prendre l'avant-dernière **séance** rend à la
+    # fenêtre le dernier mouvement réel du marché ; les jours plats qui suivent ne
+    # changent rien au rendement rechaîné, qui les multiplie par un.
+    if period == "1d" and len(jours_cotes) >= 2:
+        depart = jours_cotes[-2]
 
     # Le TWR suit la fenêtre demandée ; le P&L reste celui de la détention
     # entière, un « gain sur trois mois » n'ayant pas de sens en euros quand des
@@ -762,30 +914,10 @@ async def get_history(
     # ⚠️ **Absent quand aucun compte ne déclare de liquidités**, plutôt qu'égal à `value`.
     # L'écran sait alors qu'il n'y a rien à montrer de plus, au lieu de tracer une
     # deuxième courbe rigoureusement superposée à la première.
-    comptes_tres = (
-        db.query(Compte).filter(Compte.portfolio_id == portfolio_id).all()
-    )
-    if any(c.solde is not None for c in comptes_tres):
-        ids = [c.id for c in comptes_tres]
-        mvts = (
-            db.query(MouvementTresorerie)
-            .filter(MouvementTresorerie.compte_id.in_(ids))
-            .all()
-        ) if ids else []
-        par_compte: dict[str, list] = {}
-        for m in mvts:
-            par_compte.setdefault(m.compte_id, []).append(
-                {"date": m.date, "montant": m.montant})
-
-        jours = [date.fromisoformat(p["date"][:10]) for p in resultat["points"]]
-        liquides = liquidites_par_jour(
-            [{"solde": c.solde, "solde_depuis": c.solde_depuis,
-              "mouvements": par_compte.get(c.id, [])} for c in comptes_tres],
-            jours,
-        )
-        for p in resultat["points"]:
-            p["patrimoine"] = p["value"] + liquides.get(date.fromisoformat(p["date"][:10]), 0.0)
-
+    #
+    # ⚠️ **La condition porte sur le journal, seule source des espèces.** Elle lisait
+    # `c.solde is not None` ; ce champ n'existe plus comme donnée, et le lire aurait rendu
+    # « aucune trésorerie » sur des comptes qui en ont.
     # La courbe passe en barres intraday là où `_PAS_INTRADAY` en prévoit une.
     #
     # Les chiffres, eux, restent journaliers : TWR, Dietz et repère sont calculés
@@ -799,6 +931,59 @@ async def get_history(
     intra = _points_intraday(tickers, txs, period, depart)
     if len(intra) >= 3 and len(intra) > len(resultat["points"]):
         resultat["points"] = intra
+
+    # ⚠️ **La courbe finit sur aujourd'hui, quelle que soit sa finesse.** Les barres
+    # intraday s'arrêtent à la dernière séance cotée — vendredi 17 h 15 un dimanche — là où
+    # le calendrier journalier va jusqu'au jour même. Un apport déclaré aujourd'hui tombait
+    # donc après le dernier point de la série intraday : liquidités nulles partout, et le
+    # patrimoine de la fenêtre amputé de toute l'épargne.
+    #
+    # ⚠️ **Le mensonge n'était pas l'absence, il était l'échelle.** Le graphique met la
+    # courbe à l'échelle pour qu'elle finisse sur le chiffre du bandeau ; avec une série
+    # s'arrêtant à 5 313 € pour un patrimoine de 10 712 €, il multipliait **tout le mois par
+    # deux**. La courbe affichait 10 500 € en plein juillet, ce qui n'a jamais été vrai — et
+    # se lisait d'autant plus mal que « 3 M », journalier, montrait le bon niveau. Relevé à
+    # l'écran sur deux captures que rien ne pouvait réconcilier.
+    #
+    # Le dernier cours connu est reporté, comme le fait `_cours_du_jour` pour les jours
+    # fériés : les titres valent leur dernière clôture, la trésorerie est connue exactement.
+    #
+    # ⚠️ **Le point ajouté prend la forme de ceux qu'il suit.** Une date nue glissée au
+    # milieu d'une série horodatée donne deux types de temps dans la même courbe, que la
+    # bibliothèque de tracé n'accepte pas. On horodate donc quand les voisins le sont.
+    if resultat["points"]:
+        dernier = resultat["points"][-1]
+        if date.fromisoformat(dernier["date"][:10]) < date.today():
+            from datetime import datetime as _dtn, timezone as _tzn
+            quand = (_dtn.now(_tzn.utc).replace(microsecond=0).isoformat()
+                     if len(dernier["date"]) > 10 else date.today().isoformat())
+            resultat["points"].append({**dernier, "date": quand})
+
+    # ⚠️ **Les liquidités sont posées en dernier, sur la série qui sort d'ici.** Elles
+    # l'étaient juste avant le passage en intraday, qui remplace `points` par des barres
+    # n'ayant jamais vu la trésorerie : sur « 24 h », « 7 j » et « 1 mois » — les trois
+    # fenêtres où l'intraday prend la main — le patrimoine disparaissait de la réponse. Le
+    # livret ne montait plus la courbe et son apport n'avait plus de marche où poser sa
+    # pastille, alors que « Max » se comportait bien. Signalé à l'usage, et c'est très
+    # exactement ce que voulait dire « bizarre selon la période ».
+    #
+    # ⚠️ **Le rang des deux blocs est donc porteur, pas cosmétique.** Enrichir puis
+    # remplacer jette l'enrichissement ; remplacer puis enrichir vaut pour les deux séries.
+    if any(journal.get(c.id) for c in comptes_tres):
+        # Une barre intraday porte un horodatage complet : on ne lit que le jour, puisque
+        # c'est la maille du journal — un versement est daté du jour, pas de la minute.
+        jours = [date.fromisoformat(p["date"][:10]) for p in resultat["points"]]
+        liquides = liquidites_par_jour(
+            [{"mouvements": journal.get(c.id, [])} for c in comptes_tres], jours,
+        )
+        for p in resultat["points"]:
+            jour = date.fromisoformat(p["date"][:10])
+            # ⚠️ **`liquidites` est publié à côté de `patrimoine`, et l'écran en a besoin.**
+            # Il le déduisait de `patrimoine − value`, ce qui marche tant que les deux sont
+            # là — et laissait la page sans rien à retrancher du gain dès qu'ils ne l'étaient
+            # pas. Le donner explicitement retire une soustraction à refaire côté client.
+            p["liquidites"] = liquides.get(jour, 0.0)
+            p["patrimoine"] = p["value"] + p["liquidites"]
 
     # Le repère, rejoué avec les mêmes versements aux mêmes dates.
     #
@@ -1396,9 +1581,9 @@ async def get_history_par_compte(
     refusé toute courbe aux comptes de trésorerie, faute d'historique : un solde est un
     chiffre saisi un jour donné, et tracé tel quel il dessinait un plateau remontant
     jusqu'au premier point, donnant à croire que l'argent y dormait depuis le début.
-    `Compte.solde_depuis` a levé l'objection — le solde sait désormais à partir de quand
-    il compte, et vaut zéro avant. Un livret a donc sa courbe, et un PEA sa poche
-    d'espèces à côté de ses lignes.
+    Le journal d'apports a levé l'objection — chaque euro est daté du jour où il est
+    arrivé, et la somme cumulée vaut zéro avant le premier. Un livret a donc sa courbe,
+    et un PEA sa poche d'espèces à côté de ses lignes.
 
     ⚠️ **C'est aussi ce qui répare la somme.** La courbe totale trace le patrimoine
     depuis qu'elle compte les liquidités ; tant que les courbes par compte ignoraient les
@@ -1435,9 +1620,6 @@ async def get_history_par_compte(
         .order_by(Transaction.executed_at.asc())
         .all()
     )
-    if not txs:
-        return {"comptes": [], "start": None, "source": "aucune"}
-
     if period not in _HISTO_JOURS:
         raise HTTPException(
             status_code=400,
@@ -1454,15 +1636,36 @@ async def get_history_par_compte(
     )
     porteurs = {c.id: c for c in comptes if porte_des_titres(c)}
 
-    # Le journal des mouvements, groupé par compte : il sert à remonter le solde dans
-    # le temps. Voir `services/tresorerie.py`.
-    mouvements: dict[str, list] = {}
-    if comptes:
-        for m in (db.query(MouvementTresorerie)
-                  .filter(MouvementTresorerie.compte_id.in_([c.id for c in comptes]))
-                  .all()):
-            mouvements.setdefault(m.compte_id, []).append(
-                {"id": m.id, "date": m.date, "montant": m.montant, "note": m.note})
+    # Le journal des apports, groupé par compte : c'est lui qui donne le solde jour par
+    # jour, par somme cumulée. Voir `services/tresorerie.py`.
+    mouvements = _journal_par_compte(comptes, db)
+
+    # ⚠️ **Sans opération, le découpage suit le total plutôt que de renoncer.** Les deux
+    # routes doivent porter les mêmes jours et les mêmes montants : si `/history` trace un
+    # patrimoine de pure trésorerie et que celle-ci rend « aucune », basculer de « total » à
+    # « par compte » ferait disparaître l'épargne — la somme des parties cesserait de
+    # redonner le tout, qui est la seule promesse de cette route.
+    if not txs:
+        jours_p = _HISTO_JOURS[period]
+        depart_tres = (date.min if jours_p is None
+                       else date.today() - timedelta(days=jours_p))
+        sorties_tres = []
+        for c in comptes:
+            lot = {c.id: mouvements[c.id]} if mouvements.get(c.id) else {}
+            pts = _courbe_sans_operation(lot, depart_tres) if lot else []
+            if not pts:
+                continue
+            sorties_tres.append({
+                "id": c.id, "nom": c.nom, "couleur": c.couleur, "declare": True,
+                "points": [{"date": p["date"], "value": p["patrimoine"],
+                            "invested": 0.0} for p in pts],
+                "mouvements": mouvements.get(c.id, []),
+            })
+        if not sorties_tres:
+            return {"comptes": [], "start": None, "source": "aucune"}
+        return {"comptes": sorties_tres,
+                "start": sorties_tres[0]["points"][0]["date"],
+                "source": "tresorerie"}
 
     # ⚠️ **Le groupe « non rattachées » n'est pas facultatif.** Tant que la déclaration des
     # comptes n'est pas faite, la plupart des opérations n'en visent aucun ; sans ce groupe,
@@ -1500,7 +1703,13 @@ async def get_history_par_compte(
             continue
         serie = brut[tk].dropna()
         cours[tk] = {idx.date(): float(v) for idx, v in serie.items()}
-    calendrier = sorted({j for m in cours.values() for j in m})
+
+    # ⚠️ **Le même calendrier que `/history`, et c'est la condition de la somme.** Les deux
+    # routes doivent porter les mêmes jours, sans quoi additionner les courbes par compte
+    # ne redonnerait plus la courbe totale — la promesse que cette route existe pour tenir.
+    jours_d_apport = {m["date"].date() if hasattr(m["date"], "date") else m["date"]
+                      for lot in mouvements.values() for m in lot}
+    calendrier = _calendrier_du_patrimoine(cours, jours_d_apport)
 
     def _courbe(lot) -> list[dict]:
         r = courbe_portefeuille(
@@ -1551,8 +1760,6 @@ async def get_history_par_compte(
         """
         par_date = {p["date"]: p for p in _courbe(lot)} if lot else {}
         especes = solde_par_jour(
-            compte.solde if compte is not None else None,
-            compte.solde_depuis if compte is not None else None,
             mouvements.get(compte.id, []) if compte is not None else [],
             dates_ref,
         )
@@ -1569,9 +1776,10 @@ async def get_history_par_compte(
     sorties = []
     for c in comptes:
         lot = groupes.get(c.id, [])
-        # ⚠️ **Un compte sans titres ni solde n'a rien à tracer**, et un bouton qui ouvre
-        # une ligne plate à zéro ne dit rien à personne.
-        if not lot and c.solde is None:
+        # ⚠️ **Un compte sans titres ni apport n'a rien à tracer**, et un bouton qui ouvre
+        # une ligne plate à zéro ne dit rien à personne. La question se pose maintenant au
+        # journal — un compte sans écriture ne déclare aucune espèce.
+        if not lot and not mouvements.get(c.id):
             continue
         sorties.append({
             "id": c.id, "nom": c.nom, "couleur": c.couleur,

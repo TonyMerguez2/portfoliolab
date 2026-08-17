@@ -176,74 +176,62 @@ class Compte(Base):
     #: courant | epargne | pea | cto | crypto — voir `GENRES_COMPTE`.
     genre        = Column(String, nullable=False)
     couleur      = Column(String, nullable=False, default="#6366F1")
-    #: Les liquidités du compte, en devise du portefeuille.
-    #:
-    #: ⚠️ **Elles valent pour tous les genres, pas seulement pour le courant.** Un PEA
-    #: porte une poche d'espèces à côté de ses titres ; la réserver aux comptes de
-    #: trésorerie aurait obligé à la redemander ailleurs. Nullable : un compte dont on
-    #: n'a pas saisi les liquidités n'en déclare pas zéro, il n'en déclare aucune — et la
-    #: différence compte quand on additionne.
-    solde        = Column(Float, nullable=True, default=None)
     #: Le rang d'affichage, choisi par l'épargnant.
     rang         = Column(Integer, nullable=False, default=0)
     cree_le      = Column(DateTime, default=datetime.utcnow)
-    #: Quand le compte a été déclaré ou corrigé pour la dernière fois.
+    #: Quand la **fiche** du compte a été touchée pour la dernière fois : nom, couleur, rang.
     #:
-    #: ⚠️ **Un solde saisi à la main vieillit, et c'est la seule chose qui le dise.** Sur
-    #: un livret, ce montant *est* la valeur du compte : il entre dans les totaux comme
-    #: s'il était mesuré, alors qu'il a été tapé un jour donné et qu'il n'a bougé depuis
-    #: que si quelqu'un y a repensé. Sans cette date, rien à l'écran ne distingue un solde
-    #: d'hier d'un solde de l'an dernier.
+    #: ⚠️ **Et non « depuis quand le compte vaut ce qu'il vaut ».** C'est ce qu'elle disait
+    #: du temps où le solde était un chiffre tapé à la main qui vieillissait sans le dire.
+    #: Chaque apport porte désormais sa propre date, ce qui répond bien mieux à la question.
     mis_a_jour_le = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
-    #: Depuis quand ce solde existe — **et non quand il a été saisi**.
-    #:
-    #: ⚠️ **C'est ce qui autorise la courbe à parler de patrimoine.** Un solde est un
-    #: chiffre sans passé : pour le tracer dans le temps, il faut savoir à partir de quand
-    #: il compte. Sans cette date, les deux seules issues étaient de supposer l'argent
-    #: présent depuis toujours — faux dès qu'un livret est récent, et rien à l'écran ne
-    #: l'aurait dit — ou de le faire apparaître le jour de la déclaration, ce qui dessine
-    #: une marche verticale que l'œil lit comme une performance.
-    #:
-    #: ⚠️ **Nullable, et ce `NULL` veut dire « on ne sait pas ».** Les comptes déclarés
-    #: avant cette colonne n'ont pas pu répondre à la question ; la courbe les traite comme
-    #: présents depuis son origine, faute de mieux, et c'est le seul endroit du calcul qui
-    #: repose sur une supposition. Un compte déclaré depuis, lui, porte toujours la date.
-    solde_depuis  = Column(DateTime, nullable=True, default=None)
+    # ⚠️ **`solde` et `solde_depuis` ont disparu d'ici, et c'est tout le chantier.** Les
+    # colonnes existent encore dans les bases déjà créées — voir la migration douce en bas
+    # de ce fichier, qui les a vidées après avoir versé leur contenu au journal — mais plus
+    # rien ne les lit. Le solde d'un compte est la somme de ses apports, et il n'est stocké
+    # nulle part. Les laisser mappées aurait suffi à ce qu'on les relise un jour.
 
 
 class MouvementTresorerie(Base):
     """
-    Un versement ou un retrait sur un compte, daté.
+    Un apport sur un compte : versement ou retrait, daté.
 
-    ⚠️ **C'est le passé du solde, et rien d'autre.** `Compte.solde` reste la vérité du
-    présent — c'est lui qui s'affiche partout et qui entre dans les totaux. Ces mouvements
-    ne le remplacent pas : ils disent comment on en est arrivé là, ce qui permet de
-    remonter la courbe en arrière (solde à une date = solde actuel moins les mouvements
-    postérieurs). Faire du solde une somme de mouvements aurait été plus pur, mais aurait
-    obligé à réécrire tous les comptes déjà déclarés à partir d'un historique qui n'existe
-    pas.
+    ⚠️ **C'est la seule chose qui dise ce que vaut un compte.** Il n'y a pas de solde
+    ailleurs : le solde d'un compte à une date est la somme de ses apports jusqu'à cette
+    date. Un compte est à ses apports ce qu'une position est à ses opérations.
 
-    ⚠️ **Une seule source pour le présent, un seul journal pour le passé.** Si les deux
-    devaient diverger, `solde` gagne : il est le chiffre que l'épargnant relit sur son
-    relevé, et c'est celui qu'on lui montre. Le journal ne façonne que ce qui précède.
+    ⚠️ **Ce modèle en remplace un qui portait la même chose à deux endroits**, et il faut
+    savoir pourquoi celui-là est tombé. `Compte.solde` était « la vérité du présent », le
+    journal « le passé », et le solde d'hier se déduisait en retranchant les mouvements
+    postérieurs. Le raisonnement se tenait tant que le journal n'existait pas encore :
+    personne ne possède l'historique d'un livret ouvert il y a douze ans, et le reconstituer
+    était impossible. Mais la couture entre les deux représentations a fini par se déchirer.
+    Mesuré : sur six comptes portant un solde, **cinq** ne s'accordaient plus avec leur
+    journal, d'un écart allant jusqu'à 12 000 € ; et un apport d'ouverture daté d'aujourd'hui
+    était à la fois le solde du compte et un mouvement « postérieur » qu'on retranchait de
+    lui-même, si bien qu'un livret de 5 000 € valait zéro sur toute la courbe.
 
-    ⚠️ **Un mouvement n'est jamais un gain.** Verser 500 € monte la valeur *et* le montant
-    investi d'autant : les gains, le TWR et la comparaison au repère n'en bougent pas d'un
-    centime. C'est déjà la règle du portefeuille pour un achat de titres, et l'épargne ne
-    peut pas y échapper — sans quoi alimenter son livret se lirait comme un résultat.
+    ⚠️ **La question qui avait fait garder `solde` a reçu sa réponse.** Que devient un
+    compte déclaré avant l'existence du journal, dont on ne connaît que le solde du jour ?
+    Réponse mesurée : il n'y en avait aucun — tout compte portant un solde portait aussi sa
+    date. La migration a donc pu écrire, pour chacun, un apport d'ouverture daté, puis vider
+    les colonnes. Faute de date, elle aurait daté de la première opération du portefeuille,
+    ce qui préserve l'hypothèse « depuis toujours » plutôt que de dessiner à la date de
+    déclaration une marche verticale que l'œil lit comme une performance.
 
-    ⚠️ **Corriger le solde n'est pas un versement, et ne doit jamais en créer un.**
-    Tranché avec l'épargnant. Passer un livret de 5 000 à 5 500 € par l'écran de
-    correction veut dire « je m'étais trompé », pas « j'ai versé 500 € aujourd'hui ». La
-    conséquence est à connaître : puisqu'on remonte le temps depuis le solde actuel, une
-    correction **réécrit tout le passé** de la courbe — le livret aura toujours valu
-    5 500 €. C'est bien ce qu'une correction signifie.
+    ⚠️ **Un apport n'est jamais un gain.** Verser 500 € monte le patrimoine sans toucher
+    au capital investi : les gains, le TWR et la comparaison au repère n'en bougent pas
+    d'un centime. C'est déjà la règle du portefeuille pour un achat de titres, et l'épargne
+    ne peut pas y échapper — sans quoi alimenter son livret se lirait comme un résultat.
+    La règle a été enfreinte deux fois ; `tests/test_epargne_jamais_performance.py` la
+    garde désormais.
 
-    Un vrai versement s'enregistre donc ici, explicitement, avec sa date. C'est plus de
-    travail à la saisie, et c'est le prix d'une courbe qui distingue l'argent qu'on ajoute
-    de la faute de frappe qu'on répare. Deviner l'un à partir de l'autre aurait fait
-    apparaître, sur le graphique, des apports que personne n'a faits.
+    ⚠️ **Corriger un apport n'est pas en verser un second.** Passer un livret de 5 000 à
+    5 500 € veut dire « je m'étais trompé », et se fait en rectifiant l'écriture fautive —
+    ce qui réécrit le passé de la courbe, puisque le livret aura toujours valu 5 500 €.
+    Ajouter 500 € aujourd'hui est un second apport, daté d'aujourd'hui. Les deux gestes ont
+    deux verbes distincts, là où ils avaient deux écrans qui se ressemblaient.
     """
 
     __tablename__ = "mouvements_tresorerie"
@@ -325,6 +313,92 @@ for table, col, typedef in [
             conn.commit()
     except Exception:
         pass
+
+
+def _verser_les_soldes_au_journal(moteur=None) -> int:
+    """
+    Migration unique : ce qui restait dans `comptes.solde` devient un apport daté.
+
+    ⚠️ **`moteur` n'existe que pour l'éprouver.** Une reprise de données qu'on ne peut
+    jouer que sur la base de production est une reprise qu'on ne relit qu'après coup ;
+    celle-ci tourne sur une copie dans les tests, avec les vrais cas de figure.
+
+    ⚠️ **Elle ferme la couture sur les données, pas seulement dans le code.** Le solde
+    d'ouverture d'un compte déclaré avant cette refonte n'a jamais atteint le journal :
+    mesuré, cinq comptes sur six divergeaient du leur, jusqu'à 12 000 € d'écart sur un
+    livret. Sans cette reprise, ces comptes tomberaient à la somme de leurs seuls versements
+    ultérieurs — le livret à 16 500 € s'afficherait à 4 500 €.
+
+    ⚠️ **L'écart, et non le solde entier.** Écrire le solde complet doublerait ce que le
+    journal contient déjà. On ne comble que ce qui manque pour que la somme retombe sur le
+    solde constaté, ce qui laisse intactes les écritures déjà saisies.
+
+    ⚠️ **Le passage à `NULL` est ce qui rend la reprise rejouable sans dégât.** Elle ne
+    regarde que les comptes dont le solde n'est pas nul ; une fois vidés, ils sortent
+    définitivement de sa vue. Sans cela, `solde` resterait figé à sa valeur d'avant pendant
+    que le journal continue de vivre, et une seconde exécution injecterait un apport
+    fantôme de la différence. C'est le seul verrou, et il est dans la donnée elle-même.
+
+    ⚠️ **Aucune date n'est inventée.** À défaut de `solde_depuis` — cas qu'aucune ligne ne
+    présentait au moment de la reprise — on date de la première opération du portefeuille,
+    ce qui reconduit l'hypothèse « présent depuis toujours » de l'ancien calcul. La replier
+    sur la date de déclaration aurait dessiné une marche verticale que l'œil lit comme une
+    performance, ce que cette colonne servait précisément à éviter.
+
+    Rend le nombre de comptes repris, pour que le démarrage puisse le journaliser.
+    """
+    import uuid as _uuid
+
+    with (moteur or engine).connect() as conn:
+        colonnes = {r[1] for r in conn.execute(text("PRAGMA table_info(comptes)"))}
+        # Base neuve : les colonnes n'ont jamais existé, il n'y a rien à reprendre.
+        if not {"solde", "solde_depuis"} <= colonnes:
+            return 0
+
+        a_reprendre = conn.execute(text(
+            "SELECT id, portfolio_id, solde, solde_depuis, cree_le "
+            "FROM comptes WHERE solde IS NOT NULL")).fetchall()
+        if not a_reprendre:
+            return 0
+
+        for cid, pid, solde, depuis, cree_le in a_reprendre:
+            deja = conn.execute(
+                text("SELECT COALESCE(SUM(montant), 0) FROM mouvements_tresorerie "
+                     "WHERE compte_id = :c"), {"c": cid}).scalar() or 0.0
+            ecart = float(solde) - float(deja)
+
+            if abs(ecart) > 0.005:
+                quand = depuis
+                if quand is None:
+                    quand = conn.execute(
+                        text("SELECT MIN(executed_at) FROM transactions "
+                             "WHERE portfolio_id = :p"), {"p": pid}).scalar()
+                if quand is None:
+                    quand = cree_le
+                conn.execute(
+                    text("INSERT INTO mouvements_tresorerie (id, compte_id, date, montant, note) "
+                         "VALUES (:i, :c, :d, :m, :n)"),
+                    {"i": str(_uuid.uuid4()), "c": cid, "d": quand,
+                     "m": ecart, "n": "Apport initial"})
+
+            conn.execute(text("UPDATE comptes SET solde = NULL, solde_depuis = NULL "
+                              "WHERE id = :c"), {"c": cid})
+        conn.commit()
+    return len(a_reprendre)
+
+
+try:
+    _repris = _verser_les_soldes_au_journal()
+    if _repris:
+        import logging as _logging
+        _logging.getLogger(__name__).info(
+            "Trésorerie : %d compte(s) dont le solde est passé au journal.", _repris)
+except Exception:                                             # pragma: no cover
+    # Le démarrage ne doit pas dépendre d'une reprise de données. Un échec laisse les
+    # colonnes en place — donc rejouable au prochain lancement — plutôt qu'une base à moitié
+    # convertie et une application qui refuse de monter.
+    pass
+
 
 def get_db():
     with Session(engine) as session:

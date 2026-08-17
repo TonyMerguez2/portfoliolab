@@ -1733,7 +1733,7 @@ function PortfolioPageInner() {
     const d = dossiers.find(x => x.cle === cle);
     if (!d) throw new Error("Ce dossier n'existe plus.");
     const cree = await creerCompte(String(idPortefeuille), {
-      nom: d.nom, genre: d.genre, couleur: d.couleur, solde: null,
+      nom: d.nom, genre: d.genre, couleur: d.couleur,
     });
     const operations = operationsDuDossier(d, ecritures);
     if (operations.length > 0) {
@@ -1749,7 +1749,7 @@ function PortfolioPageInner() {
     const d = dossiers.find(x => x.cle === cle);
     if (!d) return;
     setARattacher(operationsDuDossier(d, ecritures));
-    setPrereglage({ nom: d.nom, genre: d.genre, couleur: d.couleur, solde: null });
+    setPrereglage({ nom: d.nom, genre: d.genre, couleur: d.couleur });
     setDossierAColorer(null);
     setErreurCompte(null);
     setCompteEdite(null);
@@ -1759,12 +1759,13 @@ function PortfolioPageInner() {
   /**
    * Le journal du compte en correction : chargé à l'ouverture, vidé à la fermeture.
    *
-   * ⚠️ **Seulement pour un compte qui a un solde.** Un mouvement se retranche du solde
-   * actuel pour remonter le temps ; le serveur refuse d'en enregistrer un sans solde, et
-   * afficher un journal vide sous un champ vide n'aurait proposé qu'une impasse.
+   * ⚠️ **Pour tout compte déclaré, désormais, même sans un euro.** Le serveur refusait un
+   * mouvement sur un compte sans solde — il n'y avait rien dont le retrancher — et l'écran
+   * cachait donc le journal dans ce cas. Le solde étant la somme des apports, le premier
+   * d'entre eux déclare les espèces : montrer le journal est ce qui rend le geste possible.
    */
   useEffect(() => {
-    if (!idPortefeuille || !compteEdite || compteEdite.solde == null) {
+    if (!idPortefeuille || !compteEdite) {
       setJournal([]); setErreurJournal(null);
       return;
     }
@@ -2783,7 +2784,9 @@ function PortfolioPageInner() {
                     ) : dossiers.map(d => {
                       const compte = d.compteId
                         ? comptesDeclares.find(c => c.id === d.compteId) : undefined;
-                      const depuis = compte ? fraicheurDuSolde(compte.mis_a_jour_le) : null;
+                      /* ⚠️ L'âge du **dernier apport**, et non celui de la fiche : renommer
+                         un livret ne doit pas rajeunir son solde. Voir `dernier_apport_le`. */
+                      const depuis = compte ? fraicheurDuSolde(compte.dernier_apport_le) : null;
                       /**
                         * ⚠️ **Le dossier annonce ce qu'il vaut, pas seulement ce qu'il
                         * contient.** « 3 actifs » ne dit rien du poids du compte : deux
@@ -2806,7 +2809,7 @@ function PortfolioPageInner() {
                         * été tapé un jour donné.
                         */
                       const mention = !d.porteDesTitres
-                        ? (depuis && `Solde déclaré ${depuis}`)
+                        ? (depuis && `Dernier apport ${depuis}`)
                         : [
                             d.lignes.length === 0
                               ? "Aucun actif"
@@ -3554,12 +3557,13 @@ function PortfolioPageInner() {
              local initialisé au montage, et sans elle on rouvrirait « Livret A » rempli avec
              les valeurs du compte regardé juste avant.
 
-             ⚠️ **Le solde entre dans la clé, et ce n'est pas un raffinement.** Enregistrer un
-             versement change le solde côté serveur ; le champ, lui, gardait la valeur du
-             montage — 5 000 € affichés au-dessus d'un journal annonçant +500 €. Le danger
-             n'était pas l'affichage : c'était qu'un clic sur « Enregistrer » réécrive
-             l'ancien montant et annule le versement en silence. Vu à l'écran. */
-          key={`${compteEdite?.id ?? prereglage?.nom ?? "nouveau"}:${compteEdite?.solde ?? ""}`}
+             ⚠️ **Le solde n'a plus à entrer dans la clé, et c'est un danger qui disparaît.**
+             Il y figurait parce qu'un versement changeait le solde côté serveur pendant que
+             le champ gardait la valeur du montage — 5 000 € affichés au-dessus d'un journal
+             annonçant +500 € — et qu'un clic sur « Enregistrer » réécrivait alors l'ancien
+             montant, annulant le versement en silence. Le formulaire ne portant plus de
+             champ d'argent en correction, il n'y a plus d'ancien montant à réécrire. */
+          key={`${compteEdite?.id ?? prereglage?.nom ?? "nouveau"}`}
           genres={genresCompte} initial={compteEdite}
           prerempli={prereglage ?? undefined}
           titre={prereglage ? `Déclarer votre ${prereglage.nom}` : undefined}
@@ -3571,10 +3575,10 @@ function PortfolioPageInner() {
           enCours={compteEnCours} erreur={erreurCompte}
           onEnregistrer={enregistrerLeCompte}
           onSupprimer={compteEdite ? supprimerLeCompte : undefined}
-          /* ⚠️ Réservé à la correction d'un compte qui a un solde : on ne peut pas verser
-             sur un compte qui n'existe pas encore, ni sur un compte dont on n'a jamais
-             saisi les liquidités. */
-          journal={compteEdite && compteEdite.solde != null ? (
+          /* ⚠️ Réservé aux comptes déclarés — on ne verse pas sur un compte qui n'existe
+             pas encore — mais plus à ceux qui portent déjà de l'argent : le premier apport
+             est justement celui qui déclare les espèces. */
+          journal={compteEdite ? (
             <JournalCompte
               mouvements={journal}
               enCours={journalEnCours}
