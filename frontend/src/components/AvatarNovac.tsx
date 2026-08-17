@@ -424,6 +424,19 @@ export default function AvatarNovac({
 
   const couleurYeuxFinale = yeuxDuSkin?.couleur ?? yeuxRendus;
 
+  /**
+   * Ce qui borne le regard : sa région s'il en demande une, la silhouette s'il rayonne,
+   * rien du tout sinon.
+   *
+   * ⚠️ **Trois cas et non deux, parce qu'un détourage inutile coûte un groupe par avatar.**
+   * Un visage n'a besoin d'aucun des deux : ses yeux sont déjà dans sa tête par
+   * construction. Un skin lumineux a besoin de la silhouette, faute de quoi son halo
+   * déborde. Un appareil a besoin de sa vitre — voir `Yeux.decoupe`.
+   */
+  const detourageDesYeux = yeuxDuSkin?.decoupe
+    ? `url(#${yeuxDuSkin.decoupe}-${marque})`
+    : (yeuxDuSkin?.lueur ? `url(#tete-${marque})` : undefined);
+
   const oeil = useCallback((fermeture: number, cote: -1 | 1) => {
     // ⚠️ La taille globale multiplie **aussi** l'écart : ne redimensionner que les
     // capsules resserrerait le regard à mesure qu'il grandit.
@@ -508,7 +521,7 @@ export default function AvatarNovac({
           * lorsqu'il y a une lueur : sans elle, il ne changerait rien et ajouterait un
           * groupe à chaque avatar de la page.
           */}
-        <g clipPath={yeuxDuSkin?.lueur ? `url(#tete-${marque})` : undefined}
+        <g clipPath={detourageDesYeux}
           filter={yeuxDuSkin?.lueur ? `url(#lueur-${marque})` : undefined}
           className={yeuxDuSkin?.classe}>
           <path d={oeil(vie.fermetureGauche, -1)} fill={couleurYeuxFinale} />

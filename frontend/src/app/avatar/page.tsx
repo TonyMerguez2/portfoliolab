@@ -961,11 +961,14 @@ export default function AvatarProceduralPage() {
                 </g>
               )}
               {/**
-                * ⚠️ **Détourés par la silhouette seulement quand ils rayonnent.** Un halo
-                * non contenu déborderait du carré et en trahirait le contour. Sans lueur le
-                * détourage ne changerait rien et coûterait un groupe de plus.
+                * ⚠️ **Détourés par leur région si le skin en nomme une, par la silhouette
+                * s'ils rayonnent, par rien sinon.** Un halo non contenu déborderait du carré
+                * et en trahirait le contour ; et sur un appareil, un œil qui glisse hors de
+                * sa vitre doit passer *derrière* le cadre, pas se poser dessus. Sans lueur
+                * ni région, le détourage ne changerait rien et coûterait un groupe de plus.
                 */}
-              <g clipPath={yeuxDuSkin?.lueur ? "url(#av-tete)" : undefined}
+              <g clipPath={yeuxDuSkin?.decoupe ? `url(#${yeuxDuSkin.decoupe})`
+                : (yeuxDuSkin?.lueur ? "url(#av-tete)" : undefined)}
                 filter={yeuxDuSkin?.lueur ? "url(#av-lueur)" : undefined}
                 className={yeuxDuSkin?.classe}>
                 <path d={oeilGauche} fill={couleurYeuxFinale} />

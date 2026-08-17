@@ -114,6 +114,22 @@ export type Yeux = {
   lueur?: { rayon: number; couleur: string };
   /** Une classe CSS posée sur le groupe des yeux, pour animer cette lueur. */
   classe?: string;
+  /**
+   * La région où le regard existe — une découpe nommée, comme pour les aplats.
+   *
+   * ⚠️ **Un regard derrière une vitre est borné par la vitre, pas par la tête.** Par défaut
+   * les yeux sont détourés par la silhouette, ce qui convient à un visage : ils ne peuvent
+   * en sortir. Sur un appareil, cela devient faux dès que la tête tourne un peu — l'œil
+   * glissait sur le cerclage et venait se poser *par-dessus* le métal, comme collé sur le
+   * boîtier. Confiné à la dalle ou à la visière, il disparaît derrière le cadre, ce qui est
+   * ce qu'un objet fait.
+   *
+   * ⚠️ **La lueur est coupée avec lui, et c'est voulu.** En SVG le filtre s'applique avant
+   * le détourage : le halo est donc borné à la vitre lui aussi. Physiquement une lumière
+   * baverait un peu sur le cerclage ; à l'écran, cette bavure sur un chrome clair se lit
+   * comme une salissure. On préfère le bord net.
+   */
+  decoupe?: string;
 };
 
 /** Un aplat découpé sur la sphère, éventuellement en plusieurs morceaux jointifs. */
@@ -754,6 +770,8 @@ const TERMINAL: Skin = {
     couleur: decalerClarte(p.tete, 0.38),
     lueur: { rayon: 3.4, couleur: decalerClarte(p.tete, 0.3) },
     classe: "novac-crt-yeux",
+    /* Le phosphore ne s'allume que sur la dalle : hors d'elle, il n'y a plus d'écran. */
+    decoupe: "dalle",
   }),
   /**
    * La dalle, comme région : ce qui est peint dedans n'en sort pas.
@@ -1097,6 +1115,8 @@ const ASTRONAUTE: Skin = {
     couleur: decalerClarte(p.tete, 0.12),
     lueur: { rayon: 2.6, couleur: p.tete },
     classe: "novac-casque-yeux",
+    /* Le regard vit derrière le verre : le cerclage le masque au lieu de le porter. */
+    decoupe: "visiere",
   }),
   decoupes: () => [
     /**

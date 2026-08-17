@@ -346,6 +346,25 @@ describe("skins", () => {
     expect(force("terminal")).toBeLessThan(force("astronaute"));
   });
 
+  /**
+   * ⚠️ **Un regard derrière une vitre est borné par la vitre, pas par la tête.** Sur un
+   * visage, détourer les yeux par la silhouette suffit : ils ne peuvent pas en sortir. Sur
+   * un appareil c'est faux dès que la tête tourne un peu — l'œil glissait sur le cerclage et
+   * venait se poser *par-dessus* le métal, comme collé sur le boîtier.
+   *
+   * ⚠️ **La seconde assertion est la seule qui attrape une faute de frappe.** Un `decoupe`
+   * mal orthographié désigne un détourage qui n'existe pas ; le navigateur n'avertit de
+   * rien et se contente de ne plus rien peindre. Les yeux disparaîtraient entièrement, sans
+   * message, sur le seul skin concerné — le genre de panne qu'on ne trouve qu'à l'œil.
+   */
+  it("enferme le regard des appareils dans leur vitre", () => {
+    for (const [cle, region] of [["terminal", "dalle"], ["astronaute", "visiere"]] as const) {
+      const skin = skinParCle(cle);
+      expect(skin.yeux!(skin.palette).decoupe).toBe(region);
+      expect(skin.decoupes!(skin.palette).map(c => c.id)).toContain(region);
+    }
+  });
+
   it("retombe sur l'uni pour une clé inconnue, au lieu de lever", () => {
     expect(skinParCle("n'existe pas").cle).toBe("uni");
   });
