@@ -1,5 +1,6 @@
 "use client";
-import { useEffect, type CSSProperties, type ReactNode } from "react";
+import { useEffect, useState, type CSSProperties, type ReactNode } from "react";
+import { createPortal } from "react-dom";
 
 import Cadre from "@/components/ui/Cadre";
 
@@ -23,6 +24,20 @@ import Cadre from "@/components/ui/Cadre";
  * ⚠️ **Le voile et la fenêtre entrent séparément**, l'un posant le décor et l'autre y
  * arrivant. Les deux animations vivent dans la feuille globale, où leur réglage est
  * expliqué et où `prefers-reduced-motion` les coupe d'un seul endroit.
+ *
+ * ⚠️ **Montée dans le corps du document, jamais là où on l'écrit.** `position: fixed` ne se
+ * rapporte à la fenêtre du navigateur que si aucun ancêtre ne porte `transform`, `filter`,
+ * `backdrop-filter` ou `contain` : le premier qui en porte un devient le bloc conteneur.
+ * Constaté à l'écran en ouvrant le réglage de l'avatar depuis le bandeau, dont une carte
+ * est floutée — la fenêtre s'y est retrouvée enfermée dans un rectangle de 1190 × 113,
+ * voile compris. Rien ne le signale : ni erreur, ni avertissement, seulement une fenêtre
+ * qui s'ouvre au mauvais endroit.
+ *
+ * ⚠️ **Et c'est ici que le portail doit être, pas chez l'appelant.** Le panneau de l'avatar
+ * en avait un, écrit à la main, avec sa propre note expliquant la même chose ; les deux
+ * autres fenêtres n'en avaient pas et marchaient par chance, faute d'ancêtre flouté. Poser
+ * le portail dans le composant partagé fait que la prochaine fenêtre ne retombera pas dans
+ * le piège — et supprime la note à recopier.
  */
 export default function FenetreModale({
   children, onFermer, largeur = 460, zIndex = 60, etiquette, style,
@@ -57,7 +72,17 @@ export default function FenetreModale({
     return () => document.removeEventListener("keydown", surTouche);
   }, [onFermer]);
 
-  return (
+  /**
+   * ⚠️ **Le portail n'existe qu'après le montage, sinon l'hydratation diverge.** Le serveur
+   * n'a pas de `document` : rendre le portail dès la première passe ferait un arbre côté
+   * client qui ne correspond pas à celui du serveur, ce que React signale bruyamment. Un
+   * état qui bascule au montage coûte un rendu de plus, une seule fois, à l'ouverture.
+   */
+  const [monte, setMonte] = useState(false);
+  useEffect(() => setMonte(true), []);
+  if (!monte) return null;
+
+  return createPortal((
     <div className="novac-voile-modale" onClick={onFermer}
       role="dialog" aria-modal="true" aria-label={etiquette}
       style={{
@@ -84,5 +109,5 @@ export default function FenetreModale({
         </Cadre>
       </div>
     </div>
-  );
+  ), document.body);
 }

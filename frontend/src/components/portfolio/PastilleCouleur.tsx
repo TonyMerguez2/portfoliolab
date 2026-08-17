@@ -1,7 +1,16 @@
 import { useId } from "react";
 
 import { decalerClarte } from "@/lib/couleur";
+import { JETONS } from "@/lib/palette";
 import type { Decoupe, Degrade, MotifPlat } from "@/lib/avatarSkins";
+
+/**
+ * ⚠️ **L'anneau de sélection prend l'encre du thème, il n'est plus écrit en dur.** Il valait
+ * `rgba(20,22,30,0.55)` — un gris presque noir choisi pour l'ancien panneau, qui était une
+ * carte blanche quel que soit le thème. Ce panneau est devenu une fenêtre de l'application,
+ * donc sombre : l'anneau y est passé invisible, et l'on ne voyait plus quelle couleur était
+ * retenue. Une valeur en dur survit exactement jusqu'au jour où son fond change.
+ */
 
 /**
  * Une pastille de couleur bombée, comme sur la référence.
@@ -52,7 +61,7 @@ export default function PastilleCouleur({
           `inset 0 ${-Math.round(taille * 0.07)}px ${Math.round(taille * 0.11)}px rgba(0,0,0,0.22)`,
           `inset 0 ${Math.round(taille * 0.06)}px ${Math.round(taille * 0.09)}px rgba(255,255,255,0.30)`,
         ].join(", "),
-        outline: retenue ? "2px solid rgba(20,22,30,0.55)" : "none",
+        outline: retenue ? `2px solid ${JETONS.texteIntense}` : "none",
         outlineOffset: 2,
         transition: "transform 120ms ease",
       }}
@@ -186,7 +195,7 @@ export function PastilleSkin({
           `inset 0 ${-Math.round(taille * 0.07)}px ${Math.round(taille * 0.11)}px rgba(0,0,0,0.22)`,
           `inset 0 ${Math.round(taille * 0.06)}px ${Math.round(taille * 0.09)}px rgba(255,255,255,0.30)`,
         ].join(", "),
-        outline: retenue ? "2px solid rgba(20,22,30,0.55)" : "none",
+        outline: retenue ? `2px solid ${JETONS.texteIntense}` : "none",
         outlineOffset: 2,
       }}
     >
