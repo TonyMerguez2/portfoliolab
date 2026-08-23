@@ -150,6 +150,34 @@ export type Position = {
 };
 
 /**
+ * La variation d'un groupe de lignes, pondérée par leur poids.
+ *
+ * ⚠️ **Le poids se renormalise sur les seules lignes qui ont un cours**, et c'est ce qui
+ * distingue cette fonction du `weightedChange` du bandeau. Celui-ci divise par le poids de
+ * *toutes* les lignes, y compris celles dont le prix manque : une ligne muette y tire donc
+ * le résultat vers zéro, comme si elle n'avait pas bougé. Sur un total de portefeuille c'est
+ * un biais qu'on peut accepter — il se dilue. Sur un dossier de deux lignes dont une est
+ * indisponible, il fait annoncer la moitié du mouvement réel, et le visage se tromperait
+ * d'humeur.
+ *
+ * ⚠️ **Rend `null` et non zéro quand rien n'est chiffrable.** Un dossier sans cours n'a pas
+ * fait « zéro pour cent » — on n'en sait rien, et c'est ce que l'avatar doit lire pour
+ * retomber sur son attention neutre plutôt que d'annoncer la stabilité.
+ *
+ * ⚠️ **Un poids total nul rend `null` aussi.** Un dossier de lignes à poids zéro — une
+ * enveloppe vidée dont les écritures restent — donnerait sinon une division par zéro, donc
+ * `NaN`, qui se propage en silence jusqu'à l'attribut publié.
+ */
+export function variationPonderee(
+  lignes: { change: number | null; weight: number }[],
+): number | null {
+  const chiffrees = lignes.filter(l => typeof l.change === "number" && isFinite(l.change));
+  const poids = chiffrees.reduce((s, l) => s + l.weight, 0);
+  if (!chiffrees.length || poids <= 0) return null;
+  return chiffrees.reduce((s, l) => s + (l.weight / poids) * (l.change as number), 0);
+}
+
+/**
  * Gain sur la période, à partir de la valeur d'aujourd'hui.
  *
  * `valeur × variation` suppose que la valeur actuelle était déjà celle du début

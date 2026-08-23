@@ -1,4 +1,4 @@
-import { etatSelonVariation } from "@/lib/avatarEtats";
+import { marqueAvatar } from "@/lib/avatarEtats";
 
 /**
  * Rend expressif tout ce qu'il enveloppe.
@@ -15,17 +15,28 @@ import { etatSelonVariation } from "@/lib/avatarEtats";
  * document.
  */
 export default function ReactionAvatar({
-  variation, etat, children,
+  variation, suivi, etat, children,
 }: {
   /** La variation en pourcentage — le visage s'accorde au résultat. */
   variation?: number | null;
+  /**
+   * Le chiffre dont on surveille l'évolution, si ce n'est pas `variation`.
+   *
+   * ⚠️ **À renseigner dès que `variation` est une grandeur dérivée** — un écart à une
+   * moyenne, un rang, un score. La colère se déclenche sur une **marche en points de
+   * pourcentage** : sur une échelle qui n'est pas celle d'une variation de cours, elle
+   * partirait à chaque relecture. Voir `marqueAvatar`.
+   */
+  suivi?: number | null;
   /** Un état imposé, quand la variation n'a pas de sens. */
   etat?: string;
   children: React.ReactNode;
 }) {
+  /* ⚠️ Un état imposé ne publie **pas** de variation : il n'y a pas de chiffre derrière, et
+     en inventer un ferait croire au fournisseur qu'il y a une valeur à suivre. */
   return (
     <span style={{ display: "contents" }}
-      data-avatar={etat ?? etatSelonVariation(variation)}>
+      {...(etat ? { "data-avatar": etat } : marqueAvatar(variation, suivi ?? variation))}>
       {children}
     </span>
   );

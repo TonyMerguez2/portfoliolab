@@ -23,6 +23,7 @@ import {
 } from "@/lib/chart/stickers";
 import Segments from "@/components/ui/Segments";
 import { API_URL as API } from "@/lib/api";
+import { marqueAvatar } from "@/lib/avatarEtats";
 
 export type { HistoryPoint, Period };
 
@@ -72,6 +73,19 @@ const PERIOD_API: Record<Period, string> = {
   "6M": "6mo", "1A": "1y", "3A": "3y", "Max": "max",
 };
 const PERIODES = Object.keys(PERIOD_API) as Period[];
+
+/**
+ * La demi-largeur du sommet, en fraction de la série — voir `sommetPerf`.
+ *
+ * ⚠️ **Exprimée en part de la série et non en nombre de points**, pour que la cible garde la
+ * même taille à l'écran quelle que soit la densité. Mesuré sur un graphique de 270 pixels,
+ * sommet près du bord droit : **5,9 px** pour 184 relevés, **4,9 px** pour 3 036 — un nombre
+ * de points fixe aurait donné l'un ou l'autre, jamais les deux. Sur une série courte (22
+ * relevés, la fenêtre 1M) le rayon minimal d'un point donne 24 px, ce qui est juste : à
+ * cette densité un point occupe déjà douze pixels, et la cible reste « le sommet et son
+ * voisin immédiat ».
+ */
+const LARGEUR_SOMMET = 0.01;
 
 /** Demi-largeur, en pixels, de la portion de courbe éclairée au survol. */
 const HALO = 22;
@@ -701,7 +715,7 @@ export default function PerformanceChart({
    * qui n'avait rien gagné de tel. L'appelant a besoin des deux pour isoler ce qui a
    * réellement travaillé.
    */
-  onSurvol?: (p: { valeur: number; date: string; investi?: number; liquidites?: number } | null) => void;
+  onSurvol?: (p: { valeur: number; date: string; sommet?: boolean; investi?: number; liquidites?: number } | null) => void;
   /**
    * Les montants sont-ils censurés ? Celui de l'axe l'est alors aussi.
    *
@@ -1145,6 +1159,81 @@ export default function PerformanceChart({
   }, [points, ordonnee]);
   const bornesRef = useRef<{ min: number; max: number } | null>(null);
   bornesRef.current = bornes;
+
+  /**
+   * L'instant de **meilleure performance** de la fenêtre — le point que le curseur doit
+   * trouver pour émerveiller.
+   *
+   * ⚠️ **La performance, et non le haut de la courbe tracée. S'être trompé là-dessus a
+   * rendu l'expression introuvable.** La courbe dessine le *patrimoine*, qui monte
+   * mécaniquement à chaque versement : son point le plus haut est presque toujours le bord
+   * droit, alors que la meilleure performance — ce que l'avatar juge, et ce que
+   * l'utilisateur vise — se niche ailleurs. Marquer le sommet du tracé revenait donc à
+   * décorer un point que personne ne survole, pendant que le vrai sommet ne disait rien.
+   * Signalé à l'usage : « je mets le curseur sur le point avec la meilleure perf, pas
+   * d'expression ».
+   *
+   * ⚠️ **La même formule que la page**, à savoir titres moins capital engagé, rapportés à
+   * ce capital — les liquidités retranchées, sans quoi l'épargne se lit comme un gain. Un
+   * point sans capital engagé ne concourt pas : sa performance n'est pas nulle, elle
+   * n'existe pas.
+   *
+   * ⚠️ **Une *zone* et non un point, sans quoi le sommet est matériellement invisable.**
+   * C'était le vrai défaut, mesuré : sur la fenêtre longue, le meilleur point tombe à
+   * l'index **3011 sur 3036**, soit à 99,2 % de la largeur — deux pixels du bord droit d'un
+   * graphique qui en fait 270, où **une colonne de pixels couvre onze points**. Viser
+   * l'argmax exact relevait de la loterie, et l'expression paraissait donc ne jamais
+   * marcher. On retient tous les instants dont la performance touche le haut de
+   * l'amplitude : près d'un sommet la courbe est plate, si bien qu'une marge minuscule en
+   * *valeur* couvre plusieurs pixels en *largeur*.
+   *
+   * ⚠️ **La marge se prend en *largeur* et non en valeur, et la première version s'est
+   * trompée là-dessus.** Élargir le sommet d'un centième de l'amplitude *verticale*
+   * paraissait le plus juste — « tous les points qui touchent le haut ». Mesuré sur la
+   * série réelle : **un seul point** retenu, et toujours un seul en doublant la marge. Le
+   * sommet d'une courbe de performance est un **pic**, pas un plateau ; on peut lui donner
+   * beaucoup de hauteur sans lui donner un pixel de large. Ce qu'il faut ouvrir, c'est
+   * l'axe des abscisses.
+   *
+   * ⚠️ **Un rayon proportionnel à la longueur de la série, donc constant à l'écran.** Un
+   * nombre de points fixe donnerait une cible large sur une série courte et invisible sur
+   * une série de trois mille relevés. Un centième de la série de chaque côté fait environ
+   * **cinq pixels** dans les deux cas — assez pour viser sans souris de chirurgien, assez
+   * peu pour qu'on pointe encore le sommet et pas la courbe entière. Voir
+   * `LARGEUR_SOMMET` pour les mesures.
+   *
+   * ⚠️ **Un ensemble d'horodatages plutôt que des montants comparés.** `param.time` et ces
+   * instants sortent du même calcul, quelques lignes plus haut : l'appartenance se teste au
+   * strict égal, sans deviner de tolérance sur des euros. Réserve connue : en mode bougie,
+   * la série est agrégée et l'horodatage survolé est celui de la bougie, absent de cet
+   * ensemble — le sommet ne s'y allume pas.
+   *
+   * ⚠️ **Rangé dans une `ref` autant que rendu comme valeur** : l'abonnement au survol de
+   * lightweight-charts est posé une fois et ne se réabonne pas à chaque nouvelle série.
+   * Lire l'état dans la fermeture y figerait le sommet du premier chargement.
+   */
+  const sommetPerf = useMemo(() => {
+    const mesures: { t: number; perf: number }[] = [];
+    for (const p of points) {
+      const investi = p.invested;
+      if (investi == null || investi <= 0) continue;
+      const titres = (p.patrimoine ?? p.value) - (p.liquidites ?? 0);
+      const perf = (titres - investi) / investi;
+      const t = Math.floor(new Date(p.date).getTime() / 1000);
+      if (isFinite(perf) && isFinite(t)) mesures.push({ t, perf });
+    }
+    if (mesures.length < 2) return new Set<number>();
+    let sommet = 0;
+    for (let i = 1; i < mesures.length; i++) {
+      if (mesures[i].perf > mesures[sommet].perf) sommet = i;
+    }
+    const rayon = Math.max(1, Math.round(mesures.length * LARGEUR_SOMMET));
+    return new Set(mesures
+      .slice(Math.max(0, sommet - rayon), Math.min(mesures.length, sommet + rayon + 1))
+      .map(m => m.t));
+  }, [points]);
+  const sommetRef = useRef<Set<number>>(new Set());
+  sommetRef.current = sommetPerf;
 
   /** La série déjà cadrée, en « période|mode ». Voir `cadrer`. */
   const cadreRef = useRef<string | null>(null);
@@ -1967,6 +2056,10 @@ export default function PerformanceChart({
         dernierSurvolRef.current = quand;
         surSurvolRef.current?.({
           valeur: val, date: quand,
+          /* Le curseur est-il sur le point de meilleure performance ? Comparaison stricte
+             d'horodatages : voir `sommetPerf`, et `etatSelonEcartCourbe` pour ce que
+             l'avatar en fait. */
+          sommet: sommetRef.current.has(param.time as number),
           investi: investiParDateRef.current.get(quand.slice(0, 10)),
           /**
            * ⚠️ **Absente plutôt que nulle quand on ne sait pas.** Elle valait `?? 0`, ce
@@ -2458,6 +2551,16 @@ export default function PerformanceChart({
         return (
           <div key={p} onClick={() => { if (!anterieure) onPeriodChange(p); }}
             title={anterieure ? `Le portefeuille n'existe que depuis le ${new Date(origine!).toLocaleDateString("fr-FR")}` : undefined}
+            /**
+             * ⚠️ **La fenêtre éteinte ne publie rien, et le composant savait déjà pourquoi.**
+             * Trois lignes plus haut, `anterieure` désigne une fenêtre plus ancienne que le
+             * portefeuille : elle se replie sur son origine et **répète le chiffre de Max**.
+             * Le code refusait déjà de l'afficher — « trois nombres identiques laissent croire
+             * à trois mesures ». Le donner au visage aurait rendu la même erreur autrement :
+             * trois cases grises qui font toutes la même mimique, sur une mesure qui n'existe
+             * pas. `null` les laisse à « curieux », sans chiffre à surveiller.
+             */
+            {...marqueAvatar(anterieure ? null : pct)}
             /**
              * ⚠️ Une largeur **minimale**, et non fixe. Les quarante-cinq pixels
              * d'origine étaient plus étroits que leur propre contenu : mesuré à

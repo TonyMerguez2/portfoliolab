@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { assetExchange } from "./assets";
 import { arrange, assetClass, compteInfere, enveloppe, relativeDay, valoriser, gainPeriode,
-  type GridAsset, type Position } from "./portfolio";
+  variationPonderee, type GridAsset, type Position } from "./portfolio";
 
 const a = (ticker: string, o: Partial<GridAsset> = {}): GridAsset => ({
   ticker, weight: 10, price: 100, change: 1, value: 1000, perfEur: 10, ...o,
@@ -287,5 +287,49 @@ describe("compteInfere", () => {
       "0700.HK", "NESN.SW", "SHOP.TO", "XYZ.ZZ", "", "ETH-USD"];
     const rendus = tickers.map(t => compteInfere(t, assetExchange));
     expect(rendus.filter(c => dossiers.indexOf(c) < 0)).toEqual([]);
+  });
+});
+
+describe("variationPonderee", () => {
+  it("pondère par le poids, et non par le nombre de lignes", () => {
+    // Une grosse ligne qui bouge peu pèse plus qu'une petite qui s'envole.
+    expect(variationPonderee([
+      { change: 1, weight: 90 },
+      { change: 11, weight: 10 },
+    ])).toBeCloseTo(2, 10);
+  });
+
+  it("renormalise sur les seules lignes qui ont un cours", () => {
+    /**
+     * ⚠️ **La régression que ce test fige, et ce qui distingue cette fonction du
+     * `weightedChange` du bandeau.** Celui-ci divise par le poids de *toutes* les lignes,
+     * y compris les muettes : une ligne sans prix y tire le résultat vers zéro, comme si
+     * elle n'avait pas bougé. Sur un dossier de deux lignes dont une est indisponible, cela
+     * annonçait la moitié du mouvement réel — et le visage se trompait d'humeur.
+     */
+    expect(variationPonderee([
+      { change: -4, weight: 50 },
+      { change: null, weight: 50 },
+    ])).toBe(-4);
+  });
+
+  it("ne prétend pas que zéro et « on ne sait pas » sont la même chose", () => {
+    // ⚠️ Un dossier sans cours n'a pas fait « zéro pour cent ». `null` fait retomber
+    // l'avatar sur son attention neutre ; zéro lui ferait annoncer la stabilité.
+    expect(variationPonderee([])).toBe(null);
+    expect(variationPonderee([{ change: null, weight: 10 }])).toBe(null);
+  });
+
+  it("ne divise pas par un poids nul", () => {
+    // ⚠️ Une enveloppe vidée dont les écritures restent : sans garde, `NaN` se propage en
+    // silence jusqu'à l'attribut publié, et plus rien ne se compare jamais.
+    expect(variationPonderee([{ change: 5, weight: 0 }])).toBe(null);
+  });
+
+  it("écarte un cours illisible au lieu de le propager", () => {
+    expect(variationPonderee([
+      { change: NaN, weight: 50 },
+      { change: -2, weight: 50 },
+    ])).toBe(-2);
   });
 });

@@ -3,19 +3,23 @@ import { useEffect, useState } from "react";
 import TileSparkline from "@/components/charts/TileSparkline";
 import { FONT, NUM } from "@/lib/typography";
 import { API_URL as API } from "@/lib/api";
-import { etatSelonVariation } from "@/lib/avatarEtats";
+import { marqueAvatar } from "@/lib/avatarEtats";
 
 /**
  * Repères de marché : indice, crypto, devise.
  *
  * Bas de la maquette. Sa moitié gauche — « 3 actifs ont des événements
- * importants » — n'est pas ici, faute de source : le calendrier de résultats
- * n'existe nulle part au backend, et l'onglet Événements le fabrique
- * aujourd'hui à partir de l'ordre de la boucle. Inventer une deuxième fois la
- * même donnée n'aurait rien valu de mieux.
+ * importants » — et son « Fear & Greed » ne sont pas ici mais dans WatchBand,
+ * qui enveloppe ce bloc et le pose entre les deux.
  *
- * Le « Fear & Greed » de la maquette manque pour la même raison : API externe,
- * absente du projet.
+ * ⚠️ **Rien ne monte ce composant, ni WatchBand qui l'appelle.** Les deux sont
+ * nés sans point d'accroche dans la refonte du portefeuille (98c8a18), et
+ * l'historique ne garde trace d'aucun montage — donc d'aucun retrait. Ce que ce
+ * dépôt fait quand il démonte un bloc se lit ailleurs : « La répartition passe
+ * du camembert au pavage » retire AllocationDonut le jour même où elle lui
+ * donne un remplaçant. Ici, ni commit ni remplaçant. Le branchement a été
+ * oublié, pas défait — et juger la mise en page de cette rangée demande donc
+ * de la monter d'abord.
  */
 
 
@@ -66,8 +70,9 @@ export default function MarketPulse({ period = "1J" }: { period?: string }) {
         return (
           <div key={r.ticker}
             // Le visage du bandeau s'accorde au marché survolé : content sur une
-            // hausse, préoccupé sur une baisse franche.
-            data-avatar={etatSelonVariation(c?.change)}
+            // hausse, préoccupé sur une baisse franche — et fâché si elle se creuse
+            // pendant qu'on la regarde, ce que le chiffre publié permet de voir.
+            {...marqueAvatar(c?.change)}
             style={{
             display: "flex", alignItems: "center", gap: 10, flex: 1, minWidth: 0,
             paddingLeft: i ? 16 : 0,

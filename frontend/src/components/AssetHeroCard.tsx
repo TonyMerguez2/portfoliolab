@@ -7,7 +7,7 @@ import { LIBELLE_CADENCE } from "@/lib/cadence";
 import TileCard from "@/components/TileCard";
 import { BRAND_COLORS, TRENDING } from "@/lib/assets";
 import { libellePlace } from "@/lib/placesBoursieres";
-import { etatSelonVariation } from "@/lib/avatarEtats";
+import { marqueAvatar } from "@/lib/avatarEtats";
 import { API_URL } from "@/lib/api";
 
 
@@ -167,7 +167,7 @@ export default function AssetHeroCard({
       ` }} />
 
       <div className="shared-asset-hero-row"
-        data-avatar={etatSelonVariation(price?.change)}
+        {...marqueAvatar(price?.change)}
         style={{ display: "flex", alignItems: "stretch", minWidth: 0 }}>
         <TileCard
           ticker={ticker}

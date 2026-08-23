@@ -1,6 +1,7 @@
 import { useId } from "react";
 
 import { decalerClarte } from "@/lib/couleur";
+import { marqueAvatar } from "@/lib/avatarEtats";
 import { CARTE_ACTIF } from "@/components/portfolio/CarteActif";
 
 /**
@@ -233,7 +234,7 @@ const contourPour = (l: number) => {
 };
 
 export default function CarteCompte({
-  nom, compte, couleur, icone, apercu, annonce, onClick, onModifier,
+  nom, compte, couleur, icone, apercu, annonce, onClick, onModifier, variation,
 }: {
   nom: string;
   /**
@@ -281,6 +282,19 @@ export default function CarteCompte({
    * formulaire est une promesse qu'elle ne fait pas. Les trois points la disent.
    */
   onModifier?: () => void;
+  /**
+   * Ce que le dossier a fait sur la période, en pourcentage — pour le visage du bandeau.
+   *
+   * ⚠️ **Une variation et non une clé d'état.** La carte n'a pas à connaître le répertoire
+   * d'expressions : elle donne son chiffre, `marqueAvatar` le traduit, et le jour où les
+   * seuils bougent aucun composant n'est à rouvrir. C'est la même séparation que partout
+   * ailleurs — la géométrie ne connaît pas l'application, l'application ne connaît pas la
+   * géométrie.
+   *
+   * ⚠️ **`null` est le cas normal, pas un oubli.** Un compte courant ou un livret ne varie
+   * pas avec les marchés ; il retombe alors sur « curieux » sans publier de chiffre.
+   */
+  variation?: number | null;
 }) {
   /** Un identifiant par instance : deux dossiers voisins partageraient sinon le dégradé. */
   const idBord = useId().replace(/:/g, "");
@@ -348,7 +362,19 @@ export default function CarteCompte({
          remarque à peine, et le mauvais pour un mot, qui clignoterait. Mesuré une fois
          déjà, sur « Je regarde ». L'attribut suffit — aucun abonnement, un seul écouteur
          sur le document. Voir `AvatarContext`. */
-      data-avatar="curieux"
+      /**
+       * ⚠️ **Il dit maintenant *ce que le dossier fait*, là où il disait « curieux » pour
+       * tout le monde.** Relevé sur la vue générale : huit éléments expressifs, huit fois
+       * la même clé — le visage ne pouvait rien exprimer d'autre au survol, et la colère y
+       * était injoignable faute de chiffre publié. Les dossiers sont ce qu'on y survole le
+       * plus ; ce sont donc eux qui parlent.
+       *
+       * ⚠️ **Un dossier sans cours retombe exactement sur l'ancien comportement.** Un compte
+       * courant, un livret : `variation` y vaut `null`, et `marqueAvatar` rend alors
+       * « curieux » sans publier de chiffre. Le cas par défaut est donc inchangé, ce qui
+       * évite de faire dire à une enveloppe d'épargne qu'elle s'effondre.
+       */
+      {...marqueAvatar(variation)}
       // ⚠️ Pas d'`aria-expanded` : le dossier ne se déplie pas sous lui-même, il
       // remplace la vue. Annoncer un dépliement ferait attendre un contenu juste en
       // dessous, alors que c'est toute la zone qui change.

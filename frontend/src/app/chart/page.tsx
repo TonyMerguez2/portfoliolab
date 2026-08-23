@@ -27,7 +27,7 @@ import {
 import { useModeTheme } from "@/lib/theme";
 import { styleCadreExterieur, styleCarteInterieure } from "@/lib/palette";
 import { libellePlace } from "@/lib/placesBoursieres";
-import { etatSelonVariation } from "@/lib/avatarEtats";
+import { etatSelonVariation, marqueAvatar } from "@/lib/avatarEtats";
 import { API_URL } from "@/lib/api";
 
 
@@ -1109,7 +1109,7 @@ function ChartContent() {
                       du titre affiché. Posé sur la rangée entière — `closest` remonte
                       l'arbre, un attribut suffit à couvrir la carte et son comparatif. */}
                   <div className="asset-hero-row"
-                    data-avatar={etatSelonVariation(currentPrice?.change)}
+                    {...marqueAvatar(currentPrice?.change)}
                     style={{ display:"flex", alignItems:"stretch", gap:10, minWidth:0, width:"100%", flexWrap:"wrap" }}>
                     {ticker && (
                       <TileCard ticker={ticker} className="asset-hero-card novac-tile" radius={18} glowStrength={0} colorHex={color}

@@ -6,18 +6,25 @@ import { gaugeArc } from "@/lib/donut";
 import type { GridAsset } from "@/lib/portfolio";
 import { FONT, NUM } from "@/lib/typography";
 import { API_URL as API } from "@/lib/api";
-import { etatSelonVariation } from "@/lib/avatarEtats";
+import { marqueAvatar } from "@/lib/avatarEtats";
 
 /**
  * Bande basse : ce qui mérite l'attention, les repères de marché, le sentiment.
  *
  * La maquette annonce ici « 3 actifs ont des événements importants », adossé à
- * un calendrier de résultats. Ce calendrier n'existe nulle part au backend, et
- * l'onglet Événements le fabrique aujourd'hui à partir de l'ordre de la boucle
- * — « Résultats trimestriels J+3, J+6, J+9 ». Plutôt que d'inventer la même
- * donnée une seconde fois, ce bloc garde l'intention — qu'est-ce qui bouge
+ * un calendrier de résultats. Ce bloc garde l'intention — qu'est-ce qui bouge
  * aujourd'hui — et la remplit avec ce qu'on sait vraiment : les actifs dont la
  * variation sort de l'ordinaire.
+ *
+ * ⚠️ **La raison de ce détour a disparu depuis.** Le calendrier n'existait
+ * nulle part au backend quand ces lignes ont été écrites, et l'onglet
+ * Événements fabriquait ses dates depuis l'ordre de la boucle — « Résultats
+ * trimestriels J+3, J+6, J+9 ». `services/evenements.py` sert désormais de
+ * vraies échéances, relevées chez le fournisseur. Rendre à cette bande les
+ * événements de la maquette est donc devenu possible : ce qui reste est un
+ * choix qu'on n'a pas fait, non plus un mur.
+ *
+ * ⚠️ **Rien ne monte cette bande.** Voir MarketPulse, qu'elle enveloppe.
  */
 
 
@@ -65,7 +72,7 @@ export default function WatchBand({
           <div style={{ display: "flex", alignItems: "center", flexShrink: 0 }}>
             {notables.slice(0, 3).map((a, i) => (
               <div key={a.ticker} title={`${a.ticker} ${a.change! >= 0 ? "+" : ""}${a.change!.toFixed(2)} %`}
-                data-avatar={etatSelonVariation(a.change)}
+                {...marqueAvatar(a.change)}
                 style={{
                   width: 26, height: 26, borderRadius: "50%", overflow: "hidden",
                   marginLeft: i ? -8 : 0, zIndex: 3 - i, flexShrink: 0,

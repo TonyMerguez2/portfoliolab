@@ -189,16 +189,23 @@ export default function AssetGrid({
           /**
            * ⚠️ **L'avatar réagit à l'écart au portefeuille, pas à la variation brute.**
            * `change` est la variation sur la **période affichée** : sur la fenêtre Max
-           * elle atteint des centaines de pour cent, si bien que toutes les lignes
-           * franchissaient le seuil de l'étonnement — le visage était surpris en
-           * permanence, donc ne disait plus rien, et sursautait à chaque carte
-           * survolée. Comparée à la moyenne des lignes, la même donnée redevient
-           * lisible : cette ligne fait-elle mieux ou moins bien que les autres ?
+           * une ligne détenue quelques années vaut couramment plusieurs dizaines de
+           * pour cent, si bien que toutes franchissaient le seuil de l'étonnement — le
+           * visage était surpris en permanence, donc ne disait plus rien, et sursautait
+           * à chaque carte survolée. Comparée à la moyenne des lignes, la même donnée
+           * redevient lisible : cette ligne fait-elle mieux ou moins bien que les autres ?
            */
           const ecart = a.change != null && moyenneChange != null
             ? a.change - moyenneChange : null;
+          /**
+           * ⚠️ **L'écart classe, la variation vraie se surveille.** La colère se déclenche
+           * sur une marche en points de pourcentage ; l'écart, lui, se chiffre en dizaines
+           * de points dès la fenêtre Max, où deux lignes détenues depuis des années se
+           * séparent largement. Lui confier aussi la surveillance aurait mis le visage en
+           * colère à chaque relecture des cours. Voir `marqueAvatar`.
+           */
           return (
-            <ReactionAvatar key={a.ticker} variation={ecart}>
+            <ReactionAvatar key={a.ticker} variation={ecart} suivi={a.change}>
             <CarteActif a={a}
               onClick={onAssetClick ? () => onAssetClick(a.ticker) : undefined} />
             </ReactionAvatar>
