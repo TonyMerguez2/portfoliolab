@@ -1275,6 +1275,23 @@ canvas + div {
   71%      { opacity: 0.92; }
 }
 
+/* Le frisson d'un tube au néon : presque immobile, avec de brefs décrochages.
+
+   ⚠️ **Ce n'est ni le souffle de la braise ni le clignement de la diode**, et les
+   trois cohabitent sur la même page — se ressembler les ferait passer pour la
+   même matière. Un néon est **stable** : son gaz tient sa lumière. Ce qui le
+   trahit, ce sont de courtes chutes d'alimentation, brutales et rares. D'où une
+   ligne de base à peine ondulée et deux décrochages serrés, l'un plus profond que
+   l'autre — un battement régulier se compterait, et rien ne compte moins qu'un
+   tube au néon. */
+@keyframes novac-neon-frisson {
+  0%, 46%, 100% { opacity: 1; }
+  49%           { opacity: 0.62; }
+  52%           { opacity: 0.98; }
+  78%           { opacity: 0.85; }
+  81%           { opacity: 1; }
+}
+
 @keyframes novac-casque-veille {
   0%, 62%, 100% { opacity: 1; }
   80%           { opacity: 0.72; }
@@ -1285,6 +1302,7 @@ canvas + div {
 .novac-crt-yeux   { animation: novac-crt-pupille 4.3s ease-in-out infinite; }
 .novac-casque-yeux { animation: novac-casque-veille 7.4s ease-in-out infinite; }
 .novac-braise      { animation: novac-braise-souffle 3.8s ease-in-out infinite; }
+.novac-neon        { animation: novac-neon-frisson 5.2s ease-in-out infinite; }
 
 @media (prefers-reduced-motion: reduce) {
   /* ⚠️ **L'écran reste allumé, il cesse seulement de bouger.** Couper l'animation
@@ -1295,6 +1313,7 @@ canvas + div {
   .novac-crt-halo,
   .novac-crt-yeux,
   .novac-casque-yeux,
-  .novac-braise { animation: none; }
+  .novac-braise,
+  .novac-neon { animation: none; }
   .novac-crt-bande { animation: none; opacity: 0; }
 }

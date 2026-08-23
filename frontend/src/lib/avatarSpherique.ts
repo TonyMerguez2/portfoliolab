@@ -74,9 +74,10 @@ function normaliser(v: Vec3): Vec3 {
  * hauteur qui tend vers zéro.
  */
 export function contourCapsule(
-  largeur: number, hauteur: number, echantillons: number, courbure: number = 0,
+  largeur: number, hauteur: number, echantillons: number,
+  courbure: number = 0, pliure: number = 0,
 ): Point2[] {
-  return contourArrondi(largeur, hauteur, 1, echantillons, courbure);
+  return contourArrondi(largeur, hauteur, 1, echantillons, courbure, pliure);
 }
 
 /**
@@ -99,8 +100,15 @@ export function contourCapsule(
  */
 export function contourArrondi(
   largeur: number, hauteur: number, arrondi: number,
-  echantillons: number, courbure: number = 0,
+  echantillons: number, courbure: number = 0, pliure: number = 0,
 ): Point2[] {
+  /**
+   * ⚠️ **Un seuil, et non `!== 0`.** Les états s'éteignent par amorti exponentiel : la
+   * pliure décroît vers zéro sans jamais l'atteindre. Comparée à zéro, elle restait
+   * éternellement « non nulle », et l'œil gardait **à vie** le constructeur plié au lieu de
+   * revenir à la capsule. Un millième de pliure ne se voit pas ; y rester coincé, si.
+   */
+  if (Math.abs(pliure) > 1e-3) return contourPlie(largeur, hauteur, pliure, echantillons);
   const demiL = Math.max(0.001, largeur / 2);
   const demiH = Math.max(0.001, hauteur / 2);
   const r = Math.min(demiL, demiH) * Math.min(1, Math.max(0, arrondi));
@@ -111,9 +119,132 @@ export function contourArrondi(
   const points: Point2[] = [];
   for (let i = 0; i < echantillons; i++) {
     const p = pointSurCapsule((i / echantillons) * perimetre, r, plat, dressé);
-    points.push(courbure === 0 ? p : cambrer(p, demiL, courbure));
+    points.push(courbure === 0 ? p : cambrer(p, demiL, courbure, 0));
   }
   return points;
+}
+
+/**
+ * L'œil **plié** : son axe se casse en deux, et l'épaisseur ne bouge pas.
+ *
+ * ⚠️ **Ce n'est pas un cisaillement, et c'est toute la différence.** La première version
+ * pliait en décalant `y` selon `x` — le contour entier glissait vers le haut au milieu.
+ * Une capsule cisaillée n'a plus une épaisseur constante : mesurée perpendiculairement au
+ * bras, elle **maigrit** à mesure que la pente augmente, et les bouts arrondis restent
+ * horizontaux au lieu de se mettre d'équerre avec le bras qu'ils terminent. Le résultat se
+ * lisait comme un ruban tordu, pas comme un chevron.
+ *
+ * Ici on plie l'**axe** — deux segments partant du sommet — puis on le retrace à épaisseur
+ * constante : bouts ronds, jointure ronde à l'extérieur, angle net à l'intérieur. C'est
+ * exactement ce que fait un trait de plume qu'on plie, et c'est la forme de la référence.
+ *
+ * ⚠️ **La capsule est la seule forme admise ici.** L'œil carré n'a pas de sens plié : ses
+ * angles vifs se dédoubleraient au sommet. `arrondi` est donc ignoré — l'œil par défaut
+ * est une capsule, et c'est lui qu'on plie.
+ */
+function contourPlie(
+  largeur: number, hauteur: number, pliure: number, echantillons: number,
+): Point2[] {
+  /**
+   * ⚠️ **Le pli suit toujours le **grand** axe de l'œil, jamais `x` par convention.** Il
+   * pliait le long de `x` : pour plier un œil debout — celui du repos, plus haut que
+   * large — il fallait donc lui **échanger** ses deux dimensions et le coucher d'un quart
+   * de tour. C'était juste à l'arrêt et faux en chemin : pendant la transition, longueur
+   * et épaisseur passaient toutes deux par leur moyenne, et l'œil enflait en un pavé avant
+   * de reprendre sa forme. Signalé à l'usage — « on passe de invite à neutre, ça fait ça ».
+   *
+   * En pliant le grand axe quel qu'il soit, l'œil garde ses proportions du début à la fin :
+   * seule la pliure varie, et une pliure nulle rend exactement la capsule d'origine.
+   */
+  const debout = hauteur >= largeur;
+  const longueur = debout ? hauteur : largeur;
+  const epaisseur = debout ? largeur : hauteur;
+  const r = Math.max(0.001, epaisseur / 2);
+  /**
+   * ⚠️ **L'axe est raccourci de l'épaisseur, sinon l'œil plié est plus grand que l'œil.**
+   * Les bouts ronds débordent de l'axe d'un rayon de chaque côté : un axe long de
+   * `longueur` donne un contour long de `longueur + épaisseur`. Avec les proportions du
+   * regard — 66 sur 19 — cela fait **29 % de trop**, et le défaut ne se voyait pas sur le
+   * chevron, dont on ne connaît pas la taille « juste », mais au retour au neutre : l'œil
+   * gauche restait mesuré à 98 contre 77 pour le droit, soit 1,27. C'est ce nombre-là qui a
+   * fini par trahir la cause.
+   */
+  const demiL = Math.max(0.001, (longueur - epaisseur) / 2);
+  /**
+   * ⚠️ **Le sens du pli est appliqué à la fin, par symétrie — jamais au sommet.** Construit
+   * directement avec une pliure négative, le sommet descend, les deux normales s'inversent,
+   * et l'arc de jointure se retrouve tracé du côté **creux** : le coin extérieur redevient
+   * vif et c'est l'intérieur qui s'arrondit — l'exact inverse de ce qu'on veut. On construit
+   * donc toujours vers le haut, et l'on retourne le contour fini.
+   */
+  const sens = pliure < 0 ? -1 : 1;
+  pliure = Math.abs(pliure);
+  /* Le sommet monte de `pliure` demi-largeurs : la pente d'un bras vaut donc `pliure`. */
+  /* ⚠️ Le sommet reste au **milieu** de l'axe : les deux bras du chevron sont égaux. Un
+     décalage a été essayé, pour rapprocher le glyphe du `>` d'une fonte à chasse fixe, dont
+     le sommet tombe sous le milieu de la casse ; à l'écran, l'asymétrie se lisait comme un
+     défaut de tracé plutôt que comme une lettre. */
+  const sommet = { x: 0, y: pliure * demiL };
+  const A = { x: -demiL, y: 0 };
+  const C = { x: demiL, y: 0 };
+
+  const direction = (p: Point2, q: Point2) => {
+    const dx = q.x - p.x, dy = q.y - p.y;
+    const l = Math.hypot(dx, dy) || 1;
+    return { x: dx / l, y: dy / l };
+  };
+  const u1 = direction(A, sommet);
+  const u2 = direction(sommet, C);
+  /* Normales tournées d'un quart de tour : toutes deux du côté où le sommet pointe. */
+  const n1 = { x: -u1.y, y: u1.x };
+  const n2 = { x: -u2.y, y: u2.x };
+  const dep = (p: Point2, n: Point2, k: number) => ({ x: p.x + n.x * k, y: p.y + n.y * k });
+
+  /**
+   * Le coin intérieur : l'intersection des deux bords décalés vers le creux. C'est le
+   * point que le sommet arrondi de l'extérieur a pour pendant — sans lui, les deux bras
+   * se chevaucheraient et le remplissage laisserait une entaille.
+   */
+  const p1 = dep(A, n1, -r), p2 = dep(sommet, n2, -r);
+  const den = u1.x * u2.y - u1.y * u2.x;
+  const creux = Math.abs(den) < 1e-9
+    ? dep(sommet, n1, -r)
+    : (() => {
+      const t = ((p2.x - p1.x) * u2.y - (p2.y - p1.y) * u2.x) / den;
+      return { x: p1.x + u1.x * t, y: p1.y + u1.y * t };
+    })();
+
+  const pts: Point2[] = [];
+  const ligne = (de: Point2, vers: Point2, n: number) => {
+    for (let i = 0; i < n; i++) {
+      pts.push({ x: de.x + (vers.x - de.x) * (i / n), y: de.y + (vers.y - de.y) * (i / n) });
+    }
+  };
+  const arc = (centre: Point2, depart: number, arrivee: number, n: number) => {
+    for (let i = 0; i < n; i++) {
+      const a = depart + (arrivee - depart) * (i / n);
+      pts.push({ x: centre.x + Math.cos(a) * r, y: centre.y + Math.sin(a) * r });
+    }
+  };
+  const ang = (v: Point2) => Math.atan2(v.y, v.x);
+  /* Un huitième des points par morceau : les six morceaux se partagent le contour. */
+  const n = Math.max(6, Math.round(echantillons / 8));
+
+  ligne(dep(A, n1, r), dep(sommet, n1, r), n);          // bord extérieur, bras haut
+  arc(sommet, ang(n1), ang(n2), n);                      // jointure ronde du sommet
+  ligne(dep(sommet, n2, r), dep(C, n2, r), n);           // bord extérieur, bras bas
+  arc(C, ang(n2), ang(n2) - Math.PI, n);                 // bout rond
+  ligne(dep(C, n2, -r), creux, n);                       // bord intérieur, bras bas
+  ligne(creux, dep(A, n1, -r), n);                       // bord intérieur, bras haut
+  /* ⚠️ Le bout part de `−n1` et **descend** vers `n1` : c'est le sens qui passe par `−u1`,
+     donc au-delà de `A`. Pris dans l'autre sens, l'arc rentre dans le bras et le contour
+     se recroise — on voyait une entaille au bout du bras. */
+  arc(A, ang(n1) + Math.PI, ang(n1), n);                 // bout rond
+
+  const oriente = sens < 0 ? pts.map(p => ({ x: p.x, y: -p.y })) : pts;
+  /* Un quart de tour pour un œil debout : le sommet, construit vers `+y`, pointe alors
+     vers `+x` — c'est le chevron « > », sans qu'aucune inclinaison n'ait à l'y amener. */
+  return debout ? oriente.map(p => ({ x: p.y, y: -p.x })) : oriente;
 }
 
 /**
@@ -126,9 +257,23 @@ export function contourArrondi(
  * axe à l'autre en pleine transition. Ici elle décale toujours `y` selon `x` : franche
  * sur un œil large, presque nulle sur un œil haut, et continue entre les deux.
  */
-function cambrer(p: Point2, demiLargeur: number, courbure: number): Point2 {
+/**
+ * ⚠️ **Deux déformations indépendantes, et non un curseur qui passerait de l'une à
+ * l'autre.** Elles décalent toutes deux `y` selon `x`, mais elles ne disent pas la même
+ * chose : la **cambrure** suit une parabole `1 − t²`, lisse partout y compris en son
+ * milieu — c'est l'arc doux du visage content. La **pliure** suit un toit `1 − |t|`, qui a
+ * un **coin** en zéro : le même œil plié en deux, ce qui donne un chevron.
+ *
+ * ⚠️ **La pliure a d'abord été écrite comme un mélange entre les deux**, donc sans effet
+ * tant que la cambrure valait zéro. C'était un contresens : plier un œil est un geste
+ * complet, pas une variante d'un autre geste. Réglé à l'usage — on voulait plier sans
+ * cambrer, et il fallait cambrer d'abord.
+ */
+function cambrer(p: Point2, demiLargeur: number, courbure: number, pliure: number): Point2 {
   const t = p.x / demiLargeur;
-  return { x: p.x, y: p.y + courbure * (1 - t * t) * demiLargeur };
+  const arc = courbure * (1 - t * t);
+  const pli = pliure * (1 - Math.abs(t));
+  return { x: p.x, y: p.y + (arc + pli) * demiLargeur };
 }
 
 /**
@@ -462,6 +607,15 @@ export function gonflement(p: Vec3, solide: Solide): number {
  * C'est l'image du cercle `z = 0` — celui-là même sur lequel la coupe de l'hémisphère
  * referme les contours. Deux définitions de la silhouette finiraient par se décoller, et
  * l'on verrait un liseré de fond entre un œil rasant le bord et le bord lui-même.
+ *
+ * ⚠️ **Et cette tranche *est* la silhouette, sur nos huit volumes — vérifié, pas supposé.**
+ * J'ai cru un moment qu'il fallait chercher le vrai contour apparent, là où la normale se
+ * dérobe, et l'ai écrit : sur les sept familles, il rend exactement le même tracé, au
+ * centième près. La raison est simple et vaut d'être notée — toutes sont symétriques
+ * avant/arrière, et pour un volume qui l'est, le contour apparent *est* la tranche du
+ * milieu. La recherche coûtait quarante évaluations par point pour aucune différence ; on
+ * garde la tranche. Un volume dissymétrique — un cube posé sur son coin, par exemple —
+ * demanderait l'autre méthode.
  */
 export function contourSilhouette(
   solide: Solide, rayon: number = RAYON_TETE, echantillons: number = 360,
@@ -879,6 +1033,13 @@ export type ReglagesOeil = {
   /** Cambrure de l'œil : positif pour un arc « ⌒ », l'œil des mimiques heureuses. */
   courbure?: number;
   /**
+   * Pliure de l'œil : son milieu se casse en un **angle**, là où la cambrure l'arrondit.
+   *
+   * Indépendante de la cambrure — on peut plier sans cambrer. C'est ce qui fait le chevron
+   * de l'invite de commande : le même œil, plié en deux.
+   */
+  pliure?: number;
+  /**
    * Arrondi des quatre coins, de 0 pour des angles vifs à 1 pour la capsule.
    *
    * Absent, il vaut 1 : c'est la forme d'origine, et rien de ce qui existait ne change.
@@ -940,7 +1101,7 @@ export type Orientation = { lacet: number; tangage: number; roulis?: number };
  * reste que 16 % contre 65 % sur la sphère. De profil, une tête étroite ne montre
  * pratiquement plus qu'un œil, et c'est exactement ce qu'on lui demande.
  */
-function directionEquivalente(p: Vec3, solide: Solide): Vec3 {
+export function directionEquivalente(p: Vec3, solide: Solide): Vec3 {
   if (solide.famille === "sphere") return p;
   const d = solide.decalage;
   const cx = p.x + (d ? d.x : 0), cy = p.y + (d ? d.y : 0);
@@ -952,8 +1113,24 @@ function directionEquivalente(p: Vec3, solide: Solide): Vec3 {
     x: Math.sin(phi) * ct, y: Math.sin(phi) * st, z: signe * Math.cos(phi),
   });
   const projete = (phi: number) => rayonSolide(dir(phi), solide) * Math.sin(phi);
-  // Hors d'atteinte : la forme ne va pas si loin, le point se colle au bord.
-  if (projete(Math.PI / 2) <= vise) return dir(Math.PI / 2);
+  /**
+   * Hors d'atteinte : la forme ne va pas si loin, le point se colle au bord.
+   *
+   * ⚠️ **Collé *juste en deçà* du bord, jamais exactement dessus — et l'écart est tout
+   * sauf cosmétique.** À `π/2` pile, `z` vaut `signe × cos(π/2)`, c'est-à-dire **zéro quel
+   * que soit le signe** : le point perd le côté d'où il venait. Un point de l'arrière se
+   * retrouve alors déclaré à l'horizon, donc visible, et `couperHemisphere` referme le
+   * morceau sur un arc qui fait le tour de la tête.
+   *
+   * Un cent-millième de radian suffit : le point reste sur la silhouette à l'œil, et `cos`
+   * rend un `z` minuscule mais **signé**, ce qui préserve le côté.
+   *
+   * ⚠️ **Cette correction n'est pas celle du croissant que laisse un œil au bord d'un
+   * cube** — je l'ai d'abord crue telle, à tort. Elle règle une ambiguïté réelle du signe,
+   * mesurable sur le papier, et rien de plus ; le croissant vient de l'arc de fermeture, et
+   * il n'est pas résolu.
+   */
+  if (projete(Math.PI / 2) <= vise) return dir(Math.PI / 2 - 1e-5);
   let bas = 0, haut = Math.PI / 2;
   for (let i = 0; i < 14; i++) {
     const m = (bas + haut) / 2;
@@ -982,15 +1159,126 @@ export function cheminOeil(
    * à la projection de la sphère, la même condition devient une simple égalité :
    * `sin λ' = sin λ · demi-largeur`. Mesuré, 0,211 sur les huit formes.
    */
+  /**
+   * ⚠️ **Plus de correction de largeur : la translation s'en charge, et mieux.** L'écart
+   * était corrigé ici — `sin λ' = sin λ · demi-largeur` — parce que chaque point était
+   * ensuite résolu sur le volume. Depuis que seule l'**ancre** l'est, la corriger deux fois
+   * déplaçait l'œil à une longitude différente selon la forme : son raccourci changeait
+   * avec elle, et sa surface variait de près de cinq pour cent d'un volume à l'autre là où
+   * les essais tolèrent trois. Sans elle, l'œil est *le même* sur les huit formes, et c'est
+   * le décalage de l'ancre — lui seul — qui dit où le poser.
+   */
+  const ancrage = ancrageOeil(longitude, reglages.elevation / rayon);
+  const contour = contourArrondi(
+    reglages.largeur, reglages.hauteur, reglages.arrondi ?? 1,
+    echantillons, reglages.courbure ?? 0, reglages.pliure ?? 0);
+  return cheminDansOeil(contour, reglages, orientation, cote, rayon, solide);
+}
+
+/**
+ * L'éclat à quatre branches — l'étoile de l'émerveillement.
+ *
+ * ⚠️ **Une astroïde généralisée, et non une étoile à segments droits.** `x = R·cosᵖt`,
+ * `y = R·sinᵖt` donne quatre branches reliées par des côtés **concaves** : c'est cette
+ * concavité qui fait lire « scintillement » plutôt que « étoile de shérif », et elle vient
+ * de la courbe elle-même, sans un seul point à placer à la main.
+ *
+ * ⚠️ **Les bouts sont arrondis *après*, et il n'y avait pas d'autre voie.** L'exposant
+ * commande la concavité et la finesse **ensemble** : au-dessus de deux les côtés se creusent
+ * mais les quatre bouts deviennent des points de **rebroussement** — la tangente y fait un
+ * demi-tour, ce qui donne des aiguilles qui piquent au milieu d'un visage entièrement rond.
+ * En le baissant à deux, les côtés redeviennent droits et l'étoile n'est plus qu'un losange ;
+ * essayé, et c'est pire. On garde donc l'astroïde franche, et l'on passe un lissage qui ne
+ * mord que là où la courbure est extrême, c'est-à-dire sur les pointes.
+ *
+ * `douceur` est le nombre de passes du lissage, `pointe` l'exposant de la courbe. Voir
+ * plus bas pourquoi il en faut deux.
+ */
+export function contourEclat(
+  rayon: number, echantillons = 72, tourne = 0, douceur = 17, pointe = 3,
+): Point2[] {
+  let pts: Point2[] = [];
+  const c = Math.cos(tourne), s = Math.sin(tourne);
+  /**
+   * ⚠️ **L'exposant est un mauvais levier pour émousser, et il reste à trois.** Il commande
+   * la concavité et la finesse ensemble : essayé à 2,2 puis à 2,55, il efface le creux des
+   * côtés **avant** d'avoir rendu les bouts ronds, et l'étoile devient un losange. Les deux
+   * fois, le résultat était pire que le défaut qu'on corrigeait. Seul le lissage sait
+   * distinguer les deux : il mord là où la courbure est extrême — les pointes — et laisse
+   * les côtés, dont la courbure est douce. C'est `douceur` qu'il faut monter, pas `pointe`.
+   *
+   * Le paramètre reste exposé pour le jour où l'on voudra une autre famille d'éclat, mais
+   * s'en servir pour arrondir est une fausse piste : elle a été prise deux fois.
+   *
+   * Le signe est repris à part : une puissance non entière d'un nombre négatif n'existe
+   * pas, et `Math.pow` rendrait `NaN` sur les trois quarts du tour.
+   */
+  const puis = (v: number) => Math.sign(v) * Math.abs(v) ** pointe;
+  for (let i = 0; i < echantillons; i++) {
+    const t = (i / echantillons) * TAU;
+    const x = rayon * puis(Math.cos(t));
+    const y = rayon * puis(Math.sin(t));
+    pts.push({ x: x * c - y * s, y: x * s + y * c });
+  }
+  /**
+   * Le lissage : chaque point rejoint la moyenne de ses voisins, en boucle fermée.
+   *
+   * ⚠️ **C'est un filtre passe-bas sur le contour, et c'est pour ça qu'il ne touche que les
+   * pointes.** Sur un côté presque droit, la moyenne d'un point et de ses deux voisins vaut
+   * ce point : le lissage n'y change rien. Sur un rebroussement, où la direction s'inverse
+   * d'un échantillon à l'autre, elle coupe franchement. Le creux des côtés est donc préservé
+   * pendant que les bouts s'émoussent — ce qu'aucun réglage d'exposant ne sait faire.
+   */
+  const n = pts.length;
+  for (let passe = 0; passe < douceur; passe++) {
+    const avant = pts;
+    pts = avant.map((q, i) => {
+      const a = avant[(i - 1 + n) % n], b = avant[(i + 1) % n];
+      return { x: (a.x + 2 * q.x + b.x) / 4, y: (a.y + 2 * q.y + b.y) / 4 };
+    });
+  }
+  return pts;
+}
+
+/** Une bulle ronde — le second reflet, celui qui donne le regard mouillé. */
+export function contourBulle(rayon: number, echantillons = 36): Point2[] {
+  return Array.from({ length: echantillons }, (_, i) => {
+    const t = (i / echantillons) * TAU;
+    return { x: rayon * Math.cos(t), y: rayon * Math.sin(t) };
+  });
+}
+
+/** Déplace un contour dans le repère de l'œil. */
+export function decaler(contour: Point2[], dx: number, dy: number): Point2[] {
+  return contour.map(p => ({ x: p.x + dx, y: p.y + dy }));
+}
+
+/**
+ * Projette un contour **quelconque** dans le repère d'un œil.
+ *
+ * ⚠️ **Extrait de `cheminOeil`, qui n'en est plus qu'un cas particulier.** L'émerveillement
+ * pose un éclat et une bulle *dans* l'œil : ces formes doivent subir exactement la même
+ * projection que lui — même ancre, même inclinaison, même résolution sur le volume —, faute
+ * de quoi elles glissent hors de la pupille dès que la tête tourne ou que la silhouette
+ * n'est plus ronde. Refaire le calcul à côté aurait garanti cette dérive ; il n'y a donc
+ * qu'un seul chemin, et l'œil l'emprunte comme ses détails.
+ *
+ * Le contour est donné dans les unités de la surface, centré sur l'ancre de l'œil.
+ */
+export function cheminDansOeil(
+  contour: Point2[],
+  reglages: Pick<ReglagesOeil, "ecart" | "elevation" | "inclinaison">,
+  orientation: Orientation,
+  cote: -1 | 1,
+  rayon: number = RAYON_TETE,
+  solide: Solide = SPHERE,
+): string {
+  const longitude = (cote * reglages.ecart) / rayon;
   const ancrage = ancrageOeil(
     Math.asin(Math.min(1, Math.max(-1, Math.sin(longitude) * (solide.demiLargeur ?? 1)))),
     reglages.elevation / rayon,
   );
   const cos = Math.cos(reglages.inclinaison), sin = Math.sin(reglages.inclinaison);
-
-  const contour = contourArrondi(
-    reglages.largeur, reglages.hauteur, reglages.arrondi ?? 1,
-    echantillons, reglages.courbure ?? 0);
   const surface: Vec3[] = [];
   for (let i = 0; i < contour.length; i++) {
     const u = cote * (contour[i].x * cos - contour[i].y * sin);

@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
-import { PAS_GRILLE, grilleSpherique } from "./avatarGrille";
+import { PAS_GRILLE, grillePourSolide, grilleSpherique } from "./avatarGrille";
+import { melangerSolides, solideDepuis } from "./avatarVolume";
 import {
   type Vec3, cercleDeLatitude, couperParProfondeur, traitSurLaTete,
 } from "./avatarSpherique";
@@ -157,6 +158,33 @@ describe("traitSurLaTete", () => {
           }
         }
       }
+    }
+  });
+
+  /**
+   * ⚠️ **La grille se garde, sinon chaque morphose coûte une grille par image.** La table du
+   * méridien parcourt tous les azimuts : 9,8 ms l'appel. Comme un mélange est un solide neuf à
+   * chaque image, rien ne peut le mettre en cache par identité — mais ses deux extrémités sont
+   * stables, et la table d'un rayon interpolé est l'interpolation des deux tables. Relevé
+   * après correction : 0,28 ms par image au lieu de 9,8.
+   */
+  it("garde ses tables et interpole celles d'un mélange", () => {
+    const nuage = solideDepuis("nuage", 0.5);
+    const etoile = solideDepuis("etoile6", 0.5);
+    /* Les deux bouts d'un mélange doivent redonner exactement les grilles d'origine. */
+    const seul = grillePourSolide(nuage);
+    const bout = grillePourSolide(melangerSolides(nuage, etoile, 0));
+    expect(bout.paralleles.length).toBe(seul.paralleles.length);
+    for (let i = 0; i < seul.paralleles.length; i++) {
+      expect(bout.paralleles[i][0].y).toBeCloseTo(seul.paralleles[i][0].y, 6);
+    }
+    /* Et le milieu doit tomber entre les deux, jamais au-delà. */
+    const milieu = grillePourSolide(melangerSolides(nuage, etoile, 0.5));
+    const autre = grillePourSolide(etoile);
+    for (let i = 0; i < milieu.paralleles.length; i++) {
+      const [a, b] = [seul.paralleles[i][0].y, autre.paralleles[i][0].y];
+      expect(milieu.paralleles[i][0].y).toBeGreaterThanOrEqual(Math.min(a, b) - 1e-6);
+      expect(milieu.paralleles[i][0].y).toBeLessThanOrEqual(Math.max(a, b) + 1e-6);
     }
   });
 });

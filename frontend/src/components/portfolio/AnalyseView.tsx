@@ -99,7 +99,7 @@ function Carte({ children, style }: { children: React.ReactNode; style?: React.C
     // ⚠️ L'attribut est posé sur la carte, pas sur chaque ligne : `closest` remonte
     // l'arbre, donc un seul suffit à rendre tout le panneau expressif. Un attribut par
     // ligne aurait été autant d'occasions d'en oublier une.
-    <Cadre data-avatar="reflexion"
+    <Cadre data-avatar="curieux"
       style={{ padding: "14px 18px", display: "flex", flexDirection: "column", minHeight: 0, ...style }}>
       {children}
     </Cadre>

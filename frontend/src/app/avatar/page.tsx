@@ -2,18 +2,22 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import {
-  RAYON_TETE, type Orientation, type ReglagesOeil, cheminOeil, cheminSvg,
+  RAYON_TETE, type Orientation, type ReglagesOeil, cheminDansOeil, cheminOeil, cheminSvg,
+  contourBulle, contourEclat, decaler,
   cheminsSurLaTete, contourSilhouette, projeter, tournerTete, traitSurLaTete,
 } from "@/lib/avatarSpherique";
 import { type FamilleSolide, melangerSolides, solideDepuis } from "@/lib/avatarVolume";
 import {
-  ARRONDI_REFERENCE, HALO, OEIL_REFERENCE, TAILLE_REFERENCE, VIE_REFERENCE,
+  ARRONDI_REFERENCE, ECART_INVITE, HALO, OEIL_REFERENCE, TAILLE_INVITE,
+  TAILLE_REFERENCE,
+  VIE_REFERENCE,
 } from "@/lib/avatarReglages";
-import { grilleSpherique } from "@/lib/avatarGrille";
+import { grillePourSolide } from "@/lib/avatarGrille";
 import {
   cheminOeilSolide, cheminsSurLeSolide, contourTeteSolide, normaleSolide,
   regardDansLeSolide, surLeSolide, traitSurLeSolide,
 } from "@/lib/avatarSolide";
+import { cheminOeilSurface } from "@/lib/avatarSurface";
 import {
   ACCESSOIRES, CASQUETTE_REFERENCE, type FamilleAccessoire, cheminsCasquette, contraste,
 } from "@/lib/avatarAccessoires";
@@ -54,12 +58,15 @@ import AvatarParole from "@/components/AvatarParole";
  */
 
 /**
- * Le maillage de la sphère, calculé une fois pour la vie du module.
+ * Le maillage, calculé une fois **par volume**.
  *
- * ⚠️ Hors du composant, et pas dans un `useMemo` : il ne dépend d'aucun état. Placé
- * dedans, il serait refait à chaque montage pour rendre exactement la même chose.
+ * ⚠️ **Il dépend de la forme, et c'est le seul moyen d'avoir des mailles régulières.** Une
+ * grille régulière en angle cesse de l'être dès qu'on la pose ailleurs que sur une sphère :
+ * au milieu d'une face de cube la surface est à distance un, vers un coin jusqu'à la racine
+ * de trois, si bien qu'un même écart d'angle y couvre presque le double de longueur. Le
+ * maillage se resserrait donc au centre de la face — relevé, un rapport de 1,43 entre la
+ * plus grande et la plus petite maille sur l'hexagone, ramené à 1,02.
  */
-const GRILLE = grilleSpherique();
 
 /**
  * Les couleurs des trois axes, dans la convention universelle X rouge, Y vert, Z bleu.
@@ -76,7 +83,7 @@ const FORMES: [FamilleSolide, string][] = [
   ["cube", "Carré arrondi"],
   ["etoile", "Étoile"],
   ["etoile6", "Étoile 6 lobes"],
-  ["coussin", "Coussin"],
+  ["nuage", "Nuage"],
   ["hexagone", "Hexagone"],
   ["triangle", "Triangle"],
   ["goutte", "Goutte"],
@@ -99,8 +106,22 @@ function VignetteVolume({ famille }: { famille: FamilleSolide }) {
         </svg>
       );
     case "coussin":
-      // Une capsule couchée : bouts ronds, côtés droits.
+      // Une capsule couchée : bouts ronds, côtés droits. Le volume existe encore — les
+      // essais s'appuient dessus — mais il n'est plus proposé, le nuage a pris sa place.
       return <svg {...c}><rect x={0.8} y={3.6} width={14.4} height={8.8} rx={4.4} {...f} /></svg>;
+    case "nuage":
+      // Trois bosses en bas qui portent la masse, deux lobes au-dessus.
+      return (
+        <svg {...c}>
+          <g {...f}>
+            <circle cx={4.6} cy={9.4} r={3.9} />
+            <circle cx={11.4} cy={9.4} r={3.6} />
+            <circle cx={8} cy={10} r={4.3} />
+            <circle cx={6.2} cy={5.8} r={3.4} />
+            <circle cx={10.1} cy={6.2} r={3.1} />
+          </g>
+        </svg>
+      );
     case "hexagone":
       return <svg {...c}><path d="M8 1.2 13.9 4.6v6.8L8 14.8 2.1 11.4V4.6z" {...f} /></svg>;
     case "triangle":
@@ -163,10 +184,18 @@ const PISTE = "#E4E4EB";
  * gauche et l'œil droit est fait par la géométrie. C'est la démonstration la plus
  * directe de l'intérêt du procédé : une expression tient dans un nombre.
  */
+/**
+ * ⚠️ **Les deux signes étaient intervertis, et cela a fini par coûter cher.** Une inclinaison
+ * *positive* monte le bout intérieur des yeux — mesuré, `y = −9` dedans contre `+9` dehors :
+ * c'est le `/ \` de celui qui implore, donc le **triste**. Le fâché est l'autre sens. Le banc
+ * étant l'endroit où l'on vérifie les intentions, une étiquette fausse s'y propage : c'est en
+ * s'y fiant que l'expression « en colère » a d'abord été construite à l'envers, et qu'elle se
+ * lisait comme un caprice.
+ */
 const EXPRESSIONS = [
   { cle: "neutre", libelle: "Neutre", inclinaison: 0 },
-  { cle: "fache", libelle: "Fâché", inclinaison: 16 },
-  { cle: "triste", libelle: "Triste", inclinaison: -16 },
+  { cle: "fache", libelle: "Fâché", inclinaison: -16 },
+  { cle: "triste", libelle: "Triste", inclinaison: 16 },
 ] as const;
 
 type CleExpression = (typeof EXPRESSIONS)[number]["cle"];
@@ -206,9 +235,19 @@ type Oeil = {
   forme: "capsule" | "carre";
   /** Arrondi des quatre coins du carré, de 0 (angles vifs) à 1 (capsule). */
   arrondi: number;
+  /**
+   * Pliure propre, qui **s'ajoute** à celle de l'expression.
+   *
+   * ⚠️ **La cambrure, elle, n'est pas réglable ici, et c'est délibéré.** Elle appartient
+   * aux mimiques — l'arc « ⌒ » du visage content —, alors que le pli est une déformation
+   * de la *forme* de l'œil, au même titre que sa largeur ou son arrondi. Les deux
+   * cohabitent dans la géométrie sans se confondre ; n'exposer que le pli garde ce panneau
+   * sur ce qu'il règle vraiment.
+   */
+  pliure: number;
 };
 
-const OEIL_PAR_DEFAUT: Oeil = { ...OEIL_REFERENCE };
+const OEIL_PAR_DEFAUT: Oeil = { ...OEIL_REFERENCE, pliure: 0 };
 
 
 /** Constante de temps de l'amorti du regard : le suivi glisse, il ne saute pas. */
@@ -354,6 +393,7 @@ export default function AvatarProceduralPage() {
       if (t.devant) devant.push(t.devant);
       if (t.derriere) derriere.push(t.derriere);
     };
+    const GRILLE = grillePourSolide(solideTete);
     for (let i = 1; i < GRILLE.meridiens.length; i++) ajouter(GRILLE.meridiens[i]);
     for (const p of GRILLE.paralleles) ajouter(p);
     return {
@@ -550,37 +590,148 @@ export default function AvatarProceduralPage() {
    * deux yeux partageaient les mêmes réglages, ils ne pouvaient que se fermer ensemble
    * — un clin d'œil n'était qu'un clignement lent.
    */
-  const reglagesOeil = useCallback((oeil: Oeil, fermeture: number): ReglagesOeil => {
+  const reglagesOeil = useCallback((oeil: Oeil, fermeture: number, cote: -1 | 1): ReglagesOeil => {
     const largeurRendue = oeil.largeur * taille * vie.largeur;
     const ouverte = oeil.hauteur * taille * vie.hauteur;
     const fente = Math.max(1.5, largeurRendue * 0.12);
+
+    /**
+     * ⚠️ **Le glyphe d'invite est recopié depuis `AvatarNovac`, et c'est une duplication
+     * assumée.** Le banc ne partage pas le chemin de rendu de l'avatar : il compose ses
+     * yeux à partir de ses propres curseurs, ce qui est tout son intérêt. Sans ces
+     * quelques lignes, l'état « Invite » s'affichait ici comme deux yeux ordinaires — le
+     * seul état du répertoire que le banc ne savait pas montrer, donc le seul qu'on ne
+     * pouvait pas régler à l'endroit prévu pour ça.
+     */
+    const inv = vie.invite ?? 0;
+    let ecartRendu = oeil.ecart * taille * vie.ecart;
+    let elevationRendue = oeil.elevation * taille;
+    let large = largeurRendue;
+    let haut = ouverte + (fente - ouverte) * fermeture;
+
+    /**
+     * ⚠️ **L'inclinaison s'efface à mesure que l'œil se ferme, sinon il se ferme *de travers*.**
+     * La fermeture réduit la hauteur de l'œil, c'est-à-dire son **propre** axe — et cet axe est
+     * penché dès qu'une expression l'incline. Sur un visage en colère, incliné de 31°, l'œil
+     * clos restait un trait oblique de 21 × 14 unités au lieu de s'aplatir : mesuré, contre
+     * 24 × 3 pour un œil droit. À l'écran, cela se lit comme un œil qui se ferme sur les côtés.
+     *
+     * Une paupière tombe à l'horizontale, quelle que soit l'humeur. Ramener l'inclinaison à
+     * zéro au fur et à mesure suffit : l'œil ouvert garde son accent, l'œil clos redevient un
+     * trait droit, et le trajet entre les deux se lit comme une paupière qui descend.
+     */
+    let incl = oeil.inclinaison + inclinaison + vie.inclinaison;
+    incl *= 1 - fermeture;
+    let courbe = vie.courbure;
+    let plie = oeil.pliure + vie.pliure;
+    if (inv > 0) {
+      /* ⚠️ Les deux signes sont réduits d'autant — voir `TAILLE_INVITE`, partagé avec
+         `AvatarNovac` pour que les deux rendus ne divergent pas. */
+      const cible = cote < 0
+        ? { large: largeurRendue * TAILLE_INVITE, haut: ouverte * 0.88 * TAILLE_INVITE,
+            incl: 0, courbe: 0, plie: -0.95,
+            elev: elevationRendue, ecart: ecartRendu * ECART_INVITE.chevron }
+        : { large: ouverte * 0.62 * TAILLE_INVITE, haut: largeurRendue * TAILLE_INVITE,
+            incl: 0, courbe: 0, plie: 0,
+            elev: elevationRendue - ouverte * 0.28, ecart: ecartRendu * ECART_INVITE.barre };
+      const vers = (a: number, b: number) => a + (b - a) * inv;
+      large = vers(large, cible.large);
+      haut = vers(haut, cible.haut);
+      incl = vers(incl, cible.incl);
+      courbe = vers(courbe, cible.courbe);
+      plie = vers(plie, cible.plie);
+      elevationRendue = vers(elevationRendue, cible.elev);
+      ecartRendu = vers(ecartRendu, cible.ecart);
+    }
+
     return {
-      ecart: oeil.ecart * taille * vie.ecart,
-      elevation: oeil.elevation * taille,
-      largeur: largeurRendue,
-      hauteur: ouverte + (fente - ouverte) * fermeture,
+      ecart: ecartRendu,
+      elevation: elevationRendue,
+      largeur: large,
+      hauteur: haut,
       /**
        * ⚠️ **L'expression s'*ajoute* au réglage de l'œil, elle ne le remplace pas.**
        * Sans quoi choisir « fâché » effacerait un regard asymétrique qu'on vient de
        * composer, et les deux réglages se battraient — le symptôme classique des
        * valeurs qui prétendent commander la même chose.
        */
-      inclinaison: rad(oeil.inclinaison + inclinaison + vie.inclinaison),
-      courbure: vie.courbure,
+      inclinaison: rad(incl),
+      courbure: courbe,
+      pliure: plie,
       arrondi: oeil.forme === "capsule" ? 1 : oeil.arrondi,
     };
   }, [taille, inclinaison, vie]);
 
+  /**
+   * Quel chemin dessine l'œil — et le banc doit répondre **comme l'avatar**.
+   *
+   * ⚠️ **Une seule loi, celle du volume.** Le chemin à part des volumes à faces franches a
+   * été retiré : il posait l'œil à plat puis le **rétrécissait** près du bord, c'est-à-dire
+   * qu'il corrigeait la géométrie par un facteur. `cheminOeil` résout chaque point sur le
+   * volume ; le triangle garde son cône, qui est une surface, pas un coefficient. La bascule
+   * « vraie 3D » reste un outil d'exploration : elle fait tourner le solide pour de bon.
+   *
+   * ⚠️ **Recopié ici parce que le banc a sa propre copie du rendu.** Tout changement d'avatar
+   * doit être fait aux deux endroits, sans quoi le banc cesse de montrer ce qu'on obtiendra.
+   */
+  const tracerOeil = useCallback(
+    (reglages: ReglagesOeil, cote: -1 | 1) => {
+      /* En « vraie 3D » le solide tourne pour de bon : c'est l'autre question, et elle garde
+         son chemin. Partout ailleurs, une seule loi — l'œil marche sur la surface. */
+      if (vraie3D) return cheminOeilSolide(reglages, orientation, cote, RAYON_TETE, 220, solideTete);
+      return cheminOeilSurface(reglages, orientation, cote, RAYON_TETE, 220, solideTete);
+    },
+    [vraie3D, orientation, solideTete]);
+
   const oeilGauche = useMemo(
-    () => (vraie3D ? cheminOeilSolide : cheminOeil)(
-      reglagesOeil(yeux.gauche, vie.fermetureGauche), orientation, -1,
-      RAYON_TETE, 220, solideTete),
-    [reglagesOeil, yeux.gauche, vie.fermetureGauche, orientation, solideTete, vraie3D]);
+    () => tracerOeil(reglagesOeil(yeux.gauche, vie.fermetureGauche, -1), -1),
+    [tracerOeil, reglagesOeil, yeux.gauche, vie.fermetureGauche]);
   const oeilDroit = useMemo(
-    () => (vraie3D ? cheminOeilSolide : cheminOeil)(
-      reglagesOeil(yeux.droit, vie.fermetureDroite), orientation, 1,
-      RAYON_TETE, 220, solideTete),
-    [reglagesOeil, yeux.droit, vie.fermetureDroite, orientation, solideTete, vraie3D]);
+    () => tracerOeil(reglagesOeil(yeux.droit, vie.fermetureDroite, 1), 1),
+    [tracerOeil, reglagesOeil, yeux.droit, vie.fermetureDroite]);
+
+  /**
+   * Les éclats de l'émerveillement — recopiés d'`AvatarNovac`, comme le glyphe d'invite.
+   *
+   * ⚠️ Le banc compose ses yeux à partir de ses propres curseurs, il ne partage pas le
+   * chemin de rendu de l'avatar : sans ces lignes, « Émerveillé » s'y afficherait avec des
+   * yeux vides, et c'est justement ici qu'on veut en régler la taille.
+   */
+  const eclats = useMemo(() => {
+    const m = vie.emerveille ?? 0;
+    if (m <= 0.01) return null;
+    const oeil = yeux.gauche;
+    const large = oeil.largeur * taille * vie.largeur;
+    const haut = oeil.hauteur * taille * vie.hauteur;
+    const petit = Math.min(large, haut);
+    const reglages = {
+      ecart: oeil.ecart * taille * vie.ecart,
+      elevation: oeil.elevation * taille,
+      inclinaison: rad(oeil.inclinaison + inclinaison + vie.inclinaison),
+    };
+    /**
+     * ⚠️ **L'éclat est droit, pointes aux quatre axes — et c'est ce qui dégage la bulle.**
+     * Tourné de trente-six degrés, il envoyait une de ses pointes **exactement** vers elle :
+     * les deux se touchaient, et les éloigner l'un de l'autre n'aurait fait que repousser
+     * le contact plus loin dans l'œil. Droit, ses creux tombent sur les diagonales, et la
+     * bulle se loge dans celui du bas à droite — la géométrie fait la place au lieu qu'on
+     * l'obtienne à la marge près.
+     */
+    const eclat = decaler(contourEclat(petit * 0.168 * m, 72, 0),
+      -large * 0.095, haut * 0.10);
+    const bulle = decaler(contourBulle(petit * 0.05 * m, 36), large * 0.165, -haut * 0.14);
+    /* ⚠️ Pré-inversé à gauche : le miroir de `cheminDansOeil` le remet à l'endroit, et
+       les deux yeux portent le même motif au lieu de loucher. Voir `AvatarNovac`. */
+    const pour = (cote: -1 | 1) => {
+      const droit = (c: { x: number; y: number }[]) =>
+        (cote === -1 ? c.map(q => ({ x: -q.x, y: q.y })) : c);
+      return [
+        cheminDansOeil(droit(eclat), reglages, orientation, cote, RAYON_TETE, solideTete),
+        cheminDansOeil(droit(bulle), reglages, orientation, cote, RAYON_TETE, solideTete),
+      ].join(" ");
+    };
+    return { gauche: pour(-1), droit: pour(1) };
+  }, [vie, yeux.gauche, taille, inclinaison, orientation, solideTete]);
 
   /**
    * Écrit un réglage sur l'œil courant, ou sur les deux si le lien tient.
@@ -852,12 +1003,20 @@ export default function AvatarProceduralPage() {
                 * flotteraient à l'intérieur du disque et se liraient comme des taches
                 * posées dessus, jamais comme un globe.
                 */}
+              {/* ⚠️ **La silhouette est déclarée hors de toute condition.** Le regard s'y
+                  détoure désormais toujours ; laissée sous « le skin a des aplats ou
+                  rayonne », elle n'existait pas sur un avatar nu — et le groupe des yeux
+                  pointait alors vers une `clipPath` absente, que le navigateur ignore en
+                  silence. Le détourage était donc écrit, présent dans le DOM, et sans
+                  effet : le pire des trois cas, puisqu'il se lit comme fait. */}
+              <defs>
+                <clipPath id="av-tete">
+                  <path d={contourTete} />
+                </clipPath>
+              </defs>
               {(aplats.length > 0 || yeuxDuSkin?.lueur) && (
                 <>
                   <defs>
-                    <clipPath id="av-tete">
-                      <path d={contourTete} />
-                    </clipPath>
                     {/**
                       * ⚠️ **Le banc doit monter les mêmes `<defs>` que le composant, parce
                       * qu'il a sa propre copie du rendu.** Il n'emploie pas `AvatarNovac` —
@@ -904,7 +1063,18 @@ export default function AvatarProceduralPage() {
                 * la grille s'épaissit avec la fenêtre et finit par manger la sphère.
                 */}
               {maillage && (
+                /**
+                 * ⚠️ **Le maillage est détouré par la tête, et ce détourage dit une vérité
+                 * gênante.** Le contour tracé est la **section équatoriale** du volume, pas
+                 * sa silhouette : ce qui est peint sur la surface peut donc se projeter
+                 * au-delà. Sur une sphère les deux coïncident, sur les anciennes formes elles
+                 * étaient proches — depuis que l'hexagone est un vrai cube vu par le coin,
+                 * elles s'écartent franchement et le maillage débordait de partout. Le
+                 * détourage règle l'affichage ; la cause, elle, est dans la loi du contour, et
+                 * la corriger reviendrait à dessiner la vraie silhouette des huit volumes.
+                 */
                 <g fill="none" strokeLinecap="round" strokeLinejoin="round"
+                  clipPath="url(#av-tete)"
                   vectorEffect="non-scaling-stroke" pointerEvents="none">
                   <path d={maillage.derriere} stroke="rgba(255,255,255,0.13)" strokeWidth={1} />
                   <path d={maillage.equateur.derriere} stroke="rgba(255,255,255,0.22)" strokeWidth={1.4} />
@@ -970,8 +1140,11 @@ export default function AvatarProceduralPage() {
                 * et en trahirait le contour ; et sur un appareil, un œil qui glisse hors de
                 * sa vitre doit passer *derrière* le cadre, pas se poser dessus.
                 */}
-              <g clipPath={yeuxDuSkin?.decoupe ? `url(#${yeuxDuSkin.decoupe})`
-                : (yeuxDuSkin?.lueur ? "url(#av-tete)" : undefined)}
+              {/* ⚠️ La silhouette borne **toujours** le regard, région nommée ou pas. Les yeux
+                  sont découpés à l'horizon de la *sphère* alors que la silhouette d'un cube
+                  est décidée par des points hors de ce plan : dès que la tête tourne, un œil
+                  proche du bord sort du volume. Voir `AvatarNovac`. */}
+              <g clipPath={yeuxDuSkin?.decoupe ? `url(#${yeuxDuSkin.decoupe})` : "url(#av-tete)"}
                 className={yeuxDuSkin?.classe}>
                 {yeuxDuSkin?.lueur && HALO.map(([largeur, opacite], i) => (
                   <g key={i} fill="none" stroke={yeuxDuSkin.lueur!.couleur}
@@ -983,6 +1156,22 @@ export default function AvatarProceduralPage() {
                 ))}
                 <path d={oeilGauche} fill={couleurYeuxFinale} />
                 <path d={oeilDroit} fill={couleurYeuxFinale} />
+                {/* Des trous dans l'œil, peints dans la couleur de la tête, et détourés
+                    par l'œil lui-même : reprojetés sur le volume, ils déborderaient sinon. */}
+                {eclats && (
+                  <>
+                    <defs>
+                      <clipPath id="av-oeil-g"><path d={oeilGauche} /></clipPath>
+                      <clipPath id="av-oeil-d"><path d={oeilDroit} /></clipPath>
+                    </defs>
+                    <g clipPath="url(#av-oeil-g)">
+                      <path d={eclats.gauche} fill={palette.tete} />
+                    </g>
+                    <g clipPath="url(#av-oeil-d)">
+                      <path d={eclats.droit} fill={palette.tete} />
+                    </g>
+                  </>
+                )}
               </g>
               {/* Ce qui se peint **sur** la vitre, donc après le regard. Voir
                   `MotifPlat.devant`. */}
@@ -1561,6 +1750,13 @@ export default function AvatarProceduralPage() {
               <Curseur libelle="Inclinaison propre" valeur={oeilCourant.inclinaison}
                 affichage={`${oeilCourant.inclinaison > 0 ? "+" : ""}${oeilCourant.inclinaison.toFixed(0)}°`}
                 min={-40} max={40} pas={1} onChange={v => reglerOeil("inclinaison", v)} />
+              {/* ⚠️ Le pli casse le milieu de l'œil en un angle — c'est ce qui en fait un
+                  chevron, et c'est de lui que sort le `>` de l'invite de commande. Il
+                  s'ajoute à celui de la mimique en cours plutôt que de l'écraser, comme
+                  l'inclinaison juste au-dessus. Négatif, il plie dans l'autre sens. */}
+              <Curseur libelle="Pliure de l’œil" valeur={oeilCourant.pliure}
+                affichage={oeilCourant.pliure === 0 ? "droit" : oeilCourant.pliure.toFixed(2)}
+                min={-1} max={1} pas={0.05} onChange={v => reglerOeil("pliure", v)} />
             </div>
 
             <div style={{ display: "flex", gap: 10, marginTop: 14 }}>

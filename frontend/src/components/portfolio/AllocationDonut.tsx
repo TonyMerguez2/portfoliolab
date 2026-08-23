@@ -84,7 +84,7 @@ export default function AllocationDonut({
      * portefeuille ; il regarde ce qu'on regarde. La frontière est celle qu'on tient partout :
      * le visage peut réagir à des chiffres, la parole non.
      */
-    <div data-avatar="observation"
+    <div data-avatar="curieux"
       style={{ display: "flex", flexDirection: "column", gap: 10, minHeight: 0 }}>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
         <span style={{ display: "flex", alignItems: "center", gap: 5, fontFamily: FONT, fontSize: 12.5, fontWeight: 600, color: CLAIR.texte }}>

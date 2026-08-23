@@ -48,7 +48,7 @@ export const cleSkin = (id: string | number) => `novac-avatar-skin:${id}`;
  * est la seule forme où les deux tiennent en place à la fois.
  */
 export const FORMES_AVATAR = [
-  "sphere", "carre", "coussin", "hexagone",
+  "sphere", "carre", "nuage", "hexagone",
   "triangle", "etoile", "etoile6", "goutte",
 ] as const;
 export type FormeAvatar = (typeof FORMES_AVATAR)[number];
@@ -69,6 +69,14 @@ const REMPLACEMENTS: Record<string, FormeAvatar> = {
   carre3d: "carre",
   galet: "sphere",
   fossettes: "sphere",
+  /**
+   * ⚠️ **Le coussin cède sa place au nuage, et les réglages posés suivent.** Le volume de
+   * la capsule n'est pas supprimé pour autant — le banc `/avatar` le propose encore et
+   * plusieurs essais s'appuient dessus ; il n'est simplement plus offert au portefeuille.
+   * Sans cette ligne, un portefeuille réglé sur le coussin serait retombé à la sphère,
+   * c'est-à-dire à la forme la plus éloignée de celle qu'il avait choisie.
+   */
+  coussin: "nuage",
 };
 
 /**

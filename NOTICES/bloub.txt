@@ -1,0 +1,28 @@
+Silhouette du nuage — bloub
+https://github.com/jeremy-prt/bloub
+
+Licence MIT, © 2026 Jérémy Perret. Texte intégral dans bloub-licence-mit.txt.
+
+Ce qui est repris : la disposition des cinq disques du nuage de son
+personnalisateur — trois gros qui portent la masse, deux plus petits qui font
+les lobes. Elle vit dans BOULES_NUAGE, frontend/src/lib/avatarVolume.ts.
+
+Ce qui ne l'est pas : rien d'autre. Le code amont travaille en profil radial
+plat r(theta) échantillonné sur soixante-quatre angles ; l'avatar de Novac a
+besoin d'un volume, puisque les yeux s'ancrent dessus et que l'habillage s'y
+détoure. Les disques sont donc devenus des boules, et le rayon dans une
+direction est la plus lointaine des intersections avec elles — l'union, exacte
+tant que l'origine est dedans. Les ordonnées sont retournées : bloub dessine
+dans le repère de l'écran, Novac suit la convention mathématique.
+
+Le nuage remplace le coussin dans les silhouettes proposées au portefeuille.
+La capsule du coussin n'est pas supprimée pour autant : le banc /avatar la
+propose encore et plusieurs essais s'appuient dessus. Un portefeuille déjà
+réglé sur le coussin est repris vers le nuage, par la table REMPLACEMENTS de
+frontend/src/lib/useCouleurAvatar.ts.
+
+Un portage plus large a existé le temps d'une comparaison — profils radiaux,
+mélange par interpolation des rayons, tracé posé directement dans le DOM — pour
+mesurer la fluidité des deux morphoses l'une contre l'autre. Verdict : à
+égalité en production, et Novac tient mieux sur processeur bridé. Le banc a
+donc été retiré ; seule la forme est restée.

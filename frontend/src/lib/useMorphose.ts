@@ -26,13 +26,35 @@ import { useEffect, useState } from "react";
 export const DUREE_MORPHOSE = 420;
 
 /**
- * L'adoucissement — une courbe en `S`.
+ * L'adoucissement — un départ franc, une arrivée qui se pose.
  *
  * ⚠️ **Il porte sur le mélange des volumes, pas sur une opacité.** La part avance
- * linéairement dans le temps ; la courbe la ralentit au départ et à l'arrivée, ce qui donne
- * à la forme le poids d'un objet qui se déforme plutôt que d'un réglage qu'on pousse.
+ * linéairement dans le temps ; la courbe décide de ce qu'on en voit à chaque instant.
+ *
+ * ⚠️ **Ce fut une courbe en `S` — `u²(3−2u)` —, et c'est ce qu'on prenait pour une
+ * saccade.** Une courbe en S est symétrique : elle démarre aussi lentement qu'elle finit.
+ * Relevé sur la page, en production, à 60 images par seconde sans une seule image perdue,
+ * l'avancement visuel du contour donnait `0 · 1 · 3 · 6 · 9 · 12 %` — les cinq premières
+ * images ne bougeaient que de six pour cent. Rien ne sautait, mais rien ne *commençait*
+ * non plus : l'œil lisait un temps mort, puis un mouvement. C'est ce temps mort qu'on
+ * décrivait comme « haché », et aucune optimisation ne pouvait le corriger puisqu'il
+ * n'était pas un défaut de fluidité.
+ *
+ * Ce que les deux donnent, en part du mouvement accomplie :
+ *
+ * |  temps  |  courbe en S  |  celle-ci  |
+ * |---------|---------------|------------|
+ * |   10 %  |     2,8 %     |    41 %    |
+ * |   30 %  |    21,6 %     |    83 %    |
+ * |   50 %  |    50 %       |    97 %    |
+ *
+ * ⚠️ **Le geste part avec le clic et se pose ensuite**, ce qui est la règle pour tout ce
+ * qui répond à une action : l'utilisateur doit voir sa demande prise en compte à la
+ * première image, pas à la dixième. La lenteur se paie à l'arrivée, où elle ne coûte
+ * aucune impression de latence — elle donne au contraire le poids de la matière que la
+ * courbe en S cherchait, mais au bon bout de l'animation.
  */
-export const adoucir = (u: number) => u * u * (3 - 2 * u);
+export const adoucir = (u: number) => 1 - (1 - u) ** 5;
 
 export type Morphose<T> = { de: T; part: number };
 

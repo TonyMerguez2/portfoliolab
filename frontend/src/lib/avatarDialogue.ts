@@ -127,7 +127,7 @@ export const PLACE_COMPACTE = 104;
  * il se tait.
  */
 const MARQUANTS = new Set([
-  "somnolent", "reveil", "succes", "erreur", "surpris",
+  "somnolent", "reveil", "erreur",
 ]);
 
 /** Le personnage a-t-il quelque chose à dire, ailleurs que sur le banc ? */
@@ -302,19 +302,9 @@ const PAROLES: Record<string, (nom: string) => Parole> = {
   somnolent: () => ({ genre: "envol", morceaux: DODO }),
   reveil: () => ({ genre: "pose", morceaux: [appui("Hm ?")] }),
   curieux: () => ({ genre: "pose", morceaux: [appui("Tiens"), traine("…")] }),
-  focus: regarde,
-  observation: regarde,
-  reflexion: () => ({ genre: "pose", morceaux: [amorce("Voyons"), { ...appui("voir"), saut: true }] }),
-  content: salut,
   "tres-content": salut,
-  surpris: () => ({ genre: "pose", eclat: true, morceaux: [appui("Oh !", 1.6)] }),
   sceptique: () => ({ genre: "pose", morceaux: [appui("Hmm"), traine("…")] }),
-  preoccupe: () => ({ genre: "pose", morceaux: [appui("Hmm"), traine("…")] }),
   erreur: () => ({ genre: "pose", morceaux: [appui("Aïe"), traine(".")] }),
-  succes: () => ({
-    genre: "pose", eclat: true,
-    morceaux: [amorce("C'est"), { ...appui("fait !"), saut: true }],
-  }),
 };
 
 /**

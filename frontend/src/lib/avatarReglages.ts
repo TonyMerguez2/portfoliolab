@@ -32,6 +32,37 @@ export const OEIL_REFERENCE = {
 export const TAILLE_REFERENCE = 1.23;
 
 /**
+ * Ce dont le glyphe d'invite est réduit par rapport aux yeux qu'il remplace.
+ *
+ * ⚠️ **Partagé par les deux rendus, parce qu'ils dessinent ce glyphe chacun de leur côté.**
+ * `AvatarNovac` et le banc `/avatar` ont chacun leur copie du tracé : une valeur écrite deux
+ * fois y dériverait au premier réglage. Ici elle est écrite une seule.
+ *
+ * ⚠️ **Le chevron et la barre le reçoivent tous les deux, sur leurs deux dimensions.** Ne
+ * réduire qu'une grandeur déformerait le signe au lieu de le rapetisser — le chevron
+ * s'affinerait, la barre s'allongerait. Leur écartement, lui, ne bouge pas : c'est ce qui
+ * garde au glyphe sa composition, un `>` puis un `_` à leur place.
+ */
+export const TAILLE_INVITE = 0.88;
+
+/**
+ * Où le chevron et la barre du glyphe d'invite se posent, en multiples de l'écart des yeux.
+ *
+ * ⚠️ **Les deux chiffres tiennent ensemble une seule intention : le signe se lit comme un
+ * mot, pas comme deux yeux.** La pointe du chevron doit finir exactement là où la barre
+ * commence — c'est la jointure qui fait lire `>_` d'un seul tenant. Relevé : à 1,73 et 1,42,
+ * les deux signes étaient séparés de 17 unités de vide, et le glyphe se lisait comme deux
+ * yeux dépareillés. À **1,44 et 0,90**, la pointe finit à −2 et la barre part de −2 : ils se
+ * touchent, au dixième d'unité près.
+ *
+ * ⚠️ **Le second chiffre ne se règle pas sans le premier.** Rapprocher un seul des deux
+ * signes referme bien la jointure, mais déporte le glyphe entier d'un côté du visage. Ce
+ * couple-là ferme la jointure *et* laisse le signe centré — 0,3 unité de décentrage sur
+ * quatre-vingts de large. Toute retouche doit refaire les deux.
+ */
+export const ECART_INVITE = { chevron: 1.44, barre: 0.9 };
+
+/**
  * L'arrondi de la silhouette, du plus rond au plus marqué.
  *
  * ⚠️ **Le même pour toutes les familles.** Chacune l'interprète à sa façon — exposant

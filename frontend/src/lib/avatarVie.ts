@@ -1,5 +1,6 @@
 import {
   ETATS, GESTES_SPONTANES, type Etat, type Pose, POSE_NEUTRE, etatParCle, poseDeLEtat,
+  superposerPose,
 } from "./avatarEtats";
 
 /**
@@ -43,8 +44,14 @@ export type EtatVie = {
   ecart: number;
   /** Cambrure de l'œil, pour les mimiques arquées. */
   courbure: number;
+  /** Ce que la cambrure devient : 0 un arc, 1 un pli franc — voir `Pose.pliure`. */
+  pliure: number;
   /** Inclinaison ajoutée aux capsules, en degrés. */
   inclinaison: number;
+  /** Passage vers le glyphe d'invite de commande — voir `Pose.invite`. */
+  invite: number;
+  /** Éclat et bulle peints dans l'œil — voir `Pose.emerveille`. */
+  emerveille: number;
   /** Échelle de la tête — squash, rebond, recul. */
   echelleX: number;
   echelleY: number;
@@ -68,7 +75,7 @@ export type ReglagesVie = {
 export const VIE_AU_REPOS: EtatVie = {
   fermetureGauche: 0, fermetureDroite: 0,
   lacet: 0, tangage: 0, roulis: 0,
-  largeur: 1, hauteur: 1, ecart: 1, courbure: 0, inclinaison: 0,
+  largeur: 1, hauteur: 1, ecart: 1, courbure: 0, pliure: 0, inclinaison: 0, invite: 0, emerveille: 0,
   echelleX: 1, echelleY: 1, suivi: 1,
 };
 
@@ -88,8 +95,8 @@ const REBOND = 190;
 const AMORTI = 210;
 
 const CLES_POSE: (keyof Pose)[] = [
-  "largeur", "hauteur", "ecart", "courbure", "inclinaison",
-  "lacet", "tangage", "roulis", "fermeture", "asymetrie",
+  "largeur", "hauteur", "ecart", "courbure", "pliure", "inclinaison",
+  "lacet", "tangage", "roulis", "fermeture", "asymetrie", "invite", "emerveille",
   "echelleX", "echelleY", "derive", "suivi",
 ];
 
@@ -111,6 +118,21 @@ export function creerVie(alea: () => number = Math.random): Vie {
   let etatFond: Etat = ETATS[0];
   let ponctuel: Etat | null = null;
   let debutEtat = 0;
+  /**
+   * Le nombre tiré à l'entrée dans l'état, constant jusqu'au suivant.
+   *
+   * ⚠️ **Tiré ici et non dans l'état lui-même.** `anime` est rappelée à chaque image : un
+   * tirage à l'intérieur donnerait un nombre neuf soixante fois par seconde, et le choix
+   * qu'il porte — de quel côté l'avatar s'endort — sauterait au lieu de se poser. Il est
+   * donc pris **au même endroit que `debutEtat`**, c'est-à-dire aux trois seuls instants où
+   * l'état change : la demande, l'expiration d'un ponctuel, le départ d'un geste spontané.
+   *
+   * ⚠️ Il passe par `alea`, l'aléa injecté, et non par `Math.random` : les essais qui
+   * simulent des minutes de vie doivent rendre le même résultat à chaque exécution.
+   */
+  let tirageEtat = alea();
+  /** Le ponctuel en cours est-il un geste que le visage s'est donné tout seul ? */
+  let gesteSpontane = false;
   /** La pose réellement rendue : elle rejoint la pose visée en amortissant. */
   let pose: Pose = { ...POSE_NEUTRE };
   let precedent = -1;
@@ -129,6 +151,8 @@ export function creerVie(alea: () => number = Math.random): Vie {
     demander: (cle, t) => {
       const etat = etatParCle(cle);
       debutEtat = t;
+      tirageEtat = alea();
+      gesteSpontane = false;
       if (etat.nature === "ponctuel") ponctuel = etat;
       else { etatFond = etat; ponctuel = null; }
     },
@@ -141,7 +165,9 @@ export function creerVie(alea: () => number = Math.random): Vie {
       // ── L'état, et son éventuelle expiration ──────────────────────────────
       if (ponctuel && t - debutEtat >= (ponctuel.duree ?? 1000)) {
         ponctuel = null;
+        gesteSpontane = false;
         debutEtat = t;
+        tirageEtat = alea();
       }
 
       /**
@@ -163,7 +189,9 @@ export function creerVie(alea: () => number = Math.random): Vie {
       else if (!ponctuel && t >= prochainGeste) {
         ponctuel = GESTES_SPONTANES[Math.floor(alea() * GESTES_SPONTANES.length)]
           ?? GESTES_SPONTANES[0];
+        gesteSpontane = true;
         debutEtat = t;
+        tirageEtat = alea();
         prochainGeste = attendreGeste();
       }
       const etat = actif();
@@ -175,7 +203,16 @@ export function creerVie(alea: () => number = Math.random): Vie {
        * mouvement deux fois plus lent sur un écran à 120 Hz que sur un écran à 60, un
        * défaut qu'on ne voit jamais sur sa propre machine.
        */
-      const visee = poseDeLEtat(etat);
+      /**
+       * ⚠️ **Un geste spontané se **superpose** au fond, il ne s'y substitue pas.** Voir
+       * `superposerPose` : jusqu'ici la pose du geste remplaçait celle de l'état, si bien
+       * qu'un simple coup d'œil — dont la pose est vide — ramenait le visage au repos.
+       * Un ponctuel *demandé par l'application*, lui, remplace bien : une erreur doit
+       * s'imposer, pas se mêler à ce qu'elle interrompt.
+       */
+      const visee = gesteSpontane && ponctuel
+        ? superposerPose(poseDeLEtat(etatFond, tirageEtat), poseDeLEtat(ponctuel, tirageEtat))
+        : poseDeLEtat(etat, tirageEtat);
       const part = 1 - Math.exp(-dt / (etat.amorti ?? AMORTI));
       const suivante = { ...pose };
       for (const cle of CLES_POSE) {
@@ -188,7 +225,7 @@ export function creerVie(alea: () => number = Math.random): Vie {
       // rattrapé et lissé jusqu'à disparaître.
       const rendu: Pose = { ...pose };
       if (etat.anime) {
-        const ajout = etat.anime(ecoule);
+        const ajout = etat.anime(ecoule, tirageEtat);
         for (const cle of CLES_POSE) {
           const v = ajout[cle];
           if (v === undefined) continue;
@@ -209,11 +246,20 @@ export function creerVie(alea: () => number = Math.random): Vie {
       }
 
       // ── Le clignement, superposé à l'état ─────────────────────────────────
+      /**
+       * ⚠️ **Zéro veut dire « jamais », et il fallait l'écrire.** Le multiplicateur entrait
+       * tel quel dans la cadence : à zéro, l'attente devenait nulle et l'échéance du
+       * prochain clin toujours dépassée — l'œil reclignait **à chaque image**, soit
+       * l'exact opposé de ce que le répertoire voulait dire. Le défaut est resté invisible
+       * tant qu'aucun état ne demandait zéro ; l'invite de commande, qui doit garder l'œil
+       * parfaitement fixe, l'a révélé du premier coup.
+       */
+      const sansClin = etat.clignement === 0;
       const cadence = reglages.cadenceClignement * 1000 * (etat.clignement ?? 1);
-      const attendre = () => t + cadence * (0.6 + alea() * 0.85);
+      const attendre = () => t + Math.max(1, cadence) * (0.6 + alea() * 0.85);
       if (prochainClin < 0) prochainClin = attendre();
       let clin = 0;
-      if (!reglages.clignement) {
+      if (!reglages.clignement || sansClin) {
         debutClin = null;
         prochainClin = attendre();
       } else if (debutClin === null) {
@@ -253,7 +299,10 @@ export function creerVie(alea: () => number = Math.random): Vie {
         hauteur: rendu.hauteur,
         ecart: rendu.ecart,
         courbure: rendu.courbure,
+        pliure: rendu.pliure,
         inclinaison: rendu.inclinaison,
+        invite: rendu.invite,
+        emerveille: rendu.emerveille,
         echelleX: rendu.echelleX,
         echelleY: rendu.echelleY,
         suivi: rendu.suivi,

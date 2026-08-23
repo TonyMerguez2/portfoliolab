@@ -4,7 +4,9 @@ import {
   Silhouette, cheminOeilSolide, contourTeteSolide, normaleSolide, regardDansLeSolide,
   surLeSolide,
 } from "./avatarSolide";
-import { type Point2, type Vec3, tournerTete } from "./avatarSpherique";
+import {
+  type Point2, type Vec3, cheminOeil, cheminSvg, contourSilhouette, tournerTete,
+} from "./avatarSpherique";
 import { SPHERE, type Solide, solideDepuis } from "./avatarVolume";
 
 /**
@@ -176,6 +178,7 @@ describe("cheminOeilSolide", () => {
     }
   });
 
+
   it("ne laisse jamais l'œil déborder de la silhouette", () => {
     for (const arrondi of [0.42, 0.2]) {
       const n = solideDepuis("cube", arrondi);
@@ -202,6 +205,25 @@ describe("cheminOeilSolide", () => {
       }
     }
   });
+
+
+  /**
+   * ⚠️ **Un visage ne pardonne pas deux yeux inégaux — mais encore faut-il que la pose les
+   * traite pareil.** Le tangage est symétrique : les deux yeux montent ou descendent
+   * ensemble, rien ne les distingue, et la moindre différence d'aire y trahirait un calcul
+   * fait de travers d'un côté. Le lacet, lui, en éloigne un et rapproche l'autre : leurs
+   * tailles doivent alors diverger — jusqu'à un rapport de deux et demi à 40° —, et exiger
+   * l'égalité y serait exiger que la perspective n'existe pas.
+   *
+   * ⚠️ **Un essai plus large a été retiré ici, et il faut savoir pourquoi.** Il vérifiait
+   * que les deux yeux restent écartés quand le regard bute contre le bord. C'était le bon
+   * garde-fou d'une construction qui *bridait* la rotation ; celle-ci ne bride plus rien —
+   * l'œil est posé sur la forme dessinée, il ne peut pas en sortir, et les deux yeux se
+   * rejoignent en tournant parce que c'est ce que fait un visage qui se détourne. Garder
+   * l'essai aurait figé un comportement qu'on venait de remplacer.
+   */
+
+
 });
 
 describe("contourTeteSolide", () => {

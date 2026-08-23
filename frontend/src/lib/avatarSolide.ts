@@ -41,6 +41,10 @@ export { normaleSolide, surLeSolide };
 
 const TAU = Math.PI * 2;
 
+/** L'orientation de repos : le volume vu de face, tel que la silhouette fixe le montre. */
+const REPOS: Orientation = { lacet: 0, tangage: 0, roulis: 0 };
+
+
 /**
  * Sur combien de méridiens le bord est cherché.
  *
@@ -380,15 +384,21 @@ function rendre(
   return bouts.join(" ");
 }
 
-/** Le `d` d'un œil posé sur le solide qui tourne. */
+/**
+ * Le `d` d'un œil posé sur le solide qui tourne.
+ *
+ */
 export function cheminOeilSolide(
   reglages: ReglagesOeil, orientation: Orientation, cote: -1 | 1,
   rayon: number = RAYON_TETE, echantillons: number = 220, solide: Solide = SPHERE,
 ): string {
   const ancrage = ancrageOeil((cote * reglages.ecart) / rayon, reglages.elevation / rayon);
   const cos = Math.cos(reglages.inclinaison), sin = Math.sin(reglages.inclinaison);
+  /* La pliure passe aussi : sans elle le chevron de l'invite de commande resterait droit
+     dans ce mode, et l'expression n'y existerait qu'à moitié. */
   const contour = contourArrondi(
-    reglages.largeur, reglages.hauteur, reglages.arrondi ?? 1, echantillons, reglages.courbure ?? 0);
+    reglages.largeur, reglages.hauteur, reglages.arrondi ?? 1, echantillons,
+    reglages.courbure ?? 0, reglages.pliure ?? 0);
   /**
    * ⚠️ **Aucune compensation ici, et c'est tout l'intérêt du mode.** Dans l'autre, l'œil
    * doit être rétréci d'avance de ce que le gonflement va lui rendre. Ici le gonflement
@@ -463,4 +473,29 @@ export function traitSurLeSolide(
   if (morceau.length >= 2) (cote ? devant : derriere).push(morceau);
   const ecrire = (l: Point2[][]) => l.map(cheminOuvert).filter(Boolean).join(" ");
   return { devant: ecrire(devant), derriere: ecrire(derriere) };
+}
+
+
+/**
+ * Découpe un contour posé sur le volume au bord de ce qui se voit, et le trace.
+ *
+ * ⚠️ **Exporté parce qu'un second module en a besoin, et qu'un second découpage serait un
+ * second défaut.** `avatarSurface` promène l'œil sur la surface ; il doit retrancher ce qui a
+ * tourné le dos exactement comme ici — sens du parcours déduit de l'aire, arc de fermeture
+ * borné au demi-tour. Écrit une deuxième fois à la main, il enfermait une aire deux fois trop
+ * grande dès que l'œil se coupait à deux endroits.
+ *
+ * ⚠️ **Le bord passé est celui qu'on *dessine*.** Sur un volume convexe, la normale bascule
+ * là où passe la section équatoriale, qui est précisément le contour tracé : les deux
+ * coïncident, et refermer dessus ne peut pas déborder.
+ */
+export function couperEtTracer(
+  sommets: { solide: Vec3; sphere: Vec3; vu: boolean }[],
+  silhouette: { angle(p: Vec3): number; point(t: number): Vec3 },
+  versEcran: (p: Vec3) => Point2,
+): string {
+  return couper(sommets, silhouette as unknown as Silhouette, REPOS, 0.06)
+    .map(m => cheminSvg(m.map(versEcran)))
+    .filter(Boolean)
+    .join(" ");
 }

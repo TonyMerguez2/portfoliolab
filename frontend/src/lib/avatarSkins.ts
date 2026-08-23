@@ -673,6 +673,19 @@ const matiere = (hex: string, clarte: number, saturation: number): string => {
   return rvbVersHex(tslVersRvb([teinte, Math.min(saturation, source * 4), clarte]));
 };
 
+/**
+ * Avive une teinte : plus saturée, à clarté inchangée.
+ *
+ * ⚠️ **La saturation seule, et surtout pas la clarté.** Un halo de néon doit être *coloré*,
+ * pas *clair* : l'éclaircir le tirerait vers le blanc, or c'est déjà ce que fait le cœur du
+ * trait, et les deux finiraient par se confondre. C'est l'écart entre un cœur presque blanc
+ * et un halo franchement teinté qui fait lire un tube au néon plutôt qu'une braise.
+ */
+const aviver = (hex: string, delta: number): string => {
+  const [teinte, saturation, clarte] = rvbVersTsl(hexVersRvb(hex));
+  return rvbVersHex(tslVersRvb([teinte, Math.min(1, saturation + delta), clarte]));
+};
+
 const TERMINAL: Skin = {
   cle: "terminal",
   libelle: "Terminal",
@@ -1462,17 +1475,27 @@ const CHEVALIER: Skin = {
     },
   ],
   /**
-   * ⚠️ **Une braise, pas une diode ni un phosphore.** Le halo est plus large que celui du
-   * casque et plus chaud que celui du terminal : ce qui brille ici est censé être une
-   * lumière *derrière* l'acier, pas une source posée dessus. Leur géométrie n'est toujours
-   * pas touchée.
+   * ⚠️ **Un néon, et non plus une braise.** La différence tient en un point : un tube au
+   * néon a un **cœur presque blanc** entouré d'un halo saturé, alors qu'une braise est de
+   * la même teinte partout, simplement plus claire au centre. C'est ce contraste
+   * cœur/halo qui fait lire « gaz excité » plutôt que « métal chaud », et il se règle
+   * uniquement par les deux couleurs — la géométrie des yeux n'est toujours pas touchée.
+   *
+   * ⚠️ **Le cœur monte à 0,62 de clarté, pas à 1.** Un blanc pur aurait effacé la teinte et
+   * donné un regard laiteux, indistinct de celui de l'astronaute ; il faut que la couleur
+   * reste lisible dans le trait tout en paraissant surexposée. Le halo, lui, prend la teinte
+   * **saturée** — pas celle du heaume, qui est déjà tirée vers l'acier.
+   *
+   * ⚠️ **Le rayon reste à trois, et ce n'est pas un choix esthétique.** Le halo est peint en
+   * contours empilés, pas flouté : au-delà de trois unités, ses douze paliers cessent de se
+   * fondre et se lisent comme des anneaux concentriques. Un néon plus large demanderait un
+   * vrai filtre de flou, donc un coût de rendu par avatar, pour un gain que la fente de vue
+   * masquerait aux trois quarts.
    */
   yeux: p => ({
-    couleur: decalerClarte(p.tete, 0.16),
-    /* ⚠️ Rayon ramené de 4,2 à 3 : le halo est peint en contours empilés, pas flouté, et
-       au-delà de trois unités ses paliers se lisent comme des anneaux. */
-    lueur: { rayon: 3, couleur: p.tete },
-    classe: "novac-braise",
+    couleur: decalerClarte(p.tete, 0.62),
+    lueur: { rayon: 3, couleur: aviver(p.tete, 0.35) },
+    classe: "novac-neon",
     /* Le regard n'existe que dans la fente : ailleurs il n'y a que de l'acier. */
     decoupe: "fente",
   }),

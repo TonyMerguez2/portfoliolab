@@ -40,7 +40,7 @@ const NOM_FORME: Record<FormeAvatar, string> = {
   carre: "Carrée",
   etoile: "Étoile",
   etoile6: "Étoile à six lobes",
-  coussin: "Coussin",
+  nuage: "Nuage",
   hexagone: "Hexagone",
   triangle: "Triangle",
   goutte: "Goutte",
@@ -321,6 +321,7 @@ export default function AvatarPortefeuille({
               })}
             </div>
           </Reglage>
+
         </FenetreModale>
       )}
     </div>
