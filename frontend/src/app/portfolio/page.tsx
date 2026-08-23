@@ -21,13 +21,14 @@ import PerformanceChart from "@/components/portfolio/PerformanceChart";
 import AssetGrid from "@/components/portfolio/AssetGrid";
 import CarteCompte, { APERCUS_MAX, CARTE_COMPTE } from "@/components/portfolio/CarteCompte";
 import CarteActif from "@/components/portfolio/CarteActif";
+import PiluleAction from "@/components/portfolio/PiluleAction";
 import FilAriane from "@/components/portfolio/FilAriane";
 import RailHorizontal from "@/components/portfolio/RailHorizontal";
 import PortfolioTabs from "@/components/portfolio/PortfolioTabs";
 import { donutArcs } from "@/lib/donut";
 import { operationsDuDossier, repartirEnDossiers } from "@/lib/dossiers";
 import { jouerEtalement, releverLesCartes, type Positions } from "@/lib/etalement";
-import { assetClass, compteInfere, valoriser, type Enveloppe, type GridAsset } from "@/lib/portfolio";
+import { assetClass, compteInfere, valoriser, variationPonderee, type Enveloppe, type GridAsset } from "@/lib/portfolio";
 import { assetExchange } from "@/lib/assets";
 import RadarChart from "@/components/charts/RadarChart";
 import { enTetesAuth } from "@/lib/session";
@@ -533,6 +534,19 @@ function PortfolioPageInner() {
    * du jour au lendemain. Ce qui est déclaré s'affiche en plus, pas à la place.
    */
   const [comptesDeclares, setComptesDeclares] = useState<CompteDeclare[]>([]);
+  /**
+   * La **première** liste de comptes est-elle revenue — reçue ou refusée ?
+   *
+   * ⚠️ **La vue générale attend les comptes comme elle attend les cours.** Sans ce drapeau,
+   * l'écran s'ouvrait dès les cours arrivés et la rangée de dossiers se remplissait ensuite,
+   * sous les yeux : d'abord les dossiers *déduits* seuls, puis les déclarés qui s'y ajoutaient
+   * d'un coup. Deux états successifs pour un seul chargement, là où l'on n'en attend qu'un.
+   *
+   * ⚠️ **Il passe à vrai même en cas d'échec, et c'est vital.** Hors session la lecture est
+   * refusée — c'est le cas normal, l'écran retombe alors sur le rangement par déduction. Ne le
+   * lever qu'au succès aurait laissé « Chargement… » pour toujours à qui n'est pas connecté.
+   */
+  const [comptesCharges, setComptesCharges] = useState(false);
   const [genresCompte,    setGenresCompte]    = useState<GenreCompte[]>([]);
   const [formCompte,      setFormCompte]      = useState(false);
   /** Le compte en cours de correction, ou `null` quand on en déclare un nouveau. */
@@ -593,7 +607,10 @@ function PortfolioPageInner() {
     fetch(`${API_URL}/api/v1/portfolios`, { headers: enTetesAuth() })
       .then(r => r.json())
       .then((list: PortfolioData[]) => {
-        if (!Array.isArray(list) || !list.length) { setLoading(false); return; }
+        if (!Array.isArray(list) || !list.length) {
+          /* Aucun portefeuille : personne ne lira jamais de comptes, la porte doit s'ouvrir. */
+          setLoading(false); setComptesCharges(true); return;
+        }
         const target = idFromUrl
           ? list.find(p => p.id === idFromUrl)
           : activePortfolio
@@ -608,7 +625,7 @@ function PortfolioPageInner() {
         setActivePortfolio({ id: p.id as unknown as number, name: p.name, assets: p.assets, color: p.color });
         setMode("portfolio");
       })
-      .catch(() => setLoading(false));
+      .catch(() => { setLoading(false); setComptesCharges(true); });
   }, [searchParams]); // eslint-disable-line
 
   // Réagit aux changements de portefeuille depuis le GlobalHeader.
@@ -1010,8 +1027,21 @@ function PortfolioPageInner() {
       setSparkHistory({});
     }
 
+    /**
+     * ⚠️ **`depuis` va ici aussi, et pas seulement sur la série de fond.** Les deux
+     * appels lisent la même route, mais seul le voisin bornait ses tickers à leur date
+     * d'achat : celui-ci, qui rapporte le `change` des cartes, laissait « Max » remonter
+     * à la première cotation du titre. Relevé à l'écran, MSFT annonçait +815 926 % —
+     * l'historique de Microsoft depuis 1986, sous une carte qui parle d'une position
+     * ouverte cette année. Exactement le défaut que la borne avait été écrite pour
+     * corriger, réparé d'un seul côté.
+     *
+     * Les fenêtres courtes ne bougent pas : leur découpe est déjà plus serrée que la
+     * date d'achat, et le serveur ne coupe rien quand il ne resterait qu'un point.
+     */
     const fetchPrices = () =>
-      fetch(`${API_URL}/api/v1/prices?tickers=${encodeURIComponent(tickers)}&period=${PERIOD_MAP[period]}`)
+      fetch(`${API_URL}/api/v1/prices?tickers=${encodeURIComponent(tickers)}&period=${PERIOD_MAP[period]}`
+          + `&depuis=${encodeURIComponent(depuisParTicker)}`)
         .then(r => r.json())
         .then((list: PriceData[]) => {
           const map: Record<string, PriceData> = {};
@@ -1052,7 +1082,7 @@ function PortfolioPageInner() {
 
     const interval = setInterval(() => fetchPrices(), CADENCE_COURS_MS);
     return () => clearInterval(interval);
-  }, [tickersSuivis, period]);
+  }, [tickersSuivis, period, depuisParTicker]);
 
   /**
    * La série de fond des courbes de carte : depuis le premier achat, toujours.
@@ -1292,7 +1322,7 @@ function PortfolioPageInner() {
   );
 
   const [survolCourbe, setSurvolCourbe] =
-    useState<{ valeur: number; date: string; investi?: number; liquidites?: number } | null>(null);
+    useState<{ valeur: number; date: string; sommet?: boolean; investi?: number; liquidites?: number } | null>(null);
 
   /**
    * La valeur des seuls titres à la date survolée.
@@ -1376,7 +1406,10 @@ function PortfolioPageInner() {
     const pctSurvol = (titres - survolCourbe.investi) / survolCourbe.investi * 100;
     const pctActuel = prixDeRevient != null && prixDeRevient > 0 && valeurTitres != null
       ? (valeurTitres - prixDeRevient) / prixDeRevient * 100 : 0;
-    pointer(etatSelonEcartCourbe(pctSurvol - pctActuel));
+    /* ⚠️ Le sommet vient du graphique et non d'un calcul refait ici : lui seul tient la
+       série tracée, et c'est bien la courbe *telle qu'elle est dessinée* dont on cherche le
+       point haut — celui que le curseur vise. Voir `sommetTrace` dans `PerformanceChart`. */
+    pointer(etatSelonEcartCourbe(pctSurvol - pctActuel, survolCourbe.sommet));
   }, [survolCourbe, valeurTitres, prixDeRevient, pointer, liquiditesDeclarees]);
 
   const weightedChange = enriched.reduce((s, a) => {
@@ -1599,12 +1632,27 @@ function PortfolioPageInner() {
     return () => { vivant = false; };
   }, []);
 
-  const idPortefeuille = portfolio?.id;
+  /**
+   * L'identifiant à interroger, **avant même que le portefeuille ne soit résolu**.
+   *
+   * ⚠️ **Sinon les deux lectures s'enchaînent au lieu de se chevaucher.** Les comptes se
+   * lisent sous l'identifiant du portefeuille, et cet identifiant n'arrivait qu'avec la liste
+   * des portefeuilles : deux allers-retours bout à bout, quand l'URL portait déjà la réponse.
+   * En le prenant d'abord dans l'adresse — puis dans le portefeuille actif —, la requête part
+   * à l'ouverture de l'écran, en même temps que tout le reste.
+   *
+   * Se tromper d'identifiant ne coûte rien : la lecture échoue, la liste retombe à vide, et
+   * la résolution du portefeuille relance aussitôt la bonne.
+   */
+  const idPortefeuille = portfolio?.id
+    ?? searchParams.get("id")
+    ?? (activePortfolio ? String(activePortfolio.id) : null);
   const rechargerComptes = useCallback(() => {
-    if (!idPortefeuille) return;
+    if (!idPortefeuille) { setComptesCharges(true); return; }
     lireComptes(String(idPortefeuille))
       .then(setComptesDeclares)
-      .catch(() => setComptesDeclares([]));
+      .catch(() => setComptesDeclares([]))
+      .finally(() => setComptesCharges(true));
   }, [idPortefeuille]);
 
   useEffect(() => { rechargerComptes(); }, [rechargerComptes]);
@@ -1871,7 +1919,7 @@ function PortfolioPageInner() {
     }).then(r => r.ok).catch(() => false);
     setPortfolio(p => p ? { ...p, total_value: v } : p);
     setEditingValue(false);
-    exprimer(ok ? "succes" : "erreur");
+    exprimer(ok ? "tres-content" : "erreur");
   };
 
   /** Même règle que pour la valeur totale : on lit le résultat avant de le dire. */
@@ -1883,7 +1931,7 @@ function PortfolioPageInner() {
       method: "PUT", headers: { "Content-Type": "application/json", ...enTetesAuth() },
       body: JSON.stringify({ cost_basis: v }),
     }).then(r => r.ok).catch(() => false);
-    exprimer(ok ? "succes" : "erreur");
+    exprimer(ok ? "tres-content" : "erreur");
     setPortfolio(p => p ? { ...p, cost_basis: v } : p);
     setEditingCost(false);
   };
@@ -2569,7 +2617,10 @@ function PortfolioPageInner() {
           {/* Le titre, les filtres et le tri tenaient sur deux lignes, avec
               une infobulle de légende et un bouton d'ajout que le concept n'a
               pas. Tout est descendu dans la grille, sur une seule ligne. */}
-          {loading ? (
+          {/* ⚠️ Les comptes comptent dans l'attente, au même titre que les cours : l'écran
+              s'ouvre d'un seul tenant, dossiers déclarés compris, au lieu de se compléter
+              sous les yeux. Voir `comptesCharges`. */}
+          {loading || !comptesCharges ? (
             <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", color: CLAIR.texteFaible, fontSize: 12 }}>
               Chargement…
             </div>
@@ -2695,54 +2746,15 @@ function PortfolioPageInner() {
                       * bouton la remplit exactement au lieu de flotter dedans : rien ne
                       * bouge au-dessus.
                       */}
-                    <button type="button" onClick={() => { setErreurCompte(null); setFormCompte(true); }}
+                    <PiluleAction libelle="Ajouter un compte"
+                      onClick={() => { setErreurCompte(null); setFormCompte(true); }}
                       title="Déclarer un compte : son genre, sa couleur, son logo."
-                      className="novac-lisere"
-                      style={{
-                        marginLeft: "auto", height: 26, display: "flex", alignItems: "center",
-                        gap: 6, padding: "0 12px", borderRadius: RAYONS.plein,
-                        background: fondBouton, border: "none",
-                        // ⚠️ Le liseré se peint sur `currentColor` : c'est le blanc du texte
-                        // qui le teinte, et les deux restent donc accordés sans le redire.
-                        // ⚠️ 170° et non 171° : l'angle suit les proportions, et la pilule
-                        // vient de gagner quatre pixels de haut. 180° − atan(26/141) = 169,6°,
-                        // qui place les coins à 48,9 % et 51,1 % — contre 46,2 % et 53,8 % si
-                        // l'on gardait l'ancienne valeur. Voir le calcul dans `globals.css`.
-                        ["--nv-lisere-angle" as string]: "170deg",
-                        // L'ombre portée décolle la pilule du fond ; la lumière du bord haut,
-                        // elle, est désormais l'affaire du liseré.
-                        boxShadow: "0 1px 3px rgba(0,0,0,0.30)",
-                        color: "#FFFFFF", fontFamily: FONT, fontSize: 11,
-                        fontWeight: 700, cursor: "pointer", flexShrink: 0,
-                        transition: "background 150ms, box-shadow 150ms",
-                      }}
-                      onMouseEnter={e => {
-                        e.currentTarget.style.background = fondBoutonSurvol;
-                        e.currentTarget.style.boxShadow = "0 2px 6px rgba(0,0,0,0.35)";
-                      }}
-                      onMouseLeave={e => {
-                        e.currentTarget.style.background = fondBouton;
-                        e.currentTarget.style.boxShadow = "0 1px 3px rgba(0,0,0,0.30)";
-                      }}>
-                      {/**
-                        * ⚠️ **Un « plus », le dossier ayant rejoint le titre.** Les deux
-                        * pictogrammes se répétaient à quelques centimètres, et celui qui
-                        * nomme la section n'a rien à faire sur le bouton qui l'alimente : là
-                        * on dit *ce qu'on regarde*, ici *ce qu'on fait*. Le signe redevient
-                        * donc le geste, et le dossier reste l'objet.
-                        *
-                        * ⚠️ **Rendu à 14 et non à 24.** La taille d'export du modèle
-                        * dépasserait la pilule, dont les 22 pixels tiennent la hauteur de
-                        * toute la rangée.
-                        */}
-                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
-                        stroke="currentColor" strokeWidth={1.5}
-                        strokeLinecap="round" strokeLinejoin="round"
-                        aria-hidden="true">
-                        <path d="M12 5v14m-7-7h14" />
-                      </svg>
-                      Ajouter un compte
-                    </button>
+                      fond={fondBouton} fondSurvol={fondBoutonSurvol}
+                      /* ⚠️ 170° et non les 171° par défaut : l'angle suit les proportions, et
+                         cette pilule-ci est plus courte. 180° − atan(26/141) = 169,6°, qui place
+                         les coins à 48,9 % et 51,1 % — contre 46,2 % et 53,8 % à 171°. */
+                      angle={170}
+                      placement={{ marginLeft: "auto" }} />
                   </div>
                   {/**
                     * ⚠️ **Un rail sur une seule ligne, et non une grille qui se replie.**
@@ -2820,6 +2832,19 @@ function PortfolioPageInner() {
                       return (
                         <CarteCompte key={d.cle} nom={d.nom} couleur={d.couleur}
                           icone={ICONE_PAR_GENRE[d.genre] ?? ICONE_BANQUE}
+                          /**
+                            * ⚠️ **Ce qui rend enfin la rangée expressive.** Relevé sur la vue
+                            * générale : huit éléments portaient une marque d'avatar, et tous
+                            * les huit disaient « curieux » — le visage ne pouvait donc rien
+                            * exprimer d'autre au survol, et la colère y était injoignable,
+                            * faute d'un chiffre à regarder bouger.
+                            *
+                            * ⚠️ **Un compte de trésorerie ne publie rien, et c'est voulu.**
+                            * `variationPonderee` rend `null` quand aucune ligne n'a de cours :
+                            * un livret retombe alors exactement sur l'ancien « curieux ». Sans
+                            * cela on ferait dire à de l'épargne qu'elle décroche.
+                            */
+                          variation={variationPonderee(d.lignes)}
                           annonce={`${d.nom}, ${montantSelonMasque(d.montant, masque)}${mention ? `, ${mention}` : ""}`}
                           compte={
                             <>
@@ -2898,36 +2923,10 @@ function PortfolioPageInner() {
                     * est plus courte. Voir le calcul dans `globals.css`.
                     */
                   action={dossierActif?.declare && dossierActif.porteDesTitres && (
-                    <button type="button"
+                    <PiluleAction libelle="Ajouter une opération"
                       onClick={() => { setSaisieDansLeDossier(true); setShowTxModal(true); }}
                       title={`Saisir une opération dans ${dossierActif.nom}`}
-                      className="novac-lisere"
-                      style={{
-                        display: "flex", alignItems: "center", gap: 6, height: 26,
-                        padding: "0 12px", borderRadius: RAYONS.plein, cursor: "pointer",
-                        border: "none", background: fondBouton, color: "#FFFFFF",
-                        ["--nv-lisere-angle" as string]: "171deg",
-                        boxShadow: "0 1px 3px rgba(0,0,0,0.30)",
-                        fontFamily: FONT, fontSize: 11, fontWeight: 700,
-                        whiteSpace: "nowrap", flexShrink: 0,
-                        transition: "background 150ms, box-shadow 150ms",
-                      }}
-                      onMouseEnter={e => {
-                        e.currentTarget.style.background = fondBoutonSurvol;
-                        e.currentTarget.style.boxShadow = "0 2px 6px rgba(0,0,0,0.35)";
-                      }}
-                      onMouseLeave={e => {
-                        e.currentTarget.style.background = fondBouton;
-                        e.currentTarget.style.boxShadow = "0 1px 3px rgba(0,0,0,0.30)";
-                      }}>
-                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
-                        stroke="currentColor" strokeWidth={1.5}
-                        strokeLinecap="round" strokeLinejoin="round"
-                        aria-hidden="true">
-                        <path d="M12 5v14m-7-7h14" />
-                      </svg>
-                      Ajouter une opération
-                    </button>
+                      fond={fondBouton} fondSurvol={fondBoutonSurvol} />
                   )}
                 />
               )}
@@ -3542,6 +3541,9 @@ function PortfolioPageInner() {
             refreshKey={txRefreshKey}
             onNewTransaction={() => setShowTxModal(true)}
             selectionDemandee={operationVisee}
+            /* La teinte de l'avatar, servie à l'onglet comme aux pilules de la vue
+               générale : une seule source pour la même couleur. */
+            fondBouton={fondBouton} fondBoutonSurvol={fondBoutonSurvol}
           />
         )}
       </div>
