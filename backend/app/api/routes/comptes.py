@@ -157,7 +157,32 @@ def _valider(e: CompteEntree) -> None:
         raise HTTPException(400, "Un apport a besoin de sa date.")
 
 
-def _en_dict(c: Compte, db: Session) -> dict:
+def _journaux_des_comptes(comptes: list[Compte], db: Session) -> dict[str, list]:
+    """
+    Le journal de chaque compte, en **une** requête au lieu d'une par compte.
+
+    ⚠️ **Lister les comptes en faisait une par compte, et l'écran attendait le lot.** Chaque
+    compte porte son solde, le solde est la somme de son journal, et le journal se lisait à la
+    demande : huit comptes, neuf requêtes. C'est le défaut classique du « N + 1 » — invisible
+    sur un compte de démonstration, sensible dès qu'un épargnant en déclare plusieurs.
+
+    ⚠️ **Le tri reste celui du journal — du plus récent au plus ancien.** Le groupement le
+    préserve puisqu'on parcourt le lot dans l'ordre reçu : `dernier_apport_le` continue de se
+    lire sur le premier élément, sans retrier quoi que ce soit.
+    """
+    ids = [c.id for c in comptes]
+    if not ids:
+        return {}
+    lot = (db.query(MouvementTresorerie)
+           .filter(MouvementTresorerie.compte_id.in_(ids))
+           .order_by(MouvementTresorerie.date.desc()).all())
+    par_compte: dict[str, list] = {i: [] for i in ids}
+    for m in lot:
+        par_compte[m.compte_id].append(m)
+    return par_compte
+
+
+def _en_dict(c: Compte, db: Session, journal: list | None = None) -> dict:
     """
     Le compte tel que l'écran le lit, **solde compris**.
 
@@ -172,8 +197,13 @@ def _en_dict(c: Compte, db: Session) -> dict:
     retouche de la *fiche* — renommer le compte rajeunissait donc son solde. La question que
     l'écran pose vraiment est : depuis quand cet argent n'a-t-il pas bougé ? Le journal y
     répond exactement, et c'est désormais un fait plutôt qu'un indice.
+
+    ⚠️ **Le journal peut être fourni par l'appelant.** C'est ce qui permet à la liste de le
+    lire en une seule requête pour tous les comptes ; seul l'appel unitaire — création,
+    correction — le relit ici, et il n'en charge qu'un.
     """
-    journal = _mouvements_du_compte(c, db)
+    if journal is None:
+        journal = _mouvements_du_compte(c, db)
     return {
         "id": c.id,
         "nom": c.nom,
@@ -210,7 +240,8 @@ def lister(portfolio_id: str, db: Session = Depends(get_db),
                .filter(Compte.portfolio_id == p.id)
                .order_by(Compte.rang, Compte.cree_le)
                .all())
-    return [_en_dict(c, db) for c in comptes]
+    journaux = _journaux_des_comptes(comptes, db)
+    return [_en_dict(c, db, journaux.get(c.id, [])) for c in comptes]
 
 
 @router.post("/{portfolio_id}/comptes")
