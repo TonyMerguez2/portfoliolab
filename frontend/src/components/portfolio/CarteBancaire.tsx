@@ -240,6 +240,52 @@ function Guilloche({ id, fond }: { id: string; fond: number }) {
               + ` S ${L * 0.9} ${1 + i * 21}, ${L + 10} ${8 + i * 21}`} />
           ))
         )}
+        {fond === 3 && (
+          /**
+           * Des hachures fines, pliées par une arête — relevé sur une carte réelle.
+           *
+           * ⚠️ **Ce qui fait ce guillochis-là, c'est la densité, pas le tracé.** Les trois
+           * autres dessins posent quatre à sept courbes ; celui-ci en pose une quarantaine,
+           * si serrées qu'on ne les compte pas. C'est ce qui le fait lire comme une *matière*
+           * brossée plutôt que comme des traits — et c'est aussi ce qui le rend lisible dans
+           * une bande de quarante-six pixels, là où un motif clairsemé n'aurait montré que
+           * deux ou trois lignes isolées.
+           *
+           * ⚠️ **L'arête change le sens des hachures, elle ne les interrompt pas.** Sur la
+           * référence, les deux zones sont hachurées toutes les deux : ce qui les sépare est
+           * le *sens*, qui accroche la lumière différemment de part et d'autre. Une zone
+           * laissée nue aurait donné deux matières au lieu d'une pliure dans la même.
+           *
+           * ⚠️ **La pliure traverse la bande visible**, comme les arcs : posée plus bas, elle
+           * n'existerait que sous le plan du dossier et les deux zones se ressembleraient.
+           *
+           * ⚠️ **Un trait deux fois plus fin que les autres dessins.** À 1,4 les hachures se
+           * touchaient presque et la surface virait au blanc laiteux ; à 0,7 elles gardent
+           * entre elles autant de vide que de matière, ce qui est la condition pour qu'un
+           * guillochis se lise comme gravé et non comme peint.
+           */
+          <>
+            <defs>
+              <clipPath id={`pli-haut-${id}`}>
+                <path d={`M-10 -10 H${L + 10} V4 C ${L * 0.62} 22, ${L * 0.3} 44, -10 64 Z`} />
+              </clipPath>
+              <clipPath id={`pli-bas-${id}`}>
+                <path d={`M-10 64 C ${L * 0.3} 44, ${L * 0.62} 22, ${L + 10} 4`
+                  + ` V${H + 10} H-10 Z`} />
+              </clipPath>
+            </defs>
+            <g clipPath={`url(#pli-haut-${id})`} strokeWidth={0.7}>
+              {Array.from({ length: 34 }, (_, i) => (
+                <path key={i} d={`M${-90 + i * 13} ${H + 10} L${30 + i * 13} -10`} />
+              ))}
+            </g>
+            <g clipPath={`url(#pli-bas-${id})`} strokeWidth={0.7}>
+              {Array.from({ length: 34 }, (_, i) => (
+                <path key={i} d={`M${-30 + i * 13} ${H + 10} L${-150 + i * 13} -10`} />
+              ))}
+            </g>
+          </>
+        )}
         {fond === 2 && (
           /**
            * Des obliques : un faisceau de droites parallèles, dans le sens de la lumière.

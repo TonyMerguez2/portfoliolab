@@ -261,10 +261,11 @@ export function motifPour(cle: string): number {
 /**
  * Le fond gravé d'une carte : combien de dessins, et lequel revient à qui.
  *
- * ⚠️ **Trois, et non un seul.** Le guillochis était unique : deux dossiers de trésorerie
+ * ⚠️ **Quatre, et non un seul.** Le guillochis était unique : deux dossiers de trésorerie
  * côte à côte montraient exactement la même courbe au même endroit, ce qui les faisait lire
  * comme un motif d'interface plutôt que comme deux objets. Demandé à l'usage, sur le modèle
- * des puces.
+ * des puces. Le quatrième — des hachures fines pliées par une arête — est venu d'une carte
+ * réelle montrée à l'usage.
  *
  * ⚠️ **Tirés indépendamment de la puce, et c'est une vraie contrainte.** Réutiliser
  * `motifPour` telle quelle aurait lié les deux : la puce n° 3 serait toujours venue avec le
@@ -274,7 +275,7 @@ export function motifPour(cle: string): number {
  * ⚠️ **Même raison d'être que pour la puce : déduit, jamais tiré au sort.** Un
  * `Math.random()` regraverait le fond à chaque rendu.
  */
-export const FONDS_CARTE = 3;
+export const FONDS_CARTE = 4;
 
 export function fondPour(cle: string): number {
   let somme = 7919;
