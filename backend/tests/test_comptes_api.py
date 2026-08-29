@@ -179,8 +179,11 @@ def test_les_genres_sont_publies(client):
     """
     genres = client.get("/api/v1/genres-de-compte").json()
     cles = {g["cle"] for g in genres}
-    assert cles == {"courant", "epargne", "pea", "cto", "crypto"}
-    assert {g["cle"] for g in genres if g["titres"]} == {"pea", "cto", "crypto"}
+    assert cles == {"courant", "epargne", "pea", "cto", "av", "per", "pee", "crypto"}
+    # ⚠️ Seuls le compte courant et l'épargne valent leur solde ; tout le reste détient des
+    # lignes. L'assurance-vie et le PER sont du second groupe par approximation — un contrat
+    # porte aussi un fonds en euros, que ce booléen ne sait pas dire. Voir `GENRES_COMPTE`.
+    assert {g["cle"] for g in genres if not g["titres"]} == {"courant", "epargne"}
 
 
 # ── Ce que la saisie doit refuser ─────────────────────────────────────────────
@@ -189,7 +192,10 @@ def test_les_genres_sont_publies(client):
     ({"nom": "", "genre": "pea", "couleur": "#22C55E"}, "nom vide"),
     ({"nom": "   ", "genre": "pea", "couleur": "#22C55E"}, "nom fait d'espaces"),
     ({"nom": "x" * 61, "genre": "pea", "couleur": "#22C55E"}, "nom trop long"),
-    ({"nom": "A", "genre": "assurance-vie", "couleur": "#22C55E"}, "genre inconnu"),
+    # ⚠️ **Plus « assurance-vie » : elle existe désormais, sous la clé `av`.** Le cas se
+    # lisait comme une enveloppe manquante alors qu'il ne teste que le refus d'une clé
+    # inconnue — le jour de son ajout, il serait passé au vert en testant autre chose.
+    ({"nom": "A", "genre": "matelas", "couleur": "#22C55E"}, "genre inconnu"),
     ({"nom": "A", "genre": "pea", "couleur": "vert"}, "couleur non hexadécimale"),
     ({"nom": "A", "genre": "pea", "couleur": "#22C5"}, "couleur trop courte"),
     ({"nom": "A", "genre": "pea", "couleur": "#22C55E",

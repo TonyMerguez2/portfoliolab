@@ -50,20 +50,44 @@ constantes = APIRouter(prefix="/api/v1", tags=["Comptes"])
 #:
 #: ⚠️ **Un ensemble fermé, et il faut qu'il le reste.** Un champ libre aurait produit
 #: « PEA », « P.E.A. » et « pea » dans la même base, donc trois comptes là où il y en a
-#: un, et plus aucun regroupement possible. Les cinq genres couvrent ce qu'un épargnant
-#: français détient ; en ajouter un est une ligne ici, et le refus explicite dit à
-#: l'appelant ce qui existe.
+#: un, et plus aucun regroupement possible. En ajouter un est une ligne ici, et le refus
+#: explicite dit à l'appelant ce qui existe.
 #:
 #: ⚠️ **`titres` n'est pas décoratif.** Un compte courant et un livret ne détiennent
 #: aucune ligne : leur valeur *est* leur solde. Un PEA en détient, et son solde n'est que
 #: la poche d'espèces à côté. Additionner les deux de la même façon ferait compter les
 #: titres deux fois sur les uns et rien du tout sur les autres.
+#:
+#: ⚠️ **Cinq genres prétendaient couvrir « ce qu'un épargnant français détient », et
+#: c'était faux.** Il y manquait l'assurance-vie et le plan d'épargne retraite, qui sont
+#: parmi les premiers véhicules d'épargne du pays, ainsi que l'épargne salariale. Trois
+#: entrées les ajoutent. Signalé à l'usage.
+#:
+#: ⚠️ **L'assurance-vie et le PER ne rentrent pas proprement dans ce booléen, et c'est une
+#: approximation assumée.** Un contrat détient à la fois un fonds en euros — un solde, sans
+#: aucune ligne — et des unités de compte, qui en sont. `titres` est binaire : quel que soit
+#: le côté choisi, on perd l'autre moitié du contrat. Ils sont donc déclarés porteurs de
+#: titres, le fonds en euros se saisissant comme une ligne parmi les autres. Ce que cela
+#: coûte : son rendement doit être entré à la main, faute de cotation.
+#:
+#: ⚠️ **La sortie propre serait un troisième état plutôt qu'un booléen** — « solde », « titres »
+#: et « les deux ». Elle touche la valorisation, la trésorerie et l'agrégation ; elle n'a pas
+#: été prise ici pour que l'ajout reste réversible.
+#:
+#: ⚠️ **La déduction, elle, ne connaît toujours que trois enveloppes.** `compteInfere`, côté
+#: interface, devine « PEA », « compte-titres » ou « crypto » d'après les places de cotation ;
+#: elle ne produira jamais « assurance-vie ». Un compte déclaré comme tel ne sera donc jamais
+#: rejoint par la règle qui range les opérations orphelines. C'est le prix d'un vocabulaire de
+#: déclaration plus riche que le vocabulaire de déduction, et il faut le savoir.
 GENRES_COMPTE: dict[str, dict] = {
-    "courant":  {"libelle": "Compte courant", "titres": False},
-    "epargne":  {"libelle": "Épargne",        "titres": False},
-    "pea":      {"libelle": "PEA",            "titres": True},
-    "cto":      {"libelle": "Compte-titres",  "titres": True},
-    "crypto":   {"libelle": "Crypto",         "titres": True},
+    "courant":  {"libelle": "Compte courant",  "titres": False},
+    "epargne":  {"libelle": "Épargne",         "titres": False},
+    "pea":      {"libelle": "PEA",             "titres": True},
+    "cto":      {"libelle": "Compte-titres",   "titres": True},
+    "av":       {"libelle": "Assurance-vie",   "titres": True},
+    "per":      {"libelle": "PER",             "titres": True},
+    "pee":      {"libelle": "Épargne salariale", "titres": True},
+    "crypto":   {"libelle": "Crypto",          "titres": True},
 }
 
 #: Une couleur hexadécimale à six chiffres, seule forme acceptée.
