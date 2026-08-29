@@ -142,6 +142,12 @@
      change. Sans ce dégradé, page et cartes valant toutes deux #030712,
      l'écran est parfaitement plat — c'est ce que j'avais. */
   --nv-fond-degrade:      linear-gradient(to bottom, #030712, #101828 55%, #101828 83%, #030712);
+  /* Le palier du dégradé ci-dessus — sa couleur entre 55 % et 83 % de la hauteur.
+     Nommée parce qu'une forme creusée dans le fond doit s'y confondre : la
+     remplir du dégradé lui-même donnait des taches, celui-ci variant sur la
+     hauteur de la forme. `--nv-bord` vaut la même chose en sombre, mais par
+     coïncidence — l'emprunter aurait lié deux intentions sans rapport. */
+  --nv-fond-plateau:      #101828;
   --nv-carte:             #030712;
   --nv-carte-creuse:      rgba(106,114,130,0.12);
 
@@ -311,6 +317,7 @@
   --nv-fond:              #FFFFFF;
   --nv-fond-profond:      #F3F4F6;
   --nv-fond-degrade:      linear-gradient(to bottom, #FFFFFF, #F3F4F6 55%, #F3F4F6 83%, #FFFFFF);
+  --nv-fond-plateau:      #F3F4F6;
   --nv-carte:             #FFFFFF;
   --nv-carte-creuse:      #F9FAFB;
 
@@ -582,6 +589,140 @@
   animation: av-eclat 420ms cubic-bezier(0.34, 1.56, 0.5, 1) both;
 }
 
+/* ───────────────────────────────────────────────────────────────────────────
+   Le reflet qui parcourt le filigrane — .nv-reflet-logo
+   ───────────────────────────────────────────────────────────────────────────
+   Une lumière qui glisse le long du contour du logo de fond, sort du cadre
+   avec lui et revient par l'autre bord.
+
+   ⚠️ `pathLength: 1` normalise le contour : le tiret et son décalage s'écrivent
+   en fractions, sans qu'on ait à mesurer le chemin ni à le remesurer si le
+   dessin change.
+
+   ⚠️ **Un tracé par morceau du logo, jamais un tracé à deux sous-chemins.** SVG
+   réinitialise le motif de pointillés au début de chaque sous-tracé : un `d`
+   contenant les deux volutes affiche donc toujours *deux* tirets simultanés,
+   quel que soit le motif choisi. C'est la raison — trouvée tard — pour laquelle
+   réunir les tracés ne pouvait pas donner une lumière unique.
+
+   ⚠️ Surtout : **pas de `vector-effect: non-scaling-stroke` sur ce tracé.** Il
+   calcule l'épaisseur hors du repère du dessin, quand `pathLength` normalise
+   dedans — les deux mesurent dans deux espaces différents, le motif ne boucle
+   plus et le reflet se coupe à chaque tour. Relevé à l'usage, et c'est le genre
+   de conflit qu'aucune valeur ne rattrape. L'épaisseur s'écrit donc en unités
+   du dessin.
+
+   ⚠️ Vingt-deux secondes : c'est un fond, pas une animation. Assez lent pour
+   qu'on le remarque sans qu'il appelle le regard.
+   ─────────────────────────────────────────────────────────────────────────── */
+@keyframes nv-reflet-tour {
+  from { stroke-dashoffset: 2.42; }
+  to   { stroke-dashoffset: 0; }
+}
+
+.nv-reflet-logo {
+  /* ⚠️ La proportion du vide se calcule, elle ne se devine pas.
+
+     Le tiret est posé sur le chemin pendant une plage de décalage égale à la
+     longueur du tracé plus celle du tiret — ici 1 + 0,18 = 1,18 — sur une
+     période de 2,42. Il est donc allumé 48,8 % du tour, et les deux volutes,
+     décalées d'une demi-période, brillent de 0 à 48,8 % puis de 50 à 98,8 %.
+
+     ⚠️ **La marge sous 50 % est ce qui empêche les deux de s'allumer ensemble,
+     et le noir entre eux est ce qui reste.** Un peu plus d'un pour cent, soit
+     un sixième de seconde : le relais se fait sans creux perceptible. Les
+     essais : 37 % laissait treize pour cent de noir de chaque côté — trop long ;
+     56 % faisait s'allumer les deux ensemble une fois sur huit. Toute la fenêtre
+     utile tient entre ces deux bornes, et l'on est ici tout en haut.
+
+     ⚠️ **Le noir n'est pas la seule attente, et ce n'est même pas la principale.**
+     Un quart du tracé passe hors de la fenêtre : le reflet est donc invisible
+     pendant ce quart-là, en plus des interruptions ci-dessus. C'est pourquoi la
+     durée du tour compte autant que le motif — treize secondes plutôt que
+     vingt-deux, pour que ce passage aveugle se traverse vite.
+
+     ⚠️ Un tiret plus long se lit comme une traînée, un tiret court comme un
+     point qui file. 0,18 du tour donne le premier. */
+  stroke-dasharray: 0.18 2.24;
+  animation: nv-reflet-tour 13s linear infinite;
+  /* ⚠️ Un reflet n'a pas d'arête. Sans ce flou, même à faible opacité, le tracé
+     reste une ligne nette qui court — on lit un trait, pas une lumière. Deux
+     pixels : porté à cette valeur en même temps que l'opacité descendait, le
+     flou compensant en douceur ce que l'opacité retire en présence. Au-delà la
+     traînée se dilue et cesse d'épouser le bord. */
+  filter: blur(2px);
+}
+
+/**
+ * Le relais : la seconde volute, décalée d'une demi-période.
+ *
+ * ⚠️ **Le retard vit ici, à côté de la durée, et pas dans le composant.** Il valait
+ * `-11s` en JSX quand le tour durait 22 secondes ; en ramenant le tour à 13, j'ai
+ * laissé le retard en place — il ne valait plus la demi-période mais 85 % du tour,
+ * et les deux reflets se sont mis à se chevaucher puis à s'éteindre ensemble. Deux
+ * nombres qui doivent rester liés n'ont rien à faire dans deux fichiers.
+ */
+.nv-reflet-logo--relais {
+  animation-delay: -6.5s;
+}
+
+/* Une lumière qui tourne sans fin est exactement ce que cette préférence
+   désigne : décorative, permanente, et sans rien à annoncer. */
+@media (prefers-reduced-motion: reduce) {
+  .nv-reflet-logo { animation: none; opacity: 0; }
+}
+
+/* ───────────────────────────────────────────────────────────────────────────
+   La pilule d'étiquette — .nv-pilule
+   ───────────────────────────────────────────────────────────────────────────
+   Le petit fond arrondi qui porte une qualité : « Action », « Nasdaq GS », le
+   rang d'un actif, le dossier d'une écriture.
+
+   ⚠️ Elle existait en trois copies avant d'arriver ici : dans le bloc <style>
+   de la page graphique, dans celui d'AssetHeroCard, et en style en ligne dans
+   le journal des transactions. Les deux premières étaient déjà en désaccord —
+   celle d'AssetHeroCard écrivait rgba(255,255,255,…) en dur, donc juste en
+   thème sombre et fausse en clair, quand l'autre passait par --nv-encre-rvb.
+   Une classe rangée dans le <style> d'une page ne peut pas servir ailleurs :
+   c'est ce qui condamnait chaque nouvel écran à la recopier.
+
+   ⚠️ La géométrie et l'habillage sont séparés. La pilule de performance de la
+   page graphique reprend la forme mais pose ses propres couleurs, vertes ou
+   rouges ; lui imposer le fond neutre aurait demandé de le défaire aussitôt.
+   ─────────────────────────────────────────────────────────────────────────── */
+.nv-pilule {
+  display: inline-flex;
+  align-items: center;
+  /* ⚠️ La police est **pinée**, pas héritée. Mesuré en comparant les deux écrans propriété
+     par propriété : les pilules de la page graphique tombaient en -apple-system quand celles
+     du journal étaient en Inter — un ancêtre de la carte d'actif impose une autre pile, et
+     la pilule en héritait sans que personne ne l'ait voulu. Une étiquette possède sa
+     typographie comme elle possède sa taille. */
+  font-family: Inter, -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", sans-serif;
+  /* ⚠️ Sans cela, la même classe ne rend pas pareil sur un <button> et sur un <span> : le
+     navigateur ajoute au premier son propre habillage. Le journal s'en sert sur des boutons,
+     la page graphique sur des libellés. */
+  appearance: none;
+  -webkit-appearance: none;
+  /* Un <button> centre son texte, un <span> l'aligne au début : sans cela la même classe
+     n'a pas tout à fait le même contrat selon la balise qui la porte. */
+  text-align: start;
+  min-height: 20px;
+  padding: 2px 7px;
+  border-radius: 999px;
+  font-size: 9px;
+  line-height: 1;
+  font-weight: 600;
+  white-space: nowrap;
+  box-sizing: border-box;
+}
+
+/* Le fond discret de l'étiquette neutre, teinté par l'encre du thème. */
+.nv-pilule-douce {
+  border: 1px solid rgba(var(--nv-encre-rvb), 0.035);
+  background: rgba(var(--nv-encre-rvb), 0.055);
+}
+
 /* ─────────────────────────────────────────────────────────────
    Les cartes qui s'élèvent quand la souris passe sur leur dossier.
 
@@ -613,13 +754,36 @@
   transform: translateY(-7px);
 }
 
-/* Les trois points se réveillent au survol, et restent lisibles au repos : masqués
-   jusque-là, rien n'annoncerait qu'un dossier se corrige — et sur un écran tactile,
-   « jusque-là » ne finit jamais. */
+/* Le bouton de réglages d'un dossier.
+
+   ⚠️ **Il porte son fond au repos, désormais, et non plus seulement au survol.** Il n'était
+   qu'un glyphe posé sur le plan, et son cadre n'apparaissait qu'au passage de la souris.
+   C'était tenable tant que le dossier entier se cliquait ; depuis qu'un dossier de
+   trésorerie ne s'ouvre plus, **ce bouton est sa seule commande** — et une seule commande
+   doit se voir sans qu'on la cherche. Demandé à l'usage : « qu'il réagisse comme les
+   autres ».
+
+   ⚠️ **Du blanc en dur, et non le jeton d'encre.** C'est l'exception qui confirme la règle
+   posée pour `.novac-bouton-doux` : ce bouton n'est pas sur le fond de la page mais sur le
+   plan coloré d'un dossier, lequel porte une encre blanche dans les deux thèmes. Une encre
+   de thème y donnerait un voile sombre sur fond clair — sur un dossier resté coloré.
+
+   ⚠️ **Dix et dix-huit pour cent, comme le bouton doux**, pour que l'écart au survol se
+   sente pareil d'un bout à l'autre de l'application. */
+.novac-dossier-modifier {
+  background: rgba(255, 255, 255, 0.10);
+  color: rgba(255, 255, 255, 0.78);
+  transition: background 150ms ease, color 150ms ease;
+}
+
 .novac-dossier-modifier:hover,
 .novac-dossier-modifier:focus-visible {
   color: rgba(255, 255, 255, 0.95);
-  background: rgba(255, 255, 255, 0.16);
+  background: rgba(255, 255, 255, 0.18);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .novac-dossier-modifier { transition: none; }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -865,19 +1029,34 @@ canvas + div {
    D'où deux corrections. La descente s'étale sur toute la moitié du parcours, en cinq
    paliers rapprochés plutôt qu'en trois écarts, ce qui donne vingt-deux pixels de fondu
    de chaque côté au lieu de deux et demi. Et le maximum tombe de 44 % à 24 % : sur un
-   aplat saturé, le liseré n'a pas à souligner le bord, seulement à le laisser deviner. */
+   aplat saturé, le liseré n'a pas à souligner le bord, seulement à le laisser deviner.
+
+   ⚠️ **Le plateau transparent est une plage, et non le seul point 50 %.** Avec l'angle
+   mesuré par `ancrerLisere`, les deux coins à éteindre — haut-droit et bas-gauche — se
+   projettent *exactement* sur 50 % : le produit scalaire (w/2·h − h/2·w) s'annule quel que
+   soit le rapport des côtés. Le point lui-même était donc bien noir. Mais un coin n'est pas
+   un point : sur un rayon de dix-huit pixels, tout l'arc l'entoure, et la ligne de dégradé
+   ne mesurant que 74 px sur cette pilule, les 43 % voisins tombaient à cinq pixels de là —
+   l'arc y récupérait deux à cinq pour cent, assez pour se voir. Relevé à l'écran, agrandi.
+
+   La plage 38 %–62 % éteint désormais ±8,9 px de part et d'autre du centre, ce qui couvre
+   l'arc entier. Ce sont **les arrêts de la tuile**, retrouvés par un autre chemin : elle les
+   tenait de sa géométrie, la pilule les tient de la longueur de son arc. Les cinq paliers de
+   descente sont resserrés d'autant pour que le fondu reste étalé sur vingt-huit pixels — il
+   n'y a pas d'arête à gagner en éteignant plus tôt. */
 .novac-lisere::before {
   background: linear-gradient(var(--nv-lisere-angle, 135deg),
     color-mix(in srgb, currentColor 24%, transparent) 0%,
-    color-mix(in srgb, currentColor 20%, transparent) 14%,
-    color-mix(in srgb, currentColor 15%, transparent) 26%,
-    color-mix(in srgb, currentColor 10%, transparent) 35%,
-    color-mix(in srgb, currentColor 5%, transparent) 43%,
-    transparent 50%,
-    color-mix(in srgb, currentColor 5%, transparent) 57%,
-    color-mix(in srgb, currentColor 10%, transparent) 65%,
-    color-mix(in srgb, currentColor 15%, transparent) 74%,
-    color-mix(in srgb, currentColor 20%, transparent) 86%,
+    color-mix(in srgb, currentColor 20%, transparent) 11%,
+    color-mix(in srgb, currentColor 15%, transparent) 20%,
+    color-mix(in srgb, currentColor 10%, transparent) 28%,
+    color-mix(in srgb, currentColor 5%, transparent) 34%,
+    transparent 38%,
+    transparent 62%,
+    color-mix(in srgb, currentColor 5%, transparent) 66%,
+    color-mix(in srgb, currentColor 10%, transparent) 72%,
+    color-mix(in srgb, currentColor 15%, transparent) 80%,
+    color-mix(in srgb, currentColor 20%, transparent) 89%,
     color-mix(in srgb, currentColor 24%, transparent) 100%);
 }
 
@@ -890,6 +1069,57 @@ canvas + div {
    deux ne puissent pas diverger comme l'avaient fait les versions locales à chaque page. */
 .novac-lisere {
   position: relative;
+}
+
+/* ── Les deux fonds de bouton, et leur réponse au survol ───────────────────
+   ⚠️ **Ils sont ici et non en style en ligne, parce qu'un `:hover` ne s'écrit
+   pas en ligne.** C'est la même raison qui avait déjà fait sortir le fond des
+   champs vers `.novac-surface-saisie` : un attribut `style` ne connaît aucun
+   état, et l'état est précisément ce qu'on veut voir sur un bouton. Demandé à
+   l'usage — « react du fond du bouton quand on met curseur dessus ».
+
+   ⚠️ **`.novac-bouton-doux` porte le fond au repos autant que le survol.** Il
+   serait tentant de laisser le repos en ligne et de ne mettre ici que le
+   survol : la règle en ligne l'emporterait sur la classe, et le survol ne
+   ferait rien. Le fond appartient donc entièrement à la classe, qui devient
+   obligatoire — posée sans elle, `boutonSecondaire` donne un bouton sans fond.
+
+   ⚠️ **Les valeurs : 6 % au repos, 10 % au survol.** L'écart a été choisi pour
+   se sentir sans se voir : à 8 % le survol passait inaperçu, à 14 % le bouton
+   qui renonce se mettait à peser autant que celui qui engage au moment précis
+   où l'on hésite entre les deux.
+
+   ⚠️ **Le plein s'éclaire par `filter` plutôt que par une seconde teinte.** Sa
+   couleur vient de l'appelant — l'avatar du portefeuille, le sens de
+   l'opération — et n'est donc pas connue ici. `brightness` s'applique à
+   n'importe laquelle sans qu'on ait à en déclarer la jumelle, ce qui évite la
+   paire fond/fondSurvol que `PiluleAction` doit encore transporter. */
+.novac-bouton-doux {
+  background: rgba(var(--nv-encre-rvb), 0.06);
+  transition: background 150ms ease;
+}
+
+.novac-bouton-doux:hover {
+  background: rgba(var(--nv-encre-rvb), 0.10);
+}
+
+.novac-bouton-plein {
+  transition: filter 150ms ease, background 200ms ease, opacity 200ms ease;
+}
+
+.novac-bouton-plein:hover:not(:disabled) {
+  filter: brightness(1.10);
+}
+
+/* ⚠️ Un bouton hors d'usage ne répond pas : le survol dirait qu'il attend un
+   clic qu'il refusera. */
+.novac-bouton-doux:disabled,
+.novac-bouton-doux:disabled:hover {
+  background: rgba(var(--nv-encre-rvb), 0.06);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .novac-bouton-doux, .novac-bouton-plein { transition: none; }
 }
 
 /* Il n'y a pas non plus de couche de reflet, et c'est délibéré.
@@ -960,7 +1190,6 @@ canvas + div {
    voiles de bord, qui disent la même chose sans occuper 6 px sous les cartes.
    `scrollbar-width` couvre Firefox, ce sélecteur couvre WebKit. */
 .novac-rail::-webkit-scrollbar { height: 0; width: 0; }
-
 
 /* ─────────────────────────────────────────────────────────────
    Un reflet de verre sur l'anneau épais.
@@ -1316,4 +1545,189 @@ canvas + div {
   .novac-braise,
   .novac-neon { animation: none; }
   .novac-crt-bande { animation: none; opacity: 0; }
+}
+
+/* ─────────────────────────────────────────────────────────────
+   L'arrivée des têtes dans le panneau de création.
+
+   ⚠️ **Elles se rassemblent, elles n'apparaissent pas.** Chacune monte de huit
+   pixels en grandissant depuis 82 %, avec un décalage de quatre-vingts
+   millisecondes de l'une à l'autre — du centre vers les extrémités. C'est
+   l'échelonnement qui raconte une réunion : posées ensemble, cinq têtes ne sont
+   qu'un bloc qui s'affiche.
+
+   ⚠️ **`backwards` est obligatoire ici.** Sans lui, une tête retardée s'affiche
+   à son état final pendant tout son délai, puis saute à l'état de départ au
+   moment où l'animation commence — on verrait le groupe entier, puis quatre
+   têtes disparaître pour revenir une à une. Le mode reporte la première
+   image-clé sur toute l'attente.
+
+   ⚠️ **Le ressort s'arrête juste avant le rebond.** `cubic-bezier(.16,1,.3,1)`
+   décélère très fort sans repasser au-dessus de 1 : la tête se pose au lieu de
+   dépasser puis revenir. Un rebond sur cinq objets décalés donne du désordre,
+   pas de la vie.
+
+   ⚠️ **L'opacité va de 0 à 1, et c'est le parent qui la voile.** Chaque tête a
+   son propre voile — 0,28 pour la plus lointaine, 1 pour le centre — qu'une
+   image-clé commune ne peut pas connaître. Elle se contente de révéler ; le
+   parent décide de combien.
+   ───────────────────────────────────────────────────────────── */
+@keyframes nv-arrivee-tete {
+  from { opacity: 0; transform: translateY(8px) scale(0.82); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+.nv-arrivee-tete {
+  animation: nv-arrivee-tete 520ms cubic-bezier(.16, 1, .3, 1) backwards;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  /* Couper suffit : l'état de repos est l'état d'arrivée, donc la grappe est
+     simplement là, entière, sans s'être formée sous les yeux. */
+  .nv-arrivee-tete { animation: none; }
+}
+
+/* ─────────────────────────────────────────────────────────────
+   La pastille de couleur : sa réponse au geste.
+
+   ⚠️ **C'est le seul reste de matière, et il est délibéré.** Les pastilles
+   étaient bombées — lumière intérieure, creux, ombre portée, halo coloré — pour
+   imiter un bonbon de verre. Relevé à l'usage comme trop réaliste : un
+   sélecteur montre une couleur, pas un objet éclairé. Elles sont donc plates,
+   et ce qui les rend vivantes n'est plus une imitation de volume mais une
+   **réaction** : elles grandissent sous le curseur et s'enfoncent au clic.
+
+   ⚠️ **Dix pour cent, pas plus.** Sur trente-deux pixels cela fait trois pixels
+   de croissance, assez pour que la pastille visée se détache de ses voisines
+   sans bousculer la grille — l'agrandissement ne pousse rien, il déborde
+   simplement sur l'écart de dix pixels qui les sépare.
+
+   ⚠️ **Le retour au clic descend sous 1.** Une pastille qui ne fait que
+   grandir n'a pas de bouton ; le passage par 0,94 rend l'enfoncement, et c'est
+   ce qui distingue une cible cliquable d'une vignette qui réagit au survol.
+
+   ⚠️ **Pas de garde `prefers-reduced-motion` ici, contrairement au reste du
+   fichier.** Ce que la préférence désigne, c'est le mouvement permanent et non
+   sollicité — le reflet du filigrane, les couches de l'écran cathodique. Une
+   réponse à un geste que l'utilisateur vient de faire, sur trois pixels, n'en
+   relève pas : la supprimer retirerait un retour utile sans rien apaiser.
+   ───────────────────────────────────────────────────────────── */
+.nv-pastille {
+  /* ⚠️ **`relative` porte désormais l'effet inverse de celui pour lequel il a été
+     posé, et il est devenu indispensable.** Il servait à autoriser un `z-index`,
+     qui a disparu ; ce qu'il fait maintenant, c'est **empêcher** la pastille
+     survolée de passer devant sa voisine. Un élément qui porte un `transform` est
+     peint à l'étage des éléments positionnés : sans `relative` sur *toutes* les
+     pastilles, celle qu'on survole serait seule à cet étage et couvrirait la
+     rangée entière. Toutes positionnées, elles y sont ensemble et se peignent
+     dans l'ordre du document — chacune sous celle de sa droite, y compris pendant
+     le survol. Le retirer ferait ressurgir exactement ce qu'on vient d'écarter. */
+  position: relative;
+  transition: transform 140ms cubic-bezier(.2, .8, .3, 1);
+}
+
+/* ⚠️ **Le survol grandit, mais ne passe pas devant.** Il montait à `z-index: 2`,
+   ce qui faisait ressortir la pastille visée par-dessus ses voisines. Écarté à
+   l'usage : dans une bande d'écailles, l'ordre de recouvrement dit quelque chose
+   — chacune mord celle de sa gauche —, et le curseur n'a pas à le défaire au
+   passage. La pastille grossit donc *à sa place*, sous celle qui la borde. */
+/* ⚠️ **Le facteur est réglable par élément, et il le fallait.** Un facteur unique
+   agrandit d'autant moins que l'objet est petit — or toutes les silhouettes ne
+   remplissent pas leur boîte : la goutte n'en occupe que 82 % en largeur. À 1,10
+   partout, mesuré, l'encre grandissait de 3,8 pixels sur un rond et de 3,1 sur une
+   goutte. L'œil ne compare pas des facteurs, il compare des déplacements ; chaque
+   forme reçoit donc le facteur qui lui donne la même croissance en pixels. Les
+   pastilles de couleur, elles, remplissent exactement leur boîte et gardent le
+   défaut. */
+.nv-pastille:hover { transform: scale(var(--nv-survol, 1.10)); }
+
+/* ⚠️ **Le point autour duquel on agrandit se pose sur le composant, pas ici.**
+   Une forme qui grandit autour du centre de sa boite parait *glisser* si sa
+   matiere n'y est pas centree : voir `ChoixApparence`, qui calcule pour chaque
+   silhouette le point qui ne bouge pas. Les pastilles de couleur sont des
+   disques, leur matiere est exactement au centre, et le defaut du navigateur
+   leur convient. */
+
+/* ⚠️ **La pastille retenue ne se distingue plus par rien de visuel, et c'est un
+   choix explicite.** Trois marques ont été essayées puis écartées l'une après
+   l'autre : le cerclage blanc, qui posait de la matière étrangère sur la teinte ;
+   l'agrandissement, qui déformait la bande en permanence ; le passage au premier
+   plan, qui rompait l'ordre des écailles. Il ne reste donc aucune règle ici.
+
+   ⚠️ **Ce qui répond à « laquelle ai-je prise » est ailleurs, et le fait mieux.**
+   L'aperçu de l'avatar porte la couleur choisie en grand, à quelques dizaines de
+   pixels au-dessus de la bande — un aplat de soixante-seize pixels contre une
+   marque de un. La bande sert à choisir, pas à rappeler.
+
+   ⚠️ **`aria-pressed` reste posé sur le bouton.** La marque visuelle a disparu,
+   pas l'état : un lecteur d'écran annonce toujours laquelle est retenue, et le
+   retirer transformerait une décision d'apparence en perte d'information. */
+
+/* L'enfoncement au clic. Écrit après le survol, dont il partage la spécificité :
+   à égalité, c'est l'ordre qui tranche. */
+.nv-pastille:active { transform: scale(0.94); }
+
+/* ⚠️ **Pas de `will-change` ici, et ce fut une fausse piste.** Une couche de
+   composition avait ete posee sur les silhouettes pour empecher leur contour de
+   se redessiner a chaque image. Le symptome n'etait pas un fremissement des
+   bords mais un decalage franc de la forme entiere, et sa cause est un arrondi
+   de position : voir `ChoixApparence`, ou tout est desormais pose sur des
+   pixels entiers. Une couche par element se paie en memoire et en nettete ;
+   celle-ci ne reglait rien. */
+
+/* ─────────────────────────────────────────────────────────────
+   Le changement de teinte de l'avatar.
+
+   ⚠️ **La forme s'animait, la couleur sautait.** Changer de silhouette déclenche
+   une morphose — le volume se déforme d'un état à l'autre en quelques centaines
+   de millisecondes. Changer de couleur, lui, repeignait la tête d'une image à
+   l'autre. Deux réglages voisins dans le même panneau, l'un fluide et l'autre
+   sec : signalé à l'usage. Une transition sur `fill` met les deux au même
+   niveau.
+
+   ⚠️ **`fill` est bien animable, y compris posé en attribut de présentation.**
+   Un attribut de présentation alimente la propriété CSS au plus bas niveau de
+   priorité : la valeur calculée change donc quand l'attribut change, et la
+   transition s'y applique comme sur n'importe quelle déclaration.
+
+   ⚠️ **Les yeux transitionnent avec la tête, et il le faut.** Leur teinte se
+   déduit de celle de la tête en garantissant le contraste — voir
+   `couleurDesYeux` —, si bien qu'elle peut basculer du sombre au clair au
+   passage d'une couleur foncée à une claire. Laissés secs, ils claqueraient
+   au milieu d'un fondu.
+
+   ⚠️ **260 ms, plus court que la morphose.** Un fondu de couleur se perçoit
+   plus vite qu'une déformation : à durée égale il paraîtrait traîner.
+   ───────────────────────────────────────────────────────────── */
+.nv-teinte { transition: fill 260ms ease; }
+
+@media (prefers-reduced-motion: reduce) {
+  /* La couleur d'arrivée est la même ; seul le chemin pour y aller disparaît. */
+  .nv-teinte { transition: none; }
+}
+
+/* ─────────────────────────────────────────────────────────────
+   Le champ hero de la saisie d'opération : un nombre nu.
+
+   ⚠️ **Les flèches du champ numérique n'ont plus rien à border.** Un
+   `input[type=number]` affiche des incréments au survol : dans un cadre, ils
+   se logeaient contre le bord droit ; sur un nombre centré de cinquante-six
+   pixels, ils se posent au milieu de la ligne et coupent le chiffre du
+   symbole. On les retire des deux moteurs — WebKit les dessine en
+   pseudo-élément, Firefox par une apparence.
+
+   ⚠️ **La largeur suit le contenu, en `ch`.** Un champ numérique ne se
+   rétracte pas sur son texte : sans cela le nombre ne pouvait pas être centré,
+   puisque sa boîte occupait toute la place disponible quel que soit ce qu'on y
+   tape. `field-sizing: content` ferait le même travail en une ligne, mais
+   WebKit ne l'implémente pas — et c'est précisément le moteur où l'écran est
+   relu. La largeur est donc posée en ligne, à partir du nombre de caractères.
+   ───────────────────────────────────────────────────────────── */
+.nv-nombre-nu::-webkit-outer-spin-button,
+.nv-nombre-nu::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+.nv-nombre-nu {
+  -moz-appearance: textfield;
+  appearance: textfield;
 }

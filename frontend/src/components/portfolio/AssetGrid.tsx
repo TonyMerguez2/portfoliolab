@@ -6,6 +6,7 @@ import RailHorizontal from "@/components/portfolio/RailHorizontal";
 import { arrange, type GridAsset, type SortKey } from "@/lib/portfolio";
 import { FONT, NUM } from "@/lib/typography";
 import { CLAIR, RAYONS } from "@/lib/palette";
+import { ancrerLisere } from "@/components/ui/lisere";
 
 export type { GridAsset, SortKey };
 
@@ -114,7 +115,7 @@ export default function AssetGrid({
           </span>
           <button type="button" onClick={() => setMenuTri(v => !v)}
             aria-haspopup="listbox" aria-expanded={menuTri}
-            className="novac-lisere"
+            className="novac-lisere" ref={ancrerLisere}
             /**
              * ⚠️ **Même fabrication que la pilule d'ajout, teinte à part.** Rayon plein,
              * 26 pixels, le liseré des tuiles : les deux se ressemblent assez pour se lire
@@ -122,13 +123,15 @@ export default function AssetGrid({
              * normale, parce qu'une action qui *crée* et un réglage qui *ordonne* ne
              * doivent pas peser pareil à l'œil. Tranché avec l'épargnant.
              *
-             * ⚠️ L'angle du liseré suit les proportions : ~86 × 26 donne
-             * 180° − atan(26/86) = 163°. Voir le calcul dans `globals.css`.
+             * ⚠️ L'angle du liseré suit les proportions, et se mesure : ce bouton change de
+             * largeur avec le tri retenu — « Nom », « Valeur », « Variation » n'ont pas la
+             * même longueur —, si bien qu'un angle écrit une fois serait faux les deux tiers
+             * du temps. `ancrerLisere` le recalcule à chaque changement de taille. Voir le
+             * calcul dans `globals.css`.
              */
             style={{
               display: "flex", alignItems: "center", gap: 6, height: 26, padding: "0 12px",
               borderRadius: RAYONS.plein, cursor: "pointer", border: "none",
-              ["--nv-lisere-angle" as string]: "163deg",
               background: menuTri ? CLAIR.carteCreuse : CLAIR.carte,
               color: CLAIR.texte, fontFamily: FONT, fontSize: 11.5, fontWeight: 500,
               transition: "background 140ms",

@@ -23,9 +23,14 @@ function brandGlassBg(ticker: string): string {
     h = h >>> 0;
     r = 100 + (h & 0x7F); g = 100 + ((h >> 8) & 0x7F); b = 140 + ((h >> 16) & 0x5F);
   }
-  const shine = "linear-gradient(160deg,rgba(255,255,255,0.07) 0%,rgba(255,255,255,0) 35%)";
-  const dark  = `rgba(${Math.round(r*0.14)},${Math.round(g*0.10)},${Math.round(b*0.10)},0.90)`;
-  return `${shine},${dark}`;
+  /**
+   * ⚠️ **Plus de voile lumineux en haut : la plaque est un aplat.** Un dégradé blanc à sept
+   * centièmes courait sur le premier tiers, pour donner au fond l'air d'être bombé. C'est la
+   * même imitation de matière que celle qu'on a retirée aux pastilles de couleur, et elle
+   * appelle la même objection : une plaque de logo sert à poser un dessin sur un fond lisible,
+   * pas à faire croire à un objet éclairé. Demandé à l'usage.
+   */
+  return `rgba(${Math.round(r*0.14)},${Math.round(g*0.10)},${Math.round(b*0.10)},0.90)`;
 }
 
 function cryptoSymbol(ticker: string): string {
@@ -259,7 +264,6 @@ function AssetLogoInner({
 
   const containerBg  = bare ? "transparent" : status !== "ok" ? fallbackBg : brandGlassBg(ticker);
   const containerBdr = bare ? "none"        : status !== "ok" ? "none"      : "1px solid rgba(255,255,255,0.07)";
-  const showGloss   = size >= 24 && status === "ok";
 
   return (
     <div style={{
@@ -300,24 +304,20 @@ function AssetLogoInner({
         />
       )}
 
-      {/* iOS gloss (top reflection + bottom depth + inner ring) — only ≥ 24px */}
-      {showGloss && <>
-        <div style={{
-          position:"absolute", top:0, left:0, right:0, height:"48%",
-          background:"linear-gradient(180deg,rgba(255,255,255,0.18) 0%,rgba(255,255,255,0.02) 100%)",
-          pointerEvents:"none",
-        }}/>
-        <div style={{
-          position:"absolute", bottom:0, left:0, right:0, height:"30%",
-          background:"linear-gradient(0deg,rgba(0,0,0,0.16) 0%,rgba(0,0,0,0) 100%)",
-          pointerEvents:"none",
-        }}/>
-        <div style={{
-          position:"absolute", inset:0, borderRadius:"inherit",
-          boxShadow:"inset 0 1px 0 rgba(255,255,255,0.14),inset 0 -1px 0 rgba(0,0,0,0.14)",
-          pointerEvents:"none",
-        }}/>
-      </>}
+      {/**
+        * ⚠️ **Le relief a été retiré, et il tenait en trois couches.** Un reflet blanc sur la
+        * moitié haute, une ombre noire sur le tiers bas, et un anneau intérieur clair en haut /
+        * sombre en bas — la recette d'une icône d'iOS. Ensemble elles bombaient la plaque.
+        *
+        * ⚠️ **Trois raisons de s'en passer, dont deux mesurables.** Elles s'appliquaient au
+        * logo *et* à son fond, donc elles éclaircissaient la marque elle-même — un logo n'a
+        * pas à changer de couleur parce qu'on l'a posé sur une plaque. Elles ne s'affichaient
+        * qu'au-delà de vingt-quatre pixels, si bien que le même actif n'avait pas le même
+        * aspect selon l'écran où on le regardait. Et elles répètent, ici, l'imitation de verre
+        * déjà écartée des pastilles de couleur : l'application ne fait plus semblant d'avoir
+        * de la matière.
+        */}
+
 
     </div>
   );

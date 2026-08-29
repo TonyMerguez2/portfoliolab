@@ -147,8 +147,8 @@ export default function SideNav() {
         <span aria-hidden="true" style={{
           width: 20, height: 20, flexShrink: 0,
           backgroundColor: "var(--nv-texte)",
-          maskImage: "url(/logo-novac.png)",
-          WebkitMaskImage: "url(/logo-novac.png)",
+          maskImage: "url(/logo-hivesync.svg)",
+          WebkitMaskImage: "url(/logo-hivesync.svg)",
           maskSize: "contain", WebkitMaskSize: "contain",
           maskRepeat: "no-repeat", WebkitMaskRepeat: "no-repeat",
           maskPosition: "center", WebkitMaskPosition: "center",

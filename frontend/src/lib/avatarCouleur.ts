@@ -182,32 +182,58 @@ export function contrasteDuRegard(fond: string): number {
 /**
  * Les couleurs proposées au clic sur le personnage.
  *
- * Un choix court plutôt qu'une roue complète : elles se parcourent d'un coup d'œil, et le
- * « + » reste là pour qui veut autre chose. Elles couvrent le tour du cercle chromatique
- * sans trou, à clarté et saturation comparables — deux teintes voisines mais l'une terne
- * et l'autre vive se seraient lues comme un défaut.
+ * Elles couvrent le tour du cercle chromatique sans trou, à clarté et saturation
+ * comparables — deux teintes voisines mais l'une terne et l'autre vive se seraient lues
+ * comme un défaut. Le « + » reste là pour qui veut autre chose.
  *
- * ⚠️ **Onze et non douze**, pour que la grille tombe juste : quatre colonnes sur trois
- * rangées, le « + » occupant le coin haut droit comme sur la référence. À douze, la
- * dernière rangée ne portait qu'une pastille esseulée. C'est « Émeraude » qui est partie
- * — elle doublait presque « Menthe », donc c'est le choix qui coûtait le moins.
+ * ⚠️ **Dix-neuf, contre onze auparavant.** La rangée courte se justifiait par une grille de
+ * quatre colonnes sur trois rangées, où une douzième pastille serait restée esseulée. Cette
+ * contrainte a disparu avec la disposition en écailles, qui absorbe n'importe quel compte ;
+ * et l'ancien choix laissait de vrais trous — **quatre-vingt-quinze degrés** entre le citron
+ * et la menthe, c'est-à-dire aucun vert franc, et rien entre le violet et le fuchsia.
+ * Demandé à l'usage d'en mettre davantage.
+ *
+ * ⚠️ **Rangées par teinte, du chaud au froid, les neutres à la fin.** L'ordre du tableau est
+ * l'ordre d'affichage : rangé au hasard, un nuancier se parcourt une couleur à la fois,
+ * alors qu'un spectre se lit d'un coup d'œil. Les deux neutres ferment la marche parce
+ * qu'ils n'ont pas de place sur le cercle.
+ *
+ * ⚠️ **La coupure du cercle est mise là où elle coûte le moins.** Un tableau linéaire doit
+ * bien rompre la boucle quelque part : elle tombe entre le violet, 258°, et le corail, 350°.
+ * Aucune autre paire voisine ne saute plus de trente degrés.
  */
 export const COULEURS_AVATAR: { nom: string; hex: string }[] = [
+  { nom: "Corail", hex: "#F43F5E" },
+  { nom: "Rouge", hex: "#EF4444" },
+  { nom: "Orange", hex: "#F97316" },
+  { nom: "Ambre", hex: "#F59E0B" },
+  { nom: "Or", hex: "#EAB308" },
+  { nom: "Citron", hex: "#D8E63C" },
+  { nom: "Tilleul", hex: "#84CC16" },
+  { nom: "Vert", hex: "#22C55E" },
+  { nom: "Menthe", hex: "#10B981" },
+  { nom: "Turquoise", hex: "#14B8A6" },
+  { nom: "Cyan", hex: "#22D3EE" },
+  { nom: "Ciel", hex: "#0EA5E9" },
+  { nom: "Azur", hex: "#3B82F6" },
   { nom: "Indigo", hex: "#6366F1" },
   { nom: "Violet", hex: "#8B5CF6" },
+  { nom: "Améthyste", hex: "#C026D3" },
   { nom: "Fuchsia", hex: "#D946A6" },
-  { nom: "Corail", hex: "#F43F5E" },
-  { nom: "Ambre", hex: "#F59E0B" },
-  { nom: "Citron", hex: "#D8E63C" },
-  { nom: "Menthe", hex: "#10B981" },
-  { nom: "Cyan", hex: "#22D3EE" },
-  { nom: "Azur", hex: "#3B82F6" },
   { nom: "Ardoise", hex: "#64748B" },
   { nom: "Encre", hex: "#1E2233" },
 ];
 
-/** La couleur par défaut, celle du prototype. */
-export const COULEUR_PAR_DEFAUT = COULEURS_AVATAR[0].hex;
+/**
+ * La couleur par défaut, celle du prototype.
+ *
+ * ⚠️ **Écrite, et non lue en tête de tableau.** Elle valait `COULEURS_AVATAR[0]`, ce qui
+ * marchait tant que l'indigo ouvrait la liste. Ranger le nuancier par teinte l'a envoyé en
+ * quatorzième position : le défaut serait silencieusement devenu corail, pour tous les
+ * portefeuilles qui n'ont jamais choisi. Un défaut ne doit pas dépendre de l'ordre
+ * d'affichage d'autre chose.
+ */
+export const COULEUR_PAR_DEFAUT = "#6366F1";
 
 /** La clé sous laquelle le choix survit au rechargement. */
 export const CLE_COULEUR = "novac-avatar-couleur";

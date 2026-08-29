@@ -1059,7 +1059,6 @@ function ChartContent() {
                 .asset-hero-star:active{opacity:.58;transform:none!important;scale:1!important}
                 .asset-hero-star:focus-visible{outline:2px solid rgba(var(--nv-encre-rvb), .38);outline-offset:2px}
                 .asset-hero-star svg,.asset-hero-star:hover svg{display:block;transform:none!important;translate:none!important;scale:1!important;transition:none!important}
-                .asset-meta-pill{display:inline-flex;align-items:center;min-height:20px;padding:2px 7px;border-radius:999px;border:1px solid rgba(var(--nv-encre-rvb), .035);background:rgba(var(--nv-encre-rvb), .055);font-size:9px;line-height:1;font-weight:600;white-space:nowrap}
                 .asset-hero-price{justify-content:space-between;padding-top:2px!important;padding-bottom:2px!important;box-sizing:border-box}
                 .asset-performance-pill{display:inline-flex;align-items:center;min-height:17px;padding:2px 7px;border-radius:999px;font-size:9px;line-height:1;font-weight:700;box-sizing:border-box}
                 .asset-market-pill{display:inline-flex;align-items:center;align-self:flex-start;gap:5px;min-height:17px;padding:2px 7px;box-sizing:border-box;border-radius:9px;border:1px solid rgba(var(--nv-encre-rvb), .028);background:rgba(var(--nv-encre-rvb), .045);white-space:nowrap}
@@ -1137,15 +1136,15 @@ function ChartContent() {
                               <span style={{ marginTop:5, fontSize:11, fontWeight:550, color:"rgba(var(--nv-encre-rvb), 0.9)", lineHeight:1.1, whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>{assetInfo?.name || ticker}</span>
                               <div style={{ display:"flex", alignItems:"center", gap:7, marginTop:6, minWidth:0 }}>
                                 {assetInfo?.type && assetInfo.type !== "INDEX" && (
-                                  <span className="asset-meta-pill" style={{ color:"rgba(var(--nv-encre-rvb), 0.72)" }}>
+                                  <span className="nv-pilule nv-pilule-douce" style={{ color:"rgba(var(--nv-encre-rvb), 0.72)" }}>
                                     {({"EQUITY":"Action","ETF":"ETF","CRYPTOCURRENCY":"Crypto"} as Record<string,string>)[assetInfo.type] ?? assetInfo.type}
                                   </span>
                                 )}
                                 {quote?.global_rank != null && (
-                                  <span className="asset-meta-pill" style={{ color:"rgba(var(--nv-encre-rvb), 0.72)" }}>#{quote.global_rank}</span>
+                                  <span className="nv-pilule nv-pilule-douce" style={{ color:"rgba(var(--nv-encre-rvb), 0.72)" }}>#{quote.global_rank}</span>
                                 )}
                                 {assetInfo?.exchange && !isCrypto && (
-                                  <span className="asset-meta-pill" style={{ color:"rgba(var(--nv-encre-rvb), 0.58)", fontWeight:500, minWidth:0 }}>
+                                  <span className="nv-pilule nv-pilule-douce" style={{ color:"rgba(var(--nv-encre-rvb), 0.58)", fontWeight:500, minWidth:0 }}>
                                     {/* ⚠️ L'ellipse porte sur le **texte**, plus sur la pastille. Avec
                                         `overflow:hidden` posé sur la pastille, c'était son dernier
                                         enfant qui se faisait couper — le drapeau. Mesuré avant
@@ -1271,14 +1270,14 @@ function ChartContent() {
                                     </div>
                                     <span style={{ marginTop:5, fontSize:11, fontWeight:550, color:"rgba(var(--nv-encre-rvb), 0.9)", lineHeight:1.1, whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>{customBmName}</span>
                                     <div style={{ display:"flex", alignItems:"center", gap:7, marginTop:6, minWidth:0 }}>
-                                      <span className="asset-meta-pill" style={{ color:"rgba(var(--nv-encre-rvb), 0.72)" }}>
+                                      <span className="nv-pilule nv-pilule-douce" style={{ color:"rgba(var(--nv-encre-rvb), 0.72)" }}>
                                         {({"EQUITY":"Action","ETF":"ETF","INDEX":"Indice","CRYPTOCURRENCY":"Crypto"} as Record<string,string>)[customBmType] ?? customBmType}
                                       </span>
                                       {bmQuote?.global_rank != null && (
-                                        <span className="asset-meta-pill" style={{ color:"rgba(var(--nv-encre-rvb), 0.72)" }}>#{bmQuote.global_rank}</span>
+                                        <span className="nv-pilule nv-pilule-douce" style={{ color:"rgba(var(--nv-encre-rvb), 0.72)" }}>#{bmQuote.global_rank}</span>
                                       )}
                                       {bmInfo?.exchange && customBmType !== "CRYPTOCURRENCY" && (
-                                        <span className="asset-meta-pill" style={{ color:"rgba(var(--nv-encre-rvb), 0.58)", fontWeight:500 }}>
+                                        <span className="nv-pilule nv-pilule-douce" style={{ color:"rgba(var(--nv-encre-rvb), 0.58)", fontWeight:500 }}>
                                           {libellePlace(bmInfo.exchange) ?? bmInfo.exchange}
                                           <DrapeauPlace place={bmInfo.exchange} />
                                         </span>
@@ -2344,9 +2343,9 @@ function ChartContent() {
                                     <span style={{ fontSize:12.5, lineHeight:1, fontWeight:760, letterSpacing:"-0.02em", color:"var(--nv-texte)", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{s.ticker}</span>
                                     <span style={{ marginTop:4, fontSize:9, lineHeight:1, color:"rgba(var(--nv-encre-rvb), 0.52)", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{name}</span>
                                     <div style={{ display:"flex", alignItems:"center", gap:5, marginTop:6, minWidth:0 }}>
-                                      <span className="asset-meta-pill" style={{ minHeight:15, padding:"2px 6px", fontSize:8, color:"rgba(var(--nv-encre-rvb), 0.70)" }}>{assetTypeLabel}</span>
+                                      <span className="nv-pilule nv-pilule-douce" style={{ minHeight:15, padding:"2px 6px", fontSize:8, color:"rgba(var(--nv-encre-rvb), 0.70)" }}>{assetTypeLabel}</span>
                                       {(similarBy === "marketcap" ? s.market_cap != null : (exchange || s.country)) && (
-                                        <span className="asset-meta-pill" style={{ minHeight:15, maxWidth:88, padding:"2px 6px", fontSize:8, color:"rgba(var(--nv-encre-rvb), 0.52)", fontWeight:500, overflow:"hidden", textOverflow:"ellipsis" }}>
+                                        <span className="nv-pilule nv-pilule-douce" style={{ minHeight:15, maxWidth:88, padding:"2px 6px", fontSize:8, color:"rgba(var(--nv-encre-rvb), 0.52)", fontWeight:500, overflow:"hidden", textOverflow:"ellipsis" }}>
                                           <span style={{ overflow:"hidden", textOverflow:"ellipsis" }}>
                                             {similarBy === "marketcap" && s.market_cap != null ? `Cap ${_fmtC(s.market_cap)}` : (exchange || s.country)}
                                           </span>

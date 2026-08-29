@@ -60,8 +60,8 @@ export default function AuthModal({ onClose, onAuth, dark = false }: Props) {
             // Masque plutôt qu'image : un seul fichier au lieu d'une variante
             // par thème, et la couleur suit l'encre.
             backgroundColor: "var(--nv-texte)",
-            maskImage: "url(/logo-novac.png)",
-            WebkitMaskImage: "url(/logo-novac.png)",
+            maskImage: "url(/logo-hivesync.svg)",
+            WebkitMaskImage: "url(/logo-hivesync.svg)",
             maskSize: "contain", WebkitMaskSize: "contain",
             maskRepeat: "no-repeat", WebkitMaskRepeat: "no-repeat",
             maskPosition: "center", WebkitMaskPosition: "center",

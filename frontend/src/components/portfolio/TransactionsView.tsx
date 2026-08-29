@@ -4,7 +4,9 @@ import AssetLogo from "@/components/AssetLogo";
 import { FONT, NUM } from "@/lib/typography";
 import { enTetesAuth } from "@/lib/session";
 import Cadre from "@/components/ui/Cadre";
+import Segments from "@/components/ui/Segments";
 import PiluleAction from "@/components/portfolio/PiluleAction";
+import PastilleVariation from "@/components/portfolio/PastilleVariation";
 import { JETONS } from "@/lib/palette";
 import { API_URL as API } from "@/lib/api";
 import {
@@ -410,7 +412,10 @@ export default function TransactionsView({
     // prorata, chacun défilant chez lui.
     <div style={{
       display: "flex", flexDirection: "column", gap: GOUTTIERE,
-      padding: `8px ${MARGE}px 0`, height: "100%", minHeight: 0, overflow: "hidden",
+      /* ⚠️ Même rembourrage que la vue générale, bas compris : sans les dix pixels du bas,
+         le conteneur mesurait 665 contre 647 et les deux onglets ne partaient pas du même
+         cadre, si bien qu'aucun alignement de cartes ne pouvait tomber juste. */
+      padding: `8px ${MARGE}px ${MARGE}px`, height: "100%", minHeight: 0, overflow: "hidden",
     }}>
 
       {/**
@@ -428,7 +433,11 @@ export default function TransactionsView({
         * soustrait, qu'il soit à côté ou dessous. Ce qu'on gagne, c'est le vide en moins et
         * une carte de détail plus large, pas des écritures de plus.
         */}
-      <div style={{ display: "flex", gap: GOUTTIERE, flex: 1, minHeight: 0 }}>
+      {/* ⚠️ **Gouttière à zéro, comme la vue générale — l'écart vient du rembourrage de la
+          colonne de droite.** Les deux onglets se superposent case pour case ; obtenir le
+          même écart par deux moyens différents — un `gap` ici, un `paddingLeft` là-bas —
+          aurait suffi à décaler les cartes de quelques pixels d'un onglet à l'autre. */}
+      <div style={{ display: "flex", gap: 0, flex: 1, minHeight: 0 }}>
 
       {/* ── Colonne principale ───────────────────────────────────────────── */}
       <div style={{ display: "flex", flexDirection: "column", gap: GOUTTIERE, flex: 1,
@@ -494,10 +503,22 @@ export default function TransactionsView({
       {/* ── Colonne de droite ────────────────────────────────────────────── */}
       {/* Le dernier panneau s'étire pour occuper le bas : sans quoi la colonne
           s'arrêtait à mi-hauteur et laissait un vide que rien ne justifiait. */}
+      {/* ⚠️ **296 pixels et dix de rembourrage à gauche : les mesures exactes de la colonne
+          de droite de la vue générale.** Elle en faisait 320 sans rembourrage, ce qui posait
+          « Résumé » quarante-huit pixels plus large que « Répartition » d'en face et
+          l'entraînait hors de son alignement. */}
       <div style={{ display: "flex", flexDirection: "column", gap: GOUTTIERE,
-                    width: 320, flexShrink: 0, minHeight: 0 }}>
+                    width: 296, paddingLeft: 10, boxSizing: "border-box",
+                    flexShrink: 0, minHeight: 0 }}>
 
-        <Carte style={{ flexShrink: 0 }}>
+        {/**
+          * ⚠️ **Seul dans sa colonne, « Résumé » l'occupe entièrement plutôt que de se tasser
+          * en haut.** « Répartition des opérations » est descendue dans la rangée basse pour
+          * tenir le coin que le détail libère ; sans étirement, ce panneau garderait sa
+          * hauteur naturelle de 241 et laisserait le reste de la colonne vide — le défaut
+          * qu'on vient précisément de retirer ailleurs.
+          */}
+        <Carte style={{ flex: 1, minHeight: 0 }}>
           {/**
             * ⚠️ **La même pilule que la vue générale, et non plus un bouton à elle.** Elle
             * portait un bord accentué, un fond translucide, une encre bleue et un rayon de 9
@@ -546,6 +567,201 @@ export default function TransactionsView({
           * `achat | renforcement | vente | vente_partielle | apport`, et le serveur non plus.
           * C'est un changement de modèle, pas de mise en page.
           */}
+      </div>
+      </div>
+
+      {/**
+        * La rangée basse : le détail de l'écriture, et la composition du journal à sa droite.
+        *
+        * ⚠️ **Deux colonnes ici aussi, aux mêmes mesures que la rangée haute.** Le détail
+        * s'arrête donc exactement où s'arrête le journal — demandé à l'usage, son bord droit
+        * ne s'alignait sur rien tant qu'il passait sous la colonne de droite. Et « Répartition
+        * des opérations » descend occuper le coin ainsi libéré, sans quoi on échangeait un
+        * bord mal aligné contre un vide de 286 sur 284.
+        *
+        * ⚠️ **C'est la rangée haute qui est élastique, celle-ci a la hauteur du détail.** Le
+        * détail ne défile pas — voir `HAUTEUR_DETAIL` —, donc sa hauteur est une donnée ; le
+        * journal, qui défile légitimement, prend ce qui reste.
+        */}
+      <div style={{ display: "flex", gap: 0, height: HAUTEUR_DETAIL, flexShrink: 0 }}>
+        <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column" }}>
+        {/* Hauteur naturelle, et pas une part de la colonne : voir la règle au-dessus du
+        journal. `flexShrink: 0` est ici la forme que prend le contrat « ce panneau ne
+        défile pas » — le laisser rétrécir reviendrait à le reprendre en silence. */}
+        <Carte style={{ flex: 1, minHeight: 0 }}>
+          {/**
+            * ⚠️ **La suppression est passée du bas de la carte à sa rangée de titre.** Elle
+            * occupait une rangée à elle seule, marge comprise, pour un bouton ; et cette
+            * rangée changeait de hauteur selon l'état — un bouton au repos, deux pendant la
+            * confirmation. C'était les dix derniers pixels qui manquaient pour que le
+            * panneau tienne sans défiler, et les seuls qui variaient. Là-haut elle ne coûte
+            * rien : la rangée existe déjà, réglée sur la hauteur d'une pilule.
+            *
+            * ⚠️ **Et c'est aussi sa place.** Le reste de la page met ses actions dans le
+            * titre du panneau qu'elles concernent — « Ajouter une opération » au-dessus du
+            * résumé, « Ajouter un compte » au-dessus de la rangée de dossiers. Une action
+            * reléguée sous le contenu se cherche.
+            */}
+          <Titre action={!detailApport && detail && (
+            confirme === detail.tx.id ? (
+              <span style={{ display: "flex", gap: 8 }}>
+                <button onClick={() => setConfirme(null)} style={{
+                  padding: "5px 10px", borderRadius: 8, border: "1px solid rgba(var(--nv-encre-rvb), 0.10)",
+                  background: "transparent", color: "rgba(var(--nv-encre-rvb), 0.45)",
+                  fontSize: 10.5, cursor: "pointer", fontFamily: FONT, whiteSpace: "nowrap" }}>Annuler</button>
+                <button onClick={() => supprimer(detail.tx.id)} disabled={suppression} style={{
+                  padding: "5px 10px", borderRadius: 8, border: `1px solid ${JETONS.negatifDoux}`,
+                  background: JETONS.negatifDoux, color: JETONS.negatif, fontWeight: 600,
+                  fontSize: 10.5, cursor: suppression ? "default" : "pointer", fontFamily: FONT,
+                  whiteSpace: "nowrap", opacity: suppression ? 0.5 : 1 }}>
+                  {suppression ? "Suppression…" : "Confirmer la suppression"}
+                </button>
+              </span>
+            ) : (
+              <button onClick={() => { setConfirme(detail.tx.id); setErreur(null); }} style={{
+                padding: "5px 10px", borderRadius: 8, border: "1px solid rgba(var(--nv-encre-rvb), 0.10)",
+                background: "transparent", color: "rgba(var(--nv-encre-rvb), 0.35)",
+                fontSize: 10.5, cursor: "pointer", fontFamily: FONT, whiteSpace: "nowrap" }}>
+                Supprimer cette opération
+              </button>
+            )
+          )}>{detailApport ? "Détail de l’apport" : "Détail de l’opération"}</Titre>
+          {detailApport ? (
+            <DetailApport apport={detailApport} compte={nomDeCompte[detailApport.compte_id]} />
+          ) : detail ? (() => {
+            const t = detail.tx;
+            const p = cours[t.ticker];
+            const valeurLigne = p != null ? t.quantity * p : null;
+            const poids = valeurLigne != null && valeurTotale > 0 ? (valeurLigne / valeurTotale) * 100 : null;
+            return (
+              /**
+               * ⚠️ **Ce panneau ne défile pas, et c'est une contrainte à tenir, pas un
+               * réglage.** Demandé à l'usage. Le détail d'une écriture tient en une
+               * quinzaine de valeurs : s'il faut le faire défiler, ce n'est pas qu'il est
+               * long, c'est qu'il est mal disposé — et un ascenseur ici cache justement
+               * qu'on a mal employé les mille pixels de large dont il dispose.
+               *
+               * ⚠️ **Ce qui l'a fait rentrer, mesuré :** les quatre montants passés de deux
+               * colonnes à quatre, soit une rangée de moins (~54 px), la suppression
+               * remontée dans la rangée de titre (~36 px), et les marges resserrées de deux
+               * pixels chacune. Le contenu faisait 323 px pour 242 disponibles.
+               *
+               * ⚠️ **Le jour où l'on ajoute un champ ici, c'est ce contrat qu'il faut
+               * revérifier** — pas ajouter `overflow: auto` pour faire tenir.
+               */
+              <div style={{ minHeight: 0 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10 }}>
+                  <AssetLogo ticker={t.ticker} type={t.asset_type} size={30} radius={8}
+                    fallbackBg={JETONS.accentDoux} fallbackBorder={JETONS.accentBord}
+                    fallbackTextColor={JETONS.accent} />
+                  <span>
+                    <span style={{ display: "block", fontFamily: FONT, fontSize: 13, fontWeight: 700, color: COULEUR_OP[detail.type] }}>
+                      {LIBELLE_OP[detail.type]} {t.ticker}
+                    </span>
+                    <span style={{ display: "block", fontFamily: FONT, fontSize: 10.5, color: "rgba(var(--nv-encre-rvb), 0.35)" }}>
+                      {new Date(t.executed_at).toLocaleDateString("fr-FR", { day: "numeric", month: "long", year: "numeric" })}
+                    </span>
+                  </span>
+                </div>
+
+                {/**
+                  * ⚠️ **Quatre colonnes et non deux : la carte gagne en largeur ce qu'elle
+                  * rendait en hauteur.** Depuis le retrait de la timeline, ce panneau
+                  * s'étend sur 1082 pixels ; en deux colonnes, chaque encart en recevait
+                  * 520 pour y écrire « 0,02 », et les quatre montants occupaient deux
+                  * rangées. Sur une seule, ils tiennent tous et la carte récupère une
+                  * cinquantaine de pixels de haut — c'est l'essentiel de ce qu'il fallait
+                  * trouver pour qu'elle cesse de défiler.
+                  */}
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 8, marginBottom: 10 }}>
+                  {[
+                    ["Quantité", t.quantity.toLocaleString("fr-FR", { maximumFractionDigits: 8 })],
+                    ["Prix unitaire", eur(t.unit_price)],
+                    ["Montant", eur(montant(t))],
+                    ["Frais", eur(t.fees ?? 0)],
+                  ].map(([l, v]) => (
+                    <div key={l} style={{ background: "rgba(var(--nv-encre-rvb), 0.04)", borderRadius: 10, padding: "8px 10px" }}>
+                      <div style={{ fontFamily: FONT, fontSize: 9.5, color: "rgba(var(--nv-encre-rvb), 0.32)", marginBottom: 3 }}>{l}</div>
+                      <div style={{ ...NUM, fontSize: 12, fontWeight: 700, color: "rgba(var(--nv-encre-rvb), 0.92)", whiteSpace: "nowrap" }}>{v}</div>
+                    </div>
+                  ))}
+                </div>
+
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 8, marginBottom: 10 }}>
+                  <div>
+                    <div style={{ fontFamily: FONT, fontSize: 9.5, color: "rgba(var(--nv-encre-rvb), 0.32)", marginBottom: 3 }}>
+                      Poids dans le portefeuille
+                    </div>
+                    <div style={{ ...NUM, fontSize: 12.5, fontWeight: 700, color: "rgba(var(--nv-encre-rvb), 0.92)", whiteSpace: "nowrap" }}>
+                      {poids != null ? `${poids.toFixed(2)} %` : "—"}
+                    </div>
+                  </div>
+                  <div>
+                    <div style={{ fontFamily: FONT, fontSize: 9.5, color: "rgba(var(--nv-encre-rvb), 0.32)", marginBottom: 3 }}>
+                      Valeur actuelle
+                    </div>
+                    <div style={{ ...NUM, fontSize: 12.5, fontWeight: 700, color: "rgba(var(--nv-encre-rvb), 0.92)", whiteSpace: "nowrap" }}>
+                      {valeurLigne != null ? eur(valeurLigne) : "—"}
+                    </div>
+                  </div>
+                  <div>
+                    <div style={{ fontFamily: FONT, fontSize: 9.5, color: "rgba(var(--nv-encre-rvb), 0.32)", marginBottom: 3 }}>
+                      {detail.realise ? "Résultat réalisé" : "Plus-value latente"}
+                    </div>
+                    {/**
+                      * ⚠️ **Dit comme la performance du bandeau : le montant, puis son
+                      * pourcentage en pastille.** Demandé à l'usage. C'est la même grandeur
+                      * aux deux bouts de la page — une plus-value — et elle se lisait ici
+                      * autrement : le pourcentage passait sous le montant, en petit et à
+                      * soixante pour cent d'opacité, c'est-à-dire au registre d'une note de
+                      * bas de page. Enfermé dans son fond teinté il redevient une donnée.
+                      *
+                      * ⚠️ **Et la ligne y gagne de la hauteur** : le pourcentage passant à
+                      * côté du montant plutôt qu'en dessous, le corps du détail perd une
+                      * ligne — de la réserve reprise sur `HAUTEUR_DETAIL`.
+                      */}
+                    <div style={{ ...NUM, fontSize: 12.5, fontWeight: 700, whiteSpace: "nowrap",
+                      display: "flex", alignItems: "center", gap: 7,
+                      color: detail.gain == null ? "rgba(var(--nv-encre-rvb), 0.40)" : detail.gain >= 0 ? JETONS.positif : JETONS.negatif }}>
+                      <span>{detail.gain == null ? "—" : `${detail.gain >= 0 ? "+" : ""}${eur(detail.gain)}`}</span>
+                      {detail.gainPct != null && (
+                        <PastilleVariation pct={detail.gainPct} surMontantDe={12.5}
+                          couleur={detail.gain != null && detail.gain < 0 ? JETONS.negatif : JETONS.positif} />
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                <div style={{ borderTop: "1px solid rgba(var(--nv-encre-rvb), 0.07)", paddingTop: 8 }}>
+                  <div style={{ fontFamily: FONT, fontSize: 9.5, color: "rgba(var(--nv-encre-rvb), 0.32)", marginBottom: 4 }}>
+                    Note personnelle
+                  </div>
+                  <div style={{ fontFamily: FONT, fontSize: 11.5, lineHeight: 1.6,
+                    color: t.note ? "rgba(var(--nv-encre-rvb), 0.65)" : "rgba(var(--nv-encre-rvb), 0.25)" }}>
+                    {t.note || "Aucune note sur cette opération."}
+                  </div>
+                </div>
+
+                {erreur && (
+                  <div style={{ marginTop: 10, padding: "7px 10px", borderRadius: 8,
+                    background: JETONS.negatifVoile, border: `1px solid ${JETONS.negatifDoux}`,
+                    fontFamily: FONT, fontSize: 10.5, color: JETONS.negatif, lineHeight: 1.5 }}>
+                    {erreur}
+                  </div>
+                )}
+
+              </div>
+            );
+          })() : (
+            <div style={{ fontFamily: FONT, fontSize: 11.5, color: "rgba(var(--nv-encre-rvb), 0.28)" }}>
+              {/* La timeline n'existe plus : c'est le journal du dessus qu'on désigne. */}
+              Choisissez une écriture dans le journal.
+            </div>
+          )}
+        </Carte>
+        </div>
+        <div style={{ width: 296, paddingLeft: 10, boxSizing: "border-box",
+                      flexShrink: 0, display: "flex", flexDirection: "column" }}>
         <Carte style={{ flex: 1, minHeight: 0, overflowY: "auto" }}>
           <Titre>Répartition des opérations</Titre>
           <div style={{ display: "flex", height: 6, borderRadius: 3, overflow: "hidden", marginBottom: 12 }}>
@@ -569,168 +785,6 @@ export default function TransactionsView({
       </div>
 
 
-      {/* Hauteur naturelle, et pas une part de la colonne : voir la règle au-dessus du
-      journal. `flexShrink: 0` est ici la forme que prend le contrat « ce panneau ne
-      défile pas » — le laisser rétrécir reviendrait à le reprendre en silence. */}
-      <Carte style={{ height: HAUTEUR_DETAIL, flexShrink: 0 }}>
-        {/**
-          * ⚠️ **La suppression est passée du bas de la carte à sa rangée de titre.** Elle
-          * occupait une rangée à elle seule, marge comprise, pour un bouton ; et cette
-          * rangée changeait de hauteur selon l'état — un bouton au repos, deux pendant la
-          * confirmation. C'était les dix derniers pixels qui manquaient pour que le
-          * panneau tienne sans défiler, et les seuls qui variaient. Là-haut elle ne coûte
-          * rien : la rangée existe déjà, réglée sur la hauteur d'une pilule.
-          *
-          * ⚠️ **Et c'est aussi sa place.** Le reste de la page met ses actions dans le
-          * titre du panneau qu'elles concernent — « Ajouter une opération » au-dessus du
-          * résumé, « Ajouter un compte » au-dessus de la rangée de dossiers. Une action
-          * reléguée sous le contenu se cherche.
-          */}
-        <Titre action={!detailApport && detail && (
-          confirme === detail.tx.id ? (
-            <span style={{ display: "flex", gap: 8 }}>
-              <button onClick={() => setConfirme(null)} style={{
-                padding: "5px 10px", borderRadius: 8, border: "1px solid rgba(var(--nv-encre-rvb), 0.10)",
-                background: "transparent", color: "rgba(var(--nv-encre-rvb), 0.45)",
-                fontSize: 10.5, cursor: "pointer", fontFamily: FONT, whiteSpace: "nowrap" }}>Annuler</button>
-              <button onClick={() => supprimer(detail.tx.id)} disabled={suppression} style={{
-                padding: "5px 10px", borderRadius: 8, border: `1px solid ${JETONS.negatifDoux}`,
-                background: JETONS.negatifDoux, color: JETONS.negatif, fontWeight: 600,
-                fontSize: 10.5, cursor: suppression ? "default" : "pointer", fontFamily: FONT,
-                whiteSpace: "nowrap", opacity: suppression ? 0.5 : 1 }}>
-                {suppression ? "Suppression…" : "Confirmer la suppression"}
-              </button>
-            </span>
-          ) : (
-            <button onClick={() => { setConfirme(detail.tx.id); setErreur(null); }} style={{
-              padding: "5px 10px", borderRadius: 8, border: "1px solid rgba(var(--nv-encre-rvb), 0.10)",
-              background: "transparent", color: "rgba(var(--nv-encre-rvb), 0.35)",
-              fontSize: 10.5, cursor: "pointer", fontFamily: FONT, whiteSpace: "nowrap" }}>
-              Supprimer cette opération
-            </button>
-          )
-        )}>{detailApport ? "Détail de l’apport" : "Détail de l’opération"}</Titre>
-        {detailApport ? (
-          <DetailApport apport={detailApport} compte={nomDeCompte[detailApport.compte_id]} />
-        ) : detail ? (() => {
-          const t = detail.tx;
-          const p = cours[t.ticker];
-          const valeurLigne = p != null ? t.quantity * p : null;
-          const poids = valeurLigne != null && valeurTotale > 0 ? (valeurLigne / valeurTotale) * 100 : null;
-          return (
-            /**
-             * ⚠️ **Ce panneau ne défile pas, et c'est une contrainte à tenir, pas un
-             * réglage.** Demandé à l'usage. Le détail d'une écriture tient en une
-             * quinzaine de valeurs : s'il faut le faire défiler, ce n'est pas qu'il est
-             * long, c'est qu'il est mal disposé — et un ascenseur ici cache justement
-             * qu'on a mal employé les mille pixels de large dont il dispose.
-             *
-             * ⚠️ **Ce qui l'a fait rentrer, mesuré :** les quatre montants passés de deux
-             * colonnes à quatre, soit une rangée de moins (~54 px), la suppression
-             * remontée dans la rangée de titre (~36 px), et les marges resserrées de deux
-             * pixels chacune. Le contenu faisait 323 px pour 242 disponibles.
-             *
-             * ⚠️ **Le jour où l'on ajoute un champ ici, c'est ce contrat qu'il faut
-             * revérifier** — pas ajouter `overflow: auto` pour faire tenir.
-             */
-            <div style={{ minHeight: 0 }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10 }}>
-                <AssetLogo ticker={t.ticker} type={t.asset_type} size={30} radius={8}
-                  fallbackBg={JETONS.accentDoux} fallbackBorder={JETONS.accentBord}
-                  fallbackTextColor={JETONS.accent} />
-                <span>
-                  <span style={{ display: "block", fontFamily: FONT, fontSize: 13, fontWeight: 700, color: COULEUR_OP[detail.type] }}>
-                    {LIBELLE_OP[detail.type]} {t.ticker}
-                  </span>
-                  <span style={{ display: "block", fontFamily: FONT, fontSize: 10.5, color: "rgba(var(--nv-encre-rvb), 0.35)" }}>
-                    {new Date(t.executed_at).toLocaleDateString("fr-FR", { day: "numeric", month: "long", year: "numeric" })}
-                  </span>
-                </span>
-              </div>
-
-              {/**
-                * ⚠️ **Quatre colonnes et non deux : la carte gagne en largeur ce qu'elle
-                * rendait en hauteur.** Depuis le retrait de la timeline, ce panneau
-                * s'étend sur 1082 pixels ; en deux colonnes, chaque encart en recevait
-                * 520 pour y écrire « 0,02 », et les quatre montants occupaient deux
-                * rangées. Sur une seule, ils tiennent tous et la carte récupère une
-                * cinquantaine de pixels de haut — c'est l'essentiel de ce qu'il fallait
-                * trouver pour qu'elle cesse de défiler.
-                */}
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 8, marginBottom: 10 }}>
-                {[
-                  ["Quantité", t.quantity.toLocaleString("fr-FR", { maximumFractionDigits: 8 })],
-                  ["Prix unitaire", eur(t.unit_price)],
-                  ["Montant", eur(montant(t))],
-                  ["Frais", eur(t.fees ?? 0)],
-                ].map(([l, v]) => (
-                  <div key={l} style={{ background: "rgba(var(--nv-encre-rvb), 0.04)", borderRadius: 10, padding: "8px 10px" }}>
-                    <div style={{ fontFamily: FONT, fontSize: 9.5, color: "rgba(var(--nv-encre-rvb), 0.32)", marginBottom: 3 }}>{l}</div>
-                    <div style={{ ...NUM, fontSize: 12, fontWeight: 700, color: "rgba(var(--nv-encre-rvb), 0.92)", whiteSpace: "nowrap" }}>{v}</div>
-                  </div>
-                ))}
-              </div>
-
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 8, marginBottom: 10 }}>
-                <div>
-                  <div style={{ fontFamily: FONT, fontSize: 9.5, color: "rgba(var(--nv-encre-rvb), 0.32)", marginBottom: 3 }}>
-                    Poids dans le portefeuille
-                  </div>
-                  <div style={{ ...NUM, fontSize: 12.5, fontWeight: 700, color: "rgba(var(--nv-encre-rvb), 0.92)", whiteSpace: "nowrap" }}>
-                    {poids != null ? `${poids.toFixed(2)} %` : "—"}
-                  </div>
-                </div>
-                <div>
-                  <div style={{ fontFamily: FONT, fontSize: 9.5, color: "rgba(var(--nv-encre-rvb), 0.32)", marginBottom: 3 }}>
-                    Valeur actuelle
-                  </div>
-                  <div style={{ ...NUM, fontSize: 12.5, fontWeight: 700, color: "rgba(var(--nv-encre-rvb), 0.92)", whiteSpace: "nowrap" }}>
-                    {valeurLigne != null ? eur(valeurLigne) : "—"}
-                  </div>
-                </div>
-                <div>
-                  <div style={{ fontFamily: FONT, fontSize: 9.5, color: "rgba(var(--nv-encre-rvb), 0.32)", marginBottom: 3 }}>
-                    {detail.realise ? "Résultat réalisé" : "Plus-value latente"}
-                  </div>
-                  <div style={{ ...NUM, fontSize: 12.5, fontWeight: 700, whiteSpace: "nowrap",
-                    color: detail.gain == null ? "rgba(var(--nv-encre-rvb), 0.40)" : detail.gain >= 0 ? JETONS.positif : JETONS.negatif }}>
-                    {detail.gain == null ? "—" : `${detail.gain >= 0 ? "+" : ""}${eur(detail.gain)}`}
-                    {detail.gainPct != null && (
-                      <span style={{ display: "block", opacity: 0.6, fontSize: 10.5, fontWeight: 600 }}>
-                        {detail.gainPct >= 0 ? "+" : ""}{detail.gainPct.toFixed(2)} %
-                      </span>
-                    )}
-                  </div>
-                </div>
-              </div>
-
-              <div style={{ borderTop: "1px solid rgba(var(--nv-encre-rvb), 0.07)", paddingTop: 8 }}>
-                <div style={{ fontFamily: FONT, fontSize: 9.5, color: "rgba(var(--nv-encre-rvb), 0.32)", marginBottom: 4 }}>
-                  Note personnelle
-                </div>
-                <div style={{ fontFamily: FONT, fontSize: 11.5, lineHeight: 1.6,
-                  color: t.note ? "rgba(var(--nv-encre-rvb), 0.65)" : "rgba(var(--nv-encre-rvb), 0.25)" }}>
-                  {t.note || "Aucune note sur cette opération."}
-                </div>
-              </div>
-
-              {erreur && (
-                <div style={{ marginTop: 10, padding: "7px 10px", borderRadius: 8,
-                  background: JETONS.negatifVoile, border: `1px solid ${JETONS.negatifDoux}`,
-                  fontFamily: FONT, fontSize: 10.5, color: JETONS.negatif, lineHeight: 1.5 }}>
-                  {erreur}
-                </div>
-              )}
-
-            </div>
-          );
-        })() : (
-          <div style={{ fontFamily: FONT, fontSize: 11.5, color: "rgba(var(--nv-encre-rvb), 0.28)" }}>
-            {/* La timeline n'existe plus : c'est le journal du dessus qu'on désigne. */}
-            Choisissez une écriture dans le journal.
-          </div>
-        )}
-      </Carte>
     </div>
   );
 }
@@ -803,14 +857,6 @@ function DetailApport({ apport, compte }: { apport: ApportRange; compte?: Compte
   );
 }
 
-/**
- * Le choix du dossier regardé.
- *
- * ⚠️ **Posé dans le titre du tableau, et non au-dessus de l'onglet.** Il ne commande que
- * cette liste-là : le résumé de droite continue de porter sur le portefeuille entier, et
- * un filtre planté en tête de page aurait laissé croire qu'il s'applique à tout ce qui est
- * visible.
- */
 function BarreDossiers({
   dossiers, vue, onChoisir,
 }: {
@@ -818,29 +864,49 @@ function BarreDossiers({
   vue: string;
   onChoisir: (v: string) => void;
 }) {
-  const puce = (actif: boolean): React.CSSProperties => ({
-    display: "inline-flex", alignItems: "center", gap: 5,
-    padding: "4px 9px", borderRadius: 8, cursor: "pointer", fontFamily: FONT,
-    fontSize: 10.5, fontWeight: 600, whiteSpace: "nowrap",
-    background: actif ? JETONS.accentVoile : "transparent",
-    border: `1px solid ${actif ? JETONS.accentBord : "rgba(var(--nv-encre-rvb), 0.08)"}`,
-    color: actif ? JETONS.accent : "rgba(var(--nv-encre-rvb), 0.45)",
-  });
+  /**
+   * Le classement des écritures par dossier.
+   *
+   * ⚠️ **C'est le composant `Segments` lui-même, et non une imitation.** La courbe de la vue
+   * générale propose exactement les mêmes options — `Total`, puis un dossier par compte —
+   * pour découper exactement la même chose ; les deux partagent d'ailleurs déjà leur
+   * vocabulaire, `"total"` et l'identifiant du compte. Elles portaient pourtant deux habits :
+   * une piste de segments là-bas, des puces à bord fin ici. Demandé à l'usage.
+   *
+   * ⚠️ **Imiter la piste à la main aurait été le quatrième cas de la journée** — après les
+   * boutons d'ajout, la pastille de variation et la pilule d'étiquette. Reprendre le
+   * composant, c'est hériter de ses corrections plutôt que de sa forme du jour.
+   *
+   * ⚠️ **La pastille de couleur passe dans le libellé**, que `Segment` accepte comme nœud.
+   * Elle dit à quel dossier appartient l'option, et c'est la seule chose que le sélecteur de
+   * la courbe n'a pas : là-bas la couleur est déjà portée par la courbe elle-même.
+   */
   return (
-    <div style={{ display: "flex", gap: 4, overflowX: "auto", marginBottom: 10,
-                  paddingBottom: 2, flexShrink: 0 }}>
-      <button onClick={() => onChoisir(TOTAL)} style={puce(vue === TOTAL)}>Tout</button>
-      {dossiers.map(d => (
-        <button key={d.cle} onClick={() => onChoisir(d.cle)} style={puce(vue === d.cle)}
-          title={`Les écritures de ${d.nom}`}>
-          <i style={{ width: 6, height: 6, borderRadius: "50%", background: d.couleur, flexShrink: 0 }} />
-          {d.nom}
-        </button>
-      ))}
+    <div style={{ display: "flex", overflowX: "auto", marginBottom: 10,
+                  paddingBottom: 2, flexShrink: 0, scrollbarWidth: "none" }}>
+      <Segments
+        taille="sm"
+        ariaLabel="Filtrer les écritures par dossier"
+        valeur={vue}
+        onChange={onChoisir}
+        options={[
+          { valeur: TOTAL, libelle: "Tout", titre: "Toutes les écritures du portefeuille" },
+          ...dossiers.map(d => ({
+            valeur: d.cle,
+            libelle: (
+              <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+                <i style={{ width: 6, height: 6, borderRadius: "50%",
+                            background: d.couleur, flexShrink: 0 }} />
+                {d.nom}
+              </span>
+            ),
+            titre: `Les écritures de ${d.nom}`,
+          })),
+        ]}
+      />
     </div>
   );
 }
-
 function TableauOperations({
   lignes, types, parId, comptes, choisie, onChoisir,
 }: {

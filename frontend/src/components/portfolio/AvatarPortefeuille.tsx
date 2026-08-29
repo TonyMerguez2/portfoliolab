@@ -5,12 +5,12 @@ import AvatarNovac, { contourDeForme } from "@/components/AvatarNovac";
 import FenetreModale from "@/components/ui/FenetreModale";
 import { CLAIR, RAYONS } from "@/lib/palette";
 import { FONT } from "@/lib/typography";
-import PastilleCouleur, {
-  PastilleSkin, PastillePlus,
-} from "@/components/portfolio/PastilleCouleur";
-import { COULEURS_AVATAR } from "@/lib/avatarCouleur";
-import { SKINS, skinParCle, skinPourForme } from "@/lib/avatarSkins";
-import { FORMES_AVATAR, type FormeAvatar } from "@/lib/useCouleurAvatar";
+import { PastilleSkin } from "@/components/portfolio/PastilleCouleur";
+import {
+  ChoixCouleur, ChoixSilhouette, Reglage,
+} from "@/components/portfolio/ChoixApparence";
+import { SKINS, skinPourForme } from "@/lib/avatarSkins";
+import { type FormeAvatar } from "@/lib/useCouleurAvatar";
 import { useAvatar } from "@/lib/AvatarContext";
 
 /**
@@ -33,18 +33,6 @@ import { useAvatar } from "@/lib/AvatarContext";
  * n'est pas supprimé — il reste entier dans le code — mais plus rien ne l'appelle sur
  * cette page. Poser une image de portefeuille n'est donc, pour l'instant, plus possible.
  */
-
-/** Ce que chaque forme s'appelle, à l'écran comme pour les technologies d'assistance. */
-const NOM_FORME: Record<FormeAvatar, string> = {
-  sphere: "Ronde",
-  carre: "Carrée",
-  etoile: "Étoile",
-  etoile6: "Étoile à six lobes",
-  nuage: "Nuage",
-  hexagone: "Hexagone",
-  triangle: "Triangle",
-  goutte: "Goutte",
-};
 
 export default function AvatarPortefeuille({
   portefeuille, couleur, onCouleur, forme, onForme, skin, onSkin, taille = 63,
@@ -236,17 +224,7 @@ export default function AvatarPortefeuille({
           </div>
 
           <Reglage titre="Couleur">
-            <div style={{
-              display: "grid", gridTemplateColumns: "repeat(6, 1fr)",
-              justifyItems: "center", gap: 10,
-            }}>
-              {COULEURS_AVATAR.map(c => (
-                <PastilleCouleur key={c.hex} couleur={c.hex} titre={c.nom} taille={32}
-                  retenue={skin === "uni" && c.hex.toLowerCase() === couleur.toLowerCase()}
-                  onClick={() => choisirCouleur(c.hex)} />
-              ))}
-              <PastillePlus valeur={couleur} onChange={choisirCouleur} />
-            </div>
+            <ChoixCouleur couleur={couleur} onChoisir={choisirCouleur} skin={skin} />
           </Reglage>
 
           {/**
@@ -279,69 +257,14 @@ export default function AvatarPortefeuille({
           )}
 
           <Reglage titre="Silhouette">
-            <div style={{
-              display: "grid", gridTemplateColumns: "repeat(8, 1fr)",
-              justifyItems: "center", gap: 6,
-            }}>
-              {FORMES_AVATAR.map(cle => {
-                const retenue = forme === cle;
-                const nom = NOM_FORME[cle];
-                return (
-                  <button key={cle} type="button" onClick={() => onForme(cle)}
-                    aria-pressed={retenue}
-                    aria-label={`Silhouette ${nom.toLowerCase()}`}
-                    title={nom}
-                    className="novac-surface-saisie"
-                    style={{
-                      width: 36, height: 36, padding: 0, borderRadius: RAYONS.sm,
-                      cursor: "pointer",
-                      display: "flex", alignItems: "center", justifyContent: "center",
-                      /* ⚠️ Le style en ligne l'emporte sur la classe : la silhouette
-                         retenue quitte la surface commune pour la couleur portée, comme le
-                         genre choisi dans la déclaration d'un compte. */
-                      ...(retenue
-                        ? { background: CLAIR.carteCreuse, border: `1px solid ${couleur}` }
-                        : {}),
-                    }}>
-                    {/**
-                      * ⚠️ **La vignette est l'avatar lui-même, plus un pictogramme.** Un
-                      * dessin à part ne montre que la silhouette ; ici chaque case porte la
-                      * couleur, l'habillage et le regard en cours — on voit les huit
-                      * résultats possibles avant de choisir.
-                      *
-                      * ⚠️ **L'habillage n'est repris que là où il tient**, sinon la vignette
-                      * montre la tête unie : c'est ce qu'on obtiendra vraiment en choisissant
-                      * cette silhouette, la page défaisant le réglage au même moment.
-                      */}
-                    <AvatarNovac taille={26} forme={cle} couleur={couleur}
-                      skin={skinPourForme(skinParCle(skin), cle) ? skin : "uni"}
-                      suivi={false} vivant={false} titre={nom} />
-                  </button>
-                );
-              })}
-            </div>
+            {/* ⚠️ L'habillage n'est plus passé : la vignette est un masque teinté, pas un
+                avatar rendu. Elle montre la silhouette et la couleur — la seule question que
+                cette rubrique pose. Voir `ChoixSilhouette`. */}
+            <ChoixSilhouette forme={forme} onChoisir={onForme} couleur={couleur} />
           </Reglage>
 
         </FenetreModale>
       )}
-    </div>
-  );
-}
-
-/**
- * Une rubrique du réglage : son intitulé et ce qu'elle propose.
- *
- * ⚠️ **Écrite une fois pour les trois.** Trois blocs identiques à l'espacement près, et
- * c'est l'espacement qui aurait divergé — c'est toujours lui.
- */
-function Reglage({ titre, children }: { titre: string; children: React.ReactNode }) {
-  return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-      <span style={{
-        fontFamily: FONT, fontSize: 11, fontWeight: 600, letterSpacing: 0.3,
-        textTransform: "uppercase", color: CLAIR.texteAttenue,
-      }}>{titre}</span>
-      {children}
     </div>
   );
 }

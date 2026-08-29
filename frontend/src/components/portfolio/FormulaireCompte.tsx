@@ -42,35 +42,46 @@ import { FONT, NUM } from "@/lib/typography";
  */
 export type SaisieCompte = CompteASoumettre;
 
-const etiquette: React.CSSProperties = {
-  fontFamily: FONT, fontSize: 10, fontWeight: 600, letterSpacing: "0.08em",
-  color: CLAIR.texteFaible, textTransform: "uppercase",
-};
+/* Le vocabulaire des formulaires est partagé : voir `@/components/ui/saisie`. */
+import {
+  etiquette, champ, RAYON_SAISIE, boutonPrincipal, boutonSecondaire,
+} from "@/components/ui/saisie";
+import { ancrerLisere } from "@/components/ui/lisere";
+import BoutonFermer from "@/components/ui/BoutonFermer";
+import EventailDossiers from "@/components/portfolio/EventailDossiers";
+
+
+
 
 /**
- * Le rayon de tout ce qui se pose **dans** la fenêtre.
+ * Qui tiendrait le compte, si la reprise automatique existait.
  *
- * ⚠️ **Celui du conteneur, et non un rayon d'élément.** Les champs et les choix portaient
- * `xs`, soit 6 : une pastille anguleuse dans un panneau très arrondi, et l'œil lit deux
- * langages dans le même cadre. `Cadre` donne à sa carte intérieure `RAYON − CADRE`, soit
- * 24 − 6 = 18 ; les surfaces qu'elle contient reprennent cette valeur.
+ * ⚠️ **Un mot par genre, et rien de plus.** La phrase entière n'est pas dupliquée ici : seuls
+ * changent le titre du bloc et le nom de l'organisme. Recopier la phrase aurait fait huit
+ * variantes à maintenir, dont sept se seraient figées au premier ajustement du texte.
+ *
+ * ⚠️ **Le repli couvre les genres inconnus**, et il le fera pour les prochains : « votre
+ * établissement » est vrai de tous, banque, courtier, assureur ou plateforme. Un genre ajouté
+ * sans être noté ici dira donc quelque chose de correct, au lieu de parler de banque à tort —
+ * ce qui est précisément le défaut qu'on corrige.
  */
-const RAYON_SAISIE = RAYONS.lg;
-
-/**
- * ⚠️ **Le fond, le bord et les états vivent dans `.novac-surface-saisie`.** Seule la
- * géométrie reste ici : un `:hover` ne s'écrit pas en style en ligne, et les trois états
- * de ces surfaces sont précisément ce qu'on veut voir. Voir `globals.css`.
- */
-const champ: React.CSSProperties = {
-  width: "100%", boxSizing: "border-box", fontFamily: FONT, fontSize: 12.5,
-  padding: "9px 12px", borderRadius: RAYON_SAISIE,
-  color: CLAIR.texte, outline: "none",
+const TENEUR: Record<string, { titre: string; organisme: string }> = {
+  courant: { titre: "Synchronisation bancaire", organisme: "votre banque" },
+  epargne: { titre: "Synchronisation bancaire", organisme: "votre banque" },
+  pea:     { titre: "Connexion au courtier", organisme: "votre courtier" },
+  cto:     { titre: "Connexion au courtier", organisme: "votre courtier" },
+  av:      { titre: "Connexion à l’assureur", organisme: "votre assureur" },
+  per:     { titre: "Connexion à l’assureur", organisme: "votre assureur" },
+  pee:     { titre: "Connexion au teneur de compte", organisme: "votre teneur de compte" },
+  crypto:  { titre: "Connexion à la plateforme", organisme: "votre plateforme d’échange" },
+};
+const TENEUR_PAR_DEFAUT = {
+  titre: "Synchronisation automatique", organisme: "votre établissement",
 };
 
 export default function FormulaireCompte({
   genres, initial, prerempli, titre, mention, enCours, erreur, journal,
-  onEnregistrer, onSupprimer, onFermer,
+  onEnregistrer, onSupprimer, onFermer, integre = false, onCouleur, onEtape, sortie,
 }: {
   /** Les genres publiés par le serveur. Vide tant qu'ils ne sont pas arrivés. */
   genres: GenreCompte[];
@@ -104,10 +115,70 @@ export default function FormulaireCompte({
    */
   journal?: React.ReactNode;
   onFermer: () => void;
+  /**
+   * Rendu **intégré** : le formulaire s'affiche dans le flux au lieu de flotter au-dessus
+   * d'un voile.
+   *
+   * ⚠️ **Il manquait, et cela s'est vu au premier appelant qui n'était pas une fenêtre.** Le
+   * panneau de création enchaîne trois étapes — le portefeuille, le premier compte, la
+   * première opération — dans une seule fenêtre. Posé tel quel, ce formulaire ouvrait sa
+   * *propre* `FenetreModale` par-dessus : une modale dans une modale, avec deux voiles, et
+   * l'étape du panneau restait vide puisque le contenu était parti dans un autre portail.
+   *
+   * ⚠️ **C'est exactement le mode `embedded` de la saisie d'opération**, et pour la même
+   * raison. Deux formulaires qui servent le même geste à deux endroits doivent pouvoir se
+   * poser des deux façons ; la solution existait déjà à côté, il n'y avait qu'à la reprendre
+   * sous le même nom d'intention.
+   *
+   * ⚠️ **La croix disparaît avec la fenêtre.** Elle fermait quelque chose qui n'existe plus ;
+   * en rendu intégré, c'est l'appelant qui porte la navigation. `onFermer` continue d'être
+   * appelé — le panneau de création s'en sert pour reculer d'une étape.
+   */
+  integre?: boolean;
+  /**
+   * Signale le temps interne du formulaire — 1 ou 2 — à chaque changement.
+   *
+   * ⚠️ **Parce que ce formulaire compte pour deux écrans, et que l'appelant l'ignorait.** Le
+   * panneau de création affichait trois puces pour quatre écrans : la déclaration d'un compte
+   * en occupe deux — ce qu'il est, puis d'où viennent ses opérations —, et le fil de
+   * progression restait immobile pendant qu'on avançait. Un indicateur qui ne bouge pas au
+   * moment où l'on avance est pire que pas d'indicateur. Relevé en parcourant le panneau.
+   */
+  onEtape?: (n: 1 | 2) => void;
+  /**
+   * Une sortie de plus, fournie par l'appelant, posée à gauche avec « Annuler ».
+   *
+   * ⚠️ **Parce qu'elle se retrouvait sur une seconde rangée.** Le panneau de création offre
+   * de conclure sans déclarer de compte ; faute de place ici, il posait ce bouton dans son
+   * propre pied, sous celui du formulaire. Résultat : quatre boutons sur deux rangées, dont
+   * deux à droite qui ne faisaient pas la même chose — la disposition même qu'un commentaire
+   * de ce fichier disait avoir corrigée. Constaté à l'écran.
+   *
+   * ⚠️ **À gauche, avec les autres sorties.** La droite est réservée à ce qui fait avancer.
+   * Une commande qui conclut le parcours n'a rien à y faire, quelle que soit son importance.
+   */
+  sortie?: React.ReactNode;
+  /**
+   * Signale la couleur retenue, à chaque changement.
+   *
+   * ⚠️ **Pour un aperçu que ce formulaire ne porte pas lui-même.** Le panneau de création
+   * dessine, en tête, le dossier qu'on est en train de déclarer : il lui faut donc la teinte
+   * *pendant* la saisie, et non à l'enregistrement. Sans cela l'aperçu resterait à la couleur
+   * par défaut jusqu'au dernier clic — c'est-à-dire jusqu'après le choix.
+   *
+   * ⚠️ **La couleur seule, et pas l'ensemble de la saisie.** Un rappel à chaque frappe du nom
+   * ferait redessiner l'appelant pour une information qu'il ne montre pas. On remonte ce
+   * qu'on montre, rien de plus.
+   */
+  onCouleur?: (hex: string) => void;
 }) {
   const correction = initial != null;
   const depart = initial ?? prerempli;
   const [etape, setEtape] = useState<1 | 2>(1);
+  /* ⚠️ Signalé par effet et non au clic : le formulaire change de temps à deux endroits —
+     « Continuer » et « Retour » —, et un rappel posé sur chacun aurait fini par manquer au
+     troisième. */
+  useEffect(() => { onEtape?.(etape); }, [etape, onEtape]);
   const [nom, setNom] = useState(depart?.nom ?? "");
   const [genre, setGenre] = useState<string>(depart?.genre ?? "");
   const [couleur, setCouleur] = useState(depart?.couleur ?? COULEURS_DOSSIER[0].hex);
@@ -171,6 +242,7 @@ export default function FormulaireCompte({
    * montré, le temps d'une image, un formulaire qui ne correspond à rien.
    */
   const avecTitres = genreChoisi?.titres ?? true;
+  const teneur = TENEUR[genre] ?? TENEUR_PAR_DEFAUT;
   /**
    * ⚠️ **L'apport est exigé quand il est toute la valeur du compte.** Un livret déclaré
    * sans un euro ne vaut rien et ne dit rien : la carte porterait un nom et un vide. Sur un
@@ -201,9 +273,26 @@ export default function FormulaireCompte({
     }),
   });
 
-  return (
-    <FenetreModale onFermer={onFermer} largeur={460}
-      etiquette={correction ? "Modifier le compte" : "Nouveau compte"}>
+  const contenu = (
+      <>
+        {/**
+          * ⚠️ **L'éventail de dossiers, le même qu'à la deuxième étape de la création.** Il
+          * n'y vivait qu'elle ; cette fenêtre-ci ouvre pourtant le même formulaire depuis le
+          * tableau de bord, et s'ouvrait donc sans en-tête. Signalé à l'usage. Le dossier
+          * central porte la couleur choisie, si bien que l'illustration est l'aperçu et non un
+          * décor — c'est ce qui autorise la bande de couleurs à ne marquer aucune sélection.
+          *
+          * ⚠️ **Pas en rendu intégré : le panneau de création pose déjà le sien**, et il tient
+          * à ce que les dossiers du fond survivent aux allers-retours entre étapes. Deux
+          * éventails superposés, en plus, feraient deux illustrations pour un formulaire.
+          *
+          * ⚠️ **Pas en correction non plus, et c'est un précédent qui le dit.** Ces 148 pixels
+          * avaient poussé la troisième étape contre le plafond de 90 % de hauteur d'écran, et
+          * la page s'était mise à défiler — reproché à l'usage. La fenêtre de correction est la
+          * plus longue de toutes, puisqu'elle porte en plus le journal de trésorerie. Le jour
+          * où l'on voudra l'illustration là aussi, il faudra d'abord mesurer.
+          */}
+        {!integre && !correction && <EventailDossiers couleur={couleur} />}
 
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
           <span style={{ fontFamily: FONT, fontSize: 13.5, fontWeight: 700, color: CLAIR.texte }}>
@@ -211,9 +300,10 @@ export default function FormulaireCompte({
               : etape === 1 ? "Nouveau compte"
               : avecTitres ? "Les opérations de ce compte" : "La mise à jour du solde")}
           </span>
-          <button type="button" onClick={onFermer} aria-label="Fermer"
-            style={{ background: "none", border: "none", cursor: "pointer",
-              color: CLAIR.texteFaible, fontSize: 18, lineHeight: 1, padding: 0 }}>×</button>
+          {/* ⚠️ La croix vient de `ui/BoutonFermer`. Elle était écrite ici — un « × » nu,
+              sans fond ni forme —, tandis que la fenêtre d'opération en dessinait un autre :
+              deux croix visiblement différentes dans deux fenêtres qui s'enchaînent. */}
+          {!integre && <BoutonFermer onClick={onFermer} titre="Fermer sans enregistrer" />}
         </div>
 
         {correction || etape === 1 ? (
@@ -265,7 +355,8 @@ export default function FormulaireCompte({
 
             <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
               <span style={etiquette}>Couleur du dossier</span>
-              <PastillesCouleur couleur={couleur} onChoisir={setCouleur} />
+              <PastillesCouleur couleur={couleur}
+                onChoisir={hex => { setCouleur(hex); onCouleur?.(hex); }} />
             </div>
 
             {/**
@@ -275,27 +366,32 @@ export default function FormulaireCompte({
               * n'ayant plus de solde propre, corriger se fait sur l'apport lui-même, dans
               * le journal juste en dessous. Un seul endroit où l'argent s'écrit.
               *
-              * ⚠️ **L'étiquette suit le genre, et ce n'est pas de la cosmétique.**
-              * « Liquidités » est le mot juste en finance, et il a quand même échoué :
-              * il a fallu demander ce qu'il désignait. Sur un compte courant, personne ne
-              * dit « mes liquidités » — on dit ce qu'on y met ; et sur un PEA, le mot ne
-              * dit pas qu'il s'agit de la part *non investie*, ce qui est tout le sens
-              * du champ.
+              * ⚠️ **Les espèces non investies ne se demandent plus à la déclaration.**
+              * Le champ changeait d'étiquette selon le genre — « Apport initial » sur un
+              * livret, « Espèces non investies » sur un PEA — et la seconde version a été
+              * retirée à l'usage. Elle demandait, au moment de nommer un compte, une somme
+              * que personne ne connaît de tête : la poche d'espèces d'un compte à titres
+              * n'est pas un montant qu'on décide, c'est ce qui **reste** une fois les achats
+              * saisis. La poser en premier obligeait à la deviner, puis à la corriger.
+              *
+              * ⚠️ **Rien n'est perdu : le journal l'écrit déjà.** Un versement en espèces est
+              * un mouvement de trésorerie daté comme un autre. On le saisit là où il se
+              * produit, dans le journal du compte, au lieu de l'estimer à l'ouverture.
+              *
+              * ⚠️ **L'apport reste, lui, sur les comptes sans titres.** Déclarer un livret à
+              * 5 000 €, c'est apporter 5 000 € à une date : le compte n'a pas d'autre
+              * contenu, et sans ce champ il naîtrait vide. La question a un sens là, et pas
+              * ailleurs — d'où la condition plutôt que deux étiquettes.
               */}
-            {!correction && (
+            {!correction && !avecTitres && (
               <>
                 <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
-                  <span style={etiquette}>
-                    {avecTitres ? "Espèces non investies" : "Apport initial"}
-                  </span>
+                  <span style={etiquette}>Apport initial</span>
                   <input value={apport} onChange={e => setApport(e.target.value)}
-                    inputMode="decimal"
-                    placeholder={avecTitres ? "Facultatif" : "Ex : 8 400"}
+                    inputMode="decimal" placeholder="Ex : 8 400"
                     className="novac-surface-saisie" style={{ ...champ, ...NUM }} />
                   <span style={{ fontFamily: FONT, fontSize: 10.5, color: CLAIR.texteAttenue }}>
-                    {avecTitres
-                      ? "La part en euros qui dort à côté de vos titres. Facultatif."
-                      : "Ce que vous mettez sur ce compte."}
+                    Ce que vous mettez sur ce compte.
                   </span>
                 </div>
 
@@ -379,8 +475,21 @@ export default function FormulaireCompte({
                 * ⚠️ **L'entrée automatique est montrée indisponible, et non cachée.** La
                 * cacher ferait croire que la saisie manuelle est le seul fonctionnement
                 * possible ; la proposer sans qu'elle marche serait pire. Elle suppose une
-                * connexion bancaire — un agrégateur, un contrat, des identifiants — donc une
-                * intégration entière, pas un réglage. Le dire ici évite qu'on l'attende.
+                * intégration entière — un agrégateur, un contrat, des identifiants — et non
+                * un réglage. Le dire ici évite qu'on l'attende.
+                *
+                * ⚠️ **Elle ne parle plus de banque sur un compte qui n'en est pas un.** Le
+                * bloc annonçait « Synchronisation bancaire » et « depuis votre banque » quels
+                * que soient le genre : sur un compte-titres, un PEA ou un portefeuille crypto,
+                * ce n'est pas une banque qu'on brancherait mais un courtier ou une plateforme
+                * d'échange. Signalé à l'usage. Le titre et la phrase suivent donc l'organisme
+                * qui tiendrait réellement le compte.
+                *
+                * ⚠️ **Le nom de l'organisme est déduit du genre, pas écrit à côté.** Une
+                * seconde table `genre → phrase` aurait divergé de `GENRES_COMPTE` au premier
+                * genre ajouté — et il vient précisément d'en arriver trois. `TENEUR` ne porte
+                * que le mot manquant ; tout le reste de la phrase est commun, et le repli
+                * couvre les genres qu'il ne connaît pas.
                 */}
               <div aria-disabled style={{
                 padding: "12px 14px", borderRadius: RAYON_SAISIE,
@@ -389,7 +498,7 @@ export default function FormulaireCompte({
               }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 7 }}>
                   <span style={{ fontFamily: FONT, fontSize: 12.5, fontWeight: 600, color: CLAIR.texte }}>
-                    Synchronisation bancaire
+                    {teneur.titre}
                   </span>
                   <span style={{
                     fontFamily: FONT, fontSize: 9.5, fontWeight: 600, letterSpacing: "0.06em",
@@ -400,9 +509,9 @@ export default function FormulaireCompte({
                   </span>
                 </div>
                 <div style={{ fontFamily: FONT, fontSize: 11, color: CLAIR.texteSecondaire, marginTop: 3, lineHeight: 1.5 }}>
-                  {avecTitres
-                    ? "Les opérations remonteraient seules depuis votre banque. Cela demande une connexion bancaire, qui n’est pas encore en place."
-                    : "Le solde se mettrait à jour seul depuis votre banque. Cela demande une connexion bancaire, qui n’est pas encore en place."}
+                  {`${avecTitres ? "Les opérations remonteraient seules" : "Le solde se mettrait à jour seul"}`
+                    + ` depuis ${teneur.organisme}. Cela demande une connexion qui n’est pas`
+                    + " encore en place."}
                 </div>
               </div>
             </div>
@@ -414,41 +523,79 @@ export default function FormulaireCompte({
         )}
 
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, marginTop: 2 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          {/**
+            * ⚠️ **Les trois boutons viennent de `ui/saisie`, ils n'étaient plus que recopiés.**
+            * Leurs styles étaient écrits ici mot pour mot — `fontSize: 12`, `9px 16px`,
+            * `RAYON_SAISIE`, `1px solid CLAIR.bord` — c'est-à-dire `boutonSecondaire` et
+            * `boutonPrincipal` réécrits à côté de leur propre définition. Le pied de ce
+            * formulaire et celui du panneau qui le contient se suivent à l'écran, à un pas
+            * d'intervalle et au même endroit : la moindre dérive de l'un se lit comme un saut.
+            * C'est exactement ce qui est arrivé sur la hauteur, restée à 38 ici pendant que
+            * les champs passaient à 40.
+            *
+            * ⚠️ **Seule la suppression garde des surcharges**, et uniquement celles qui
+            * portent du sens : le rouge et la graisse de la confirmation. Le reste — la
+            * géométrie — n'a aucune raison de différer d'un bouton qui renonce.
+            */}
           {correction && onSupprimer ? (
-            <button type="button" disabled={enCours}
+            <button type="button" disabled={enCours} className="novac-lisere novac-bouton-doux" ref={ancrerLisere}
               onClick={() => (confirmeSuppression ? onSupprimer() : setConfirmeSuppression(true))}
               style={{
-                fontFamily: FONT, fontSize: 12, padding: "9px 16px", borderRadius: RAYON_SAISIE,
-                cursor: enCours ? "default" : "pointer", background: "transparent",
-                border: `1px solid ${confirmeSuppression ? CLAIR.negatif : CLAIR.bord}`,
-                color: confirmeSuppression ? CLAIR.negatif : CLAIR.texteFaible,
-                fontWeight: confirmeSuppression ? 600 : 400,
+                ...boutonSecondaire,
+                cursor: enCours ? "default" : "pointer",
+                /* ⚠️ **Le cerne rouge n'apparaît qu'à la confirmation, et c'est une ombre
+                   interne, jamais une bordure** — une bordure dédoublerait le liseré, voir
+                   `boutonSecondaire`. Au repos, le bouton reste celui qui renonce : rien ne
+                   doit distinguer « Supprimer » de « Retour » tant qu'on n'a pas confirmé. */
+                ...(confirmeSuppression
+                  ? { boxShadow: `inset 0 0 0 1px ${CLAIR.negatif}`, color: CLAIR.negatif, fontWeight: 600 }
+                  : {}),
               }}>
               {confirmeSuppression ? "Confirmer la suppression" : "Supprimer"}
             </button>
           ) : (
             <button type="button" onClick={() => (etape === 1 ? onFermer() : setEtape(1))}
-              style={{
-                fontFamily: FONT, fontSize: 12, padding: "9px 16px", borderRadius: RAYON_SAISIE,
-                cursor: "pointer", background: "transparent",
-                border: `1px solid ${CLAIR.bord}`, color: CLAIR.texteSecondaire,
-              }}>
+              className="novac-lisere novac-bouton-doux" ref={ancrerLisere} style={boutonSecondaire}>
               {etape === 1 ? "Annuler" : "Retour"}
             </button>
           )}
+          {sortie}
+          </div>
           <button type="button" disabled={!peutContinuer || enCours}
+            className="novac-lisere novac-bouton-plein" ref={ancrerLisere}
             onClick={() => (correction || etape === 2 ? enregistrer() : setEtape(2))}
             style={{
-              fontFamily: FONT, fontSize: 12, fontWeight: 600, padding: "9px 18px",
-              borderRadius: RAYON_SAISIE, border: "none", color: "#FFFFFF",
-              background: couleur, opacity: !peutContinuer || enCours ? 0.45 : 1,
+              ...boutonPrincipal(couleur, !(!peutContinuer || enCours)),
               cursor: !peutContinuer || enCours ? "default" : "pointer",
             }}>
             {enCours ? "Enregistrement…"
               : correction ? "Enregistrer"
-              : etape === 1 ? "Continuer" : "Créer le compte"}
+              /* ⚠️ **« Suivant » et non « Créer le compte » en rendu intégré, parce que rien
+                 n'est créé.** Ce bouton range un brouillon et rend la main à l'appelant ;
+                 l'écriture n'a lieu qu'à la conclusion du panneau. Le libellé promettait donc
+                 une écriture qui n'avait pas lieu — et il voisinait avec « Passer, et créer
+                 sans compte », lequel, lui, écrivait vraiment. Les deux verbes étaient
+                 inversés. Relevé en parcourant le panneau. */
+              : etape === 1 ? "Continuer"
+              : integre ? "Suivant" : "Créer le compte"}
           </button>
         </div>
+      </>
+  );
+
+  /* ⚠️ **Le même contenu, deux enveloppes.** Écrire deux rendus aurait fait diverger
+     l'espacement, le titre ou l'ordre des étapes au premier ajustement — c'est ce que fait
+     toujours une seconde copie. */
+  if (integre) {
+    return (
+      <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>{contenu}</div>
+    );
+  }
+  return (
+    <FenetreModale onFermer={onFermer}
+      etiquette={correction ? "Modifier le compte" : "Nouveau compte"}>
+      {contenu}
     </FenetreModale>
   );
 }

@@ -1,126 +1,125 @@
 import { useId } from "react";
 
-import { decalerClarte } from "@/lib/couleur";
-import { JETONS } from "@/lib/palette";
 import type { Decoupe, Degrade, MotifPlat } from "@/lib/avatarSkins";
 
 /**
- * ⚠️ **L'anneau de sélection prend l'encre du thème, il n'est plus écrit en dur.** Il valait
- * `rgba(20,22,30,0.55)` — un gris presque noir choisi pour l'ancien panneau, qui était une
- * carte blanche quel que soit le thème. Ce panneau est devenu une fenêtre de l'application,
- * donc sombre : l'anneau y est passé invisible, et l'on ne voyait plus quelle couleur était
- * retenue. Une valeur en dur survit exactement jusqu'au jour où son fond change.
+ * ⚠️ **Il n'y a plus d'anneau de sélection du tout.** Il y en a eu deux : `rgba(20,22,30,
+ * 0.55)` écrit en dur, devenu invisible le jour où le panneau blanc s'est fait fenêtre
+ * sombre, puis l'encre du thème — un cerclage blanc de deux pixels. Écarté à l'usage.
+ *
+ * ⚠️ **Ce qui le remplace ne s'ajoute pas, il se retranche aux autres.** La pastille retenue
+ * **passe devant** ses voisines : sur un nuancier en écailles, où chacune est mordue par
+ * celle de sa droite, être la seule entière est déjà une marque. Un anneau désignait la
+ * couleur de l'extérieur ; ici c'est la disposition qui la désigne, et rien d'étranger ne
+ * vient se poser sur la teinte.
+ *
+ * ⚠️ **Elle a aussi grandi d'un cinquième, un temps.** Écarté à l'usage : un agrandissement
+ * permanent déforme la bande là où l'œil cherche un nuancier régulier. Ce qui reste est donc
+ * la marque la plus discrète possible — l'aperçu de l'avatar, juste au-dessus, portant de
+ * toute façon la couleur choisie en grand.
+ *
+ * ⚠️ **Le repère non visuel reste, lui.** `aria-pressed` porte l'état pour qui n'a pas
+ * l'image : la marque a changé de forme, elle n'a pas disparu. Voir `.nv-pastille` dans
+ * `globals.css`, qui la dessine.
  */
 
 /**
- * Une pastille de couleur bombée, comme sur la référence.
+ * Le cerne d'une pastille : un cheveu d'encre du thème.
  *
- * ⚠️ **Le relief tient à quatre ombres qui se répondent, pas à un dégradé.** Un simple
- * dégradé du clair au sombre donne un disque plat qu'on a peint : ce qui fait la
- * pastille de bonbon, c'est la lumière posée en haut *à l'intérieur*, le creux en bas
- * *à l'intérieur*, l'ombre portée en dessous et le halo de sa propre couleur autour.
- * Retirer l'une des quatre suffit à faire retomber l'objet à plat — j'ai essayé.
+ * ⚠️ **Un aplat sans bord disparaît sur un fond proche.** L'encre `#1E2233` sur la fenêtre
+ * sombre, le citron sur la carte claire : sans cerne, la pastille n'a plus de contour et la
+ * rangée paraît trouée.
  *
- * ⚠️ **Le halo prend la couleur de la pastille, pas du noir.** C'est ce qui donne
- * l'impression que le disque est translucide et éclairé de l'intérieur. Un halo neutre
- * l'aurait fait ressembler à un jeton posé sur la carte.
+ * ⚠️ **Il contraste avec la carte, pas avec la pastille — et c'est tout le raisonnement.**
+ * `--nv-encre-rvb` vaut le blanc en thème sombre et le bleu nuit en clair : le cheveu est
+ * donc toujours du côté opposé au fond, donc toujours visible, quelle que soit la teinte
+ * qu'il borde. Un cerne qui contrasterait avec la *pastille* ne résoudrait rien — c'est
+ * justement quand la pastille ressemble à la carte qu'on a besoin de la borner.
  *
- * ⚠️ **Les teintes du relief sont calculées, pas écrites.** Elles se déduisent de la
- * couleur par un décalage de clarté : une table de variantes aurait interdit le champ
- * libre, où la couleur n'est connue qu'au moment du clic.
+ * ⚠️ **Assombrir la couleur elle-même était le premier essai, et il était faux.**
+ * `decalerClarte(couleur, -0.14)` travaille en TSL : sur une teinte déjà très saturée,
+ * baisser la clarté pousse vers la teinte pure au lieu de foncer. Mesuré sur l'indigo
+ * `#6366F1` — le cerne sortait en `rgb(33, 38, 235)`, c'est-à-dire un bleu **plus vif** que
+ * la pastille, soit un liseré fluorescent là où l'on voulait une ombre.
+ */
+const CERNE = "rgba(var(--nv-encre-rvb), 0.18)";
+
+/**
+ * Une pastille de couleur : un aplat, un cerne, rien d'autre.
+ *
+ * ⚠️ **Elle a été bombée, et ce n'était pas le bon registre.** Quatre ombres se
+ * répondaient — une lumière posée en haut à l'intérieur, un creux en bas, une ombre portée
+ * dessous et un halo de sa propre couleur autour — pour imiter un bonbon de verre. C'était
+ * bien fait et c'était trop : relevé à l'usage comme « trop réaliste ». Un sélecteur de
+ * couleur montre **une couleur**, pas un objet éclairé ; tout ce qui simule une matière
+ * ajoute une information dont le choix n'a que faire, et fausse d'ailleurs la teinte qu'on
+ * croit choisir — le haut du dégradé était 16 % plus clair que la couleur réelle.
+ *
+ * ⚠️ **Ce qui reste est ce qui sert.** L'aplat, qui dit la couleur exactement. Le cerne, qui
+ * la borne. Deux éléments, deux fonctions — et plus rien pour désigner celle qui est
+ * retenue : voir la note d'en-tête.
+ *
+ * ⚠️ **Le grossissement au survol vit dans `.nv-pastille`.** Un `:hover` ne s'écrit pas en
+ * style en ligne, et c'est là le seul reste de matière qu'on garde : la pastille répond au
+ * geste au lieu de faire semblant d'exister.
  */
 export default function PastilleCouleur({
   couleur, taille = 34, retenue = false, titre, onClick,
 }: {
   couleur: string;
   taille?: number;
-  /** La couleur en cours : elle porte un anneau, seule marque qui ne la salit pas. */
+  /**
+   * La couleur en cours.
+   *
+   * ⚠️ **Elle ne se voit plus, elle s'annonce.** Toutes les marques visuelles ont été
+   * écartées à l'usage ; ce drapeau ne sert donc plus qu'à poser `aria-pressed`, ce qui
+   * n'est pas une raison de le supprimer — c'est au contraire le seul endroit où l'état
+   * survit encore.
+   */
   retenue?: boolean;
+  /**
+   * Le nom de la couleur.
+   *
+   * ⚠️ **Il n'est plus posé en `title`, donc plus d'infobulle grise au survol.** Elle
+   * s'affichait sur chaque pastille et se lisait mal : dix-neuf disques serrés, et une boîte
+   * du système qui recouvre ses voisines dès que le curseur traverse la bande. Écartée à
+   * l'usage. Le nom reste en `aria-label` — la couleur se choisit à l'œil, mais elle doit
+   * pouvoir s'annoncer.
+   */
   titre?: string;
   onClick?: () => void;
 }) {
-  const haut = decalerClarte(couleur, 0.16);
-  const bas = decalerClarte(couleur, -0.13);
   return (
     <button
       type="button"
       onClick={onClick}
-      title={titre}
       aria-label={titre}
       aria-pressed={retenue}
+      className="nv-pastille"
       style={{
         width: taille, height: taille, borderRadius: "50%", padding: 0, border: 0,
-        cursor: "pointer", flexShrink: 0, position: "relative",
-        // La lumière vient d'en haut, un peu à gauche : c'est l'inclinaison de la
-        // référence, et elle doit être la même sur toutes les pastilles pour qu'on les
-        // lise comme un même jeu d'objets éclairés par une seule source.
-        background: `radial-gradient(circle at 42% 26%, ${haut} 0%, ${couleur} 54%, ${bas} 100%)`,
-        boxShadow: [
-          `0 0 ${Math.round(taille * 0.3)}px ${Math.round(taille * 0.04)}px ${couleur}59`,
-          `0 ${Math.round(taille * 0.06)}px ${Math.round(taille * 0.12)}px rgba(0,0,0,0.20)`,
-          `inset 0 ${-Math.round(taille * 0.07)}px ${Math.round(taille * 0.11)}px rgba(0,0,0,0.22)`,
-          `inset 0 ${Math.round(taille * 0.06)}px ${Math.round(taille * 0.09)}px rgba(255,255,255,0.30)`,
-        ].join(", "),
-        outline: retenue ? `2px solid ${JETONS.texteIntense}` : "none",
-        outlineOffset: 2,
-        transition: "transform 120ms ease",
+        cursor: "pointer", flexShrink: 0,
+        background: couleur,
+        boxShadow: `inset 0 0 0 1px ${CERNE}`,
       }}
     />
   );
 }
 
 /**
- * Le « + » de la référence : la couleur libre.
+ * ⚠️ **Le « + » de la couleur libre a été retiré d'ici.** Il ouvrait le sélecteur du système
+ * sur un champ `input[type=color]` rendu invisible — la bonne façon de faire, puisqu'une roue
+ * chromatique maison, c'est une teinte, une saturation, une clarté et un champ hexadécimal à
+ * tenir. Il se justifiait tant que le nuancier n'offrait que onze teintes et laissait de
+ * vrais trous ; à dix-neuf, le tour du cercle est couvert et il ne servait plus qu'à casser
+ * la bande d'écailles, n'étant pas un disque. Écarté à l'usage.
  *
- * ⚠️ **Il ouvre le sélecteur du système, il n'en réinvente pas un.** Une roue chromatique
- * maison, c'est une teinte, une saturation, une clarté et un champ hexadécimal à tenir —
- * là où le navigateur en propose déjà un que l'utilisateur connaît, avec la pipette de
- * son système. Le champ natif est simplement rendu invisible et déclenché par le bouton,
- * parce que son apparence, elle, n'est pas réglable.
+ * ⚠️ **Rien n'en survit ici, et c'est délibéré.** Un composant exporté que plus personne
+ * n'appelle est du code qui vieillit sans être vu — les pastilles se sont aplaties, l'anneau
+ * de sélection a disparu, et lui serait resté seul à porter l'ancien langage. S'il faut
+ * rouvrir le champ libre un jour, il se réécrit en vingt lignes ; le modèle, lui, n'a jamais
+ * cessé de l'accepter, `estCouleurValide` prenant n'importe quel hexadécimal.
  */
-export function PastillePlus({
-  taille = 34, valeur, onChange,
-}: {
-  taille?: number;
-  valeur: string;
-  onChange: (hex: string) => void;
-}) {
-  const trait = Math.max(2, Math.round(taille * 0.09));
-  const bras = Math.round(taille * 0.52);
-  return (
-    <label
-      title="Une autre couleur"
-      style={{
-        width: taille, height: taille, flexShrink: 0, cursor: "pointer",
-        display: "flex", alignItems: "center", justifyContent: "center",
-        position: "relative",
-      }}
-    >
-      <input
-        type="color"
-        value={valeur}
-        aria-label="Une autre couleur"
-        onChange={e => onChange(e.target.value)}
-        // Invisible mais présent : c'est lui qui ouvre le sélecteur du système, et un
-        // `display: none` l'empêcherait de recevoir le clic sur certains navigateurs.
-        style={{
-          position: "absolute", inset: 0, opacity: 0, width: "100%", height: "100%",
-          padding: 0, border: 0, cursor: "pointer",
-        }}
-      />
-      <svg width={taille} height={taille} viewBox={`0 0 ${taille} ${taille}`}
-        aria-hidden="true" style={{ display: "block", pointerEvents: "none" }}>
-        {/* Le trait porte sa propre ombre, comme sur la référence : sans elle il paraît
-            collé sur la carte alors que les pastilles, elles, en décollent. */}
-        <g stroke="#4A5058" strokeWidth={trait} strokeLinecap="round"
-          style={{ filter: "drop-shadow(0 1px 1.5px rgba(0,0,0,0.28))" }}>
-          <line x1={(taille - bras) / 2} y1={taille / 2} x2={(taille + bras) / 2} y2={taille / 2} />
-          <line x1={taille / 2} y1={(taille - bras) / 2} x2={taille / 2} y2={(taille + bras) / 2} />
-        </g>
-      </svg>
-    </label>
-  );
-}
 
 /**
  * Une pastille qui montre un **habillage** plutôt qu'une couleur.
@@ -128,12 +127,14 @@ export function PastillePlus({
  * ⚠️ **Le même objet que ses voisines, à la peinture près.** Elle vit dans la rangée des
  * couleurs parce qu'elle décrit la même chose — ce que porte la tête — et il n'y a rien à
  * composer entre les deux : l'habillage recouvre la couleur. Elle en reprend donc le
- * diamètre, l'ombre portée, le creux et la lumière du haut, sans quoi elle se lirait
- * comme un bouton étranger tombé au milieu d'un jeu de bonbons.
+ * diamètre, le cerne et l'anneau, sans quoi elle se lirait comme un bouton étranger tombé au
+ * milieu de la rangée.
  *
- * ⚠️ **Le halo est neutre, lui.** Celui des pastilles prend leur couleur, ce qui les fait
- * paraître éclairées de l'intérieur ; un aplat à deux teintes n'a pas de couleur unique à
- * rayonner, et lui en imposer une aurait teinté l'océan ou les terres au hasard.
+ * ⚠️ **Elle s'est aplatie avec elles, et c'était obligatoire.** Elle portait le même relief —
+ * creux du bas, lumière du haut, ombre portée. Le garder ici pendant que les couleurs le
+ * perdaient aurait fait exactement ce que la règle ci-dessus interdit : un objet d'un autre
+ * registre au milieu de la rangée. Quand une recette est partagée, elle se change des deux
+ * côtés à la fois — c'est tout l'intérêt de l'avoir écrite deux fois au même endroit.
  */
 export function PastilleSkin({
   contour, aplats, fond, degrades = [], decoupes = [], rayon = "50%",
@@ -186,17 +187,12 @@ export function PastilleSkin({
       title={titre}
       aria-label={titre}
       aria-pressed={retenue}
+      className="nv-pastille"
       style={{
         width: taille, height: taille, borderRadius: rayon, padding: 0, border: 0,
         cursor: "pointer", flexShrink: 0, position: "relative", overflow: "hidden",
         background: fond,
-        boxShadow: [
-          `0 ${Math.round(taille * 0.06)}px ${Math.round(taille * 0.12)}px rgba(0,0,0,0.20)`,
-          `inset 0 ${-Math.round(taille * 0.07)}px ${Math.round(taille * 0.11)}px rgba(0,0,0,0.22)`,
-          `inset 0 ${Math.round(taille * 0.06)}px ${Math.round(taille * 0.09)}px rgba(255,255,255,0.30)`,
-        ].join(", "),
-        outline: retenue ? `2px solid ${JETONS.texteIntense}` : "none",
-        outlineOffset: 2,
+        boxShadow: `inset 0 0 0 1px ${CERNE}`,
       }}
     >
       <svg viewBox="-100 -100 200 200" width={taille} height={taille}

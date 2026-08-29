@@ -1,6 +1,6 @@
 "use client";
-import { FONT } from "@/lib/typography";
-import { RAYONS } from "@/lib/palette";
+import { ancrerLisere } from "@/components/ui/lisere";
+import { pilule } from "@/components/ui/saisie";
 
 /**
  * La pilule d'ajout : le geste « déclarer une chose de plus », partout où il se présente.
@@ -20,8 +20,21 @@ import { RAYONS } from "@/lib/palette";
  * assombrie par `assombrirPourBlanc`, ce qui est ce qui garantit que le blanc ci-dessous
  * reste lisible quelle que soit la couleur choisie.
  */
+
+/**
+ * ⚠️ **Une seule taille, et c'est une décision, pas un manque.** La page d'accueil a eu droit
+ * à une grande version — 46 pixels de haut, puis 38 —, l'idée étant qu'une action seule au
+ * milieu d'un écran vide demande plus de présence qu'une commande de barre d'outils. Essayée,
+ * puis abandonnée à l'usage : c'est le même geste, il en veut le même bouton. Une échelle à
+ * deux points, c'est déjà deux versions qui peuvent diverger.
+ *
+ * ⚠️ **Ce que la landing en avait fait de son côté**, avant de reprendre ce composant : rayon
+ * de saisie au lieu du rayon plein, `+` écrit au clavier en guise d'icône, interlettrage, et
+ * un survol qui soulevait le bouton d'un pixel au lieu de l'éclairer. Le même geste dans un
+ * autre dialecte — la quatrième copie, exactement ce que ce fichier existe pour empêcher.
+ */
 export default function PiluleAction({
-  libelle, onClick, fond, fondSurvol, title, angle = 171, placement,
+  libelle, onClick, fond, fondSurvol, title, placement,
 }: {
   libelle: string;
   onClick: () => void;
@@ -30,15 +43,6 @@ export default function PiluleAction({
   /** Le même, éclairci — le survol éclaire, il ne fonce pas. */
   fondSurvol: string;
   title?: string;
-  /**
-   * L'angle du liseré, en degrés.
-   *
-   * ⚠️ **Il suit les proportions de la pilule** : `180° − atan(hauteur / largeur)`. Pour les
-   * 26 pixels de haut et la largeur d'un libellé de deux mots — environ 160 — cela donne les
-   * 171° par défaut. Une pilule nettement plus courte le veut plus petit : « Ajouter un
-   * compte » tourne à 170°. Voir le calcul dans `globals.css`.
-   */
-  angle?: number;
   /**
    * De quoi la **placer**, et rien d'autre.
    *
@@ -54,14 +58,15 @@ export default function PiluleAction({
   const ombreSurvol = "0 2px 6px rgba(0,0,0,0.35)";
   return (
     <button type="button" onClick={onClick} title={title} className="novac-lisere"
+      ref={ancrerLisere}
+      /* ⚠️ La forme vient de `pilule`, dans `ui/saisie` : elle était écrite ici, et les
+         pieds de fenêtre comme le bouton de tri de la grille l'avaient recopiée chacun de
+         leur côté. Ne restent en propre que la teinte, l'ombre et le survol. */
       style={{
-        display: "flex", alignItems: "center", gap: 6, height: 26,
-        padding: "0 12px", borderRadius: RAYONS.plein, cursor: "pointer",
-        border: "none", background: fond, color: "#FFFFFF",
-        ["--nv-lisere-angle" as string]: `${angle}deg`,
+        ...pilule,
+        background: fond, color: "#FFFFFF",
         boxShadow: ombre,
-        fontFamily: FONT, fontSize: 11, fontWeight: 700,
-        whiteSpace: "nowrap", flexShrink: 0,
+        fontSize: 11, fontWeight: 700,
         transition: "background 150ms, box-shadow 150ms",
         ...placement,
       }}

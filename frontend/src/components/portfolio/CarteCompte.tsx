@@ -233,6 +233,37 @@ const contourPour = (l: number) => {
   return trace;
 };
 
+/**
+ * Le dossier réduit à sa silhouette, pour qui doit le redessiner ailleurs.
+ *
+ * ⚠️ **Le tracé et sa boîte, jamais des pixels.** Le contour est écrit dans les unités du
+ * vrai dossier — une languette de 118, un plan de `panneau` de haut — et ne se rétrécit donc
+ * pas en changeant ses nombres : c'est le `viewBox` de l'appelant qui le met à l'échelle,
+ * exactement comme on réduit un dessin sans le redessiner. On rend ce qu'il faut pour poser
+ * ce `viewBox`, et rien d'autre.
+ *
+ * ⚠️ **Publiée le jour où le panneau de création a voulu illustrer l'étape du compte.** Il en
+ * avait d'abord fait une version simplifiée — même idée, mesures approchées. Demandé à
+ * l'usage que ce soit **exactement** le dossier du tableau de bord : une silhouette
+ * ressemblante n'est pas la même silhouette, et deux dossiers qui diffèrent d'un rayon se
+ * voient tout de suite sans qu'on sache le nommer.
+ *
+ * ⚠️ **Le nombre de cartes en aperçu change la largeur, donc les proportions.** Un dossier de
+ * trésorerie n'en range qu'une et se lit plus étroit qu'un dossier plein — voir
+ * `largeurPour`. L'illustration prend le même argument que la vraie carte pour que les deux
+ * puissent parler du même objet.
+ */
+export function silhouetteDossier(cartes = APERCUS_MAX): {
+  d: string; largeur: number; hauteur: number;
+} {
+  const largeur = CARTE_COMPTE.largeurPour(cartes);
+  return {
+    d: contourPour(largeur),
+    largeur,
+    hauteur: CARTE_COMPTE.panneau + LANGUETTE.hauteur,
+  };
+}
+
 export default function CarteCompte({
   nom, compte, couleur, icone, apercu, annonce, onClick, onModifier, variation,
 }: {
@@ -329,6 +360,30 @@ export default function CarteCompte({
   const clair = decalerClarte(couleur, 0.10);
   const sombre = decalerClarte(couleur, -0.16);
   const cartes = apercu ?? [];
+  /**
+   * Le dossier a-t-il un intérieur à montrer ?
+   *
+   * ⚠️ **L'absence de `onClick` en décide, plutôt qu'un drapeau de plus.** Un dossier de
+   * trésorerie n'a rien derrière son plan : ni ligne, ni cours, ni écran « intérieur d'un
+   * livret » qui aurait quelque chose à dire. C'est l'appelant qui le sait — lui seul
+   * connaît le genre du compte —, et ne rien lui passer est déjà la façon de le dire.
+   *
+   * ⚠️ **Trois choses en découlent ensemble, et c'est pour cela qu'une seule condition les
+   * commande.** Le chevron promet un intérieur : il disparaît. Le plan cesse d'être un
+   * bouton : un bouton sans action est un piège au clavier. Et les cartes ne se soulèvent
+   * plus au survol, ce soulèvement étant l'annonce d'une ouverture. Réglées séparément, les
+   * trois auraient fini par se contredire. Demandé à l'usage : « rends interactif juste les
+   * trois petits points ».
+   *
+   * ⚠️ **Ce qui reste actionnable, ce sont les trois points** — et ils suffisent, puisque
+   * cliquer un dossier de trésorerie ouvrait de toute façon sa correction. On ne perd donc
+   * aucun geste : on retire une promesse que la carte ne tenait pas.
+   */
+  const ouvrable = onClick != null;
+  /* ⚠️ Une balise variable, écrite ainsi parce que TypeScript refuserait `type="button"`
+     sur un `div` : la valeur est calculée, le type reste celui du cas complet, et les
+     attributs propres au bouton sont ajoutés conditionnellement juste en dessous. */
+  const Plan = (ouvrable ? "button" : "div") as "button";
 
   return (
     /**
@@ -343,7 +398,13 @@ export default function CarteCompte({
      * simple fait de glisser la souris vers les trois points sortait du survol et laissait
      * les cartes retomber au moment précis où l'on visait.
      */
-    <div className="novac-dossier-carte"
+    <div
+      /* ⚠️ **Le soulèvement des cartes vaut pour tous les dossiers, y compris ceux qui ne
+         s'ouvrent pas.** Je l'avais retiré des dossiers de trésorerie en le prenant pour
+         l'annonce d'une ouverture ; il ne l'est pas. C'est la matière qui répond au regard —
+         un paquet de cartes qu'on effleure —, et une carte bancaire mérite ce mouvement
+         autant qu'une carte d'actif. Redemandé à l'usage. */
+      className="novac-dossier-carte"
       /**
        * ⚠️ **`display: flex`, et ce n'est pas indifférent — sept pixels en dépendent.** Un
        * `<button>` est de niveau ligne : posé dans un bloc, il s'assoit sur la ligne de base
@@ -353,10 +414,11 @@ export default function CarteCompte({
        * qu'on regarde les dossiers ou leur contenu.
        */
       style={{ position: "relative", width: largeur, flexShrink: 0, display: "flex" }}>
-    <button
-      type="button"
+    <Plan
+      {...(ouvrable
+        ? { type: "button" as const, onClick, "aria-label": `Ouvrir ${annonce ?? nom}` }
+        : {})}
       className="novac-dossier"
-      onClick={onClick}
       /* ⚠️ **Le personnage se penche sur ce qu'on survole, et ne dit rien.** Un survol
          change au rythme du curseur : c'est le bon registre pour une mimique, qu'on
          remarque à peine, et le mauvais pour un mot, qui clignoterait. Mesuré une fois
@@ -378,10 +440,10 @@ export default function CarteCompte({
       // ⚠️ Pas d'`aria-expanded` : le dossier ne se déplie pas sous lui-même, il
       // remplace la vue. Annoncer un dépliement ferait attendre un contenu juste en
       // dessous, alors que c'est toute la zone qui change.
-      aria-label={`Ouvrir ${annonce ?? nom}`}
       style={{
         position: "relative", width: largeur, height: HAUTEUR,
-        padding: 0, border: 0, background: "none", cursor: "pointer",
+        padding: 0, border: 0, background: "none",
+        cursor: ouvrable ? "pointer" : "default",
         textAlign: "left", flexShrink: 0,
       }}
     >
@@ -420,9 +482,32 @@ export default function CarteCompte({
          * d'opacité, là où l'ancienne y était près de son maximum : c'est cette coupe-là,
          * en pleine force, qui donnait le trait net sous le dossier.
          */
+        /**
+         * ⚠️ **Un quatrième halo, en encre de thème, et il ne sert qu'à une couleur sur
+         * dix-neuf.** Les trois ombres ci-dessus portent la teinte du dossier ou du noir :
+         * sur une teinte proche du fond de page, aucune des trois ne se voit, et la
+         * silhouette disparaît. Mesuré, en thème sombre, contre `#030712` : le citron est à
+         * 10,5 de contraste, le bleu à 5,5, l'ardoise à 4,2 — et l'encre `#1E2233` à **1,28**.
+         * Ce n'est donc pas la palette qui est en cause, c'est une valeur aberrante. Relevé à
+         * l'usage : « le dossier en mode sombre se voit pas très bien ».
+         *
+         * ⚠️ **Un halo plutôt qu'une correction de la couleur.** Remonter la teinte jusqu'à
+         * un contraste minimal aurait marché — et aurait retiré à l'épargnant le dossier
+         * sombre qu'il a choisi, celui qui va avec la carte noire qu'il trouve parfaite. Le
+         * halo dessine le contour sans toucher à l'aplat.
+         *
+         * ⚠️ **`--nv-encre-rvb` et non du blanc : le défaut s'inverse en thème clair.** Là,
+         * c'est un dossier *pâle* qui se perd sur fond blanc, et il lui faut un halo sombre.
+         * Le jeton vaut blanc sur fond noir et encre sur fond blanc — le même code sert les
+         * deux cas.
+         *
+         * ⚠️ **Sur les dix-huit autres il est invisible**, et c'est voulu : un bord déjà
+         * cinq fois plus clair que la page ne gagne rien à un halo à seize pour cent.
+         */
         filter: `drop-shadow(0 2px 9px ${couleur}59)`
           + ` drop-shadow(0 1px 3px ${couleur}3D)`
-          + ` drop-shadow(0 1px 2px rgba(4,10,24,0.38))`,
+          + ` drop-shadow(0 1px 2px rgba(4,10,24,0.38))`
+          + ` drop-shadow(0 0 1px rgba(var(--nv-encre-rvb), 0.16))`,
       }} />
 
       {/* Le paquet de cartes, décalé vers la droite.
@@ -549,13 +634,20 @@ export default function CarteCompte({
                 <div style={{ fontSize: 12.5, color: "rgba(255,255,255,0.82)", minWidth: 0 }}>
                   {compte}
                 </div>
-                {/* Le chevron pointe à droite, comme sur la référence, et ne pivote
-                    plus : il ne déplie rien sous la carte, il mène dans le dossier. */}
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none"
-                  stroke="rgba(255,255,255,0.9)" strokeWidth={2.4} strokeLinecap="round"
-                  strokeLinejoin="round" aria-hidden="true">
-                  <path d="m9 18 6-6-6-6" />
-                </svg>
+                {/**
+                  * ⚠️ **Le chevron ne paraît que s'il mène quelque part.** Il pointe à
+                  * droite, comme sur la référence, et ne pivote pas : il ne déplie rien sous
+                  * la carte, il mène *dans* le dossier. Sur un dossier de trésorerie il n'y a
+                  * pas de dedans — il promettait alors un écran qui n'existe pas. Relevé à
+                  * l'usage.
+                  */}
+                {ouvrable && (
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none"
+                    stroke="rgba(255,255,255,0.9)" strokeWidth={2.4} strokeLinecap="round"
+                    strokeLinejoin="round" aria-hidden="true">
+                    <path d="m9 18 6-6-6-6" />
+                  </svg>
+                )}
               </div>
             </div>
           </div>
@@ -649,7 +741,7 @@ export default function CarteCompte({
             (CARTE_COMPTE.panneau + LANGUETTE.hauteur - 1) / (CARTE_COMPTE.panneau + LANGUETTE.hauteur)
           })`} />
       </svg>
-    </button>
+    </Plan>
 
     {/**
       * Les trois points, à la place qu'occupait la pastille.
@@ -664,19 +756,27 @@ export default function CarteCompte({
       */}
     {onModifier && (
       <button type="button" className="novac-dossier-modifier"
-        aria-label={`Modifier ${nom}`}
+        aria-label={`Réglages de ${nom}`}
         onClick={onModifier}
         style={{
           position: "absolute", top: CARTE_COMPTE.apercu + AIR_PANNEAU.haut,
           right: AIR_PANNEAU.cote, width: 28, height: 28, borderRadius: "50%",
           display: "flex", alignItems: "center", justifyContent: "center",
-          padding: 0, border: 0, background: "none", cursor: "pointer",
-          color: "rgba(255,255,255,0.6)",
+          padding: 0, border: 0, cursor: "pointer",
         }}>
-        <svg width="17" height="17" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-          <circle cx="5" cy="12" r="1.7" />
-          <circle cx="12" cy="12" r="1.7" />
-          <circle cx="19" cy="12" r="1.7" />
+        {/**
+          * ⚠️ **Trois curseurs plutôt que trois points.** Les points ne disent rien : ils
+          * annoncent « il y a autre chose », charge à vous de deviner quoi. Ce bouton ouvre
+          * des *réglages* — le nom, le genre, la couleur d'un dossier —, et depuis que le
+          * dossier de trésorerie ne s'ouvre plus, il en est la seule commande. Le seul geste
+          * d'un objet mérite d'être nommé par son dessin.
+          *
+          * ⚠️ **Seize et non dix-sept.** Le tracé est bien plus dense que trois disques : à
+          * la même taille, il pesait plus lourd que le pictogramme d'établissement qui lui
+          * fait face à l'autre bout de la rangée.
+          */}
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+          <path d="M13.944 3.25c.774 0 1.516.308 2.063.854.31.31.54.685.683 1.09h3.088a.972.972 0 0 1 0 1.945H16.69c-.143.406-.373.78-.683 1.09a2.916 2.916 0 0 1-4.125 0c-.31-.31-.54-.684-.683-1.09H4.222a.972.972 0 0 1 0-1.945H11.2c.143-.405.373-.78.683-1.09a2.92 2.92 0 0 1 2.062-.854M10.173 9.938a2.916 2.916 0 0 0-4.124 0c-.31.31-.54.684-.684 1.09H4.222a.972.972 0 0 0 0 1.944h1.143c.144.406.374.78.684 1.09a2.916 2.916 0 0 0 4.124 0c.31-.31.54-.684.684-1.09h8.92a.972.972 0 0 0 0-1.944h-8.92a2.9 2.9 0 0 0-.684-1.09M16.861 14.917c.774 0 1.515.307 2.062.854.31.31.54.684.684 1.09h.17a.972.972 0 0 1 0 1.945h-.17c-.144.405-.373.78-.684 1.09a2.916 2.916 0 0 1-4.124 0c-.31-.31-.54-.685-.684-1.09H4.222a.972.972 0 0 1 0-1.945h9.893c.144-.406.374-.78.684-1.09a2.92 2.92 0 0 1 2.062-.854" />
         </svg>
       </button>
     )}

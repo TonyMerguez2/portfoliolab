@@ -2,6 +2,7 @@
 import { useId } from "react";
 
 import { CARTE_ACTIF } from "@/components/portfolio/CarteActif";
+import { MOTIFS_PUCE, REPERE_PUCE, fondPour, motifPour } from "@/lib/pucesCarte";
 import { CARTE_COMPTE } from "@/components/portfolio/CarteCompte";
 import { decalerClarte } from "@/lib/couleur";
 import { FONT, NUM } from "@/lib/typography";
@@ -83,75 +84,67 @@ const DEBORD = CARTE_COMPTE.languette.largeur + CARTE_COMPTE.languette.course - 
  */
 const PUCE = { largeur: CARTE_ACTIF.logo.cote, hauteur: 26 };
 
-/**
- * La grille des contacts, en unités du repère de 32.
- *
- * ⚠️ **Écrite en bornes plutôt qu'en largeurs.** Les pavés se déduisent d'un produit de deux
- * listes : trois colonnes, trois rangées. Exprimée en largeurs additionnées, la moindre
- * retouche décalait tout ce qui suit et il fallait refaire l'arithmétique à la main.
- *
- * ⚠️ **Les bornes extérieures sortent du repère, et c'est voulu.** Le débord est rattrapé
- * par la découpe : c'est lui qui donne aux pavés d'angle la courbe du contour.
- *
- * ⚠️ **Colonne du milieu large, rangée du bas haute.** Trois bandes égales font un damier ;
- * le déséquilibre est ce qu'on reconnaît d'un contact sans savoir le nommer.
- */
-const COLONNES = [[-2, 9.0], [9.9, 22.1], [23.0, 34]];
-/**
- * ⚠️ **Les rangées sont recalculées sur la hauteur réduite, pas simplement écrasées.** Un
- * `viewBox` plus court aurait comprimé les sillons avec les pavés : ils sont taillés dans le
- * métal, ils n'ont pas de raison de s'amincir quand la puce se couche. Les trois hauteurs
- * gardent donc leurs proportions — la rangée du bas reste la plus haute — et les sillons
- * gardent leurs neuf dixièmes d'unité.
- */
-const RANGEES = [[-2, 7.74], [8.64, 15.94], [16.84, 28]];
-/** Le sillon entre deux pavés, en unités du repère — mesuré sur la photo, il est fin. */
-const ARRONDI_PAVE = 1.3;
+/** Ce qui affleure entre les plages : le substrat, sous le métal. */
+const SUBSTRAT = "#5F656F";
 
-function Puce() {
+/**
+ * La puce, gravée d'un des dessins de `MOTIFS_PUCE`.
+ *
+ * ⚠️ **Substrat puis plages, et jamais l'inverse.** Une version intermédiaire peignait la
+ * plaque pleine et traçait les sillons par-dessus, au pinceau : c'était plus court, et faux.
+ * Un trait ne peut pas arrondir ce qu'il sépare — les plages restaient à angles vifs, alors
+ * que sur la planche ce sont des tuiles nettement arrondies, d'un rayon bien supérieur à la
+ * largeur du sillon. Le sillon n'est donc dessiné nulle part : c'est le substrat qu'on voit
+ * entre deux tuiles.
+ *
+ * ⚠️ **Le dégradé traverse toutes les plages d'un seul tenant**, en coordonnées du repère.
+ * Rapporté à la boîte de chacune, il repartirait du clair dans chaque tuile : on obtiendrait
+ * une mosaïque de plaquettes éclairées pareil, au lieu d'une surface que la lumière traverse.
+ *
+ * ⚠️ **La découpe à la silhouette taille les tuiles du pourtour.** Elles débordent exprès de
+ * la boîte : leurs angles extérieurs prennent ainsi le rayon du contour de la puce, au lieu
+ * de porter le leur et de laisser quatre coins sombres que la planche n'a pas.
+ */
+function Puce({ motif }: { motif: number }) {
   /**
    * ⚠️ **L'identifiant du dégradé est propre à l'instance.** Deux cartes bancaires côte à
    * côte partageraient sinon la même définition : le navigateur applique alors la dernière
    * rencontrée aux deux, et la première change d'aspect quand la seconde apparaît.
    */
   const id = useId().replace(/:/g, "");
+  const dessin = MOTIFS_PUCE[motif % MOTIFS_PUCE.length];
+  const metal = `url(#puce-${id})`;
   return (
     <svg width={PUCE.largeur} height={PUCE.hauteur}
-      viewBox={`0 0 ${PUCE.largeur} ${PUCE.hauteur}`} aria-hidden="true"
+      viewBox={`0 0 ${REPERE_PUCE.largeur} ${REPERE_PUCE.hauteur}`} aria-hidden="true"
       style={{ flexShrink: 0 }}>
       <defs>
-        {/**
-          * ⚠️ **Le dégradé est en coordonnées du repère, pas de chaque boîte.** Rapporté à
-          * la boîte de chaque pavé, il repartait du clair dans les neuf : on obtenait neuf
-          * petites plaques éclairées pareil, au lieu d'une seule surface que la lumière
-          * traverse.
-          */}
         <linearGradient id={`puce-${id}`} gradientUnits="userSpaceOnUse"
-          x1="0" y1="0" x2={PUCE.largeur} y2={PUCE.hauteur}>
+          x1="0" y1="0" x2={REPERE_PUCE.largeur} y2={REPERE_PUCE.hauteur}>
           <stop offset="0%" stopColor="#F4F6F9" />
           <stop offset="34%" stopColor="#D3D8DF" />
           <stop offset="66%" stopColor="#A8AFBA" />
           <stop offset="100%" stopColor="#CDD3DA" />
         </linearGradient>
-      </defs>
-
-      <defs>
         <clipPath id={`silhouette-${id}`}>
-          <rect x="0.6" y="0.6" width={PUCE.largeur - 1.2} height={PUCE.hauteur - 1.2}
-            rx={CARTE_ACTIF.logo.rayon - 0.6} />
+          <rect x="0.6" y="0.6" width={REPERE_PUCE.largeur - 1.2}
+            height={REPERE_PUCE.hauteur - 1.2} rx={CARTE_ACTIF.logo.rayon - 0.6} />
         </clipPath>
       </defs>
 
-      {/* Le substrat : ce qui affleure entre les pavés. Sans liseré épais autour — sur la
-          photo, le pourtour est fait des pavés eux-mêmes, pas d'un cadre. */}
-      <rect x="0.6" y="0.6" width={PUCE.largeur - 1.2} height={PUCE.hauteur - 1.2}
-        rx={CARTE_ACTIF.logo.rayon - 0.6} fill="#5F656F" />
-
       <g clipPath={`url(#silhouette-${id})`}>
-        {RANGEES.map(([y1, y2], r) => COLONNES.map(([x1, x2], c) => (
-          <rect key={`${r}-${c}`} x={x1} y={y1} width={x2 - x1} height={y2 - y1}
-            rx={ARRONDI_PAVE} fill={`url(#puce-${id})`} />
-        )))}
+        <rect x="0.6" y="0.6" width={REPERE_PUCE.largeur - 1.2}
+          height={REPERE_PUCE.hauteur - 1.2} rx={CARTE_ACTIF.logo.rayon - 0.6}
+          fill={SUBSTRAT} />
+        {dessin.plages.map((d, i) => <path key={`p${i}`} d={d} fill={metal} />)}
+        {dessin.disques?.map((c, i) => (
+          <circle key={`c${i}`} cx={c.cx} cy={c.cy} r={c.r} fill={metal} />
+        ))}
+        {/* Les entailles n'ouvrent pas la plaque : elles entament une tuile sans la couper. */}
+        {dessin.entailles?.map((d, i) => (
+          <path key={`e${i}`} d={d} fill="none" stroke={SUBSTRAT} strokeWidth={1.1}
+            strokeLinecap="round" />
+        ))}
       </g>
     </svg>
   );
@@ -171,7 +164,7 @@ function Puce() {
  * juste sur l'une et faux sur les dix autres. Du blanc à sept pour cent éclaircit la surface
  * quelle qu'elle soit, sans jamais introduire une seconde teinte.
  */
-function Guilloche({ id }: { id: string }) {
+function Guilloche({ id, fond }: { id: string; fond: number }) {
   const L = CARTE_ACTIF.largeur, H = CARTE_ACTIF.hauteur;
   return (
     <svg viewBox={`0 0 ${L} ${H}`} aria-hidden="true"
@@ -209,18 +202,66 @@ function Guilloche({ id }: { id: string }) {
           <stop offset="100%" stopColor="rgba(255,255,255,0.04)" />
         </linearGradient>
       </defs>
+      {/**
+        * ⚠️ **Trois gravures, et toutes calées sur la même bande.** Le motif était unique :
+        * deux dossiers voisins montraient la même courbe au même endroit, et l'œil y lisait
+        * un fond d'interface plutôt que deux objets. Ce qui change d'un dessin à l'autre est
+        * la *famille de courbes*, jamais l'endroit où elle passe — les trois traversent les
+        * soixante-huit pixels visibles, faute de quoi elles n'existeraient que sous le plan.
+        *
+        * ⚠️ **Toutes en blanc translucide, comme la première.** La carte prend l'une des
+        * dix-neuf couleurs de dossier : une gravure teintée aurait été juste sur l'une et
+        * fausse sur les dix-huit autres.
+        */}
       <g fill="none" stroke={`url(#arcs-${id})`} strokeWidth={1.4}>
-        <circle cx={L + 7} cy={H + 19} r={152} />
-        <circle cx={L + 7} cy={H + 19} r={190} />
-        <circle cx={L + 7} cy={H + 19} r={228} />
-        <circle cx={L + 7} cy={H + 19} r={266} />
+        {fond === 0 && (
+          /* Le guillochis d'origine : des arcs concentriques nés du coin bas-droit. Leurs
+             rayons se suivent de trente-huit — c'est la répétition qui fait le guillochis,
+             pas la présence de courbes. */
+          <>
+            <circle cx={L + 7} cy={H + 19} r={152} />
+            <circle cx={L + 7} cy={H + 19} r={190} />
+            <circle cx={L + 7} cy={H + 19} r={228} />
+            <circle cx={L + 7} cy={H + 19} r={266} />
+          </>
+        )}
+        {fond === 1 && (
+          /**
+           * Des ondes : quatre sinusoïdes parallèles qui traversent la bande.
+           *
+           * ⚠️ **Écrites en courbes de Bézier plutôt qu'en `path` sinusoïdal exact.** Deux
+           * cubiques par période suffisent à l'œil sur une amplitude de neuf pixels, et
+           * restent lisibles dans le fichier — une sinusoïde échantillonnée aurait donné
+           * quarante nombres qu'on ne saurait plus relire.
+           */
+          [0, 1, 2, 3].map(i => (
+            <path key={i} d={`M-10 ${10 + i * 21} C ${L * 0.28} ${1 + i * 21},`
+              + ` ${L * 0.42} ${19 + i * 21}, ${L * 0.62} ${10 + i * 21}`
+              + ` S ${L * 0.9} ${1 + i * 21}, ${L + 10} ${8 + i * 21}`} />
+          ))
+        )}
+        {fond === 2 && (
+          /**
+           * Des obliques : un faisceau de droites parallèles, dans le sens de la lumière.
+           *
+           * ⚠️ **Inclinées à contresens du dégradé de teinte.** Le fond de la carte descend
+           * du clair au sombre vers le bas-droit ; des obliques dans le même sens auraient
+           * épaissi ce mouvement au lieu de le croiser, et la surface serait redevenue plate.
+           *
+           * ⚠️ **L'écart est serré au point qu'on ne les compte pas.** Vingt-six pixels : à
+           * quarante on lisait des traits isolés, ce qui est un décor et non une matière.
+           */
+          [0, 1, 2, 3, 4, 5, 6].map(i => (
+            <path key={i} d={`M${-40 + i * 26} ${H + 10} L${40 + i * 26} -10`} />
+          ))
+        )}
       </g>
     </svg>
   );
 }
 
 export default function CarteBancaire({
-  intitule, couleur, derniers,
+  intitule, couleur, derniers, cle,
 }: {
   /** Ce que la carte annonce en tête — « Compte courant », « Livret A ». */
   intitule: string;
@@ -228,6 +269,20 @@ export default function CarteBancaire({
   couleur: string;
   /** Les quatre derniers chiffres, s'ils ont été déclarés. */
   derniers?: string | null;
+  /**
+   * De quoi attribuer sa puce à cette carte-ci.
+   *
+   * ⚠️ **Une clé, et non un numéro de dessin.** L'appelant sait *quel compte* il montre, pas
+   * quelle gravure lui revient : lui faire choisir un motif l'obligerait à savoir combien il
+   * en existe — et à refaire ce choix, donc à le refaire différemment, au prochain emplacement
+   * où une carte apparaîtra. Il donne ce qu'il a, la carte en déduit le reste. C'est aussi ce
+   * qui a permis d'en retirer deux sans toucher à un seul appelant.
+   *
+   * ⚠️ **L'identifiant du compte de préférence à son nom, quand il existe.** Renommer un
+   * compte ne doit pas regraver sa carte. À défaut — un dossier deviné, pas encore déclaré —
+   * le nom fait l'affaire : il est ce qui tient lieu d'identité à ce stade.
+   */
+  cle?: string;
 }) {
   /**
    * ⚠️ **La carte est plus sombre que son dossier, et c'est ce qui les distingue.** Posée
@@ -274,7 +329,7 @@ export default function CarteBancaire({
         position: "relative", overflow: "hidden",
       }}
     >
-      <Guilloche id={id} />
+      <Guilloche id={id} fond={fondPour(cle ?? intitule)} />
 
       {/**
         * La bande du haut : puce, intitulé, mention, pictogramme.
@@ -294,7 +349,7 @@ export default function CarteBancaire({
           * La puce. Un rectangle arrondi barré de deux traits — c'est le seul détail qui
           * fait lire « carte » plutôt que « rectangle », et il tient en trois lignes de SVG.
           */}
-        <Puce />
+        <Puce motif={motifPour(cle ?? intitule)} />
         <div style={{ minWidth: 0, flex: 1 }}>
           {/* Corps et interlignage repris de la ligne d'identité d'une carte d'actif : c'est
               le même rang de lecture, il doit avoir le même poids. */}
@@ -306,12 +361,22 @@ export default function CarteBancaire({
           </div>
         </div>
 
-        {/* Le fronton d'une banque : le pictogramme du genre, pas un logo d'établissement —
-            celui-là a sa place sur le dossier, où l'épargnant le pose. */}
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.94)"
-          strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
-          <path d="M3 21h18M3 10h18M5 6l7-3 7 3M4 10v11m16-11v11M8 14v3m4-3v3m4-3v3" />
-        </svg>
+        {/**
+          * ⚠️ **Le coin haut-droit reste vide, et c'est un choix.** Il a porté deux choses,
+          * l'une après l'autre. D'abord le fronton d'une banque, écrit en dur — qui faisait
+          * doublon avec le pictogramme du genre porté par le plan du dossier, quelques pixels
+          * plus bas : deux tracés identiques dans le même objet, et pire depuis que le compte
+          * courant a le sien, la carte disant « banque » pendant que le dossier disait
+          * « espèces ». Puis la marque Novac, à la place que les cartes réservent au réseau.
+          * Écartée à l'usage.
+          *
+          * ⚠️ **Ce qui reste dit déjà tout ce qu'il faut.** La puce fait lire « carte », le
+          * nom dit quel compte, le numéro en bas achève la forme. Une marque de plus ne
+          * répondait à aucune question que la carte laisse en suspens.
+          *
+          * ⚠️ **Le vide n'est pas un oubli : c'est la fin de bande.** Le titre porte
+          * `flex: 1` et occupe donc la place libérée — rien à retirer ni à recentrer.
+          */}
       </div>
 
       {/* Le numéro, dans le prolongement que la languette laisse libre à droite. */}

@@ -22,6 +22,8 @@ import AssetGrid from "@/components/portfolio/AssetGrid";
 import CarteCompte, { APERCUS_MAX, CARTE_COMPTE } from "@/components/portfolio/CarteCompte";
 import CarteActif from "@/components/portfolio/CarteActif";
 import PiluleAction from "@/components/portfolio/PiluleAction";
+import PanneauCreation from "@/components/portfolio/PanneauCreation";
+import PastilleVariation, { pastille, FlecheTendance } from "@/components/portfolio/PastilleVariation";
 import FilAriane from "@/components/portfolio/FilAriane";
 import RailHorizontal from "@/components/portfolio/RailHorizontal";
 import PortfolioTabs from "@/components/portfolio/PortfolioTabs";
@@ -310,79 +312,7 @@ const DIAMETRE_ROND = 63;
  */
 const DIAMETRE_ANNEAU_SCORE = 50;
 
-/**
- * La pastille de la maquette : un aplat plein, encré de la couleur du bandeau.
- *
- * ⚠️ **Pleine, et son texte prend le fond du bandeau plutôt qu'un blanc.** Un blanc fixe
- * aurait tenu sur le vert et le rouge mais serait devenu criard sur l'orange d'une note
- * moyenne ; reprendre la couleur de la carte donne un texte qui semble découpé dans
- * l'aplat, et qui reste juste quel que soit le thème puisqu'il suit le même jeton.
- *
- * ⚠️ **La teinte vient de ce que la pastille dit** — vert pour un gain, rouge pour une
- * perte, orange pour une note à revoir. L'écrire trois fois pour une seule géométrie
- * aurait garanti qu'elles finissent par diverger.
- */
-const pastille = (couleur: string): React.CSSProperties => ({
-  fontFamily: FONT, fontSize: 11.5, fontWeight: 600, color: CLAIR.carte,
-  background: couleur, borderRadius: 999, padding: "3px 9px",
-  whiteSpace: "nowrap", lineHeight: 1.2,
-  /**
-   * ⚠️ **Alignement sur la ligne de base, et non au centre.** Un pictogramme centré
-   * verticalement flotte à côté de chiffres qui, eux, reposent sur leur ligne de base :
-   * le triangle paraissait glisser vers le haut. En `baseline`, un élément remplacé comme
-   * un SVG pose son bord inférieur sur cette ligne — la base du triangle et le pied des
-   * chiffres tombent donc au même niveau.
-   */
-  display: "inline-flex", alignItems: "baseline", gap: 4,
-});
 
-/**
- * La flèche de tendance qui précède le signe dans la pastille de performance.
- *
- * ⚠️ **Elle double le signe, et c'est voulu.** Un « + » et un « − » se distinguent mal du
- * coin de l'œil à 11,5 px, quand une courbe qui monte ou descend se lit avant le
- * caractère. La couleur dit déjà la même chose, mais elle seule ne suffit pas — un
- * daltonisme rouge-vert touche environ un homme sur douze, et c'est précisément ce
- * couple-là que la pastille emploie.
- *
- * ⚠️ **La boîte enferme le trait, pas la géométrie.** Le chemin va de x = 3 à 21 et de
- * y = 7 à 17, mais il est *filaire* : un trait de 1,5 déborde d'une demi-épaisseur de part
- * et d'autre, et les bouts arrondis n'y changent rien. Le dessin peint donc 2,25–21,75 sur
- * 6,25–17,75. Cadrer sur la géométrie aurait rogné le trait sur les quatre bords —
- * l'erreur inverse de celle du triangle précédent, où la boîte était trop grande.
- *
- * ⚠️ **La hauteur est celle des chiffres, mesurée et non devinée.** `measureText` donne
- * 8,479 px au-dessus de la ligne de base pour cette police à cette taille. Posée sur cette
- * ligne par l'alignement de la pastille, la flèche monte donc exactement au sommet du
- * chiffre voisin et s'arrête exactement sur son pied. La largeur suit le rapport de la
- * boîte, faute de quoi le dessin s'étirerait.
- *
- * ⚠️ **Un seul cadrage pour les deux sens**, contrairement aux triangles d'avant : ces
- * deux chemins-ci occupent la même bande, montée et descente confondues. Vérifié plutôt
- * que supposé.
- */
-function FlecheTendance({ hausse }: { hausse: boolean }) {
-  return (
-    <svg viewBox="2.25 6.25 19.5 11.5" fill="none" stroke="currentColor" strokeWidth={1.5}
-      strokeLinecap="round" strokeLinejoin="round" width={14.38} height={8.48}
-      /**
-       * ⚠️ **`overflow: visible`, sinon le trait est rasé sur ses quatre bords.** Un SVG
-       * masque par défaut ce qui dépasse de sa boîte. Or celle-ci épouse le dessin au
-       * millième près : les bouts arrondis arrivent *pile* sur le bord, et le demi-pixel
-       * d'antialiasing qui les adoucit tombe du mauvais côté de la limite. Signalé à
-       * l'usage — la flèche paraissait coupée à droite.
-       *
-       * Élargir la boîte aurait aussi réglé le rognage, mais en désaccordant la hauteur
-       * du dessin de celle des chiffres : c'est le masquage qu'il faut lever, pas le
-       * cadrage qu'il faut fausser.
-       */
-      aria-hidden="true" style={{ flexShrink: 0, overflow: "visible" }}>
-      <path d={hausse
-        ? "m3 17 6-6 4 4 8-8m0 0h-7m7 0v7"
-        : "m3 7 6 6 4-4 8 8m0 0v-7m0 7h-7"} />
-    </svg>
-  );
-}
 
 const montantExact = (v: number): string =>
   v.toLocaleString("fr-FR", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + " €";
@@ -549,6 +479,8 @@ function PortfolioPageInner() {
   const [comptesCharges, setComptesCharges] = useState(false);
   const [genresCompte,    setGenresCompte]    = useState<GenreCompte[]>([]);
   const [formCompte,      setFormCompte]      = useState(false);
+  /** Le panneau de création, ouvert depuis l'écran « aucun portefeuille ». */
+  const [creation,        setCreation]        = useState(false);
   /** Le compte en cours de correction, ou `null` quand on en déclare un nouveau. */
   const [renomme,         setRenomme]         = useState(false);
   const [nomSaisi,        setNomSaisi]        = useState("");
@@ -1948,13 +1880,30 @@ function PortfolioPageInner() {
         height: "100vh", background: "transparent", color: CLAIR.surFondAttenue,
         fontSize: 14, flexDirection: "column", gap: 16 }}>
         <div>Aucun portefeuille sélectionné.</div>
-        <button onClick={() => router.push("/build")}
+        {/**
+          * ⚠️ **Le second bouton « Créer un portefeuille », et il partait ailleurs.** Celui de
+          * l'écran d'accueil ouvre le panneau de création ; celui-ci, portant exactement le
+          * même libellé, envoyait toujours vers `/build` — l'ancien parcours en page pleine.
+          * Deux boutons, un seul mot, deux comportements : de quelque côté qu'on soit entré,
+          * on n'obtenait pas la même chose, et rien à l'écran ne le disait.
+          *
+          * ⚠️ **Retrouvé en cherchant pourquoi « rien n'avait changé ».** Le serveur servait
+          * bien le nouveau code — vérifié jusqu'à la feuille de style —, mais l'écran par
+          * lequel on arrivait n'y menait pas. Le défaut n'était pas dans le rendu, il était
+          * dans la porte d'entrée.
+          *
+          * ⚠️ **`/build` reste joignable**, depuis le tableau de bord, pour ce qu'il fait
+          * bien : composer une allocation cible. Ce n'est simplement plus ce que promet le
+          * mot « créer ».
+          */}
+        <button onClick={() => setCreation(true)}
           style={{ padding: "8px 20px", borderRadius: RAYONS.sm,
             border: `1px solid ${JETONS.accentBord}`,
             background: CLAIR.accentDoux, color: CLAIR.accent,
             cursor: "pointer", fontSize: 12 }}>
           Créer un portefeuille
         </button>
+        {creation && <PanneauCreation onFermer={() => setCreation(false)}/>}
       </div>
     );
   }
@@ -2447,10 +2396,7 @@ function PortfolioPageInner() {
           {/* ⚠️ **Le pourcentage devient une pastille.** Entre parenthèses et en gris, il
               se lisait comme une précision de bas de page ; enfermé dans son fond teinté,
               il devient une donnée à part entière sans disputer sa taille au montant. */}
-          <span style={pastille(plCol)}>
-            <FlecheTendance hausse={plPct >= 0} />
-            {plPct >= 0 ? "+" : ""}{plPct.toFixed(2)} %
-          </span>
+          <PastilleVariation pct={plPct} couleur={plCol} />
           {/* Le crayon disparaît dès que le prix de revient vient des
               écritures : la valeur saisie serait enregistrée puis ignorée,
               le calcul repartant des transactions au rafraîchissement. */}
@@ -2718,13 +2664,15 @@ function PortfolioPageInner() {
                       * bas-gauche. Le dégradé vit dans `globals.css`, partagé avec
                       * `.novac-tile` pour que les deux ne divergent pas.
                       *
-                      * ⚠️ **Seul l'angle change, et il se calcule.** Les arrêts des tuiles
-                      * valent pour des proportions proches du carré ; sur cette pilule de
-                      * 143 × 22, l'angle de 135° placerait les deux coins à 86,7 % et 13,3 %,
-                      * en pleine partie éclairée — le liseré y serait à pleine force au lieu
-                      * de s'y éteindre. L'axe doit être perpendiculaire à la diagonale des
-                      * coins à éteindre, soit 180° − atan(h / w) = 171°, où ils retombent à
-                      * 50,7 % et 49,3 %. Voir le calcul complet dans `globals.css`.
+                      * ⚠️ **Seul l'angle change, et il n'est plus écrit ici.** Les arrêts des
+                      * tuiles valent pour des proportions proches du carré ; sur cette pilule
+                      * de 143 × 22, l'angle de 135° placerait les deux coins à 86,7 % et
+                      * 13,3 %, en pleine partie éclairée — le liseré y serait à pleine force
+                      * au lieu de s'y éteindre. L'axe doit être perpendiculaire à la diagonale
+                      * des coins à éteindre, soit 180° − atan(h / w). Cette valeur était
+                      * recopiée à la main à chaque emplacement, avec un degré d'écart et un
+                      * commentaire pour l'expliquer ; `ancrerLisere` la mesure désormais sur
+                      * le bouton lui-même. Voir le calcul complet dans `globals.css`.
                       *
                       * ⚠️ **La teinte est celle de la référence, et non l'accent de la page.**
                       * Le violet ne vient d'aucun jeton : il est posé ici en clair, ce qui est
@@ -2750,10 +2698,6 @@ function PortfolioPageInner() {
                       onClick={() => { setErreurCompte(null); setFormCompte(true); }}
                       title="Déclarer un compte : son genre, sa couleur, son logo."
                       fond={fondBouton} fondSurvol={fondBoutonSurvol}
-                      /* ⚠️ 170° et non les 171° par défaut : l'angle suit les proportions, et
-                         cette pilule-ci est plus courte. 180° − atan(26/141) = 169,6°, qui place
-                         les coins à 48,9 % et 51,1 % — contre 46,2 % et 53,8 % à 171°. */
-                      angle={170}
                       placement={{ marginLeft: "auto" }} />
                   </div>
                   {/**
@@ -2864,20 +2808,30 @@ function PortfolioPageInner() {
                             */
                           apercu={!d.porteDesTitres
                             ? [<CarteBancaire key="carte" couleur={d.couleur}
-                                intitule={compte?.libelle_genre ?? d.nom} />]
+                                intitule={compte?.libelle_genre ?? d.nom}
+                                /* ⚠️ L'identifiant plutôt que le nom : renommer un compte ne
+                                   doit pas changer la gravure de sa carte. */
+                                cle={compte ? String(compte.id) : d.nom} />]
                             : [...d.lignes]
                                 .sort((a, b) => b.weight - a.weight)
                                 .slice(0, APERCUS_PAR_DOSSIER)
                                 .map(a => <CarteActif key={a.ticker} a={versCarte(a)} inerte />)}
-                          /* ⚠️ **Un compte de trésorerie s'ouvre sur sa correction, faute
-                             d'intérieur à montrer.** Son solde entre dans le total et
-                             vieillit tout seul ; sans moyen de le reprendre, le déclarer
-                             reviendrait à le graver. Deux sens du clic cohabitent donc dans
-                             la rangée — dette assumée, faute d'un écran « intérieur d'un
-                             livret » qui aurait quelque chose à dire. */
-                          onClick={compte && !d.porteDesTitres
-                            ? ouvrirLaCorrection(compte)
-                            : () => releverPuis(() => setCompteOuvert(d.cle))}
+                          /**
+                           * ⚠️ **Un dossier de trésorerie ne s'ouvre pas, et c'est la dette
+                           * précédente qui se solde.** Il ouvrait sa *correction* — faute
+                           * d'un écran « intérieur d'un livret » qui aurait quelque chose à
+                           * dire —, si bien que deux sens du clic cohabitaient dans la même
+                           * rangée : ici on entre, là on modifie. Rien ne l'annonçait, et le
+                           * chevron du coin promettait même l'inverse.
+                           *
+                           * ⚠️ **Aucun geste n'est perdu.** La correction reste au bout des
+                           * trois points, qui la désignaient déjà et qui, eux, disent ce
+                           * qu'ils font. Ne rien passer ici suffit à retirer au dossier son
+                           * chevron, son curseur et son soulèvement — voir `ouvrable`.
+                           */
+                          onClick={d.porteDesTitres
+                            ? () => releverPuis(() => setCompteOuvert(d.cle))
+                            : undefined}
                           onModifier={compte
                             ? ouvrirLaCorrection(compte)
                             /* Un dossier deviné n'a pas été saisi : son nom vient de
@@ -2918,9 +2872,10 @@ function PortfolioPageInner() {
                     * habits différents, ce qui donnait à croire à deux natures d'action. Même
                     * fond tiré de l'avatar, même liseré, même rayon plein, même blanc.
                     *
-                    * ⚠️ L'angle du liseré suit les proportions : ~160 × 26 donne
-                    * 180° − atan(26/160) = 171°, et non les 170° de la pilule d'à côté, qui
-                    * est plus courte. Voir le calcul dans `globals.css`.
+                    * ⚠️ L'angle du liseré suit les proportions, et se mesure : deux libellés
+                    * de longueurs différentes veulent deux axes différents, ce que
+                    * `ancrerLisere` déduit de la boîte au lieu qu'on le recopie. Voir le
+                    * calcul dans `globals.css`.
                     */
                   action={dossierActif?.declare && dossierActif.porteDesTitres && (
                     <PiluleAction libelle="Ajouter une opération"
@@ -3697,6 +3652,25 @@ const ICONE_BANQUE = (
   </svg>
 );
 
+/**
+ * Le compte courant a désormais le sien, et ne partage plus celui de l'épargne.
+ *
+ * ⚠️ **Deux comptes de trésorerie, mais pas la même chose.** Le fronton de banque disait
+ * l'établissement ; il convenait à un livret, qu'on identifie par sa banque, et beaucoup
+ * moins à un compte courant, qu'on identifie par ce qui y circule. Les pièces disent
+ * l'argent disponible — ce qu'un compte courant est.
+ *
+ * ⚠️ **Même famille de tracé que les autres :** boîte de 24, trait de 1,5, bouts ronds.
+ * En mélanger d'autres origines donnerait des épaisseurs différentes à la même taille.
+ */
+const ICONE_ESPECES = (
+  <svg width={TAILLE_ICONE} height={TAILLE_ICONE} viewBox="0 0 24 24" fill="none"
+    stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round"
+    aria-hidden="true">
+    <path d="M9 14c0 1.657 2.686 3 6 3s6-1.343 6-3M9 14c0-1.657 2.686-3 6-3s6 1.343 6 3M9 14v4c0 1.656 2.686 3 6 3s6-1.344 6-3v-4M3 6c0 1.072 1.144 2.062 3 2.598s4.144.536 6 0S15 7.072 15 6s-1.144-2.062-3-2.598-4.144-.536-6 0S3 4.928 3 6m0 0v10c0 .888.772 1.45 2 2m-2-7c0 .888.772 1.45 2 2" />
+  </svg>
+);
+
 const ICONE_TITRES = (
   <svg width={TAILLE_ICONE} height={TAILLE_ICONE} viewBox="0 0 24 24" fill="currentColor"
     aria-hidden="true">
@@ -3721,7 +3695,7 @@ const ICONE_CRYPTO = (
  * que pas de signe du tout.
  */
 const ICONE_PAR_GENRE: Record<string, React.ReactNode> = {
-  courant: ICONE_BANQUE,
+  courant: ICONE_ESPECES,
   epargne: ICONE_BANQUE,
   pea: ICONE_TITRES,
   cto: ICONE_TITRES,

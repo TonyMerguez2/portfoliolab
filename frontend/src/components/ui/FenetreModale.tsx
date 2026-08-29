@@ -39,12 +39,33 @@ import Cadre from "@/components/ui/Cadre";
  * le portail dans le composant partagé fait que la prochaine fenêtre ne retombera pas dans
  * le piège — et supprime la note à recopier.
  */
+/**
+ * La largeur d'une fenêtre de saisie.
+ *
+ * ⚠️ **Une constante parce que les trois fenêtres du même parcours en avaient trois.** Le
+ * panneau de création déclarait 470, la saisie d'une opération 440, la déclaration d'un
+ * compte 460 — et le défaut du composant valait 460 aussi, si bien qu'aucune ne pouvait
+ * s'aligner sur les autres sans qu'on aille lire les trois. Or ce sont les mêmes écrans : la
+ * déclaration d'un compte est une étape *dans* la création d'un portefeuille avant d'être
+ * une fenêtre du tableau de bord. Trente pixels d'écart entre deux vues du même formulaire
+ * se voient immédiatement quand on passe de l'une à l'autre. Signalé à l'usage, deux fois.
+ *
+ * ⚠️ **470 parce que c'est le panneau de création qui contraint.** Il porte une illustration
+ * et une bande de dix-neuf couleurs ; les deux autres n'ont pas de contrainte propre. C'est
+ * donc à elles de céder, comme la barre d'actif avait imposé sa hauteur aux champs.
+ *
+ * ⚠️ **Elle reste réglable**, et une fenêtre qui n'appartient pas à ce parcours peut avoir sa
+ * mesure : le réglage d'avatar s'ouvre à 400, parce qu'il ne montre qu'une grille de
+ * silhouettes et qu'une fenêtre large la laisserait flotter.
+ */
+export const LARGEUR_FENETRE = 470;
+
 export default function FenetreModale({
-  children, onFermer, largeur = 460, zIndex = 60, etiquette, style,
+  children, onFermer, largeur = LARGEUR_FENETRE, zIndex = 60, etiquette, style,
 }: {
   children: ReactNode;
   onFermer: () => void;
-  /** Largeur de la fenêtre. Elle se rétracte d'elle-même sur un écran plus étroit. */
+  /** Largeur de la fenêtre — voir `LARGEUR_FENETRE`. Elle se rétracte d'elle-même sur un écran plus étroit. */
   largeur?: number;
   /**
    * Le plan de la fenêtre.
@@ -87,6 +108,11 @@ export default function FenetreModale({
       role="dialog" aria-modal="true" aria-label={etiquette}
       style={{
         position: "fixed", inset: 0, zIndex, display: "flex",
+        /* ⚠️ **Toutes les fenêtres sont centrées, y compris celle de création.** Elle s'est
+           ouverte un temps sous le bandeau, dans le prolongement de la barre de recherche,
+           l'idée étant qu'elle continue le haut de l'écran. Ramenée au centre à l'usage — et
+           un seul ancrage vaut mieux qu'un réglage : quatre fenêtres qui s'ouvrent au même
+           endroit se lisent comme un système, deux places en font deux mécanismes. */
         alignItems: "center", justifyContent: "center", padding: 20,
         background: "rgba(0,0,0,0.55)",
         backdropFilter: "blur(3px)", WebkitBackdropFilter: "blur(3px)",

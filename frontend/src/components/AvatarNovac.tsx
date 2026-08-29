@@ -149,6 +149,7 @@ export default function AvatarNovac({
   forme = "sphere",
   skin = "uni",
   vivant = true,
+  yeux = true,
   titre,
   style,
 }: {
@@ -192,6 +193,19 @@ export default function AvatarNovac({
    * obtiendra, pas une créature.
    */
   vivant?: boolean;
+  /**
+   * La tête a-t-elle un visage ?
+   *
+   * ⚠️ **Faux pour une vignette qui ne montre que la silhouette.** Le sélecteur de forme
+   * pose huit têtes côte à côte, toutes de la même couleur : ce qui les distingue est leur
+   * contour, et deux yeux identiques répétés huit fois n'ajoutent rien à cette question tout
+   * en occupant le milieu de chaque vignette. Demandé à l'usage.
+   *
+   * ⚠️ **Ce n'est pas la même chose que `vivant`.** Sans vie, les yeux sont là mais immobiles ;
+   * sans visage, il n'y a plus d'yeux du tout — donc plus de reflets ni de halo d'habillage
+   * non plus, qui vivent dans le même groupe et n'ont rien à cercler.
+   */
+  yeux?: boolean;
   /** Le regard suit-il le curseur dans la fenêtre ? */
   suivi?: boolean;
   /** Débattement du suivi, en degrés. */
@@ -420,10 +434,30 @@ export default function AvatarNovac({
    * ⚠️ **Il ne dépend que de `taille`, jamais de l'état de la morphose.** Un nombre de points
    * qui changerait en cours de route ferait sauter la silhouette à la dernière image, au
    * moment précis où l'œil la suit.
+   *
+   * ⚠️ **Arrondi à un multiple de quatre, et ce n'est pas une coquetterie : c'est ce qui
+   * empêche les pointes d'être tranchées.** Les points sont pris à `t = i/n · 2π` ; pour que
+   * l'un d'eux tombe sur l'axe vertical, il faut `n/4` entier. Sinon deux points encadrent le
+   * sommet et la corde qui les joint le coupe net.
+   *
+   * Constaté sur la goutte à soixante-seize pixels de rendu : `1,4 × 76 = 106`, or 106/4 vaut
+   * 26,5 — les points 26 et 27 tombaient à `x = ±3,35` et le pic, qui devait monter à −100,
+   * s'arrêtait à **−95,5**. Quatre unités et demie de moins sur deux cents, soit un sommet
+   * rabattu en petit plateau. Signalé à l'usage.
+   *
+   * ⚠️ **Le défaut ne se voyait qu'à certaines tailles**, ce qui est le pire des cas : à
+   * vingt-six pixels le compte est plafonné à 72, à cent trente-deux il l'est à 180, et les
+   * deux sont des multiples de quatre. Seules les tailles intermédiaires tombaient à côté.
+   * Les bornes étant elles-mêmes des multiples de quatre, les ramener après l'arrondi
+   * préserve la propriété.
+   *
+   * ⚠️ **Cela vaut pour toutes les formes à sommet, pas seulement la goutte.** La pointe du
+   * triangle et les branches des étoiles vivent sur les mêmes axes ; elles étaient tranchées
+   * de la même façon, moins visiblement parce que moins effilées.
    */
   const contourTete = useMemo(
     () => cheminSvg(contourSilhouette(
-      solide, RAYON_TETE, borner(Math.round(taille * 1.4), 72, 180))),
+      solide, RAYON_TETE, borner(Math.round(taille * 1.4 / 4) * 4, 72, 180))),
     [solide, taille]);
 
   /**
@@ -739,7 +773,7 @@ export default function AvatarNovac({
       {/* L'échelle est une transformation du rendu, pas de la géométrie : la sphère
           reste une sphère, et c'est son image qu'on comprime le temps d'un rebond. */}
       <g transform={`scale(${vie.echelleX.toFixed(4)} ${vie.echelleY.toFixed(4)})`}>
-        <path d={contourTete} fill={teteRendue} />
+        <path d={contourTete} fill={teteRendue} className="nv-teinte" />
         {/* ⚠️ Déclaré hors du bloc des aplats : le regard s'y détoure désormais **toujours**,
             y compris sur un avatar sans habillage. Laissé sous la condition, il n'existait
             pas là où le défaut se voyait le plus. */}
@@ -787,7 +821,7 @@ export default function AvatarNovac({
           * lorsqu'il y a une lueur : sans elle, il ne changerait rien et ajouterait un
           * groupe à chaque avatar de la page.
           */}
-        <g clipPath={detourageDesYeux} className={yeuxDuSkin?.classe}>
+        {yeux && <g clipPath={detourageDesYeux} className={yeuxDuSkin?.classe}>
           {yeuxDuSkin?.lueur && HALO.map(([largeur, opacite], i) => (
             <g key={i} fill="none" stroke={yeuxDuSkin.lueur!.couleur}
               strokeWidth={yeuxDuSkin.lueur!.rayon * largeur} strokeLinejoin="round"
@@ -796,8 +830,8 @@ export default function AvatarNovac({
               <path d={cheminDroit} />
             </g>
           ))}
-          <path d={cheminGauche} fill={couleurYeuxFinale} />
-          <path d={cheminDroit} fill={couleurYeuxFinale} />
+          <path d={cheminGauche} fill={couleurYeuxFinale} className="nv-teinte" />
+          <path d={cheminDroit} fill={couleurYeuxFinale} className="nv-teinte" />
           {/**
             * Les reflets sont peints dans la couleur de la tête : ce sont des trous dans
             * l'œil, pas des taches posées dessus — c'est ce qui les fait lire comme du
@@ -816,14 +850,14 @@ export default function AvatarNovac({
                 <clipPath id={`oeil-d-${marque}`}><path d={cheminDroit} /></clipPath>
               </defs>
               <g clipPath={`url(#oeil-g-${marque})`}>
-                <path d={eclats.gauche} fill={teteRendue} />
+                <path d={eclats.gauche} fill={teteRendue} className="nv-teinte" />
               </g>
               <g clipPath={`url(#oeil-d-${marque})`}>
-                <path d={eclats.droit} fill={teteRendue} />
+                <path d={eclats.droit} fill={teteRendue} className="nv-teinte" />
               </g>
             </>
           )}
-        </g>
+        </g>}
         {devant.length > 0 && (
           <g clipPath={`url(#tete-${marque})`}>{devant.map(peindre)}</g>
         )}
