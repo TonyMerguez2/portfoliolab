@@ -242,46 +242,44 @@ function Guilloche({ id, fond }: { id: string; fond: number }) {
         )}
         {fond === 3 && (
           /**
-           * Des hachures fines, pliées par une arête — relevé sur une carte réelle.
+           * Des hachures fines, et des plans de lumière qui les traversent.
            *
-           * ⚠️ **Ce qui fait ce guillochis-là, c'est la densité, pas le tracé.** Les trois
-           * autres dessins posent quatre à sept courbes ; celui-ci en pose une quarantaine,
-           * si serrées qu'on ne les compte pas. C'est ce qui le fait lire comme une *matière*
-           * brossée plutôt que comme des traits — et c'est aussi ce qui le rend lisible dans
-           * une bande de quarante-six pixels, là où un motif clairsemé n'aurait montré que
-           * deux ou trois lignes isolées.
+           * ⚠️ **Le sens des hachures ne change jamais — c'est la teinte qui change.** Ma
+           * première version pliait les hachures en miroir de part et d'autre d'une courbe :
+           * cela donnait un chevron, et la carte de référence n'en a pas. Sur elle, les
+           * traits filent tous dans la même direction d'un bord à l'autre ; ce qui découpe la
+           * surface, ce sont de larges plans plus clairs qui passent *dessous*. La matière
+           * est continue, la lumière ne l'est pas.
            *
-           * ⚠️ **L'arête change le sens des hachures, elle ne les interrompt pas.** Sur la
-           * référence, les deux zones sont hachurées toutes les deux : ce qui les sépare est
-           * le *sens*, qui accroche la lumière différemment de part et d'autre. Une zone
-           * laissée nue aurait donné deux matières au lieu d'une pliure dans la même.
+           * ⚠️ **Deux plans, et non un.** Un seul aurait donné une carte coupée en deux ; la
+           * référence en montre plusieurs qui se recouvrent, ce qui fait tourner la surface
+           * comme un ruban plié. Le second est plus faible et décalé, si bien que leur
+           * intersection forme une troisième valeur sans qu'on ait à la peindre.
            *
-           * ⚠️ **La pliure traverse la bande visible**, comme les arcs : posée plus bas, elle
-           * n'existerait que sous le plan du dossier et les deux zones se ressembleraient.
+           * ⚠️ **Les deux traversent la bande visible.** Posés plus bas, ils n'existeraient
+           * que sous le plan du dossier, et il ne resterait qu'un aplat hachuré.
            *
-           * ⚠️ **Un trait deux fois plus fin que les autres dessins.** À 1,4 les hachures se
-           * touchaient presque et la surface virait au blanc laiteux ; à 0,7 elles gardent
-           * entre elles autant de vide que de matière, ce qui est la condition pour qu'un
-           * guillochis se lise comme gravé et non comme peint.
+           * ⚠️ **Cinq pixels d'écart, et un trait de 0,55.** C'est la seule façon d'obtenir
+           * une *matière* : à treize d'écart on lit des traits, à un trait de 1,4 la surface
+           * vire au blanc laiteux. Il faut qu'entre deux hachures il reste plus de vide que
+           * de matière — c'est ce qui distingue un guillochis gravé d'un aplat peint.
+           *
+           * ⚠️ **Soixante-douze tracés, et c'est le prix à payer.** Un `<pattern>` en aurait
+           * fait un seul, mais son contenu se répète en coordonnées de tuile : le dégradé qui
+           * éteint les hachures vers le bord extérieur y repartirait à chaque tuile, et l'on
+           * verrait la grille du motif. La densité est le sujet ; on la paie en nœuds.
            */
           <>
-            <defs>
-              <clipPath id={`pli-haut-${id}`}>
-                <path d={`M-10 -10 H${L + 10} V4 C ${L * 0.62} 22, ${L * 0.3} 44, -10 64 Z`} />
-              </clipPath>
-              <clipPath id={`pli-bas-${id}`}>
-                <path d={`M-10 64 C ${L * 0.3} 44, ${L * 0.62} 22, ${L + 10} 4`
-                  + ` V${H + 10} H-10 Z`} />
-              </clipPath>
-            </defs>
-            <g clipPath={`url(#pli-haut-${id})`} strokeWidth={0.7}>
-              {Array.from({ length: 34 }, (_, i) => (
-                <path key={i} d={`M${-90 + i * 13} ${H + 10} L${30 + i * 13} -10`} />
-              ))}
-            </g>
-            <g clipPath={`url(#pli-bas-${id})`} strokeWidth={0.7}>
-              {Array.from({ length: 34 }, (_, i) => (
-                <path key={i} d={`M${-30 + i * 13} ${H + 10} L${-150 + i * 13} -10`} />
+            {/* Les plans de lumière, sous les hachures : `fill` et non `stroke`. */}
+            <path fill="rgba(255,255,255,0.055)" stroke="none"
+              d={`M-10 ${H + 10} L-10 58 C ${L * 0.3} 44, ${L * 0.58} 20, ${L + 10} -10`
+                + ` L${L + 10} ${H + 10} Z`} />
+            <path fill="rgba(255,255,255,0.038)" stroke="none"
+              d={`M-10 ${H + 10} L-10 96 C ${L * 0.36} 74, ${L * 0.66} 44, ${L + 10} 22`
+                + ` L${L + 10} ${H + 10} Z`} />
+            <g strokeWidth={0.55}>
+              {Array.from({ length: 72 }, (_, i) => (
+                <path key={i} d={`M${-100 + i * 5} ${H + 10} L${-5 + i * 5} -10`} />
               ))}
             </g>
           </>
