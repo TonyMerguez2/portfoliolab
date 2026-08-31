@@ -81,6 +81,23 @@ const EPINE = 10;
  * même endroit que nous — la source est commune, le poids ne l'est pas.
  */
 const RAYON = RAYONS.lg;
+/**
+ * Le rayon des deux raccords concaves — plus grand que celui des angles, et j'avais conclu
+ * l'inverse.
+ *
+ * ⚠️ **Ce qui rend un pli doux n'est pas son rayon, c'est sa course.** J'ai écrit ici que la
+ * pente d'un raccord à quatre-vingt-dix degrés vaut 45° « quel que soit le rayon », et j'en ai
+ * tiré qu'on ne pouvait rien y faire. C'est vrai de la pente et faux de l'effet : le pli du
+ * dossier s'étale sur **34,6 pixels** de course, celui du rail sur 18. À rayon égal, le second
+ * plie deux fois plus court — et c'est cela qu'on lit comme « sec ». Relevé à l'usage, sur
+ * deux captures posées côte à côte, après que je l'aie déclaré impossible.
+ *
+ * ⚠️ **Le rayon des angles ne suit pas, et c'est la seule chose que je maintiens.** Les coins
+ * convexes du rail sont de la même espèce que ceux du dossier — un angle qu'on arrondit —, et
+ * la règle des « trois coins au même rayon » les concerne. Le raccord, lui, n'est pas un
+ * angle : c'est un pli, et il se règle sur la course du pli qu'il imite.
+ */
+const RACCORD = 34;
 /** Le côté d'une rangée, l'écart entre deux, et le rembourrage du rail. */
 const RANGEE = 40, ECART = 4, MARGE = 9;
 /**
@@ -105,7 +122,7 @@ const RANGEE = 40, ECART = 4, MARGE = 9;
  * rangée treize pixels sous le bandeau, c'est-à-dire *presque* en face, se lirait comme une
  * erreur. À vingt-huit, le rail ne prétend s'aligner sur rien.
  */
-const HAUT = 28;
+const HAUT = 44;
 
 type Item = { label: string; href: string; icon: React.JSX.Element };
 
@@ -338,7 +355,7 @@ export default function SideNav() {
         /* ⚠️ **Visible, sinon les raccords ne servent à rien** : ils sont dessinés par deux
            pseudo-éléments posés *hors* de la boîte, et l'infobulle sort par la droite. */
         overflow: "visible",
-        ["--nv-raccord" as string]: `${RAYON}px`,
+        ["--nv-raccord" as string]: `${RACCORD}px`,
       }}
     >
       {/**
