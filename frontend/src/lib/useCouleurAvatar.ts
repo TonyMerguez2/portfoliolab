@@ -162,3 +162,45 @@ export function useFormeAvatar(
   return useChoixGarde<FormeAvatar>(
     portefeuille?.id, cleForme, estFormeValide, FORME_PAR_DEFAUT);
 }
+
+/**
+ * L'apparence gardée d'un portefeuille, lue d'un coup et hors de React.
+ *
+ * ⚠️ **Parce qu'une liste ne peut pas appeler trois crochets par ligne.** `useCouleurAvatar`,
+ * `useFormeAvatar` et `useSkinAvatar` répondent à un écran qui montre *un* portefeuille et
+ * peut en changer l'apparence. La palette de recherche en montre dix ou vingt et n'en change
+ * aucune : appeler un crochet par ligne est interdit — leur nombre varie à chaque frappe —
+ * et en poser trois qui écrivent alors qu'on ne fait que lire est de toute façon un
+ * contresens.
+ *
+ * ⚠️ **Elle rend les valeurs par défaut hors du navigateur, et ne lève jamais.** Le stockage
+ * peut être refusé, illisible, ou simplement absent au rendu serveur ; dans tous ces cas la
+ * bonne réponse est l'apparence par défaut, jamais une exception au milieu d'une liste.
+ *
+ * ⚠️ **La couleur déclarée sert de repli, comme dans le crochet.** Un portefeuille dont
+ * personne n'a touché l'avatar porte la teinte que l'API lui donne — sans quoi tous les
+ * anciens portefeuilles paraîtraient du même indigo dans la liste.
+ */
+export function lireApparenceAvatar(
+  portefeuille: { id: string | number; color?: string | null } | null | undefined,
+): { couleur: string; forme: FormeAvatar; skin: string } {
+  const repli = {
+    couleur: estCouleurValide(portefeuille?.color) ? (portefeuille!.color as string) : COULEUR_PAR_DEFAUT,
+    forme: FORME_PAR_DEFAUT,
+    skin: "uni",
+  };
+  if (typeof window === "undefined" || portefeuille?.id == null) return repli;
+  try {
+    const id = portefeuille.id;
+    const c = localStorage.getItem(cleCouleur(id));
+    const f = localStorage.getItem(cleForme(id));
+    const s = localStorage.getItem(cleSkin(id));
+    return {
+      couleur: estCouleurValide(c) ? c : repli.couleur,
+      forme: estFormeValide(f) ? f : repli.forme,
+      skin: estSkinValide(s) ? s : repli.skin,
+    };
+  } catch {
+    return repli;
+  }
+}

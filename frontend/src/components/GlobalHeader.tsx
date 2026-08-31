@@ -6,7 +6,8 @@ import { enTetesAuth } from "@/lib/session";
 import { surModification } from "@/lib/portefeuilleModifie";
 import { TRENDING } from "@/lib/assets";
 import AssetLogo from "@/components/AssetLogo";
-import PocheActifs, { RAYON_CORPS } from "@/components/portfolio/PocheActifs";
+import AvatarNovac from "@/components/AvatarNovac";
+import { lireApparenceAvatar } from "@/lib/useCouleurAvatar";
 import PastilleEnveloppe from "@/components/portfolio/PastilleEnveloppe";
 import { enveloppe, infobulleEnveloppe } from "@/lib/portfolio";
 import { assetExchange } from "@/lib/assets";
@@ -19,10 +20,8 @@ import { assetExchange } from "@/lib/assets";
  * d'enveloppe lisible.
  */
 const VIGNETTE = 48;
-import { JETONS, RAYONS, rayonVignette } from "@/lib/palette";
+import { JETONS, RAYONS } from "@/lib/palette";
 import FenetreModale from "@/components/ui/FenetreModale";
-import { initiale } from "@/lib/initiale";
-import { encreSur } from "@/lib/couleur";
 import { API_URL } from "@/lib/api";
 
 type Asset = { ticker: string; type: string; name: string; };
@@ -91,66 +90,54 @@ const AssetRow = memo(function AssetRow({ a, highlighted, focused, idx, price, o
  * qu'on cherche par leur nom.
  */
 const LignePortefeuille = memo(function LignePortefeuille(
-  { p, actif, onSelect }: { p: Portefeuille; actif: boolean; onSelect: (p: Portefeuille) => void },
+  { p, actif, onSelect, idx, focused }: {
+    p: Portefeuille; actif: boolean; onSelect: (p: Portefeuille) => void;
+    /**
+     * ⚠️ **Le rang dans la suite, et non dans la liste des portefeuilles.** C'est par lui que
+     * l'effet de défilement retrouve la ligne surlignée — `[data-idx]` est cherché sur toute
+     * la liste, portefeuilles et actifs mêlés. Un rang local aurait fait remonter le premier
+     * actif portant le même numéro.
+     */
+    idx: number;
+    focused: boolean;
+  },
 ) {
   const [survol, setSurvol] = useState(false);
-  const fond = p.color || "#6366F1";
+  /* ⚠️ Gardé sur le portefeuille : la liste se refiltre à chaque frappe, et relire le
+     stockage à chaque rendu ferait vingt lectures par lettre tapée. */
+  const apparence = useMemo(() => lireApparenceAvatar(p), [p]);
   const enveloppeLigne = useMemo(
     () => enveloppe((p.assets ?? []).map(a => a.ticker), assetExchange),
     [p.assets]);
   return (
-    <div onClick={() => onSelect(p)}
+    <div onClick={() => onSelect(p)} data-idx={idx}
       onMouseEnter={() => setSurvol(true)} onMouseLeave={() => setSurvol(false)}
       style={{ display:"flex", alignItems:"center", gap:"10px", width:"100%", padding:"8px 12px",
-        background: survol ? "rgba(255,255,255,0.05)" : "transparent", cursor:"pointer",
+        /* Le survol et la sélection au clavier disent la même chose et se peignent pareil :
+           deux teintes pour un même état feraient croire à deux états. */
+        background: survol || focused ? "rgba(255,255,255,0.05)" : "transparent", cursor:"pointer",
         borderBottom:"1px solid rgba(255,255,255,0.04)", boxSizing:"border-box" as const }}>
-      {/* La même vignette que la bande de tête du portefeuille, et désormais avec
-          les deux mêmes ajouts : le logo de la première ligne, et la pastille
-          d'enveloppe. Elle portait l'initiale du nom, à trois millimètres du nom
-          lui-même — répétition qui coûtait plus cher ici qu'ailleurs, cette liste
-          servant justement à distinguer des portefeuilles dont les initiales se
-          ressemblent.
-
-          ⚠️ **Elle passe de 28 à 48 px, et c'est ce que coûtent ces deux
-          ajouts.** À 28, le logo ne s'affichait pas — le seuil de `PocheActifs`
-          est à 40, en dessous duquel il mesure moins de 9 px et ne désigne plus
-          rien — et une pastille lisible ne descend pas sous 20 px de diamètre, ce
-          qui en aurait couvert la moitié. La ligne de la liste gagne donc une
-          vingtaine de pixels de haut. C'est le prix, il n'y a pas de réglage
-          intermédiaire qui tienne : entre 28 et 48, on paie la hauteur sans
-          gagner la lisibilité.
-
-          Le rayon suit celui du corps de la poche quand c'est elle qui s'affiche,
-          et `rayonVignette` sinon : c'est ce `overflow: hidden` qui coupe les
-          angles du dessin, donc les deux valeurs doivent s'accorder. */}
+      {/**
+        * ⚠️ **L'avatar du portefeuille, et non plus sa poche d'actifs.** Cette vignette
+        * montrait le contenu — une carte par actif, empilées — ou l'initiale du nom à trois
+        * millimètres du nom lui-même. C'était le portrait de ce que le portefeuille *range* ;
+        * ce qu'on cherche dans une liste, c'est le portefeuille lui-même. Il a un visage
+        * depuis qu'on peut lui en choisir un, et deux portefeuilles se reconnaissent bien
+        * mieux à leur forme et à leur teinte qu'à six logos de trois pixels. Relevé à
+        * l'usage — « au lieu d'afficher l'ancien logo ».
+        *
+        * ⚠️ **Immobile et sans regard.** `vivant` et `suivi` sont coupés : vingt avatars qui
+        * respirent et suivent le curseur dans une liste qui se refiltre à chaque frappe font
+        * une volière, et chacun redessine son volume à chaque image. L'avatar est ici un
+        * portrait, pas une présence.
+        *
+        * ⚠️ **La pastille d'enveloppe reste.** Elle dit PEA, CTO ou crypto — une information
+        * que ni le nom ni l'avatar ne portent, et qui départage justement deux portefeuilles
+        * nommés pareil.
+        */}
       <span style={{ position:"relative", display:"inline-flex", flexShrink:0 }}>
-        {/**
-          * ⚠️ La couleur du portefeuille ne sert de fond **qu'à l'initiale**.
-          *
-          * Elle était posée dans tous les cas, et cela produisait un liseré coloré
-          * le long des angles arrondis — un liseré bleu sur les portefeuilles
-          * restés à la couleur par défaut, `#6366F1`. La cause n'est pas un
-          * débordement mais le lissage : le `overflow: hidden` découpe l'angle en
-          * fondu, et chaque pixel du bord mélange le dessin avec ce qu'il y a
-          * derrière. Derrière, il y avait cet indigo.
-          *
-          * Une image ou une poche remplissent la boîte : elles n'ont besoin
-          * d'aucun fond, et la surface creuse du thème leur suffit. C'est déjà ce
-          * que fait `ImagePortefeuille` sur le tableau de bord — d'où l'absence du
-          * liseré là-bas, et sa présence ici.
-          */}
-        <span style={{ width:VIGNETTE, height:VIGNETTE, flexShrink:0,
-          borderRadius: p.assets && !p.image_url ? Math.round(VIGNETTE * RAYON_CORPS) : rayonVignette(VIGNETTE),
-          display:"flex", alignItems:"center", justifyContent:"center", overflow:"hidden",
-          background: p.image_url || p.assets ? JETONS.carteCreuse : fond,
-          color:encreSur(fond), fontSize:19, fontWeight:700 }}>
-          {p.image_url
-            // eslint-disable-next-line @next/next/no-img-element
-            ? <img src={`${API_URL}${p.image_url}`} alt="" style={{ width:"100%", height:"100%", objectFit:"cover" }} />
-            : p.assets
-              ? <PocheActifs actifs={p.assets} taille={VIGNETTE} />
-              : initiale(p.name)}
-        </span>
+        <AvatarNovac taille={VIGNETTE} couleur={apparence.couleur} forme={apparence.forme}
+          skin={apparence.skin} vivant={false} suivi={false} />
         {enveloppeLigne && (
           <PastilleEnveloppe enveloppe={enveloppeLigne} diametre={20}
             infobulle={infobulleEnveloppe(enveloppeLigne)} />
@@ -330,6 +317,29 @@ export default function GlobalHeader() {
   const displayAssets = localSearch ? searchResults.filter(a => category === "all" || a.type === category) : filteredAssets.slice(0, displayCount);
 
   /**
+   * Ce que la palette propose, en une seule suite.
+   *
+   * ⚠️ **Deux listes rendues à la file n'en font pas une pour le clavier.** Les
+   * portefeuilles et les actifs s'affichaient l'un sous l'autre, mais `highlightIndex`
+   * n'indexait que les actifs : les flèches sautaient les portefeuilles, et l'entrée ne
+   * pouvait pas en ouvrir un. Ce qu'on voit doit être ce qu'on parcourt — d'où une suite
+   * unique, dont l'ordre d'affichage *est* l'ordre de navigation.
+   *
+   * ⚠️ **La catégorie décide ce qui entre, pas ce qui se colore.** « Portefeuilles » écarte
+   * les actifs, les quatre autres écartent les portefeuilles ; « Tous » garde les deux. Un
+   * filtre qui laisserait la liste entière en grisant les exclus obligerait à les parcourir
+   * pour les ignorer.
+   */
+  const resultats = useMemo(() => [
+    ...(category === "all" || category === "PORTEFEUILLE"
+      ? portefeuillesTrouves.map(p => ({ genre: "portefeuille" as const, cle: `p:${p.id}`, p }))
+      : []),
+    ...(category === "PORTEFEUILLE"
+      ? []
+      : displayAssets.map(a => ({ genre: "actif" as const, cle: `a:${a.ticker}`, a }))),
+  ], [category, portefeuillesTrouves, displayAssets]);
+
+  /**
    * ⚠️ **Fermer, c'est trois choses et non une.** La palette se refermait par des suites
    * recopiées — parfois `setShowSearch(false)` seul, parfois avec la remise à zéro de
    * l'index, parfois avec un `blur()`. Rouverte, elle gardait alors la ligne surlignée de
@@ -340,14 +350,36 @@ export default function GlobalHeader() {
     setHighlightIndex(-1);
   }, []);
 
+  /**
+   * Ouvrir un résultat, quel qu'il soit.
+   *
+   * ⚠️ **L'entrée n'ouvrait rien, elle se contentait de retenir l'actif.** Elle appelait
+   * `setActiveAsset` et refermait : le contexte changeait, la page ne bougeait pas. Sur la
+   * page graphique, la navigation se faisait bien — mais dans `handleSelect`, et sous la
+   * condition `isChartPage`. Autrement dit, chercher un actif depuis la carte ou la
+   * simulation le sélectionnait sans jamais le montrer. Relevé à l'usage.
+   *
+   * ⚠️ **Le contexte est posé avant la navigation, et il le faut.** La page graphique lit
+   * l'actif actif au montage ; naviguer d'abord la ferait s'ouvrir sur le précédent, le
+   * temps d'un rendu.
+   */
+  const ouvrirResultat = useCallback((r: { genre: "portefeuille"; p: Portefeuille }
+    | { genre: "actif"; a: Asset }) => {
+    if (r.genre === "portefeuille") { ouvrirPortefeuille(r.p); return; }
+    setActiveAsset({ ticker: r.a.ticker, name: r.a.name });
+    setLocalSearch("");
+    fermerPalette();
+    router.push(`/chart?ticker=${encodeURIComponent(r.a.ticker)}`);
+  }, [ouvrirPortefeuille, setActiveAsset, fermerPalette, router]);
+
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (!showSearch) return;
-    if (e.key === "ArrowDown") { e.preventDefault(); setHighlightIndex(i => Math.min(i + 1, displayAssets.length - 1)); }
+    if (e.key === "ArrowDown") { e.preventDefault(); setHighlightIndex(i => Math.min(i + 1, resultats.length - 1)); }
     else if (e.key === "ArrowUp") { e.preventDefault(); setHighlightIndex(i => Math.max(i - 1, -1)); }
     else if (e.key === "Enter") {
       e.preventDefault();
-      const a = displayAssets[highlightIndex];
-      if (a) { setActiveAsset({ ticker: a.ticker, name: a.name }); setShowSearch(false); setLocalSearch(""); setHighlightIndex(-1); }
+      const r = resultats[highlightIndex];
+      if (r) ouvrirResultat(r);
     }
     else if (e.key === "Escape") fermerPalette();
   };
@@ -493,7 +525,7 @@ export default function GlobalHeader() {
 
           <div style={{ display:"flex", gap:"2px", padding:"8px 14px",
             borderBottom:`1px solid ${JETONS.bord}` }}>
-            {[{id:"all",label:"Tous"},{id:"EQUITY",label:"Actions"},{id:"ETF",label:"Fonds"},{id:"INDEX",label:"Indices"},{id:"CRYPTOCURRENCY",label:"Crypto"}].map(cat => (
+            {[{id:"all",label:"Tous"},{id:"PORTEFEUILLE",label:"Portefeuilles"},{id:"EQUITY",label:"Actions"},{id:"ETF",label:"Fonds"},{id:"INDEX",label:"Indices"},{id:"CRYPTOCURRENCY",label:"Crypto"}].map(cat => (
               <button key={cat.id} onClick={() => { setCategory(cat.id); setDisplayCount(20); }}
                 style={{ padding:"4px 11px", borderRadius:"6px", border:"none", fontSize:"11px", cursor:"pointer",
                   background:category===cat.id?"rgba(91,141,239,0.2)":"transparent",
@@ -507,24 +539,31 @@ export default function GlobalHeader() {
               rythme des résultats. */}
           <div ref={listRef} onScroll={handleScroll}
             style={{ flex:1, minHeight:0, maxHeight:"46vh", overflowY:"auto" }}>
-            {portefeuillesTrouves.length > 0 && (
-              <>
-                <div style={{ padding:"8px 14px 2px", color:"rgba(255,255,255,0.2)", fontSize:"9px", letterSpacing:"0.12em" }}>PORTEFEUILLES</div>
-                {portefeuillesTrouves.map(p => (
-                  <LignePortefeuille key={p.id} p={p}
-                    actif={String(activePortfolio?.id ?? "") === String(p.id)}
-                    onSelect={ouvrirPortefeuille} />
-                ))}
-              </>
-            )}
-            {!localSearch && <div style={{ padding:"8px 14px 2px", color:"rgba(255,255,255,0.2)", fontSize:"9px", letterSpacing:"0.12em" }}>POPULAIRES</div>}
-            {displayAssets.map((a, i) => (
-              <AssetRow key={a.ticker} a={a} highlighted={i===0 && !!localSearch} focused={i===highlightIndex}
-                idx={i} price={prices[a.ticker]}
-                onSelect={x => { handleSelect(x); fermerPalette(); }}
-                onChart={x => { handleChart(x); fermerPalette(); }}/>
-            ))}
-            {localSearch && displayAssets.length === 0 && portefeuillesTrouves.length === 0 && !isSearching && (
+            {resultats.map((r, i) => {
+              /* L'en-tête paraît au premier de chaque genre, et nulle part ailleurs :
+                 c'est la suite qui le décide, pas deux blocs écrits à la file. */
+              const entete = i === 0 || resultats[i - 1].genre !== r.genre
+                ? (r.genre === "portefeuille" ? "PORTEFEUILLES" : localSearch ? null : "POPULAIRES")
+                : null;
+              return (
+                <div key={r.cle}>
+                  {entete && (
+                    <div style={{ padding:"8px 14px 2px", color:"rgba(255,255,255,0.2)", fontSize:"9px", letterSpacing:"0.12em" }}>{entete}</div>
+                  )}
+                  {r.genre === "portefeuille" ? (
+                    <LignePortefeuille p={r.p} idx={i} focused={i === highlightIndex}
+                      actif={String(activePortfolio?.id ?? "") === String(r.p.id)}
+                      onSelect={ouvrirPortefeuille} />
+                  ) : (
+                    <AssetRow a={r.a} highlighted={false} focused={i === highlightIndex}
+                      idx={i} price={prices[r.a.ticker]}
+                      onSelect={() => ouvrirResultat(r)}
+                      onChart={x => { handleChart(x); fermerPalette(); }}/>
+                  )}
+                </div>
+              );
+            })}
+            {localSearch && resultats.length === 0 && !isSearching && (
               <div style={{ padding:"24px 14px", textAlign:"center", color:"rgba(255,255,255,0.25)", fontSize:"12px" }}>Aucun résultat</div>
             )}
           </div>
