@@ -32,6 +32,7 @@ import { assetExchange } from "@/lib/assets";
 const VIGNETTE = 28;
 import { JETONS, RAYONS } from "@/lib/palette";
 import { brandHex } from "@/lib/tileStyle";
+import { HAUTEUR_SAISIE, RAYON_SAISIE, champ } from "@/components/ui/saisie";
 import FenetreModale from "@/components/ui/FenetreModale";
 import { API_URL } from "@/lib/api";
 
@@ -51,10 +52,9 @@ type AssetRowProps = {
   idx: number;
   price?: Price;
   onSelect: (a: Asset) => void;
-  onChart: (ticker: string) => void;
 };
 
-const AssetRow = memo(function AssetRow({ a, highlighted, focused, idx, price, onSelect, onChart }: AssetRowProps) {
+const AssetRow = memo(function AssetRow({ a, highlighted, focused, idx, price, onSelect }: AssetRowProps) {
   const tc = typeColor(a.type);
   const [hovered, setHovered] = useState(false);
   /**
@@ -87,13 +87,14 @@ const AssetRow = memo(function AssetRow({ a, highlighted, focused, idx, price, o
         fallbackTextColor={tc.text}
       />
       <span style={{ color:"#F8F9FC", fontSize:"11px", fontWeight:500, flex:1, textAlign:"left" }}>{a.name}</span>
-      {hovered && (
-        <button
-          onClick={e => { e.stopPropagation(); onChart(a.ticker); }}
-          style={{ background:"rgba(91,141,239,0.15)", border:"1px solid rgba(91,141,239,0.3)", borderRadius:"5px", color:"#9BB9FF", fontSize:"10px", padding:"3px 8px", cursor:"pointer", flexShrink:0, whiteSpace:"nowrap" as const, letterSpacing:"0.03em" }}>
-          Graphique
-        </button>
-      )}
+      {/**
+        * ⚠️ **Le bouton « Graphique » a été retiré, et il se prenait pour une commande.**
+        * Il paraissait au survol, juste avant le prix, et poussait donc le cours et la
+        * performance hors du regard **au moment précis où l'on visait la ligne**. Or la
+        * ligne entière ouvre déjà le graphique : le bouton doublait le clic qui le portait,
+        * et le payait en cachant les deux seuls chiffres qu'on venait lire. Relevé à
+        * l'usage — « je ne vois pas avec le bouton ».
+        */}
       {price && (
         <div style={{ display:"flex", flexDirection:"column", alignItems:"flex-end", gap:"1px" }}>
           <span style={{ color:"#F8F9FC", fontSize:"10px", opacity:0.6 }}>${price.price.toLocaleString("en-US", { minimumFractionDigits:2, maximumFractionDigits:2 })}</span>
@@ -114,7 +115,7 @@ const AssetRow = memo(function AssetRow({ a, highlighted, focused, idx, price, o
  * qu'on cherche par leur nom.
  */
 const LignePortefeuille = memo(function LignePortefeuille(
-  { p, actif, onSelect, idx, focused }: {
+  { p, actif, onSelect, idx, focused, onSupprimer }: {
     p: Portefeuille; actif: boolean; onSelect: (p: Portefeuille) => void;
     /**
      * ⚠️ **Le rang dans la suite, et non dans la liste des portefeuilles.** C'est par lui que
@@ -124,9 +125,12 @@ const LignePortefeuille = memo(function LignePortefeuille(
      */
     idx: number;
     focused: boolean;
+    /** Retire ce portefeuille. Rendu par l'appelant, qui seul tient la liste. */
+    onSupprimer: (p: Portefeuille) => void;
   },
 ) {
   const [survol, setSurvol] = useState(false);
+  const [confirme, setConfirme] = useState(false);
   /* ⚠️ Gardé sur le portefeuille : la liste se refiltre à chaque frappe, et relire le
      stockage à chaque rendu ferait vingt lectures par lettre tapée. */
   const apparence = useMemo(() => lireApparenceAvatar(p), [p]);
@@ -135,7 +139,8 @@ const LignePortefeuille = memo(function LignePortefeuille(
     [p.assets]);
   return (
     <div onClick={() => onSelect(p)} data-idx={idx}
-      onMouseEnter={() => setSurvol(true)} onMouseLeave={() => setSurvol(false)}
+      onMouseEnter={() => setSurvol(true)}
+      onMouseLeave={() => { setSurvol(false); setConfirme(false); }}
       style={{ display:"flex", alignItems:"center", gap:"10px", width:"100%", padding:"8px 12px",
         /* Le survol et la sélection au clavier disent la même chose et se peignent pareil :
            deux teintes pour un même état feraient croire à deux états. */
@@ -177,6 +182,30 @@ const LignePortefeuille = memo(function LignePortefeuille(
       <span style={{ color:"rgba(255,255,255,0.35)", fontSize:"10px" }}>
         {p.assets?.length ?? 0} actif{(p.assets?.length ?? 0) > 1 ? "s" : ""}
       </span>
+      {/**
+        * ⚠️ **Deux clics, et non une boîte du navigateur.** `confirm()` arrête tout, sort de
+        * la page et se présente au nom du site plutôt qu'au nom de l'application — c'est déjà
+        * la règle du formulaire de compte, et il n'y a pas de raison qu'elle vaille là et pas
+        * ici. Le bouton devient son propre garde-fou, et se défait dès qu'on quitte la ligne.
+        *
+        * ⚠️ **Il n'apparaît qu'au survol de la ligne, et il arrête le clic.** Visible en
+        * permanence, une croix par portefeuille ferait d'une liste de navigation une liste de
+        * gestion ; sans `stopPropagation`, la supprimer ouvrirait le portefeuille au passage.
+        */}
+      {(survol || confirme) && (
+        <button type="button"
+          onClick={e => {
+            e.stopPropagation();
+            if (confirme) onSupprimer(p); else setConfirme(true);
+          }}
+          aria-label={confirme ? `Confirmer la suppression de ${p.name}` : `Supprimer ${p.name}`}
+          style={{ flexShrink:0, border:"none", cursor:"pointer", borderRadius:RAYONS.xs,
+            padding:"3px 8px", fontSize:"10px", letterSpacing:"0.03em",
+            background: confirme ? "rgba(239,68,68,0.22)" : "transparent",
+            color: confirme ? "#fca5a5" : "rgba(255,255,255,0.4)" }}>
+          {confirme ? "Confirmer" : "✕"}
+        </button>
+      )}
     </div>
   );
 });
@@ -340,6 +369,32 @@ export default function GlobalHeader() {
     setLocalSearch("");
     router.push(`/portfolio?id=${encodeURIComponent(p.id)}`);
   }, [setActivePortfolio, setMode, router]);
+
+  /**
+   * Retire un portefeuille, ici et sur le serveur.
+   *
+   * ⚠️ **La liste est corrigée avant la réponse, et remise en cas de refus.** Attendre le
+   * serveur laisse la ligne sous le curseur pendant une seconde, ce qui se lit comme un clic
+   * manqué et invite à recommencer — sur une suppression, recommencer est précisément ce
+   * qu'il ne faut pas encourager. On retire d'abord ; si la route refuse, la liste revient
+   * telle qu'elle était.
+   *
+   * ⚠️ **Le portefeuille ouvert cesse de l'être s'il vient d'être supprimé.** Le contexte
+   * garderait sinon un identifiant que le serveur ne connaît plus, et la page suivante
+   * chercherait à le charger.
+   */
+  const supprimerPortefeuille = useCallback(async (cible: Portefeuille) => {
+    const avant = portfolios;
+    setPortfolios(l => l.filter(x => String(x.id) !== String(cible.id)));
+    if (String(activePortfolio?.id ?? "") === String(cible.id)) setActivePortfolio(null);
+    try {
+      const r = await fetch(`${API_URL}/api/v1/portfolios/${encodeURIComponent(cible.id)}`,
+        { method: "DELETE", headers: enTetesAuth() });
+      if (!r.ok) throw new Error("refus");
+    } catch {
+      setPortfolios(avant);
+    }
+  }, [portfolios, activePortfolio, setActivePortfolio]);
 
   const displayAssets = localSearch ? searchResults.filter(a => category === "all" || a.type === category) : filteredAssets.slice(0, displayCount);
 
@@ -540,9 +595,17 @@ export default function GlobalHeader() {
             * survit à l'encadrement.
             */}
           <div style={{ padding:"14px 14px 12px", borderBottom:`1px solid ${JETONS.bord}` }}>
-          <div style={{ display:"flex", alignItems:"center", gap:"10px",
-            padding:"10px 16px", borderRadius:RAYONS.plein,
-            border:`1px solid ${JETONS.bord}`, background:JETONS.segmentPiste }}>
+          {/**
+            * ⚠️ **La recette des saisies, et non un rayon choisi ici.** Je l'avais fait plein
+            * — une pilule de 999 —, ce qui est la forme des *boutons* d'action, pas celle des
+            * champs. L'application a une seule recette pour « on écrit ici » : quarante de
+            * haut, `RAYON_SAISIE` d'arrondi, douze de rembourrage, et la surface
+            * `.novac-surface-saisie`. Un champ qui invente sa forme est un champ que l'œil
+            * range ailleurs. Relevé à l'usage.
+            */}
+          <div className="novac-surface-saisie" style={{ display:"flex", alignItems:"center",
+            gap:"10px", height:HAUTEUR_SAISIE, padding:champ.padding,
+            borderRadius:RAYON_SAISIE, boxSizing:"border-box" }}>
             <svg width="20" height="20" fill="none" viewBox="0 0 24 24" stroke="currentColor"
               strokeWidth={2.0} strokeLinecap="round" strokeLinejoin="round"
               style={{ flexShrink:0, color:JETONS.texteIntense }}>
@@ -595,12 +658,11 @@ export default function GlobalHeader() {
                   {r.genre === "portefeuille" ? (
                     <LignePortefeuille p={r.p} idx={i} focused={i === highlightIndex}
                       actif={String(activePortfolio?.id ?? "") === String(r.p.id)}
-                      onSelect={ouvrirPortefeuille} />
+                      onSelect={ouvrirPortefeuille} onSupprimer={supprimerPortefeuille} />
                   ) : (
                     <AssetRow a={r.a} highlighted={false} focused={i === highlightIndex}
                       idx={i} price={prices[r.a.ticker]}
-                      onSelect={() => ouvrirResultat(r)}
-                      onChart={x => { handleChart(x); fermerPalette(); }}/>
+                      onSelect={() => ouvrirResultat(r)}/>
                   )}
                 </div>
               );
