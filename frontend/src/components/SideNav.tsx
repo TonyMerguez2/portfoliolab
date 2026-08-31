@@ -7,6 +7,7 @@ import ProfileModal from "@/components/ProfileModal";
 import AuthModal from "@/components/AuthModal";
 import { basculerMode, useModeTheme } from "@/lib/theme";
 import { API_URL } from "@/lib/api";
+import { RAYONS } from "@/lib/palette";
 
 /**
  * Navigation principale, en rail sorti du bord gauche.
@@ -48,10 +49,25 @@ import { API_URL } from "@/lib/api";
 const LARGEUR = 68;
 /** L'épine collée au bord, dont le rail est un renflement. */
 const EPINE = 10;
-/** L'arrondi du flanc droit du rail — convexe, celui-là. */
-const RAYON = 20;
-/** Le rayon des deux raccords concaves. Voir `.nv-rail` dans `globals.css`. */
-const RACCORD = 16;
+/**
+ * Le rayon de toutes les courbes du rail — les deux convexes du flanc droit comme les deux
+ * raccords concaves.
+ *
+ * ⚠️ **Un seul rayon, et non deux, parce que la languette d'un dossier le dit déjà.** Elle a
+ * exactement la même topologie que ce rail : un angle convexe, puis un creux qui la ramène au
+ * plan. Son commentaire est catégorique — « les trois coins de l'encoche ont le rayon des
+ * angles du dossier », faute de quoi « trois courbures se succèdent et l'œil voit un raccord
+ * bricolé sans savoir le nommer ». Mon rail portait vingt pour les angles et seize pour les
+ * creux : deux courbures pour une seule forme, la faute même que ce commentaire décrit.
+ * Relevé à l'usage.
+ *
+ * ⚠️ **Pris dans l'échelle des rayons, et non chez la carte d'actif.** C'est bien elle qui
+ * publie le nombre dont la languette tire ses courbes, mais `CarteActif` traîne derrière elle
+ * TileCard, AssetLogo, une étincelle et des chiffres roulants : l'importer ici aurait chargé
+ * tout cela dans la coquille de chaque page pour un entier. Elle prend désormais son rayon au
+ * même endroit que nous — la source est commune, le poids ne l'est pas.
+ */
+const RAYON = RAYONS.lg;
 /** Le côté d'une rangée, l'écart entre deux, et le rembourrage du rail. */
 const RANGEE = 40, ECART = 4, MARGE = 9;
 /**
@@ -67,9 +83,10 @@ const RANGEE = 40, ECART = 4, MARGE = 9;
  *
  * ⚠️ **Mais pas aligné sur le bandeau, faute de place — et c'est contre-intuitif.** Le champ
  * de recherche commence à douze pixels du haut ; aligner la première rangée dessus poserait
- * le rail à y=3, et son raccord supérieur — qui vit seize pixels plus haut — sortirait de
- * l'écran. On perdrait la moitié de la silhouette pour gagner un alignement. Vingt-cinq est
- * le minimum qui garde le raccord entier ; vingt-huit lui laisse douze pixels d'air.
+ * le rail à y=3, et son raccord supérieur — qui vit un rayon plus haut — sortirait de
+ * l'écran. On perdrait la moitié de la silhouette pour gagner un alignement. La première
+ * rangée ne peut donc pas monter au-dessus de `RAYON + MARGE`, soit vingt-sept ; à
+ * vingt-huit, la silhouette commence à dix pixels du bord supérieur.
  *
  * ⚠️ **Et un alignement manqué se voit plus qu'un décalage assumé.** Poser la première
  * rangée treize pixels sous le bandeau, c'est-à-dire *presque* en face, se lirait comme une
@@ -267,7 +284,7 @@ export default function SideNav() {
         /* ⚠️ **Visible, sinon les raccords ne servent à rien** : ils sont dessinés par deux
            pseudo-éléments posés *hors* de la boîte, et l'infobulle sort par la droite. */
         overflow: "visible",
-        ["--nv-raccord" as string]: `${RACCORD}px`,
+        ["--nv-raccord" as string]: `${RAYON}px`,
       }}
     >
       {/**

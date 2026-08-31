@@ -9,6 +9,7 @@ import { brandHex } from "@/lib/tileStyle";
 import { assetName } from "@/lib/assets";
 import type { GridAsset } from "@/lib/portfolio";
 import { FONT, NUM } from "@/lib/typography";
+import { RAYONS } from "@/lib/palette";
 import { useClignotement, styleClignotement } from "@/lib/clignotement";
 
 /**
@@ -41,8 +42,14 @@ export const CARTE_ACTIF = {
    * trois nombres auraient divergé au premier ajustement, et deux cartes voisines n'auraient
    * plus eu ni le même arrondi ni les mêmes marges — un décalage de deux pixels que l'œil
    * voit sans savoir le nommer.
+   *
+   * ⚠️ **Pris dans l'échelle des rayons, et non écrit en chiffre.** Il valait `18` en dur, et
+   * `RAYONS.lg` vaut la même chose : deux façons d'écrire le même nombre, donc deux nombres
+   * qui finiront par différer. Ce rayon voyage loin — la languette du dossier lui emprunte
+   * ses trois courbes, et le rail de navigation les siennes. Il lui faut une source, pas une
+   * coïncidence.
    */
-  rayon: 18,
+  rayon: RAYONS.lg,
   /** Le rembourrage : `haut` place le logo et le titre, `cote` les colle au bord. */
   marge: { haut: 14, cote: 15 },
   /** Le côté du logo, et son propre arrondi. */
