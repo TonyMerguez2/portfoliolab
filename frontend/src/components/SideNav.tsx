@@ -1,5 +1,5 @@
 "use client";
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useApp } from "@/lib/AppContext";
@@ -9,16 +9,51 @@ import { basculerMode, useModeTheme } from "@/lib/theme";
 import { API_URL } from "@/lib/api";
 
 /**
- * Navigation principale, en panneau latéral repliable.
+ * Navigation principale, en rail sorti du bord gauche.
  *
- * La largeur est publiée dans `--novac-nav-w` sur l'élément racine plutôt que
- * remontée dans un contexte : la coquille et les éléments fixes du header s'y
- * accrochent en CSS, sans qu'aucun d'eux n'ait à connaître ce composant ni à
- * se re-rendre quand on replie le panneau.
+ * ⚠️ **Le rail ne flotte pas, il sort du bord — et c'est toute la différence.** Une barre
+ * posée à quelques pixels du bord est un panneau de plus, qui se lit comme un objet
+ * étranger tombé sur la page. Ici une épine court sur toute la hauteur contre le bord, et le
+ * rail en est un renflement : les deux raccords concaves, en haut et en bas, disent que
+ * c'est la même matière. Repris d'une référence montrée à l'usage.
+ *
+ * ⚠️ **Sans l'épine, les raccords ne raccordent rien.** Ils ont besoin d'une matière à
+ * rejoindre : sur la référence c'est le cadre noir de l'écran, qui court d'un bout à l'autre
+ * et dont la barre n'est qu'un élargissement. Le premier essai posait les raccords sur un
+ * rail isolé — ils se terminaient dans le vide, comme deux crochets.
+ *
+ * ⚠️ **La largeur totale ne bouge plus, et c'est ce qui rend le changement gratuit.** Le
+ * repli publiait tour à tour 232 et 68 pixels dans `--novac-nav-w`, dont chaque page tire sa
+ * marge gauche. Le rail garde les 68 de l'état replié : aucune page n'a à savoir qu'il a
+ * changé de forme, et la variable reste publiée pour celles qui s'y accrochent en CSS.
+ *
+ * ⚠️ **Il n'y a plus d'état déplié, donc plus de préférence à retenir.** Les noms ne sont
+ * plus écrits en toutes lettres — ils paraissent au survol, dans une infobulle à ergot. Le
+ * bouton de repli, la clé de stockage et le garde-fou d'hydratation qu'elle imposait sont
+ * partis avec.
+ *
+ * ⚠️ **Les anneaux de la référence n'ont pas été repris.** Ils y portent une consommation en
+ * pourcentage ; « Carte » ou « Simulation » n'ont aucune quantité à montrer, et un anneau
+ * posé autour d'eux aurait été un décor déguisé en donnée.
  */
-const EXPANDED = 232;
-const COLLAPSED = 68;
-const STORAGE_KEY = "novac_nav_collapsed";
+
+/**
+ * La largeur que le rail réserve, épine comprise.
+ *
+ * ⚠️ **C'est celle de l'ancien état replié, et ce n'est pas une coïncidence.** Elle est
+ * publiée dans `--novac-nav-w` et sert de marge gauche à toutes les pages : la reprendre
+ * telle quelle est ce qui permet de refaire la navigation sans toucher à une seule d'entre
+ * elles.
+ */
+const LARGEUR = 68;
+/** L'épine collée au bord, dont le rail est un renflement. */
+const EPINE = 10;
+/** L'arrondi du flanc droit du rail — convexe, celui-là. */
+const RAYON = 20;
+/** Le rayon des deux raccords concaves. Voir `.nv-rail` dans `globals.css`. */
+const RACCORD = 16;
+/** Le côté d'une rangée, l'écart entre deux, et le rembourrage du rail. */
+const RANGEE = 40, ECART = 4, MARGE = 9;
 
 type Item = { label: string; href: string; icon: React.JSX.Element };
 
@@ -41,14 +76,86 @@ const ICONS = {
   moon:      "M20 14.5A8.5 8.5 0 0 1 9.5 4a8.5 8.5 0 1 0 10.5 10.5",
 };
 
+/** Le voile flouté, identique sur les quatre pièces de la silhouette. */
+const FLOU = {
+  background: "var(--nv-barre-fond)",
+  backdropFilter: "blur(24px) saturate(1.4)",
+  WebkitBackdropFilter: "blur(24px) saturate(1.4)",
+} as const;
+
+/**
+ * Une rangée du rail.
+ *
+ * ⚠️ **Écrite une fois, alors qu'il y en avait cinq copies.** Le panneau répétait le même
+ * bloc de style pour un lien, un réglage, un compte, une connexion et deux thèmes — six
+ * fois la même hauteur, le même arrondi, la même bascule de survol. Elles avaient déjà
+ * divergé : 40 pixels de haut pour les liens, 44 pour le compte, `0 12px` de rembourrage
+ * d'un côté et `0 8px` de l'autre. Le rail les remet toutes au carré, et une seule
+ * définition garantit qu'elles y restent.
+ */
+function Rangee({
+  nom, href, onClick, actif = false, enfant,
+}: {
+  nom: string;
+  href?: string;
+  onClick?: () => void;
+  actif?: boolean;
+  enfant: React.ReactNode;
+}) {
+  const socle: React.CSSProperties = {
+    position: "relative",
+    display: "flex", alignItems: "center", justifyContent: "center",
+    width: RANGEE, height: RANGEE, flexShrink: 0,
+    padding: 0, border: "none", borderRadius: 12, cursor: "pointer",
+    textDecoration: "none",
+    color: actif ? "var(--nv-texte)" : "var(--nv-texte-secondaire)",
+    background: actif ? "var(--nv-barre-actif)" : "transparent",
+    boxShadow: actif ? "inset 0 0 0 1px var(--nv-barre-actif-bord)" : "none",
+    transition: "background 160ms, color 160ms",
+  };
+  /* ⚠️ Le survol se pose à la main plutôt qu'en CSS : la teinte active doit survivre au
+     passage du curseur, et une règle `:hover` l'écraserait sans savoir laquelle est en cours. */
+  const entrer = (e: React.MouseEvent<HTMLElement>) => {
+    if (!actif) e.currentTarget.style.background = "var(--nv-barre-survol)";
+  };
+  const sortir = (e: React.MouseEvent<HTMLElement>) => {
+    if (!actif) e.currentTarget.style.background = "transparent";
+  };
+
+  const dedans = (
+    <>
+      {enfant}
+      {/**
+        * ⚠️ **L'infobulle est dans le lien, pas à côté.** C'est ce qui la fait paraître au
+        * survol sans une ligne de JavaScript ni un état par rangée : la règle CSS descend du
+        * lien survolé vers son propre enfant. Posée en voisine, il aurait fallu dix états.
+        */}
+      <span className="nv-rail-bulle" style={{
+        background: "var(--nv-carte)",
+        color: "var(--nv-texte)",
+        border: "1px solid var(--nv-bord-fort)",
+        borderRadius: 8, padding: "5px 9px",
+        fontSize: 12, fontWeight: 500, whiteSpace: "nowrap",
+        boxShadow: "0 6px 20px rgba(0,0,0,0.28)",
+      }}>{nom}</span>
+    </>
+  );
+
+  return href ? (
+    <Link className="nv-rail-lien" href={href} style={socle} aria-label={nom}
+      aria-current={actif ? "page" : undefined}
+      onMouseEnter={entrer} onMouseLeave={sortir}>{dedans}</Link>
+  ) : (
+    <button className="nv-rail-lien" type="button" onClick={onClick} style={socle}
+      aria-label={nom} onMouseEnter={entrer} onMouseLeave={sortir}>{dedans}</button>
+  );
+}
+
 export default function SideNav() {
   const pathname = usePathname();
   const { mode, activeAsset, displayMode, toggleDisplayMode } = useApp();
   const modeTheme = useModeTheme();
 
-  // Replié par défaut nulle part : on lit la préférence après hydratation, pour
-  // que le rendu serveur et le premier rendu client concordent.
-  const [collapsed, setCollapsed] = useState(false);
   const [ready, setReady] = useState(false);
   const [user, setUser] = useState<{ username?: string; email?: string; avatar_url?: string } | null>(null);
   const [showProfile, setShowProfile] = useState(false);
@@ -56,7 +163,6 @@ export default function SideNav() {
 
   useEffect(() => {
     try {
-      setCollapsed(localStorage.getItem(STORAGE_KEY) === "1");
       const stored = localStorage.getItem("novac_user");
       if (stored) setUser(JSON.parse(stored));
     } catch { /* stockage refusé ou contenu illisible */ }
@@ -96,16 +202,11 @@ export default function SideNav() {
     return () => { annule = true; };
   }, []);
 
+  /* ⚠️ Publiée une fois pour toutes : la largeur ne dépend plus d'un état, mais la variable
+     reste — c'est par elle que la coquille et les éléments fixes du bandeau se décalent, et
+     aucun d'eux n'a jamais eu à connaître ce composant. */
   useEffect(() => {
-    document.documentElement.style.setProperty("--novac-nav-w", `${collapsed ? COLLAPSED : EXPANDED}px`);
-  }, [collapsed]);
-
-  const toggle = useCallback(() => {
-    setCollapsed(v => {
-      const next = !v;
-      try { localStorage.setItem(STORAGE_KEY, next ? "1" : "0"); } catch { /* stockage refusé */ }
-      return next;
-    });
+    document.documentElement.style.setProperty("--novac-nav-w", `${LARGEUR}px`);
   }, []);
 
   // Le premier onglet suit le mode : un portefeuille ouvert mène à son tableau
@@ -122,150 +223,79 @@ export default function SideNav() {
     { label: "Simulation", href: "/simulation", icon: icon(ICONS.simulation) },
   ];
 
-  const width = collapsed ? COLLAPSED : EXPANDED;
-
   return (
     <>
+    {/* L'épine : la matière dont le rail est un renflement. */}
+    <div aria-hidden="true" style={{
+      position: "fixed", left: 0, top: 0, bottom: 0, width: EPINE, zIndex: 59,
+      ...FLOU,
+    }} />
+
     <nav
       aria-label="Navigation principale"
       data-avatar="curieux"
+      className="nv-rail"
       style={{
-        position: "fixed", left: 0, top: 0, bottom: 0, width, zIndex: 60,
-        display: "flex", flexDirection: "column",
-        background: "var(--nv-barre-fond)",
-        backdropFilter: "blur(24px) saturate(1.4)",
-        WebkitBackdropFilter: "blur(24px) saturate(1.4)",
-        borderRight: "1px solid var(--nv-bord)",
-        // Pas de transition avant hydratation : sinon le panneau s'anime depuis
-        // sa largeur par défaut vers la préférence enregistrée, à chaque visite.
-        transition: ready ? "width 220ms cubic-bezier(0.4,0,0.2,1)" : "none",
-        overflow: "hidden",
+        position: "fixed", left: EPINE, top: "50%", transform: "translateY(-50%)",
+        width: LARGEUR - EPINE, zIndex: 60,
+        display: "flex", flexDirection: "column", alignItems: "center", gap: ECART,
+        padding: `${MARGE}px 0`,
+        borderRadius: `0 ${RAYON}px ${RAYON}px 0`,
+        ...FLOU,
+        /* ⚠️ **Visible, sinon les raccords ne servent à rien** : ils sont dessinés par deux
+           pseudo-éléments posés *hors* de la boîte, et l'infobulle sort par la droite. */
+        overflow: "visible",
+        ["--nv-raccord" as string]: `${RACCORD}px`,
       }}
     >
-      {/* Marque + bouton de repli */}
-      <div style={{ display: "flex", alignItems: "center", gap: 10, height: 60, padding: "0 16px", flexShrink: 0 }}>
+      {/**
+        * La marque, en tête du rail.
+        *
+        * ⚠️ **Le mot « NOVAC » est parti avec l'état déplié**, faute de tenir dans
+        * cinquante-huit pixels. Le seul repère qui y tienne est le sigle, et il y était déjà :
+        * c'est ce que la barre repliée montrait.
+        */}
+      <Rangee nom="Accueil Novac" href="/" enfant={
         <span aria-hidden="true" style={{
-          width: 20, height: 20, flexShrink: 0,
+          width: 20, height: 20,
           backgroundColor: "var(--nv-texte)",
           maskImage: "url(/logo-hivesync.svg)",
           WebkitMaskImage: "url(/logo-hivesync.svg)",
           maskSize: "contain", WebkitMaskSize: "contain",
           maskRepeat: "no-repeat", WebkitMaskRepeat: "no-repeat",
           maskPosition: "center", WebkitMaskPosition: "center",
-          // Il reste quand la barre se replie : c'est le seul repère de marque
-          // qui tienne dans 68 px, là où le mot ne tient pas.
-          marginRight: collapsed ? 0 : 2,
-          transition: "margin 160ms",
         }} />
-        <Link href="/" aria-label="Accueil Novac" style={{
-          textDecoration: "none", color: "var(--nv-texte)", fontSize: 13, fontWeight: 700,
-          letterSpacing: "0.22em", whiteSpace: "nowrap",
-          // Effacé sans être démonté : le retirer du flux ferait sauter le
-          // bouton de repli d'un côté à l'autre pendant l'animation.
-          opacity: collapsed ? 0 : 0.85,
-          width: collapsed ? 0 : "auto",
-          // Une largeur nulle ne retient pas le texte : sans découpe, « NOVAC »
-          // débordait par-dessus le bouton de repli et, quoique invisible,
-          // captait son clic — déplier ne faisait donc rien. Les évènements
-          // sont coupés en plus de la découpe, la seconde ne valant que pour
-          // ce qui dépasse.
-          overflow: "hidden",
-          pointerEvents: collapsed ? "none" : undefined,
-          transition: "opacity 160ms",
-        }}>NOVAC</Link>
-        <button
-          onClick={toggle}
-          aria-label={collapsed ? "Déplier la navigation" : "Replier la navigation"}
-          aria-expanded={!collapsed}
-          title={collapsed ? "Déplier" : "Replier"}
-          style={{
-            marginLeft: collapsed ? 0 : "auto", width: 32, height: 32, flexShrink: 0,
-            display: "flex", alignItems: "center", justifyContent: "center",
-            background: "transparent", border: "none", borderRadius: 8,
-            color: "var(--nv-texte-attenue)", cursor: "pointer", padding: 0,
-          }}
-        >
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round">
-            <rect x="3" y="4" width="18" height="16" rx="2" />
-            <path d="M9 4v16" />
-          </svg>
-        </button>
-      </div>
+      } />
 
-      {/* Liens */}
-      <div style={{ display: "flex", flexDirection: "column", gap: 2, padding: "6px 10px", flex: 1 }}>
-        {items.map(item => {
-          const base = item.href.split("?")[0];
-          const active = pathname === base || (base !== "/" && pathname.startsWith(base));
-          return (
-            <Link key={item.label} href={item.href}
-              title={collapsed ? item.label : undefined}
-              aria-current={active ? "page" : undefined}
-              style={{
-                display: "flex", alignItems: "center", gap: 12,
-                height: 40, padding: "0 12px", borderRadius: 10,
-                textDecoration: "none", whiteSpace: "nowrap",
-                color: active ? "var(--nv-texte)" : "var(--nv-texte-secondaire)",
-                background: active ? "var(--nv-barre-actif)" : "transparent",
-                boxShadow: active ? "inset 0 0 0 1px var(--nv-barre-actif-bord)" : "none",
-                fontSize: 13, fontWeight: active ? 600 : 500,
-                transition: "background 160ms, color 160ms",
-              }}
-              onMouseEnter={e => { if (!active) e.currentTarget.style.background = "var(--nv-barre-survol)"; }}
-              onMouseLeave={e => { if (!active) e.currentTarget.style.background = "transparent"; }}
-            >
-              <span style={{ flexShrink: 0, display: "flex" }}>{item.icon}</span>
-              <span style={{ opacity: collapsed ? 0 : 1, transition: "opacity 160ms" }}>{item.label}</span>
-            </Link>
-          );
-        })}
-      </div>
+      {items.map(item => {
+        const base = item.href.split("?")[0];
+        const actif = pathname === base || (base !== "/" && pathname.startsWith(base));
+        return (
+          <Rangee key={item.label} nom={item.label} href={item.href} actif={actif}
+            enfant={item.icon} />
+        );
+      })}
 
-      {/* Bas de panneau : compte puis thème.
-          Tout ce qui touche au compte est réuni ici — il était auparavant
-          coupé en deux, avatar dans le bandeau et thème dans le panneau. */}
-      <div style={{ padding: "10px", borderTop: "1px solid var(--nv-bord)", flexShrink: 0 }}>
-        {(() => {
-          const actif = pathname.startsWith("/parametres");
-          return (
-            <Link href="/parametres"
-              title={collapsed ? "Paramètres" : undefined}
-              aria-current={actif ? "page" : undefined}
-              style={{
-                display: "flex", alignItems: "center", gap: 12,
-                height: 40, padding: "0 12px", borderRadius: 10, marginBottom: 4,
-                textDecoration: "none", whiteSpace: "nowrap",
-                color: actif ? "var(--nv-texte)" : "var(--nv-texte-secondaire)",
-                background: actif ? "var(--nv-barre-actif)" : "transparent",
-                boxShadow: actif ? "inset 0 0 0 1px var(--nv-barre-actif-bord)" : "none",
-                fontSize: 13, fontWeight: actif ? 600 : 500,
-                transition: "background 160ms, color 160ms",
-              }}
-              onMouseEnter={e => { if (!actif) e.currentTarget.style.background = "var(--nv-barre-survol)"; }}
-              onMouseLeave={e => { if (!actif) e.currentTarget.style.background = "transparent"; }}
-            >
-              <span style={{ flexShrink: 0, display: "flex" }}>{icon(ICONS.reglages)}</span>
-              <span style={{ opacity: collapsed ? 0 : 1, transition: "opacity 160ms" }}>Paramètres</span>
-            </Link>
-          );
-        })()}
-        {user && (
-          <button
-            type="button"
-            onClick={() => setShowProfile(true)}
-            title={collapsed ? (user.username || user.email || "Compte") : undefined}
-            style={{
-              display: "flex", alignItems: "center", gap: 12, width: "100%",
-              height: 44, padding: "0 8px", borderRadius: 10, marginBottom: 4,
-              background: "transparent", border: "none", cursor: "pointer",
-              color: "var(--nv-texte)", fontSize: 13, fontWeight: 500,
-              whiteSpace: "nowrap", textAlign: "left",
-            }}
-            onMouseEnter={e => { e.currentTarget.style.background = "var(--nv-barre-survol)"; }}
-            onMouseLeave={e => { e.currentTarget.style.background = "transparent"; }}
-          >
+      {/**
+        * ⚠️ **Un filet, et non un écart plus grand.** Les quatre commandes du bas ne sont pas
+        * des destinations : elles règlent l'application. Un simple blanc aurait laissé croire
+        * à une pause dans la même liste ; le trait dit qu'on change de nature. Demandé à
+        * l'usage — « séparées d'un filet ».
+        */}
+      <span aria-hidden="true" style={{
+        width: 22, height: 1, margin: `${ECART}px 0`,
+        background: "var(--nv-bord-fort)", flexShrink: 0,
+      }} />
+
+      <Rangee nom="Paramètres" href="/parametres" actif={pathname.startsWith("/parametres")}
+        enfant={icon(ICONS.reglages)} />
+
+      {user && (
+        <Rangee nom={user.username?.split(" ")[0] || user.email || "Compte"}
+          onClick={() => setShowProfile(true)}
+          enfant={
             <span style={{
-              width: 28, height: 28, borderRadius: "50%", flexShrink: 0, overflow: "hidden",
+              width: 26, height: 26, borderRadius: "50%", overflow: "hidden",
               display: "flex", alignItems: "center", justifyContent: "center",
               border: "1px solid var(--nv-bord-fort)", background: "var(--nv-carte-creuse)",
             }}>
@@ -283,90 +313,35 @@ export default function SideNav() {
                 </span>
               )}
             </span>
-            <span style={{
-              opacity: collapsed ? 0 : 1, transition: "opacity 160ms",
-              overflow: "hidden", textOverflow: "ellipsis",
-            }}>
-              {user.username?.split(" ")[0] || user.email || "Compte"}
-            </span>
-          </button>
-        )}
+          } />
+      )}
 
-        {/* Hors session : l'entrée du compte reste, mais elle mène à la
-            connexion. Sans elle, il fallait repasser par la page d'accueil
-            pour se connecter — donc quitter ce qu'on était en train de faire. */}
-        {ready && !user && (
-          <button
-            type="button"
-            onClick={() => setShowAuth(true)}
-            title={collapsed ? "Se connecter" : undefined}
-            style={{
-              display: "flex", alignItems: "center", gap: 12, width: "100%",
-              height: 44, padding: "0 8px", borderRadius: 10, marginBottom: 4,
-              background: "transparent", border: "none", cursor: "pointer",
-              color: "var(--nv-texte)", fontSize: 13, fontWeight: 500,
-              whiteSpace: "nowrap", textAlign: "left",
-            }}
-            onMouseEnter={e => { e.currentTarget.style.background = "var(--nv-barre-survol)"; }}
-            onMouseLeave={e => { e.currentTarget.style.background = "transparent"; }}
-          >
-            <span style={{
-              width: 28, height: 28, borderRadius: "50%", flexShrink: 0,
-              display: "flex", alignItems: "center", justifyContent: "center",
-              border: "1px solid var(--nv-accent-bord)", background: "var(--nv-accent-doux)",
-              color: "var(--nv-accent)", fontSize: 13, lineHeight: 1,
-            }}>↪</span>
-            <span style={{
-              opacity: collapsed ? 0 : 1, transition: "opacity 160ms",
-              overflow: "hidden", textOverflow: "ellipsis",
-            }}>
-              Se connecter
-            </span>
-          </button>
-        )}
-        <button
-          onClick={() => basculerMode()}
-          title={modeTheme === "clair" ? "Passer au thème sombre" : "Passer au thème clair"}
-          style={{
-            display: "flex", alignItems: "center", gap: 12, width: "100%",
-            height: 40, padding: "0 12px", borderRadius: 10,
-            background: "transparent", border: "none", cursor: "pointer",
-            color: "var(--nv-texte-secondaire)", fontSize: 13, fontWeight: 500,
-            whiteSpace: "nowrap", textAlign: "left",
-          }}
-        >
-          <span style={{ flexShrink: 0, display: "flex" }}>
-            {icon(modeTheme === "clair" ? ICONS.moon : ICONS.sun)}
-          </span>
-          <span style={{ opacity: collapsed ? 0 : 1, transition: "opacity 160ms" }}>
-            {modeTheme === "clair" ? "Thème sombre" : "Thème clair"}
-          </span>
-        </button>
-        <button
-          onClick={toggleDisplayMode}
-          title={displayMode === "black" ? "Revenir au thème verre" : "Passer au thème noir"}
-          style={{
-            display: "flex", alignItems: "center", gap: 12, width: "100%",
-            height: 40, padding: "0 12px", borderRadius: 10,
-            background: "transparent", border: "none", cursor: "pointer",
-            color: "var(--nv-texte-secondaire)", fontSize: 13, fontWeight: 500,
-            whiteSpace: "nowrap", textAlign: "left",
-          }}
-        >
-          <span style={{ flexShrink: 0, display: "flex" }}>
-            {icon(displayMode === "black" ? ICONS.sun : ICONS.moon)}
-          </span>
-          <span style={{ opacity: collapsed ? 0 : 1, transition: "opacity 160ms" }}>
-            {displayMode === "black" ? "Thème verre" : "Thème noir"}
-          </span>
-        </button>
-      </div>
+      {/* Hors session : l'entrée du compte reste, mais elle mène à la
+          connexion. Sans elle, il fallait repasser par la page d'accueil
+          pour se connecter — donc quitter ce qu'on était en train de faire. */}
+      {ready && !user && (
+        <Rangee nom="Se connecter" onClick={() => setShowAuth(true)} enfant={
+          <span style={{
+            width: 26, height: 26, borderRadius: "50%",
+            display: "flex", alignItems: "center", justifyContent: "center",
+            border: "1px solid var(--nv-accent-bord)", background: "var(--nv-accent-doux)",
+            color: "var(--nv-accent)", fontSize: 13, lineHeight: 1,
+          }}>↪</span>
+        } />
+      )}
 
+      <Rangee nom={modeTheme === "clair" ? "Thème sombre" : "Thème clair"}
+        onClick={() => basculerMode()}
+        enfant={icon(modeTheme === "clair" ? ICONS.moon : ICONS.sun)} />
+
+      <Rangee nom={displayMode === "black" ? "Thème verre" : "Thème noir"}
+        onClick={toggleDisplayMode}
+        enfant={icon(displayMode === "black" ? ICONS.sun : ICONS.moon)} />
     </nav>
 
     {/* Hors du <nav> à dessein : son backdrop-filter en fait le bloc conteneur
-        des descendants en position fixe, qui seraient donc enfermés dans les
-        232 px du panneau — et rognés par son overflow: hidden. */}
+        des descendants en position fixe, qui seraient donc enfermés dans la
+        largeur du rail. */}
     {showProfile && user && (
       // Le conteneur ne sert qu'à la superposition : la modale se voile en
       // z-index 50, le panneau vit en 60, et sans cela le panneau restait seul
