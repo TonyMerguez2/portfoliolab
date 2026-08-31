@@ -151,22 +151,108 @@ function Puce({ motif }: { motif: number }) {
 }
 
 /**
+ * Le centre du pointillé, en pourcentage de la carte.
+ *
+ * ⚠️ **Remonté dans la bande visible, et c'est tout le sujet.** Sur la carte de référence, la
+ * fleur du halftone est à peu près au milieu — chez nous, le dossier recouvre tout ce qui
+ * passe sous le soixante-huitième pixel, soit les deux tiers du bas. Un centre fidèlement
+ * recopié n'aurait jamais existé qu'en dessous, et il ne serait resté à l'écran qu'un semis de
+ * points sans origine. Il est donc posé haut et à droite, dans la zone que le titre laisse
+ * libre, et il tombe du même coup sur la lueur du coin — la fleur naît là où la carte est
+ * déjà éclairée.
+ */
+const CENTRE_POINTILLE = { x: 64, y: 19 };
+
+/**
+ * Le semis de points : un halftone polaire, en deux dégradés et zéro nœud.
+ *
+ * ⚠️ **Ce n'est pas un semis de points, c'est le croisement de deux familles.** Sur la carte
+ * de référence, les points ne sont ni alignés ni de taille constante : ils sont posés sur une
+ * grille *polaire* — des rayons partant d'un centre, coupés par des anneaux concentriques. Un
+ * point est une intersection. C'est ce qui produit tout l'effet : l'écart angulaire étant
+ * constant, les points grossissent et s'écartent en s'éloignant du centre, et le moiré des
+ * deux familles fait tourner la surface.
+ *
+ * ⚠️ **En CSS et non en SVG, parce que le compte de nœuds était rédhibitoire.** À l'écart de
+ * la référence — trois pixels et demi ramenés à notre échelle — la carte demanderait près de
+ * quatre mille cercles, multipliés par autant de dossiers de trésorerie affichés. Deux
+ * dégradés répétés en font autant pour un seul élément, et le navigateur les peint sur le
+ * processeur graphique. Les hachures du fond n° 0 ont payé leurs soixante-douze tracés parce
+ * qu'un `<pattern>` aurait laissé voir sa grille ; ici le motif est *polaire*, donc justement
+ * hors d'atteinte d'une tuile — mais parfaitement à portée d'un dégradé conique.
+ *
+ * ⚠️ **`multiply` entre les deux couches, `screen` par-dessus la carte.** Superposées telles
+ * quelles, les deux familles auraient donné une résille — des rayons *et* des anneaux, avec
+ * des nœuds un peu plus clairs. Ce n'est pas ce que montre la référence, où il n'y a que les
+ * nœuds. Le produit des deux ne garde que leur intersection ; le `screen` la repose ensuite
+ * sur la carte sans jamais l'assombrir, ce qu'un blanc translucide ordinaire n'aurait pas su
+ * faire par-dessus le dégradé de teinte.
+ *
+ * ⚠️ **Les bornes sont molles des deux côtés, et ce n'est pas de la coquetterie.** Des arrêts
+ * francs à moins de deux degrés scintillent : la carte se déplace d'un pixel au survol du
+ * dossier et les rayons crénelés se mettent à fourmiller. Des bornes dégradées donnent des
+ * points ronds plutôt que des losanges, ce que la référence montre aussi.
+ *
+ * ⚠️ **Le cœur est évidé, sinon il fait un œil-de-bœuf.** Une grille polaire a un défaut que
+ * la référence ne peut pas avoir, parce qu'elle est imprimée : près du centre, l'écart
+ * angulaire tombe sous le pixel, les rayons se fondent en un gris uniforme et **il ne reste
+ * plus que les anneaux** — une cible concentrique, vue et corrigée. Le masque efface le semis
+ * sur les huit premiers pixels et le laisse revenir à vingt-six ; la fleur blanche posée
+ * dessous occupe la place, comme sur la référence où les points naissent d'une lumière au
+ * lieu de s'y empiler.
+ */
+function Pointille() {
+  const { x, y } = CENTRE_POINTILLE;
+  const centre = `at ${x}% ${y}%`;
+  /* Le masque et la fleur partagent leur centre avec le semis : trois valeurs, une source. */
+  const evidement = `radial-gradient(circle ${centre},`
+    + " transparent 0, transparent 8px, #000 26px)";
+  return (
+    <>
+      {/* La fleur, sous le semis : c'est d'elle que les points ont l'air de sortir. */}
+      <div aria-hidden="true" style={{
+        position: "absolute", inset: 0, pointerEvents: "none",
+        background: `radial-gradient(circle ${centre}, rgba(255,255,255,0.20) 0,`
+          + " rgba(255,255,255,0.07) 24px, rgba(255,255,255,0) 62px)",
+      }} />
+      <div aria-hidden="true" style={{
+        position: "absolute", inset: 0, pointerEvents: "none",
+        backgroundImage: [
+          /* Les rayons : une période de 3,9° fait quatre-vingt-douze branches. */
+          `repeating-conic-gradient(from 0deg ${centre},`
+            + " #fff 0deg, #000 1.3deg, #000 2.6deg, #fff 3.9deg)",
+          /* Les anneaux : 5,4 pixels de période, soit l'écart des points près du centre. */
+          `repeating-radial-gradient(circle ${centre},`
+            + " #fff 0, #000 2px, #000 3.4px, #fff 5.4px)",
+        ].join(", "),
+        backgroundBlendMode: "multiply",
+        mixBlendMode: "screen",
+        opacity: 0.16,
+        /* ⚠️ Le préfixe reste : Safari ne sert `mask-image` sans lui que depuis 15.4. */
+        WebkitMaskImage: evidement, maskImage: evidement,
+      }} />
+    </>
+  );
+}
+
+/**
  * Le fond guilloché de la carte.
  *
- * ⚠️ **Les arcs sont calés pour traverser la bande visible, pas pour être beaux hors champ.**
- * Le dossier ne laisse voir que les soixante-huit premiers pixels de la carte : un motif
- * centré, ou des arcs partant du bas, n'existeraient que dans la partie cachée. Leur centre
- * est donc posé au-delà du coin inférieur droit et leurs rayons choisis pour que les trois
- * courbes coupent la bande — mesuré, elles la traversent aux abscisses 181, 98 et 36.
+ * ⚠️ **Le motif est calé pour traverser la bande visible, pas pour être beau hors champ.**
+ * Le dossier ne laisse voir que les soixante-huit premiers pixels de la carte : un dessin
+ * centré, ou des arcs partant du bas, n'existeraient que dans la partie cachée. C'est la
+ * contrainte qui a défait chacun des trois fonds au premier essai, et celle qu'il faut
+ * reprendre avant d'en ajouter un quatrième.
  *
  * ⚠️ **En blanc translucide, jamais dans une teinte à soi.** La carte prend la couleur du
  * dossier, qui est celle que l'épargnant a choisie parmi onze : un motif coloré aurait été
- * juste sur l'une et faux sur les dix autres. Du blanc à sept pour cent éclaircit la surface
+ * juste sur l'une et faux sur les dix autres. Du blanc à peine posé éclaircit la surface
  * quelle qu'elle soit, sans jamais introduire une seconde teinte.
  */
 function Guilloche({ id, fond }: { id: string; fond: number }) {
   const L = CARTE_ACTIF.largeur, H = CARTE_ACTIF.hauteur;
   return (
+    <>
     <svg viewBox={`0 0 ${L} ${H}`} aria-hidden="true"
       style={{ position: "absolute", inset: 0, width: "100%", height: "100%",
         pointerEvents: "none" }}>
@@ -179,20 +265,13 @@ function Guilloche({ id, fond }: { id: string; fond: number }) {
       {/* La lueur du coin haut-droit : elle éclaire la bande visible sans y poser de forme. */}
       <rect width={L} height={H} fill={`url(#lueur-${id})`} />
       {/**
-        * ⚠️ **Les arcs se voient, sinon ils ne servent à rien.** À 7,5 % d'opacité sur un
-        * pixel et deux dixièmes, ils étaient signalés comme « trop discrets » — et ils
-        * l'étaient d'autant plus depuis que la carte a été éclaircie : un blanc à peine posé
-        * disparaît sur un fond clair, là où il tenait encore sur un presque-noir. Ils passent
-        * à 14 %, sur un trait plus franc.
+        * ⚠️ **Les traits se voient, sinon ils ne servent à rien.** À 7,5 % d'opacité, ils
+        * étaient signalés comme « trop discrets » — et ils l'étaient d'autant plus depuis que
+        * la carte a été éclaircie : un blanc à peine posé disparaît sur un fond clair, là où
+        * il tenait encore sur un presque-noir.
         *
-        * ⚠️ **Un quatrième arc, et l'écart resserré.** Trois cercles espacés de quarante-cinq
-        * laissaient de grandes plages nues entre eux ; le guillochis d'une vraie carte se
-        * reconnaît à la **répétition**, pas à la présence de courbes. Les rayons se suivent
-        * donc de trente-huit, et le plus petit remonte pour que le motif atteigne la bande
-        * visible plutôt que de rester tapi sous le plan du dossier.
-        *
-        * ⚠️ **Ils s'éteignent vers l'extérieur.** Tous à la même intensité, les arcs du bord
-        * gauche pesaient autant que ceux qui tournent près du coin éclairé, ce qui aplatit la
+        * ⚠️ **Ils s'éteignent vers l'extérieur.** Tous à la même intensité, les traits du bord
+        * gauche pesaient autant que ceux qui passent près du coin éclairé, ce qui aplatit la
         * surface. Le dégradé les fait naître dans la lueur et s'y perdre.
         */}
       <defs>
@@ -209,29 +288,21 @@ function Guilloche({ id, fond }: { id: string; fond: number }) {
         * la *famille de courbes*, jamais l'endroit où elle passe — les trois traversent les
         * soixante-huit pixels visibles, faute de quoi elles n'existeraient que sous le plan.
         *
-        * ⚠️ **Il y en a eu cinq, et deux ont été écartées à l'usage.** Des ondes — quatre
-        * sinusoïdes parallèles — et des obliques droites. Elles avaient le défaut commun de
-        * n'être *que* régulières : un motif de fond d'écran, pas la gravure d'une carte. Ce
-        * qui reste a en commun de tourner. Les numéros ci-dessous sont ceux d'aujourd'hui,
-        * renumérotés sans trou ; la planche montrée à l'usage les appelait 0, 3 et 4.
+        * ⚠️ **Six ont été dessinées, trois sont restées, et aucune n'est morte de sa
+        * régularité seule.** Écartées : des ondes sinusoïdales et des obliques droites — un
+        * motif de fond d'écran, pas la gravure d'une carte ; puis le guillochis d'origine,
+        * quatre arcs concentriques nés du coin bas-droit, que le pointillé remplace. Ce qui
+        * reste ne se ressemble en rien : une matière hachurée, une famille de courbes, un
+        * semis de points. **Les numéros sont ceux d'aujourd'hui et ils ont déjà glissé deux
+        * fois** — inutile de chercher à les faire correspondre aux planches montrées à
+        * l'usage, seule leur suite sans trou compte, `fondPour` prenant un modulo.
         *
-        * ⚠️ **Toutes en blanc translucide, comme la première.** La carte prend l'une des
-        * dix-neuf couleurs de dossier : une gravure teintée aurait été juste sur l'une et
-        * fausse sur les dix-huit autres.
+        * ⚠️ **Toutes en blanc translucide.** La carte prend l'une des dix-neuf couleurs de
+        * dossier : une gravure teintée aurait été juste sur l'une et fausse sur les dix-huit
+        * autres.
         */}
       <g fill="none" stroke={`url(#arcs-${id})`} strokeWidth={1.4}>
         {fond === 0 && (
-          /* Le guillochis d'origine : des arcs concentriques nés du coin bas-droit. Leurs
-             rayons se suivent de trente-huit — c'est la répétition qui fait le guillochis,
-             pas la présence de courbes. */
-          <>
-            <circle cx={L + 7} cy={H + 19} r={152} />
-            <circle cx={L + 7} cy={H + 19} r={190} />
-            <circle cx={L + 7} cy={H + 19} r={228} />
-            <circle cx={L + 7} cy={H + 19} r={266} />
-          </>
-        )}
-        {fond === 1 && (
           /**
            * Des hachures fines, et des plans de lumière qui les traversent.
            *
@@ -275,16 +346,9 @@ function Guilloche({ id, fond }: { id: string; fond: number }) {
             </g>
           </>
         )}
-        {fond === 2 && (
+        {fond === 1 && (
           /**
            * Un éventail d'arcs qui balaie le coin haut-droit.
-           *
-           * ⚠️ **Ce n'est pas le premier guillochis avec un autre centre.** Le fond n° 0 pose
-           * son centre au-delà du coin bas-droit : ses arcs bombent vers le haut-gauche et
-           * traversent toute la largeur, à trente-huit d'écart. Celui-ci a son centre sous le
-           * bord *gauche* — les arcs bombent vers le haut-droit, entrent tous par le bord
-           * supérieur et ressortent par le bord droit. Deux familles opposées, et non deux
-           * réglages de la même.
            *
            * ⚠️ **Le centre est dans la carte, et il a fallu l'y ramener.** Premier essai :
            * centre sous le bord gauche, à 250 pixels — des rayons de 285 à 350, soit une fois
@@ -327,10 +391,9 @@ function Guilloche({ id, fond }: { id: string; fond: number }) {
            * dégradé commun l'a déjà ramené à quatre pour cent — l'atténuer une seconde fois
            * l'aurait effacé, et avec lui toute l'ouverture qu'on venait de gagner.
            *
-           * ⚠️ **Trait d'un pixel, et non de 1,4 comme le fond n° 0.** À dix pixels d'écart au
-           * lieu de trente-huit, l'épaisseur de l'autre famille d'arcs refermait les
-           * intervalles : c'est la même règle qu'aux hachures du fond n° 1 — plus les traits
-           * se serrent, plus il faut qu'il reste du vide entre eux.
+           * ⚠️ **Trait d'un pixel, et non le 1,4 du groupe.** À dix pixels d'écart, l'épaisseur
+           * commune refermait les intervalles : c'est la même règle qu'aux hachures du fond
+           * n° 0 — plus les traits se serrent, plus il faut qu'il reste du vide entre eux.
            */
           <g strokeWidth={1}>
             {Array.from({ length: 11 }, (_, i) => (
@@ -341,6 +404,9 @@ function Guilloche({ id, fond }: { id: string; fond: number }) {
         )}
       </g>
     </svg>
+    {/* ⚠️ Hors du SVG : le pointillé se peint en CSS, faute de pouvoir tenir en nœuds. */}
+    {fond === 2 && <Pointille />}
+    </>
   );
 }
 
@@ -411,6 +477,20 @@ export default function CarteBancaire({
         /* ⚠️ Le fond est posé en absolu : il faut donc un repère, et les deux rangées
            doivent se replacer au-dessus de lui. */
         position: "relative", overflow: "hidden",
+        /**
+         * ⚠️ **L'isolation borne l'arrière-plan que le `screen` du pointillé doit lire.** Sans
+         * elle, un `mix-blend-mode` remonte au premier contexte d'empilement venu : le
+         * navigateur doit alors composer tout ce qui a été peint sous lui — la rangée de
+         * dossiers, la page — pour éclaircir deux cent quarante-huit pixels de large.
+         *
+         * ⚠️ **Elle ne corrige aucun défaut visible, et je l'ai vérifié plutôt que supposé.**
+         * Retirée à la main sur la page rendue, l'image est identique au pixel près : la carte
+         * étant opaque et son propre fond peint dans le même contexte, l'arrière-plan lu se
+         * trouve être le bon de toute façon. Ce qui change est le *périmètre* de la lecture,
+         * et donc son coût — et le fait qu'elle reste juste si l'on pose un jour quelque chose
+         * de translucide sous la carte.
+         */
+        isolation: "isolate",
       }}
     >
       <Guilloche id={id} fond={fondPour(cle ?? intitule)} />

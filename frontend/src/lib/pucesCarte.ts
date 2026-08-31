@@ -263,9 +263,14 @@ export function motifPour(cle: string): number {
  *
  * ⚠️ **Trois, et non un seul.** Le guillochis était unique : deux dossiers de trésorerie
  * côte à côte montraient exactement la même courbe au même endroit, ce qui les faisait lire
- * comme un motif d'interface plutôt que comme deux objets. Il y en a eu cinq ; les ondes et
- * les obliques ont été écartées à l'usage — trop régulières pour être une gravure. Les deux
- * qui restent à côté de l'original viennent chacun d'une carte réelle.
+ * comme un motif d'interface plutôt que comme deux objets. Six ont été dessinés ; les trois
+ * qui restent viennent chacun d'une carte réelle, et **plus un seul n'est de mon invention** —
+ * ni les ondes, ni les obliques, ni le guillochis d'origine n'ont survécu à l'usage.
+ *
+ * ⚠️ **Le nombre est resté trois par deux fois, et ce n'est pas un hasard heureux.** Le
+ * dernier retrait s'est fait avec un ajout, précisément pour ne pas rouvrir la question du
+ * couple ci-dessous — retirer sans remplacer aurait ramené à deux fonds, et deux divise six
+ * tout autant que trois.
  *
  * ⚠️ **Le couple puce × fond se dégrade quand on retire un fond, et c'est le piège.**
  * Descendre de cinq à trois n'a l'air de rien ; mais trois **divise** six. Sur une clé d'un
