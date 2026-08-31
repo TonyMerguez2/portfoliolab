@@ -80,7 +80,7 @@ const TENEUR_PAR_DEFAUT = {
 };
 
 export default function FormulaireCompte({
-  genres, initial, prerempli, titre, mention, enCours, erreur, journal,
+  genres, initial, prerempli, titre, mention, enCours, erreur,
   onEnregistrer, onSupprimer, onFermer, integre = false, onCouleur, onEtape, sortie,
 }: {
   /** Les genres publiés par le serveur. Vide tant qu'ils ne sont pas arrivés. */
@@ -104,16 +104,6 @@ export default function FormulaireCompte({
   erreur: string | null;
   onEnregistrer: (s: SaisieCompte) => void;
   onSupprimer?: () => void;
-  /**
-   * Le journal de trésorerie du compte, quand il y a lieu d'en montrer un.
-   *
-   * ⚠️ **Un bloc rendu par le parent, et non des données passées à ce formulaire.** Ce
-   * composant ne sait rien du réseau — il rend une saisie et la remonte. Lui confier le
-   * chargement des mouvements l'aurait obligé à connaître le portefeuille, l'identifiant
-   * du compte et la gestion d'erreur, alors qu'il sert aussi à *créer* un compte qui
-   * n'existe pas encore et n'a donc aucun journal.
-   */
-  journal?: React.ReactNode;
   onFermer: () => void;
   /**
    * Rendu **intégré** : le formulaire s'affiche dans le flux au lieu de flotter au-dessus
@@ -264,8 +254,8 @@ export default function FormulaireCompte({
      * distingue les deux ; l'écran doit le lui permettre.
      *
      * ⚠️ **Rien n'est envoyé en correction.** Le serveur ignore ces champs sur un compte
-     * existant — l'argent ne s'écrit que dans le journal — et les envoyer quand même
-     * laisserait croire, en lisant ce code, qu'ils peuvent encore agir.
+     * existant — l'apport initial n'a de sens qu'au moment de la déclaration — et les
+     * envoyer quand même laisserait croire, en lisant ce code, qu'ils peuvent encore agir.
      */
     ...(correction ? {} : {
       apport_initial: apport.trim() === "" ? null : Number(apport.replace(",", ".")),
@@ -286,13 +276,21 @@ export default function FormulaireCompte({
           * à ce que les dossiers du fond survivent aux allers-retours entre étapes. Deux
           * éventails superposés, en plus, feraient deux illustrations pour un formulaire.
           *
-          * ⚠️ **Pas en correction non plus, et c'est un précédent qui le dit.** Ces 148 pixels
-          * avaient poussé la troisième étape contre le plafond de 90 % de hauteur d'écran, et
-          * la page s'était mise à défiler — reproché à l'usage. La fenêtre de correction est la
-          * plus longue de toutes, puisqu'elle porte en plus le journal de trésorerie. Le jour
-          * où l'on voudra l'illustration là aussi, il faudra d'abord mesurer.
+          * ⚠️ **En correction aussi, désormais — et c'est ce qui rend la bande de couleurs
+          * utilisable.** Elle en était exclue au motif que la fenêtre de correction était « la
+          * plus longue de toutes, puisqu'elle porte en plus le journal de trésorerie », le
+          * commentaire d'alors réclamant qu'on mesure avant d'y revenir. Le journal étant
+          * parti, la mesure a été faite — voir plus bas.
+          *
+          * ⚠️ **Sans elle, choisir une couleur ne se voyait nulle part.** La bande ne marque
+          * aucune sélection : décision assumée, mais **à la condition, écrite trois lignes
+          * plus haut, que l'illustration réponde à sa place**. Privée d'illustration, la
+          * correction ne répondait plus qu'en repeignant la pilule du genre et le bouton
+          * « Enregistrer » — deux commandes, pas un aperçu. Relevé à l'usage : « les pastilles
+          * ne réagissent pas pareil que les autres pages ». La justification et son exception
+          * se contredisaient dans le même commentaire, et personne ne l'avait lu jusqu'au bout.
           */}
-        {!integre && !correction && <EventailDossiers couleur={couleur} />}
+        {!integre && <EventailDossiers couleur={couleur} />}
 
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
           <span style={{ fontFamily: FONT, fontSize: 13.5, fontWeight: 700, color: CLAIR.texte }}>
@@ -361,10 +359,16 @@ export default function FormulaireCompte({
 
             {/**
               * ⚠️ **L'argent ne se saisit qu'à la déclaration, et jamais plus ici.**
-              * Ce champ réécrivait un solde posé à côté du journal, et les deux ont fini
-              * par diverger sur cinq comptes sur six — jusqu'à 12 000 € d'écart. Le compte
-              * n'ayant plus de solde propre, corriger se fait sur l'apport lui-même, dans
-              * le journal juste en dessous. Un seul endroit où l'argent s'écrit.
+              * Ce champ réécrivait un solde, et les deux valeurs ont fini par diverger sur
+              * cinq comptes sur six — jusqu'à 12 000 € d'écart. Le compte n'ayant plus de
+              * solde propre, il n'y a plus rien à réécrire.
+              *
+              * ⚠️ **Et il n'y a plus, ici, d'endroit où l'argent d'un compte existant se
+              * touche.** Le journal de trésorerie tenait ce rôle sous ce formulaire ; il a
+              * été retiré à l'usage — « c'est le travail de la page transaction ». Cette
+              * page-là *lit* les apports et les mêle aux opérations, mais elle n'en écrit
+              * pas encore : tant qu'elle ne le fera pas, corriger un versement passé n'est
+              * possible nulle part. C'est su, ce n'est pas un oubli.
               *
               * ⚠️ **Les espèces non investies ne se demandent plus à la déclaration.**
               * Le champ changeait d'étiquette selon le genre — « Apport initial » sur un
@@ -374,9 +378,9 @@ export default function FormulaireCompte({
               * n'est pas un montant qu'on décide, c'est ce qui **reste** une fois les achats
               * saisis. La poser en premier obligeait à la deviner, puis à la corriger.
               *
-              * ⚠️ **Rien n'est perdu : le journal l'écrit déjà.** Un versement en espèces est
-              * un mouvement de trésorerie daté comme un autre. On le saisit là où il se
-              * produit, dans le journal du compte, au lieu de l'estimer à l'ouverture.
+              * ⚠️ **Ce sont les opérations qui répondent, sur un compte à titres.** La poche
+              * d'espèces se déduit des achats et des ventes saisis ; il n'y a rien à
+              * apporter à l'ouverture qui ne soit démenti au premier ordre enregistré.
               *
               * ⚠️ **L'apport reste, lui, sur les comptes sans titres.** Déclarer un livret à
               * 5 000 €, c'est apporter 5 000 € à une date : le compte n'a pas d'autre
@@ -420,11 +424,6 @@ export default function FormulaireCompte({
                 )}
               </>
             )}
-
-            {/* ⚠️ **Le journal est désormais le seul endroit où l'argent d'un compte
-                existant se touche.** Il n'y a plus de champ au-dessus qui réécrive le
-                total : on ajoute un apport, ou l'on corrige celui qu'on avait mal saisi. */}
-            {journal}
           </>
         ) : (
           <>
