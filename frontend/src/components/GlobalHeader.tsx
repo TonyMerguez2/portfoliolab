@@ -24,6 +24,7 @@ import { JETONS, RAYONS } from "@/lib/palette";
 import { brandHex } from "@/lib/tileStyle";
 import { HAUTEUR_SAISIE, RAYON_SAISIE, champ } from "@/components/ui/saisie";
 import FenetreModale from "@/components/ui/FenetreModale";
+import Segments from "@/components/ui/Segments";
 import { API_URL } from "@/lib/api";
 
 /**
@@ -645,15 +646,39 @@ export default function GlobalHeader() {
           </div>
           </div>
 
-          <div style={{ display:"flex", gap:"2px", padding:"8px 14px",
-            borderBottom:`1px solid ${JETONS.bord}` }}>
-            {[{id:"all",label:"Tous"},{id:"PORTEFEUILLE",label:"Portefeuilles"},{id:"EQUITY",label:"Actions"},{id:"ETF",label:"Fonds"},{id:"INDEX",label:"Indices"},{id:"CRYPTOCURRENCY",label:"Crypto"}].map(cat => (
-              <button key={cat.id} onClick={() => { setCategory(cat.id); setDisplayCount(20); }}
-                style={{ padding:"4px 11px", borderRadius:"6px", border:"none", fontSize:"11px", cursor:"pointer",
-                  background:category===cat.id?"rgba(91,141,239,0.2)":"transparent",
-                  color:category===cat.id?"#9BB9FF":"rgba(255,255,255,0.4)",
-                  fontWeight:category===cat.id?600:400, letterSpacing:"0.04em" }}>{cat.label}</button>
-            ))}
+          {/**
+            * ⚠️ **La rangée de catégories est un `Segments`, et non six boutons.** Elle en
+            * était six : un fond bleu à 20 % sur celui qui est pris, un gris sur les autres,
+            * un rayon de 6 et un rembourrage écrits sur place — quatre valeurs propres à cette
+            * ligne. L'application a pourtant un objet pour cela, celui qui découpe la courbe
+            * du graphique, et qui sert déjà quatre fois ailleurs. C'est la même question
+            * posée : « lequel de ces découpages regardez-vous ? ». Demandé à l'usage.
+            *
+            * ⚠️ **`sm`, comme au graphique.** La palette est une fenêtre, pas une barre de
+            * section : `md` y donnerait des pastilles plus hautes que les rangées qu'elles
+            * filtrent.
+            *
+            * ⚠️ **La piste peut déborder, et il faut le lui permettre.** Six libellés dans
+            * 560 pixels tiennent, mais « Portefeuilles » est long et rien ne garantit qu'un
+            * septième découpage tiendrait. Le défilement horizontal est repris du graphique,
+            * avec sa marge négative — sans elle, la piste rogne son propre anneau de survol.
+            */}
+          <div style={{ padding:"10px 14px", borderBottom:`1px solid ${JETONS.bord}`,
+            overflowX:"auto", scrollbarWidth:"none" }}>
+            <Segments
+              taille="sm"
+              ariaLabel="Filtrer les résultats"
+              valeur={category}
+              onChange={v => { setCategory(v); setDisplayCount(20); }}
+              options={[
+                { valeur: "all", libelle: "Tous" },
+                { valeur: "PORTEFEUILLE", libelle: "Portefeuilles" },
+                { valeur: "EQUITY", libelle: "Actions" },
+                { valeur: "ETF", libelle: "Fonds" },
+                { valeur: "INDEX", libelle: "Indices" },
+                { valeur: "CRYPTOCURRENCY", libelle: "Crypto" },
+              ]}
+            />
           </div>
 
           {/* ⚠️ La liste seule défile, et c'est elle qui porte la hauteur : `flex: 1` sur un
