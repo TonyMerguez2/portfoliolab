@@ -165,11 +165,11 @@ const silhouette = (h: number) => {
   const l = LARGEUR - EPINE, r = RACCORD, v = ETALEMENT;
   return [
     "M0,0",
-    `A${r},${r} 0 0 1 ${l / 2},${v / 2}`,
-    `A${r},${r} 0 0 0 ${l},${v}`,
+    `A${r},${r} 0 0 0 ${l / 2},${v / 2}`,
+    `A${r},${r} 0 0 1 ${l},${v}`,
     `L${l},${h - v}`,
-    `A${r},${r} 0 0 1 ${l / 2},${h - v / 2}`,
-    `A${r},${r} 0 0 0 0,${h}`,
+    `A${r},${r} 0 0 0 ${l / 2},${h - v / 2}`,
+    `A${r},${r} 0 0 1 0,${h}`,
     "Z",
   ].join(" ");
 };
