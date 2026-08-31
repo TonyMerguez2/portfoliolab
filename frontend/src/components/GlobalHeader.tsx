@@ -8,17 +8,7 @@ import { TRENDING } from "@/lib/assets";
 import AssetLogo from "@/components/AssetLogo";
 import AvatarNovac from "@/components/AvatarNovac";
 import { lireApparenceAvatar } from "@/lib/useCouleurAvatar";
-import PastilleEnveloppe from "@/components/portfolio/PastilleEnveloppe";
-import { enveloppe, infobulleEnveloppe } from "@/lib/portfolio";
-import { assetExchange } from "@/lib/assets";
 
-/**
- * Taille de la vignette d'un portefeuille dans la liste du menu déroulant.
- *
- * Voir la mise en garde à l'endroit où elle sert : 48 est le plus petit nombre
- * qui laisse tenir à la fois le logo de la première ligne et une pastille
- * d'enveloppe lisible.
- */
 /**
  * Le côté de la vignette d'un portefeuille dans la palette.
  *
@@ -134,9 +124,6 @@ const LignePortefeuille = memo(function LignePortefeuille(
   /* ⚠️ Gardé sur le portefeuille : la liste se refiltre à chaque frappe, et relire le
      stockage à chaque rendu ferait vingt lectures par lettre tapée. */
   const apparence = useMemo(() => lireApparenceAvatar(p), [p]);
-  const enveloppeLigne = useMemo(
-    () => enveloppe((p.assets ?? []).map(a => a.ticker), assetExchange),
-    [p.assets]);
   return (
     <div onClick={() => onSelect(p)} data-idx={idx}
       onMouseEnter={() => setSurvol(true)}
@@ -163,18 +150,19 @@ const LignePortefeuille = memo(function LignePortefeuille(
         * tournent pas ensemble vers le curseur — ce qui, à cette taille, se lirait comme un
         * défaut plutôt que comme une présence.
         *
-        * ⚠️ **La pastille d'enveloppe reste.** Elle dit PEA, CTO ou crypto — une information
-        * que ni le nom ni l'avatar ne portent, et qui départage justement deux portefeuilles
-        * nommés pareil.
+        * ⚠️ **La pastille d'enveloppe a été retirée, et elle avait deux torts.** Elle
+        * annonçait PEA, CTO ou crypto par-dessus l'avatar — une information vraie, mais posée
+        * *sur* le seul endroit de la ligne qui serve à reconnaître le portefeuille. Elle
+        * mordait donc le portrait qu'on venait d'y mettre. Et son diamètre de vingt sur une
+        * vignette descendue à vingt-huit en recouvrait plus de la moitié : elle tenait sur
+        * les quarante-huit d'avant, pas ici. Retirée à l'usage.
+        *
+        * ⚠️ **Ce qu'on perd.** Deux portefeuilles nommés pareil et de même apparence ne se
+        * départagent plus dans cette liste. Le cas existe ; il est rare, et l'enveloppe se lit
+        * sur le dossier une fois le portefeuille ouvert.
         */}
-      <span style={{ position:"relative", display:"inline-flex", flexShrink:0 }}>
-        <AvatarNovac taille={VIGNETTE} couleur={apparence.couleur} forme={apparence.forme}
-          skin={apparence.skin} suivi={false} />
-        {enveloppeLigne && (
-          <PastilleEnveloppe enveloppe={enveloppeLigne} diametre={20}
-            infobulle={infobulleEnveloppe(enveloppeLigne)} />
-        )}
-      </span>
+      <AvatarNovac taille={VIGNETTE} couleur={apparence.couleur} forme={apparence.forme}
+        skin={apparence.skin} suivi={false} />
       <span style={{ color:"#F8F9FC", fontSize:"11px", fontWeight:500, flex:1, textAlign:"left" }}>{p.name}</span>
       {actif && (
         <span style={{ fontSize:"9px", color:JETONS.positif, fontWeight:600, letterSpacing:"0.04em" }}>OUVERT</span>
