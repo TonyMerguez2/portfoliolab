@@ -20,7 +20,7 @@ import { assetExchange } from "@/lib/assets";
  */
 const VIGNETTE = 48;
 import { JETONS, RAYONS, rayonVignette } from "@/lib/palette";
-import Cadre from "@/components/ui/Cadre";
+import FenetreModale from "@/components/ui/FenetreModale";
 import { initiale } from "@/lib/initiale";
 import { encreSur } from "@/lib/couleur";
 import { API_URL } from "@/lib/api";
@@ -179,7 +179,6 @@ export default function GlobalHeader() {
   const { mode, setMode, activePortfolio, setActivePortfolio, activeAsset, setActiveAsset, displayMode, toggleDisplayMode } = useApp();
   const [localSearch, setLocalSearch] = useState("");
   const [searchResults, setSearchResults] = useState<Asset[]>([]);
-  const [showDropdown, setShowDropdown] = useState(false);
   const [showSearch, setShowSearch] = useState(false);
   const searchRef = useRef<HTMLInputElement>(null);
   const [portfolios, setPortfolios] = useState<Portefeuille[]>([]);
@@ -194,7 +193,6 @@ export default function GlobalHeader() {
   const [highlightIndex, setHighlightIndex] = useState(-1);
   const debounce = useRef<NodeJS.Timeout | undefined>(undefined);
   const listRef = useRef<HTMLDivElement>(null);
-  const inputRef = useRef<HTMLInputElement>(null);
   const isLanding = pathname === "/";
   const isChartPage = pathname === "/chart";
   useEffect(() => {
@@ -219,20 +217,6 @@ export default function GlobalHeader() {
   useEffect(() => surModification(p => {
     setPortfolios(l => l.map(x => (x.id === p.id ? { ...x, ...p } : x)));
   }), []);
-
-  // ⌘K shortcut
-  useEffect(() => {
-    const h = (e: KeyboardEvent) => {
-      if ((e.metaKey || e.ctrlKey) && e.key === "k") {
-        e.preventDefault();
-        setMode("asset");
-        setShowDropdown(true);
-        setTimeout(() => inputRef.current?.focus(), 50);
-      }
-    };
-    document.addEventListener("keydown", h);
-    return () => document.removeEventListener("keydown", h);
-  }, []);
 
   // Ticker tape
   useEffect(() => {
@@ -298,10 +282,10 @@ export default function GlobalHeader() {
 
   // Load prices when dropdown opens
   useEffect(() => {
-    if (!showDropdown || mode !== "asset") return;
+    if (!showSearch || mode !== "asset") return;
     const visible = filteredAssets.slice(0, displayCount);
     fetchPrices(visible.map(a => a.ticker));
-  }, [showDropdown, category, displayCount, mode]);
+  }, [showSearch, category, displayCount, mode]);
 
   // Scroll infini
   const handleScroll = () => {
@@ -338,39 +322,52 @@ export default function GlobalHeader() {
       color: p.color || "#6366F1" });
     setMode("portfolio");
     setShowSearch(false);
-    setShowDropdown(false);
+    setShowSearch(false);
     setLocalSearch("");
     router.push(`/portfolio?id=${encodeURIComponent(p.id)}`);
   }, [setActivePortfolio, setMode, router]);
 
   const displayAssets = localSearch ? searchResults.filter(a => category === "all" || a.type === category) : filteredAssets.slice(0, displayCount);
 
+  /**
+   * ⚠️ **Fermer, c'est trois choses et non une.** La palette se refermait par des suites
+   * recopiées — parfois `setShowSearch(false)` seul, parfois avec la remise à zéro de
+   * l'index, parfois avec un `blur()`. Rouverte, elle gardait alors la ligne surlignée de
+   * la fois d'avant. Un seul geste, appelé de partout.
+   */
+  const fermerPalette = useCallback(() => {
+    setShowSearch(false);
+    setHighlightIndex(-1);
+  }, []);
+
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (!showDropdown) return;
+    if (!showSearch) return;
     if (e.key === "ArrowDown") { e.preventDefault(); setHighlightIndex(i => Math.min(i + 1, displayAssets.length - 1)); }
     else if (e.key === "ArrowUp") { e.preventDefault(); setHighlightIndex(i => Math.max(i - 1, -1)); }
     else if (e.key === "Enter") {
       e.preventDefault();
       const a = displayAssets[highlightIndex];
-      if (a) { setActiveAsset({ ticker: a.ticker, name: a.name }); setShowDropdown(false); setLocalSearch(""); setHighlightIndex(-1); }
+      if (a) { setActiveAsset({ ticker: a.ticker, name: a.name }); setShowSearch(false); setLocalSearch(""); setHighlightIndex(-1); }
     }
-    else if (e.key === "Escape") { setShowDropdown(false); setHighlightIndex(-1); inputRef.current?.blur(); }
+    else if (e.key === "Escape") fermerPalette();
   };
 
   // ⌘K, comme dans la maquette. Le raccourci est posé sur le document parce que
-  // le champ n'a pas le focus au moment où on veut l'y amener.
+  // le déclencheur n'a pas le focus au moment où l'on veut ouvrir la palette.
+  //
+  // ⚠️ Plus de `focus()` différé : la fenêtre se monte à l'ouverture, et son champ porte
+  // `autoFocus` — React le lui donne au montage, sans minuterie à accorder.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
         e.preventDefault();
         setShowSearch(true);
-        searchRef.current?.focus();
       }
-      if (e.key === "Escape") setShowSearch(false);
+      if (e.key === "Escape") fermerPalette();
     };
     document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);
-  }, []);
+  }, [fermerPalette]);
 
   useEffect(() => {
     if (highlightIndex < 0 || !listRef.current) return;
@@ -388,7 +385,7 @@ export default function GlobalHeader() {
 
   const handleSelect = useCallback((a: Asset) => {
     setActiveAsset({ ticker: a.ticker, name: a.name });
-    setShowDropdown(false);
+    setShowSearch(false);
     setLocalSearch("");
     setHighlightIndex(-1);
     // Sur la page chart : naviguer directement vers le nouvel actif
@@ -397,7 +394,7 @@ export default function GlobalHeader() {
 
   const handleChart = useCallback((ticker: string) => {
     router.push(`/chart?ticker=${encodeURIComponent(ticker)}`);
-    setShowDropdown(false);
+    setShowSearch(false);
   }, [router]);
 
   return (
@@ -412,139 +409,147 @@ export default function GlobalHeader() {
 
       {/* La navigation vit désormais dans SideNav, en panneau latéral. */}
 
-      {showDropdown && <div style={{ position:"fixed", inset:0, zIndex:49 }} onClick={() => setShowDropdown(false)}/>}
 
-
-      {/* Recherche globale, au bord droit du bandeau.
-          Elle n'existait que repliée dans le menu du portefeuille, et sur la
-          page portefeuille ce menu ne montre que les portefeuilles : il n'y
-          avait donc aucun moyen de chercher un actif depuis cette page.
-
-          ⚠️ **Elle ne suit plus la barre latérale, et c'est ce qui simplifie tout.**
-          Calée à gauche, elle partait de `--novac-nav-w` — 232 dépliée, bien moins
-          repliée — et il fallait lui donner la transition de `.novac-shell`, même
-          durée et même courbe, pour qu'elle glisse avec le panneau au lieu de sauter
-          quand il se termine. Ancrée au bord droit, elle ne dépend plus de rien : le
-          repli de la barre ne la déplace pas, donc il n'y a plus rien à synchroniser.
-
-          ⚠️ Le conteneur est `fixed`, ce qui suffit à ancrer le panneau de
-          résultats en dessous : un `position: relative` intermédiaire, qu'il y
-          avait ici, ne servait plus à rien. */}
-      <div style={{
-        position:"fixed", top:"12px", right:"20px",
-        zIndex:50, width:"320px",
-      }}>
-        <div style={{
+      {/**
+        * Le déclencheur de la recherche, au bord droit du bandeau.
+        *
+        * ⚠️ **Ce n'est plus un champ, c'est un bouton — et la différence est le sujet.** La
+        * recherche s'écrivait ici même, et ses résultats tombaient dans un panneau accroché
+        * sous le champ : la troisième surface flottante de l'application, avec ses propres
+        * marges, sa propre largeur et son propre ancrage. Demandé à l'usage de la faire
+        * s'ouvrir « comme une page, comme pour ajouter une opération ». Elle se pose donc
+        * désormais dans une `FenetreModale`, au centre, sur le même voile que les quatre
+        * autres — et ce qui reste au bandeau n'a plus qu'à *annoncer* la recherche.
+        *
+        * ⚠️ **Il garde exactement l'aspect du champ qu'il remplace.** Même hauteur, même
+        * aplat, même loupe, même phrase : ce qu'on cliquait continue de se cliquer au même
+        * endroit et de la même façon. Seul ce qui s'ouvre a changé.
+        *
+        * ⚠️ **Le texte est un `span`, plus un `placeholder`.** Un champ désactivé aurait
+        * gardé un curseur de saisie et l'annonce « champ de texte » aux technologies
+        * d'assistance, pour une boîte où l'on ne peut rien écrire.
+        */}
+      <button type="button" onClick={() => setShowSearch(true)}
+        aria-label="Rechercher un actif, un ETF, un indice"
+        style={{
+          position:"fixed", top:"12px", right:"20px", zIndex:50, width:"320px",
           display:"flex", alignItems:"center", gap:"8px", height:"36px", padding:"0 12px",
-          borderRadius:RAYONS.md, boxSizing:"border-box",
-          // Un aplat sombre et sans liseré, comme le concept : le champ y est
-          // un creux dans le bandeau, pas un objet cerné posé dessus. Le verre
-          // translucide qu'il portait le laissait flotter entre les deux.
-          background:JETONS.segmentPiste,
-          border:"none",
-          outline: showSearch ? `1px solid ${JETONS.accentBord}` : "none",
-          transition:"outline-color 150ms",
+          borderRadius:RAYONS.md, boxSizing:"border-box", cursor:"pointer",
+          background:JETONS.segmentPiste, border:"none", outline:"none",
+          textAlign:"left",
         }}>
-          {/* La loupe du concept, comme la roue à côté.
-              Les deux tracés occupent 18 unités sur 24, à partir de (3,3) —
-              mesuré, pas supposé. C'est leur grille : tous leurs pictogrammes
-              tiennent dans le même carré. Deux boîtes égales suffisent donc à
-              les apparier, et les calculs d'emprise que j'ai refaits trois
-              fois pour accorder un dessin maison à un autre n'ont plus lieu
-              d'être. Régler ce genre de chose une icône à la fois était le
-              symptôme ; la cause était de dessiner hors de leur grille.
+        {/* La loupe du concept. Trait de 2,0 et non 1,5 : leur valeur suppose un rendu à
+            24 px, où elle donne 1,5. Sur une boîte de 18 il faut 2,0 pour ce poids. */}
+        <svg width="18" height="18" fill="none" viewBox="0 0 24 24" stroke="currentColor"
+          strokeWidth={2.0} strokeLinecap="round" strokeLinejoin="round"
+          style={{ flexShrink:0, color:JETONS.texteIntense }}>
+          <path d="m21 21-6-6M3 10a7 7 0 1 0 14 0 7 7 0 0 0-14 0"/>
+        </svg>
+        <span style={{ color:JETONS.texte, fontSize:"12px", opacity:0.55, flex:1, minWidth:0,
+          overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>
+          Rechercher un actif, un ETF, un indice…
+        </span>
+      </button>
 
-              Trait de 2,0, non de 1,5 : leur valeur suppose un rendu à 24 px,
-              où elle donne 1,5 px. Sur une boîte de 18 il faut 2,0 pour
-              retrouver ce poids. */}
-          <svg width="18" height="18" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.0}
-            strokeLinecap="round" strokeLinejoin="round"
-            style={{ flexShrink:0, color:JETONS.texteIntense }}>
-            <path d="m21 21-6-6M3 10a7 7 0 1 0 14 0 7 7 0 0 0-14 0"/>
-          </svg>
-          <input ref={searchRef} value={localSearch}
-            onChange={e => { setLocalSearch(e.target.value); setHighlightIndex(-1); setShowSearch(true); }}
-            onFocus={() => setShowSearch(true)}
-            onKeyDown={handleKeyDown}
-            placeholder="Rechercher un actif, un ETF, un indice…"
-            style={{ background:"transparent", border:"none", outline:"none", color:JETONS.texte, fontSize:"12px", flex:1, minWidth:0 }}/>
-          {/* Le champ vide ne montre plus rien à droite : les deux capuchons
-              ⌘ et K ont été retirés. Le raccourci lui-même reste actif — il
-              est posé sur le document, pas sur ces touches dessinées. */}
-          {localSearch && (
-            <button onMouseDown={e => e.preventDefault()}
-              onClick={() => { setLocalSearch(""); setSearchResults([]); setHighlightIndex(-1); }}
-              style={{ background:"transparent", border:"none", cursor:"pointer", opacity:0.4, color:JETONS.texte, padding:0, fontSize:"12px" }}>✕</button>
-          )}
-        </div>
-
-        {showSearch && (
-          // ⚠️ **Ancré à droite, et l'ancrage suit le champ.** Le panneau fait 420 de
-          // large pour un champ de 320 : il déborde donc de cent pixels du côté opposé à
-          // son ancrage. Accroché à gauche alors que le champ est au bord droit, ces cent
-          // pixels sortiraient de la fenêtre. Accroché à droite, ils tombent vers
-          // l'intérieur de la page, où il y a la place. C'est la même erreur qu'au
-          // déplacement précédent, en miroir : le champ avait bougé, pas l'ancrage — et le
-          // panneau passait alors sous la barre latérale, qu'il recouvrait.
-          /**
-           * ⚠️ **Le panneau prend le cadre de la page, comme les fenêtres.** Il portait un
-           * bleu translucide, un bord blanc à 10 %, un rayon de 12 et une ombre écrite ici
-           * — quatre valeurs propres à ce seul endroit. C'est la troisième surface flottante
-           * de l'application, et la dernière à ne pas ressembler aux deux autres.
-           *
-           * ⚠️ **Il naît de son ancrage, pas de son centre.** L'animation partagée avec les
-           * fenêtres est reprise avec une origine en haut à droite : le panneau est accroché
-           * au champ de recherche, et grandir depuis son milieu le ferait venir d'ailleurs
-           * que de l'endroit qu'on vient de toucher.
-           *
-           * ⚠️ **Un porteur enveloppe `Cadre` au lieu de lui passer sa place.** Ce composant
-           * répartit le style entre ses deux couches d'après une liste de clés de
-           * placement, où ne figurent ni `position`, ni `top`, ni `zIndex` : elles
-           * seraient tombées sur la carte intérieure, qui se serait décrochée de son
-           * anneau resté, lui, dans le flux. Le porteur prend donc la place et
-           * l'animation ; `Cadre` ne fait que dessiner.
-           *
-           * ⚠️ **`overflow: hidden` va bien à la carte**, elle : c'est elle qui porte le
-           * rayon, donc elle qui doit rogner la liste qui la déborde.
-           */
-          <div onMouseDown={e => e.preventDefault()} className="novac-panneau-ancre"
-            style={{ position:"absolute", top:"calc(100% + 6px)", right:0, width:"420px", zIndex:60 }}>
-          <Cadre style={{ overflow:"hidden" }}>
-            <div style={{ display:"flex", gap:"2px", padding:"6px 8px", borderBottom:"1px solid rgba(255,255,255,0.06)" }}>
-              {[{id:"all",label:"Tous"},{id:"EQUITY",label:"Actions"},{id:"ETF",label:"Fonds"},{id:"INDEX",label:"Indices"},{id:"CRYPTOCURRENCY",label:"Crypto"}].map(cat => (
-                <button key={cat.id} onClick={() => { setCategory(cat.id); setDisplayCount(20); }}
-                  style={{ padding:"3px 10px", borderRadius:"6px", border:"none", fontSize:"10px", cursor:"pointer",
-                    background:category===cat.id?"rgba(91,141,239,0.2)":"transparent",
-                    color:category===cat.id?"#9BB9FF":"rgba(255,255,255,0.4)",
-                    fontWeight:category===cat.id?600:400, letterSpacing:"0.04em" }}>{cat.label}</button>
-              ))}
-            </div>
-            <div ref={listRef} onScroll={handleScroll} style={{ maxHeight:"320px", overflowY:"auto" }}>
-              {portefeuillesTrouves.length > 0 && (
-                <>
-                  <div style={{ padding:"6px 12px 2px", color:"rgba(255,255,255,0.2)", fontSize:"9px", letterSpacing:"0.12em" }}>PORTEFEUILLES</div>
-                  {portefeuillesTrouves.map(p => (
-                    <LignePortefeuille key={p.id} p={p}
-                      actif={String(activePortfolio?.id ?? "") === String(p.id)}
-                      onSelect={ouvrirPortefeuille} />
-                  ))}
-                </>
-              )}
-              {!localSearch && <div style={{ padding:"6px 12px 2px", color:"rgba(255,255,255,0.2)", fontSize:"9px", letterSpacing:"0.12em" }}>POPULAIRES</div>}
-              {displayAssets.map((a, i) => (
-                <AssetRow key={a.ticker} a={a} highlighted={i===0 && !!localSearch} focused={i===highlightIndex}
-                  idx={i} price={prices[a.ticker]}
-                  onSelect={x => { handleSelect(x); setShowSearch(false); }}
-                  onChart={x => { handleChart(x); setShowSearch(false); }}/>
-              ))}
-              {localSearch && displayAssets.length === 0 && portefeuillesTrouves.length === 0 && !isSearching && (
-                <div style={{ padding:"18px 14px", textAlign:"center", color:"rgba(255,255,255,0.25)", fontSize:"11px" }}>Aucun résultat</div>
-              )}
-            </div>
-          </Cadre>
+      {showSearch && (
+        /**
+         * ⚠️ **La fenêtre partagée, et non une quatrième recette.** Elle apporte le voile, le
+         * centrage, l'animation, `aria-modal` et la fermeture au clic dehors — quatre choses
+         * que le panneau ancré réécrivait pour lui seul, dont un voile invisible en `zIndex`
+         * 49 qu'il fallait poser deux fois.
+         *
+         * ⚠️ **Rembourrage nul et débordement caché, contre les valeurs par défaut.** Une
+         * fenêtre ordinaire respire de 18 sur 20 et fait défiler tout son contenu ; une
+         * palette veut que son champ touche les bords et que **seule la liste** défile, le
+         * champ et le pied restant en place. Les trois valeurs sont passées en `style`, que
+         * `FenetreModale` étale après les siennes.
+         */
+        <FenetreModale largeur={560} etiquette="Recherche"
+          onFermer={fermerPalette}
+          style={{ padding:0, gap:0, overflow:"hidden" }}>
+          {/* Le champ, en tête et sur toute la largeur. */}
+          <div style={{ display:"flex", alignItems:"center", gap:"10px",
+            padding:"14px 18px", borderBottom:`1px solid ${JETONS.bord}` }}>
+            <svg width="20" height="20" fill="none" viewBox="0 0 24 24" stroke="currentColor"
+              strokeWidth={2.0} strokeLinecap="round" strokeLinejoin="round"
+              style={{ flexShrink:0, color:JETONS.texteIntense }}>
+              <path d="m21 21-6-6M3 10a7 7 0 1 0 14 0 7 7 0 0 0-14 0"/>
+            </svg>
+            {/* ⚠️ `autoFocus` plutôt qu'un `focus()` différé : la fenêtre se monte au moment
+                où on l'ouvre, donc le champ existe déjà quand React le pose. */}
+            <input ref={searchRef} value={localSearch} autoFocus
+              onChange={e => { setLocalSearch(e.target.value); setHighlightIndex(-1); }}
+              onKeyDown={handleKeyDown}
+              placeholder="Rechercher un actif, un ETF, un indice…"
+              style={{ background:"transparent", border:"none", outline:"none",
+                color:JETONS.texte, fontSize:"15px", flex:1, minWidth:0 }}/>
+            {localSearch && (
+              <button onClick={() => { setLocalSearch(""); setSearchResults([]); setHighlightIndex(-1); }}
+                aria-label="Effacer la recherche"
+                style={{ background:"transparent", border:"none", cursor:"pointer", opacity:0.4,
+                  color:JETONS.texte, padding:0, fontSize:"13px" }}>✕</button>
+            )}
           </div>
-        )}
-        </div>
+
+          <div style={{ display:"flex", gap:"2px", padding:"8px 14px",
+            borderBottom:`1px solid ${JETONS.bord}` }}>
+            {[{id:"all",label:"Tous"},{id:"EQUITY",label:"Actions"},{id:"ETF",label:"Fonds"},{id:"INDEX",label:"Indices"},{id:"CRYPTOCURRENCY",label:"Crypto"}].map(cat => (
+              <button key={cat.id} onClick={() => { setCategory(cat.id); setDisplayCount(20); }}
+                style={{ padding:"4px 11px", borderRadius:"6px", border:"none", fontSize:"11px", cursor:"pointer",
+                  background:category===cat.id?"rgba(91,141,239,0.2)":"transparent",
+                  color:category===cat.id?"#9BB9FF":"rgba(255,255,255,0.4)",
+                  fontWeight:category===cat.id?600:400, letterSpacing:"0.04em" }}>{cat.label}</button>
+            ))}
+          </div>
+
+          {/* ⚠️ La liste seule défile, et c'est elle qui porte la hauteur : `flex: 1` sur un
+              parent en colonne, plus un plafond, pour que la fenêtre ne grandisse pas au
+              rythme des résultats. */}
+          <div ref={listRef} onScroll={handleScroll}
+            style={{ flex:1, minHeight:0, maxHeight:"46vh", overflowY:"auto" }}>
+            {portefeuillesTrouves.length > 0 && (
+              <>
+                <div style={{ padding:"8px 14px 2px", color:"rgba(255,255,255,0.2)", fontSize:"9px", letterSpacing:"0.12em" }}>PORTEFEUILLES</div>
+                {portefeuillesTrouves.map(p => (
+                  <LignePortefeuille key={p.id} p={p}
+                    actif={String(activePortfolio?.id ?? "") === String(p.id)}
+                    onSelect={ouvrirPortefeuille} />
+                ))}
+              </>
+            )}
+            {!localSearch && <div style={{ padding:"8px 14px 2px", color:"rgba(255,255,255,0.2)", fontSize:"9px", letterSpacing:"0.12em" }}>POPULAIRES</div>}
+            {displayAssets.map((a, i) => (
+              <AssetRow key={a.ticker} a={a} highlighted={i===0 && !!localSearch} focused={i===highlightIndex}
+                idx={i} price={prices[a.ticker]}
+                onSelect={x => { handleSelect(x); fermerPalette(); }}
+                onChart={x => { handleChart(x); fermerPalette(); }}/>
+            ))}
+            {localSearch && displayAssets.length === 0 && portefeuillesTrouves.length === 0 && !isSearching && (
+              <div style={{ padding:"24px 14px", textAlign:"center", color:"rgba(255,255,255,0.25)", fontSize:"12px" }}>Aucun résultat</div>
+            )}
+          </div>
+
+          {/**
+            * ⚠️ **Le pied annonce les touches, parce qu'elles marchent enfin.** Les flèches
+            * et l'entrée étaient déjà écrites, mais gardées derrière un état que rien
+            * n'allumait plus : elles ne faisaient rien depuis longtemps, et personne ne
+            * pouvait le savoir puisque rien ne les annonçait. Les rendre visibles est ce qui
+            * oblige à les tenir.
+            */}
+          <div style={{ display:"flex", alignItems:"center", justifyContent:"flex-end", gap:"14px",
+            padding:"9px 14px", borderTop:`1px solid ${JETONS.bord}`,
+            color:"rgba(255,255,255,0.35)", fontSize:"11px" }}>
+            {[["↑ ↓","Naviguer"],["↵","Ouvrir"],["Esc","Fermer"]].map(([touche, quoi]) => (
+              <span key={quoi} style={{ display:"flex", alignItems:"center", gap:"6px" }}>
+                <kbd style={{ fontFamily:"inherit", fontSize:"10px", padding:"2px 6px",
+                  borderRadius:"5px", border:`1px solid ${JETONS.bord}`,
+                  color:"rgba(255,255,255,0.6)" }}>{touche}</kbd>
+                {quoi}
+              </span>
+            ))}
+          </div>
+        </FenetreModale>
+      )}
 
       {/**
         * La roue de réglage a été retirée du bandeau.
@@ -558,10 +563,6 @@ export default function GlobalHeader() {
         * n'avaient plus d'autre déclencheur. Rien d'autre ne les lisait ; le voile de
         * fermeture ne garde donc que la recherche.
         */}
-      {showSearch && (
-        <div style={{ position:"fixed", inset:0, zIndex:49 }}
-          onClick={() => setShowSearch(false)}/>
-      )}
     </>
   );
 }
