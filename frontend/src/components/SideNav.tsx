@@ -121,7 +121,6 @@ const ICONS = {
   chart:     "M4 19V5m0 14h16M8 15V9m4 6V6m4 9v-4",
   markets:   "M3 3v18h18M7 15l4-5 3 3 5-7",
   map:       "M9 4 3 6.5v13L9 17l6 2.5 6-2.5v-13L15 6.5zM9 4v13m6-10.5v13",
-  analysis:  "M12 3a9 9 0 1 0 9 9h-9z M13 3.5A8.5 8.5 0 0 1 20.5 11H13z",
   simulation:"M6 20V10m6 10V4m6 16v-7",
   reglages:  "M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-2.8 1.17V21a2 2 0 1 1-4 0v-.1A1.65 1.65 0 0 0 7.9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 3 15.1a1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 8.9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 8.9 4.6h.1A1.65 1.65 0 0 0 10 3.09V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V10a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1",
   sun:       "M12 4V2m0 20v-2m8-8h2M2 12h2m13.7-5.7 1.4-1.4M4.9 19.1l1.4-1.4m0-11.4L4.9 4.9m14.2 14.2-1.4-1.4M16 12a4 4 0 1 1-8 0 4 4 0 0 1 8 0",
@@ -205,7 +204,7 @@ function Rangee({
 
 export default function SideNav() {
   const pathname = usePathname();
-  const { mode, activeAsset, displayMode, toggleDisplayMode } = useApp();
+  const { mode, activeAsset } = useApp();
   const modeTheme = useModeTheme();
 
   const [ready, setReady] = useState(false);
@@ -271,7 +270,13 @@ export default function SideNav() {
     first,
     { label: "Marchés",    href: "/treemap",    icon: icon(ICONS.markets) },
     { label: "Carte",      href: "/map",        icon: icon(ICONS.map) },
-    { label: "Analyse",    href: "/dashboard",  icon: icon(ICONS.analysis) },
+    /**
+     * ⚠️ **« Analyse » est retirée, et `/dashboard` n'est plus atteignable.** Le rail était
+     * le **seul** lien vers cette page dans toute l'application — vérifié par recherche, il
+     * n'en existe aucun autre. Ses sept cent quarante-cinq lignes sont donc désormais du code
+     * mort, servi par une route que rien ne mène à ouvrir. Retiré à l'usage ; la page n'a pas
+     * été supprimée pour autant, cela ne m'a pas été demandé.
+     */
     { label: "Simulation", href: "/simulation", icon: icon(ICONS.simulation) },
   ];
 
@@ -382,13 +387,23 @@ export default function SideNav() {
         } />
       )}
 
+      {/**
+        * ⚠️ **Il y avait deux bascules de thème, et la seconde ne se voyait presque jamais.**
+        * Elle appelait `toggleDisplayMode`, qui fait bien basculer l'état — mais `displayMode`
+        * n'est lu que par le graphique, la simulation et leurs courbes. Sur les cinq autres
+        * pages, dont celle d'où on l'actionnait le plus souvent, appuyer ne changeait rien à
+        * l'écran. Elle ne fonctionnait pas *là où on s'en servait*, ce qui revient au même.
+        * Retirée à l'usage.
+        *
+        * ⚠️ **Plus rien ne bascule le thème noir dans l'application.** `GlobalHeader` en
+        * extrait encore `toggleDisplayMode` du contexte, mais ne l'appelle nulle part — c'était
+        * déjà le cas avant. Le contexte, lui, reste entier : l'état existe, sa valeur par
+        * défaut est « verre », et le jour où le thème noir vaudra pour toutes les pages il y
+        * aura un interrupteur à rebrancher, pas un mode à réécrire.
+        */}
       <Rangee nom={modeTheme === "clair" ? "Thème sombre" : "Thème clair"}
         onClick={() => basculerMode()}
         enfant={icon(modeTheme === "clair" ? ICONS.moon : ICONS.sun)} />
-
-      <Rangee nom={displayMode === "black" ? "Thème verre" : "Thème noir"}
-        onClick={toggleDisplayMode}
-        enfant={icon(displayMode === "black" ? ICONS.sun : ICONS.moon)} />
     </nav>
 
     {/* Hors du <nav> à dessein : son backdrop-filter en fait le bloc conteneur
