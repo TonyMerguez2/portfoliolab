@@ -26,6 +26,22 @@ import { HAUTEUR_SAISIE, RAYON_SAISIE, champ } from "@/components/ui/saisie";
 import FenetreModale from "@/components/ui/FenetreModale";
 import { API_URL } from "@/lib/api";
 
+/**
+ * Le rayon des deux surfaces de recherche : le déclencheur du bandeau et le champ de la
+ * palette.
+ *
+ * ⚠️ **Celui de la fenêtre, et non celui des saisies.** `RAYON_SAISIE` vaut 18, qui est le
+ * rayon de la *carte* intérieure ; la fenêtre, elle, se voit arrondie à 24 par son anneau
+ * extérieur — et c'est ce bord-là qu'on a sous les yeux quand la palette est ouverte. Un
+ * champ posé à quatorze pixels du bord d'une fenêtre en portait donc six de moins qu'elle,
+ * ce qui se lit comme deux familles de coins. Demandé à l'usage : « même rayon que la page ».
+ *
+ * ⚠️ **Le déclencheur le prend aussi, alors qu'il n'est pas dans la fenêtre.** Ce sont les
+ * deux visages du même objet — l'un annonce ce que l'autre ouvre —, et ils se voient à une
+ * seconde d'intervalle. Deux rayons feraient deux boîtes.
+ */
+const RAYON_RECHERCHE = RAYONS.xl;
+
 type Asset = { ticker: string; type: string; name: string; };
 type Portefeuille = {
   id: string; name: string; color?: string | null; image_url?: string | null;
@@ -531,14 +547,27 @@ export default function GlobalHeader() {
         * gardé un curseur de saisie et l'annonce « champ de texte » aux technologies
         * d'assistance, pour une boîte où l'on ne peut rien écrire.
         */}
+      {/**
+        * ⚠️ **Il porte la même surface que le champ qu'il ouvre.** Il avait son propre aplat
+        * — `segmentPiste` —, aucun liseré, et un rayon de 14 choisi ici : trois valeurs qui
+        * ne se retrouvaient nulle part ailleurs, pour un objet qui annonce précisément un
+        * champ de saisie. `.novac-surface-saisie` lui donne le fond, le liseré transparent
+        * qui se colore au survol et le creusement au clic — la même réponse au geste que le
+        * champ de la palette. Relevé à l'usage.
+        *
+        * ⚠️ **Le fond n'est plus posé en ligne, et il ne peut pas l'être.** La classe porte
+        * le repos autant que le survol ; une règle en ligne l'emporterait sur elle, et le
+        * survol ne ferait plus rien. C'est la même contrainte que `.novac-bouton-doux`, dont
+        * le commentaire de `globals.css` dit déjà pourquoi.
+        */}
       <button type="button" onClick={() => setShowSearch(true)}
+        className="novac-surface-saisie"
         aria-label="Rechercher un actif, un ETF, un indice"
         style={{
           position:"fixed", top:"12px", right:"20px", zIndex:50, width:"320px",
           display:"flex", alignItems:"center", gap:"8px", height:"36px", padding:"0 12px",
-          borderRadius:RAYONS.md, boxSizing:"border-box", cursor:"pointer",
-          background:JETONS.segmentPiste, border:"none", outline:"none",
-          textAlign:"left",
+          borderRadius:RAYON_RECHERCHE, boxSizing:"border-box", cursor:"pointer",
+          outline:"none", textAlign:"left",
         }}>
         {/* La loupe du concept. Trait de 2,0 et non 1,5 : leur valeur suppose un rendu à
             24 px, où elle donne 1,5. Sur une boîte de 18 il faut 2,0 pour ce poids. */}
@@ -593,7 +622,7 @@ export default function GlobalHeader() {
             */}
           <div className="novac-surface-saisie" style={{ display:"flex", alignItems:"center",
             gap:"10px", height:HAUTEUR_SAISIE, padding:champ.padding,
-            borderRadius:RAYON_SAISIE, boxSizing:"border-box" }}>
+            borderRadius:RAYON_RECHERCHE, boxSizing:"border-box" }}>
             <svg width="20" height="20" fill="none" viewBox="0 0 24 24" stroke="currentColor"
               strokeWidth={2.0} strokeLinecap="round" strokeLinejoin="round"
               style={{ flexShrink:0, color:JETONS.texteIntense }}>
