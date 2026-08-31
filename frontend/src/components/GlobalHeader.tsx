@@ -19,8 +19,19 @@ import { assetExchange } from "@/lib/assets";
  * qui laisse tenir à la fois le logo de la première ligne et une pastille
  * d'enveloppe lisible.
  */
-const VIGNETTE = 48;
+/**
+ * Le côté de la vignette d'un portefeuille dans la palette.
+ *
+ * ⚠️ **Celui d'un logo d'actif, et pas un de plus.** Elle valait 48 du temps où elle portait
+ * une poche d'actifs : le logo de la première ligne n'apparaît qu'à partir de 40, et une
+ * pastille lisible ne descend pas sous 20 — deux seuils qui imposaient la hauteur. L'avatar
+ * n'a aucun de ces seuils, et une liste où portefeuilles et actifs se suivent doit les poser
+ * sur la même colonne : deux tailles de vignette font deux natures d'objet. Relevé à
+ * l'usage.
+ */
+const VIGNETTE = 28;
 import { JETONS, RAYONS } from "@/lib/palette";
+import { brandHex } from "@/lib/tileStyle";
 import FenetreModale from "@/components/ui/FenetreModale";
 import { API_URL } from "@/lib/api";
 
@@ -46,10 +57,23 @@ type AssetRowProps = {
 const AssetRow = memo(function AssetRow({ a, highlighted, focused, idx, price, onSelect, onChart }: AssetRowProps) {
   const tc = typeColor(a.type);
   const [hovered, setHovered] = useState(false);
+  /**
+   * ⚠️ **La ligne prend la teinte de l'actif, et non un bleu pour tous.** Elle se surlignait
+   * en `rgba(91,141,239,…)` — l'accent de l'application, le même sur Apple, Bitcoin et le
+   * CAC 40. Or chaque actif *a* une couleur, celle que portent déjà sa carte et sa tuile :
+   * la reprendre ici fait que la ligne visée s'annonce de la même couleur que ce qu'elle va
+   * ouvrir. Relevé à l'usage.
+   *
+   * ⚠️ **Deux alphas et non un.** Le survol et la sélection au clavier doivent se distinguer
+   * quand les deux tombent sur la même ligne — sans quoi déplacer la souris efface la trace
+   * du clavier. Le clavier appuie plus fort.
+   */
+  const teinte = brandHex(a.ticker);
+  const fond = focused ? `${teinte}2E` : hovered ? `${teinte}1A` : "transparent";
   return (
     <div
       data-idx={idx}
-      style={{ display:"flex", alignItems:"center", gap:"10px", width:"100%", padding:"8px 12px", background: focused ? "rgba(91,141,239,0.12)" : hovered ? "rgba(255,255,255,0.05)" : "transparent", cursor:"pointer", borderBottom:"1px solid rgba(255,255,255,0.04)", borderLeft: focused ? "2px solid rgba(91,141,239,0.6)" : "2px solid transparent", boxSizing:"border-box" as const }}
+      style={{ display:"flex", alignItems:"center", gap:"10px", width:"100%", padding:"8px 12px", background: fond, cursor:"pointer", borderRadius:RAYONS.sm, boxSizing:"border-box" as const }}
       onClick={() => onSelect(a)}
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}>
@@ -115,8 +139,8 @@ const LignePortefeuille = memo(function LignePortefeuille(
       style={{ display:"flex", alignItems:"center", gap:"10px", width:"100%", padding:"8px 12px",
         /* Le survol et la sélection au clavier disent la même chose et se peignent pareil :
            deux teintes pour un même état feraient croire à deux états. */
-        background: survol || focused ? "rgba(255,255,255,0.05)" : "transparent", cursor:"pointer",
-        borderBottom:"1px solid rgba(255,255,255,0.04)", boxSizing:"border-box" as const }}>
+        background: focused ? `${apparence.couleur}2E` : survol ? `${apparence.couleur}1A` : "transparent",
+        cursor:"pointer", borderRadius:RAYONS.sm, boxSizing:"border-box" as const }}>
       {/**
         * ⚠️ **L'avatar du portefeuille, et non plus sa poche d'actifs.** Cette vignette
         * montrait le contenu — une carte par actif, empilées — ou l'initiale du nom à trois
@@ -126,10 +150,13 @@ const LignePortefeuille = memo(function LignePortefeuille(
         * mieux à leur forme et à leur teinte qu'à six logos de trois pixels. Relevé à
         * l'usage — « au lieu d'afficher l'ancien logo ».
         *
-        * ⚠️ **Immobile et sans regard.** `vivant` et `suivi` sont coupés : vingt avatars qui
-        * respirent et suivent le curseur dans une liste qui se refiltre à chaque frappe font
-        * une volière, et chacun redessine son volume à chaque image. L'avatar est ici un
-        * portrait, pas une présence.
+        * ⚠️ **Vivant, mais sans regard.** Je les avais figés — vingt avatars qui respirent
+        * dans une liste qui se refiltre à chaque frappe, cela paraissait cher. Demandé à
+        * l'usage de les animer : ce qui coûte vraiment n'est pas la respiration mais le
+        * **suivi du curseur**, qui fait recalculer la direction du regard de chaque ligne à
+        * chaque mouvement de souris. `suivi` reste donc coupé, et vingt paires d'yeux ne se
+        * tournent pas ensemble vers le curseur — ce qui, à cette taille, se lirait comme un
+        * défaut plutôt que comme une présence.
         *
         * ⚠️ **La pastille d'enveloppe reste.** Elle dit PEA, CTO ou crypto — une information
         * que ni le nom ni l'avatar ne portent, et qui départage justement deux portefeuilles
@@ -137,7 +164,7 @@ const LignePortefeuille = memo(function LignePortefeuille(
         */}
       <span style={{ position:"relative", display:"inline-flex", flexShrink:0 }}>
         <AvatarNovac taille={VIGNETTE} couleur={apparence.couleur} forme={apparence.forme}
-          skin={apparence.skin} vivant={false} suivi={false} />
+          skin={apparence.skin} suivi={false} />
         {enveloppeLigne && (
           <PastilleEnveloppe enveloppe={enveloppeLigne} diametre={20}
             infobulle={infobulleEnveloppe(enveloppeLigne)} />
@@ -499,9 +526,23 @@ export default function GlobalHeader() {
         <FenetreModale largeur={560} etiquette="Recherche"
           onFermer={fermerPalette}
           style={{ padding:0, gap:0, overflow:"hidden" }}>
-          {/* Le champ, en tête et sur toute la largeur. */}
+          {/**
+            * Le champ, en tête.
+            *
+            * ⚠️ **Une pilule cernée, et non une bande à ras bord.** Il touchait les deux
+            * flancs de la fenêtre et ne se distinguait du reste que par le filet du dessous :
+            * on lisait un en-tête, pas un endroit où écrire. Sur le concept, c'est un objet
+            * posé *dans* la fenêtre — cerné, arrondi, avec de l'air tout autour. La
+            * différence n'est pas décorative : c'est elle qui dit « le curseur est ici ».
+            *
+            * ⚠️ **Le filet du dessous reste, lui.** Il ne cerne plus le champ, il sépare la
+            * saisie des résultats — deux rôles que la même ligne tenait, et dont un seul
+            * survit à l'encadrement.
+            */}
+          <div style={{ padding:"14px 14px 12px", borderBottom:`1px solid ${JETONS.bord}` }}>
           <div style={{ display:"flex", alignItems:"center", gap:"10px",
-            padding:"14px 18px", borderBottom:`1px solid ${JETONS.bord}` }}>
+            padding:"10px 16px", borderRadius:RAYONS.plein,
+            border:`1px solid ${JETONS.bord}`, background:JETONS.segmentPiste }}>
             <svg width="20" height="20" fill="none" viewBox="0 0 24 24" stroke="currentColor"
               strokeWidth={2.0} strokeLinecap="round" strokeLinejoin="round"
               style={{ flexShrink:0, color:JETONS.texteIntense }}>
@@ -522,6 +563,7 @@ export default function GlobalHeader() {
                   color:JETONS.texte, padding:0, fontSize:"13px" }}>✕</button>
             )}
           </div>
+          </div>
 
           <div style={{ display:"flex", gap:"2px", padding:"8px 14px",
             borderBottom:`1px solid ${JETONS.bord}` }}>
@@ -538,7 +580,7 @@ export default function GlobalHeader() {
               parent en colonne, plus un plafond, pour que la fenêtre ne grandisse pas au
               rythme des résultats. */}
           <div ref={listRef} onScroll={handleScroll}
-            style={{ flex:1, minHeight:0, maxHeight:"46vh", overflowY:"auto" }}>
+            style={{ flex:1, minHeight:0, maxHeight:"46vh", overflowY:"auto", padding:"0 8px 8px" }}>
             {resultats.map((r, i) => {
               /* L'en-tête paraît au premier de chaque genre, et nulle part ailleurs :
                  c'est la suite qui le décide, pas deux blocs écrits à la file. */
