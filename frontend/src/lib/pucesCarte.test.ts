@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 
-import { DEBORD_PLAGE, MOTIFS_PUCE, REPERE_PUCE, motifPour } from "./pucesCarte";
+import {
+  DEBORD_PLAGE, FONDS_CARTE, MOTIFS_PUCE, REPERE_PUCE, fondPour, motifPour,
+} from "./pucesCarte";
 
 /**
  * Les sommets d'une plage, retrouvés dans son tracé.
@@ -139,5 +141,55 @@ describe("l'attribution d'une puce", () => {
 
     const suite = Array.from({ length: 40 }, (_, i) => String(i + 1));
     expect(new Set(suite.map(motifPour)).size).toBe(MOTIFS_PUCE.length);
+  });
+});
+
+/**
+ * ⚠️ **Ce qu'on grave sur une carte est un *couple*, jamais une puce ni un fond seuls.**
+ * Deux tirages irréprochables pris séparément peuvent s'accorder mal : c'est arrivé en
+ * passant les fonds de cinq à trois. Trois divise six, et sur une clé d'un seul caractère les
+ * deux sommes valent chacune « une constante plus le code du caractère » — donc affines en un
+ * même nombre. `% 3` est alors une fonction de `% 6` : la puce déterminait entièrement le
+ * fond, six couples au lieu de dix-huit, et rien dans les tests d'alors ne s'en plaignait.
+ *
+ * ⚠️ **Les deux propriétés ci-dessous ne se déduisent pas l'une de l'autre**, et c'est
+ * pourquoi il en faut deux. Un tirage peut couvrir toutes les combinaisons tout en posant
+ * deux cartes jumelles côte à côte (mesuré : c'est ce que faisait une passe d'avalanche, sur
+ * les comptes 3 et 4). Un autre peut ne jamais répéter deux voisines tout en n'explorant
+ * qu'un tiers des couples. La première se voit à l'écran, la seconde à l'usage.
+ */
+describe("le couple puce × fond", () => {
+  const carte = (n: number) => {
+    const cle = String(n);
+    return `${motifPour(cle)}-${fondPour(cle)}`;
+  };
+
+  it("rend toujours un fond existant, et le même pour la même clé", () => {
+    for (const cle of ["", "a", "PEA Bourso", "42", "x".repeat(500)]) {
+      const n = fondPour(cle);
+      expect(Number.isInteger(n)).toBe(true);
+      expect(n).toBeGreaterThanOrEqual(0);
+      expect(n).toBeLessThan(FONDS_CARTE);
+      expect(fondPour(cle)).toBe(n);
+    }
+  });
+
+  /**
+   * ⚠️ **Les identifiants se suivent, et les dossiers aussi.** Les comptes s'affichent dans
+   * l'ordre où ils ont été créés : deux cartes identiques ne resteront pas cachées au fond du
+   * jeu, elles seront voisines à l'écran. C'est le seul défaut de tirage qui se voie vraiment.
+   */
+  it("ne pose jamais deux cartes identiques côte à côte", () => {
+    const jumelles: string[] = [];
+    for (let n = 2; n <= 60; n++) {
+      if (carte(n) === carte(n - 1)) jumelles.push(`${n - 1} et ${n}`);
+    }
+    expect(jumelles).toEqual([]);
+  });
+
+  /** ⚠️ Toutes les combinaisons doivent servir, sans quoi des dessins sont morts-nés. */
+  it("finit par montrer les dix-huit combinaisons", () => {
+    const vues = new Set(Array.from({ length: 200 }, (_, i) => carte(i + 1)));
+    expect(vues.size).toBe(MOTIFS_PUCE.length * FONDS_CARTE);
   });
 });

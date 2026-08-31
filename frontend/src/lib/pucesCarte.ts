@@ -261,27 +261,33 @@ export function motifPour(cle: string): number {
 /**
  * Le fond gravé d'une carte : combien de dessins, et lequel revient à qui.
  *
- * ⚠️ **Cinq, et non un seul.** Le guillochis était unique : deux dossiers de trésorerie
+ * ⚠️ **Trois, et non un seul.** Le guillochis était unique : deux dossiers de trésorerie
  * côte à côte montraient exactement la même courbe au même endroit, ce qui les faisait lire
- * comme un motif d'interface plutôt que comme deux objets. Demandé à l'usage, sur le modèle
- * des puces. Les deux derniers viennent chacun d'une carte réelle montrée à l'usage : des
- * hachures fines traversées par des plans de lumière, puis un éventail d'arcs qui balaie le
- * coin haut-droit.
+ * comme un motif d'interface plutôt que comme deux objets. Il y en a eu cinq ; les ondes et
+ * les obliques ont été écartées à l'usage — trop régulières pour être une gravure. Les deux
+ * qui restent à côté de l'original viennent chacun d'une carte réelle.
  *
- * ⚠️ **Tirés indépendamment de la puce, et c'est une vraie contrainte.** Réutiliser
- * `motifPour` telle quelle aurait lié les deux : la puce n° 3 serait toujours venue avec le
- * fond n° 0, et l'on aurait vu six paires figées au lieu de trente combinaisons. Le sel
- * décale la somme avant le modulo, ce qui suffit à décorréler les deux tirages.
+ * ⚠️ **Le couple puce × fond se dégrade quand on retire un fond, et c'est le piège.**
+ * Descendre de cinq à trois n'a l'air de rien ; mais trois **divise** six. Sur une clé d'un
+ * seul caractère, les deux sommes valent chacune « une constante plus le code du
+ * caractère » : elles sont donc affines en un même nombre, et `% 3` devient alors une
+ * fonction de `% 6`. Mesuré : sur les neuf premiers comptes, la puce détermine entièrement
+ * le fond — six couples au lieu de dix-huit. Le sel ne sauve rien, il ne fait que décaler
+ * une droite.
  *
- * ⚠️ **Ce qui compte est le couple, pas le compte des fonds.** Mesuré sur les quarante
- * premiers identifiants : les trente paires puce × fond y sont toutes présentes, et les cinq
- * fonds tombent à 60/59/60/60/61 sur trois cents comptes. C'est cela qu'il faut revérifier en
- * ajoutant un dessin — deux tirages honnêtes pris séparément peuvent s'accorder mal.
+ * ⚠️ **On l'a laissé ainsi, et le remède était pire.** Une passe d'avalanche
+ * (`Math.imul`, décalages, ou-exclusif) casse bien l'affinité — mais elle casse aussi la
+ * rotation qui vient avec : mesuré, les comptes 3 et 4 recevaient alors une carte
+ * **identique**, et 38 et 39 de même. Deux voisins jumeaux se voient ; six couples au lieu
+ * de dix-huit ne se voit pas. Tel quel, sur les soixante premiers identifiants : aucune
+ * carte identique côte à côte, la première répétition entre le compte 1 et le compte 7, et
+ * les dix-huit combinaisons toutes présentes — les clés à deux chiffres suffisent à rompre
+ * l'affinité que les clés à un chiffre imposaient.
  *
  * ⚠️ **Même raison d'être que pour la puce : déduit, jamais tiré au sort.** Un
  * `Math.random()` regraverait le fond à chaque rendu.
  */
-export const FONDS_CARTE = 5;
+export const FONDS_CARTE = 3;
 
 export function fondPour(cle: string): number {
   let somme = 7919;

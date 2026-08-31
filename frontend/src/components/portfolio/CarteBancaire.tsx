@@ -209,6 +209,12 @@ function Guilloche({ id, fond }: { id: string; fond: number }) {
         * la *famille de courbes*, jamais l'endroit où elle passe — les trois traversent les
         * soixante-huit pixels visibles, faute de quoi elles n'existeraient que sous le plan.
         *
+        * ⚠️ **Il y en a eu cinq, et deux ont été écartées à l'usage.** Des ondes — quatre
+        * sinusoïdes parallèles — et des obliques droites. Elles avaient le défaut commun de
+        * n'être *que* régulières : un motif de fond d'écran, pas la gravure d'une carte. Ce
+        * qui reste a en commun de tourner. Les numéros ci-dessous sont ceux d'aujourd'hui,
+        * renumérotés sans trou ; la planche montrée à l'usage les appelait 0, 3 et 4.
+        *
         * ⚠️ **Toutes en blanc translucide, comme la première.** La carte prend l'une des
         * dix-neuf couleurs de dossier : une gravure teintée aurait été juste sur l'une et
         * fausse sur les dix-huit autres.
@@ -226,21 +232,6 @@ function Guilloche({ id, fond }: { id: string; fond: number }) {
           </>
         )}
         {fond === 1 && (
-          /**
-           * Des ondes : quatre sinusoïdes parallèles qui traversent la bande.
-           *
-           * ⚠️ **Écrites en courbes de Bézier plutôt qu'en `path` sinusoïdal exact.** Deux
-           * cubiques par période suffisent à l'œil sur une amplitude de neuf pixels, et
-           * restent lisibles dans le fichier — une sinusoïde échantillonnée aurait donné
-           * quarante nombres qu'on ne saurait plus relire.
-           */
-          [0, 1, 2, 3].map(i => (
-            <path key={i} d={`M-10 ${10 + i * 21} C ${L * 0.28} ${1 + i * 21},`
-              + ` ${L * 0.42} ${19 + i * 21}, ${L * 0.62} ${10 + i * 21}`
-              + ` S ${L * 0.9} ${1 + i * 21}, ${L + 10} ${8 + i * 21}`} />
-          ))
-        )}
-        {fond === 3 && (
           /**
            * Des hachures fines, et des plans de lumière qui les traversent.
            *
@@ -286,21 +277,6 @@ function Guilloche({ id, fond }: { id: string; fond: number }) {
         )}
         {fond === 2 && (
           /**
-           * Des obliques : un faisceau de droites parallèles, dans le sens de la lumière.
-           *
-           * ⚠️ **Inclinées à contresens du dégradé de teinte.** Le fond de la carte descend
-           * du clair au sombre vers le bas-droit ; des obliques dans le même sens auraient
-           * épaissi ce mouvement au lieu de le croiser, et la surface serait redevenue plate.
-           *
-           * ⚠️ **L'écart est serré au point qu'on ne les compte pas.** Vingt-six pixels : à
-           * quarante on lisait des traits isolés, ce qui est un décor et non une matière.
-           */
-          [0, 1, 2, 3, 4, 5, 6].map(i => (
-            <path key={i} d={`M${-40 + i * 26} ${H + 10} L${40 + i * 26} -10`} />
-          ))
-        )}
-        {fond === 4 && (
-          /**
            * Un éventail d'arcs qui balaie le coin haut-droit.
            *
            * ⚠️ **Ce n'est pas le premier guillochis avec un autre centre.** Le fond n° 0 pose
@@ -310,51 +286,57 @@ function Guilloche({ id, fond }: { id: string; fond: number }) {
            * supérieur et ressortent par le bord droit. Deux familles opposées, et non deux
            * réglages de la même.
            *
-           * ⚠️ **Il occupe le coin haut-droit, et c'est ce qui le rend possible ici.** La bande
-           * que le dossier laisse voir porte la puce à gauche et le nom du compte à sa suite ;
-           * le coin haut-droit, lui, est resté vide à dessein — le titre porte `flex: 1` et
-           * pousse le vide jusqu'au bord. Le premier arc entre par le bord supérieur à 121,
-           * soit après la puce et au-delà de la tête du titre : l'éventail effleure la fin
-           * d'un nom long et laisse tout le reste intact, là où les autres fonds traversent la
-           * carte de part en part.
-           *
            * ⚠️ **Le centre est dans la carte, et il a fallu l'y ramener.** Premier essai :
            * centre sous le bord gauche, à 250 pixels — des rayons de 285 à 350, soit une fois
            * et demie la diagonale de la carte. Vu à deux fois et demie, l'éventail ne se lisait
            * plus comme des arcs mais comme un faisceau de traits droits : sur les onze, huit
            * tournaient de moins de quinze degrés. **Un arc dont le rayon dépasse l'objet n'est
-           * plus un arc, c'est une droite.** Ramené à l'intérieur, en bas à gauche du milieu,
-           * les rayons tombent entre 170 et 222 et le premier tourne de cinquante-cinq degrés.
+           * plus un arc, c'est une droite.** Le centre est donc rentré dans la carte, près du
+           * coin bas-gauche.
+           *
+           * ⚠️ **Puis il a fallu l'ouvrir : c'est la portée qui manquait, pas la courbure.**
+           * Deuxième essai, centre en (95, 168) : les arcs tournaient bien, mais neuf traits
+           * blottis dans le coin, ressortant tous du bord droit avant la mi-hauteur. La carte
+           * de référence, elle, porte son éventail sur la moitié de sa surface — c'est la
+           * *famille* qu'on y voit, jamais un trait. Le centre a donc été poussé vers le bas
+           * et vers la gauche, en (61, 186) : à peu près la même courbure, mais onze arcs qui
+           * balaient le bord droit **de 8 jusqu'à 138**, soit sept dixièmes de la hauteur, au
+           * lieu de s'arrêter à 94.
+           *
+           * ⚠️ **Le rayon de départ n'est pas choisi, il est déduit.** Il est celui de l'arc
+           * qui passe par (113, 0) et (248, 138) en tournant de soixante degrés — l'ouverture
+           * qu'on veut voir. Une corde et un angle donnent le rayon, `corde = 2 r sin(θ/2)`,
+           * et le rayon donne le centre sur la médiatrice. Les onze rayons suivent de 6,5.
            *
            * ⚠️ **L'écart se resserre tout seul vers le coin, et ce n'est pas un réglage.**
-           * Les rayons se suivent d'un pas constant de 6,5 ; mais plus un arc est grand, plus
-           * il coupe le bord supérieur à plat, et moins ce pas se traduit en distance. Mesuré
-           * sur le bord : vingt-huit pixels entre les deux premiers, dix entre les deux
-           * derniers. C'est la convergence qu'on voit sur la carte de référence, et elle sort
-           * de la géométrie plutôt que d'une suite de rayons écrite à la main.
+           * Le pas des rayons est constant ; mais plus un arc est grand, plus il coupe le bord
+           * supérieur à plat, et moins ce pas se traduit en distance. Mesuré sur le bord :
+           * vingt-et-un pixels entre les deux premiers, dix entre les deux derniers. C'est la
+           * convergence qu'on voit sur la carte de référence, et elle sort de la géométrie
+           * plutôt que d'une suite de rayons écrite à la main.
            *
-           * ⚠️ **Les neuf traversent la bande visible**, puisque tous entrent par le bord
-           * supérieur : ils coupent le haut de 121 à 240, et six d'entre eux ressortent par le
-           * bord droit avant la profondeur de 68 que le dossier dégage.
+           * ⚠️ **Les onze traversent la bande visible**, puisque tous entrent par le bord
+           * supérieur : ils coupent le haut de 113 à 240. Le premier entre après la puce et
+           * au-delà de la tête du titre — l'éventail effleure la fin d'un nom long et laisse
+           * tout le reste intact, là où les autres fonds traversent la carte de part en part.
            *
-           * ⚠️ **L'éventail n'a ni premier ni dernier trait.** À intensité égale, la famille
-           * se lisait découpée dans un motif plus grand — deux arcs francs marquaient ses
-           * bords comme une coupure. Les deux extrêmes sont donc éteints de plus de moitié :
-           * l'éventail naît et se perd au lieu de commencer et de finir.
+           * ⚠️ **L'éventail n'a pas de dernier trait — mais il a bien un premier.** À intensité
+           * égale, la famille se lisait découpée dans un motif plus grand : un arc franc
+           * marquait son bord comme une coupure. Seuls les deux **derniers** sont donc éteints,
+           * ceux du coin. Le premier, lui, reste entier : il court vers le bas-gauche, là où le
+           * dégradé commun l'a déjà ramené à quatre pour cent — l'atténuer une seconde fois
+           * l'aurait effacé, et avec lui toute l'ouverture qu'on venait de gagner.
            *
-           * ⚠️ **Trait d'un pixel, et non de 1,4 comme les autres fonds.** À dix pixels
-           * d'écart au lieu de trente-huit, l'épaisseur des autres familles refermait les
-           * intervalles : c'est la même règle qu'aux hachures du fond n° 3 — plus les traits
+           * ⚠️ **Trait d'un pixel, et non de 1,4 comme le fond n° 0.** À dix pixels d'écart au
+           * lieu de trente-huit, l'épaisseur de l'autre famille d'arcs refermait les
+           * intervalles : c'est la même règle qu'aux hachures du fond n° 1 — plus les traits
            * se serrent, plus il faut qu'il reste du vide entre eux.
            */
           <g strokeWidth={1}>
-            {Array.from({ length: 9 }, (_, i) => {
-              const bord = Math.min(i, 8 - i);
-              return (
-                <circle key={i} cx={95} cy={168} r={170 + i * 6.5}
-                  strokeOpacity={bord === 0 ? 0.45 : bord === 1 ? 0.75 : 1} />
-              );
-            })}
+            {Array.from({ length: 11 }, (_, i) => (
+              <circle key={i} cx={61} cy={186} r={193 + i * 6.5}
+                strokeOpacity={i === 10 ? 0.45 : i === 9 ? 0.75 : 1} />
+            ))}
           </g>
         )}
       </g>
