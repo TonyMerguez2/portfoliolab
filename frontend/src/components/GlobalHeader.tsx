@@ -144,7 +144,7 @@ const LignePortefeuille = memo(function LignePortefeuille(
      * dix secondes, pour vingt lignes dont une seule a bougé. Deux nombres changent quand
      * *ces* deux nombres changent.
      */
-    chiffres: { valeur: number | null; variation: number | null };
+    chiffres: { valeur: number | null; variation: number | null; lignes: number };
   },
 ) {
   const [survol, setSurvol] = useState(false);
@@ -209,7 +209,7 @@ const LignePortefeuille = memo(function LignePortefeuille(
         <span style={{ color:"#F8F9FC", fontSize:"10px", opacity:0.6 }}>
           {chiffres.valeur != null
             ? chiffres.valeur.toLocaleString("fr-FR", { maximumFractionDigits:0 }) + " €"
-            : `${p.assets?.length ?? 0} actif${(p.assets?.length ?? 0) > 1 ? "s" : ""}`}
+            : `${chiffres.lignes} actif${chiffres.lignes > 1 ? "s" : ""}`}
         </span>
         {chiffres.variation != null && (
           <span style={{ fontSize:"10px", fontWeight:600,
@@ -379,20 +379,6 @@ export default function GlobalHeader() {
     fetchPrices(visible.map(a => a.ticker));
   }, [showSearch, category, displayCount]);
 
-  /**
-   * ⚠️ **Les cours des lignes détenues, demandés à l'ouverture.** L'effet ci-dessus ne
-   * charge que les actifs *proposés* ; ceux que les portefeuilles contiennent n'y figurent
-   * pas, et sans eux leur variation du jour resterait vide indéfiniment. Une seule requête
-   * groupée, sur l'union des tickers de tous les portefeuilles — et pas une par ligne.
-   */
-  useEffect(() => {
-    if (!showSearch) return;
-    /* ⚠️ `Array.from` et non un déploiement de `Set` : la cible de compilation du projet
-       est antérieure à 2015, et le déploiement d'un itérable y est refusé. */
-    const tickers = Array.from(new Set(portfolios.flatMap(p => (p.assets ?? []).map(a => a.ticker))));
-    if (tickers.length) fetchPrices(tickers);
-  }, [showSearch, portfolios]);
-
   // Scroll infini
   const handleScroll = () => {
     const el = listRef.current;
@@ -460,41 +446,61 @@ export default function GlobalHeader() {
   }, [portfolios, activePortfolio, setActivePortfolio]);
 
   /**
-   * La valeur et la variation du jour de chaque portefeuille.
+   * Ce que chaque portefeuille vaut réellement, demandé au serveur.
    *
-   * ⚠️ **La valeur est déclarée, la variation est calculée — et ce n'est pas la même
-   * matière.** `total_value` vient du serveur, saisi par l'épargnant ; aucune route ne
-   * publie de performance journalière par portefeuille. On la reconstitue donc à partir des
-   * cours déjà en main : la variation d'un portefeuille est la moyenne des variations de ses
-   * lignes, **pondérée par leurs poids**.
+   * ⚠️ **`/positions` et non la charge utile de la liste — j'avais lu deux champs pour ce
+   * qu'ils ne sont pas.** `total_value`, sur `GET /portfolios`, est la valeur *saisie à la
+   * déclaration*, c'est-à-dire l'investi ; et `assets` est l'**allocation cible**, vide dès
+   * qu'un portefeuille est bâti sur des transactions. D'où les trois symptômes relevés à
+   * l'usage, qui n'en faisaient qu'un : une valeur qui était l'investi, un « 0 actif » sur un
+   * portefeuille qui en a, et aucune variation faute de poids à pondérer.
    *
-   * ⚠️ **Pondérée, et non moyenne simple.** Une ligne à 80 % et une à 2 % ne pèsent pas
-   * pareil sur ce que l'épargnant voit bouger. Une moyenne simple donnerait au bitcoin qui
-   * occupe 2 % du portefeuille autant de voix qu'à l'ETF monde qui en fait les trois quarts.
+   * ⚠️ **La route fait déjà le repli, et c'est pourquoi elle est la bonne.** Sans
+   * transactions, elle recalcule depuis `assets × total_value` et se déclare `source:
+   * "weights"` ; avec, elle rend les positions réelles. Refaire ce choix ici aurait été
+   * réécrire, du mauvais côté du réseau, la seule règle qui sache trancher.
    *
-   * ⚠️ **Elle ne paraît que si l'on a de quoi la dire.** Les cours n'arrivent que pour les
-   * tickers demandés ; tant qu'aucune ligne du portefeuille n'a le sien, la variation vaut
-   * `null` et la ligne montre son nombre d'actifs plutôt qu'un zéro qui mentirait. Les poids
-   * manquants sont eux aussi écartés du dénominateur, sans quoi un portefeuille à moitié
-   * coté afficherait la moitié de sa vraie variation.
+   * ⚠️ **La variation est celle depuis l'achat, et non celle du jour.** `total_pnl_pct` est
+   * la seule performance qu'une route publie par portefeuille. Un 24 h demanderait de
+   * pondérer les cours de chaque position — faisable, mais c'est un second calcul et une
+   * seconde source de désaccord avec ce que la page portefeuille affiche.
+   *
+   * ⚠️ **Une requête par portefeuille, et une seule fois par identifiant.** Il n'existe pas
+   * de route groupée. Le résultat est donc gardé tant que l'en-tête vit — il ne se démonte
+   * pas d'une page à l'autre —, si bien que rouvrir la palette ne redemande rien.
    */
-  const chiffresParPortefeuille = useMemo(() => {
-    const table = new Map<string, { valeur: number | null; variation: number | null }>();
-    for (const p of portfolios) {
-      let poids = 0, somme = 0;
-      for (const a of p.assets ?? []) {
-        const c = prices[a.ticker];
-        if (!c || !Number.isFinite(a.weight)) continue;
-        poids += a.weight;
-        somme += a.weight * c.change;
+  const [chiffresPf, setChiffresPf] = useState<Record<string,
+    { valeur: number | null; variation: number | null; lignes: number }>>({});
+
+  useEffect(() => {
+    if (!showSearch) return;
+    const aLire = portfolios.filter(p => !(String(p.id) in chiffresPf));
+    if (!aLire.length) return;
+    let annule = false;
+    Promise.all(aLire.map(async p => {
+      try {
+        const r = await fetch(
+          `${API_URL}/api/v1/portfolios/${encodeURIComponent(p.id)}/positions`,
+          { headers: enTetesAuth() });
+        if (!r.ok) throw new Error("refus");
+        const d = await r.json();
+        return [String(p.id), {
+          valeur: Number.isFinite(d?.total_value) ? d.total_value : null,
+          variation: Number.isFinite(d?.total_pnl_pct) ? d.total_pnl_pct : null,
+          lignes: Array.isArray(d?.positions) ? d.positions.length : 0,
+        }] as const;
+      } catch {
+        /* ⚠️ On garde une entrée vide plutôt que rien : sans elle, le portefeuille
+           repasserait dans `aLire` au prochain rendu et l'on redemanderait sans fin une
+           route qui refuse. */
+        return [String(p.id), { valeur: null, variation: null, lignes: 0 }] as const;
       }
-      table.set(String(p.id), {
-        valeur: Number.isFinite(p.total_value as number) ? (p.total_value as number) : null,
-        variation: poids > 0 ? somme / poids : null,
-      });
-    }
-    return table;
-  }, [portfolios, prices]);
+    })).then(lots => {
+      if (annule) return;
+      setChiffresPf(t => ({ ...t, ...Object.fromEntries(lots) }));
+    });
+    return () => { annule = true; };
+  }, [showSearch, portfolios, chiffresPf]);
 
   const displayAssets = localSearch ? searchResults.filter(a => category === "all" || a.type === category) : filteredAssets.slice(0, displayCount);
 
@@ -796,8 +802,8 @@ export default function GlobalHeader() {
                     <LignePortefeuille p={r.p} idx={i} focused={i === highlightIndex}
                       actif={String(activePortfolio?.id ?? "") === String(r.p.id)}
                       onSelect={ouvrirPortefeuille} onSupprimer={supprimerPortefeuille}
-                      chiffres={chiffresParPortefeuille.get(String(r.p.id))
-                        ?? { valeur: null, variation: null }} />
+                      chiffres={chiffresPf[String(r.p.id)]
+                        ?? { valeur: null, variation: null, lignes: r.p.assets?.length ?? 0 }} />
                   ) : (
                     <AssetRow a={r.a} highlighted={false} focused={i === highlightIndex}
                       idx={i} price={prices[r.a.ticker]}
