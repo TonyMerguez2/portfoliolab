@@ -54,6 +54,28 @@ const RAYON = 20;
 const RACCORD = 16;
 /** Le côté d'une rangée, l'écart entre deux, et le rembourrage du rail. */
 const RANGEE = 40, ECART = 4, MARGE = 9;
+/**
+ * Où le rail commence.
+ *
+ * ⚠️ **En haut, et non centré — la mesure tranche.** Le serveur rend neuf rangées : ni le
+ * compte ni « Se connecter » ne sont décidés avant hydratation, et la dixième n'apparaît
+ * qu'ensuite. Centré, le rail grandit alors de 44 pixels vers ses deux extrémités, et
+ * **chaque rangée saute de 22 pixels à chaque chargement de page**. Un rail centré dérive en
+ * outre de la moitié de tout redimensionnement vertical de la fenêtre : aucune cible n'a de
+ * position stable, ni entre deux visites, ni entre deux tailles d'écran. Ancré en haut, les
+ * deux valeurs tombent à zéro.
+ *
+ * ⚠️ **Mais pas aligné sur le bandeau, faute de place — et c'est contre-intuitif.** Le champ
+ * de recherche commence à douze pixels du haut ; aligner la première rangée dessus poserait
+ * le rail à y=3, et son raccord supérieur — qui vit seize pixels plus haut — sortirait de
+ * l'écran. On perdrait la moitié de la silhouette pour gagner un alignement. Vingt-cinq est
+ * le minimum qui garde le raccord entier ; vingt-huit lui laisse douze pixels d'air.
+ *
+ * ⚠️ **Et un alignement manqué se voit plus qu'un décalage assumé.** Poser la première
+ * rangée treize pixels sous le bandeau, c'est-à-dire *presque* en face, se lirait comme une
+ * erreur. À vingt-huit, le rail ne prétend s'aligner sur rien.
+ */
+const HAUT = 28;
 
 type Item = { label: string; href: string; icon: React.JSX.Element };
 
@@ -236,7 +258,7 @@ export default function SideNav() {
       data-avatar="curieux"
       className="nv-rail"
       style={{
-        position: "fixed", left: EPINE, top: "50%", transform: "translateY(-50%)",
+        position: "fixed", left: EPINE, top: HAUT,
         width: LARGEUR - EPINE, zIndex: 60,
         display: "flex", flexDirection: "column", alignItems: "center", gap: ECART,
         padding: `${MARGE}px 0`,
