@@ -53,13 +53,26 @@ const EPINE = 10;
  * Le rayon de toutes les courbes du rail — les deux convexes du flanc droit comme les deux
  * raccords concaves.
  *
- * ⚠️ **Un seul rayon, et non deux, parce que la languette d'un dossier le dit déjà.** Elle a
- * exactement la même topologie que ce rail : un angle convexe, puis un creux qui la ramène au
- * plan. Son commentaire est catégorique — « les trois coins de l'encoche ont le rayon des
- * angles du dossier », faute de quoi « trois courbures se succèdent et l'œil voit un raccord
- * bricolé sans savoir le nommer ». Mon rail portait vingt pour les angles et seize pour les
- * creux : deux courbures pour une seule forme, la faute même que ce commentaire décrit.
- * Relevé à l'usage.
+ * ⚠️ **Un seul rayon, et non deux, parce que la languette d'un dossier le dit déjà.** Son
+ * commentaire est catégorique — « les trois coins de l'encoche ont le rayon des angles du
+ * dossier », faute de quoi « trois courbures se succèdent et l'œil voit un raccord bricolé
+ * sans savoir le nommer ». Le rail portait vingt pour les angles et seize pour les creux :
+ * deux courbures pour une seule forme, la faute même que ce commentaire décrit. Relevé à
+ * l'usage.
+ *
+ * ⚠️ **Mais le rayon est tout ce qui se partage : la courbe, elle, ne peut pas.** J'avais
+ * écrit ici que les deux formes avaient « exactement la même topologie », et c'est faux. Le
+ * raccord de la languette est un **S à virage nul** — il part horizontal, arrive horizontal
+ * — ce qui autorise ses deux arcs à être raccourcis : 73,9° chacun, une course de 34,6 pour
+ * une chute de 26, soit une pente de 36,9°. Les raccords du rail, eux, tournent chacun d'un
+ * **quart**, de l'épine verticale au bord horizontal : à rayon égal leur arc *est* un quart
+ * de cercle, 18 sur 18, pente 45°. Aucun raccourcissement n'est possible — on ne tourne pas
+ * de quatre-vingt-dix degrés avec un arc de soixante-quatorze.
+ *
+ * ⚠️ **La conséquence est à savoir avant de vouloir l'adoucir.** Ces 45° sont exactement la
+ * pente que la languette a écartée en son temps. Chez elle, la remède était de raccourcir
+ * l'arc ; ici il n'y en a qu'un — **augmenter le rayon**, donc rompre la règle du rayon
+ * unique qu'on vient d'appliquer. Les deux ne peuvent pas être vrais à la fois.
  *
  * ⚠️ **Pris dans l'échelle des rayons, et non chez la carte d'actif.** C'est bien elle qui
  * publie le nombre dont la languette tire ses courbes, mais `CarteActif` traîne derrière elle

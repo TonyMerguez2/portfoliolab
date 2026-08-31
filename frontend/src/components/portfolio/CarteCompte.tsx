@@ -189,11 +189,23 @@ const AIR_PANNEAU = { haut: 10, cote: 18, bas: 18 };
  *
  * Décrit une fois pour toutes puisque la taille est fixe. Le sens de parcours est horaire.
  *
- * ⚠️ **Le raccord de la languette est une Bézier, plus deux arcs.** Deux quarts de cercle
- * accolés donnent bien un S, mais un S dont l'étalement vaut forcément le rayon : la pente
- * était donc à quarante-cinq degrés, sans moyen de l'adoucir sans changer aussi la hauteur de
- * la languette. La cubique part verticale — elle prolonge l'arc du coin sans cassure — et
- * arrive horizontale sur le plan, avec la longueur qu'on lui donne.
+ * ⚠️ **Le raccord de la languette est fait de deux arcs, et de rien d'autre.** Ce commentaire
+ * annonçait « une Bézier, plus deux arcs » : la cubique avait disparu deux réécritures plus
+ * tôt, d'abord au profit d'arcs elliptiques, puis des deux arcs circulaires qu'on lit
+ * ci-dessous. Le texte a survécu au tracé qu'il décrivait et racontait donc une géométrie qui
+ * n'existe plus — relevé en cherchant si le rail de navigation avait bien la même.
+ *
+ * ⚠️ **Ce qui restait vrai du grief d'alors.** Deux *quarts* de cercle accolés donnent un S
+ * dont l'étalement vaut forcément le rayon, donc une pente de quarante-cinq degrés. Ce n'est
+ * plus le cas ici parce que les arcs ne sont pas des quarts : ce S ne tourne d'aucun angle
+ * net — il part horizontal et arrive horizontal —, ce qui laisse toute liberté de les
+ * raccourcir. Mesuré sur les valeurs actuelles : deux arcs de 73,9°, une course de 34,6 pour
+ * une chute de 26, soit une pente moyenne de 36,9°.
+ *
+ * ⚠️ **Cette liberté n'appartient qu'aux raccords à virage nul.** Un raccord qui doit tourner
+ * d'un quart — le passage de l'épine au rail de navigation, par exemple — n'a pas le choix :
+ * à rayon égal son arc *est* un quart de cercle, et sa pente reste à quarante-cinq degrés. Le
+ * rayon se partage, la courbe non.
  */
 const contourDe = (l: number) => {
   const h = CARTE_COMPTE.panneau + LANGUETTE.hauteur;
