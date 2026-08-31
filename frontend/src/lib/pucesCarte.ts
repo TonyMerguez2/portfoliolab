@@ -301,3 +301,31 @@ export function fondPour(cle: string): number {
   }
   return somme % FONDS_CARTE;
 }
+
+
+/**
+ * Le métal de la puce : argent ou or.
+ *
+ * ⚠️ **Le sel et le facteur ont été choisis par la mesure, et non par le raisonnement.**
+ * C'est le troisième tirage sur la même clé, et les trois se gênent : deux valent un couple,
+ * trois valent un triplet, et rien ne garantit qu'un troisième hachage honnête s'accorde aux
+ * deux premiers. Éprouvé sur quatre paires (sel, facteur) : `(31, 37)` ne donnait que
+ * **dix-huit** triplets sur trente-six — le métal y était entièrement déterminé par le couple
+ * déjà tiré — et `(104729, 37)` vingt-quatre. Celle-ci les donne tous les trente-six, atteints
+ * au compte n° 125, sans jamais deux cartes identiques côte à côte sur les deux cents
+ * premiers, et l'or et l'argent tombent à 500/500 sur mille comptes.
+ *
+ * ⚠️ **Deux valeurs seulement, et deux divise six comme trois le fait.** Le défaut décrit
+ * plus haut vaut donc aussi ici, et pour la même raison : sur une clé d'un seul caractère,
+ * tous ces hachages sont affines en un même nombre. La conclusion ne change pas — ce qui se
+ * voit, ce sont deux voisins jumeaux, et il n'y en a pas.
+ */
+export const METAUX_PUCE = 2;
+
+export function metalPour(cle: string): number {
+  let somme = 1299709;
+  for (let i = 0; i < cle.length; i++) {
+    somme = (somme * 43 + cle.charCodeAt(i)) % 100003;
+  }
+  return somme % METAUX_PUCE;
+}

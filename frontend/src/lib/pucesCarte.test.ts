@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
 
 import {
-  DEBORD_PLAGE, FONDS_CARTE, MOTIFS_PUCE, REPERE_PUCE, fondPour, motifPour,
+  DEBORD_PLAGE, FONDS_CARTE, METAUX_PUCE, MOTIFS_PUCE, REPERE_PUCE,
+  fondPour, metalPour, motifPour,
 } from "./pucesCarte";
 
 /**
@@ -145,32 +146,38 @@ describe("l'attribution d'une puce", () => {
 });
 
 /**
- * ⚠️ **Ce qu'on grave sur une carte est un *couple*, jamais une puce ni un fond seuls.**
- * Deux tirages irréprochables pris séparément peuvent s'accorder mal : c'est arrivé en
- * passant les fonds de cinq à trois. Trois divise six, et sur une clé d'un seul caractère les
- * deux sommes valent chacune « une constante plus le code du caractère » — donc affines en un
+ * ⚠️ **Ce qu'on grave sur une carte est un *triplet*, jamais une puce, un fond ou un métal
+ * seuls.** Trois tirages irréprochables pris séparément peuvent s'accorder mal : c'est arrivé
+ * en passant les fonds de cinq à trois. Trois divise six, et sur une clé d'un seul caractère
+ * les sommes valent chacune « une constante plus le code du caractère » — donc affines en un
  * même nombre. `% 3` est alors une fonction de `% 6` : la puce déterminait entièrement le
- * fond, six couples au lieu de dix-huit, et rien dans les tests d'alors ne s'en plaignait.
+ * fond, et rien dans les tests d'alors ne s'en plaignait. Le métal a été ajouté ensuite, et
+ * son sel a dû être *choisi par la mesure* : une paire (sel, facteur) voisine ne donnait que
+ * dix-huit triplets sur trente-six.
  *
  * ⚠️ **Les deux propriétés ci-dessous ne se déduisent pas l'une de l'autre**, et c'est
  * pourquoi il en faut deux. Un tirage peut couvrir toutes les combinaisons tout en posant
  * deux cartes jumelles côte à côte (mesuré : c'est ce que faisait une passe d'avalanche, sur
  * les comptes 3 et 4). Un autre peut ne jamais répéter deux voisines tout en n'explorant
- * qu'un tiers des couples. La première se voit à l'écran, la seconde à l'usage.
+ * qu'un tiers des triplets. La première se voit à l'écran, la seconde à l'usage.
  */
-describe("le couple puce × fond", () => {
+describe("le triplet puce × fond × métal", () => {
   const carte = (n: number) => {
     const cle = String(n);
-    return `${motifPour(cle)}-${fondPour(cle)}`;
+    return `${motifPour(cle)}-${fondPour(cle)}-${metalPour(cle)}`;
   };
 
-  it("rend toujours un fond existant, et le même pour la même clé", () => {
+  it("rend toujours un fond et un métal existants, et les mêmes pour la même clé", () => {
     for (const cle of ["", "a", "PEA Bourso", "42", "x".repeat(500)]) {
-      const n = fondPour(cle);
-      expect(Number.isInteger(n)).toBe(true);
-      expect(n).toBeGreaterThanOrEqual(0);
-      expect(n).toBeLessThan(FONDS_CARTE);
-      expect(fondPour(cle)).toBe(n);
+      for (const [tirage, bornes] of [
+        [fondPour, FONDS_CARTE], [metalPour, METAUX_PUCE],
+      ] as const) {
+        const n = tirage(cle);
+        expect(Number.isInteger(n)).toBe(true);
+        expect(n).toBeGreaterThanOrEqual(0);
+        expect(n).toBeLessThan(bornes);
+        expect(tirage(cle)).toBe(n);
+      }
     }
   });
 
@@ -187,9 +194,13 @@ describe("le couple puce × fond", () => {
     expect(jumelles).toEqual([]);
   });
 
-  /** ⚠️ Toutes les combinaisons doivent servir, sans quoi des dessins sont morts-nés. */
-  it("finit par montrer les dix-huit combinaisons", () => {
-    const vues = new Set(Array.from({ length: 200 }, (_, i) => carte(i + 1)));
-    expect(vues.size).toBe(MOTIFS_PUCE.length * FONDS_CARTE);
+  /**
+   * ⚠️ **Toutes les combinaisons doivent servir, sans quoi des dessins sont morts-nés.**
+   * Mesuré : les trente-six sont atteintes au compte n° 125. La borne est posée bien au-delà
+   * — ce qu'on vérifie n'est pas la vitesse mais le fait qu'aucune ne soit inaccessible.
+   */
+  it("finit par montrer les trente-six combinaisons", () => {
+    const vues = new Set(Array.from({ length: 400 }, (_, i) => carte(i + 1)));
+    expect(vues.size).toBe(MOTIFS_PUCE.length * FONDS_CARTE * METAUX_PUCE);
   });
 });

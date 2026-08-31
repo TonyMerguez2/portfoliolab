@@ -2,7 +2,7 @@
 import { useId } from "react";
 
 import { CARTE_ACTIF } from "@/components/portfolio/CarteActif";
-import { MOTIFS_PUCE, REPERE_PUCE, fondPour, motifPour } from "@/lib/pucesCarte";
+import { MOTIFS_PUCE, REPERE_PUCE, fondPour, metalPour, motifPour } from "@/lib/pucesCarte";
 import { CARTE_COMPTE } from "@/components/portfolio/CarteCompte";
 import { decalerClarte } from "@/lib/couleur";
 import { FONT, NUM } from "@/lib/typography";
@@ -84,8 +84,38 @@ const DEBORD = CARTE_COMPTE.languette.largeur + CARTE_COMPTE.languette.course - 
  */
 const PUCE = { largeur: CARTE_ACTIF.logo.cote, hauteur: 26 };
 
-/** Ce qui affleure entre les plages : le substrat, sous le métal. */
-const SUBSTRAT = "#5F656F";
+/**
+ * Le rayon du contour de la puce.
+ *
+ * ⚠️ **Il ne vient plus du logo d'une carte d'actif, et c'est une séparation voulue.** Il
+ * valait `CARTE_ACTIF.logo.rayon`, soit 8 sur 32 de large — près d'un quart. Une tuile
+ * d'application, pas un module de carte : relevé à l'usage sur trois cartes réelles, l'arrondi
+ * d'un contact tient autour d'un dixième de sa largeur. La puce garde du logo sa **largeur**
+ * et son coin haut-gauche, qui sont ce qui aligne les deux cartes côte à côte ; son arrondi ne
+ * regarde qu'elle.
+ *
+ * ⚠️ **Le contour reste plus rond que ses tuiles** — 3,6 contre 1,9. C'est l'ordre qu'on voit
+ * sur une vraie puce, et l'inverse aurait fait saillir les tuiles d'angle hors du contour qui
+ * les taille.
+ */
+const RAYON_PUCE = 3.6;
+
+/**
+ * Les deux métaux d'un contact, du plus clair au plus sombre.
+ *
+ * ⚠️ **Ce sont les mêmes quatre paliers, transposés — pas une seconde recette.** L'or reprend
+ * exactement la courbe de clarté de l'argent : clair en haut-gauche, creux aux deux tiers,
+ * remontée au coin. Choisir librement quatre jaunes aurait donné un métal éclairé autrement,
+ * et deux puces voisines auraient semblé prises sous deux lumières.
+ *
+ * ⚠️ **Le substrat suit le métal, et il le doit.** Le gris froid qui affleure entre les
+ * plages d'argent vire au vert sous de l'or : c'est la même paire complémentaire qui salit un
+ * jaune assombri d'un gris bleuté. Chaque métal porte donc le sien.
+ */
+const METAUX = [
+  { substrat: "#5F656F", paliers: ["#F4F6F9", "#D3D8DF", "#A8AFBA", "#CDD3DA"] },
+  { substrat: "#6E5E3C", paliers: ["#F7EFCF", "#E3CE93", "#B99B54", "#DCC58A"] },
+] as const;
 
 /**
  * La puce, gravée d'un des dessins de `MOTIFS_PUCE`.
@@ -105,15 +135,23 @@ const SUBSTRAT = "#5F656F";
  * la boîte : leurs angles extérieurs prennent ainsi le rayon du contour de la puce, au lieu
  * de porter le leur et de laisser quatre coins sombres que la planche n'a pas.
  */
-function Puce({ motif }: { motif: number }) {
+function Puce({ motif, metal }: { motif: number; metal: number }) {
   /**
    * ⚠️ **L'identifiant du dégradé est propre à l'instance.** Deux cartes bancaires côte à
    * côte partageraient sinon la même définition : le navigateur applique alors la dernière
-   * rencontrée aux deux, et la première change d'aspect quand la seconde apparaît.
+   * rencontrée aux deux, et la première change d'aspect quand la seconde apparaît. Depuis
+   * qu'il existe deux métaux, ce n'est plus une nuance : une puce d'or voisine d'une puce
+   * d'argent les rendrait toutes deux de la même couleur.
    */
   const id = useId().replace(/:/g, "");
   const dessin = MOTIFS_PUCE[motif % MOTIFS_PUCE.length];
-  const metal = `url(#puce-${id})`;
+  const { substrat, paliers } = METAUX[metal % METAUX.length];
+  const teinte = `url(#puce-${id})`;
+  /* Le contour, écrit une fois : la découpe et le substrat doivent avoir exactement la même. */
+  const contour = {
+    x: 0.6, y: 0.6, width: REPERE_PUCE.largeur - 1.2, height: REPERE_PUCE.hauteur - 1.2,
+    rx: RAYON_PUCE - 0.6,
+  };
   return (
     <svg width={PUCE.largeur} height={PUCE.hauteur}
       viewBox={`0 0 ${REPERE_PUCE.largeur} ${REPERE_PUCE.hauteur}`} aria-hidden="true"
@@ -121,28 +159,37 @@ function Puce({ motif }: { motif: number }) {
       <defs>
         <linearGradient id={`puce-${id}`} gradientUnits="userSpaceOnUse"
           x1="0" y1="0" x2={REPERE_PUCE.largeur} y2={REPERE_PUCE.hauteur}>
-          <stop offset="0%" stopColor="#F4F6F9" />
-          <stop offset="34%" stopColor="#D3D8DF" />
-          <stop offset="66%" stopColor="#A8AFBA" />
-          <stop offset="100%" stopColor="#CDD3DA" />
+          {paliers.map((c, i) => (
+            <stop key={c} offset={`${[0, 34, 66, 100][i]}%`} stopColor={c} />
+          ))}
         </linearGradient>
         <clipPath id={`silhouette-${id}`}>
-          <rect x="0.6" y="0.6" width={REPERE_PUCE.largeur - 1.2}
-            height={REPERE_PUCE.hauteur - 1.2} rx={CARTE_ACTIF.logo.rayon - 0.6} />
+          <rect {...contour} />
         </clipPath>
       </defs>
 
+      {/**
+        * ⚠️ **Le liseré sombre du module, et il est devenu nécessaire avec l'or.** Une puce
+        * d'argent se détachait de tout ; une puce d'or posée sur un dossier jaune se fondait
+        * dans la carte — combinaison qui *arrivera*, le métal étant tiré indépendamment de la
+        * couleur. Un vrai module est serti dans le plastique et cette jointure se voit : elle
+        * dit la même chose ici, et elle sépare la puce de n'importe quelle teinte sans rien
+        * changer à son métal.
+        *
+        * ⚠️ **Hors de la découpe, pas dedans.** Tracé à l'intérieur du groupe rogné, la
+        * silhouette lui aurait mangé la moitié extérieure et n'aurait laissé qu'un demi-trait,
+        * deux fois plus pâle que voulu.
+        */}
+      <rect {...contour} fill="none" stroke="rgba(0,0,0,0.24)" strokeWidth={0.8} />
       <g clipPath={`url(#silhouette-${id})`}>
-        <rect x="0.6" y="0.6" width={REPERE_PUCE.largeur - 1.2}
-          height={REPERE_PUCE.hauteur - 1.2} rx={CARTE_ACTIF.logo.rayon - 0.6}
-          fill={SUBSTRAT} />
-        {dessin.plages.map((d, i) => <path key={`p${i}`} d={d} fill={metal} />)}
+        <rect {...contour} fill={substrat} />
+        {dessin.plages.map((d, i) => <path key={`p${i}`} d={d} fill={teinte} />)}
         {dessin.disques?.map((c, i) => (
-          <circle key={`c${i}`} cx={c.cx} cy={c.cy} r={c.r} fill={metal} />
+          <circle key={`c${i}`} cx={c.cx} cy={c.cy} r={c.r} fill={teinte} />
         ))}
         {/* Les entailles n'ouvrent pas la plaque : elles entament une tuile sans la couper. */}
         {dessin.entailles?.map((d, i) => (
-          <path key={`e${i}`} d={d} fill="none" stroke={SUBSTRAT} strokeWidth={1.1}
+          <path key={`e${i}`} d={d} fill="none" stroke={substrat} strokeWidth={1.1}
             strokeLinecap="round" />
         ))}
       </g>
@@ -151,87 +198,41 @@ function Puce({ motif }: { motif: number }) {
 }
 
 /**
- * Le centre du pointillé, en pourcentage de la carte.
+ * Le pictogramme du sans-contact, à droite de la puce.
  *
- * ⚠️ **Remonté dans la bande visible, et c'est tout le sujet.** Sur la carte de référence, la
- * fleur du halftone est à peu près au milieu — chez nous, le dossier recouvre tout ce qui
- * passe sous le soixante-huitième pixel, soit les deux tiers du bas. Un centre fidèlement
- * recopié n'aurait jamais existé qu'en dessous, et il ne serait resté à l'écran qu'un semis de
- * points sans origine. Il est donc posé haut et à droite, dans la zone que le titre laisse
- * libre, et il tombe du même coup sur la lueur du coin — la fleur naît là où la carte est
- * déjà éclairée.
+ * ⚠️ **Quatre arcs concentriques, et le premier n'est pas un point.** La marque normalisée
+ * part d'un arc court et non d'un disque ; le disque est une simplification qu'on voit sur des
+ * imitations, et elle se remarque parce qu'elle rompt la progression — quatre arcs de même
+ * ouverture, de rayons régulièrement croissants, dont l'œil lit l'onde qui s'éloigne.
+ *
+ * ⚠️ **Leur centre est hors du cadre, à gauche.** C'est ce qui les fait tous ouvrir vers la
+ * droite du même angle. Placé dedans, le plus petit arc se serait refermé en croissant.
+ *
+ * ⚠️ **En blanc simple, jamais dans le métal de la puce.** Sur une carte réelle, le contact
+ * est du métal serti et la marque est *imprimée* : lui donner l'or ou l'argent aurait fait
+ * croire à un second morceau de puce. Elle prend donc l'encre de la carte, au même degré que
+ * le numéro qu'elle surplombe.
+ *
+ * ⚠️ **Dix-neuf de haut pour une puce de vingt-six, soit les trois quarts.** À seize —
+ * l'essai précédent — la marque se lisait comme un détail tombé à côté de la puce plutôt que
+ * comme son pendant. Mesuré sur la carte de référence, le rapport tient autour de trois
+ * quarts, et c'est ce qui les fait lire comme un seul groupe.
  */
-const CENTRE_POINTILLE = { x: 64, y: 19 };
-
-/**
- * Le semis de points : un halftone polaire, en deux dégradés et zéro nœud.
- *
- * ⚠️ **Ce n'est pas un semis de points, c'est le croisement de deux familles.** Sur la carte
- * de référence, les points ne sont ni alignés ni de taille constante : ils sont posés sur une
- * grille *polaire* — des rayons partant d'un centre, coupés par des anneaux concentriques. Un
- * point est une intersection. C'est ce qui produit tout l'effet : l'écart angulaire étant
- * constant, les points grossissent et s'écartent en s'éloignant du centre, et le moiré des
- * deux familles fait tourner la surface.
- *
- * ⚠️ **En CSS et non en SVG, parce que le compte de nœuds était rédhibitoire.** À l'écart de
- * la référence — trois pixels et demi ramenés à notre échelle — la carte demanderait près de
- * quatre mille cercles, multipliés par autant de dossiers de trésorerie affichés. Deux
- * dégradés répétés en font autant pour un seul élément, et le navigateur les peint sur le
- * processeur graphique. Les hachures du fond n° 0 ont payé leurs soixante-douze tracés parce
- * qu'un `<pattern>` aurait laissé voir sa grille ; ici le motif est *polaire*, donc justement
- * hors d'atteinte d'une tuile — mais parfaitement à portée d'un dégradé conique.
- *
- * ⚠️ **`multiply` entre les deux couches, `screen` par-dessus la carte.** Superposées telles
- * quelles, les deux familles auraient donné une résille — des rayons *et* des anneaux, avec
- * des nœuds un peu plus clairs. Ce n'est pas ce que montre la référence, où il n'y a que les
- * nœuds. Le produit des deux ne garde que leur intersection ; le `screen` la repose ensuite
- * sur la carte sans jamais l'assombrir, ce qu'un blanc translucide ordinaire n'aurait pas su
- * faire par-dessus le dégradé de teinte.
- *
- * ⚠️ **Les bornes sont molles des deux côtés, et ce n'est pas de la coquetterie.** Des arrêts
- * francs à moins de deux degrés scintillent : la carte se déplace d'un pixel au survol du
- * dossier et les rayons crénelés se mettent à fourmiller. Des bornes dégradées donnent des
- * points ronds plutôt que des losanges, ce que la référence montre aussi.
- *
- * ⚠️ **Le cœur est évidé, sinon il fait un œil-de-bœuf.** Une grille polaire a un défaut que
- * la référence ne peut pas avoir, parce qu'elle est imprimée : près du centre, l'écart
- * angulaire tombe sous le pixel, les rayons se fondent en un gris uniforme et **il ne reste
- * plus que les anneaux** — une cible concentrique, vue et corrigée. Le masque efface le semis
- * sur les huit premiers pixels et le laisse revenir à vingt-six ; la fleur blanche posée
- * dessous occupe la place, comme sur la référence où les points naissent d'une lumière au
- * lieu de s'y empiler.
- */
-function Pointille() {
-  const { x, y } = CENTRE_POINTILLE;
-  const centre = `at ${x}% ${y}%`;
-  /* Le masque et la fleur partagent leur centre avec le semis : trois valeurs, une source. */
-  const evidement = `radial-gradient(circle ${centre},`
-    + " transparent 0, transparent 8px, #000 26px)";
+function SansFil() {
+  /* Le centre à gauche du cadre ; quatre rayons, une ouverture de ±42°. */
+  const cx = -1, cy = 8, cos = Math.cos(Math.PI * 42 / 180), sin = Math.sin(Math.PI * 42 / 180);
   return (
-    <>
-      {/* La fleur, sous le semis : c'est d'elle que les points ont l'air de sortir. */}
-      <div aria-hidden="true" style={{
-        position: "absolute", inset: 0, pointerEvents: "none",
-        background: `radial-gradient(circle ${centre}, rgba(255,255,255,0.20) 0,`
-          + " rgba(255,255,255,0.07) 24px, rgba(255,255,255,0) 62px)",
-      }} />
-      <div aria-hidden="true" style={{
-        position: "absolute", inset: 0, pointerEvents: "none",
-        backgroundImage: [
-          /* Les rayons : une période de 3,9° fait quatre-vingt-douze branches. */
-          `repeating-conic-gradient(from 0deg ${centre},`
-            + " #fff 0deg, #000 1.3deg, #000 2.6deg, #fff 3.9deg)",
-          /* Les anneaux : 5,4 pixels de période, soit l'écart des points près du centre. */
-          `repeating-radial-gradient(circle ${centre},`
-            + " #fff 0, #000 2px, #000 3.4px, #fff 5.4px)",
-        ].join(", "),
-        backgroundBlendMode: "multiply",
-        mixBlendMode: "screen",
-        opacity: 0.16,
-        /* ⚠️ Le préfixe reste : Safari ne sert `mask-image` sans lui que depuis 15.4. */
-        WebkitMaskImage: evidement, maskImage: evidement,
-      }} />
-    </>
+    <svg width={12} height={19} viewBox="0 0 10 16" aria-hidden="true"
+      fill="none" stroke="rgba(255,255,255,0.72)" strokeWidth={1.5} strokeLinecap="round"
+      style={{ flexShrink: 0 }}>
+      {[3, 5.5, 8, 10.5].map(r => {
+        const x = (cx + r * cos).toFixed(2);
+        return (
+          <path key={r} d={`M${x} ${(cy - r * sin).toFixed(2)}`
+            + ` A${r} ${r} 0 0 1 ${x} ${(cy + r * sin).toFixed(2)}`} />
+        );
+      })}
+    </svg>
   );
 }
 
@@ -252,7 +253,6 @@ function Pointille() {
 function Guilloche({ id, fond }: { id: string; fond: number }) {
   const L = CARTE_ACTIF.largeur, H = CARTE_ACTIF.hauteur;
   return (
-    <>
     <svg viewBox={`0 0 ${L} ${H}`} aria-hidden="true"
       style={{ position: "absolute", inset: 0, width: "100%", height: "100%",
         pointerEvents: "none" }}>
@@ -282,20 +282,29 @@ function Guilloche({ id, fond }: { id: string; fond: number }) {
         </linearGradient>
       </defs>
       {/**
-        * ⚠️ **Trois gravures, et toutes calées sur la même bande.** Le motif était unique :
-        * deux dossiers voisins montraient la même courbe au même endroit, et l'œil y lisait
-        * un fond d'interface plutôt que deux objets. Ce qui change d'un dessin à l'autre est
-        * la *famille de courbes*, jamais l'endroit où elle passe — les trois traversent les
-        * soixante-huit pixels visibles, faute de quoi elles n'existeraient que sous le plan.
+        * ⚠️ **Deux gravures et une carte nue, et les deux gravures sont calées sur la même
+        * bande.** Le motif était unique : deux dossiers voisins montraient la même courbe au
+        * même endroit, et l'œil y lisait un fond d'interface plutôt que deux objets. Ce qui
+        * change d'un dessin à l'autre est la *famille de courbes*, jamais l'endroit où elle
+        * passe — elles traversent les soixante-huit pixels visibles, faute de quoi elles
+        * n'existeraient que sous le plan.
         *
-        * ⚠️ **Six ont été dessinées, trois sont restées, et aucune n'est morte de sa
-        * régularité seule.** Écartées : des ondes sinusoïdales et des obliques droites — un
-        * motif de fond d'écran, pas la gravure d'une carte ; puis le guillochis d'origine,
-        * quatre arcs concentriques nés du coin bas-droit, que le pointillé remplace. Ce qui
-        * reste ne se ressemble en rien : une matière hachurée, une famille de courbes, un
-        * semis de points. **Les numéros sont ceux d'aujourd'hui et ils ont déjà glissé deux
+        * ⚠️ **Sept ont été dessinées, il en reste deux.** Écartées : des ondes sinusoïdales
+        * et des obliques droites — un motif de fond d'écran, pas la gravure d'une carte ;
+        * puis quatre arcs concentriques nés du coin bas-droit ; puis un semis de points en
+        * halftone polaire. **Les numéros sont ceux d'aujourd'hui et ils ont déjà glissé trois
         * fois** — inutile de chercher à les faire correspondre aux planches montrées à
         * l'usage, seule leur suite sans trou compte, `fondPour` prenant un modulo.
+        *
+        * ⚠️ **Le troisième fond ne dessine rien, et ce n'est pas un manque.** Une carte réelle
+        * sur deux n'a pas de guillochis du tout : c'est un aplat, et ce qui la fait lire comme
+        * une carte est sa puce, son sans-contact, son numéro. Demandé à l'usage — et c'est
+        * aussi le seul « fond » dont on soit certain qu'il ne concurrence jamais le nom du
+        * compte. Il n'y a donc pas de branche `fond === 2` : il n'y a rien à peindre.
+        *
+        * ⚠️ **La lueur du coin, elle, reste sur les trois.** Ce n'est pas une gravure mais la
+        * lumière de l'objet ; l'ôter avec le motif aurait aplati la carte nue au lieu de la
+        * laisser nue.
         *
         * ⚠️ **Toutes en blanc translucide.** La carte prend l'une des dix-neuf couleurs de
         * dossier : une gravure teintée aurait été juste sur l'une et fausse sur les dix-huit
@@ -404,9 +413,6 @@ function Guilloche({ id, fond }: { id: string; fond: number }) {
         )}
       </g>
     </svg>
-    {/* ⚠️ Hors du SVG : le pointillé se peint en CSS, faute de pouvoir tenir en nœuds. */}
-    {fond === 2 && <Pointille />}
-    </>
   );
 }
 
@@ -477,20 +483,8 @@ export default function CarteBancaire({
         /* ⚠️ Le fond est posé en absolu : il faut donc un repère, et les deux rangées
            doivent se replacer au-dessus de lui. */
         position: "relative", overflow: "hidden",
-        /**
-         * ⚠️ **L'isolation borne l'arrière-plan que le `screen` du pointillé doit lire.** Sans
-         * elle, un `mix-blend-mode` remonte au premier contexte d'empilement venu : le
-         * navigateur doit alors composer tout ce qui a été peint sous lui — la rangée de
-         * dossiers, la page — pour éclaircir deux cent quarante-huit pixels de large.
-         *
-         * ⚠️ **Elle ne corrige aucun défaut visible, et je l'ai vérifié plutôt que supposé.**
-         * Retirée à la main sur la page rendue, l'image est identique au pixel près : la carte
-         * étant opaque et son propre fond peint dans le même contexte, l'arrière-plan lu se
-         * trouve être le bon de toute façon. Ce qui change est le *périmètre* de la lecture,
-         * et donc son coût — et le fait qu'elle reste juste si l'on pose un jour quelque chose
-         * de translucide sous la carte.
-         */
-        isolation: "isolate",
+        /* ⚠️ Un `isolation: isolate` a vécu ici le temps d'un fond au `mix-blend-mode`. Il
+           est parti avec lui : plus rien ne mélange, plus rien à borner. */
       }}
     >
       <Guilloche id={id} fond={fondPour(cle ?? intitule)} />
@@ -510,10 +504,29 @@ export default function CarteBancaire({
         display: "flex", alignItems: "flex-start", gap: CARTE_ACTIF.ecartIdentite,
       }}>
         {/**
-          * La puce. Un rectangle arrondi barré de deux traits — c'est le seul détail qui
-          * fait lire « carte » plutôt que « rectangle », et il tient en trois lignes de SVG.
+          * La puce et le sans-contact : le groupe qui fait lire « carte ».
+          *
+          * ⚠️ **Centrés l'un sur l'autre, dans une rangée alignée par le haut.** Le
+          * pictogramme est plus court que la puce ; posé sur la même ligne haute, il aurait
+          * flotté sous son bord supérieur. Un `center` local les apparie sans toucher à
+          * l'alignement en tête que la rangée doit à la carte d'actif.
+          *
+          * ⚠️ **Ils se serrent — six pixels — et le groupe garde ensuite l'écart commun.**
+          * C'est le rapport de la carte de référence : les deux appartiennent au même objet
+          * physique, la colonne de texte est ailleurs.
+          *
+          * ⚠️ **Le prix : la colonne de texte n'est plus alignée sur celle d'une carte
+          * d'actif.** Le titre d'un actif commence à 56 — quinze de marge, trente-deux de
+          * logo, neuf d'écart. Ici il commence seize pixels plus loin, le sans-contact
+          * s'étant intercalé. Deux cartes voisines gardent le même haut, la même largeur de
+          * puce et le même coin haut-gauche ; ce sont leurs titres qui se décalent. Assumé :
+          * une carte bancaire sans sans-contact ne ressemble plus à une carte bancaire, et
+          * c'est ce que la référence montre en premier.
           */}
-        <Puce motif={motifPour(cle ?? intitule)} />
+        <div style={{ display: "flex", alignItems: "center", gap: 6, flexShrink: 0 }}>
+          <Puce motif={motifPour(cle ?? intitule)} metal={metalPour(cle ?? intitule)} />
+          <SansFil />
+        </div>
         <div style={{ minWidth: 0, flex: 1 }}>
           {/* Corps et interlignage repris de la ligne d'identité d'une carte d'actif : c'est
               le même rang de lecture, il doit avoir le même poids. */}
