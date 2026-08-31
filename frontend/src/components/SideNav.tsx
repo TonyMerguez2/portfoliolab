@@ -1,5 +1,5 @@
 "use client";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useApp } from "@/lib/AppContext";
@@ -50,7 +50,7 @@ const LARGEUR = 68;
 /** L'épine collée au bord, dont le rail est un renflement. */
 const EPINE = 10;
 /**
- * Le rayon de toutes les courbes du rail — les deux convexes du flanc droit comme les deux
+ * Le rayon des deux plis — ce n'est plus celui des angles. — les deux convexes du flanc droit comme les deux
  * raccords concaves.
  *
  * ⚠️ **Un seul rayon, et non deux, parce que la languette d'un dossier le dit déjà.** Son
@@ -97,7 +97,23 @@ const RAYON = RAYONS.lg;
  * la règle des « trois coins au même rayon » les concerne. Le raccord, lui, n'est pas un
  * angle : c'est un pli, et il se règle sur la course du pli qu'il imite.
  */
-const RACCORD = 34;
+const RACCORD = 24;
+/**
+ * De combien le pli s'étale le long du rail, déduit du reste.
+ *
+ * ⚠️ **Deux arcs tangents, et leur étalement n'est pas libre.** Le rail est à 58 pixels de
+ * l'épine ; deux arcs de même rayon qui relient deux verticales distantes de `d` en restant
+ * tangents à l'une et à l'autre s'étalent de `√(4r² − (d − 2r)²)`. C'est la formule que la
+ * languette du dossier emploie déjà, à ceci près qu'elle y relie deux horizontales. Écrire
+ * l'étalement à la main, c'est le voir cesser d'être juste au premier changement de largeur —
+ * et la tangence se perd sans prévenir.
+ *
+ * ⚠️ **Le dossier plie sur 34,6 pour un décalage de 26, soit une fois et un tiers.** Le même
+ * rapport sur 58 demanderait 77 pixels de pli à chaque bout, donc 154 de rail en plus : plus
+ * de la moitié de sa hauteur passerait dans ses deux plis. À 24 de rayon le pli fait 47, ce
+ * qui reste franchement plus doux que les 34 d'avant sans manger le rail.
+ */
+const ETALEMENT = Math.round(Math.sqrt(4 * RACCORD ** 2 - (LARGEUR - EPINE - 2 * RACCORD) ** 2));
 /** Le côté d'une rangée, l'écart entre deux, et le rembourrage du rail. */
 const RANGEE = 40, ECART = 4, MARGE = 9;
 /**
@@ -122,7 +138,41 @@ const RANGEE = 40, ECART = 4, MARGE = 9;
  * rangée treize pixels sous le bandeau, c'est-à-dire *presque* en face, se lirait comme une
  * erreur. À vingt-huit, le rail ne prétend s'aligner sur rien.
  */
-const HAUT = 44;
+const HAUT = ETALEMENT + 10;
+
+/**
+ * La silhouette du rail : deux verticales reliées par deux plis en S.
+ *
+ * ⚠️ **C'est le dossier pivoté d'un quart, et ce ne l'était pas.** Le raccord précédent
+ * allait du flanc vertical de l'épine au bord horizontal du rail : un virage net de
+ * quatre-vingt-dix degrés, c'est-à-dire un **coin arrondi**. Le pli d'une languette relie deux
+ * bords *parallèles* — le haut de la languette et le haut du plan — et ne tourne au net
+ * d'aucun angle : c'est un **S**. Élargir le coin l'avait adouci sans le changer de nature.
+ * Relevé à l'usage : « comme si je prenais le dossier et le faisais pivoter sur le côté ».
+ *
+ * ⚠️ **Il n'y a plus d'angle du tout sur le flanc droit.** Les arcs arrivent tangents à la
+ * verticale : entre les deux plis, le flanc est droit et se termine de lui-même. Le
+ * `border-radius` qui arrondissait les deux coins n'a plus d'objet — il en dessinerait un
+ * troisième, au milieu d'une courbe qui n'en a pas.
+ *
+ * ⚠️ **En `clip-path` et non en masques, parce qu'un S ne se masque pas.** Les deux raccords
+ * précédents étaient des quarts de disque retranchés d'un carré, ce qu'un dégradé radial sait
+ * faire. Un arc plus court qu'un quart, non : il faut le tracer. D'où une hauteur à mesurer,
+ * puisque le tracé la contient — le rail grandit avec son contenu, qui change quand la
+ * session s'ouvre.
+ */
+const silhouette = (h: number) => {
+  const l = LARGEUR - EPINE, r = RACCORD, v = ETALEMENT;
+  return [
+    "M0,0",
+    `A${r},${r} 0 0 1 ${l / 2},${v / 2}`,
+    `A${r},${r} 0 0 0 ${l},${v}`,
+    `L${l},${h - v}`,
+    `A${r},${r} 0 0 1 ${l / 2},${h - v / 2}`,
+    `A${r},${r} 0 0 0 0,${h}`,
+    "Z",
+  ].join(" ");
+};
 
 type Item = { label: string; href: string; icon: React.JSX.Element };
 
@@ -261,6 +311,25 @@ export default function SideNav() {
   const modeTheme = useModeTheme();
 
   const [ready, setReady] = useState(false);
+  /**
+   * La découpe du rail, refaite quand sa hauteur change.
+   *
+   * ⚠️ **Mesurée et non déduite du nombre de rangées.** Il en varie déjà — le compte n'est
+   * décidé qu'après hydratation — et rien ne dit qu'une future rangée aura la même hauteur
+   * que les autres. Un `ResizeObserver` répond à ce qui est, pas à ce qu'on croit compter.
+   */
+  const [decoupe, setDecoupe] = useState("");
+  const ancrerRail = useCallback((el: HTMLElement | null) => {
+    if (!el) return;
+    const poser = () => {
+      const h = el.getBoundingClientRect().height;
+      if (h > 0) setDecoupe(`path("${silhouette(h)}")`);
+    };
+    poser();
+    const ro = new ResizeObserver(poser);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
   const [user, setUser] = useState<{ username?: string; email?: string; avatar_url?: string } | null>(null);
   const [showProfile, setShowProfile] = useState(false);
   const [showAuth, setShowAuth] = useState(false);
@@ -344,18 +413,19 @@ export default function SideNav() {
     <nav
       aria-label="Navigation principale"
       data-avatar="curieux"
-      className="nv-rail"
+      ref={ancrerRail}
       style={{
-        position: "fixed", left: EPINE, top: HAUT,
+        position: "fixed", left: EPINE, top: HAUT - ETALEMENT,
         width: LARGEUR - EPINE, zIndex: 60,
         display: "flex", flexDirection: "column", alignItems: "center", gap: ECART,
-        padding: `${MARGE}px 0`,
-        borderRadius: `0 ${RAYON}px ${RAYON}px 0`,
+        /* ⚠️ Le rembourrage porte l'étalement du pli : la découpe mange ces pixels-là, et
+           sans eux la première rangée entrerait dans la courbe. */
+        padding: `${ETALEMENT + MARGE}px 0`,
+        clipPath: decoupe, WebkitClipPath: decoupe,
         ...FLOU,
         /* ⚠️ **Visible, sinon les raccords ne servent à rien** : ils sont dessinés par deux
            pseudo-éléments posés *hors* de la boîte, et l'infobulle sort par la droite. */
         overflow: "visible",
-        ["--nv-raccord" as string]: `${RACCORD}px`,
       }}
     >
       {/**
