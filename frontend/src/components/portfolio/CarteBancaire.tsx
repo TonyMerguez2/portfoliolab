@@ -299,6 +299,64 @@ function Guilloche({ id, fond }: { id: string; fond: number }) {
             <path key={i} d={`M${-40 + i * 26} ${H + 10} L${40 + i * 26} -10`} />
           ))
         )}
+        {fond === 4 && (
+          /**
+           * Un éventail d'arcs qui balaie le coin haut-droit.
+           *
+           * ⚠️ **Ce n'est pas le premier guillochis avec un autre centre.** Le fond n° 0 pose
+           * son centre au-delà du coin bas-droit : ses arcs bombent vers le haut-gauche et
+           * traversent toute la largeur, à trente-huit d'écart. Celui-ci a son centre sous le
+           * bord *gauche* — les arcs bombent vers le haut-droit, entrent tous par le bord
+           * supérieur et ressortent par le bord droit. Deux familles opposées, et non deux
+           * réglages de la même.
+           *
+           * ⚠️ **Il occupe le coin haut-droit, et c'est ce qui le rend possible ici.** La bande
+           * que le dossier laisse voir porte la puce à gauche et le nom du compte à sa suite ;
+           * le coin haut-droit, lui, est resté vide à dessein — le titre porte `flex: 1` et
+           * pousse le vide jusqu'au bord. Le premier arc entre par le bord supérieur à 121,
+           * soit après la puce et au-delà de la tête du titre : l'éventail effleure la fin
+           * d'un nom long et laisse tout le reste intact, là où les autres fonds traversent la
+           * carte de part en part.
+           *
+           * ⚠️ **Le centre est dans la carte, et il a fallu l'y ramener.** Premier essai :
+           * centre sous le bord gauche, à 250 pixels — des rayons de 285 à 350, soit une fois
+           * et demie la diagonale de la carte. Vu à deux fois et demie, l'éventail ne se lisait
+           * plus comme des arcs mais comme un faisceau de traits droits : sur les onze, huit
+           * tournaient de moins de quinze degrés. **Un arc dont le rayon dépasse l'objet n'est
+           * plus un arc, c'est une droite.** Ramené à l'intérieur, en bas à gauche du milieu,
+           * les rayons tombent entre 170 et 222 et le premier tourne de cinquante-cinq degrés.
+           *
+           * ⚠️ **L'écart se resserre tout seul vers le coin, et ce n'est pas un réglage.**
+           * Les rayons se suivent d'un pas constant de 6,5 ; mais plus un arc est grand, plus
+           * il coupe le bord supérieur à plat, et moins ce pas se traduit en distance. Mesuré
+           * sur le bord : vingt-huit pixels entre les deux premiers, dix entre les deux
+           * derniers. C'est la convergence qu'on voit sur la carte de référence, et elle sort
+           * de la géométrie plutôt que d'une suite de rayons écrite à la main.
+           *
+           * ⚠️ **Les neuf traversent la bande visible**, puisque tous entrent par le bord
+           * supérieur : ils coupent le haut de 121 à 240, et six d'entre eux ressortent par le
+           * bord droit avant la profondeur de 68 que le dossier dégage.
+           *
+           * ⚠️ **L'éventail n'a ni premier ni dernier trait.** À intensité égale, la famille
+           * se lisait découpée dans un motif plus grand — deux arcs francs marquaient ses
+           * bords comme une coupure. Les deux extrêmes sont donc éteints de plus de moitié :
+           * l'éventail naît et se perd au lieu de commencer et de finir.
+           *
+           * ⚠️ **Trait d'un pixel, et non de 1,4 comme les autres fonds.** À dix pixels
+           * d'écart au lieu de trente-huit, l'épaisseur des autres familles refermait les
+           * intervalles : c'est la même règle qu'aux hachures du fond n° 3 — plus les traits
+           * se serrent, plus il faut qu'il reste du vide entre eux.
+           */
+          <g strokeWidth={1}>
+            {Array.from({ length: 9 }, (_, i) => {
+              const bord = Math.min(i, 8 - i);
+              return (
+                <circle key={i} cx={95} cy={168} r={170 + i * 6.5}
+                  strokeOpacity={bord === 0 ? 0.45 : bord === 1 ? 0.75 : 1} />
+              );
+            })}
+          </g>
+        )}
       </g>
     </svg>
   );

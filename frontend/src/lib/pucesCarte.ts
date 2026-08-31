@@ -261,21 +261,27 @@ export function motifPour(cle: string): number {
 /**
  * Le fond gravé d'une carte : combien de dessins, et lequel revient à qui.
  *
- * ⚠️ **Quatre, et non un seul.** Le guillochis était unique : deux dossiers de trésorerie
+ * ⚠️ **Cinq, et non un seul.** Le guillochis était unique : deux dossiers de trésorerie
  * côte à côte montraient exactement la même courbe au même endroit, ce qui les faisait lire
  * comme un motif d'interface plutôt que comme deux objets. Demandé à l'usage, sur le modèle
- * des puces. Le quatrième — des hachures fines pliées par une arête — est venu d'une carte
- * réelle montrée à l'usage.
+ * des puces. Les deux derniers viennent chacun d'une carte réelle montrée à l'usage : des
+ * hachures fines traversées par des plans de lumière, puis un éventail d'arcs qui balaie le
+ * coin haut-droit.
  *
  * ⚠️ **Tirés indépendamment de la puce, et c'est une vraie contrainte.** Réutiliser
  * `motifPour` telle quelle aurait lié les deux : la puce n° 3 serait toujours venue avec le
- * fond n° 0, et l'on aurait vu six paires figées au lieu de dix-huit combinaisons. Le sel
+ * fond n° 0, et l'on aurait vu six paires figées au lieu de trente combinaisons. Le sel
  * décale la somme avant le modulo, ce qui suffit à décorréler les deux tirages.
+ *
+ * ⚠️ **Ce qui compte est le couple, pas le compte des fonds.** Mesuré sur les quarante
+ * premiers identifiants : les trente paires puce × fond y sont toutes présentes, et les cinq
+ * fonds tombent à 60/59/60/60/61 sur trois cents comptes. C'est cela qu'il faut revérifier en
+ * ajoutant un dessin — deux tirages honnêtes pris séparément peuvent s'accorder mal.
  *
  * ⚠️ **Même raison d'être que pour la puce : déduit, jamais tiré au sort.** Un
  * `Math.random()` regraverait le fond à chaque rendu.
  */
-export const FONDS_CARTE = 4;
+export const FONDS_CARTE = 5;
 
 export function fondPour(cle: string): number {
   let somme = 7919;
