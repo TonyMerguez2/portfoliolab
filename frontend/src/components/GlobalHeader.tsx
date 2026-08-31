@@ -58,12 +58,14 @@ type AssetRowProps = {
   a: Asset;
   highlighted?: boolean;
   focused?: boolean;
+  /** Cet actif est-il celui que le graphique montre en ce moment ? */
+  ouvert?: boolean;
   idx: number;
   price?: Price;
   onSelect: (a: Asset) => void;
 };
 
-const AssetRow = memo(function AssetRow({ a, highlighted, focused, idx, price, onSelect }: AssetRowProps) {
+const AssetRow = memo(function AssetRow({ a, highlighted, focused, ouvert, idx, price, onSelect }: AssetRowProps) {
   const tc = typeColor(a.type);
   const [hovered, setHovered] = useState(false);
   /**
@@ -78,7 +80,10 @@ const AssetRow = memo(function AssetRow({ a, highlighted, focused, idx, price, o
    * du clavier. Le clavier appuie plus fort.
    */
   const teinte = brandHex(a.ticker);
-  const fond = focused ? `${teinte}2E` : hovered ? `${teinte}1A` : "transparent";
+  /* ⚠️ **`ouvert` se peint comme un survol, pour la même raison que le portefeuille ouvert.**
+     Un actif déjà à l'écran n'a pas à s'annoncer autrement que la ligne qu'on vise : c'est le
+     même « vous y êtes », et deux langages pour un seul état obligent à en apprendre deux. */
+  const fond = focused ? `${teinte}2E` : hovered || ouvert ? `${teinte}1A` : "transparent";
   return (
     <div
       data-idx={idx}
@@ -159,7 +164,20 @@ const LignePortefeuille = memo(function LignePortefeuille(
       style={{ display:"flex", alignItems:"center", gap:"10px", width:"100%", padding:"8px 12px",
         /* Le survol et la sélection au clavier disent la même chose et se peignent pareil :
            deux teintes pour un même état feraient croire à deux états. */
-        background: focused ? `${apparence.couleur}2E` : survol ? `${apparence.couleur}1A` : "transparent",
+        /**
+         * ⚠️ **Ce qui est ouvert se peint, il ne s'écrit pas.** La ligne portait le mot
+         * « OUVERT » en vert, entre le nom et les chiffres : un troisième objet dans une
+         * rangée qui en comptait déjà deux, et le seul de la liste à annoncer son état par du
+         * texte. Le fond du survol dit la même chose sans rien ajouter — c'est déjà le
+         * vocabulaire de la ligne visée, et l'œil le lit sans le déchiffrer. Relevé à
+         * l'usage.
+         *
+         * ⚠️ **Même teinte que le survol, et non une de plus.** Le vert de `positif` disait
+         * « ceci va bien » là où il fallait dire « vous y êtes ». La couleur de l'avatar, elle,
+         * désigne ce portefeuille-là.
+         */
+        background: focused ? `${apparence.couleur}2E`
+          : survol || actif ? `${apparence.couleur}1A` : "transparent",
         cursor:"pointer", borderRadius:RAYONS.sm, boxSizing:"border-box" as const }}>
       {/**
         * ⚠️ **L'avatar du portefeuille, et non plus sa poche d'actifs.** Cette vignette
@@ -192,9 +210,6 @@ const LignePortefeuille = memo(function LignePortefeuille(
       <AvatarNovac taille={VIGNETTE} couleur={apparence.couleur} forme={apparence.forme}
         skin={apparence.skin} suivi={false} />
       <span style={{ color:"#F8F9FC", fontSize:"11px", fontWeight:500, flex:1, textAlign:"left" }}>{p.name}</span>
-      {actif && (
-        <span style={{ fontSize:"9px", color:JETONS.positif, fontWeight:600, letterSpacing:"0.04em" }}>OUVERT</span>
-      )}
       {/**
         * ⚠️ **La même colonne que les actifs, au même endroit.** Une ligne de portefeuille
         * n'annonçait que son nombre d'actifs, quand celle d'un actif porte un cours et une
@@ -806,6 +821,7 @@ export default function GlobalHeader() {
                         ?? { valeur: null, variation: null, lignes: r.p.assets?.length ?? 0 }} />
                   ) : (
                     <AssetRow a={r.a} highlighted={false} focused={i === highlightIndex}
+                      ouvert={activeAsset?.ticker === r.a.ticker}
                       idx={i} price={prices[r.a.ticker]}
                       onSelect={() => ouvrirResultat(r)}/>
                   )}
