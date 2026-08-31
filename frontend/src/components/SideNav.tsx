@@ -109,22 +109,58 @@ const HAUT = 28;
 
 type Item = { label: string; href: string; icon: React.JSX.Element };
 
-const icon = (d: string) => (
-  <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-    strokeWidth={1.7} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-    <path d={d} />
+/**
+ * Un pictogramme : un ou plusieurs tracés, pleins ou au trait.
+ *
+ * ⚠️ **Ce n'était qu'une chaîne, et ça ne suffit plus.** Le jeu précédent était uniformément
+ * au trait, d'un seul tracé : `icon()` prenait un `d` et posait un contour de 1,7. Les
+ * pictogrammes fournis à l'usage sont pleins pour huit d'entre eux, au trait pour la carte
+ * seule, et celui du graphique en compte **deux**. Trois variations qu'une chaîne ne peut pas
+ * porter.
+ */
+type Pictogramme = { trace: string[]; contour?: boolean };
+
+/**
+ * ⚠️ **Dix-huit pixels et non dix-sept, parce que le jeu a changé de nature.** Un
+ * pictogramme plein pèse plus qu'un contour de même boîte : à dix-sept, ceux-ci paraissaient
+ * plus gros que les précédents alors qu'ils occupent la même place. Le pixel rendu est ici
+ * une compensation de masse, pas un agrandissement.
+ *
+ * ⚠️ **Le trait de la carte reste celui de sa source.** Un globe est un fil de fer : il ne
+ * peut pas se remplir sans devenir un disque. Son 1,5 dans une boîte de 24 rendue à 18 donne
+ * un trait d'environ 1,1 pixel — plus léger que la masse des pleins qui l'entourent, et c'est
+ * le seul écart de graisse du jeu. Assumé : la forme prime, et elle n'a pas d'autre version.
+ */
+const icon = (p: Pictogramme) => (
+  <svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"
+    fill={p.contour ? "none" : "currentColor"}
+    stroke={p.contour ? "currentColor" : "none"}
+    strokeWidth={p.contour ? 1.5 : undefined}
+    strokeLinecap="round" strokeLinejoin="round">
+    {p.trace.map((d, i) => <path key={i} d={d} />)}
   </svg>
 );
 
-const ICONS = {
-  dashboard: "M3 10.5 12 4l9 6.5V20a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z",
-  chart:     "M4 19V5m0 14h16M8 15V9m4 6V6m4 9v-4",
-  markets:   "M3 3v18h18M7 15l4-5 3 3 5-7",
-  map:       "M9 4 3 6.5v13L9 17l6 2.5 6-2.5v-13L15 6.5zM9 4v13m6-10.5v13",
-  simulation:"M6 20V10m6 10V4m6 16v-7",
-  reglages:  "M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-2.8 1.17V21a2 2 0 1 1-4 0v-.1A1.65 1.65 0 0 0 7.9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 3 15.1a1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 8.9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 8.9 4.6h.1A1.65 1.65 0 0 0 10 3.09V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V10a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1",
-  sun:       "M12 4V2m0 20v-2m8-8h2M2 12h2m13.7-5.7 1.4-1.4M4.9 19.1l1.4-1.4m0-11.4L4.9 4.9m14.2 14.2-1.4-1.4M16 12a4 4 0 1 1-8 0 4 4 0 0 1 8 0",
-  moon:      "M20 14.5A8.5 8.5 0 0 1 9.5 4a8.5 8.5 0 1 0 10.5 10.5",
+/**
+ * ⚠️ **Le jeu précédent avait un défaut que celui-ci corrige.** « Graphique » et
+ * « Simulation » y étaient le même dessin — trois barres, l'une avec un axe en L, l'autre
+ * sans : à dix-sept pixels et sans nom écrit à côté, deux destinations sur cinq ne se
+ * distinguaient plus. Les nouveaux les séparent par la forme même : une courbe pleine, trois
+ * barres, quatre tuiles. Il n'y a plus deux pictogrammes du même genre dans le rail.
+ */
+const ICONS: Record<string, Pictogramme> = {
+  dashboard: { trace: ["m12.69 2.535 8.772 8.776c.615.614.18 1.664-.689 1.664H19.8v5.85a2.926 2.926 0 0 1-2.925 2.925h-.975v-6.825a2.926 2.926 0 0 0-2.753-2.92L12.975 12h-1.95a2.924 2.924 0 0 0-2.924 2.925v6.825h-.975A2.924 2.924 0 0 1 4.2 18.825v-5.85h-.974c-.868 0-1.304-1.05-.69-1.664l8.774-8.776a.975.975 0 0 1 1.378 0m.285 11.415a.974.974 0 0 1 .975.975v6.825h-3.9v-6.825a.974.974 0 0 1 .861-.968l.114-.007z"] },
+  chart: { trace: [
+    "M15.13 9.438a.97.97 0 0 1 1.355-.16l.091.08 3.89 3.882a.97.97 0 0 1 .275.56l.009.127v4.852a.97.97 0 0 1-.858.964l-.114.007H4.2l-.107-.009-.107-.02-.104-.032-.102-.045-.097-.057-.092-.068-.058-.053-.07-.08-.062-.086-.053-.094-.015-.034-.04-.1-.025-.102-.015-.105-.004-.107.009-.107.018-.102q.015-.057.034-.108l.045-.102.057-.097 3.89-5.824a.97.97 0 0 1 1.132-.378l.11.048 3.187 1.59z",
+    "M15.142 3.6a.973.973 0 0 1 1.344-.146l.09.08 3.89 3.883a.97.97 0 0 1-1.284 1.453l-.092-.08-3.136-3.13-4.18 5.005a.97.97 0 0 1-1.069.295l-.112-.048L7.43 9.334 5 12.568a.973.973 0 0 1-1.259.26l-.102-.066a.97.97 0 0 1-.262-1.257l.068-.102L6.36 7.521a.97.97 0 0 1 1.106-.331l.107.045 3.2 1.597z",
+  ] },
+  markets: { trace: ["M9.083 3.25a1.945 1.945 0 0 1 1.945 1.944v5.834a1.944 1.944 0 0 1-1.945 1.944H5.194a1.944 1.944 0 0 1-1.944-1.944V5.194A1.944 1.944 0 0 1 5.194 3.25zm0 11.667a1.944 1.944 0 0 1 1.945 1.944v1.945a1.945 1.945 0 0 1-1.945 1.944H5.194a1.945 1.945 0 0 1-1.944-1.944V16.86a1.944 1.944 0 0 1 1.944-1.944zm9.723-3.89a1.944 1.944 0 0 1 1.944 1.945v5.834a1.945 1.945 0 0 1-1.944 1.944h-3.89a1.945 1.945 0 0 1-1.944-1.944v-5.834a1.944 1.944 0 0 1 1.945-1.944zm0-7.777a1.944 1.944 0 0 1 1.944 1.944V7.14a1.945 1.945 0 0 1-1.944 1.944h-3.89a1.945 1.945 0 0 1-1.944-1.944V5.194a1.945 1.945 0 0 1 1.945-1.944z"] },
+  map: { contour: true, trace: ["M3.6 9h16.8M3.6 15h16.8M11.5 3a17 17 0 0 0 0 18m1-18a17 17 0 0 1 0 18M3 12a9 9 0 1 0 18.001 0A9 9 0 0 0 3 12"] },
+  simulation: { trace: ["M5 7.25c.223 0 .428 0 .599.012.177.012.373.039.57.12.43.178.77.52.948.948.082.198.11.394.121.571.012.171.012.376.012.599v9c0 .223 0 .428-.012.599a1.8 1.8 0 0 1-.12.57 1.75 1.75 0 0 1-.948.948 1.8 1.8 0 0 1-.571.121A9 9 0 0 1 5 20.75c-.223 0-.428 0-.599-.012a1.8 1.8 0 0 1-.57-.12 1.75 1.75 0 0 1-.948-.948 1.8 1.8 0 0 1-.121-.571 9 9 0 0 1-.012-.599v-9c0-.223 0-.428.012-.599a1.8 1.8 0 0 1 .12-.57 1.75 1.75 0 0 1 .948-.948 1.8 1.8 0 0 1 .571-.121c.171-.012.376-.012.599-.012M19 10.25c.223 0 .428 0 .599.012.177.012.373.039.57.12.43.178.77.52.948.948.082.198.11.394.121.571.012.171.012.376.012.599v6c0 .223 0 .428-.012.599a1.8 1.8 0 0 1-.12.57 1.75 1.75 0 0 1-.948.948 1.8 1.8 0 0 1-.571.121c-.171.012-.376.012-.599.012s-.428 0-.599-.012a1.8 1.8 0 0 1-.57-.12 1.75 1.75 0 0 1-.948-.948 1.8 1.8 0 0 1-.121-.571 9 9 0 0 1-.012-.599v-6c0-.223 0-.428.012-.599.012-.177.039-.373.12-.57a1.75 1.75 0 0 1 .948-.948c.198-.082.394-.11.571-.121.171-.012.376-.012.599-.012M12 3.25c.223 0 .428 0 .599.012.177.012.373.039.57.12.43.178.77.52.948.948.082.198.11.394.121.571.012.171.012.376.012.599v12.999c0 .223 0 .428-.012.599a1.8 1.8 0 0 1-.12.57c-.178.43-.52.77-.948.948-.198.082-.394.11-.571.122-.171.012-.376.011-.599.011s-.428 0-.599-.01a1.8 1.8 0 0 1-.57-.123 1.75 1.75 0 0 1-.948-.947 1.8 1.8 0 0 1-.121-.571 9 9 0 0 1-.012-.599V5.5c0-.223 0-.428.012-.599a1.8 1.8 0 0 1 .12-.57 1.75 1.75 0 0 1 .948-.948 1.8 1.8 0 0 1 .571-.121c.171-.012.376-.012.599-.012"] },
+  reglages: { trace: ["M14.58 4.28a.705.705 0 0 0 1.054.436c2.378-1.448 5.099 1.272 3.651 3.65a.707.707 0 0 0 .436 1.053c2.705.656 2.705 4.505 0 5.162a.705.705 0 0 0-.437 1.053c1.448 2.378-1.272 5.099-3.65 3.651a.707.707 0 0 0-1.053.436c-.656 2.705-4.505 2.705-5.162 0a.706.706 0 0 0-1.053-.437c-2.378 1.448-5.099-1.272-3.651-3.65a.706.706 0 0 0-.436-1.053c-2.705-.656-2.705-4.505 0-5.162a.706.706 0 0 0 .437-1.053c-1.448-2.378 1.272-5.099 3.65-3.651a.704.704 0 0 0 1.053-.436c.656-2.705 4.505-2.705 5.162 0M12 9.074a2.925 2.925 0 1 0 0 5.85 2.925 2.925 0 0 0 0-5.85"] },
+  sun: { trace: ["M12 18.84a.977.977 0 0 1 .977.978v1.955a.977.977 0 0 1-1.954 0v-1.955a.977.977 0 0 1 .977-.977m-4.837-2.003a.977.977 0 0 1 0 1.382L5.78 19.601a.976.976 0 1 1-1.382-1.382l1.382-1.382a.977.977 0 0 1 1.382 0m11.056 0 1.382 1.382a.977.977 0 0 1-1.382 1.382l-1.382-1.382a.978.978 0 0 1 1.382-1.382m-4.934-9.612a4.886 4.886 0 1 1-2.425 9.466 4.886 4.886 0 0 1 2.425-9.466m-9.103 3.798a.977.977 0 0 1 0 1.954H2.227a.977.977 0 0 1 0-1.954zm17.59 0a.977.977 0 0 1 0 1.954h-1.954a.977.977 0 0 1 0-1.954zM5.782 4.399 7.163 5.78A.977.977 0 0 1 5.78 7.163L4.399 5.78A.977.977 0 0 1 5.78 4.399m13.82 0a.977.977 0 0 1 0 1.382L18.22 7.163a.978.978 0 0 1-1.382-1.382l1.382-1.382a.977.977 0 0 1 1.382 0M12 1.25a.977.977 0 0 1 .977.977v1.955a.977.977 0 0 1-1.954 0V2.227A.977.977 0 0 1 12 1.25"] },
+  moon: { trace: ["M12.336 2.25c-1.781 0-3.528.48-5.056 1.387a9.8 9.8 0 0 0-3.618 3.765 9.68 9.68 0 0 0 .493 10.01 9.8 9.8 0 0 0 3.97 3.399 9.91 9.91 0 0 0 10.065-.974 9.76 9.76 0 0 0 3.232-4.095c.335-.8-.468-1.603-1.277-1.277a6.45 6.45 0 0 1-4.35.162 6.4 6.4 0 0 1-3.446-2.634 6.29 6.29 0 0 1 1.043-8.046l.076-.078c.542-.614.111-1.611-.746-1.611h-.261l-.067-.006-.06-.002z"] },
+  connexion: { trace: ["M12 2.25c.954 0 1.886.286 2.679.822a4.86 4.86 0 0 1 1.775 2.187c.365.891.46 1.871.275 2.817a4.9 4.9 0 0 1-1.32 2.496 4.8 4.8 0 0 1-2.468 1.334 4.77 4.77 0 0 1-2.786-.277A4.83 4.83 0 0 1 7.99 9.833a4.9 4.9 0 0 1-.812-2.708l.004-.212a4.9 4.9 0 0 1 1.483-3.31A4.8 4.8 0 0 1 12 2.25M13.929 13.95c1.278 0 2.505.514 3.409 1.428a4.9 4.9 0 0 1 1.412 3.447v.975c0 .517-.203 1.013-.565 1.379a1.92 1.92 0 0 1-1.364.571H7.18a1.92 1.92 0 0 1-1.364-.571A1.96 1.96 0 0 1 5.25 19.8v-.975c0-1.293.508-2.533 1.412-3.447a4.8 4.8 0 0 1 3.41-1.428z"] },
 };
 
 /** Le voile flouté, identique sur les quatre pièces de la silhouette. */
@@ -377,13 +413,21 @@ export default function SideNav() {
           connexion. Sans elle, il fallait repasser par la page d'accueil
           pour se connecter — donc quitter ce qu'on était en train de faire. */}
       {ready && !user && (
+        /**
+          * ⚠️ **La pastille d'accent a cédé la place au pictogramme.** Cette entrée portait un
+          * « ↪ » typographique dans un disque teinté : le disque disait « ceci concerne le
+          * compte », faute d'un dessin qui le dise. Le pictogramme fourni est une silhouette —
+          * il porte le sens lui-même, et la pastille redevenait une bordure de plus dans un
+          * rail qui n'en a aucune autre.
+          *
+          * ⚠️ **L'accent reste, sur l'encre.** C'est la seule rangée qui appelle une action
+          * plutôt qu'une destination : elle doit se détacher, mais par sa couleur, pas par une
+          * forme étrangère. `icon()` peint en `currentColor`, donc l'enveloppe suffit.
+          */
         <Rangee nom="Se connecter" onClick={() => setShowAuth(true)} enfant={
-          <span style={{
-            width: 26, height: 26, borderRadius: "50%",
-            display: "flex", alignItems: "center", justifyContent: "center",
-            border: "1px solid var(--nv-accent-bord)", background: "var(--nv-accent-doux)",
-            color: "var(--nv-accent)", fontSize: 13, lineHeight: 1,
-          }}>↪</span>
+          <span style={{ display: "flex", color: "var(--nv-accent)" }}>
+            {icon(ICONS.connexion)}
+          </span>
         } />
       )}
 
