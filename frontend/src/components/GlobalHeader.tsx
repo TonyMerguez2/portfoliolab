@@ -359,12 +359,25 @@ export default function GlobalHeader() {
     }, 300);
   }, [localSearch]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Load prices when dropdown opens
+  /**
+   * Les cours des actifs proposés, demandés à l'ouverture de la palette.
+   *
+   * ⚠️ **La condition sur le mode a été retirée, et c'est elle qui vidait la colonne.** Elle
+   * se lisait `mode !== "asset"` — vestige du temps où la recherche était un menu déroulant
+   * qui ne s'ouvrait qu'en mode actif. Depuis qu'elle est une palette, elle s'ouvre de
+   * partout : sur le tableau de bord d'un portefeuille, `mode` vaut « portfolio », aucun
+   * cours n'était donc chargé, et les vingt actifs proposés paraissaient sans prix ni
+   * variation. Relevé à l'usage — « je ne vois plus les perfs et valeurs ».
+   *
+   * ⚠️ **Ce n'est pas la palette qui choisit ce qu'elle montre selon le mode.** Elle propose
+   * les mêmes actifs partout ; conditionner leurs cours à l'écran d'où on l'appelle est une
+   * asymétrie que rien n'annonce, et qui se lit comme une panne de réseau.
+   */
   useEffect(() => {
-    if (!showSearch || mode !== "asset") return;
+    if (!showSearch) return;
     const visible = filteredAssets.slice(0, displayCount);
     fetchPrices(visible.map(a => a.ticker));
-  }, [showSearch, category, displayCount, mode]);
+  }, [showSearch, category, displayCount]);
 
   /**
    * ⚠️ **Les cours des lignes détenues, demandés à l'ouverture.** L'effet ci-dessus ne
