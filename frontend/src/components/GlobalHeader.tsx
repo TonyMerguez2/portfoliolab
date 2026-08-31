@@ -46,6 +46,8 @@ const RAYON_RECHERCHE = RAYONS.xl;
 type Asset = { ticker: string; type: string; name: string; };
 type Portefeuille = {
   id: string; name: string; color?: string | null; image_url?: string | null;
+  /** La valeur déclarée du portefeuille. La route de liste la publie déjà. */
+  total_value?: number | null;
   // Le poids sert à la vignette, qui met la plus grosse ligne devant. Le type
   // était `unknown[]`, ce que seul un `.length` tolérait.
   assets?: { ticker: string; weight: number }[];
@@ -122,7 +124,7 @@ const AssetRow = memo(function AssetRow({ a, highlighted, focused, idx, price, o
  * qu'on cherche par leur nom.
  */
 const LignePortefeuille = memo(function LignePortefeuille(
-  { p, actif, onSelect, idx, focused, onSupprimer }: {
+  { p, actif, onSelect, idx, focused, onSupprimer, chiffres }: {
     p: Portefeuille; actif: boolean; onSelect: (p: Portefeuille) => void;
     /**
      * ⚠️ **Le rang dans la suite, et non dans la liste des portefeuilles.** C'est par lui que
@@ -134,6 +136,15 @@ const LignePortefeuille = memo(function LignePortefeuille(
     focused: boolean;
     /** Retire ce portefeuille. Rendu par l'appelant, qui seul tient la liste. */
     onSupprimer: (p: Portefeuille) => void;
+    /**
+     * La valeur et la variation du jour, déjà calculées.
+     *
+     * ⚠️ **Passées toutes faites, et non déduites d'une table de cours.** Recevoir `prices`
+     * entier ferait échouer la mémoïsation de chaque ligne à chaque cours reçu — toutes les
+     * dix secondes, pour vingt lignes dont une seule a bougé. Deux nombres changent quand
+     * *ces* deux nombres changent.
+     */
+    chiffres: { valeur: number | null; variation: number | null };
   },
 ) {
   const [survol, setSurvol] = useState(false);
@@ -184,9 +195,29 @@ const LignePortefeuille = memo(function LignePortefeuille(
       {actif && (
         <span style={{ fontSize:"9px", color:JETONS.positif, fontWeight:600, letterSpacing:"0.04em" }}>OUVERT</span>
       )}
-      <span style={{ color:"rgba(255,255,255,0.35)", fontSize:"10px" }}>
-        {p.assets?.length ?? 0} actif{(p.assets?.length ?? 0) > 1 ? "s" : ""}
-      </span>
+      {/**
+        * ⚠️ **La même colonne que les actifs, au même endroit.** Une ligne de portefeuille
+        * n'annonçait que son nombre d'actifs, quand celle d'un actif porte un cours et une
+        * variation du jour. Les deux se suivent dans la même liste : deux grammaires à
+        * droite du nom obligent à relire pour savoir ce qu'on regarde. Demandé à l'usage.
+        *
+        * ⚠️ **Le nombre d'actifs ne disparaît pas, il descend.** Il tenait la place que le
+        * cours occupe maintenant ; il devient la ligne du bas quand il n'y a pas de variation
+        * à montrer — un portefeuille vide, ou dont aucun cours n'est encore arrivé.
+        */}
+      <div style={{ display:"flex", flexDirection:"column", alignItems:"flex-end", gap:"1px" }}>
+        <span style={{ color:"#F8F9FC", fontSize:"10px", opacity:0.6 }}>
+          {chiffres.valeur != null
+            ? chiffres.valeur.toLocaleString("fr-FR", { maximumFractionDigits:0 }) + " €"
+            : `${p.assets?.length ?? 0} actif${(p.assets?.length ?? 0) > 1 ? "s" : ""}`}
+        </span>
+        {chiffres.variation != null && (
+          <span style={{ fontSize:"10px", fontWeight:600,
+            color: chiffres.variation >= 0 ? "#22c55e" : "#ef4444" }}>
+            {chiffres.variation >= 0 ? "▲" : "▼"} {Math.abs(chiffres.variation).toFixed(2)}%
+          </span>
+        )}
+      </div>
       {/**
         * ⚠️ **Deux clics, et non une boîte du navigateur.** `confirm()` arrête tout, sort de
         * la page et se présente au nom du site plutôt qu'au nom de l'application — c'est déjà
@@ -335,6 +366,20 @@ export default function GlobalHeader() {
     fetchPrices(visible.map(a => a.ticker));
   }, [showSearch, category, displayCount, mode]);
 
+  /**
+   * ⚠️ **Les cours des lignes détenues, demandés à l'ouverture.** L'effet ci-dessus ne
+   * charge que les actifs *proposés* ; ceux que les portefeuilles contiennent n'y figurent
+   * pas, et sans eux leur variation du jour resterait vide indéfiniment. Une seule requête
+   * groupée, sur l'union des tickers de tous les portefeuilles — et pas une par ligne.
+   */
+  useEffect(() => {
+    if (!showSearch) return;
+    /* ⚠️ `Array.from` et non un déploiement de `Set` : la cible de compilation du projet
+       est antérieure à 2015, et le déploiement d'un itérable y est refusé. */
+    const tickers = Array.from(new Set(portfolios.flatMap(p => (p.assets ?? []).map(a => a.ticker))));
+    if (tickers.length) fetchPrices(tickers);
+  }, [showSearch, portfolios]);
+
   // Scroll infini
   const handleScroll = () => {
     const el = listRef.current;
@@ -400,6 +445,43 @@ export default function GlobalHeader() {
       setPortfolios(avant);
     }
   }, [portfolios, activePortfolio, setActivePortfolio]);
+
+  /**
+   * La valeur et la variation du jour de chaque portefeuille.
+   *
+   * ⚠️ **La valeur est déclarée, la variation est calculée — et ce n'est pas la même
+   * matière.** `total_value` vient du serveur, saisi par l'épargnant ; aucune route ne
+   * publie de performance journalière par portefeuille. On la reconstitue donc à partir des
+   * cours déjà en main : la variation d'un portefeuille est la moyenne des variations de ses
+   * lignes, **pondérée par leurs poids**.
+   *
+   * ⚠️ **Pondérée, et non moyenne simple.** Une ligne à 80 % et une à 2 % ne pèsent pas
+   * pareil sur ce que l'épargnant voit bouger. Une moyenne simple donnerait au bitcoin qui
+   * occupe 2 % du portefeuille autant de voix qu'à l'ETF monde qui en fait les trois quarts.
+   *
+   * ⚠️ **Elle ne paraît que si l'on a de quoi la dire.** Les cours n'arrivent que pour les
+   * tickers demandés ; tant qu'aucune ligne du portefeuille n'a le sien, la variation vaut
+   * `null` et la ligne montre son nombre d'actifs plutôt qu'un zéro qui mentirait. Les poids
+   * manquants sont eux aussi écartés du dénominateur, sans quoi un portefeuille à moitié
+   * coté afficherait la moitié de sa vraie variation.
+   */
+  const chiffresParPortefeuille = useMemo(() => {
+    const table = new Map<string, { valeur: number | null; variation: number | null }>();
+    for (const p of portfolios) {
+      let poids = 0, somme = 0;
+      for (const a of p.assets ?? []) {
+        const c = prices[a.ticker];
+        if (!c || !Number.isFinite(a.weight)) continue;
+        poids += a.weight;
+        somme += a.weight * c.change;
+      }
+      table.set(String(p.id), {
+        valeur: Number.isFinite(p.total_value as number) ? (p.total_value as number) : null,
+        variation: poids > 0 ? somme / poids : null,
+      });
+    }
+    return table;
+  }, [portfolios, prices]);
 
   const displayAssets = localSearch ? searchResults.filter(a => category === "all" || a.type === category) : filteredAssets.slice(0, displayCount);
 
@@ -700,7 +782,9 @@ export default function GlobalHeader() {
                   {r.genre === "portefeuille" ? (
                     <LignePortefeuille p={r.p} idx={i} focused={i === highlightIndex}
                       actif={String(activePortfolio?.id ?? "") === String(r.p.id)}
-                      onSelect={ouvrirPortefeuille} onSupprimer={supprimerPortefeuille} />
+                      onSelect={ouvrirPortefeuille} onSupprimer={supprimerPortefeuille}
+                      chiffres={chiffresParPortefeuille.get(String(r.p.id))
+                        ?? { valeur: null, variation: null }} />
                   ) : (
                     <AssetRow a={r.a} highlighted={false} focused={i === highlightIndex}
                       idx={i} price={prices[r.a.ticker]}
