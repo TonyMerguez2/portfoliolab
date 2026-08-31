@@ -198,15 +198,35 @@ function Puce({ motif, metal }: { motif: number; metal: number }) {
 }
 
 /**
+ * Le tracé du sans-contact, tel qu'il a été fourni.
+ *
+ * ⚠️ **C'est la chaîne d'origine, à un `h.01` près.** Le point de base a été retiré en
+ * effaçant ce seul segment — et **non** en supprimant le `M12 18` qui le précède. Les deux
+ * ondes suivantes commencent par un `m` *relatif* : ôter l'ancre les aurait fait repartir de
+ * l'origine du repère, et les trois arcs se seraient éparpillés. Le point de départ reste
+ * donc écrit, il ne dessine simplement plus rien. Le reste n'est pas retouché d'un caractère,
+ * ce qui permet de le comparer à la source à l'œil nu.
+ */
+const TRACE_SANS_FIL = "M12 18m-2.838-2.828a4 4 0 0 1 5.656 0"
+  + "m-8.485-2.829a8 8 0 0 1 11.314 0M3.515 9.515c4.686-4.687 12.284-4.687 17 0";
+
+/**
  * Le pictogramme du sans-contact, à droite de la puce.
  *
- * ⚠️ **Quatre arcs concentriques, et le premier n'est pas un point.** La marque normalisée
- * part d'un arc court et non d'un disque ; le disque est une simplification qu'on voit sur des
- * imitations, et elle se remarque parce qu'elle rompt la progression — quatre arcs de même
- * ouverture, de rayons régulièrement croissants, dont l'œil lit l'onde qui s'éloigne.
+ * ⚠️ **Il est couché d'un quart de tour, et c'est le seul écart à l'icône fournie.** Telle
+ * quelle, elle ouvre vers le **haut** : c'est un signal de réseau, et sur une carte bancaire
+ * cela se lit « wifi ». La marque sans-contact, sur les trois cartes de référence, ouvre à
+ * l'horizontale — arc court côté puce, arc long vers l'extérieur. La rotation est faite par
+ * l'attribut et non en réécrivant les coordonnées, précisément pour que le tracé reste
+ * comparable à la source.
  *
- * ⚠️ **Leur centre est hors du cadre, à gauche.** C'est ce qui les fait tous ouvrir vers la
- * droite du même angle. Placé dedans, le plus petit arc se serait refermé en croissant.
+ * ⚠️ **Le cadre est ajusté au dessin, pas laissé à 24 sur 24.** Le point retiré occupait le
+ * bas de la boîte d'origine ; en la gardant entière, l'icône aurait rendu avec un tiers de
+ * vide sous elle, et l'écart de six pixels d'avec la puce n'aurait plus rien voulu dire. Les
+ * bornes ci-dessous sont celles des trois arcs après rotation — mesurées sur les tracés :
+ * l'onde longue culmine à 6 avant rotation, ce qui la porte à 18 en abscisse, et ses deux
+ * extrémités tombent en ordonnée 3,515 et 20,515. Une demi-épaisseur de trait est ajoutée
+ * tout autour, sans quoi le trait serait rogné par le bord du cadre.
  *
  * ⚠️ **En blanc simple, jamais dans le métal de la puce.** Sur une carte réelle, le contact
  * est du métal serti et la marque est *imprimée* : lui donner l'or ou l'argent aurait fait
@@ -214,24 +234,16 @@ function Puce({ motif, metal }: { motif: number; metal: number }) {
  * le numéro qu'elle surplombe.
  *
  * ⚠️ **Dix-neuf de haut pour une puce de vingt-six, soit les trois quarts.** À seize —
- * l'essai précédent — la marque se lisait comme un détail tombé à côté de la puce plutôt que
+ * un essai précédent — la marque se lisait comme un détail tombé à côté de la puce plutôt que
  * comme son pendant. Mesuré sur la carte de référence, le rapport tient autour de trois
  * quarts, et c'est ce qui les fait lire comme un seul groupe.
  */
 function SansFil() {
-  /* Le centre à gauche du cadre ; quatre rayons, une ouverture de ±42°. */
-  const cx = -1, cy = 8, cos = Math.cos(Math.PI * 42 / 180), sin = Math.sin(Math.PI * 42 / 180);
   return (
-    <svg width={12} height={19} viewBox="0 0 10 16" aria-hidden="true"
-      fill="none" stroke="rgba(255,255,255,0.72)" strokeWidth={1.5} strokeLinecap="round"
-      style={{ flexShrink: 0 }}>
-      {[3, 5.5, 8, 10.5].map(r => {
-        const x = (cx + r * cos).toFixed(2);
-        return (
-          <path key={r} d={`M${x} ${(cy - r * sin).toFixed(2)}`
-            + ` A${r} ${r} 0 0 1 ${x} ${(cy + r * sin).toFixed(2)}`} />
-        );
-      })}
+    <svg width={11} height={19} viewBox="8.08 2.77 10.67 18.5" aria-hidden="true"
+      fill="none" stroke="rgba(255,255,255,0.72)" strokeWidth={1.5}
+      strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
+      <path transform="rotate(90 12 12)" d={TRACE_SANS_FIL} />
     </svg>
   );
 }
