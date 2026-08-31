@@ -175,6 +175,13 @@ const LignePortefeuille = memo(function LignePortefeuille(
          * ⚠️ **Même teinte que le survol, et non une de plus.** Le vert de `positif` disait
          * « ceci va bien » là où il fallait dire « vous y êtes ». La couleur de l'avatar, elle,
          * désigne ce portefeuille-là.
+         *
+         * ⚠️ **Une seule ligne peut l'être à la fois, et le mode seul le sait.** Le contexte
+         * garde *en même temps* un portefeuille actif et un actif actif : celui qu'on
+         * regardait avant de changer d'écran survit à la bascule. Marquer les deux allumait
+         * deux lignes de la liste alors qu'une seule page est affichée — deux « vous y êtes »
+         * dont l'un était faux. Relevé à l'usage. `mode` dit lequel des deux souvenirs est
+         * celui qu'on a sous les yeux.
          */
         background: focused ? `${apparence.couleur}2E`
           : survol || actif ? `${apparence.couleur}1A` : "transparent",
@@ -815,13 +822,14 @@ export default function GlobalHeader() {
                   )}
                   {r.genre === "portefeuille" ? (
                     <LignePortefeuille p={r.p} idx={i} focused={i === highlightIndex}
-                      actif={String(activePortfolio?.id ?? "") === String(r.p.id)}
+                      actif={mode === "portfolio"
+                        && String(activePortfolio?.id ?? "") === String(r.p.id)}
                       onSelect={ouvrirPortefeuille} onSupprimer={supprimerPortefeuille}
                       chiffres={chiffresPf[String(r.p.id)]
                         ?? { valeur: null, variation: null, lignes: r.p.assets?.length ?? 0 }} />
                   ) : (
                     <AssetRow a={r.a} highlighted={false} focused={i === highlightIndex}
-                      ouvert={activeAsset?.ticker === r.a.ticker}
+                      ouvert={mode === "asset" && activeAsset?.ticker === r.a.ticker}
                       idx={i} price={prices[r.a.ticker]}
                       onSelect={() => ouvrirResultat(r)}/>
                   )}
