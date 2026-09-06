@@ -1,3 +1,4 @@
+import { recuperer } from "@/lib/requete";
 /**
  * Le nom complet d'un actif, quel que soit l'endroit d'où il vient.
  *
@@ -64,7 +65,7 @@ export function demanderNom(ticker: string): void {
   if (!ticker || nomConnu(ticker) !== null || _noms.has(ticker) || _enCours.has(ticker)) return;
   const promesse = (async () => {
     try {
-      const r = await fetch(`${API_URL}/api/v1/search?q=${encodeURIComponent(ticker)}`);
+      const r = await recuperer(`${API_URL}/api/v1/search?q=${encodeURIComponent(ticker)}`);
       const d = await r.json();
       const exact = (d?.results || []).find((x: { ticker?: string }) => x?.ticker === ticker);
       _noms.set(ticker, exact?.name ?? null);

@@ -1,4 +1,5 @@
 "use client";
+import { recuperer } from "@/lib/requete";
 import { useEffect, useState } from "react";
 
 import { API_URL as API } from "@/lib/api";
@@ -89,7 +90,7 @@ export function useParametresSuggeres(portfolioId?: string) {
   useEffect(() => {
     if (!portfolioId) { setSuggestions(null); return; }
     let annule = false;
-    fetch(`${API}/api/v1/portfolios/${portfolioId}/objectifs/parametres`,
+    recuperer(`${API}/api/v1/portfolios/${portfolioId}/objectifs/parametres`,
       { headers: enTetesAuth() })
       .then(r => (r.ok ? r.json() : null))
       .then(d => { if (!annule && d) setSuggestions(d); })

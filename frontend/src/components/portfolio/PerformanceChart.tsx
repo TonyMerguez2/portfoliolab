@@ -1,4 +1,5 @@
 "use client";
+import { annulerRepos, auRepos, recuperer } from "@/lib/requete";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { couleurGrille, ecrireStyleGrille, lireStyleGrille, LIBELLE_GRILLE, STYLES_GRILLE, type StyleGrille } from "@/lib/grille";
@@ -1329,7 +1330,7 @@ export default function PerformanceChart({
       return;
     }
     let annule = false;
-    fetch(`${API}/api/v1/portfolios/${portfolioId}/history/comptes?period=${PERIOD_API[period]}`,
+    recuperer(`${API}/api/v1/portfolios/${portfolioId}/history/comptes?period=${PERIOD_API[period]}`,
           { headers: enTetesAuth() })
       .then(r => r.json())
       .then((d: { comptes?: CourbeCompte[] }) => {
@@ -1498,20 +1499,38 @@ export default function PerformanceChart({
   //
   // Et c'est bien le premier qu'il faut afficher, puisque c'est la série que
   // la courbe trace au-dessus du chiffre.
+  /**
+   * ⚠️ **La période affichée d'abord, les sept autres au repos et une par une.**
+   *
+   * Les huit partaient ensemble, en `Promise.all`. Mesuré dans le navigateur sur le site en
+   * ligne : trente-quatre appels pour un chargement, les huit fenêtres lancées à la même
+   * milliseconde et rendues entre dix et quinze secondes — quand un seul de ces appels, seul,
+   * répond en 0,68 s. Elles ne étaient pas lentes, elles s'attendaient les unes les autres.
+   *
+   * ⚠️ **Et sept d'entre elles ne s'affichent nulle part.** Le chiffre visible est celui de la
+   * pastille retenue, décidé à l'usage ; les autres ne servent plus qu'à l'`aria-label` du
+   * survol et à l'expression de l'avatar. Douze secondes d'attente pour un texte que l'écran
+   * ne montre pas.
+   *
+   * Elles ne sont pas supprimées pour autant : elles arrivent après, quand le navigateur n'a
+   * plus rien à faire, une par une pour ne jamais se disputer le serveur. `requestIdleCallback`
+   * n'existe pas partout — Safari ne l'a que depuis peu — d'où le repli sur un `setTimeout`.
+   */
   const [rendements, setRendements] = useState<Record<Period, number | null>>(
     () => Object.fromEntries(PERIODES.map(p => [p, null])) as Record<Period, number | null>);
 
   useEffect(() => {
     if (!assets.length) return;
-    let cancelled = false;
+    let annule = false;
     const tickers = encodeURIComponent(assets.map(a => a.ticker).join(","));
     const weights = encodeURIComponent(assets.map(a => a.weight).join(","));
-    Promise.all(PERIODES.map(p => {
-      const u = surTransactions && portfolioId
-        ? `${API}/api/v1/portfolios/${portfolioId}/history?period=${PERIOD_API[p]}`
-        : `${API}/api/v1/portfolio-history?tickers=${tickers}&weights=${weights}&period=${PERIOD_API[p]}`;
-      return fetch(u, { headers: enTetesAuth() })
-        .then(r => r.json())
+
+    const urlDe = (p: Period) => (surTransactions && portfolioId
+      ? `${API}/api/v1/portfolios/${portfolioId}/history?period=${PERIOD_API[p]}`
+      : `${API}/api/v1/portfolio-history?tickers=${tickers}&weights=${weights}&period=${PERIOD_API[p]}`);
+
+    const lire = (p: Period) => recuperer(urlDe(p), { headers: enTetesAuth() })
+      .then(r => r.json())
         /**
          * Sur transactions, le gain rapporté au capital engagé — la même mesure
          * que « Gains / pertes » de la bande de tête, fenêtre par fenêtre.
@@ -1537,16 +1556,29 @@ export default function PerformanceChart({
          * Dietz modifié, 14,89 % ici contre 5,87 % — mais il se compare à un
          * repère qui n'est pas mesuré comme lui.
          */
-        .then((d: { change?: number | null; gain_pct?: number | null }) => {
-          const v = surTransactions ? d.gain_pct : d.change;
-          return [p, typeof v === "number" ? v : null] as const;
-        })
-        .catch(() => [p, null] as const);
-    })).then(paires => {
-      if (!cancelled) setRendements(Object.fromEntries(paires) as Record<Period, number | null>);
-    });
-    return () => { cancelled = true; };
-  }, [key, portfolioId, surTransactions]); // eslint-disable-line react-hooks/exhaustive-deps
+      .then((d: { change?: number | null; gain_pct?: number | null }) => {
+        const v = surTransactions ? d.gain_pct : d.change;
+        const n = typeof v === "number" ? v : null;
+        if (!annule) setRendements(prev => (prev[p] === n ? prev : { ...prev, [p]: n }));
+      })
+      .catch(() => {});
+
+    /* La fenêtre à l'écran, tout de suite : c'est le seul chiffre que quelqu'un lit. */
+    lire(period);
+
+    /* Puis les autres, chacune attendant que la précédente ait rendu. Une file, pas une salve. */
+    const autres = PERIODES.filter(p => p !== period);
+    let repos: number | undefined;
+    const suivante = () => {
+      if (annule) return;
+      const p = autres.shift();
+      if (!p) return;
+      lire(p).then(() => { if (!annule) repos = auRepos(suivante); });
+    };
+    repos = auRepos(suivante);
+
+    return () => { annule = true; if (repos !== undefined) annulerRepos(repos); };
+  }, [key, portfolioId, surTransactions, period]); // eslint-disable-line react-hooks/exhaustive-deps
 
 
   /**

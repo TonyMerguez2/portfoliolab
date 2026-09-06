@@ -1,4 +1,5 @@
 "use client";
+import { recuperer } from "@/lib/requete";
 import { useEffect, useState } from "react";
 
 import { API_URL as API } from "@/lib/api";
@@ -63,7 +64,7 @@ export function useTransparence(portfolioId?: string): {
     if (!portfolioId) { setEtat("pret"); setDonnees(null); return; }
     let annule = false;
     setEtat("charge");
-    fetch(`${API}/api/v1/portfolios/${portfolioId}/events/transparence`, { headers: enTetesAuth() })
+    recuperer(`${API}/api/v1/portfolios/${portfolioId}/events/transparence`, { headers: enTetesAuth() })
       .then(r => (r.ok ? r.json() : Promise.reject(new Error(String(r.status)))))
       .then((d: Transparence) => { if (!annule) { setDonnees(d); setEtat("pret"); } })
       .catch(() => { if (!annule) setEtat("erreur"); });

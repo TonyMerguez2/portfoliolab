@@ -25,6 +25,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, field_validator
 from sqlalchemy.orm import Session
 
+from app.services.memoire_courte import memorise, oublier as oublier_memoire
 from app.core.database import Compte, get_db, MouvementTresorerie, Portfolio, Transaction
 from app.services.tresorerie import liquidites_par_jour
 from app.core.auth import require_auth
@@ -295,6 +296,7 @@ def delete_transaction(
 # ── GET — positions calculées ─────────────────────────────────────────────────
 
 @router.get("/{portfolio_id}/positions")
+@memorise("positions")
 async def get_positions(
     portfolio_id: str,
     db:           Session = Depends(get_db),
@@ -718,6 +720,7 @@ def _journal_par_compte(comptes, db) -> dict:
 
 
 @router.get("/{portfolio_id}/history")
+@memorise("history")
 async def get_history(
     portfolio_id: str,
     period:       str     = Query("max"),
@@ -1591,6 +1594,7 @@ def _details_titre(ticker: str) -> dict:
 
 
 @router.get("/{portfolio_id}/history/comptes")
+@memorise("history-comptes")
 async def get_history_par_compte(
     portfolio_id: str,
     period:       str     = Query("max"),
@@ -1845,6 +1849,7 @@ async def get_history_par_compte(
 
 
 @router.get("/{portfolio_id}/analysis")
+@memorise("analysis")
 async def get_analysis(
     portfolio_id: str,
     db:           Session = Depends(get_db),

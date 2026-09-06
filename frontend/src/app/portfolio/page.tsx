@@ -1,4 +1,5 @@
 "use client";
+import { recuperer } from "@/lib/requete";
 import { useCallback, useEffect, useLayoutEffect, useState, useMemo, useRef, useId, Suspense } from "react";
 import type { ReactNode } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
@@ -533,7 +534,7 @@ function PortfolioPageInner() {
 
   useEffect(() => {
     const idFromUrl = searchParams.get("id");
-    fetch(`${API_URL}/api/v1/portfolios`, { headers: enTetesAuth() })
+    recuperer(`${API_URL}/api/v1/portfolios`, { headers: enTetesAuth() })
       .then(r => r.json())
       .then((list: PortfolioData[]) => {
         if (!Array.isArray(list) || !list.length) {
@@ -577,7 +578,7 @@ function PortfolioPageInner() {
     });
 
     let cancelled = false;
-    fetch(`${API_URL}/api/v1/portfolios`, { headers: enTetesAuth() })
+    recuperer(`${API_URL}/api/v1/portfolios`, { headers: enTetesAuth() })
       .then(r => r.json())
       .then((list: PortfolioData[]) => {
         if (cancelled || !Array.isArray(list)) return;
@@ -606,7 +607,7 @@ function PortfolioPageInner() {
 
     let cancelled = false;
     const relire = () =>
-      fetch(`${API_URL}/api/v1/portfolios/${id}/positions`, { headers: auth })
+      recuperer(`${API_URL}/api/v1/portfolios/${id}/positions`, { headers: auth })
         .then(r => (r.ok ? r.json() : null))
         .then((d: PositionsData | null) => { if (!cancelled) setPositions(d); })
         .catch(() => { if (!cancelled) setPositions(null); });
@@ -785,7 +786,7 @@ function PortfolioPageInner() {
     if (!id || !surTransactions) { setEcritures([]); setJournalArrive(true); return; }
     setJournalArrive(false);
     let annule = false;
-    fetch(`${API_URL}/api/v1/portfolios/${id}/transactions`, { headers: enTetesAuth() })
+    recuperer(`${API_URL}/api/v1/portfolios/${id}/transactions`, { headers: enTetesAuth() })
       .then(r => (r.ok ? r.json() : null))
       .then((d) => {
         if (annule) return;
@@ -829,7 +830,7 @@ function PortfolioPageInner() {
     const id = portfolio?.id;
     if (!id || !surTransactions) { setTwr(null); return; }
     let annule = false;
-    fetch(`${API_URL}/api/v1/portfolios/${id}/history?period=${PERIOD_MAP[period]}`,
+    recuperer(`${API_URL}/api/v1/portfolios/${id}/history?period=${PERIOD_MAP[period]}`,
           { headers: enTetesAuth() })
       .then(r => (r.ok ? r.json() : null))
       .then((d: {
@@ -998,7 +999,7 @@ function PortfolioPageInner() {
      * date d'achat, et le serveur ne coupe rien quand il ne resterait qu'un point.
      */
     const fetchPrices = () =>
-      fetch(`${API_URL}/api/v1/prices?tickers=${encodeURIComponent(tickers)}&period=${PERIOD_MAP[period]}`
+      recuperer(`${API_URL}/api/v1/prices?tickers=${encodeURIComponent(tickers)}&period=${PERIOD_MAP[period]}`
           + `&depuis=${encodeURIComponent(depuisParTicker)}`)
         .then(r => r.json())
         .then((list: PriceData[]) => {
@@ -1085,7 +1086,7 @@ function PortfolioPageInner() {
     if (!tickersSuivis.length) return;
     let annule = false;
     const tickers = tickersSuivis.join(",");
-    fetch(`${API_URL}/api/v1/prices?tickers=${encodeURIComponent(tickers)}`
+    recuperer(`${API_URL}/api/v1/prices?tickers=${encodeURIComponent(tickers)}`
         + `&period=${PERIOD_MAP[period]}&depuis=${encodeURIComponent(depuisParTicker)}`)
       .then(r => r.json())
       .then((list: PriceData[]) => {
@@ -1106,7 +1107,7 @@ function PortfolioPageInner() {
 
   // Benchmark SPY — fetch séparé, silencieux en cas d'échec
   useEffect(() => {
-    fetch(`${API_URL}/api/v1/prices?tickers=SPY&period=${PERIOD_MAP[period]}`)
+    recuperer(`${API_URL}/api/v1/prices?tickers=SPY&period=${PERIOD_MAP[period]}`)
       .then(r => r.json())
       .then((list: PriceData[]) => {
         const spy = list.find(p => p.symbol === "SPY");
@@ -1506,7 +1507,7 @@ function PortfolioPageInner() {
     // ⚠️ On ne remet pas l'état à « charge » : la route met plusieurs secondes,
     // et vider la note à chaque rafraîchissement des écritures l'aurait fait
     // clignoter. Elle reste affichée jusqu'à son remplacement.
-    fetch(`${API_URL}/api/v1/portfolios/${id}/analysis`, { headers: enTetesAuth() })
+    recuperer(`${API_URL}/api/v1/portfolios/${id}/analysis`, { headers: enTetesAuth() })
       .then(r => (r.ok ? r.json() : null))
       .then((d: Analyse | null) => {
         if (annule) return;
@@ -1552,7 +1553,7 @@ function PortfolioPageInner() {
     const id = portfolio?.id;
     if (!id) return;
     try {
-      await fetch(`${API_URL}/api/v1/portfolios/${id}`, {
+      await recuperer(`${API_URL}/api/v1/portfolios/${id}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json", ...enTetesAuth() },
         body: JSON.stringify({ horizon_annees: horizon, tolerance }),
@@ -1576,7 +1577,7 @@ function PortfolioPageInner() {
     const id = portfolio?.id;
     if (!id) return;
     try {
-      await fetch(`${API_URL}/api/v1/portfolios/${id}`, {
+      await recuperer(`${API_URL}/api/v1/portfolios/${id}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json", ...enTetesAuth() },
         body: JSON.stringify({ frais_lignes: frais }),
@@ -1711,7 +1712,7 @@ function PortfolioPageInner() {
     else delete suivantes[genre];
     setPortfolio(p => (p ? { ...p, couleurs_comptes: suivantes } : p));
     try {
-      const r = await fetch(`${API_URL}/api/v1/portfolios/${id}`, {
+      const r = await recuperer(`${API_URL}/api/v1/portfolios/${id}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json", ...enTetesAuth() },
         body: JSON.stringify({ couleurs_comptes: suivantes }),
@@ -1855,7 +1856,7 @@ function PortfolioPageInner() {
     const avant = portfolio?.name;
     setPortfolio(p => (p ? { ...p, name: propre } : p));
     try {
-      const r = await fetch(`${API_URL}/api/v1/portfolios/${idPortefeuille}`, {
+      const r = await recuperer(`${API_URL}/api/v1/portfolios/${idPortefeuille}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json", ...enTetesAuth() },
         body: JSON.stringify({ name: propre }),
@@ -1886,7 +1887,7 @@ function PortfolioPageInner() {
     if (!portfolio) return;
     const v = parseFloat(valueInput.replace(/\s/g, "").replace(",", "."));
     if (isNaN(v) || v <= 0) { setEditingValue(false); return; }
-    const ok = await fetch(`${API_URL}/api/v1/portfolios/${portfolio.id}`, {
+    const ok = await recuperer(`${API_URL}/api/v1/portfolios/${portfolio.id}`, {
       method: "PUT", headers: { "Content-Type": "application/json", ...enTetesAuth() },
       body: JSON.stringify({ total_value: v }),
     }).then(r => r.ok).catch(() => false);
@@ -1900,7 +1901,7 @@ function PortfolioPageInner() {
     if (!portfolio) return;
     const v = parseFloat(costInput.replace(/\s/g, "").replace(",", "."));
     if (isNaN(v) || v <= 0) { setEditingCost(false); return; }
-    const ok = await fetch(`${API_URL}/api/v1/portfolios/${portfolio.id}`, {
+    const ok = await recuperer(`${API_URL}/api/v1/portfolios/${portfolio.id}`, {
       method: "PUT", headers: { "Content-Type": "application/json", ...enTetesAuth() },
       body: JSON.stringify({ cost_basis: v }),
     }).then(r => r.ok).catch(() => false);

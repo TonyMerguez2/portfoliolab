@@ -1,4 +1,5 @@
 "use client";
+import { recuperer } from "@/lib/requete";
 import { useCallback, useEffect, useState } from "react";
 
 import { API_URL as API } from "@/lib/api";
@@ -54,7 +55,7 @@ export function useObjectifs(portfolioId?: string) {
     if (!portfolioId) { setEtat("pret"); setDonnees(null); return; }
     setEtat("charge");
     try {
-      const r = await fetch(`${API}/api/v1/portfolios/${portfolioId}/objectifs`,
+      const r = await recuperer(`${API}/api/v1/portfolios/${portfolioId}/objectifs`,
         { headers: enTetesAuth() });
       if (!r.ok) throw new Error(String(r.status));
       setDonnees(await r.json());

@@ -1,4 +1,5 @@
 "use client";
+import { recuperer } from "@/lib/requete";
 import { useEffect, useState } from "react";
 import AssetLogo from "@/components/AssetLogo";
 import MarketPulse from "@/components/portfolio/MarketPulse";
@@ -44,7 +45,7 @@ export default function WatchBand({
 
   useEffect(() => {
     let cancelled = false;
-    fetch(`${API}/api/v1/fear-greed`)
+    recuperer(`${API}/api/v1/fear-greed`)
       .then(r => r.json())
       .then(d => { if (!cancelled) setFng(d); })
       .catch(() => { /* le panneau se tait */ });

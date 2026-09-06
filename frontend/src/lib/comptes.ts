@@ -1,3 +1,4 @@
+import { recuperer } from "@/lib/requete";
 // ⚠️ Chemins relatifs et non l'alias « @/ » : Vitest tourne sans configuration et ne le
 // résout pas. Un import en alias ici rendrait tout le module intestable — y compris
 // `fraicheurDuSolde`, qui est pourtant du calcul pur et le seul endroit où une erreur ne
@@ -116,7 +117,7 @@ export type CompteASoumettre = {
  * portefeuille : c'est une constante du domaine, elle n'appartient à personne.
  */
 export async function lireGenres(): Promise<GenreCompte[]> {
-  const r = await fetch(`${API_URL}/api/v1/genres-de-compte`);
+  const r = await recuperer(`${API_URL}/api/v1/genres-de-compte`);
   if (!r.ok) throw new Error("Genres de compte indisponibles.");
   return r.json();
 }
@@ -213,7 +214,7 @@ export type ApportRange = Mouvement & { compte_id: string };
  * Ici, une requête sur une table déjà en base.
  */
 export async function listerLesApports(portefeuille: string): Promise<ApportRange[]> {
-  const r = await fetch(`${API_URL}/api/v1/portfolios/${portefeuille}/mouvements`,
+  const r = await recuperer(`${API_URL}/api/v1/portfolios/${portefeuille}/mouvements`,
     { headers: enTetesAuth() });
   if (!r.ok) return ouRaler(r, "Les apports du portefeuille n'ont pas pu être lus.");
   return r.json();

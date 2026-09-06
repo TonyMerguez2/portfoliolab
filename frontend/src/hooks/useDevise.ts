@@ -1,4 +1,5 @@
 "use client";
+import { recuperer } from "@/lib/requete";
 import { useCallback, useEffect, useState } from "react";
 
 import { API_URL as API } from "@/lib/api";
@@ -37,13 +38,13 @@ export function useDevise() {
     let annule = false;
     (async () => {
       try {
-        const liste = await (await fetch(`${API}/api/v1/auth/devises`)).json();
+        const liste = await (await recuperer(`${API}/api/v1/auth/devises`)).json();
         if (annule) return;
         setDevises(liste.devises ?? []);
         // Le compte connecté, s'il y en a un : la préférence est à lui.
         let choisie: string | null = null;
         if (compteMemorise()) {
-          const r = await fetch(`${API}/api/v1/auth/me`, { headers: enTetesAuth() });
+          const r = await recuperer(`${API}/api/v1/auth/me`, { headers: enTetesAuth() });
           if (r.ok) choisie = (await r.json()).devise ?? null;
         }
         if (annule) return;
@@ -66,7 +67,7 @@ export function useDevise() {
       return false;
     }
     try {
-      const r = await fetch(`${API}/api/v1/auth/profile`, {
+      const r = await recuperer(`${API}/api/v1/auth/profile`, {
         method: "PUT",
         headers: { ...enTetesAuth(), "Content-Type": "application/json" },
         body: JSON.stringify({ devise: nouveau }),

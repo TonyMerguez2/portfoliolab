@@ -1,4 +1,5 @@
 "use client";
+import { recuperer } from "@/lib/requete";
 import TitreDeCarte from "@/components/ui/TitreDeCarte";
 import { useEffect, useMemo, useState } from "react";
 import AssetLogo from "@/components/AssetLogo";
@@ -209,9 +210,9 @@ export default function TransactionsView({
     let annule = false;
     setChargement(true);
     Promise.all([
-      fetch(`${API}/api/v1/portfolios/${portfolioId}/transactions`, { headers: enTetesAuth() })
+      recuperer(`${API}/api/v1/portfolios/${portfolioId}/transactions`, { headers: enTetesAuth() })
         .then(r => (r.ok ? r.json() : null)).catch(() => null),
-      fetch(`${API}/api/v1/portfolios/${portfolioId}/positions`, { headers: enTetesAuth() })
+      recuperer(`${API}/api/v1/portfolios/${portfolioId}/positions`, { headers: enTetesAuth() })
         .then(r => (r.ok ? r.json() : null)).catch(() => null),
       // ⚠️ Les dossiers et leurs apports échouent sans bruit : l'onglet doit rester lisible
       // sur un portefeuille dont aucun compte n'est déclaré, ce qui est le cas le plus
@@ -259,7 +260,7 @@ export default function TransactionsView({
     setSuppression(true);
     setErreur(null);
     try {
-      const r = await fetch(`${API}/api/v1/portfolios/${portfolioId}/transactions/${id}`, {
+      const r = await recuperer(`${API}/api/v1/portfolios/${portfolioId}/transactions/${id}`, {
         method: "DELETE", headers: enTetesAuth(),
       });
       if (!r.ok) {

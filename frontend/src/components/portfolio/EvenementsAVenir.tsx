@@ -1,4 +1,5 @@
 "use client";
+import { recuperer } from "@/lib/requete";
 import TitreDeCarte from "@/components/ui/TitreDeCarte";
 import { useEffect, useMemo, useState } from "react";
 
@@ -201,7 +202,7 @@ export default function EvenementsAVenir({
     if (!portfolioId) { setEtat("pret"); setDonnees(null); return; }
     let annule = false;
     setEtat("charge");
-    fetch(`${API}/api/v1/portfolios/${portfolioId}/events`, { headers: enTetesAuth() })
+    recuperer(`${API}/api/v1/portfolios/${portfolioId}/events`, { headers: enTetesAuth() })
       .then(r => (r.ok ? r.json() : Promise.reject(new Error(String(r.status)))))
       .then((d: Reponse) => {
         if (annule) return;

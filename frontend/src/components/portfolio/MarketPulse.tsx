@@ -1,4 +1,5 @@
 "use client";
+import { recuperer } from "@/lib/requete";
 import { useEffect, useState } from "react";
 import TileSparkline from "@/components/charts/TileSparkline";
 import { FONT, NUM } from "@/lib/typography";
@@ -41,7 +42,7 @@ export default function MarketPulse({ period = "1J" }: { period?: string }) {
     let cancelled = false;
     const tickers = REPERES.map(r => r.ticker).join(",");
     const charger = () =>
-      fetch(`${API}/api/v1/prices?tickers=${encodeURIComponent(tickers)}&period=${PERIOD_API[period] ?? "1d"}`)
+      recuperer(`${API}/api/v1/prices?tickers=${encodeURIComponent(tickers)}&period=${PERIOD_API[period] ?? "1d"}`)
         .then(r => r.json())
         .then((list: Cote[]) => {
           if (cancelled || !Array.isArray(list)) return;

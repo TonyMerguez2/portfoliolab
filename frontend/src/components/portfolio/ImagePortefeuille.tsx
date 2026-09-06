@@ -1,4 +1,5 @@
 "use client";
+import { recuperer } from "@/lib/requete";
 import { useRef, useState } from "react";
 import { JETONS, RAYONS, rayonVignette } from "@/lib/palette";
 import { FONT } from "@/lib/typography";
@@ -105,7 +106,7 @@ export default function ImagePortefeuille<T extends PortefeuilleImage>({
   async function appeler(methode: "POST" | "DELETE", corps?: FormData) {
     setEnvoi(true); setErreur(null);
     try {
-      const r = await fetch(`${API}/api/v1/portfolios/${portefeuille.id}/image`, {
+      const r = await recuperer(`${API}/api/v1/portfolios/${portefeuille.id}/image`, {
         // Surtout pas de Content-Type ici : c'est au navigateur de le poser,
         // avec la frontière multipart qu'il vient de tirer au sort.
         method: methode, headers: enTetesAuth(), body: corps,

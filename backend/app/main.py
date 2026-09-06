@@ -4,6 +4,7 @@ PortfolioLab API — FastAPI application entry point.
 from __future__ import annotations
 
 import logging
+import re
 import threading
 
 from fastapi import FastAPI
@@ -12,6 +13,7 @@ import os
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.core.config import get_settings
+from app.services import memoire_courte
 from app.services.rankings import start_preload
 from app.services.chaleur import PERIODES, carte
 from app.api.routes.backtest import router as backtest_router
@@ -63,6 +65,35 @@ _ORIGINES_RESEAU_LOCAL = (
     r"|172\.(1[6-9]|2\d|3[01])\.\d{1,3}\.\d{1,3}"
     r"):\d+$"
 )
+
+# ── Oubli de la mémoire courte à chaque écriture ────────────────────────────
+#
+# ⚠️ **Un seul endroit, et non un appel dans chaque route qui écrit.** Il y en a dix-sept —
+# transactions, comptes, mouvements, objectifs, pondérations, image — et le jour où l'on en
+# ajoute une dix-huitième, personne ne se souviendra d'y penser. Or en oublier une seule veut
+# dire qu'un utilisateur saisit une transaction, ne la voit pas apparaître pendant trois
+# minutes, et la ressaisit. Une donnée en double vaut bien pire qu'un calcul refait.
+#
+# Ici, toute requête qui n'est pas une lecture efface ce qui concerne son portefeuille — ou
+# tout, si l'adresse n'en désigne aucun. Vider une mémoire de quelques centaines d'entrées ne
+# coûte rien ; se tromper, si.
+#
+# ⚠️ **Après la réponse, et seulement si elle a réussi.** Oublier avant l'appel laisserait la
+# mémoire se remplir à nouveau pendant l'écriture, avec l'état d'avant.
+_PORTEFEUILLE_DANS_ADRESSE = re.compile(r"/api/v1/portfolios/([^/]+)")
+
+
+@app.middleware("http")
+async def oublier_apres_ecriture(requete, appeler_suite):
+    reponse = await appeler_suite(requete)
+    if requete.method != "GET" and reponse.status_code < 400:
+        trouve = _PORTEFEUILLE_DANS_ADRESSE.search(requete.url.path)
+        if trouve:
+            memoire_courte.oublier(trouve.group(1))
+        else:
+            memoire_courte.tout_oublier()
+    return reponse
+
 
 app.add_middleware(
     CORSMiddleware,
