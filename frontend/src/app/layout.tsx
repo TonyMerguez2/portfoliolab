@@ -6,6 +6,7 @@ import "./globals.css";
 import GlobalHeader from "@/components/GlobalHeader";
 import SideNav from "@/components/SideNav";
 import PointsFond from "@/components/PointsFond";
+import CadreSite from "@/components/CadreSite";
 
 const inter = Inter({ subsets: ["latin"] });
 
@@ -49,11 +50,10 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           {/* L'avatar vit dans le bandeau, mais ce qu'il exprime vient des pages :
               le fournisseur doit donc envelopper les deux. */}
           <AvatarProvider>
-            <SideNav/>
-            <div className="novac-shell">
-              <GlobalHeader/>
+            {/* ⚠️ Le cadre s'efface devant la porte de l'alpha fermée — voir `CadreSite`. */}
+            <CadreSite rail={<SideNav/>} bandeau={<GlobalHeader/>}>
               {children}
-            </div>
+            </CadreSite>
           </AvatarProvider>
         </AppProvider>
       </body>

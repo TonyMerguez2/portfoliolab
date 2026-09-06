@@ -16,6 +16,17 @@ class Settings(BaseSettings):
         "http://127.0.0.1:3001",
     ]
 
+    #: Les origines publiques du site en ligne, séparées par des virgules.
+    #:
+    #: Par exemple : ORIGINES_PUBLIQUES=https://novac.xyz,https://www.novac.xyz
+    #:
+    #: ⚠️ **Vide par défaut, et souvent inutile.** En production le frontal relaie l'API —
+    #: voir les `rewrites` de next.config.js —, si bien que le navigateur n'appelle jamais
+    #: que l'origine qu'il a chargée : le CORS ne se pose pas. Ce réglage existe pour le jour
+    #: où l'API serait servie sur son propre sous-domaine, et pour qu'on n'ait pas alors à
+    #: modifier du code pour publier.
+    origines_publiques: str = ""
+
     # Finance defaults
     risk_free_rate: float = 0.035       # 3.5% — Eurozone OAT 10Y
     trading_days_per_year: int = 252
@@ -26,6 +37,13 @@ class Settings(BaseSettings):
 
     class Config:
         env_file = ".env"
+
+
+    @property
+    def origines(self) -> list[str]:
+        """Les origines autorisées : celles du développement, plus celles du site en ligne."""
+        publiques = [o.strip() for o in self.origines_publiques.split(",") if o.strip()]
+        return [*self.allowed_origins, *publiques]
 
 
 @lru_cache

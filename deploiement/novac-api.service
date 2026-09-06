@@ -1,0 +1,26 @@
+# L'API FastAPI. À copier dans /etc/systemd/system/novac-api.service
+[Unit]
+Description=Novac — API
+After=network.target
+
+[Service]
+Type=simple
+User=novac
+WorkingDirectory=/srv/novac/portfoliolab/backend
+EnvironmentFile=/etc/novac/novac.env
+
+# ⚠️ `--host 127.0.0.1` et non 0.0.0.0 : l'API n'a aucune raison d'être joignable depuis
+# Internet, Caddy et Next sont sur la même machine. Ouvrir l'écoute au monde contournerait
+# à la fois le TLS et la porte de l'alpha.
+#
+# ⚠️ Un seul processus (`--workers 1` implicite). La base est un fichier SQLite : plusieurs
+# processus qui écrivent en même temps se heurtent au verrou, et le préchargement des
+# classements se ferait autant de fois qu'il y a de travailleurs. Le jour où la charge le
+# demandera, il faudra changer de base avant de changer ce chiffre.
+ExecStart=/srv/novac/portfoliolab/backend/venv/bin/uvicorn app.main:app --host 127.0.0.1 --port 8000
+
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

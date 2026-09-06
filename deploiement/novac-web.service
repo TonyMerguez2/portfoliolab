@@ -1,0 +1,21 @@
+# Le frontal Next. À copier dans /etc/systemd/system/novac-web.service
+[Unit]
+Description=Novac — frontal
+After=network.target novac-api.service
+
+[Service]
+Type=simple
+User=novac
+WorkingDirectory=/srv/novac/portfoliolab/frontend
+EnvironmentFile=/etc/novac/novac.env
+
+# ⚠️ `npm run start` sert le résultat de `npm run build`, il ne construit rien. Une mise à
+# jour se fait donc en deux temps : construire, puis redémarrer — voir `mettre-a-jour.sh`.
+# Redémarrer sans construire sert l'ancienne version sans rien signaler.
+ExecStart=/usr/bin/npm run start -- --hostname 127.0.0.1 --port 3000
+
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

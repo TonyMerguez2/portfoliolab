@@ -1,0 +1,30 @@
+# Le seul point d'entrée public du site.
+#
+# ⚠️ **Caddy obtient et renouvelle le certificat tout seul**, à condition que le domaine
+# pointe déjà sur la machine au premier démarrage : il demande le certificat à Let's Encrypt,
+# qui vérifie en appelant ce nom. Lancer Caddy avant que le DNS soit propagé fait échouer la
+# demande, et Let's Encrypt limite les tentatives — attendez que `dig novac.xyz` renvoie
+# l'adresse de la machine.
+#
+# ⚠️ **Ni le frontal ni l'API ne sont exposés directement.** Tous deux écoutent sur
+# 127.0.0.1 : depuis Internet, la seule chose joignable est Caddy. C'est ce qui fait qu'on
+# n'a pas à se demander si le port 8000 est protégé — il n'est pas atteignable.
+
+novac.xyz, www.novac.xyz {
+	encode zstd gzip
+
+	# Tout passe par Next, y compris `/api/v1/…` et `/uploads/…` qu'il relaie lui-même
+	# vers l'API — voir les `rewrites` de next.config.js.
+	#
+	# ⚠️ **C'est aussi ce qui met l'API derrière la porte de l'alpha.** Le middleware de
+	# Next ne voit que ce qui traverse Next : router l'API directement vers le port 8000
+	# ici ouvrirait un chemin où la porte n'existe pas, et où les données du site seraient
+	# lisibles sans code d'accès.
+	reverse_proxy 127.0.0.1:3000
+
+	# Les journaux, pour savoir qui vient et ce qui casse.
+	log {
+		output file /var/log/caddy/novac.log
+		format json
+	}
+}

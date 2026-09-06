@@ -4,6 +4,7 @@ PortfolioLab API — FastAPI application entry point.
 from __future__ import annotations
 
 import logging
+import threading
 
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
@@ -12,14 +13,19 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.core.config import get_settings
 from app.services.rankings import start_preload
+from app.services.chaleur import PERIODES, carte
 from app.api.routes.backtest import router as backtest_router
 from app.api.routes.portfolios import router as portfolios_router
 from app.api.routes.auth import router as auth_router
 from app.api.routes.ticker import router as ticker_router
+from app.api.routes.chaleur import router as chaleur_router
+from app.api.routes.capitalisations import router as capitalisations_router
 from app.api.routes.transactions import router as transactions_router
 from app.api.routes.objectifs import router as objectifs_router
 from app.api.routes.comptes import constantes as comptes_constantes, router as comptes_router
+from app.api.routes.attente import router as attente_router
 from app.models.user import User
+from app.models.attente import ListeAttente  # noqa: F401  (crée la table au démarrage)
 # Import pour que SQLAlchemy enregistre le modèle Transaction avant create_all
 from app.core.database import Transaction  # noqa: F401
 
@@ -60,7 +66,7 @@ _ORIGINES_RESEAU_LOCAL = (
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=settings.allowed_origins,
+    allow_origins=settings.origines,
     allow_origin_regex=_ORIGINES_RESEAU_LOCAL,
     allow_credentials=True,
     allow_methods=["*"],
@@ -71,10 +77,13 @@ app.include_router(backtest_router)
 app.include_router(portfolios_router)
 app.include_router(auth_router)
 app.include_router(ticker_router)
+app.include_router(chaleur_router)
+app.include_router(capitalisations_router)
 app.include_router(transactions_router)
 app.include_router(objectifs_router)
 app.include_router(comptes_router)
 app.include_router(comptes_constantes)
+app.include_router(attente_router)
 os.makedirs("uploads", exist_ok=True)
 app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
 
@@ -82,6 +91,39 @@ app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
 @app.on_event("startup")
 async def on_startup() -> None:
     start_preload()
+    _prechauffer_chaleur()
+
+
+def _prechauffer_chaleur() -> None:
+    """Remplit le cache de la carte de chaleur avant le premier visiteur.
+
+    ⚠️ **Onze secondes, mesurées, pour cinq cent trois titres à froid.** C'est le
+    prix d'un appel groupé chez le fournisseur, et il est payé par celui qui
+    ouvre la page le premier — les suivants lisent le cache en une fraction de
+    milliseconde. Le déplacer au démarrage, dans un fil détaché, le rend
+    invisible : le serveur répond pendant ce temps, et la page est chaude quand
+    on l'ouvre.
+
+    ⚠️ **Les six périodes, et non la seule « 1j ».** Je n'avais préchauffé que
+    celle-ci, en jugeant que changer de période était un choix délibéré du
+    visiteur, qui accepterait l'attente. C'est faux à l'usage : onze secondes sur
+    un bouton qu'on vient de cliquer se lisent comme une panne, pas comme un
+    calcul. Les six tiennent en une minute et quelques au démarrage, dans un fil
+    qui ne bloque rien.
+
+    ⚠️ **L'une après l'autre, et non en parallèle.** Six téléchargements
+    simultanés de cinq cents titres, c'est exactement ce que le fournisseur
+    étrangle. En série, le serveur répond pendant ce temps et la charge reste
+    celle d'un visiteur.
+    """
+    def tache() -> None:
+        for periode in PERIODES:
+            try:
+                carte(periode)
+            except Exception:
+                logger.exception("Préchauffage de la carte de chaleur : échec (%s)", periode)
+
+    threading.Thread(target=tache, daemon=True, name="prechauffage-chaleur").start()
 
 
 @app.get("/health", tags=["System"])
