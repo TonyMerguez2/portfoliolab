@@ -151,11 +151,19 @@
      s'annule aux bornes. Le plateau existe toujours, mais on y entre et on en sort sans
      angle. Les couleurs de départ, de sommet et de fin sont inchangées.
 
+     ⚠️ **Le sommet est le jeton `--background-subtle` d'Appica UI, pas une teinte choisie.**
+     La bibliothèque l'écrit en OKLCH et, en thème sombre, sous forme translucide :
+     `oklch(0.551 0.027 264.364 / 8%)` posé sur `--background`, lui-même
+     `oklch(0.13 0.028 261.692)`. Composé puis converti, cela donne `#0B101B` — et
+     `--background` donne exactement `#030712`, la couleur que nos extrémités portaient déjà.
+     Le sommet valait `#101828`, une valeur maison plus claire et plus bleue que la référence.
+     Thème clair : `#F9FAFB`, non translucide.
+
      ⚠️ **Et il est symétrique** : la descente a exactement la longueur et la courbe de la
      montée. La première correction gardait le déséquilibre d'origine — le haut s'éclaircissait
      sur soixante-deux pour cent de la hauteur quand le bas s'assombrissait sur vingt-huit — si
      bien que les deux extrémités n'avaient pas le même fondu. Relevé à l'usage. */
-  --nv-fond-degrade:      linear-gradient(to bottom, #030712 0%, #060B17 10%, #0B1220 20%, #101727 30%, #101828 40%, #101828 50%, #101828 60%, #101727 70%, #0B1220 80%, #060B17 90%, #030712 100%);
+  --nv-fond-degrade:      linear-gradient(to bottom, #030712 0%, #050914 10%, #080D18 20%, #0B101B 30%, #0B101B 40%, #0B101B 50%, #0B101B 60%, #0B101B 70%, #080D18 80%, #050914 90%, #030712 100%);
   /* Le palier du dégradé ci-dessus — sa couleur entre 55 % et 83 % de la hauteur.
      Nommée parce qu'une forme creusée dans le fond doit s'y confondre : la
      remplir du dégradé lui-même donnait des taches, celui-ci variant sur la
@@ -336,7 +344,7 @@
   --nv-fond:              #FFFFFF;
   --nv-fond-profond:      #F3F4F6;
   /* Même correction, même méthode, pour le thème clair — voir la note du thème sombre. */
-  --nv-fond-degrade:      linear-gradient(to bottom, #FFFFFF 0%, #FCFDFD 10%, #F7F8F9 20%, #F3F4F6 30%, #F3F4F6 40%, #F3F4F6 50%, #F3F4F6 60%, #F3F4F6 70%, #F7F8F9 80%, #FCFDFD 90%, #FFFFFF 100%);
+  --nv-fond-degrade:      linear-gradient(to bottom, #FFFFFF 0%, #FEFEFE 10%, #FBFCFC 20%, #F9FAFB 30%, #F9FAFB 40%, #F9FAFB 50%, #F9FAFB 60%, #F9FAFB 70%, #FBFCFC 80%, #FEFEFE 90%, #FFFFFF 100%);
   --nv-fond-plateau:      #F3F4F6;
   --nv-carte:             #FFFFFF;
   --nv-carte-creuse:      #F9FAFB;
