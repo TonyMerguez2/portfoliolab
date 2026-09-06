@@ -141,7 +141,16 @@
      cartes comme des creux sombres, sans qu'aucune de leurs couleurs ne
      change. Sans ce dégradé, page et cartes valant toutes deux #030712,
      l'écran est parfaitement plat — c'est ce que j'avais. */
-  --nv-fond-degrade:      linear-gradient(to bottom, #030712, #101828 55%, #101828 83%, #030712);
+  /* ⚠️ **Neuf arrêts et non quatre : la pente ne doit jamais casser net.**
+     Le dégradé montait jusqu'à 55 %, restait parfaitement plat jusqu'à 83 %, puis
+     redescendait. Relevé ligne par ligne à l'écran : clarté 8 en haut, 23 de 480 à 720 px,
+     14 en bas — deux coudes francs. L'œil accentue les *ruptures de pente* bien plus que les
+     écarts de valeur, si bien qu'on voyait deux lignes horizontales traverser l'écran là où
+     il n'y a aucune arête. C'est une bande de Mach, et elle est apparue à l'usage.
+     Les arrêts suivent maintenant deux `smoothstep` — montée, puis descente — dont la dérivée
+     s'annule aux bornes. Le plateau existe toujours, mais on y entre et on en sort sans
+     angle. Les couleurs de départ, de sommet et de fin sont inchangées. */
+  --nv-fond-degrade:      linear-gradient(to bottom, #030712 0%, #040914 12%, #080D1A 25%, #0C1220 38%, #0F1626 50%, #101828 62%, #101727 75%, #080E1B 88%, #030712 100%);
   /* Le palier du dégradé ci-dessus — sa couleur entre 55 % et 83 % de la hauteur.
      Nommée parce qu'une forme creusée dans le fond doit s'y confondre : la
      remplir du dégradé lui-même donnait des taches, celui-ci variant sur la
@@ -316,7 +325,8 @@
   --nv-cadre-voile:       rgba(255,255,255,0.5);
   --nv-fond:              #FFFFFF;
   --nv-fond-profond:      #F3F4F6;
-  --nv-fond-degrade:      linear-gradient(to bottom, #FFFFFF, #F3F4F6 55%, #F3F4F6 83%, #FFFFFF);
+  /* Même correction, même méthode, pour le thème clair — voir la note du thème sombre. */
+  --nv-fond-degrade:      linear-gradient(to bottom, #FFFFFF 0%, #FEFEFE 12%, #FBFBFC 25%, #F7F8F9 38%, #F4F5F7 50%, #F3F4F6 62%, #F3F4F6 75%, #FAFAFB 88%, #FFFFFF 100%);
   --nv-fond-plateau:      #F3F4F6;
   --nv-carte:             #FFFFFF;
   --nv-carte-creuse:      #F9FAFB;
