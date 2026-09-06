@@ -197,157 +197,36 @@ export default function Home() {
         * n'a de sens sur une texture. Le `.nv-lisere-courant` de `globals.css` disparaît avec.
         */}
       {/**
-        * ⚠️ **Ancré à la fenêtre, pas au contenu — `fixed` et non `absolute`.** La racine de
-        * cette page commence *après* le rail de navigation : elle démarre à 68 pixels et
-        * rétrécit d'autant quand le menu s'ouvre. Un filigrane positionné par rapport à elle
-        * se décalait donc à chaque ouverture, alors qu'une texture de fond n'a aucune raison
-        * de bouger quand un panneau s'ouvre par-dessus. Signalé à l'usage.
+        * La silhouette du logo, dessinée par la trame de points.
         *
-        * ⚠️ **Et cela règle le débordement du même coup.** Un élément `fixed` ne participe pas
-        * à la zone défilable du document : il déborde de la fenêtre sans jamais y faire
-        * apparaître de barre. En `absolute`, il ne devait sa discrétion qu'au `overflow:
-        * hidden` de la racine — une protection qui tombe dès qu'un parent la lève.
+        * ⚠️ **Elle remplace le filigrane, qui est supprimé.** Le filigrane était un aplat
+        * masqué par le dessin : il éclaircissait le fond en forme de logo. Les deux ensemble
+        * faisaient deux logos décalés — l'un clair, l'autre piqueté — sans que rien ne
+        * l'explique. Le reflet animé qui parcourait son contour part avec lui : il n'avait de
+        * sens que sur un bord plein, et il n'y a plus de bord.
+        *
+        * ⚠️ **Ce ne sont pas des points ajoutés : ce sont les mêmes, rendus plus présents.**
+        * La couche reprend exactement le motif de `.nv-points` — même rayon, même pas de
+        * 14 px — dans une encre plus soutenue, et le logo lui sert de masque. Une seconde
+        * trame décalée d'un demi-pixel aurait moiré contre la première.
+        *
+        * ⚠️ **Le pas est ancré sur le coin de l'écran, comme la trame du fond.** `.nv-points`
+        * est en `position: fixed` et son motif part de l'origine du cadre. Cette couche est
+        * donc `fixed` elle aussi, à la taille de l'écran, et c'est le **masque** qu'on place
+        * et qu'on dimensionne — pas la boîte. Dimensionner la boîte aurait décalé la grille
+        * de points, et la silhouette se serait lue comme une seconde trame plutôt que comme
+        * la même, renforcée.
         */}
       <div aria-hidden="true" className="fixed pointer-events-none" style={{
-        right: "-16%", bottom: "-24%",
-        width: "min(115vh, 1300px)", height: "min(115vh, 1300px)",
-        zIndex: 0,
-      }}>
-        {/**
-          * ⚠️ **Le filigrane interrompt la trame de points au lieu de se poser dessus.**
-          * Demandé à l'usage. Un tracé teinté à 4 % laissait voir les pointillés au travers,
-          * si bien que la forme se lisait comme un voile posé sur la texture — deux motifs
-          * superposés au lieu d'un seul.
-          *
-          * ⚠️ **D'où le retour au masque CSS, et l'abandon du `<svg>`.** Pour couvrir les
-          * points il faut une surface **opaque** ; pour rester invisible en tant que surface,
-          * cette opacité doit être exactement le fond de la page. Un `fill` SVG ne sait pas
-          * porter un dégradé calé sur la fenêtre — un fond CSS, si.
-          *
-          * ⚠️ **Deux couches de fond dans une seule propriété.** La première, la teinte du
-          * filigrane, est un dégradé constant — la seule façon d'écrire un aplat parmi des
-          * couches. La seconde reprend le dégradé du `body` en `background-attachment:
-          * fixed` : il s'aligne donc au pixel sur celui de la page, à toute hauteur d'écran,
-          * là où un aplat aurait fait une tache sur une forme aussi grande.
-          */}
-        <div style={{
-          position: "absolute", inset: 0,
-          backgroundImage: [
-            /**
-             * ⚠️ **La teinte est l'accent, pas du blanc — et c'est une question de direction,
-             * pas d'intensité.** Le fond de page est un bleu nuit franc : `#101828`, dont le
-             * bleu vaut deux fois et demie le rouge. Un blanc pur l'éclaircit également sur
-             * les trois canaux — mesuré, +11, +10, +10 — donc il **désature** : le rapport
-             * bleu/rouge tombait de 2,50 à 1,85 et la forme se lisait comme une tache délavée
-             * plutôt que comme le fond éclairci.
-             *
-             * L'accent à six centièmes donne `rgb(20, 32, 53)`, soit un rapport de 2,65 :
-             * dans la famille du fond, très légèrement plus froid. L'écart au fond garde la
-             * même ampleur — la discrétion ne change pas, seule la direction devient juste.
-             */
-            "linear-gradient(rgba(var(--nv-accent-rvb), 0.06), rgba(var(--nv-accent-rvb), 0.06))",
-            "var(--nv-fond-degrade)",
-          ].join(", "),
-          backgroundAttachment: "scroll, fixed",
-          maskImage: "url(/logo-hivesync.svg)",
-          WebkitMaskImage: "url(/logo-hivesync.svg)",
-          maskSize: "contain", WebkitMaskSize: "contain",
-          maskRepeat: "no-repeat", WebkitMaskRepeat: "no-repeat",
-          maskPosition: "center", WebkitMaskPosition: "center",
-        }} />
-
-        {/**
-          * La silhouette, dessinée par la trame elle-même.
-          *
-          * ⚠️ **Ce ne sont pas des points ajoutés : ce sont les mêmes, rendus plus présents.**
-          * La couche reprend exactement le motif de `.nv-points` — même rayon, même pas de
-          * 14 px — dans une encre plus soutenue, et le logo lui sert de masque. Là où la forme
-          * passe, les points existants paraissent donc appuyés ; ailleurs, rien ne change. Une
-          * seconde trame décalée d'un demi-pixel aurait moiré contre la première.
-          *
-          * ⚠️ **Le pas est ancré sur le coin de l'écran, comme la trame du fond.** `.nv-points`
-          * est en `position: fixed` et son motif part de l'origine du cadre ; cette couche est
-          * posée au même endroit et à la même taille, sinon les deux grilles se décaleraient et
-          * la silhouette se lirait comme une seconde trame plutôt que comme la même, renforcée.
-          *
-          * ⚠️ **Sous le filigrane, pas au-dessus.** Le filigrane est un aplat qui éclaircit le
-          * fond ; posée par-dessus, la silhouette pointillée l'aurait piqueté au lieu de le
-          * doubler. Dessous, elle épaissit son bord et lui donne de la matière.
-          */}
-        <div aria-hidden="true" style={{
-          position: "fixed", inset: 0, pointerEvents: "none", zIndex: -1,
-          backgroundImage:
-            "radial-gradient(circle at 1px 1px, rgba(var(--nv-accent-rvb), 0.30) 1px, transparent 1.5px)",
-          backgroundSize: "14px 14px",
-          maskImage: "url(/logo-hivesync.svg)", WebkitMaskImage: "url(/logo-hivesync.svg)",
-          maskSize: "contain", WebkitMaskSize: "contain",
-          maskRepeat: "no-repeat", WebkitMaskRepeat: "no-repeat",
-          maskPosition: "center", WebkitMaskPosition: "center",
-        }} />
-
-        {/**
-          * Le reflet qui parcourt les bords du filigrane.
-          *
-          * ⚠️ **Il sort du cadre et revient, parce que la forme elle-même en sort.** Le
-          * filigrane déborde de l'angle bas-droit : un point qui suit son contour disparaît
-          * donc hors écran sur une partie du trajet, puis reparaît de l'autre côté. C'est
-          * l'effet demandé, et il ne demande aucun réglage — il découle du cadrage.
-          *
-          * ⚠️ **Un reflet par volute, chacun sur son chemin fermé.** Le dessin compte deux
-          * sous-tracés ; un pointillé posé sur le tracé entier se déroule de l'un à l'autre
-          * et se coupe à la jointure. Séparés, chacun fait le tour du sien sans fin.
-          *
-          * ⚠️ **L'épaisseur est en unités du dessin, sans `vector-effect`.** Voir
-          * `.nv-reflet-logo` dans `globals.css` : figer le trait hors du repère entre en
-          * conflit avec `pathLength`, et le motif cesse de boucler.
-          */}
-        <svg viewBox="0 0 1200 1200"
-          style={{ position: "absolute", inset: 0, width: "100%", height: "100%" }}>
-          {/**
-            * ⚠️ **Un tracé par morceau, et jamais un tracé à deux sous-chemins.** SVG
-            * réinitialise le motif de pointillés au début de chaque sous-tracé : réunir les
-            * deux volutes dans un même `d` affiche donc **deux tirets simultanés**, quel que
-            * soit le motif. C'est la raison — trouvée tard — pour laquelle la version
-            * combinée montrait toujours deux reflets.
-            *
-            * ⚠️ **L'alternance vient du retard, pas de la géométrie.** Chaque volute porte le
-            * même balayage de vingt-deux secondes, mais la seconde est décalée d'une
-            * demi-période. Comme le motif laisse la volute éteinte la moitié du temps — voir
-            * le vide de 1,88 dans `globals.css` —, l'une s'allume pendant que l'autre est
-            * noire. Une seule lumière à l'écran, toujours.
-            *
-            * ⚠️ **La volute droite passe en premier**, puisque c'est par elle que le reflet
-            * doit commencer ; celle de gauche prend le relais après son extinction.
-            */}
-          {[{ d: "M 985.00 878.91 C 967.83 876.88 940.52 868.54 911.00 856.31 C 892.19 848.52 847.20 826.38 826.00 814.48 C 767.78 781.80 670.81 718.29 553.00 635.69 C 499.88 598.45 489.89 590.34 478.64 575.35 C 455.73 544.83 453.63 515.03 473.90 508.15 C 482.05 505.39 487.48 506.45 518.81 516.94 C 589.84 540.72 620.45 543.80 637.42 528.86 C 657.32 511.35 659.79 480.08 644.97 433.50 C 616.22 343.12 522.58 204.50 418.02 97.52 C 386.12 64.88 381.58 57.85 381.53 41.00 C 381.50 30.02 383.14 25.82 389.80 19.80 C 394.86 15.22 399.68 13.68 407.39 14.17 C 415.31 14.68 420.39 17.33 437.91 30.08 C 525.36 93.72 611.10 170.06 695.04 259.00 C 823.48 395.10 898.51 486.68 950.81 571.19 C 1002.77 655.15 1035.98 730.97 1045.65 787.70 C 1048.05 801.75 1048.05 826.08 1045.67 836.50 C 1043.47 846.08 1037.50 858.94 1032.60 864.63 C 1022.71 876.13 1005.38 881.33 985.00 878.91 Z", relais: false },
-            { d: "M 631.70 983.90 C 621.77 981.57 606.05 970.81 567.50 939.99 C 503.29 888.64 450.19 840.33 379.98 769.38 C 283.75 672.13 199.68 570.54 122.29 458.00 C 91.20 412.78 69.57 376.90 51.47 340.50 C 5.86 248.76 -7.36 183.84 11.70 145.18 C 25.39 117.40 55.39 110.88 101.46 125.67 C 145.45 139.79 208.35 172.07 281.00 217.81 C 334.14 251.26 370.18 275.89 514.50 377.36 C 560.15 409.45 572.49 421.18 582.99 442.50 C 588.54 453.76 589.94 458.78 589.98 467.60 C 590.02 477.94 586.75 484.49 579.67 488.27 C 576.24 490.10 573.99 490.47 567.00 490.39 C 559.07 490.30 556.69 489.68 531.50 481.22 C 486.29 466.03 460.56 460.51 438.16 461.19 C 426.90 461.53 424.89 461.87 419.96 464.26 C 405.25 471.40 396.76 487.17 395.34 510.00 C 392.00 563.74 443.79 668.87 527.38 778.00 C 540.31 794.88 578.12 841.98 594.42 861.50 C 602.68 871.40 619.81 890.08 632.48 903.00 C 657.95 928.98 661.70 934.24 664.59 948.09 C 669.34 970.90 652.83 988.88 631.70 983.90 Z", relais: true }].map((volute, i) => (
-            <path key={i} d={volute.d} transform="matrix(1.112183 0 0 1.112093 600 600) translate(-525.5, -499)"
-              className={`nv-reflet-logo${volute.relais ? " nv-reflet-logo--relais" : ""}`}
-              pathLength={1}
-              /**
-               * ⚠️ **Le reflet suit la teinte du filigrane, et l'opacité a été recalculée
-               * pour cela.** Il était en encre neutre à 0,085 ; sur un filigrane désormais
-               * bleuté, du blanc l'aurait désaturé exactement comme il désaturait le fond —
-               * rapport bleu/rouge tombant à 1,75, soit une traînée grise sur une forme
-               * bleue.
-               *
-               * ⚠️ **Passer à l'accent oblige à monter l'opacité, sans que rien ne s'éclaire
-               * davantage.** L'accent est moins lumineux que le blanc : à valeur égale il
-               * éclaire moins. Calculé sur la luminance relative, 0,16 d'accent rend le même
-               * gain de clarté que 0,085 de blanc — 19,3 contre 19,0 — pour un rapport
-               * bleu/rouge de 2,88 au lieu de 1,75. Même discrétion, autre direction.
-               *
-               * ⚠️ **Puis ramené de 0,16 à 0,08 : le gain de clarté passe de 19,3 à 9,6.**
-               * L'accord de teinte était juste, l'intensité non — signalé à l'usage comme
-               * trop voyant. Un reflet sur un filigrane doit se deviner, pas se lire ; à la
-               * moitié de sa clarté il attire encore l'œil qui passe sans retenir celui qui
-               * lit.
-               */
-              fill="none" stroke="rgba(var(--nv-accent-rvb), 0.08)" strokeWidth={2.4}
-              strokeLinejoin="round" strokeLinecap="round" />
-          ))}
-        </svg>
-      </div>
+        inset: 0, zIndex: 0,
+        backgroundImage:
+          "radial-gradient(circle at 1px 1px, rgba(var(--nv-accent-rvb), 0.34) 1px, transparent 1.5px)",
+        backgroundSize: "14px 14px",
+        maskImage: "url(/logo-hivesync.svg)", WebkitMaskImage: "url(/logo-hivesync.svg)",
+        maskSize: "min(115vh, 1300px)", WebkitMaskSize: "min(115vh, 1300px)",
+        maskRepeat: "no-repeat", WebkitMaskRepeat: "no-repeat",
+        maskPosition: "right -16% bottom -24%", WebkitMaskPosition: "right -16% bottom -24%",
+      }} />
 
       {/**
         * ⚠️ **Le texte descend pour laisser voir le logo.** Centré comme lui, il se posait
