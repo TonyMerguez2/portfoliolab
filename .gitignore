@@ -55,3 +55,12 @@ backend/uploads/*
 # et faisait disparaître la diversification du score.
 .cache_details.json
 .cache_details.json.tmp
+
+# Cache des événements de marché — dividendes, résultats, détachements.
+#
+# ⚠️ Il était **suivi**, et ça a bloqué net un déploiement : le serveur le réécrit en
+# tournant, si bien que `git pull` refusait d'avancer — « your local changes would be
+# overwritten by merge ». Même raisonnement que pour la base et les fichiers téléversés :
+# c'est une donnée de travail, reconstructible depuis le fournisseur de cours, qui n'a
+# rien à faire dans le dépôt.
+backend/cache_evenements.json
