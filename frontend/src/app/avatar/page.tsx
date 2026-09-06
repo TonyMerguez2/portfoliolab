@@ -1,4 +1,5 @@
 "use client";
+import { FONT } from "@/lib/typography";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import {
@@ -499,7 +500,15 @@ export default function AvatarProceduralPage() {
    * chose finissent par ne plus la peindre pareil. À l'intérieur d'un même fichier, la même
    * règle vaut.
    */
-  const peindreAplat = useCallback((m: MotifPlat, i: number) => (
+  const peindreAplat = useCallback((m: MotifPlat, i: number) => m.texte ? (
+    /* Un texte à la place du tracé — voir `MotifPlat.texte`. Même branche que le composant. */
+    <text key={i} x={m.texte.x} y={m.texte.y} opacity={m.opacite}
+      fill={m.degrade ? `url(#${m.degrade})` : (m.couleur ?? "none")}
+      fontSize={m.texte.taille} fontWeight={m.texte.graisse ?? 600} fontFamily={FONT}
+      letterSpacing={m.texte.espacement ?? 0} textAnchor="middle" dominantBaseline="middle"
+      clipPath={m.decoupe ? `url(#${m.decoupe})` : undefined}
+      style={{ userSelect: "none", pointerEvents: "none" }}>{m.texte.contenu}</text>
+  ) : (
     <path key={i} d={m.d}
       fill={m.degrade ? `url(#${m.degrade})` : (m.couleur ?? "none")}
       opacity={m.opacite} className={m.classe}
@@ -1486,7 +1495,6 @@ export default function AvatarProceduralPage() {
                 <button
                   key={p.nom}
                   type="button"
-                  title={p.nom}
                   aria-label={`Palette ${p.nom}`}
                   onClick={() => setPalette(cur => ({ ...cur, tete: p.tete, accent: p.accent }))}
                   style={{
@@ -1532,7 +1540,7 @@ export default function AvatarProceduralPage() {
                   <button
                     key={e.cle}
                     type="button"
-                    title={`${e.quand} — ${e.nature}`}
+                    aria-label={`${e.quand} — ${e.nature}`}
                     onClick={() => demander(e.cle)}
                     aria-pressed={retenu}
                     style={{

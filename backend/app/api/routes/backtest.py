@@ -371,8 +371,13 @@ def _trim_depuis(obj, depuis: str | None):
     suivante. Une position ouverte hier garde ainsi deux points au lieu d'un,
     et il reste quelque chose à tracer.
 
-    Une date postérieure à toute la série ne coupe rien : mieux vaut une courbe
-    trop longue qu'une carte vide.
+    ⚠️ **Quand la borne ne laisserait qu'un point, on garde les deux derniers —
+    pas la série entière.** Le repli d'avant rendait tout l'historique : une ligne
+    achetée la veille faisait afficher `AAPL` à **+331 078 %** sur quarante points,
+    à côté de voisines bornées à quatre points et +2 %. « Mieux vaut une courbe
+    trop longue qu'une carte vide » était le bon principe, mais « trop longue »
+    valait ici quarante ans. Deux points suffisent à tracer, et ils disent la
+    vérité de la détention au lieu de celle du titre.
     """
     if not depuis or len(obj) == 0:
         return obj
@@ -389,7 +394,7 @@ def _trim_depuis(obj, depuis: str | None):
     avant = idx[idx <= borne]
     debut = avant[-1] if len(avant) else idx[0]
     coupe = obj[idx >= debut]
-    return coupe if len(coupe) >= 2 else obj
+    return coupe if len(coupe) >= 2 else obj.iloc[-2:]
 
 
 def _session_with_base(frame, sessions):
@@ -418,16 +423,27 @@ def _session_with_base(frame, sessions):
     return pd.concat([avant.iloc[[-1]], seance]) if len(avant) else seance
 
 
-def _intraday_session(close, sessions, ticker: str, n_tickers: int) -> list[float]:
-    """Barres intraday de la dernière séance ouverte, pour un ticker.
+def _intraday_24h(close, ticker: str, n_tickers: int) -> list[float]:
+    """Les barres intraday des vingt-quatre heures qui précèdent la **dernière barre reçue**.
 
-    On isole la dernière séance plutôt que de prendre les N dernières barres :
-    une fenêtre de deux jours enjambe une clôture, et la courbe montrerait
-    alors un saut de nuit que la variation du jour ne contient pas.
+    ⚠️ **Remplace `_intraday_session`, qui isolait la dernière séance — et c'était trop peu.**
+    Isoler la séance protégeait d'un saut de nuit dans le tracé. Mais à 10 h 18, la séance en
+    cours compte cinq barres de quinze minutes : la carte « 24 h » montrait une heure et quart,
+    presque droite, et à 9 h 05 elle n'aurait montré qu'un point. Mesuré le 4 septembre 2026 sur
+    trois lignes d'un PEA : 5 à 6 points par carte. Le graphique du bandeau, lui, trace bien
+    vingt-quatre heures ; les cartes doivent parler de la même fenêtre.
+
+    ⚠️ **Depuis la dernière barre, pas depuis l'horloge** — même raison que dans `/history` :
+    un dimanche, rien n'a coté depuis plus de vingt-quatre heures, et la fenêtre d'horloge
+    serait vide là où l'on veut voir toute la séance du vendredi.
+
+    ⚠️ **Le saut de nuit est donc dans le tracé, et c'est assumé.** Il est dans le bandeau
+    aussi. Ce qu'on perd — une courbe sans discontinuité — vaut moins que ce qu'on gagne : une
+    courbe qui existe dès l'ouverture.
     """
     import pandas as pd
 
-    if close is None or sessions is None:
+    if close is None:
         return []
     try:
         if n_tickers == 1:
@@ -436,11 +452,54 @@ def _intraday_session(close, sessions, ticker: str, n_tickers: int) -> list[floa
             if ticker not in close.columns:
                 return []
             s = close[ticker]
-        by_session = pd.Series(s.values, index=sessions).dropna()
-        if by_session.empty:
+        s = s.dropna()
+        if s.empty:
             return []
-        last = max(by_session.index)
-        return [float(v) for v in by_session[by_session.index == last].values]
+        s = s[s.index >= s.index[-1] - pd.Timedelta(hours=24)]
+        return [float(v) for v in s.values]
+    except Exception:
+        return []
+
+
+#: Au-delà de cette durée, l'intraday n'est plus téléchargé pour la sparkline.
+#:
+#: ⚠️ **Trente jours, parce que c'est la limite utile, pas celle de Yahoo.** Le fournisseur sert
+#: le quart d'heure jusqu'à soixante jours. Mais une sparkline est ramenée à quarante points de
+#: toute façon : au-delà d'un mois, l'intraday n'apporte plus de forme, seulement du
+#: téléchargement.
+JOURS_INTRADAY = 30
+
+
+def _valeurs_intraday(close, ticker: str, n_tickers: int, debut) -> list[float]:
+    """
+    Les barres intraday d'un ticker à partir d'une date, pour une fenêtre courte.
+
+    ⚠️ **Distinct d'`_intraday_24h`, qui sert la fenêtre « 24 h ».** Celui-là se compte en
+    heures depuis la dernière barre ; ici la borne est une date de détention ou de période, et
+    on veut plusieurs séances entières : les sauts entre elles font partie de la semaine
+    qu'on affiche.
+    """
+    import pandas as pd
+
+    if close is None:
+        return []
+    try:
+        if n_tickers == 1:
+            s = close if isinstance(close, pd.Series) else close.iloc[:, 0]
+        else:
+            if ticker not in close.columns:
+                return []
+            s = close[ticker]
+        s = s.dropna()
+        if s.empty:
+            return []
+        if debut is not None:
+            borne = pd.Timestamp(debut)
+            tz = getattr(s.index, "tz", None)
+            if tz is not None and borne.tz is None:
+                borne = borne.tz_localize("UTC").tz_convert(tz)
+            s = s[s.index >= borne]
+        return [float(v) for v in s.values]
     except Exception:
         return []
 
@@ -507,32 +566,64 @@ async def get_prices(tickers: str = "", period: str = "1d", depuis: str = "") ->
             if i < len(bornes) and bornes[i]
         }
 
+        from datetime import date as _dt_date, timedelta as _td
+
         yf_period = _YF_WINDOW.get(period, "5d")
 
         def batch_download():
             arg = ticker_list[0] if len(ticker_list) == 1 else ticker_list
             return yf.download(arg, period=yf_period, progress=False, auto_adjust=True)
 
+        """
+        ⚠️ **L'intraday se décide sur la durée **effective**, pas sur le nom de la période.** Il
+        n'était téléchargé que pour « 24 h ». Résultat mesuré sur un portefeuille de six jours :
+        « 1 S » rendait **cinq points** — cinq séances de clôtures journalières — et la courbe
+        lissée les habillait en vague, ce qui a été signalé à l'écran. Or la borne de détention
+        ramène ici « 1 M » et même « Max » à ces mêmes cinq jours : c'est donc la fenêtre réelle
+        qui doit décider, jamais l'étiquette.
+
+        ⚠️ **La variation continue de venir des clôtures journalières.** Seule la *série* change.
+        Les dériver de l'intraday donnerait des chiffres légèrement différents — 0,02 à 0,03
+        point mesuré — et l'écart se verrait d'une page à l'autre.
+        """
+        debut_effectif = None
+        if period in _PERIOD_DAYS:
+            debut_effectif = _dt_date.today() - _td(days=_PERIOD_DAYS[period])
+        elif period == "1d":
+            debut_effectif = _dt_date.today() - _td(days=2)
+        # La borne de détention la plus ancienne resserre encore la fenêtre ; sans borne pour
+        # un seul ticker, on ne peut rien resserrer du tout.
+        if depuis_par_ticker and len(depuis_par_ticker) == len(ticker_list):
+            try:
+                plus_ancienne = min(_dt_date.fromisoformat(b) for b in depuis_par_ticker.values())
+                debut_effectif = plus_ancienne if debut_effectif is None else max(debut_effectif, plus_ancienne)
+            except ValueError:
+                pass
+
+        jours_fenetre = None
+        if debut_effectif is not None:
+            ecart = (_dt_date.today() - debut_effectif).days
+            if ecart <= JOURS_INTRADAY:
+                jours_fenetre = max(1, ecart)
+
         def batch_intraday():
             arg = ticker_list[0] if len(ticker_list) == 1 else ticker_list
-            return yf.download(arg, period="2d", interval="15m", progress=False, auto_adjust=True)
+            # ⚠️ Une marge d'un jour : la borne tombe souvent un jour non coté, et sans elle la
+            # première séance manquerait. Le pas de quinze minutes couvre soixante jours chez
+            # Yahoo, donc tout ce qu'on demande ici.
+            return yf.download(arg, period=f"{jours_fenetre + 1}d", interval="15m",
+                               progress=False, auto_adjust=True)
 
         loop = asyncio.get_running_loop()
         with ThreadPoolExecutor(max_workers=1) as pool:
             hist = await loop.run_in_executor(pool, batch_download)
-            intra = await loop.run_in_executor(pool, batch_intraday) if period == "1d" else None
+            intra = await loop.run_in_executor(pool, batch_intraday) if jours_fenetre is not None else None
 
         if hist.empty:
             return []
 
         close = hist["Close"]
-        # Séances repérées dans le fuseau de la place, pas en UTC : une séance
-        # américaine se termine à 20h UTC et déborderait sur le lendemain.
-        intra_close, intra_sessions = None, None
-        if intra is not None and not intra.empty:
-            intra_close = intra["Close"]
-            idx = intra_close.index
-            intra_sessions = (idx.tz_convert("America/New_York") if idx.tz is not None else idx).date
+        intra_close = intra["Close"] if intra is not None and not intra.empty else None
 
         results = []
 
@@ -562,12 +653,27 @@ async def get_prices(tickers: str = "", period: str = "1d", depuis: str = "") ->
                 # ne finissait donc pas sur le montant écrit à côté d'elle. L'intérieur
                 # reste la vraie trajectoire.
                 if period == "1d":
-                    series_vals = _intraday_session(intra_close, intra_sessions, ticker, len(ticker_list))
+                    series_vals = _intraday_24h(intra_close, ticker, len(ticker_list))
+                    # ⚠️ Sans `prev` en tête : la fenêtre commence hier à la même heure, pas
+                    # à la clôture de la veille. Poser cette clôture *avant* une barre d'hier
+                    # matin inventerait un premier mouvement. Le repli sur les clôtures garde
+                    # la clôture précédente, qui est alors bien le point de départ.
+                    if series_vals:
+                        series_vals[-1] = price
+                    else:
+                        series_vals = [prev, price]
                 else:
-                    series_vals = [float(v) for v in series.values]
-                if series_vals:
-                    series_vals = [prev] + series_vals
-                    series_vals[-1] = price
+                    # ⚠️ L'intraday ne remplace les clôtures que s'il apporte **plus** de points.
+                    # Sur un titre peu traité, il peut en rendre moins que les séances elles-mêmes ;
+                    # le repli sur les clôtures est alors le bon tracé.
+                    series_vals = _valeurs_intraday(
+                        intra_close, ticker, len(ticker_list),
+                        series.index[0] if len(series) else None)
+                    if len(series_vals) <= len(series):
+                        series_vals = [float(v) for v in series.values]
+                    if series_vals:
+                        series_vals = [prev] + series_vals
+                        series_vals[-1] = price
 
                 results.append({
                     "symbol": ticker,

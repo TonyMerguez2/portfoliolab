@@ -1,0 +1,2517 @@
+{
+ "A": {
+  "actions": 281965813.0,
+  "nom": "Agilent Technologies",
+  "secteur": "Health Care"
+ },
+ "AAPL": {
+  "actions": 14594180000.0,
+  "nom": "Apple Inc.",
+  "secteur": "Information Technology"
+ },
+ "ABBV": {
+  "actions": 1767117285.0,
+  "nom": "AbbVie",
+  "secteur": "Health Care"
+ },
+ "ABNB": {
+  "actions": 589585682.0,
+  "nom": "Airbnb",
+  "secteur": "Consumer Discretionary"
+ },
+ "ABT": {
+  "actions": 1730383296.0,
+  "nom": "Abbott Laboratories",
+  "secteur": "Health Care"
+ },
+ "ACGL": {
+  "actions": 341229126.0,
+  "nom": "Arch Capital Group",
+  "secteur": "Financials"
+ },
+ "ACN": {
+  "actions": 611942109.0,
+  "nom": "Accenture",
+  "secteur": "Information Technology"
+ },
+ "ADBE": {
+  "actions": 397500000.0,
+  "nom": "Adobe Inc.",
+  "secteur": "Information Technology"
+ },
+ "ADI": {
+  "actions": 484565465.0,
+  "nom": "Analog Devices",
+  "secteur": "Information Technology"
+ },
+ "ADM": {
+  "actions": 481959583.0,
+  "nom": "Archer Daniels Midland",
+  "secteur": "Consumer Staples"
+ },
+ "ADP": {
+  "actions": 397262737.0,
+  "nom": "Automatic Data Processing",
+  "secteur": "Industrials"
+ },
+ "ADSK": {
+  "actions": 211145251.0,
+  "nom": "Autodesk",
+  "secteur": "Information Technology"
+ },
+ "AEE": {
+  "actions": 276843251.0,
+  "nom": "Ameren",
+  "secteur": "Utilities"
+ },
+ "AEP": {
+  "actions": 544397352.0,
+  "nom": "American Electric Power",
+  "secteur": "Utilities"
+ },
+ "AES": {
+  "actions": 713438630.0,
+  "nom": "AES Corporation",
+  "secteur": "Utilities"
+ },
+ "AFL": {
+  "actions": 501343298.0,
+  "nom": "Aflac",
+  "secteur": "Financials"
+ },
+ "AIG": {
+  "actions": 522893169.0,
+  "nom": "American International Group",
+  "secteur": "Financials"
+ },
+ "AIZ": {
+  "actions": 49323767.0,
+  "nom": "Assurant",
+  "secteur": "Financials"
+ },
+ "AJG": {
+  "actions": 256341000.0,
+  "nom": "Arthur J. Gallagher & Co.",
+  "secteur": "Financials"
+ },
+ "AKAM": {
+  "actions": 143716609.0,
+  "nom": "Akamai Technologies",
+  "secteur": "Information Technology"
+ },
+ "ALB": {
+  "actions": 118005057.0,
+  "nom": "Albemarle Corporation",
+  "secteur": "Materials"
+ },
+ "ALGN": {
+  "actions": 71039852.0,
+  "nom": "Align Technology",
+  "secteur": "Health Care"
+ },
+ "ALL": {
+  "actions": 252857950.0,
+  "nom": "Allstate",
+  "secteur": "Financials"
+ },
+ "ALLE": {
+  "actions": 85036786.0,
+  "nom": "Allegion",
+  "secteur": "Industrials"
+ },
+ "AMAT": {
+  "actions": 793597443.0,
+  "nom": "Applied Materials",
+  "secteur": "Information Technology"
+ },
+ "AMCR": {
+  "actions": 462345690.0,
+  "nom": "Amcor",
+  "secteur": "Materials"
+ },
+ "AMD": {
+  "actions": 1632475042.0,
+  "nom": "Advanced Micro Devices",
+  "secteur": "Information Technology"
+ },
+ "AME": {
+  "actions": 229261244.0,
+  "nom": "Ametek",
+  "secteur": "Industrials"
+ },
+ "AMGN": {
+  "actions": 540632005.0,
+  "nom": "Amgen",
+  "secteur": "Health Care"
+ },
+ "AMP": {
+  "actions": 88333219.0,
+  "nom": "Ameriprise Financial",
+  "secteur": "Financials"
+ },
+ "AMT": {
+  "actions": 465960048.0,
+  "nom": "American Tower",
+  "secteur": "Real Estate"
+ },
+ "AMZN": {
+  "actions": 10786313572.0,
+  "nom": "Amazon",
+  "secteur": "Consumer Discretionary"
+ },
+ "ANET": {
+  "actions": 1261224648.0,
+  "nom": "Arista Networks",
+  "secteur": "Information Technology"
+ },
+ "AON": {
+  "actions": 212125434.0,
+  "nom": "Aon plc",
+  "secteur": "Financials"
+ },
+ "AOS": {
+  "actions": 135908573.0,
+  "nom": "A. O. Smith",
+  "secteur": "Industrials"
+ },
+ "APA": {
+  "actions": 350351510.0,
+  "nom": "APA Corporation",
+  "secteur": "Energy"
+ },
+ "APD": {
+  "actions": 222685530.0,
+  "nom": "Air Products",
+  "secteur": "Materials"
+ },
+ "APH": {
+  "actions": 1232983457.0,
+  "nom": "Amphenol",
+  "secteur": "Information Technology"
+ },
+ "APO": {
+  "actions": 590543159.0,
+  "nom": "Apollo Global Management",
+  "secteur": "Financials"
+ },
+ "APP": {
+  "actions": 335939521.0,
+  "nom": "AppLovin",
+  "secteur": "Communication Services"
+ },
+ "APTV": {
+  "actions": 207633331.0,
+  "nom": "Aptiv",
+  "secteur": "Consumer Discretionary"
+ },
+ "ARE": {
+  "actions": 172095277.0,
+  "nom": "Alexandria Real Estate Equities",
+  "secteur": "Real Estate"
+ },
+ "ARES": {
+  "actions": 225518332.0,
+  "nom": "Ares Management",
+  "secteur": "Financials"
+ },
+ "ATO": {
+  "actions": 168988553.0,
+  "nom": "Atmos Energy",
+  "secteur": "Utilities"
+ },
+ "AVGO": {
+  "actions": 4757580198.0,
+  "nom": "Broadcom",
+  "secteur": "Information Technology"
+ },
+ "AVY": {
+  "actions": 75788142.0,
+  "nom": "Avery Dennison",
+  "secteur": "Materials"
+ },
+ "AWK": {
+  "actions": 198728989.0,
+  "nom": "American Water Works",
+  "secteur": "Utilities"
+ },
+ "AXON": {
+  "actions": 81237415.0,
+  "nom": "Axon Enterprise",
+  "secteur": "Industrials"
+ },
+ "AXP": {
+  "actions": 675309833.0,
+  "nom": "American Express",
+  "secteur": "Financials"
+ },
+ "AZO": {
+  "actions": 16325355.0,
+  "nom": "AutoZone",
+  "secteur": "Consumer Discretionary"
+ },
+ "BA": {
+  "actions": 790370020.0,
+  "nom": "Boeing",
+  "secteur": "Industrials"
+ },
+ "BAC": {
+  "actions": 6992748365.0,
+  "nom": "Bank of America",
+  "secteur": "Financials"
+ },
+ "BALL": {
+  "actions": 264703357.0,
+  "nom": "Ball Corporation",
+  "secteur": "Materials"
+ },
+ "BAX": {
+  "actions": 516995999.0,
+  "nom": "Baxter International",
+  "secteur": "Health Care"
+ },
+ "BBY": {
+  "actions": 210767126.0,
+  "nom": "Best Buy",
+  "secteur": "Consumer Discretionary"
+ },
+ "BDX": {
+  "actions": 272386800.0,
+  "nom": "Becton Dickinson",
+  "secteur": "Health Care"
+ },
+ "BEN": {
+  "actions": 508076910.0,
+  "nom": "Franklin Resources",
+  "secteur": "Financials"
+ },
+ "BF-B": {
+  "actions": 458864265.0,
+  "nom": "Brown–Forman",
+  "secteur": "Consumer Staples"
+ },
+ "BG": {
+  "actions": 192119123.0,
+  "nom": "Bunge Global",
+  "secteur": "Consumer Staples"
+ },
+ "BIIB": {
+  "actions": 147753998.0,
+  "nom": "Biogen",
+  "secteur": "Health Care"
+ },
+ "BKNG": {
+  "actions": 751380500.0,
+  "nom": "Booking Holdings",
+  "secteur": "Consumer Discretionary"
+ },
+ "BKR": {
+  "actions": 992674071.0,
+  "nom": "Baker Hughes",
+  "secteur": "Energy"
+ },
+ "BLDR": {
+  "actions": 107596457.0,
+  "nom": "Builders FirstSource",
+  "secteur": "Industrials"
+ },
+ "BLK": {
+  "actions": 154869259.0,
+  "nom": "BlackRock",
+  "secteur": "Financials"
+ },
+ "BMY": {
+  "actions": 2042714656.0,
+  "nom": "Bristol Myers Squibb",
+  "secteur": "Health Care"
+ },
+ "BNY": {
+  "actions": 678504142.0,
+  "nom": "BNY Mellon",
+  "secteur": "Financials"
+ },
+ "BR": {
+  "actions": 114021798.0,
+  "nom": "Broadridge Financial Solutions",
+  "secteur": "Industrials"
+ },
+ "BRK-B": {
+  "actions": 2140709794.0,
+  "nom": "Berkshire Hathaway",
+  "secteur": "Financials"
+ },
+ "BRO": {
+  "actions": 334610357.0,
+  "nom": "Brown & Brown",
+  "secteur": "Financials"
+ },
+ "BSX": {
+  "actions": 1449229526.0,
+  "nom": "Boston Scientific",
+  "secteur": "Health Care"
+ },
+ "BX": {
+  "actions": 750625114.0,
+  "nom": "Blackstone Inc.",
+  "secteur": "Financials"
+ },
+ "BXP": {
+  "actions": 159661556.0,
+  "nom": "BXP, Inc.",
+  "secteur": "Real Estate"
+ },
+ "C": {
+  "actions": 1677436783.0,
+  "nom": "Citigroup",
+  "secteur": "Financials"
+ },
+ "CAH": {
+  "actions": 232575728.0,
+  "nom": "Cardinal Health",
+  "secteur": "Health Care"
+ },
+ "CARR": {
+  "actions": 824325057.0,
+  "nom": "Carrier Global",
+  "secteur": "Industrials"
+ },
+ "CASY": {
+  "actions": 37004914.0,
+  "nom": "Casey's",
+  "secteur": "Consumer Staples"
+ },
+ "CAT": {
+  "actions": 459674889.0,
+  "nom": "Caterpillar Inc.",
+  "secteur": "Industrials"
+ },
+ "CB": {
+  "actions": 385799859.0,
+  "nom": "Chubb Limited",
+  "secteur": "Financials"
+ },
+ "CBOE": {
+  "actions": 104431019.0,
+  "nom": "Cboe Global Markets",
+  "secteur": "Financials"
+ },
+ "CBRE": {
+  "actions": 289575298.0,
+  "nom": "CBRE Group",
+  "secteur": "Real Estate"
+ },
+ "CCI": {
+  "actions": 425455439.0,
+  "nom": "Crown Castle",
+  "secteur": "Real Estate"
+ },
+ "CCL": {
+  "actions": 1369649119.0,
+  "nom": "Carnival Corporation",
+  "secteur": "Consumer Discretionary"
+ },
+ "CDNS": {
+  "actions": 275393000.0,
+  "nom": "Cadence Design Systems",
+  "secteur": "Information Technology"
+ },
+ "CDW": {
+  "actions": 125017426.0,
+  "nom": "CDW Corporation",
+  "secteur": "Information Technology"
+ },
+ "CEG": {
+  "actions": 354307379.0,
+  "nom": "Constellation Energy",
+  "secteur": "Utilities"
+ },
+ "CF": {
+  "actions": 151338130.0,
+  "nom": "CF Industries",
+  "secteur": "Materials"
+ },
+ "CFG": {
+  "actions": 421176788.0,
+  "nom": "Citizens Financial Group",
+  "secteur": "Financials"
+ },
+ "CHD": {
+  "actions": 237203907.0,
+  "nom": "Church & Dwight",
+  "secteur": "Consumer Staples"
+ },
+ "CHRW": {
+  "actions": 116851258.0,
+  "nom": "C.H. Robinson",
+  "secteur": "Industrials"
+ },
+ "CHTR": {
+  "actions": 119277493.0,
+  "nom": "Charter Communications",
+  "secteur": "Communication Services"
+ },
+ "CI": {
+  "actions": 264240486.0,
+  "nom": "Cigna",
+  "secteur": "Health Care"
+ },
+ "CIEN": {
+  "actions": 141552922.0,
+  "nom": "Ciena",
+  "secteur": "Information Technology"
+ },
+ "CINF": {
+  "actions": 153478045.0,
+  "nom": "Cincinnati Financial",
+  "secteur": "Financials"
+ },
+ "CL": {
+  "actions": 797172829.0,
+  "nom": "Colgate-Palmolive",
+  "secteur": "Consumer Staples"
+ },
+ "CLX": {
+  "actions": 120931005.0,
+  "nom": "Clorox",
+  "secteur": "Consumer Staples"
+ },
+ "CMCSA": {
+  "actions": 3548636573.0,
+  "nom": "Comcast",
+  "secteur": "Communication Services"
+ },
+ "CME": {
+  "actions": 359579263.0,
+  "nom": "CME Group",
+  "secteur": "Financials"
+ },
+ "CMG": {
+  "actions": 1267838000.0,
+  "nom": "Chipotle Mexican Grill",
+  "secteur": "Consumer Discretionary"
+ },
+ "CMI": {
+  "actions": 137664487.0,
+  "nom": "Cummins",
+  "secteur": "Industrials"
+ },
+ "CMS": {
+  "actions": 313577136.0,
+  "nom": "CMS Energy",
+  "secteur": "Utilities"
+ },
+ "CNC": {
+  "actions": 493995000.0,
+  "nom": "Centene Corporation",
+  "secteur": "Health Care"
+ },
+ "CNP": {
+  "actions": 658720288.0,
+  "nom": "CenterPoint Energy",
+  "secteur": "Utilities"
+ },
+ "COF": {
+  "actions": 613484836.0,
+  "nom": "Capital One",
+  "secteur": "Financials"
+ },
+ "COHR": {
+  "actions": 195832246.0,
+  "nom": "Coherent Corp.",
+  "secteur": "Information Technology"
+ },
+ "COIN": {
+  "actions": 263836923.0,
+  "nom": "Coinbase",
+  "secteur": "Financials"
+ },
+ "COO": {
+  "actions": 195030630.0,
+  "nom": "Cooper Companies (The)",
+  "secteur": "Health Care"
+ },
+ "COP": {
+  "actions": 1218294007.0,
+  "nom": "ConocoPhillips",
+  "secteur": "Energy"
+ },
+ "COR": {
+  "actions": 190827165.0,
+  "nom": "Cencora",
+  "secteur": "Health Care"
+ },
+ "COST": {
+  "actions": 443478804.0,
+  "nom": "Costco",
+  "secteur": "Consumer Staples"
+ },
+ "CPAY": {
+  "actions": 65659599.0,
+  "nom": "Corpay",
+  "secteur": "Financials"
+ },
+ "CPRT": {
+  "actions": 925811482.0,
+  "nom": "Copart",
+  "secteur": "Industrials"
+ },
+ "CPT": {
+  "actions": 115732578.0,
+  "nom": "Camden Property Trust",
+  "secteur": "Real Estate"
+ },
+ "CRH": {
+  "actions": 665284511.0,
+  "nom": "CRH plc",
+  "secteur": "Materials"
+ },
+ "CRL": {
+  "actions": 47738872.0,
+  "nom": "Charles River Laboratories",
+  "secteur": "Health Care"
+ },
+ "CRM": {
+  "actions": 823000000.0,
+  "nom": "Salesforce",
+  "secteur": "Information Technology"
+ },
+ "CRWD": {
+  "actions": 1023934842.0,
+  "nom": "CrowdStrike",
+  "secteur": "Information Technology"
+ },
+ "CSCO": {
+  "actions": 3941434665.0,
+  "nom": "Cisco",
+  "secteur": "Information Technology"
+ },
+ "CSGP": {
+  "actions": 405197588.0,
+  "nom": "CoStar Group",
+  "secteur": "Real Estate"
+ },
+ "CSX": {
+  "actions": 1852474917.0,
+  "nom": "CSX Corporation",
+  "secteur": "Industrials"
+ },
+ "CTAS": {
+  "actions": 400169561.0,
+  "nom": "Cintas",
+  "secteur": "Industrials"
+ },
+ "CTSH": {
+  "actions": 450444209.0,
+  "nom": "Cognizant",
+  "secteur": "Information Technology"
+ },
+ "CTVA": {
+  "actions": 667196000.0,
+  "nom": "Corteva",
+  "secteur": "Materials"
+ },
+ "CVNA": {
+  "actions": 719916415.0,
+  "nom": "Carvana",
+  "secteur": "Consumer Discretionary"
+ },
+ "CVS": {
+  "actions": 1278970369.0,
+  "nom": "CVS Health",
+  "secteur": "Health Care"
+ },
+ "CVX": {
+  "actions": 1961603274.0,
+  "nom": "Chevron Corporation",
+  "secteur": "Energy"
+ },
+ "D": {
+  "actions": 879525949.0,
+  "nom": "Dominion Energy",
+  "secteur": "Utilities"
+ },
+ "DAL": {
+  "actions": 657623030.0,
+  "nom": "Delta Air Lines",
+  "secteur": "Industrials"
+ },
+ "DASH": {
+  "actions": 433295654.0,
+  "nom": "DoorDash",
+  "secteur": "Consumer Discretionary"
+ },
+ "DD": {
+  "actions": 135042975.0,
+  "nom": "DuPont",
+  "secteur": "Industrials"
+ },
+ "DDOG": {
+  "actions": 359075024.0,
+  "nom": "Datadog",
+  "secteur": "Information Technology"
+ },
+ "DE": {
+  "actions": 269625412.0,
+  "nom": "Deere & Company",
+  "secteur": "Industrials"
+ },
+ "DECK": {
+  "actions": 136181857.0,
+  "nom": "Deckers Brands",
+  "secteur": "Consumer Discretionary"
+ },
+ "DELL": {
+  "actions": 646142428.0,
+  "nom": "Dell Technologies",
+  "secteur": "Information Technology"
+ },
+ "DG": {
+  "actions": 220616790.0,
+  "nom": "Dollar General",
+  "secteur": "Consumer Staples"
+ },
+ "DGX": {
+  "actions": 110373360.0,
+  "nom": "Quest Diagnostics",
+  "secteur": "Health Care"
+ },
+ "DHI": {
+  "actions": 279701267.0,
+  "nom": "D. R. Horton",
+  "secteur": "Consumer Discretionary"
+ },
+ "DHR": {
+  "actions": 702986054.0,
+  "nom": "Danaher Corporation",
+  "secteur": "Health Care"
+ },
+ "DIS": {
+  "actions": 1726686902.0,
+  "nom": "Walt Disney Company (The)",
+  "secteur": "Communication Services"
+ },
+ "DLR": {
+  "actions": 370998727.0,
+  "nom": "Digital Realty",
+  "secteur": "Real Estate"
+ },
+ "DLTR": {
+  "actions": 187630299.0,
+  "nom": "Dollar Tree",
+  "secteur": "Consumer Staples"
+ },
+ "DOC": {
+  "actions": 689527260.0,
+  "nom": "Healthpeak Properties",
+  "secteur": "Real Estate"
+ },
+ "DOV": {
+  "actions": 134680225.0,
+  "nom": "Dover Corporation",
+  "secteur": "Industrials"
+ },
+ "DOW": {
+  "actions": 722340711.0,
+  "nom": "Dow Inc.",
+  "secteur": "Materials"
+ },
+ "DPZ": {
+  "actions": 33081735.0,
+  "nom": "Domino's",
+  "secteur": "Consumer Discretionary"
+ },
+ "DRI": {
+  "actions": 113541756.0,
+  "nom": "Darden Restaurants",
+  "secteur": "Consumer Discretionary"
+ },
+ "DTE": {
+  "actions": 208088069.0,
+  "nom": "DTE Energy",
+  "secteur": "Utilities"
+ },
+ "DUK": {
+  "actions": 779702193.0,
+  "nom": "Duke Energy",
+  "secteur": "Utilities"
+ },
+ "DVA": {
+  "actions": 63800000.0,
+  "nom": "DaVita",
+  "secteur": "Health Care"
+ },
+ "DVN": {
+  "actions": 1100000000.0,
+  "nom": "Devon Energy",
+  "secteur": "Energy"
+ },
+ "DXCM": {
+  "actions": 377360765.0,
+  "nom": "Dexcom",
+  "secteur": "Health Care"
+ },
+ "EBAY": {
+  "actions": 445000000.0,
+  "nom": "eBay Inc.",
+  "secteur": "Consumer Discretionary"
+ },
+ "ECHO": {
+  "actions": 290490708.0,
+  "nom": "EchoStar",
+  "secteur": "Communication Services"
+ },
+ "ECL": {
+  "actions": 280328603.0,
+  "nom": "Ecolab",
+  "secteur": "Materials"
+ },
+ "ED": {
+  "actions": 369828633.0,
+  "nom": "Consolidated Edison",
+  "secteur": "Utilities"
+ },
+ "EFX": {
+  "actions": 117484896.0,
+  "nom": "Equifax",
+  "secteur": "Industrials"
+ },
+ "EG": {
+  "actions": 38342734.0,
+  "nom": "Everest Group",
+  "secteur": "Financials"
+ },
+ "EIX": {
+  "actions": 384813979.0,
+  "nom": "Edison International",
+  "secteur": "Utilities"
+ },
+ "EL": {
+  "actions": 361798567.0,
+  "nom": "Estée Lauder Companies (The)",
+  "secteur": "Consumer Staples"
+ },
+ "ELV": {
+  "actions": 216869290.0,
+  "nom": "Elevance Health",
+  "secteur": "Health Care"
+ },
+ "EME": {
+  "actions": 44109901.0,
+  "nom": "Emcor",
+  "secteur": "Industrials"
+ },
+ "EMR": {
+  "actions": 557800000.0,
+  "nom": "Emerson Electric",
+  "secteur": "Industrials"
+ },
+ "EOG": {
+  "actions": 524529176.0,
+  "nom": "EOG Resources",
+  "secteur": "Energy"
+ },
+ "EQIX": {
+  "actions": 98671686.0,
+  "nom": "Equinix",
+  "secteur": "Real Estate"
+ },
+ "EQT": {
+  "actions": 625516000.0,
+  "nom": "EQT Corporation",
+  "secteur": "Energy"
+ },
+ "ERIE": {
+  "actions": 52289868.0,
+  "nom": "Erie Indemnity",
+  "secteur": "Financials"
+ },
+ "ES": {
+  "actions": 376674754.0,
+  "nom": "Eversource Energy",
+  "secteur": "Utilities"
+ },
+ "ESS": {
+  "actions": 64268439.0,
+  "nom": "Essex Property Trust",
+  "secteur": "Real Estate"
+ },
+ "ETN": {
+  "actions": 388400000.0,
+  "nom": "Eaton Corporation",
+  "secteur": "Industrials"
+ },
+ "ETR": {
+  "actions": 466631498.0,
+  "nom": "Entergy",
+  "secteur": "Utilities"
+ },
+ "EVRG": {
+  "actions": 230567172.0,
+  "nom": "Evergy",
+  "secteur": "Utilities"
+ },
+ "EW": {
+  "actions": 576400000.0,
+  "nom": "Edwards Lifesciences",
+  "secteur": "Health Care"
+ },
+ "EXC": {
+  "actions": 1030253967.0,
+  "nom": "Exelon",
+  "secteur": "Utilities"
+ },
+ "EXE": {
+  "actions": 231503789.0,
+  "nom": "Expand Energy",
+  "secteur": "Energy"
+ },
+ "EXPD": {
+  "actions": 129990622.0,
+  "nom": "Expeditors International",
+  "secteur": "Industrials"
+ },
+ "EXPE": {
+  "actions": 120022077.0,
+  "nom": "Expedia Group",
+  "secteur": "Consumer Discretionary"
+ },
+ "EXR": {
+  "actions": 211269558.0,
+  "nom": "Extra Space Storage",
+  "secteur": "Real Estate"
+ },
+ "F": {
+  "actions": 3987595667.0,
+  "nom": "Ford Motor Company",
+  "secteur": "Consumer Discretionary"
+ },
+ "FANG": {
+  "actions": 280019792.0,
+  "nom": "Diamondback Energy",
+  "secteur": "Energy"
+ },
+ "FAST": {
+  "actions": 1147497573.0,
+  "nom": "Fastenal",
+  "secteur": "Industrials"
+ },
+ "FCX": {
+  "actions": 1436017523.0,
+  "nom": "Freeport-McMoRan",
+  "secteur": "Materials"
+ },
+ "FDS": {
+  "actions": 35565543.0,
+  "nom": "FactSet",
+  "secteur": "Financials"
+ },
+ "FDX": {
+  "actions": 236670435.0,
+  "nom": "FedEx",
+  "secteur": "Industrials"
+ },
+ "FDXF": {
+  "actions": 149518133.0,
+  "nom": "FedEx Freight",
+  "secteur": "Industrials"
+ },
+ "FE": {
+  "actions": 578639932.0,
+  "nom": "FirstEnergy",
+  "secteur": "Utilities"
+ },
+ "FERG": {
+  "actions": 193452717.0,
+  "nom": "Ferguson Enterprises",
+  "secteur": "Industrials"
+ },
+ "FFIV": {
+  "actions": 56627182.0,
+  "nom": "F5, Inc.",
+  "secteur": "Information Technology"
+ },
+ "FICO": {
+  "actions": 21597635.0,
+  "nom": "Fair Isaac",
+  "secteur": "Information Technology"
+ },
+ "FIS": {
+  "actions": 515705917.0,
+  "nom": "Fidelity National Information Services",
+  "secteur": "Financials"
+ },
+ "FISV": {
+  "actions": 531766721.0,
+  "nom": "Fiserv",
+  "secteur": "Financials"
+ },
+ "FITB": {
+  "actions": 906892564.0,
+  "nom": "Fifth Third Bancorp",
+  "secteur": "Financials"
+ },
+ "FIX": {
+  "actions": 35194329.0,
+  "nom": "Comfort Systems USA",
+  "secteur": "Industrials"
+ },
+ "FLEX": {
+  "actions": 369402978.0,
+  "nom": "Flex Ltd.",
+  "secteur": "Information Technology"
+ },
+ "FOX": {
+  "actions": 420437476.0,
+  "nom": "Fox Corporation (Class B)",
+  "secteur": "Communication Services"
+ },
+ "FOXA": {
+  "actions": 420437476.0,
+  "nom": "Fox Corporation (Class A)",
+  "secteur": "Communication Services"
+ },
+ "FRT": {
+  "actions": 86889133.0,
+  "nom": "Federal Realty Investment Trust",
+  "secteur": "Real Estate"
+ },
+ "FSLR": {
+  "actions": 107469788.0,
+  "nom": "First Solar",
+  "secteur": "Information Technology"
+ },
+ "FTNT": {
+  "actions": 733713653.0,
+  "nom": "Fortinet",
+  "secteur": "Information Technology"
+ },
+ "FTV": {
+  "actions": 302017052.0,
+  "nom": "Fortive",
+  "secteur": "Industrials"
+ },
+ "GD": {
+  "actions": 270557195.0,
+  "nom": "General Dynamics",
+  "secteur": "Industrials"
+ },
+ "GDDY": {
+  "actions": 126647704.0,
+  "nom": "GoDaddy",
+  "secteur": "Information Technology"
+ },
+ "GE": {
+  "actions": 1037562513.0,
+  "nom": "GE Aerospace",
+  "secteur": "Industrials"
+ },
+ "GEHC": {
+  "actions": 451686252.0,
+  "nom": "GE HealthCare",
+  "secteur": "Health Care"
+ },
+ "GEN": {
+  "actions": 598587032.0,
+  "nom": "Gen Digital",
+  "secteur": "Information Technology"
+ },
+ "GEV": {
+  "actions": 266333581.0,
+  "nom": "GE Vernova",
+  "secteur": "Industrials"
+ },
+ "GILD": {
+  "actions": 1239955155.0,
+  "nom": "Gilead Sciences",
+  "secteur": "Health Care"
+ },
+ "GIS": {
+  "actions": 533708396.0,
+  "nom": "General Mills",
+  "secteur": "Consumer Staples"
+ },
+ "GL": {
+  "actions": 76849447.0,
+  "nom": "Globe Life",
+  "secteur": "Financials"
+ },
+ "GLW": {
+  "actions": 861388331.0,
+  "nom": "Corning Inc.",
+  "secteur": "Information Technology"
+ },
+ "GM": {
+  "actions": 904451541.0,
+  "nom": "General Motors",
+  "secteur": "Consumer Discretionary"
+ },
+ "GNRC": {
+  "actions": 59006361.0,
+  "nom": "Generac",
+  "secteur": "Industrials"
+ },
+ "GOOG": {
+  "actions": 12229934831.0,
+  "nom": "Alphabet Inc. (Class C)",
+  "secteur": "Communication Services"
+ },
+ "GOOGL": {
+  "actions": 12229934831.0,
+  "nom": "Alphabet Inc. (Class A)",
+  "secteur": "Communication Services"
+ },
+ "GPC": {
+  "actions": 137859758.0,
+  "nom": "Genuine Parts Company",
+  "secteur": "Consumer Discretionary"
+ },
+ "GPN": {
+  "actions": 264618390.0,
+  "nom": "Global Payments",
+  "secteur": "Financials"
+ },
+ "GRMN": {
+  "actions": 192852536.0,
+  "nom": "Garmin",
+  "secteur": "Consumer Discretionary"
+ },
+ "GS": {
+  "actions": 291171408.0,
+  "nom": "Goldman Sachs",
+  "secteur": "Financials"
+ },
+ "GWW": {
+  "actions": 47100942.0,
+  "nom": "W. W. Grainger",
+  "secteur": "Industrials"
+ },
+ "HAL": {
+  "actions": 833130367.0,
+  "nom": "Halliburton",
+  "secteur": "Energy"
+ },
+ "HAS": {
+  "actions": 141044467.0,
+  "nom": "Hasbro",
+  "secteur": "Consumer Discretionary"
+ },
+ "HBAN": {
+  "actions": 2020414826.0,
+  "nom": "Huntington Bancshares",
+  "secteur": "Financials"
+ },
+ "HCA": {
+  "actions": 216501500.0,
+  "nom": "HCA Healthcare",
+  "secteur": "Health Care"
+ },
+ "HD": {
+  "actions": 997689626.0,
+  "nom": "Home Depot (The)",
+  "secteur": "Consumer Discretionary"
+ },
+ "HIG": {
+  "actions": 270872002.0,
+  "nom": "Hartford (The)",
+  "secteur": "Financials"
+ },
+ "HII": {
+  "actions": 39404598.0,
+  "nom": "Huntington Ingalls Industries",
+  "secteur": "Industrials"
+ },
+ "HLT": {
+  "actions": 225064910.0,
+  "nom": "Hilton Worldwide",
+  "secteur": "Consumer Discretionary"
+ },
+ "HON": {
+  "actions": 316940010.0,
+  "nom": "Honeywell Technologies",
+  "secteur": "Industrials"
+ },
+ "HONA": {
+  "actions": 316952725.0,
+  "nom": "Honeywell Aerospace",
+  "secteur": "Industrials"
+ },
+ "HOOD": {
+  "actions": 899082273.0,
+  "nom": "Robinhood Markets",
+  "secteur": "Financials"
+ },
+ "HPE": {
+  "actions": 1324203521.0,
+  "nom": "Hewlett Packard Enterprise",
+  "secteur": "Information Technology"
+ },
+ "HPQ": {
+  "actions": 901790969.0,
+  "nom": "HP Inc.",
+  "secteur": "Information Technology"
+ },
+ "HRL": {
+  "actions": 550350800.0,
+  "nom": "Hormel Foods",
+  "secteur": "Consumer Staples"
+ },
+ "HSIC": {
+  "actions": 111446542.0,
+  "nom": "Henry Schein",
+  "secteur": "Health Care"
+ },
+ "HST": {
+  "actions": 685124399.0,
+  "nom": "Host Hotels & Resorts",
+  "secteur": "Real Estate"
+ },
+ "HSY": {
+  "actions": 200925657.0,
+  "nom": "Hershey Company (The)",
+  "secteur": "Consumer Staples"
+ },
+ "HUBB": {
+  "actions": 52832571.0,
+  "nom": "Hubbell Incorporated",
+  "secteur": "Industrials"
+ },
+ "HUM": {
+  "actions": 120080308.0,
+  "nom": "Humana",
+  "secteur": "Health Care"
+ },
+ "HWM": {
+  "actions": 398801399.0,
+  "nom": "Howmet Aerospace",
+  "secteur": "Industrials"
+ },
+ "IBKR": {
+  "actions": 453078171.0,
+  "nom": "Interactive Brokers",
+  "secteur": "Financials"
+ },
+ "IBM": {
+  "actions": 942134390.0,
+  "nom": "IBM",
+  "secteur": "Information Technology"
+ },
+ "ICE": {
+  "actions": 561394487.0,
+  "nom": "Intercontinental Exchange",
+  "secteur": "Financials"
+ },
+ "IDXX": {
+  "actions": 78781116.0,
+  "nom": "Idexx Laboratories",
+  "secteur": "Health Care"
+ },
+ "IEX": {
+  "actions": 73719896.0,
+  "nom": "IDEX Corporation",
+  "secteur": "Industrials"
+ },
+ "IFF": {
+  "actions": 255149963.0,
+  "nom": "International Flavors & Fragrances",
+  "secteur": "Materials"
+ },
+ "INCY": {
+  "actions": 202697746.0,
+  "nom": "Incyte",
+  "secteur": "Health Care"
+ },
+ "INTC": {
+  "actions": 5254526315.0,
+  "nom": "Intel",
+  "secteur": "Information Technology"
+ },
+ "INTU": {
+  "actions": 273537000.0,
+  "nom": "Intuit",
+  "secteur": "Information Technology"
+ },
+ "INVH": {
+  "actions": 594041956.0,
+  "nom": "Invitation Homes",
+  "secteur": "Real Estate"
+ },
+ "IP": {
+  "actions": 529569895.0,
+  "nom": "International Paper",
+  "secteur": "Materials"
+ },
+ "IQV": {
+  "actions": 164600000.0,
+  "nom": "IQVIA",
+  "secteur": "Health Care"
+ },
+ "IR": {
+  "actions": 387999429.0,
+  "nom": "Ingersoll Rand",
+  "secteur": "Industrials"
+ },
+ "IRM": {
+  "actions": 297702812.0,
+  "nom": "Iron Mountain",
+  "secteur": "Real Estate"
+ },
+ "ISRG": {
+  "actions": 358278038.0,
+  "nom": "Intuitive Surgical",
+  "secteur": "Health Care"
+ },
+ "IT": {
+  "actions": 63148976.0,
+  "nom": "Gartner",
+  "secteur": "Information Technology"
+ },
+ "ITW": {
+  "actions": 284800000.0,
+  "nom": "Illinois Tool Works",
+  "secteur": "Industrials"
+ },
+ "IVZ": {
+  "actions": 441499780.0,
+  "nom": "Invesco",
+  "secteur": "Financials"
+ },
+ "J": {
+  "actions": 117038611.0,
+  "nom": "Jacobs Solutions",
+  "secteur": "Industrials"
+ },
+ "JBHT": {
+  "actions": 93914939.0,
+  "nom": "J.B. Hunt",
+  "secteur": "Industrials"
+ },
+ "JBL": {
+  "actions": 104787089.0,
+  "nom": "Jabil",
+  "secteur": "Information Technology"
+ },
+ "JCI": {
+  "actions": 605741470.0,
+  "nom": "Johnson Controls",
+  "secteur": "Industrials"
+ },
+ "JKHY": {
+  "actions": 71050780.0,
+  "nom": "Jack Henry & Associates",
+  "secteur": "Financials"
+ },
+ "JNJ": {
+  "actions": 2409898597.0,
+  "nom": "Johnson & Johnson",
+  "secteur": "Health Care"
+ },
+ "JPM": {
+  "actions": 2658186195.0,
+  "nom": "JPMorgan Chase",
+  "secteur": "Financials"
+ },
+ "KDP": {
+  "actions": 1360826038.0,
+  "nom": "Keurig Dr Pepper",
+  "secteur": "Consumer Staples"
+ },
+ "KEY": {
+  "actions": 1067128554.0,
+  "nom": "KeyCorp",
+  "secteur": "Financials"
+ },
+ "KEYS": {
+  "actions": 170300000.0,
+  "nom": "Keysight Technologies",
+  "secteur": "Information Technology"
+ },
+ "KHC": {
+  "actions": 1185823758.0,
+  "nom": "Kraft Heinz",
+  "secteur": "Consumer Staples"
+ },
+ "KIM": {
+  "actions": 670789373.0,
+  "nom": "Kimco Realty",
+  "secteur": "Real Estate"
+ },
+ "KKR": {
+  "actions": 897635601.0,
+  "nom": "KKR & Co.",
+  "secteur": "Financials"
+ },
+ "KLAC": {
+  "actions": 1306546783.0,
+  "nom": "KLA Corporation",
+  "secteur": "Information Technology"
+ },
+ "KMB": {
+  "actions": 332579038.0,
+  "nom": "Kimberly-Clark",
+  "secteur": "Consumer Staples"
+ },
+ "KMI": {
+  "actions": 2226802089.0,
+  "nom": "Kinder Morgan",
+  "secteur": "Energy"
+ },
+ "KO": {
+  "actions": 4302549243.0,
+  "nom": "Coca-Cola Company (The)",
+  "secteur": "Consumer Staples"
+ },
+ "KR": {
+  "actions": 612647282.0,
+  "nom": "Kroger",
+  "secteur": "Consumer Staples"
+ },
+ "KVUE": {
+  "actions": 1920773467.0,
+  "nom": "Kenvue",
+  "secteur": "Consumer Staples"
+ },
+ "L": {
+  "actions": 204427720.0,
+  "nom": "Loews Corporation",
+  "secteur": "Financials"
+ },
+ "LDOS": {
+  "actions": 125492209.0,
+  "nom": "Leidos",
+  "secteur": "Industrials"
+ },
+ "LEN": {
+  "actions": 240895142.0,
+  "nom": "Lennar",
+  "secteur": "Consumer Discretionary"
+ },
+ "LH": {
+  "actions": 81100000.0,
+  "nom": "Labcorp",
+  "secteur": "Health Care"
+ },
+ "LHX": {
+  "actions": 186214616.0,
+  "nom": "L3Harris",
+  "secteur": "Industrials"
+ },
+ "LII": {
+  "actions": 34560675.0,
+  "nom": "Lennox International",
+  "secteur": "Industrials"
+ },
+ "LIN": {
+  "actions": 460980163.0,
+  "nom": "Linde plc",
+  "secteur": "Materials"
+ },
+ "LITE": {
+  "actions": 89700000.0,
+  "nom": "Lumentum",
+  "secteur": "Information Technology"
+ },
+ "LLY": {
+  "actions": 891741406.0,
+  "nom": "Lilly (Eli)",
+  "secteur": "Health Care"
+ },
+ "LMT": {
+  "actions": 230790753.0,
+  "nom": "Lockheed Martin",
+  "secteur": "Industrials"
+ },
+ "LNT": {
+  "actions": 259284699.0,
+  "nom": "Alliant Energy",
+  "secteur": "Utilities"
+ },
+ "LOW": {
+  "actions": 560707041.0,
+  "nom": "Lowe's",
+  "secteur": "Consumer Discretionary"
+ },
+ "LRCX": {
+  "actions": 1251321000.0,
+  "nom": "Lam Research",
+  "secteur": "Information Technology"
+ },
+ "LULU": {
+  "actions": 113553918.0,
+  "nom": "Lululemon Athletica",
+  "secteur": "Consumer Discretionary"
+ },
+ "LUV": {
+  "actions": 489208201.0,
+  "nom": "Southwest Airlines",
+  "secteur": "Industrials"
+ },
+ "LVS": {
+  "actions": 647701184.0,
+  "nom": "Las Vegas Sands",
+  "secteur": "Consumer Discretionary"
+ },
+ "LYB": {
+  "actions": 323037952.0,
+  "nom": "LyondellBasell",
+  "secteur": "Materials"
+ },
+ "LYV": {
+  "actions": 232959505.0,
+  "nom": "Live Nation Entertainment",
+  "secteur": "Communication Services"
+ },
+ "MA": {
+  "actions": 876009940.0,
+  "nom": "Mastercard",
+  "secteur": "Financials"
+ },
+ "MAA": {
+  "actions": 116021957.0,
+  "nom": "Mid-America Apartment Communities",
+  "secteur": "Real Estate"
+ },
+ "MAR": {
+  "actions": 260766288.0,
+  "nom": "Marriott International",
+  "secteur": "Consumer Discretionary"
+ },
+ "MAS": {
+  "actions": 197187430.0,
+  "nom": "Masco",
+  "secteur": "Industrials"
+ },
+ "MCD": {
+  "actions": 707641531.0,
+  "nom": "McDonald's",
+  "secteur": "Consumer Discretionary"
+ },
+ "MCHP": {
+  "actions": 543008691.0,
+  "nom": "Microchip Technology",
+  "secteur": "Information Technology"
+ },
+ "MCK": {
+  "actions": 116590363.0,
+  "nom": "McKesson Corporation",
+  "secteur": "Health Care"
+ },
+ "MCO": {
+  "actions": 173180984.0,
+  "nom": "Moody's Corporation",
+  "secteur": "Financials"
+ },
+ "MDLZ": {
+  "actions": 1276308057.0,
+  "nom": "Mondelez International",
+  "secteur": "Consumer Staples"
+ },
+ "MDT": {
+  "actions": 1279980861.0,
+  "nom": "Medtronic",
+  "secteur": "Health Care"
+ },
+ "MET": {
+  "actions": 635476927.0,
+  "nom": "MetLife",
+  "secteur": "Financials"
+ },
+ "META": {
+  "actions": 2547506225.0,
+  "nom": "Meta Platforms",
+  "secteur": "Communication Services"
+ },
+ "MGM": {
+  "actions": 255851235.0,
+  "nom": "MGM Resorts",
+  "secteur": "Consumer Discretionary"
+ },
+ "MKC": {
+  "actions": 268851552.0,
+  "nom": "McCormick & Company",
+  "secteur": "Consumer Staples"
+ },
+ "MLM": {
+  "actions": 71019382.0,
+  "nom": "Martin Marietta Materials",
+  "secteur": "Materials"
+ },
+ "MMM": {
+  "actions": 515722417.0,
+  "nom": "3M",
+  "secteur": "Industrials"
+ },
+ "MNST": {
+  "actions": 1959051764.0,
+  "nom": "Monster Beverage",
+  "secteur": "Consumer Staples"
+ },
+ "MO": {
+  "actions": 1669743926.0,
+  "nom": "Altria",
+  "secteur": "Consumer Staples"
+ },
+ "MOS": {
+  "actions": 317895646.0,
+  "nom": "Mosaic Company (The)",
+  "secteur": "Materials"
+ },
+ "MPC": {
+  "actions": 280824763.0,
+  "nom": "Marathon Petroleum",
+  "secteur": "Energy"
+ },
+ "MPWR": {
+  "actions": 49143000.0,
+  "nom": "Monolithic Power Systems",
+  "secteur": "Information Technology"
+ },
+ "MRK": {
+  "actions": 2467171638.0,
+  "nom": "Merck & Co.",
+  "secteur": "Health Care"
+ },
+ "MRNA": {
+  "actions": 399235889.0,
+  "nom": "Moderna",
+  "secteur": "Health Care"
+ },
+ "MRSH": {
+  "actions": 477211268.0,
+  "nom": "Marsh McLennan",
+  "secteur": "Financials"
+ },
+ "MRVL": {
+  "actions": 898704613.0,
+  "nom": "Marvell Technology",
+  "secteur": "Information Technology"
+ },
+ "MS": {
+  "actions": 1570566292.0,
+  "nom": "Morgan Stanley",
+  "secteur": "Financials"
+ },
+ "MSCI": {
+  "actions": 72700000.0,
+  "nom": "MSCI",
+  "secteur": "Financials"
+ },
+ "MSFT": {
+  "actions": 7425545491.0,
+  "nom": "Microsoft",
+  "secteur": "Information Technology"
+ },
+ "MSI": {
+  "actions": 165493788.0,
+  "nom": "Motorola Solutions",
+  "secteur": "Information Technology"
+ },
+ "MTB": {
+  "actions": 144416262.0,
+  "nom": "M&T Bank",
+  "secteur": "Financials"
+ },
+ "MTD": {
+  "actions": 20036559.0,
+  "nom": "Mettler Toledo",
+  "secteur": "Health Care"
+ },
+ "MU": {
+  "actions": 1129393151.0,
+  "nom": "Micron Technology",
+  "secteur": "Information Technology"
+ },
+ "NCLH": {
+  "actions": 459187846.0,
+  "nom": "Norwegian Cruise Line Holdings",
+  "secteur": "Consumer Discretionary"
+ },
+ "NDAQ": {
+  "actions": 558977372.0,
+  "nom": "Nasdaq, Inc.",
+  "secteur": "Financials"
+ },
+ "NDSN": {
+  "actions": 55699366.0,
+  "nom": "Nordson Corporation",
+  "secteur": "Industrials"
+ },
+ "NEE": {
+  "actions": 2085978209.0,
+  "nom": "NextEra Energy",
+  "secteur": "Utilities"
+ },
+ "NEM": {
+  "actions": 1053692271.0,
+  "nom": "Newmont",
+  "secteur": "Materials"
+ },
+ "NFLX": {
+  "actions": 4163939676.0,
+  "nom": "Netflix",
+  "secteur": "Communication Services"
+ },
+ "NI": {
+  "actions": 479560100.0,
+  "nom": "NiSource",
+  "secteur": "Utilities"
+ },
+ "NKE": {
+  "actions": 1483498703.0,
+  "nom": "Nike, Inc.",
+  "secteur": "Consumer Discretionary"
+ },
+ "NOC": {
+  "actions": 142063026.0,
+  "nom": "Northrop Grumman",
+  "secteur": "Industrials"
+ },
+ "NOW": {
+  "actions": 1033862000.0,
+  "nom": "ServiceNow",
+  "secteur": "Information Technology"
+ },
+ "NRG": {
+  "actions": 210210483.0,
+  "nom": "NRG Energy",
+  "secteur": "Utilities"
+ },
+ "NSC": {
+  "actions": 224608373.0,
+  "nom": "Norfolk Southern",
+  "secteur": "Industrials"
+ },
+ "NTAP": {
+  "actions": 196234265.0,
+  "nom": "NetApp",
+  "secteur": "Information Technology"
+ },
+ "NTRS": {
+  "actions": 182955653.0,
+  "nom": "Northern Trust",
+  "secteur": "Financials"
+ },
+ "NUE": {
+  "actions": 226875676.0,
+  "nom": "Nucor",
+  "secteur": "Materials"
+ },
+ "NVDA": {
+  "actions": 24147000000.0,
+  "nom": "Nvidia",
+  "secteur": "Information Technology"
+ },
+ "NVR": {
+  "actions": 2664860.0,
+  "nom": "NVR, Inc.",
+  "secteur": "Consumer Discretionary"
+ },
+ "NWS": {
+  "actions": 537159929.0,
+  "nom": "News Corp (Class B)",
+  "secteur": "Communication Services"
+ },
+ "NWSA": {
+  "actions": 537159929.0,
+  "nom": "News Corp (Class A)",
+  "secteur": "Communication Services"
+ },
+ "NXPI": {
+  "actions": 252164174.0,
+  "nom": "NXP Semiconductors",
+  "secteur": "Information Technology"
+ },
+ "O": {
+  "actions": 946218033.0,
+  "nom": "Realty Income",
+  "secteur": "Real Estate"
+ },
+ "ODFL": {
+  "actions": 207356622.0,
+  "nom": "Old Dominion",
+  "secteur": "Industrials"
+ },
+ "OKE": {
+  "actions": 630369667.0,
+  "nom": "Oneok",
+  "secteur": "Energy"
+ },
+ "OMC": {
+  "actions": 274345967.0,
+  "nom": "Omnicom Group",
+  "secteur": "Communication Services"
+ },
+ "ON": {
+  "actions": 389318613.0,
+  "nom": "ON Semiconductor",
+  "secteur": "Information Technology"
+ },
+ "ORCL": {
+  "actions": 2880471000.0,
+  "nom": "Oracle Corporation",
+  "secteur": "Information Technology"
+ },
+ "ORLY": {
+  "actions": 808960792.0,
+  "nom": "O'Reilly Automotive",
+  "secteur": "Consumer Discretionary"
+ },
+ "OTIS": {
+  "actions": 380669339.0,
+  "nom": "Otis Worldwide",
+  "secteur": "Industrials"
+ },
+ "OXY": {
+  "actions": 999637371.0,
+  "nom": "Occidental Petroleum",
+  "secteur": "Energy"
+ },
+ "PANW": {
+  "actions": 815000000.0,
+  "nom": "Palo Alto Networks",
+  "secteur": "Information Technology"
+ },
+ "PAYX": {
+  "actions": 355682860.0,
+  "nom": "Paychex",
+  "secteur": "Industrials"
+ },
+ "PCAR": {
+  "actions": 526364953.0,
+  "nom": "Paccar",
+  "secteur": "Industrials"
+ },
+ "PCG": {
+  "actions": 2202366906.0,
+  "nom": "PG&E Corporation",
+  "secteur": "Utilities"
+ },
+ "PEG": {
+  "actions": 498420030.0,
+  "nom": "Public Service Enterprise Group",
+  "secteur": "Utilities"
+ },
+ "PEP": {
+  "actions": 1364891558.0,
+  "nom": "PepsiCo",
+  "secteur": "Consumer Staples"
+ },
+ "PFE": {
+  "actions": 5699673589.0,
+  "nom": "Pfizer",
+  "secteur": "Health Care"
+ },
+ "PFG": {
+  "actions": 214104641.0,
+  "nom": "Principal Financial Group",
+  "secteur": "Financials"
+ },
+ "PG": {
+  "actions": 2324433060.0,
+  "nom": "Procter & Gamble",
+  "secteur": "Consumer Staples"
+ },
+ "PGR": {
+  "actions": 581100000.0,
+  "nom": "Progressive Corporation",
+  "secteur": "Financials"
+ },
+ "PH": {
+  "actions": 126047469.0,
+  "nom": "Parker Hannifin",
+  "secteur": "Industrials"
+ },
+ "PHM": {
+  "actions": 190486353.0,
+  "nom": "PulteGroup",
+  "secteur": "Consumer Discretionary"
+ },
+ "PKG": {
+  "actions": 89098299.0,
+  "nom": "Packaging Corporation of America",
+  "secteur": "Materials"
+ },
+ "PLD": {
+  "actions": 950333372.0,
+  "nom": "Prologis",
+  "secteur": "Real Estate"
+ },
+ "PLTR": {
+  "actions": 2403058480.0,
+  "nom": "Palantir Technologies",
+  "secteur": "Information Technology"
+ },
+ "PM": {
+  "actions": 1558613439.0,
+  "nom": "Philip Morris International",
+  "secteur": "Consumer Staples"
+ },
+ "PNC": {
+  "actions": 398943667.0,
+  "nom": "PNC Financial Services",
+  "secteur": "Financials"
+ },
+ "PNR": {
+  "actions": 159600000.0,
+  "nom": "Pentair",
+  "secteur": "Industrials"
+ },
+ "PNW": {
+  "actions": 121197234.0,
+  "nom": "Pinnacle West Capital",
+  "secteur": "Utilities"
+ },
+ "PODD": {
+  "actions": 69354199.0,
+  "nom": "Insulet Corporation",
+  "secteur": "Health Care"
+ },
+ "PPG": {
+  "actions": 222300000.0,
+  "nom": "PPG Industries",
+  "secteur": "Materials"
+ },
+ "PPL": {
+  "actions": 752544841.0,
+  "nom": "PPL Corporation",
+  "secteur": "Utilities"
+ },
+ "PRU": {
+  "actions": 345000000.0,
+  "nom": "Prudential Financial",
+  "secteur": "Financials"
+ },
+ "PSA": {
+  "actions": 186745748.0,
+  "nom": "Public Storage",
+  "secteur": "Real Estate"
+ },
+ "PSKY": {
+  "actions": 1121945779.0,
+  "nom": "Paramount Skydance Corporation",
+  "secteur": "Communication Services"
+ },
+ "PSX": {
+  "actions": 399020916.0,
+  "nom": "Phillips 66",
+  "secteur": "Energy"
+ },
+ "PTC": {
+  "actions": 108506261.0,
+  "nom": "PTC Inc.",
+  "secteur": "Information Technology"
+ },
+ "PWR": {
+  "actions": 150343393.0,
+  "nom": "Quanta Services",
+  "secteur": "Industrials"
+ },
+ "PYPL": {
+  "actions": 855460874.0,
+  "nom": "PayPal",
+  "secteur": "Financials"
+ },
+ "Q": {
+  "actions": 209208543.0,
+  "nom": "Qnity Electronics",
+  "secteur": "Information Technology"
+ },
+ "QCOM": {
+  "actions": 1068060487.0,
+  "nom": "Qualcomm",
+  "secteur": "Information Technology"
+ },
+ "RCL": {
+  "actions": 267452084.0,
+  "nom": "Royal Caribbean Group",
+  "secteur": "Consumer Discretionary"
+ },
+ "RDDT": {
+  "actions": 192396510.0,
+  "nom": "Reddit",
+  "secteur": "Communication Services"
+ },
+ "REG": {
+  "actions": 183120547.0,
+  "nom": "Regency Centers",
+  "secteur": "Real Estate"
+ },
+ "REGN": {
+  "actions": 102954988.0,
+  "nom": "Regeneron Pharmaceuticals",
+  "secteur": "Health Care"
+ },
+ "RF": {
+  "actions": 851929506.0,
+  "nom": "Regions Financial Corporation",
+  "secteur": "Financials"
+ },
+ "RJF": {
+  "actions": 192361711.0,
+  "nom": "Raymond James Financial",
+  "secteur": "Financials"
+ },
+ "RL": {
+  "actions": 59582239.0,
+  "nom": "Ralph Lauren Corporation",
+  "secteur": "Consumer Discretionary"
+ },
+ "RMD": {
+  "actions": 144252306.0,
+  "nom": "ResMed|",
+  "secteur": "Health Care"
+ },
+ "ROK": {
+  "actions": 111048676.0,
+  "nom": "Rockwell Automation",
+  "secteur": "Industrials"
+ },
+ "ROL": {
+  "actions": 481145404.0,
+  "nom": "Rollins, Inc.",
+  "secteur": "Industrials"
+ },
+ "ROP": {
+  "actions": 98900874.0,
+  "nom": "Roper Technologies",
+  "secteur": "Information Technology"
+ },
+ "ROST": {
+  "actions": 320781076.0,
+  "nom": "Ross Stores",
+  "secteur": "Consumer Discretionary"
+ },
+ "RSG": {
+  "actions": 306212978.0,
+  "nom": "Republic Services",
+  "secteur": "Industrials"
+ },
+ "RTX": {
+  "actions": 1347758144.0,
+  "nom": "RTX Corporation",
+  "secteur": "Industrials"
+ },
+ "RVTY": {
+  "actions": 111586401.0,
+  "nom": "Revvity",
+  "secteur": "Health Care"
+ },
+ "SBAC": {
+  "actions": 106088110.0,
+  "nom": "SBA Communications",
+  "secteur": "Real Estate"
+ },
+ "SBUX": {
+  "actions": 1140000000.0,
+  "nom": "Starbucks",
+  "secteur": "Consumer Discretionary"
+ },
+ "SCHW": {
+  "actions": 1729335714.0,
+  "nom": "Charles Schwab Corporation",
+  "secteur": "Financials"
+ },
+ "SHW": {
+  "actions": 242758151.0,
+  "nom": "Sherwin-Williams",
+  "secteur": "Materials"
+ },
+ "SJM": {
+  "actions": 106823183.0,
+  "nom": "J.M. Smucker Company (The)",
+  "secteur": "Consumer Staples"
+ },
+ "SLB": {
+  "actions": 1484143231.0,
+  "nom": "Schlumberger",
+  "secteur": "Energy"
+ },
+ "SMCI": {
+  "actions": 646873027.0,
+  "nom": "Supermicro",
+  "secteur": "Information Technology"
+ },
+ "SNA": {
+  "actions": 51727124.0,
+  "nom": "Snap-on",
+  "secteur": "Industrials"
+ },
+ "SNDK": {
+  "actions": 146419001.0,
+  "nom": "Sandisk",
+  "secteur": "Information Technology"
+ },
+ "SNPS": {
+  "actions": 191636646.0,
+  "nom": "Synopsys",
+  "secteur": "Information Technology"
+ },
+ "SO": {
+  "actions": 1150362966.0,
+  "nom": "Southern Company",
+  "secteur": "Utilities"
+ },
+ "SOLV": {
+  "actions": 170223729.0,
+  "nom": "Solventum",
+  "secteur": "Health Care"
+ },
+ "SPG": {
+  "actions": 323559515.0,
+  "nom": "Simon Property Group",
+  "secteur": "Real Estate"
+ },
+ "SPGI": {
+  "actions": 294800000.0,
+  "nom": "S&P Global",
+  "secteur": "Financials"
+ },
+ "SRE": {
+  "actions": 653900348.0,
+  "nom": "Sempra",
+  "secteur": "Utilities"
+ },
+ "STE": {
+  "actions": 97500110.0,
+  "nom": "Steris",
+  "secteur": "Health Care"
+ },
+ "STLD": {
+  "actions": 143328088.0,
+  "nom": "Steel Dynamics",
+  "secteur": "Materials"
+ },
+ "STT": {
+  "actions": 274701765.0,
+  "nom": "State Street Corporation",
+  "secteur": "Financials"
+ },
+ "STX": {
+  "actions": 226644518.0,
+  "nom": "Seagate Technology",
+  "secteur": "Information Technology"
+ },
+ "STZ": {
+  "actions": 170778434.0,
+  "nom": "Constellation Brands",
+  "secteur": "Consumer Staples"
+ },
+ "SW": {
+  "actions": 524522908.0,
+  "nom": "Smurfit Westrock",
+  "secteur": "Materials"
+ },
+ "SWK": {
+  "actions": 151016641.0,
+  "nom": "Stanley Black & Decker",
+  "secteur": "Industrials"
+ },
+ "SWKS": {
+  "actions": 150472782.0,
+  "nom": "Skyworks Solutions",
+  "secteur": "Information Technology"
+ },
+ "SYF": {
+  "actions": 325370840.0,
+  "nom": "Synchrony Financial",
+  "secteur": "Financials"
+ },
+ "SYK": {
+  "actions": 383573046.0,
+  "nom": "Stryker Corporation",
+  "secteur": "Health Care"
+ },
+ "SYY": {
+  "actions": 479096016.0,
+  "nom": "Sysco",
+  "secteur": "Consumer Staples"
+ },
+ "T": {
+  "actions": 6852385650.0,
+  "nom": "AT&T",
+  "secteur": "Communication Services"
+ },
+ "TAP": {
+  "actions": 186453933.0,
+  "nom": "Molson Coors Beverage Company",
+  "secteur": "Consumer Staples"
+ },
+ "TDG": {
+  "actions": 55276525.0,
+  "nom": "TransDigm Group",
+  "secteur": "Industrials"
+ },
+ "TDY": {
+  "actions": 46355673.0,
+  "nom": "Teledyne Technologies",
+  "secteur": "Information Technology"
+ },
+ "TECH": {
+  "actions": 156818238.0,
+  "nom": "Bio-Techne",
+  "secteur": "Health Care"
+ },
+ "TEL": {
+  "actions": 289513228.0,
+  "nom": "TE Connectivity",
+  "secteur": "Information Technology"
+ },
+ "TER": {
+  "actions": 156340750.0,
+  "nom": "Teradyne",
+  "secteur": "Information Technology"
+ },
+ "TFC": {
+  "actions": 1221626188.0,
+  "nom": "Truist Financial",
+  "secteur": "Financials"
+ },
+ "TGT": {
+  "actions": 454291461.0,
+  "nom": "Target Corporation",
+  "secteur": "Consumer Staples"
+ },
+ "TJX": {
+  "actions": 1104704446.0,
+  "nom": "TJX Companies",
+  "secteur": "Consumer Discretionary"
+ },
+ "TKO": {
+  "actions": 73111098.0,
+  "nom": "TKO Group Holdings",
+  "secteur": "Communication Services"
+ },
+ "TMO": {
+  "actions": 369747286.0,
+  "nom": "Thermo Fisher Scientific",
+  "secteur": "Health Care"
+ },
+ "TMUS": {
+  "actions": 1072671613.0,
+  "nom": "T-Mobile US",
+  "secteur": "Communication Services"
+ },
+ "TPL": {
+  "actions": 68974683.0,
+  "nom": "Texas Pacific Land Corporation",
+  "secteur": "Energy"
+ },
+ "TPR": {
+  "actions": 199391678.0,
+  "nom": "Tapestry, Inc.",
+  "secteur": "Consumer Discretionary"
+ },
+ "TRGP": {
+  "actions": 214431021.0,
+  "nom": "Targa Resources",
+  "secteur": "Energy"
+ },
+ "TRMB": {
+  "actions": 233111519.0,
+  "nom": "Trimble Inc.",
+  "secteur": "Information Technology"
+ },
+ "TROW": {
+  "actions": 213315850.0,
+  "nom": "T. Rowe Price",
+  "secteur": "Financials"
+ },
+ "TRV": {
+  "actions": 208575022.0,
+  "nom": "Travelers Companies (The)",
+  "secteur": "Financials"
+ },
+ "TSCO": {
+  "actions": 521040137.0,
+  "nom": "Tractor Supply",
+  "secteur": "Consumer Discretionary"
+ },
+ "TSLA": {
+  "actions": 3949547394.0,
+  "nom": "Tesla, Inc.",
+  "secteur": "Consumer Discretionary"
+ },
+ "TSN": {
+  "actions": 351801512.0,
+  "nom": "Tyson Foods",
+  "secteur": "Consumer Staples"
+ },
+ "TT": {
+  "actions": 220023177.0,
+  "nom": "Trane Technologies",
+  "secteur": "Industrials"
+ },
+ "TTD": {
+  "actions": 469880194.0,
+  "nom": "Trade Desk (The)",
+  "secteur": "Communication Services"
+ },
+ "TTWO": {
+  "actions": 186980443.0,
+  "nom": "Take-Two Interactive",
+  "secteur": "Communication Services"
+ },
+ "TXN": {
+  "actions": 913247686.0,
+  "nom": "Texas Instruments",
+  "secteur": "Information Technology"
+ },
+ "TXT": {
+  "actions": 171986917.0,
+  "nom": "Textron",
+  "secteur": "Industrials"
+ },
+ "TYL": {
+  "actions": 40952274.0,
+  "nom": "Tyler Technologies",
+  "secteur": "Information Technology"
+ },
+ "UAL": {
+  "actions": 324569728.0,
+  "nom": "United Airlines Holdings",
+  "secteur": "Industrials"
+ },
+ "UBER": {
+  "actions": 2042560121.0,
+  "nom": "Uber",
+  "secteur": "Industrials"
+ },
+ "UDR": {
+  "actions": 321264222.0,
+  "nom": "UDR, Inc.",
+  "secteur": "Real Estate"
+ },
+ "UHS": {
+  "actions": 58936515.0,
+  "nom": "Universal Health Services",
+  "secteur": "Health Care"
+ },
+ "ULTA": {
+  "actions": 42989311.0,
+  "nom": "Ulta Beauty",
+  "secteur": "Consumer Discretionary"
+ },
+ "UNH": {
+  "actions": 897594847.0,
+  "nom": "UnitedHealth Group",
+  "secteur": "Health Care"
+ },
+ "UNP": {
+  "actions": 594075498.0,
+  "nom": "Union Pacific Corporation",
+  "secteur": "Industrials"
+ },
+ "UPS": {
+  "actions": 850781582.0,
+  "nom": "United Parcel Service",
+  "secteur": "Industrials"
+ },
+ "URI": {
+  "actions": 62242489.0,
+  "nom": "United Rentals",
+  "secteur": "Industrials"
+ },
+ "USB": {
+  "actions": 1558051446.0,
+  "nom": "U.S. Bancorp",
+  "secteur": "Financials"
+ },
+ "V": {
+  "actions": 1867047259.0,
+  "nom": "Visa Inc.",
+  "secteur": "Financials"
+ },
+ "VEEV": {
+  "actions": 161908850.0,
+  "nom": "Veeva Systems",
+  "secteur": "Health Care"
+ },
+ "VICI": {
+  "actions": 1101077562.0,
+  "nom": "Vici Properties",
+  "secteur": "Real Estate"
+ },
+ "VLO": {
+  "actions": 287927461.0,
+  "nom": "Valero Energy",
+  "secteur": "Energy"
+ },
+ "VLTO": {
+  "actions": 243793344.0,
+  "nom": "Veralto",
+  "secteur": "Industrials"
+ },
+ "VMC": {
+  "actions": 129578739.0,
+  "nom": "Vulcan Materials Company",
+  "secteur": "Materials"
+ },
+ "VMRK": {
+  "actions": 398834711.0,
+  "nom": "Vivmark Residential",
+  "secteur": "Real Estate"
+ },
+ "VRSK": {
+  "actions": 130156012.0,
+  "nom": "Verisk Analytics",
+  "secteur": "Industrials"
+ },
+ "VRSN": {
+  "actions": 90400000.0,
+  "nom": "Verisign",
+  "secteur": "Information Technology"
+ },
+ "VRT": {
+  "actions": 384988173.0,
+  "nom": "Vertiv",
+  "secteur": "Industrials"
+ },
+ "VRTX": {
+  "actions": 253460924.0,
+  "nom": "Vertex Pharmaceuticals",
+  "secteur": "Health Care"
+ },
+ "VST": {
+  "actions": 335635195.0,
+  "nom": "Vistra Corp.",
+  "secteur": "Utilities"
+ },
+ "VTR": {
+  "actions": 512946359.0,
+  "nom": "Ventas",
+  "secteur": "Real Estate"
+ },
+ "VTRS": {
+  "actions": 1148590864.0,
+  "nom": "Viatris",
+  "secteur": "Health Care"
+ },
+ "VZ": {
+  "actions": 4154775202.0,
+  "nom": "Verizon",
+  "secteur": "Communication Services"
+ },
+ "WAB": {
+  "actions": 168910851.0,
+  "nom": "Wabtec",
+  "secteur": "Industrials"
+ },
+ "WAT": {
+  "actions": 98185855.0,
+  "nom": "Waters Corporation",
+  "secteur": "Health Care"
+ },
+ "WBD": {
+  "actions": 2507136702.0,
+  "nom": "Warner Bros. Discovery",
+  "secteur": "Communication Services"
+ },
+ "WDAY": {
+  "actions": 241000000.0,
+  "nom": "Workday, Inc.",
+  "secteur": "Information Technology"
+ },
+ "WDC": {
+  "actions": 360540944.0,
+  "nom": "Western Digital",
+  "secteur": "Information Technology"
+ },
+ "WEC": {
+  "actions": 325849383.0,
+  "nom": "WEC Energy Group",
+  "secteur": "Utilities"
+ },
+ "WELL": {
+  "actions": 720572011.0,
+  "nom": "Welltower",
+  "secteur": "Real Estate"
+ },
+ "WFC": {
+  "actions": 3023999336.0,
+  "nom": "Wells Fargo",
+  "secteur": "Financials"
+ },
+ "WM": {
+  "actions": 399715184.0,
+  "nom": "Waste Management",
+  "secteur": "Industrials"
+ },
+ "WMB": {
+  "actions": 1223167472.0,
+  "nom": "Williams Companies",
+  "secteur": "Energy"
+ },
+ "WMT": {
+  "actions": 7958079155.0,
+  "nom": "Walmart",
+  "secteur": "Consumer Staples"
+ },
+ "WRB": {
+  "actions": 371227529.0,
+  "nom": "W. R. Berkley Corporation",
+  "secteur": "Financials"
+ },
+ "WSM": {
+  "actions": 117768000.0,
+  "nom": "Williams-Sonoma, Inc.",
+  "secteur": "Consumer Discretionary"
+ },
+ "WST": {
+  "actions": 70375762.0,
+  "nom": "West Pharmaceutical Services",
+  "secteur": "Health Care"
+ },
+ "WTW": {
+  "actions": 92871937.0,
+  "nom": "Willis Towers Watson",
+  "secteur": "Financials"
+ },
+ "WY": {
+  "actions": 721042609.0,
+  "nom": "Weyerhaeuser",
+  "secteur": "Real Estate"
+ },
+ "WYNN": {
+  "actions": 102973891.0,
+  "nom": "Wynn Resorts",
+  "secteur": "Consumer Discretionary"
+ },
+ "XEL": {
+  "actions": 624634306.0,
+  "nom": "Xcel Energy",
+  "secteur": "Utilities"
+ },
+ "XOM": {
+  "actions": 4111911960.0,
+  "nom": "ExxonMobil",
+  "secteur": "Energy"
+ },
+ "XYL": {
+  "actions": 233486812.0,
+  "nom": "Xylem Inc.",
+  "secteur": "Industrials"
+ },
+ "XYZ": {
+  "actions": 600795000.0,
+  "nom": "Block, Inc.",
+  "secteur": "Financials"
+ },
+ "YUM": {
+  "actions": 272901085.0,
+  "nom": "Yum! Brands",
+  "secteur": "Consumer Discretionary"
+ },
+ "ZBH": {
+  "actions": 190737689.0,
+  "nom": "Zimmer Biomet",
+  "secteur": "Health Care"
+ },
+ "ZBRA": {
+  "actions": 47310660.0,
+  "nom": "Zebra Technologies",
+  "secteur": "Information Technology"
+ },
+ "ZTS": {
+  "actions": 413223602.0,
+  "nom": "Zoetis",
+  "secteur": "Health Care"
+ }
+}

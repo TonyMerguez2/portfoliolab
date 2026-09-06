@@ -6,7 +6,7 @@ d'une journée affichait deux points reliés par un segment de droite, avec les
 nombres « 6 » et « 7 » pour tout repère en abscisse.
 """
 
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 from types import SimpleNamespace
 
 import pandas as pd
@@ -60,8 +60,24 @@ class TestPasImpose:
             "soit l'écart au dernier jour coté")
 
     def test_les_fenetres_longues_gardent_leur_regle(self, telechargement):
+        """
+        ⚠️ **Le départ est compté depuis aujourd'hui, et l'écrire en dur était une
+        bombe à retardement.** Le test fixait le 20 juillet 2026 : il passait tant
+        que cette date restait à moins de trente et un jours, puis a commencé à
+        échouer le 20 août — non parce que le code avait changé, mais parce que
+        `_pas_intraday` refuse l'intraday au-delà d'un mois et rendait `None`.
+        Aucun téléchargement n'avait donc lieu, d'où le `KeyError: 'interval'`.
+
+        Un test qui dépend du jour où on le lance ne teste pas ce qu'il annonce.
+        Vingt jours en arrière le maintient dans le régime des fenêtres longues,
+        quelle que soit la date d'exécution.
+        """
+        depart = date.today() - timedelta(days=20)
+        assert _pas_intraday((date.today() - depart).days) == "15m", (
+            "le repère du test doit rester dans le régime des fenêtres longues")
+
         telechargement["serie"] = _seance(7, pas_min=15)
-        _points_intraday(["A"], _txs(), "1mo", datetime(2026, 7, 20).date())
+        _points_intraday(["A"], _txs(), "1mo", depart)
         assert telechargement["interval"] == "15m"
 
 

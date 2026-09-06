@@ -1,5 +1,12 @@
-import { BRAND_COLORS } from "@/lib/assets";
-import { pourFondSombre } from "@/lib/couleur";
+import { BRAND_COLORS } from "./assets";
+import { pourFond, pourFondSombre } from "./couleur";
+import { plaqueConnue, teinteConnue } from "./couleursLogos";
+
+/* ⚠️ **Imports relatifs et non aliasés, pour que ce module soit testable.** Aucun test du
+   dépôt n'atteignait jusqu'ici un module écrit en `@/…` : l'alias n'est pas résolu sous vitest,
+   comme l'a montré `couleur.ts` en faisant échouer quatre fichiers d'un coup le jour où on lui
+   a ajouté un import aliasé. Or la règle de couleur d'un actif est exactement ce qui doit être
+   verrouillé par un test — c'est elle qui a divergé entre deux pages. */
 
 export type RGB = [number, number, number];
 
@@ -57,6 +64,60 @@ export function tileData(ticker: string): {
 export function brandHex(ticker: string): string {
   const [r, g, b] = brandRgb(ticker);
   return `#${[r, g, b].map(v => v.toString(16).padStart(2, "0")).join("")}`;
+}
+
+/**
+ * La couleur d'un actif : une seule règle, pour toutes les cartes qui le montrent.
+ *
+ * ⚠️ **Elle existe parce que deux pages répondaient différemment à la même question.** La carte
+ * d'actif du tableau de bord posait `brandHex(ticker)` ; celle de la page graphique calculait
+ * `pourFond(BRAND_COLORS[t] ?? extraite ?? accent, !sombre)`. Le même actif pouvait donc porter
+ * deux couleurs selon la page où on le regardait — ce que personne ne voit tant qu'on ne les
+ * ouvre pas côte à côte, et qu'on ne peut plus ignorer une fois vu. Demandé à l'usage.
+ *
+ * ⚠️ **Quatre sources, dans cet ordre — et j'ai essayé de mettre la plaque en premier, à tort.**
+ * Deux cartes fautives (`ESE.PA`, `JPM`) m'avaient fait conclure que « ce qui se voit prime sur
+ * ce qui est écrit ». L'audit du catalogue entier a montré que c'était faux : **vingt-cinq
+ * actifs partagent le logo de leur émetteur** — sept ETF sectoriels SPDR, douze iShares, quatre
+ * Vanguard, deux BNP. Leur plaque identifie la maison, pas le fonds. Plaque en premier, les
+ * sept SPDR devenaient le **même bleu** et les douze iShares le **même cyan** : on remplaçait
+ * quelques couleurs fausses par une famille entière d'indistinguables.
+ *
+ * 1. **La table de marques**, qui est le seul endroit où l'on peut distinguer deux fonds au
+ *    logo identique — l'or de `GLD` de l'énergie de `XLE`.
+ * 2. **La plaque du logo**, pour les actifs que la table ignore : c'est le fond que l'œil
+ *    compare, et il vaut mieux qu'un hachage.
+ * 3. **La teinte dominante** du dessin, quand le logo n'a pas de plaque exploitable.
+ * 4. **Le hachage du ticker** en dernier — il ne veut rien dire, il a seulement le mérite d'être
+ *    stable et distinct d'un actif à l'autre.
+ *
+ * ⚠️ **Les entrées fausses se corrigent dans la table, pas dans la règle.** Douze tickers à logo
+ * **unique** portaient une couleur que leur propre plaque contredisait de plus de quarante
+ * degrés — `JPM` en bleu pour une plaque brune, `TSM` en bleu pour une plaque rouge. Onze de ces
+ * douze plaques sont parfaitement plates, donc fiables. Les entrées ont été retirées : sans
+ * elles, la plaque parle. Voir `BRAND_COLORS`.
+ *
+ * ⚠️ **La mise au net suit le thème, et c'était la seconde divergence.** `brandHex` appliquait
+ * `pourFondSombre` en toutes circonstances : en thème clair, la carte du tableau de bord gardait
+ * donc des couleurs réglées pour du noir pendant que la page graphique, elle, passait par
+ * `pourFondClair`. Les deux pages divergeaient alors sur **tous** les actifs, pas seulement sur
+ * ceux qui manquent à la table.
+ */
+export function couleurActif(
+  ticker: string,
+  { extraite = null, clair = false }: { extraite?: string | null; clair?: boolean } = {},
+): string {
+  const marque = BRAND_COLORS[ticker];
+  if (marque) return pourFond(marque, clair);
+  const plaque = plaqueConnue(ticker);
+  if (plaque) return pourFond(plaque, clair);
+  /* ⚠️ La teinte passée par l'appelant d'abord, le cache partagé ensuite : une surface qui
+     s'abonne a la valeur la plus fraîche, une surface qui ne s'abonne pas profite quand même de
+     ce qu'une autre a déjà analysé. Sans ce second recours, la répartition pavée et les cartes
+     d'actif du même tableau de bord se contredisaient sur les actifs hors table. */
+  const teinte = extraite ?? teinteConnue(ticker);
+  if (teinte) return pourFond(teinte, clair);
+  return pourFond(brandHex(ticker), clair);
 }
 
 /**
@@ -146,6 +207,58 @@ export function tileSurface(ticker: string, radius = 18, colorHex?: string): {
     WebkitBackdropFilter: "blur(24px) saturate(1.6) brightness(1.06)",
     border: "none",
     boxShadow: `0 14px 44px rgba(0,0,0,0.28), 0 0 28px ${voile(16)}`,
+    overflow: "hidden",
+    boxSizing: "border-box",
+  };
+}
+
+/**
+ * La tuile en aplat : une seule couleur, pleine et sans matière.
+ *
+ * ⚠️ **Elle existe pour que la plaque du logo disparaisse dans la carte.** Un logo de marque
+ * est une plaque de couleur avec un dessin blanc dessus ; si la carte porte *exactement* la
+ * couleur de cette plaque, la plaque cesse de se voir et il ne reste que le dessin, posé sur
+ * un fond uni. Demandé à l'usage — « qu'on voie seulement le logo blanc et que le fond soit
+ * uniforme ». Le moindre lavis, dégradé ou voile suffit à faire réapparaître le carré du
+ * logo, puisqu'il éloigne la carte de la couleur exacte à l'endroit précis où le logo se
+ * pose.
+ *
+ * ⚠️ **C'est donc `tileSurface` moins tout ce qui n'est pas la couleur.** Partent : les deux
+ * lavis d'angle, le spéculaire qui suit le curseur, le fond sombre `rgba(2,10,24,0.38)` et le
+ * `backdrop-filter`. Ce dernier n'aurait de toute façon plus rien à filtrer — un aplat opaque
+ * ne laisse rien passer.
+ *
+ * ⚠️ **Le bord reste, et c'est la seule chose qu'on garde du verre.** Il est peint par
+ * `.novac-tile::before`, hors d'ici, à partir de `currentColor` : l'appelant pose donc la même
+ * couleur sur `color`. Demandé — « sauf effet sur bord ».
+ *
+ * ⚠️ **Une seconde surface, et non un drapeau sur la première.** Ce fichier porte déjà la
+ * trace d'un paramètre d'intensité retiré parce qu'il faisait diverger deux appelants qui
+ * devaient rendre la même chose. Ce n'en est pas un : la distinction n'est pas « quelle page »
+ * mais « d'où vient la couleur ». Un aplat n'a de sens que si la couleur est celle du logo —
+ * sinon il n'y a rien à faire disparaître, et une carte pleine d'une couleur de marque prise
+ * dans une table serait un aplat qui ne sert à rien. `tileSurface` reste donc telle quelle
+ * pour `TileCard`, dont les couleurs viennent encore de la table.
+ */
+export function surfaceAplat(couleur: string, radius = 18): {
+  borderRadius: number;
+  backgroundColor: string;
+  border: string;
+  boxShadow: string;
+  overflow: "hidden";
+  boxSizing: "border-box";
+} {
+  return {
+    borderRadius: radius,
+    /* ⚠️ `backgroundColor` et non `background` : la couleur arrive après le chargement du
+       logo, et une propriété longue ne s'interpole pas. Nommer la sous-propriété est ce qui
+       permet à l'appelant de fondre l'une dans l'autre au lieu de la faire sauter. */
+    backgroundColor: couleur,
+    border: "none",
+    /* L'ombre portée reste : elle décolle la tuile du fond, ce qui n'est pas un effet de
+       matière — et sans elle une carte sombre se confond avec la page. Le halo coloré de
+       `tileSurface`, lui, est parti avec le reste du verre. */
+    boxShadow: "0 14px 44px rgba(0,0,0,0.28)",
     overflow: "hidden",
     boxSizing: "border-box",
   };

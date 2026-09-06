@@ -1,10 +1,16 @@
 "use client";
+import BoutonOutil from "@/components/ui/BoutonOutil";
+import { FONT } from "@/lib/typography";
+import { JETONS } from "@/lib/palette";
+import Segments from "@/components/ui/Segments";
+import MarqueMode from "@/components/charts/MarqueMode";
 import { useState, useEffect, useMemo, useRef, Suspense } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import dynamic from "next/dynamic";
 import { useApp } from "@/lib/AppContext";
 import { TRENDING, BRAND_COLORS } from "@/lib/assets";
 import TileCard from "@/components/TileCard";
+import { couleurActif } from "@/lib/tileStyle";
 import {
   BarChart, Bar,
   XAxis, YAxis, CartesianGrid, ResponsiveContainer,
@@ -277,7 +283,7 @@ function CustomPanel({ lineColor, candleUp, candleDown, defaultLineColor, onLine
           {COLOR_PRESETS.map(p => (
             <button key={p.label}
               onClick={() => { onLineColor(p.line); onCandleUp(p.up); onCandleDown(p.down); }}
-              title={p.label}
+              aria-label={p.label}
               style={{
                 width:20, height:20, borderRadius:4, cursor:"pointer",
                 background:`linear-gradient(135deg, ${p.line} 50%, ${p.up} 50%)`,
@@ -288,7 +294,7 @@ function CustomPanel({ lineColor, candleUp, candleDown, defaultLineColor, onLine
           ))}
           <button
             onClick={() => { onLineColor(null); onCandleUp("#26a69a"); onCandleDown("#ef5350"); }}
-            title="Réinitialiser"
+            aria-label="Réinitialiser"
             style={{
               width:20, height:20, borderRadius:4, cursor:"pointer",
               background:"rgba(var(--nv-encre-rvb), 0.06)", border:"1px solid rgba(var(--nv-encre-rvb), 0.12)",
@@ -407,9 +413,28 @@ function ChartContent() {
   const priceFlash = useClignotement(currentPrice?.price);
 
   const [quote, setQuote] = useState<{day_high?:number;day_low?:number;open?:number;prev_close?:number;year_high?:number;year_low?:number;volume?:number;avg_volume?:number;market_cap?:number;currency?:string;global_rank?:number}|null>(null);
-  const [isFavorite, setIsFavorite] = useState(() => {
-    try { return JSON.parse(localStorage.getItem("favorites") ?? "[]").includes(ticker); } catch { return false; }
-  });
+  /**
+   * L'étoile « favori », lue dans le navigateur **après** le premier rendu.
+   *
+   * ⚠️ **Lire `localStorage` dans l'initialisateur d'un `useState` casse l'hydratation, et ça se
+   * voyait en console.** Le serveur n'a pas de `localStorage` : l'accès y lève, le rattrapage rend
+   * `false`, et le HTML part avec une étoile vide. Le client rejoue le même initialisateur, trouve
+   * la valeur rangée, et rend `true` — React signale alors que `className`, `title`, `aria-pressed`,
+   * `fill` et `stroke` ne concordent pas, et **ne les corrige pas**. Une préférence propre au
+   * navigateur ne peut pas figurer dans un rendu serveur ; elle arrive au montage.
+   *
+   * ⚠️ **Et l'effet dépend du ticker, ce qui répare un second défaut passé inaperçu.** Un
+   * initialisateur de `useState` ne s'exécute qu'au **montage**. Or cette page change de ticker
+   * par ses paramètres d'URL, sans remonter : en passant d'un actif favori à un autre qui ne
+   * l'est pas, l'étoile gardait l'état du précédent. Vérifiable en naviguant entre deux fiches.
+   */
+  const [isFavorite, setIsFavorite] = useState(false);
+  useEffect(() => {
+    try {
+      const liste: string[] = JSON.parse(localStorage.getItem("favorites") ?? "[]");
+      setIsFavorite(ticker !== null && liste.includes(ticker));
+    } catch { setIsFavorite(false); }
+  }, [ticker]);
   const toggleFavorite = () => {
     setIsFavorite((prev: boolean) => {
       const next = !prev;
@@ -503,11 +528,18 @@ function ChartContent() {
   // repli restent donc des hexadécimaux, choisis dans la palette.
   const ACCENT_BRUT = sombre ? "#50A2FF" : "#2177D1";
   const ATTENTION_BRUT = sombre ? "#FF8904" : "#D64200";
+  /* ⚠️ **`couleurActif` et non la règle écrite ici, pour que la carte du tableau de bord porte
+     la même.** Elle appliquait `brandHex`, qui ne consulte pas la teinte extraite et ne suit pas
+     le thème : le même actif changeait de couleur d'une page à l'autre. La règle est désormais
+     dans `tileStyle`, appelée des deux côtés. L'accent reste le dernier recours *ici seulement*,
+     quand aucun ticker n'est encore choisi — c'est un état que la grille du tableau de bord ne
+     connaît pas. */
   const color = isPortfolio
     ? (activePortfolio?.color || "var(--nv-accent)")
-    : pourFond(ticker ? (BRAND_COLORS[ticker] ?? extractedColor ?? ACCENT_BRUT) : ACCENT_BRUT, !sombre);
+    : (ticker ? couleurActif(ticker, { extraite: extractedColor, clair: !sombre })
+              : pourFond(ACCENT_BRUT, !sombre));
   const activeBmColor = customBmTicker
-    ? pourFond(BRAND_COLORS[customBmTicker] ?? bmExtractedColor ?? ATTENTION_BRUT, !sombre)
+    ? couleurActif(customBmTicker, { extraite: bmExtractedColor, clair: !sombre })
     : "var(--nv-attention)";
   const tc = typeColor(assetInfo?.type);
   const shortLabel = ticker
@@ -1121,13 +1153,16 @@ function ChartContent() {
                             <AssetLogo
                               ticker={ticker} type={assetInfo?.type} size={60} radius={13}
                               fallbackBg={tc.bg} fallbackBorder={tc.border} fallbackTextColor={tc.text}
-                              onColorExtracted={c => { if (!BRAND_COLORS[ticker]) setExtractedColor(c); }}
+                              /* ⚠️ Le rappel n'est posé que si la table ne répond pas. Le garde vivait *dans* le rappel :
+                                  l'extraction avait donc lieu — un aller-retour réseau et une lecture de pixels — pour
+                                  un résultat aussitôt jeté. C'est le même choix que `CarteActif`. */
+                              onColorExtracted={BRAND_COLORS[ticker] ? undefined : setExtractedColor}
                               bare
                             />
                             <div style={{ marginLeft:12, display:"flex", flexDirection:"column", justifyContent:"center", minWidth:0 }}>
                               <div style={{ display:"flex", alignItems:"center", minWidth:0 }}>
                                 <span style={{ fontSize:20, fontWeight:800, color:"var(--nv-texte)", letterSpacing:"-0.04em", lineHeight:.95 }}>{displayTicker}</span>
-                                <button onClick={toggleFavorite} className={`asset-hero-star${isFavorite ? " is-active" : ""}`} title={isFavorite ? "Retirer des favoris" : "Ajouter aux favoris"} aria-pressed={isFavorite}>
+                                <button onClick={toggleFavorite} className={`asset-hero-star${isFavorite ? " is-active" : ""}`} aria-label={isFavorite ? "Retirer des favoris" : "Ajouter aux favoris"} aria-pressed={isFavorite}>
                                   <svg width="13" height="13" viewBox="0 0 24 24" fill={isFavorite ? "#facc15" : "none"} stroke={isFavorite ? "#facc15" : "rgba(var(--nv-encre-rvb), 0.58)"} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
                                     <path d="M12 3.15c.35 0 .68.2.84.54l2.17 4.4 4.86.7c.38.06.69.32.81.69.12.36.02.76-.25 1.02l-3.52 3.43.83 4.84c.06.38-.09.76-.4.99-.31.22-.72.25-1.06.07L12 17.54l-4.35 2.29c-.34.18-.75.15-1.06-.07a1.02 1.02 0 0 1-.4-.99l.83-4.84-3.52-3.43a1.02 1.02 0 0 1-.25-1.02c.12-.37.43-.63.81-.69l4.86-.7 2.17-4.4c.16-.34.49-.54.84-.54Z"/>
                                   </svg>
@@ -1257,12 +1292,12 @@ function ChartContent() {
                                 <div className="asset-hero-identity">
                                   <AssetLogo ticker={customBmTicker} type={customBmType} size={60} radius={13}
                                     fallbackBg="rgba(var(--nv-encre-rvb), 0.07)" fallbackBorder="rgba(var(--nv-encre-rvb), 0.12)" fallbackTextColor="rgba(var(--nv-encre-rvb), 0.55)" bare
-                                    onColorExtracted={c => { if (!BRAND_COLORS[customBmTicker]) setBmExtractedColor(c); }}/>
+                                    onColorExtracted={BRAND_COLORS[customBmTicker] ? undefined : setBmExtractedColor}/>
                                   <div style={{ marginLeft:12, display:"flex", flexDirection:"column", justifyContent:"center", minWidth:0 }}>
                                     <div style={{ display:"flex", alignItems:"center", minWidth:0 }}>
                                       <span style={{ fontSize:20, fontWeight:800, color:"var(--nv-texte)", letterSpacing:"-0.04em", lineHeight:.95 }}>{bmDisplayTicker}</span>
                                       <button onClick={e => { e.stopPropagation(); setCustomBmTicker(null); setCustomBmName(""); setRawCustomBmData([]); setBmCurrentPrice(null); setSyncView(false); }}
-                                        className="asset-hero-star" title="Retirer la comparaison" aria-label="Retirer la comparaison">
+                                        className="asset-hero-star" aria-label="Retirer la comparaison">
                                         <svg width="11" height="11" viewBox="0 0 16 16" fill="none">
                                           <path d="M5 5l6 6M11 5l-6 6" stroke="rgba(var(--nv-encre-rvb), .58)" strokeWidth="1.5" strokeLinecap="round"/>
                                         </svg>
@@ -1552,171 +1587,91 @@ function ChartContent() {
                     </div>
                   ) : undefined}
                   rightSlot={
-                    <div style={{ display:"flex", alignItems:"center", gap:5 }}>
-                      {/* Fullscreen */}
+                    /**
+                     * ⚠️ **Le même vocabulaire que le bandeau du portefeuille, pièce par pièce.**
+                     * Six boutons de 30 px en verre flouté, teintés d'accent quand actifs, chacun
+                     * avec son style recopié, et un basculement courbe/bougies qui montrait le
+                     * mode *suivant* — face à un portefeuille où tout est en pastilles de 26 px.
+                     * Demandé : les mêmes. `BoutonOutil` pour chaque outil, la piste à deux
+                     * pastilles pour courbe/bougies — qui montre l'état retenu, pas le suivant —
+                     * et la piste pour superposé/séparé.
+                     */
+                    <div style={{ display:"flex", alignItems:"center", gap:6 }}>
                       {ticker && (
-                        <button
-                          onClick={() => setFullscreen(f => !f)}
-                          title={fullscreen ? "Quitter le plein écran" : "Plein écran"}
-                          className="chart-action-btn"
-                          style={{
-                            background: fullscreen ? "rgba(var(--nv-accent-rvb), 0.18)" : "rgba(var(--nv-encre-rvb), 0.06)",
-                            backdropFilter:"blur(10px) saturate(1.5)",
-                            WebkitBackdropFilter:"blur(10px) saturate(1.5)",
-                            border:`1px solid ${fullscreen ? "rgba(var(--nv-accent-rvb), 0.45)" : "rgba(var(--nv-encre-rvb), 0.12)"}`,
-                            borderRadius:9, width:30, height:30, cursor:"pointer",
-                            display:"flex", alignItems:"center", justifyContent:"center",
-                            color: fullscreen ? "var(--nv-accent)" : "rgba(var(--nv-encre-rvb), 0.50)",
-                            boxShadow: fullscreen ? "0 0 12px rgba(var(--nv-accent-rvb), 0.20), inset 0 1px 0 rgba(var(--nv-encre-rvb), 0.10)" : "0 1px 3px rgba(0,0,0,0.20), inset 0 1px 0 rgba(var(--nv-encre-rvb), 0.07)",
-                          }}
-                        >
+                        <BoutonOutil actif={fullscreen} onClick={() => setFullscreen(f => !f)}
+                          titre={fullscreen ? "Quitter le plein écran" : "Plein écran"}>
                           {fullscreen ? (
-                            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M8 3v3a2 2 0 01-2 2H3m18 0h-3a2 2 0 01-2-2V3m0 18v-3a2 2 0 012-2h3M3 16h3a2 2 0 012 2v3"/></svg>
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" aria-hidden="true"><path strokeLinecap="round" strokeLinejoin="round" d="M8 3v3a2 2 0 01-2 2H3m18 0h-3a2 2 0 01-2-2V3m0 18v-3a2 2 0 012-2h3M3 16h3a2 2 0 012 2v3"/></svg>
                           ) : (
-                            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M8 3H5a2 2 0 00-2 2v3m18 0V5a2 2 0 00-2-2h-3m0 18h3a2 2 0 002-2v-3M3 16v3a2 2 0 002 2h3"/></svg>
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" aria-hidden="true"><path strokeLinecap="round" strokeLinejoin="round" d="M8 3H5a2 2 0 00-2 2v3m18 0V5a2 2 0 00-2-2h-3m0 18h3a2 2 0 002-2v-3M3 16v3a2 2 0 002 2h3"/></svg>
                           )}
-                        </button>
+                        </BoutonOutil>
                       )}
-                      {/* Sidebar toggle */}
                       {ticker && (
-                        <button
-                          onClick={() => setSidebarOpen(o => !o)}
-                          title={sidebarOpen ? "Fermer le panneau" : "Ouvrir le panneau (News, Similaires, IA)"}
-                          className="chart-action-btn"
-                          style={{
-                            background: sidebarOpen ? "rgba(var(--nv-accent-rvb), 0.18)" : "rgba(var(--nv-encre-rvb), 0.06)",
-                            backdropFilter:"blur(10px) saturate(1.5)",
-                            WebkitBackdropFilter:"blur(10px) saturate(1.5)",
-                            border:`1px solid ${sidebarOpen ? "rgba(var(--nv-accent-rvb), 0.45)" : "rgba(var(--nv-encre-rvb), 0.12)"}`,
-                            borderRadius:9, width:30, height:30, cursor:"pointer",
-                            display:"flex", alignItems:"center", justifyContent:"center",
-                            color: sidebarOpen ? "var(--nv-accent)" : "rgba(var(--nv-encre-rvb), 0.50)",
-                            boxShadow: sidebarOpen ? "0 0 12px rgba(var(--nv-accent-rvb), 0.20), inset 0 1px 0 rgba(var(--nv-encre-rvb), 0.10)" : "0 1px 3px rgba(0,0,0,0.20), inset 0 1px 0 rgba(var(--nv-encre-rvb), 0.07)",
-                          }}
-                        >
-                          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><line x1="15" y1="3" x2="15" y2="21"/></svg>
-                        </button>
+                        <BoutonOutil actif={sidebarOpen} onClick={() => setSidebarOpen(o => !o)}
+                          titre={sidebarOpen ? "Fermer le panneau" : "Ouvrir le panneau (News, Similaires, IA)"}>
+                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><line x1="15" y1="3" x2="15" y2="21"/></svg>
+                        </BoutonOutil>
                       )}
-                      {/* Share */}
-                      <button
-                        onClick={handleShare}
-                        title="Copier le lien"
-                        className="chart-action-btn"
-                        style={{
-                          background: copied ? "rgba(var(--nv-positif-rvb), 0.16)" : "rgba(var(--nv-encre-rvb), 0.06)",
-                          backdropFilter:"blur(10px) saturate(1.5)",
-                          WebkitBackdropFilter:"blur(10px) saturate(1.5)",
-                          border:`1px solid ${copied ? "rgba(var(--nv-positif-rvb), 0.40)" : "rgba(var(--nv-encre-rvb), 0.12)"}`,
-                          borderRadius:9, width:30, height:30, cursor:"pointer",
-                          display:"flex", alignItems:"center", justifyContent:"center",
-                          color: copied ? "var(--nv-positif)" : "rgba(var(--nv-encre-rvb), 0.50)",
-                          boxShadow: copied ? "0 0 12px rgba(var(--nv-positif-rvb), 0.18), inset 0 1px 0 rgba(var(--nv-encre-rvb), 0.10)" : "0 1px 3px rgba(0,0,0,0.20), inset 0 1px 0 rgba(var(--nv-encre-rvb), 0.07)",
-                        }}
-                      >
+                      <BoutonOutil actif={copied} onClick={handleShare} titre={copied ? "Lien copié" : "Copier le lien"}>
                         {copied ? (
-                          <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2">
-                            <polyline points="2,8 6,12 14,4"/>
-                          </svg>
+                          <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2.2" aria-hidden="true"><polyline points="2,8 6,12 14,4"/></svg>
                         ) : (
-                          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                            <path strokeLinecap="round" strokeLinejoin="round" d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z"/>
-                          </svg>
+                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" aria-hidden="true"><path strokeLinecap="round" strokeLinejoin="round" d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z"/></svg>
                         )}
-                      </button>
+                      </BoutonOutil>
 
-                      {/* Courbe / Bougies toggle — only for ticker */}
                       {ticker && (
-                        <button
-                          onClick={() => setChartViewMode(m => m === "line" ? "candle" : "line")}
-                          title={chartViewMode === "line" ? "Passer en bougies" : "Passer en courbe"}
-                          className="chart-action-btn"
-                          style={{
-                            background: chartViewMode === "candle" ? "rgba(var(--nv-accent-rvb), 0.16)" : "rgba(var(--nv-encre-rvb), 0.06)",
-                            backdropFilter:"blur(10px) saturate(1.5)",
-                            WebkitBackdropFilter:"blur(10px) saturate(1.5)",
-                            border:`1px solid ${chartViewMode === "candle" ? "rgba(var(--nv-accent-rvb), 0.40)" : "rgba(var(--nv-encre-rvb), 0.12)"}`,
-                            borderRadius:9, width:30, height:30, cursor:"pointer",
-                            display:"flex", alignItems:"center", justifyContent:"center",
-                            color: chartViewMode === "candle" ? "var(--nv-accent)" : "rgba(var(--nv-encre-rvb), 0.50)",
-                            boxShadow: chartViewMode === "candle" ? "0 0 12px rgba(var(--nv-accent-rvb), 0.16), inset 0 1px 0 rgba(var(--nv-encre-rvb), 0.10)" : "0 1px 3px rgba(0,0,0,0.20), inset 0 1px 0 rgba(var(--nv-encre-rvb), 0.07)",
-                          }}
-                        >
-                          {chartViewMode === "line" ? (
-                            <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
-                              <rect x="3" y="4" width="3" height="6" rx="0.5"/>
-                              <line x1="4.5" y1="2" x2="4.5" y2="4"/>
-                              <line x1="4.5" y1="10" x2="4.5" y2="14"/>
-                              <rect x="10" y="6" width="3" height="5" rx="0.5"/>
-                              <line x1="11.5" y1="3" x2="11.5" y2="6"/>
-                              <line x1="11.5" y1="11" x2="11.5" y2="13"/>
-                            </svg>
-                          ) : (
-                            <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
-                              <polyline points="1,12 4,8 7,10 10,5 13,7 15,4"/>
-                            </svg>
-                          )}
-                        </button>
+                        <Segments
+                          picto
+                          taille="sm"
+                          ariaLabel="Type de tracé"
+                          valeur={chartViewMode}
+                          onChange={setChartViewMode}
+                          options={[
+                            { valeur: "line" as const, libelle: <MarqueMode cible="ligne" />, titre: "Courbe" },
+                            { valeur: "candle" as const, libelle: <MarqueMode cible="bougie" />, titre: "Bougies" },
+                          ]}
+                        />
                       )}
 
                       {/* Le mode de surface verre/noir vit désormais dans le header global. */}
 
                       {/* Contrôles du mode comparaison */}
                       {customBmTicker && (
-                        <div style={{ display:"flex", alignItems:"center", gap:6, marginRight:2 }}>
-                          {/* Superposé / séparé */}
-                          <div style={{ display:"inline-flex", padding:2, borderRadius:9, gap:2,
-                            border:"1px solid rgba(var(--nv-encre-rvb), 0.12)", background:"rgba(var(--nv-encre-rvb), 0.05)" }}>
-                            {([["overlay","Superposé","Les deux actifs sur un même axe, ramenés à une base commune — pour voir lequel surperforme"],
-                               ["split","Séparé","Un graphique par actif, chacun avec son axe de prix — pour lire les niveaux absolus"]] as const)
-                              .map(([v,label,title]) => {
-                                const active = (v === "overlay") === !syncView;
-                                return (
-                                  <button key={v} title={title} onClick={() => setSyncView(v === "split")}
-                                    style={{ padding:"4px 9px", borderRadius:7, border:"none", cursor:"pointer",
-                                      fontSize:10, fontWeight: active ? 650 : 500, letterSpacing:"0.02em",
-                                      color: active ? "var(--nv-texte)" : "rgba(var(--nv-encre-rvb), 0.52)",
-                                      background: active ? "rgba(var(--nv-accent-rvb), 0.22)" : "transparent" }}>
-                                    {label}
-                                  </button>
-                                );
-                              })}
-                          </div>
-
+                        <div style={{ display:"flex", alignItems:"center", gap:6 }}>
+                          <Segments
+                            taille="sm"
+                            ariaLabel="Disposition de la comparaison"
+                            valeur={syncView ? "split" : "overlay"}
+                            onChange={v => setSyncView(v === "split")}
+                            options={[
+                              { valeur: "overlay" as const, libelle: "Superposé",
+                                titre: "Les deux actifs sur un même axe, ramenés à une base commune — pour voir lequel surperforme" },
+                              { valeur: "split" as const, libelle: "Séparé",
+                                titre: "Un graphique par actif, chacun avec son axe de prix — pour lire les niveaux absolus" },
+                            ]}
+                          />
                           {/* Repère de lecture : en superposé l'axe est un
                               indice recalculé sur la fenêtre visible, pas un prix. */}
                           {!syncView && (
-                            <span title="Les deux courbes repartent de 0 % au début de la période choisie : l'écart lu à droite est la surperformance sur cette période. Le zoom est figé en comparaison pour que ce point de référence reste unique — utilise les boutons de période pour changer de fenêtre. La ligne horizontale marque le départ commun."
-                              style={{ padding:"4px 9px", borderRadius:9, fontSize:10, fontWeight:600,
-                                letterSpacing:"0.02em", color:"rgba(var(--nv-encre-rvb), 0.62)", cursor:"help",
-                                border:"1px solid rgba(var(--nv-encre-rvb), 0.12)", background:"rgba(var(--nv-encre-rvb), 0.05)" }}>
+                            <span aria-label="Les deux courbes repartent de 0 % au début de la période choisie : l'écart lu à droite est la surperformance sur cette période. Le zoom est figé en comparaison pour que ce point de référence reste unique — utilise les boutons de période pour changer de fenêtre. La ligne horizontale marque le départ commun."
+                              style={{ padding:"0 9px", height:22, display:"inline-flex", alignItems:"center",
+                                borderRadius:12, fontSize:11, fontWeight:500, fontFamily:FONT,
+                                color:JETONS.texteFort, cursor:"help",
+                                border:`1px solid ${JETONS.bord}`, background:JETONS.segmentPiste }}>
                               Écart en %
                             </span>
                           )}
                         </div>
                       )}
 
-                      {/* Customisation colours */}
-                      <button
-                        onClick={() => setShowCustom(v => !v)}
-                        title="Personnaliser les couleurs"
-                        className="chart-action-btn"
-                        style={{
-                          background: showCustom ? "rgba(var(--nv-accent-rvb), 0.16)" : "rgba(var(--nv-encre-rvb), 0.06)",
-                          backdropFilter:"blur(10px) saturate(1.5)",
-                          WebkitBackdropFilter:"blur(10px) saturate(1.5)",
-                          border:`1px solid ${showCustom ? "rgba(var(--nv-accent-rvb), 0.40)" : "rgba(var(--nv-encre-rvb), 0.12)"}`,
-                          borderRadius:9, width:30, height:30, cursor:"pointer",
-                          display:"flex", alignItems:"center", justifyContent:"center",
-                          boxShadow: showCustom ? "0 0 12px rgba(var(--nv-accent-rvb), 0.16), inset 0 1px 0 rgba(var(--nv-encre-rvb), 0.10)" : "0 1px 3px rgba(0,0,0,0.20), inset 0 1px 0 rgba(var(--nv-encre-rvb), 0.07)",
-                        }}
-                      >
-                        <svg width="13" height="13" viewBox="0 0 16 16" fill="none">
-                          <circle cx="4"  cy="4"  r="2.5" fill={showCustom ? "var(--nv-accent)" : "rgba(var(--nv-encre-rvb), 0.50)"}/>
-                          <circle cx="12" cy="4"  r="2.5" fill={showCustom ? "var(--nv-accent)" : "rgba(var(--nv-encre-rvb), 0.50)"}/>
-                          <circle cx="4"  cy="12" r="2.5" fill={showCustom ? "var(--nv-accent)" : "rgba(var(--nv-encre-rvb), 0.50)"}/>
-                          <circle cx="12" cy="12" r="2.5" fill={showCustom ? "var(--nv-accent)" : "rgba(var(--nv-encre-rvb), 0.50)"}/>
+                      <BoutonOutil actif={showCustom} onClick={() => setShowCustom(v => !v)} titre="Personnaliser les couleurs">
+                        <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
+                          <circle cx="4"  cy="4"  r="2.5"/><circle cx="12" cy="4"  r="2.5"/>
+                          <circle cx="4"  cy="12" r="2.5"/><circle cx="12" cy="12" r="2.5"/>
                         </svg>
-                      </button>
+                      </BoutonOutil>
                     </div>
                   }
                 />
@@ -2146,7 +2101,7 @@ function ChartContent() {
                       );
                     })}
                     <button onClick={() => setSidebarOpen(false)}
-                      title="Fermer"
+                      aria-label="Fermer"
                       style={{ flexShrink:0, width:36, border:"none", background:"transparent", cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center", color:"rgba(var(--nv-encre-rvb), 0.20)", borderLeft:"1px solid rgba(var(--nv-encre-rvb), 0.05)", transition:"color 0.13s" }}
                       onMouseEnter={e => (e.currentTarget.style.color="rgba(var(--nv-encre-rvb), 0.55)")}
                       onMouseLeave={e => (e.currentTarget.style.color="rgba(var(--nv-encre-rvb), 0.20)")}>
@@ -2200,7 +2155,7 @@ function ChartContent() {
                                 background:"rgba(var(--nv-encre-rvb), 0.035)", border:"1px solid rgba(var(--nv-encre-rvb), 0.07)" }}>
                                 {(["recent","impact"] as const).map(s => (
                                   <button key={s} onClick={() => setNewsSortBy(s)}
-                                    title={s === "impact" ? "Trier par impact estimé" : "Trier par date de publication"}
+                                    aria-label={s === "impact" ? "Trier par impact estimé" : "Trier par date de publication"}
                                     style={{
                                     fontSize:9, fontWeight:600, letterSpacing:"0.045em", padding:"3px 9px", borderRadius:6, cursor:"pointer",
                                     border:"none",
@@ -2231,7 +2186,7 @@ function ChartContent() {
                                       background:"rgba(var(--nv-encre-rvb), 0.08)", color:"rgba(var(--nv-encre-rvb), 0.50)", textTransform:"uppercase" as const }}>
                                       {n.type}
                                     </span>
-                                    <span title="Impact estimé à partir du titre et du type d’événement" style={{ fontSize:8, fontWeight:650, letterSpacing:"0.045em", padding:"1.5px 6px", borderRadius:5,
+                                    <span aria-label="Impact estimé à partir du titre et du type d’événement" style={{ fontSize:8, fontWeight:650, letterSpacing:"0.045em", padding:"1.5px 6px", borderRadius:5,
                                       background:imp.bg, color:imp.color, display:"flex", alignItems:"center", gap:3 }}>
                                       <span style={{ width:4, height:4, borderRadius:"50%", background:imp.dot, display:"inline-block", flexShrink:0 }}/>
                                       {imp.label}

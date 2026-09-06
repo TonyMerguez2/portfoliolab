@@ -90,7 +90,6 @@ function Points({ nombre, courant, onChoisir, fond }: {
         return (
           <button key={i} type="button" role="tab" aria-selected={actif}
             aria-label={`Aide ${i + 1} sur ${nombre}`}
-            title={`Aide ${i + 1} sur ${nombre}`}
             onClick={() => onChoisir(i)}
             style={{
               // Le point actif s'allonge au lieu de seulement s'éclaircir : la position se
@@ -279,7 +278,7 @@ export default function CarteConstats({
        */
       minHeight: 230,
       display: "flex", flexDirection: "column", gap: 10,
-      padding: "14px 16px",
+      padding: "13px 15px",
       /**
        * ⚠️ **La carte porte la couleur du portefeuille, pas celle du thème — donc elle ne
        * suit plus le mode clair ni le sombre.** C'est assumé : cette carte-là dit à qui
@@ -290,8 +289,10 @@ export default function CarteConstats({
       background: fond,
     }}>
       <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
-        <span style={{ fontFamily: FONT, fontSize: 15, fontWeight: 700, flexShrink: 0,
-          color: encre(fond, 1), letterSpacing: "-0.01em" }}>
+        {/* ⚠️ Même corps et même graisse que tous les titres de carte — 12,5 px, 600 —, seule
+            l'encre reste déduite du fond teinté. Il était en 15 px gras, le seul de la page. */}
+        <span style={{ fontFamily: FONT, fontSize: 12.5, fontWeight: 600, flexShrink: 0, lineHeight: "17px",
+          color: encre(fond, 1) }}>
           {titre}
         </span>
         {/**
@@ -570,7 +571,7 @@ export default function CarteConstats({
           des données et non une probabilité de réalisation, et un « 0,54 » se lirait comme la
           seconde. Le détail des motifs est au survol, pour ne pas alourdir la carte. */}
       {aide != null && (
-        <div title={aide.motifs.join(" · ")}
+        <div aria-label={aide.motifs.join(" · ")}
           style={{ marginTop: "auto", paddingTop: 10, display: "flex", alignItems: "center",
             gap: 7, minWidth: 0, borderTop: `1px solid ${encre(fond, 0.14)}` }}>
           {/**

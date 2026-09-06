@@ -7,21 +7,26 @@ import ProfileModal from "@/components/ProfileModal";
 import AuthModal from "@/components/AuthModal";
 import { basculerMode, useModeTheme } from "@/lib/theme";
 import { API_URL } from "@/lib/api";
-import { RAYONS } from "@/lib/palette";
 
 /**
- * Navigation principale, en rail sorti du bord gauche.
+ * Navigation principale : deux cascades en S, tête et pied, qui sortent du bord gauche de
+ * l'écran.
  *
- * ⚠️ **Le rail ne flotte pas, il sort du bord — et c'est toute la différence.** Une barre
- * posée à quelques pixels du bord est un panneau de plus, qui se lit comme un objet
- * étranger tombé sur la page. Ici une épine court sur toute la hauteur contre le bord, et le
- * rail en est un renflement : les deux raccords concaves, en haut et en bas, disent que
- * c'est la même matière. Repris d'une référence montrée à l'usage.
+ * ⚠️ **La courbe vient du dossier de `CarteCompte`, la symétrie non.** Le tracé de référence
+ * est `contourDe` : le raccord de sa languette — deux arcs tangents à des bords parallèles —
+ * est ce qu'on reprend, mis à l'échelle. Mais une languette est **dissymétrique** : un angle
+ * ordinaire sur un flanc, l'encoche sur l'autre. Le rail l'a été, un temps, l'encoche en bas
+ * et un quart de cercle de rayon 18 en haut ; c'est ce que la géométrie du dossier dit, et
+ * c'est ce que l'usage a écarté — « juste le menu doit être symétrique, donc reproduis la
+ * cascade du bas mais en haut ». Le rail n'est donc **pas** une languette : c'est un ruban qui
+ * sort du bord et y rentre, deux fois de la même façon. Décidé, pas oublié.
  *
- * ⚠️ **Sans l'épine, les raccords ne raccordent rien.** Ils ont besoin d'une matière à
- * rejoindre : sur la référence c'est le cadre noir de l'écran, qui court d'un bout à l'autre
- * et dont la barre n'est qu'un élargissement. Le premier essai posait les raccords sur un
- * rail isolé — ils se terminaient dans le vide, comme deux crochets.
+ * ⚠️ **Le plan n'est pas une pièce du rail : c'est la page.** Une épine pleine hauteur courait
+ * contre le bord, dont le rail se donnait pour un renflement — il fallait bien une matière où
+ * les deux raccords à angle droit d'alors pouvaient se terminer. Les cascades, elles, arrivent
+ * **tangentes à la verticale** : elles se fondent dans le bord de l'écran sans rien à
+ * rejoindre. Une épine faite de la matière du rail dirait au contraire que le plan est un
+ * panneau de plus, quand il doit être la page elle-même.
  *
  * ⚠️ **La largeur totale ne bouge plus, et c'est ce qui rend le changement gratuit.** Le
  * repli publiait tour à tour 232 et 68 pixels dans `--novac-nav-w`, dont chaque page tire sa
@@ -39,81 +44,62 @@ import { RAYONS } from "@/lib/palette";
  */
 
 /**
- * La largeur que le rail réserve, épine comprise.
+ * La largeur que le rail réserve — c'est-à-dire de combien le ruban sort du bord.
  *
  * ⚠️ **C'est celle de l'ancien état replié, et ce n'est pas une coïncidence.** Elle est
  * publiée dans `--novac-nav-w` et sert de marge gauche à toutes les pages : la reprendre
  * telle quelle est ce qui permet de refaire la navigation sans toucher à une seule d'entre
  * elles.
+ *
+ * ⚠️ **Elle ne réserve plus d'épine.** Les 68 pixels étaient partagés entre une bande de dix
+ * contre le bord et un rail de cinquante-huit ; ils vont maintenant d'un seul tenant du bord
+ * de l'écran au flanc. La valeur publiée, elle, n'a pas bougé — et c'est bien elle, la largeur
+ * entière, qui sert de profondeur aux deux cascades.
  */
 const LARGEUR = 68;
-/** L'épine collée au bord, dont le rail est un renflement. */
-const EPINE = 10;
 /**
- * Le rayon des deux plis — ce n'est plus celui des angles. — les deux convexes du flanc droit comme les deux
- * raccords concaves.
- *
- * ⚠️ **Un seul rayon, et non deux, parce que la languette d'un dossier le dit déjà.** Son
- * commentaire est catégorique — « les trois coins de l'encoche ont le rayon des angles du
- * dossier », faute de quoi « trois courbures se succèdent et l'œil voit un raccord bricolé
- * sans savoir le nommer ». Le rail portait vingt pour les angles et seize pour les creux :
- * deux courbures pour une seule forme, la faute même que ce commentaire décrit. Relevé à
- * l'usage.
- *
- * ⚠️ **Mais le rayon est tout ce qui se partage : la courbe, elle, ne peut pas.** J'avais
- * écrit ici que les deux formes avaient « exactement la même topologie », et c'est faux. Le
- * raccord de la languette est un **S à virage nul** — il part horizontal, arrive horizontal
- * — ce qui autorise ses deux arcs à être raccourcis : 73,9° chacun, une course de 34,6 pour
- * une chute de 26, soit une pente de 36,9°. Les raccords du rail, eux, tournent chacun d'un
- * **quart**, de l'épine verticale au bord horizontal : à rayon égal leur arc *est* un quart
- * de cercle, 18 sur 18, pente 45°. Aucun raccourcissement n'est possible — on ne tourne pas
- * de quatre-vingt-dix degrés avec un arc de soixante-quatorze.
- *
- * ⚠️ **La conséquence est à savoir avant de vouloir l'adoucir.** Ces 45° sont exactement la
- * pente que la languette a écartée en son temps. Chez elle, la remède était de raccourcir
- * l'arc ; ici il n'y en a qu'un — **augmenter le rayon**, donc rompre la règle du rayon
- * unique qu'on vient d'appliquer. Les deux ne peuvent pas être vrais à la fois.
- *
- * ⚠️ **Pris dans l'échelle des rayons, et non chez la carte d'actif.** C'est bien elle qui
- * publie le nombre dont la languette tire ses courbes, mais `CarteActif` traîne derrière elle
- * TileCard, AssetLogo, une étincelle et des chiffres roulants : l'importer ici aurait chargé
- * tout cela dans la coquille de chaque page pour un entier. Elle prend désormais son rayon au
- * même endroit que nous — la source est commune, le poids ne l'est pas.
- */
-const RAYON = RAYONS.lg;
-/**
- * Le rayon des deux raccords concaves — plus grand que celui des angles, et j'avais conclu
- * l'inverse.
+ * Le rayon des deux cascades en S.
  *
  * ⚠️ **Ce qui rend un pli doux n'est pas son rayon, c'est sa course.** J'ai écrit ici que la
  * pente d'un raccord à quatre-vingt-dix degrés vaut 45° « quel que soit le rayon », et j'en ai
- * tiré qu'on ne pouvait rien y faire. C'est vrai de la pente et faux de l'effet : le pli du
- * dossier s'étale sur **34,6 pixels** de course, celui du rail sur 18. À rayon égal, le second
- * plie deux fois plus court — et c'est cela qu'on lit comme « sec ». Relevé à l'usage, sur
- * deux captures posées côte à côte, après que je l'aie déclaré impossible.
+ * tiré qu'on ne pouvait rien y faire. C'est vrai de la pente et faux de l'effet : deux arcs
+ * tangents à des bords *parallèles* ne tournent d'aucun angle net, ce qui laisse toute liberté
+ * de les raccourcir — le dossier le dit déjà, et c'est sa course, pas sa pente, qu'on lit.
  *
- * ⚠️ **Le rayon des angles ne suit pas, et c'est la seule chose que je maintiens.** Les coins
- * convexes du rail sont de la même espèce que ceux du dossier — un angle qu'on arrondit —, et
- * la règle des « trois coins au même rayon » les concerne. Le raccord, lui, n'est pas un
- * angle : c'est un pli, et il se règle sur la course du pli qu'il imite.
+ * ⚠️ **Le nombre est celui du dossier, mis à l'échelle de la profondeur d'ici.** Il plie sur
+ * une profondeur de 26 avec un rayon de 18 ; la nôtre est profonde de 68. Le même S demande
+ * donc `18 × 68 ⁄ 26`, soit 47 — et la course tombe alors à 90,3, c'est-à-dire les 34,6 du
+ * dossier au même facteur. Ce n'est pas une ressemblance, c'est la même courbe agrandie.
+ *
+ * ⚠️ **Dix-huit ne marcherait pas, et pas seulement de justesse.** Deux arcs de rayon `r`
+ * n'atteignent deux verticales distantes de `d` que si `r ≥ d ⁄ 4`, soit 17 : à 18 on est à un
+ * pixel de l'impossible, et la course qui en sortirait vaut 16,5 pour une chute de 68 — une
+ * falaise, pas une cascade.
+ *
+ * ⚠️ **Ce que la symétrie coûte, et c'est assumé.** Le nombre a été choisi quand il n'y avait
+ * qu'un pli, en remplacement de deux plis de 47 : quatre-vingt-dix pixels contre quatre-vingt-
+ * quatorze, le budget était le même. La symétrie demandée à l'usage en remet un second, donc
+ * **181 pixels de silhouette pliée pour 361 de rangées** — un tiers de la hauteur du rail. Ce
+ * n'est pas une dérive : c'est cette cascade-là qui a été demandée, vue en place, et deux fois.
+ * Le seul remède serait de la raccourcir, c'est-à-dire de la changer.
  */
-const RACCORD = 24;
+const RACCORD = 47;
 /**
- * De combien le pli s'étale le long du rail, déduit du reste.
+ * De combien l'encoche s'étale le long du rail, déduit du reste.
  *
- * ⚠️ **Deux arcs tangents, et leur étalement n'est pas libre.** Le rail est à 58 pixels de
- * l'épine ; deux arcs de même rayon qui relient deux verticales distantes de `d` en restant
- * tangents à l'une et à l'autre s'étalent de `√(4r² − (d − 2r)²)`. C'est la formule que la
- * languette du dossier emploie déjà, à ceci près qu'elle y relie deux horizontales. Écrire
- * l'étalement à la main, c'est le voir cesser d'être juste au premier changement de largeur —
- * et la tangence se perd sans prévenir.
+ * ⚠️ **Deux arcs tangents, et leur étalement n'est pas libre.** Deux arcs de même rayon qui
+ * relient deux verticales distantes de `d` en restant tangents à l'une et à l'autre s'étalent
+ * de `√(4r² − (d − 2r)²)` ; ici `d` vaut la largeur entière, du bord de l'écran au flanc.
+ * C'est la formule que la languette du dossier emploie déjà, à ceci près qu'elle y relie deux
+ * horizontales. Écrire l'étalement à la main, c'est le voir cesser d'être juste au premier
+ * changement de largeur — et la tangence se perd sans prévenir.
  *
- * ⚠️ **Le dossier plie sur 34,6 pour un décalage de 26, soit une fois et un tiers.** Le même
- * rapport sur 58 demanderait 77 pixels de pli à chaque bout, donc 154 de rail en plus : plus
- * de la moitié de sa hauteur passerait dans ses deux plis. À 24 de rayon le pli fait 47, ce
- * qui reste franchement plus doux que les 34 d'avant sans manger le rail.
+ * ⚠️ **Et non arrondi, parce que l'arrondi est précisément ce qui la perd.** Le point où les
+ * deux arcs se touchent est à mi-course et à mi-profondeur : un dixième de pixel de moins sur
+ * la course, et il n'est plus sur le cercle. Le navigateur redimensionne alors les rayons en
+ * silence pour boucler le tracé, et la tangente aux extrémités part avec.
  */
-const ETALEMENT = Math.round(Math.sqrt(4 * RACCORD ** 2 - (LARGEUR - EPINE - 2 * RACCORD) ** 2));
+const ETALEMENT = Math.sqrt(4 * RACCORD ** 2 - (LARGEUR - 2 * RACCORD) ** 2);
 /** Le côté d'une rangée, l'écart entre deux, et le rembourrage du rail. */
 const RANGEE = 40, ECART = 4, MARGE = 9;
 /**
@@ -127,49 +113,64 @@ const RANGEE = 40, ECART = 4, MARGE = 9;
  * position stable, ni entre deux visites, ni entre deux tailles d'écran. Ancré en haut, les
  * deux valeurs tombent à zéro.
  *
- * ⚠️ **Mais pas aligné sur le bandeau, faute de place — et c'est contre-intuitif.** Le champ
- * de recherche commence à douze pixels du haut ; aligner la première rangée dessus poserait
- * le rail à y=3, et son raccord supérieur — qui vit un rayon plus haut — sortirait de
- * l'écran. On perdrait la moitié de la silhouette pour gagner un alignement. La première
- * rangée ne peut donc pas monter au-dessus de `RAYON + MARGE`, soit vingt-sept ; à
- * vingt-huit, la silhouette commence à dix pixels du bord supérieur.
+ * ⚠️ **C'est le départ de la cascade qu'on pose, et il s'aligne sur le bandeau.** Le champ de
+ * recherche est en `position: fixed; top: 12px` ; la silhouette part du même douze, si bien
+ * que le haut du rail et le haut du champ tiennent sur une ligne. Demandé à l'usage — « à même
+ * marge que la barre de recherche ». C'était dix, deux pixels plus haut, ce qui suffisait à se
+ * lire comme un alignement manqué.
  *
- * ⚠️ **Et un alignement manqué se voit plus qu'un décalage assumé.** Poser la première
- * rangée treize pixels sous le bandeau, c'est-à-dire *presque* en face, se lirait comme une
- * erreur. À vingt-huit, le rail ne prétend s'aligner sur rien.
+ * ⚠️ **La première rangée, elle, tombe où la cascade la laisse.** Douze plus l'étalement plus
+ * la marge, soit cent onze : elle n'est alignée sur rien, et ne peut pas l'être tant que le
+ * pli fait quatre-vingt-dix. C'est le bord de la silhouette qui porte l'alignement, pas son
+ * contenu.
  */
-const HAUT = ETALEMENT + 10;
+const HAUT = 12;
 
 /**
- * La silhouette du rail : deux verticales reliées par deux plis en S.
+ * La silhouette du rail : un flanc droit, une cascade en S à chaque bout.
  *
- * ⚠️ **C'est le dossier pivoté d'un quart, et ce ne l'était pas.** Le raccord précédent
- * allait du flanc vertical de l'épine au bord horizontal du rail : un virage net de
- * quatre-vingt-dix degrés, c'est-à-dire un **coin arrondi**. Le pli d'une languette relie deux
- * bords *parallèles* — le haut de la languette et le haut du plan — et ne tourne au net
- * d'aucun angle : c'est un **S**. Élargir le coin l'avait adouci sans le changer de nature.
- * Relevé à l'usage : « comme si je prenais le dossier et le faisais pivoter sur le côté ».
+ * Le sens de parcours est horaire, en partant du bord de l'écran. La courbe est celle du
+ * raccord de languette de `contourDe`, dans `CarteCompte.tsx`, mise à l'échelle — mais posée
+ * deux fois, en miroir, là où le dossier n'en a qu'une.
  *
- * ⚠️ **Il n'y a plus d'angle du tout sur le flanc droit.** Les arcs arrivent tangents à la
- * verticale : entre les deux plis, le flanc est droit et se termine de lui-même. Le
- * `border-radius` qui arrondissait les deux coins n'a plus d'objet — il en dessinerait un
- * troisième, au milieu d'une courbe qui n'en a pas.
+ * ⚠️ **La symétrie est demandée, et elle a coûté un détour.** Le rail a porté un temps la
+ * vraie languette : l'encoche en bas, un quart de cercle de rayon 18 en haut. C'est ce que la
+ * géométrie du dossier impose — une languette a un flanc qui commence et un flanc qui rejoint
+ * le plan. L'usage a tranché autrement : « juste le menu doit être symétrique ». L'angle
+ * ordinaire est donc parti, et avec lui le seul rayon que ce fichier partageait avec l'échelle
+ * des cartes. Ne pas le remettre en croyant réparer un oubli.
  *
- * ⚠️ **En `clip-path` et non en masques, parce qu'un S ne se masque pas.** Les deux raccords
- * précédents étaient des quarts de disque retranchés d'un carré, ce qu'un dégradé radial sait
+ * ⚠️ **Les deux arcs d'une cascade se touchent à mi-course et à mi-profondeur.** C'est le seul
+ * point où ils peuvent se rejoindre en gardant la même tangente ; il se calcule, il ne se règle
+ * pas.
+ *
+ * ⚠️ **Les quatre drapeaux de balayage ne sont pas les mêmes, et c'est la signature du
+ * miroir.** En haut la cascade part du bord de l'écran vers le flanc — `0` puis `1` ; en bas
+ * elle repart du flanc vers le bord — `1` puis `0`. Deux cascades symétriques ont donc des
+ * drapeaux *inversés*, non identiques. Ils ont déjà été posés faux tous les quatre sans que la
+ * capture prise alors le montre : elle cadrait la moitié du rail où l'erreur ne se voit pas.
+ * Vérifier les deux bouts, pas un seul.
+ *
+ * ⚠️ **En `clip-path` et non en masques, parce qu'un S ne se masque pas.** Les raccords d'un
+ * temps étaient des quarts de disque retranchés d'un carré, ce qu'un dégradé radial sait
  * faire. Un arc plus court qu'un quart, non : il faut le tracer. D'où une hauteur à mesurer,
  * puisque le tracé la contient — le rail grandit avec son contenu, qui change quand la
  * session s'ouvre.
  */
 const silhouette = (h: number) => {
-  const l = LARGEUR - EPINE, r = RACCORD, v = ETALEMENT;
+  const l = LARGEUR, r = RACCORD, v = ETALEMENT;
   return [
+    // La cascade du haut : le creux part tangent au bord de l'écran…
     "M0,0",
     `A${r},${r} 0 0 0 ${l / 2},${v / 2}`,
+    // …puis le bombé reprend sa tangente et arrive tangent au flanc.
     `A${r},${r} 0 0 1 ${l},${v}`,
+    // Le flanc, droit sur toute la hauteur des rangées.
     `L${l},${h - v}`,
-    `A${r},${r} 0 0 0 ${l / 2},${h - v / 2}`,
-    `A${r},${r} 0 0 1 0,${h}`,
+    // La cascade du bas, la même en miroir : le bombé quitte le flanc…
+    `A${r},${r} 0 0 1 ${l / 2},${h - v / 2}`,
+    // …et le creux rejoint le bord de l'écran, tangent lui aussi.
+    `A${r},${r} 0 0 0 0,${h}`,
     "Z",
   ].join(" ");
 };
@@ -230,7 +231,7 @@ const ICONS: Record<string, Pictogramme> = {
   connexion: { trace: ["M12 2.25c.954 0 1.886.286 2.679.822a4.86 4.86 0 0 1 1.775 2.187c.365.891.46 1.871.275 2.817a4.9 4.9 0 0 1-1.32 2.496 4.8 4.8 0 0 1-2.468 1.334 4.77 4.77 0 0 1-2.786-.277A4.83 4.83 0 0 1 7.99 9.833a4.9 4.9 0 0 1-.812-2.708l.004-.212a4.9 4.9 0 0 1 1.483-3.31A4.8 4.8 0 0 1 12 2.25M13.929 13.95c1.278 0 2.505.514 3.409 1.428a4.9 4.9 0 0 1 1.412 3.447v.975c0 .517-.203 1.013-.565 1.379a1.92 1.92 0 0 1-1.364.571H7.18a1.92 1.92 0 0 1-1.364-.571A1.96 1.96 0 0 1 5.25 19.8v-.975c0-1.293.508-2.533 1.412-3.447a4.8 4.8 0 0 1 3.41-1.428z"] },
 };
 
-/** Le voile flouté, identique sur les quatre pièces de la silhouette. */
+/** Le voile flouté du rail — la seule pièce, depuis que l'épine a disparu. */
 const FLOU = {
   background: "var(--nv-barre-fond)",
   backdropFilter: "blur(24px) saturate(1.4)",
@@ -404,28 +405,28 @@ export default function SideNav() {
 
   return (
     <>
-    {/* L'épine : la matière dont le rail est un renflement. */}
-    <div aria-hidden="true" style={{
-      position: "fixed", left: 0, top: 0, bottom: 0, width: EPINE, zIndex: 59,
-      ...FLOU,
-    }} />
-
     <nav
       aria-label="Navigation principale"
       data-avatar="curieux"
       ref={ancrerRail}
       style={{
-        position: "fixed", left: EPINE, top: HAUT - ETALEMENT,
-        width: LARGEUR - EPINE, zIndex: 60,
+        position: "fixed", left: 0, top: HAUT,
+        width: LARGEUR, zIndex: 60,
         display: "flex", flexDirection: "column", alignItems: "center", gap: ECART,
-        /* ⚠️ Le rembourrage porte l'étalement du pli : la découpe mange ces pixels-là, et
-           sans eux la première rangée entrerait dans la courbe. */
-        padding: `${ETALEMENT + MARGE}px 0`,
+        /* ⚠️ Le rembourrage porte l'étalement des deux cascades : la découpe mange ces
+           pixels-là, et sans eux la première et la dernière rangée entreraient dans la courbe.
+           Arrondi ici et nulle part ailleurs : un demi-pixel de rembourrage ne se voit pas, un
+           demi-pixel d'étalement défait la tangence des arcs. */
+        padding: `${Math.round(ETALEMENT + MARGE)}px 0`,
+        /* ⚠️ **La découpe emporte aussi l'infobulle, et `overflow` n'y peut rien.** Un
+           `clip-path` coupe tous les descendants, positionnés ou non : la bulle des noms sort
+           à onze pixels du flanc et se perd donc à la coupe. Un `overflow: visible` traînait
+           ici en croyant l'en préserver — il ne s'applique qu'au débordement, jamais à la
+           découpe. Le remède est de poser la matière et sa découpe dans une couche à part,
+           sous les rangées, plutôt que sur le rail lui-même ; ce n'est pas la silhouette, et
+           cela déplace le bloc conteneur dont les modales plus bas se tiennent à l'écart. */
         clipPath: decoupe, WebkitClipPath: decoupe,
         ...FLOU,
-        /* ⚠️ **Visible, sinon les raccords ne servent à rien** : ils sont dessinés par deux
-           pseudo-éléments posés *hors* de la boîte, et l'infobulle sort par la droite. */
-        overflow: "visible",
       }}
     >
       {/**

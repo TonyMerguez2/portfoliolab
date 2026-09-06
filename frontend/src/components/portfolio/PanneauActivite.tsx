@@ -1,4 +1,5 @@
 "use client";
+import TitreDeCarte from "@/components/ui/TitreDeCarte";
 import { useEffect, useState } from "react";
 
 import { CountryFlagRounded } from "@appica/country-flags-react";
@@ -249,12 +250,7 @@ export default function PanneauActivite({
 
   return (
     <>
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between",
-        marginBottom: 8, flexShrink: 0 }}>
-        <span style={{ fontFamily: FONT, fontSize: 12.5, fontWeight: 600, color: CLAIR.texte }}>
-          Activité
-        </span>
-      </div>
+      <TitreDeCarte>Activité</TitreDeCarte>
 
       <div style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column",
         overflow: "hidden" }}>

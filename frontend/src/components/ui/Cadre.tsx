@@ -113,7 +113,7 @@ export default function Cadre({
         : {}),
       ...cadre,
     }}>
-      <div className={classeCarte} style={{
+      <div className={classeCarte} data-cadre="carte" style={{
         ...styleCarteInterieure(),
         ...(teinte ? { border: `1px solid ${teinte.bord}` } : {}),
         ...carte,

@@ -163,8 +163,7 @@ export default function ImagePortefeuille<T extends PortefeuilleImage>({
       <input ref={champ} type="file" accept="image/png,image/jpeg,image/gif,image/webp"
         onChange={choisir} style={{ display: "none" }} />
 
-      <button type="button" onClick={() => champ.current?.click()} disabled={envoi}
-        title={libelle} aria-label={libelle}
+      <button type="button" onClick={() => champ.current?.click()} disabled={envoi} aria-label={libelle}
         style={{
           width: taille, height: taille, overflow: "hidden",
           borderRadius: rayon, padding: 0, border: "none",
@@ -213,8 +212,7 @@ export default function ImagePortefeuille<T extends PortefeuilleImage>({
           la vignette — dans le menu du portefeuille, ou au survol du nom. */}
 
       {image && survol && !envoi && (
-        <button type="button" onClick={() => appeler("DELETE")}
-          title="Retirer l'image" aria-label="Retirer l'image du portefeuille"
+        <button type="button" onClick={() => appeler("DELETE")} aria-label="Retirer l'image du portefeuille"
           style={{
             position: "absolute", top: -5, right: -5, width: 17, height: 17,
             borderRadius: RAYONS.plein, border: "none", cursor: "pointer", padding: 0,

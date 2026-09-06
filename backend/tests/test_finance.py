@@ -90,11 +90,18 @@ def test_max_drawdown_negative(sample_returns):
 
 
 def test_max_drawdown_simple():
-    # Manual: 10% gain then 20% loss = drawdown of ~18.2%
+    # +10 % puis −20 % : le cumulé passe de 1,10 à 0,88.
     r = pd.Series([0.10, -0.20])
-    # Cumulative: 1.10, 0.88 — peak=1.10, dd=(0.88-1.10)/1.10=-0.1818
+    # Sommet = 1,10, creux = 0,88 → (0,88 − 1,10) / 1,10 = −0,20.
+    #
+    # ⚠️ **Ce test attendait −0,1818 et se contredisait lui-même.** Son propre
+    # commentaire posait la division par 1,10 — qui donne −0,20 — mais la valeur
+    # affirmée correspond à une division par 1,21. Vérifié à part : 0,88 / 1,10
+    # = 0,80, soit une chute de vingt pour cent exactement. C'est le test qui
+    # avait tort, pas `max_drawdown`, dont l'implémentation est la forme
+    # canonique — cumul, maximum courant, écart relatif.
     mdd = max_drawdown(r)
-    assert abs(mdd - (-0.18181818)) < 1e-5
+    assert abs(mdd - (-0.20)) < 1e-9
 
 
 # ─── Sharpe ───────────────────────────────────
@@ -142,7 +149,12 @@ def test_portfolio_returns_equal_weights():
     weights = {"A": 0.5, "B": 0.5}
     p = portfolio_returns(returns, weights)
     expected = pd.Series([0.01, 0.02, 0.0])
-    pd.testing.assert_series_equal(p.values, expected.values, check_exact=False, atol=1e-9)
+    # ⚠️ **On compare les Series, pas leurs `.values`.** L'appel passait deux
+    # `ndarray` à `assert_series_equal`, qui exige des Series et refuse avant même
+    # de regarder les nombres — « Expected type Series, found ndarray ». Les
+    # valeurs, elles, étaient égales depuis le début : le test échouait sur sa
+    # propre forme, pas sur le résultat de `portfolio_returns`.
+    pd.testing.assert_series_equal(p, expected, check_exact=False, atol=1e-9)
 
 
 # ─── Growth curve ─────────────────────────────

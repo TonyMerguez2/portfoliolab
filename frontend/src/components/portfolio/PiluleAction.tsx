@@ -57,7 +57,7 @@ export default function PiluleAction({
   const ombre = "0 1px 3px rgba(0,0,0,0.30)";
   const ombreSurvol = "0 2px 6px rgba(0,0,0,0.35)";
   return (
-    <button type="button" onClick={onClick} title={title} className="novac-lisere"
+    <button type="button" onClick={onClick} aria-label={title} className="novac-lisere"
       ref={ancrerLisere}
       /* ⚠️ La forme vient de `pilule`, dans `ui/saisie` : elle était écrite ici, et les
          pieds de fenêtre comme le bouton de tri de la grille l'avaient recopiée chacun de

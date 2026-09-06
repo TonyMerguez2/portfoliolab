@@ -123,7 +123,6 @@ export default function AvatarPortefeuille({
         onBlur={() => setSurvole(false)}
         aria-expanded={ouvert}
         aria-label={`Personnaliser l’avatar${portefeuille.name ? ` de ${portefeuille.name}` : ""}`}
-        title="Personnaliser l’avatar"
         style={{
           width: taille, height: taille, padding: 0, border: 0, background: "none",
           cursor: "pointer", display: "block", position: "relative",

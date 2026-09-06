@@ -94,6 +94,21 @@ export type MotifPlat = {
    * qui ne dessinent pas d'yeux — la pastille de réglage — peuvent l'ignorer entièrement.
    */
   devant?: boolean;
+  /**
+   * Un texte à la place du tracé : `d` est alors ignoré.
+   *
+   * ⚠️ **Le seul écart à « tout est un tracé », et pour un seul mot.** L'encoche du Pip-Boy
+   * porte son nom gravé, et c'était demandé. Dessiner sept lettres en polygones aurait
+   * donné un tracé illisible à relire et faux dès la première correction ; un `<text>` SVG
+   * se rend partout, se détoure comme un tracé et suit la même couleur. Ce que ça coûte : la
+   * police du système, donc un rendu qui peut différer d'une machine à l'autre d'un demi
+   * pixel — acceptable pour une gravure de huit unités, pas pour une forme.
+   *
+   * ⚠️ **Trois rendus la peignent, et c'est la dette connue de ce dépôt** : le composant, le
+   * banc, la pastille de réglage. Chacun a une branche pour le texte, écrite de la même
+   * façon ; en ajouter une quatrième oblige à la reprendre.
+   */
+  texte?: { contenu: string; x: number; y: number; taille: number; graisse?: number; espacement?: number };
 };
 
 /** Une région nommée, découpée dans la silhouette. Voir `MotifPlat.decoupe`. */
@@ -516,68 +531,15 @@ const TERRE: Skin = {
   },
 };
 
+// ── Appareils : ce que les écrans se partagent ─────────────────────────────
+
 /**
- * Un terminal à tube : une carrosserie, une vitre encastrée, et du phosphore dedans.
- *
- * ⚠️ **Un habillage, jamais une forme.** La silhouette appartient à la forme choisie : ses
- * proportions, son rayon d'angle et la géométrie des yeux ne bougent pas d'un pixel. Ce qui
- * change est la surface. Le boîtier dessiné ci-dessous est peint *à l'intérieur* du carré,
- * il ne l'élargit pas et ne l'arrondit pas autrement.
- *
- * ⚠️ **Tout est *plat*, et c'est la seule construction juste.** Un écran se peint sur la
- * vitre, pas sur le volume : le balayage reste horizontal quoi que fasse la tête. C'est ce
- * que `MotifPlat` garantit — détouré par la silhouette, jamais emporté par la rotation.
- * Posé sur la sphère comme les coutures d'un ballon, le tube se serait mis à rouler.
- *
- * ⚠️ **Les teintes se déduisent de la couleur choisie.** La palette propose un vert de
- * phosphore, mais les terminaux ambre ont existé : chaque couche est cette même teinte
- * décalée en clarté, et le boîtier la même désaturée. L'habillage suit la couleur au lieu
- * de la contredire.
- *
- * ⚠️ **Deux régions, et c'est la correction principale de cette passe.** La première
- * version faisait de la forme entière un écran : le balayage courait jusqu'à l'arête, et
- * l'on voyait une dalle nue plutôt qu'un appareil. Il y a désormais un *boîtier* et une
- * *dalle* encastrée dedans, la seconde bornant strictement les couches lumineuses — voir
- * `decoupes`. Un moniteur se reconnaît à sa carrosserie autant qu'à sa lueur.
+ * ⚠️ **Le terminal, devenu Pip-Boy, a été retiré à la demande — et ses outils restent.** Le
+ * classique et le Game Boy sont bâtis sur la même ossature : un boîtier, une vitre encastrée
+ * dans une région nommée, un regard borné par elle. Les fonctions ci-dessous — l'ellipse,
+ * le rectangle, la superellipse, la vitre, le reflet, la matière — sont celles qu'il avait
+ * fait naître ; elles n'ont plus de propriétaire et servent aux deux.
  */
-export const ECRAN = {
-  /** L'écart entre deux lignes de balayage, sur une tête de rayon 100. */
-  pas: 7,
-  /**
-   * ⚠️ **Bien sous la moitié du pas.** Au-delà, le sombre l'emporte et l'on ne lit plus
-   * des lignes sur un écran mais un écran sombre rayé de clair. Deux pixels sur sept
-   * laissent les cinq septièmes du phosphore visibles — un peigne, pas une grille.
-   */
-  trait: 2,
-  /**
-   * La dalle : ses retraits dans un repère qui va de −100 à 100, et son rayon d'angle.
-   *
-   * ⚠️ **Le tour n'est pas d'épaisseur égale : le bas est deux fois et demie plus large.**
-   * C'est la proportion qui *dit* « appareil ». Un cadre régulier se lit comme une marge ;
-   * un bandeau sous la vitre se lit comme la face avant d'un boîtier, celle qui porte les
-   * commandes. Le modèle le montre, et c'est le seul endroit où loger les détails.
-   *
-   * ⚠️ **Mesuré sur les yeux avant d'être choisi.** Sur cinquante relevés, clignements et
-   * regard compris, ils tiennent dans `x ∈ [−38,3 ; 31,3]` et `y ∈ [−35 ; 38,7]`. La dalle
-   * descend à 54 : quinze unités de garde sous l'œil le plus bas. La consigne « ne pas
-   * toucher à leur géométrie » interdisait de les remonter, donc c'est le bandeau qui
-   * s'arrête là où ils commencent, et non l'inverse.
-   *
-   * ⚠️ **Le rayon de la dalle est bien plus petit que celui de la silhouette.** Une vitre
-   * aussi arrondie que le boîtier ne se distingue plus de lui ; un verre est toujours plus
-   * anguleux que la matière qui le tient.
-   */
-  dalle: { cote: 18, haut: 18, bas: 46, rayon: 24 },
-  /*
-   * ⚠️ **Exporté pour être vérifié, pas pour être lu ailleurs.** Aucun composant ne s'en
-   * sert : seul le test des marges y accède, parce que retrouver le bas de la dalle en
-   * relisant le tracé SVG demanderait d'interpréter des `v` et des arcs relatifs — un test
-   * qui casserait au premier changement de construction plutôt qu'au premier changement de
-   * proportion. Une constante nommée est la bonne forme d'une spécification chiffrée.
-   */
-  /** Le bandeau sous la vitre : la grille de gauche s'y borne. */
-  bandeau: { grille: { x: -58, y: 64, largeur: 50, pas: 6, trait: 2.4, nombre: 4 } },
-};
 
 /** Une ellipse, en tracé : deux arcs d'un demi-tour. */
 const ellipse = (cx: number, cy: number, rx: number, ry: number) =>
@@ -590,18 +552,61 @@ const rectangle = (x: number, y: number, l: number, h: number, r: number) =>
   + `v${-(h - 2 * r)}a${r} ${r} 0 0 1 ${r} ${-r}Z`;
 
 /**
+ * Une superellipse |x/rx|ⁿ + |y/ry|ⁿ = 1, en tracé échantillonné.
+ *
+ * ⚠️ **L'écran des appareils se trace avec la courbe de la silhouette, pas avec des arcs de
+ * cercle.** Le carré arrondi n'est pas un rectangle à coins ronds : c'est une superellipse
+ * d'exposant 4, mesurée sur le banc — le point de la diagonale tombe à 0,841 du demi-côté,
+ * ce qui est exactement 2^(−1/4). Un écran à coins circulaires posé dedans montrait deux
+ * géométries d'arrondi l'une dans l'autre, et l'œil le voyait sans savoir le dire : « le
+ * rayon de l'écran doit être pareil que celui de la forme ». Le même exposant, aux
+ * dimensions de l'écran, donne un encadrement d'épaisseur presque constante — dix-huit
+ * unités sur les côtés, vingt dans les coins. Fait d'abord pour le classique, puis demandé
+ * pour le terminal : c'est `vitre()` qui la trace, donc tous les écrans la partagent.
+ *
+ * ⚠️ **Échantillonnée, comme la silhouette elle-même.** Il n'existe pas de commande SVG pour
+ * cette courbe ; quatre-vingt-seize segments suffisent à la rendre lisse à toute taille
+ * affichée, et le détourage s'en accommode aussi bien que d'un tracé à arcs.
+ */
+const superellipse = (cx: number, cy: number, rx: number, ry: number, n = 4, segments = 96) => {
+  const e = 2 / n;
+  let d = "";
+  for (let i = 0; i < segments; i++) {
+    const t = (i / segments) * 2 * Math.PI;
+    const c = Math.cos(t), s = Math.sin(t);
+    const x = cx + rx * Math.sign(c) * Math.pow(Math.abs(c), e);
+    const y = cy + ry * Math.sign(s) * Math.pow(Math.abs(s), e);
+    d += `${i === 0 ? "M" : "L"}${x.toFixed(2)} ${y.toFixed(2)}`;
+  }
+  return d + "Z";
+};
+
+/**
  * La dalle, en tracé — la même géométrie pour la peindre et pour la détourer.
  *
- * ⚠️ **Une fonction, pas une constante.** Elle est appelée au rendu, donc un changement de
- * `ECRAN.dalle` se propage partout sans qu'aucune copie ne subsiste. Le `retrait` grandi de
- * quelques unités sert au creux : c'est le seul endroit qui s'en écarte, et il le fait par
- * un calcul lisible plutôt que par un second tracé écrit à la main.
+ * ⚠️ **Une fonction, pas une constante.** Elle est appelée au rendu, donc un changement des
+ * retraits d'une dalle se propage partout sans qu'aucune copie ne subsiste. La `marge` élargit la
+ * courbe pour les creux et les encadrements : c'est le seul endroit qui s'en écarte, et il
+ * le fait par un calcul lisible plutôt que par un second tracé écrit à la main.
+ *
+ * ⚠️ **Une superellipse, plus un rectangle à arcs.** Voir `superellipse` : les coins de
+ * l'écran suivent la courbe de la silhouette, ce qui vaut pour le terminal comme pour le
+ * classique.
  */
-const vitre = (marge = 0) => {
-  const d = ECRAN.dalle;
-  return rectangle(-100 + d.cote - marge, -100 + d.haut - marge,
-                   200 - 2 * d.cote + 2 * marge,
-                   200 - d.haut - d.bas + 2 * marge, d.rayon + marge);
+/**
+ * ⚠️ **Deux formes de vitre, parce que les deux modèles n'ont pas la même.** Le classique
+ * — un carré arrondi dont l'écran épouse les coins — se trace en superellipse, comme sa
+ * silhouette. Le Pip-Boy, lui, a un écran *rectangulaire* aux coins modérément arrondis
+ * dans un cadre épais, et le concept fourni le montre sans ambiguïté ; tracé en
+ * superellipse, il perdait ses bords droits et ne ressemblait plus au concept, ce qui a
+ * été signalé. Chaque appareil nomme donc ses retraits et sa forme.
+ */
+export type Dalle = { cote: number; haut: number; bas: number; rayon?: number };
+const vitre = (marge: number, d: Dalle) => {
+  const x = -100 + d.cote - marge, y = -100 + d.haut - marge;
+  const l = 200 - 2 * d.cote + 2 * marge, h = 200 - d.haut - d.bas + 2 * marge;
+  if (d.rayon != null) return rectangle(x, y, l, h, d.rayon + marge);
+  return superellipse(x + l / 2, y + h / 2, l / 2, h / 2);
 };
 
 /**
@@ -668,9 +673,16 @@ const refletDeVitre = () =>
  * pâle, ce que personne n'a demandé. Le plafond laisse les couleurs franches atteindre leur
  * pigment et retient les neutres près du neutre.
  */
-const matiere = (hex: string, clarte: number, saturation: number): string => {
+/**
+ * ⚠️ **`virage` décale la teinte, en tours (0,07 ≈ 25°), et sert au seul Pip-Boy.** Son
+ * métal est un kaki *vert* quand son phosphore est ambre : déduit tel quel de l'ambre, le
+ * boîtier sortait brun. Tourner la teinte d'un quart de sextant vers le vert donne l'olive du
+ * modèle tout en restant accroché à la couleur réglée — un phosphore rouge donnerait un
+ * boîtier brun-orangé, un bleu un boîtier violacé, ce qui est la bonne réponse.
+ */
+const matiere = (hex: string, clarte: number, saturation: number, virage = 0): string => {
   const [teinte, source] = rvbVersTsl(hexVersRvb(hex));
-  return rvbVersHex(tslVersRvb([teinte, Math.min(saturation, source * 4), clarte]));
+  return rvbVersHex(tslVersRvb([(teinte + virage + 1) % 1, Math.min(saturation, source * 4), clarte]));
 };
 
 /**
@@ -686,267 +698,6 @@ const aviver = (hex: string, delta: number): string => {
   return rvbVersHex(tslVersRvb([teinte, Math.min(1, saturation + delta), clarte]));
 };
 
-const TERMINAL: Skin = {
-  cle: "terminal",
-  libelle: "Terminal",
-  /**
-   * ⚠️ **Réservé au carré arrondi, et à lui seul.** L'appareil est composé pour une surface
-   * à peu près carrée : le bandeau suppose un bord bas droit, le vignettage suit les quatre
-   * côtés de la vitre, et le balayage a besoin d'une largeur constante pour se lire comme un
-   * peigne. Détouré par un triangle ou une goutte, il ne raconte plus un moniteur — le
-   * bandeau se pince en pointe et la grille sort de la silhouette. Sept images fausses pour
-   * en servir une : c'est ce que `formes` existe pour empêcher.
-   */
-  formes: ["carre"],
-  /**
-   * Le vert d'un tube au phosphore.
-   *
-   * ⚠️ **C'est la teinte *allumée* qui est réglée, pas le fond.** L'écran éteint est
-   * presque noir, et sa couleur ne vient que de ce qui s'y allume : régler le noir aurait
-   * été régler ce qu'on ne voit pas. Le fond et le boîtier se déduisent donc de cette
-   * teinte — voir `plats`.
-   */
-  palette: { tete: "#5C8A3C", accent: "#7CFF9B", yeux: "#8BFFA8" },
-  motifs: () => [],
-  degrades: p => {
-    const phosphore = decalerClarte(p.tete, 0.3);
-    return [
-      {
-        /**
-         * La lumière qui tombe sur le boîtier : claire en haut à gauche, éteinte en bas.
-         *
-         * ⚠️ **Une seule source, en haut à gauche, comme partout ailleurs dans
-         * l'application.** Les cartes, les pastilles et les liserés supposent tous cette
-         * direction ; un boîtier éclairé d'ailleurs se serait remarqué sans qu'on sache dire
-         * pourquoi. L'écart reste faible : il s'agit de donner du volume à la carrosserie,
-         * pas d'y dessiner un reflet qui concurrencerait l'écran.
-         */
-        id: "boitier", cx: -70, cy: -95, r: 235,
-        arrets: [
-          { a: 0, couleur: "#FFFFFF", opacite: 0.13 },
-          { a: 0.55, couleur: "#FFFFFF", opacite: 0.03 },
-          { a: 1, couleur: "#000000", opacite: 0.16 },
-        ],
-      },
-      {
-        /**
-         * Le halo du centre : le faisceau qui insiste au milieu de la dalle.
-         *
-         * ⚠️ **Centré sur la dalle, pas sur la tête.** La vitre n'est plus concentrique à la
-         * silhouette depuis que le bandeau lui prend le bas : son milieu est à −14. Un halo
-         * resté à zéro aurait éclairé le bord bas et laissé le haut terne, ce qui se lit
-         * comme une tache et non comme un faisceau.
-         */
-        id: "halo", cx: 0, cy: -20, r: 96,
-        arrets: [
-          { a: 0, couleur: phosphore, opacite: 0.22 },
-          { a: 0.45, couleur: phosphore, opacite: 0.1 },
-          { a: 1, couleur: phosphore, opacite: 0 },
-        ],
-      },
-      {
-        /**
-         * La bande du balayage lent : une lueur large et molle qui descend l'écran.
-         *
-         * ⚠️ **Étirée en ellipse plate plutôt que peinte en bande nette.** Un rectangle
-         * clair qui descend se lit comme un objet qui passe devant l'écran ; une lueur sans
-         * bord se lit comme une brillance *dans* le tube, ce qui est le phénomène qu'on
-         * imite. Le dégradé s'éteint à 100 %, donc la bande n'a aucune arête.
-         */
-        id: "bande", cx: 0, cy: 0, r: 55,
-        arrets: [
-          { a: 0, couleur: phosphore, opacite: 0.16 },
-          { a: 1, couleur: phosphore, opacite: 0 },
-        ],
-      },
-      {
-        /**
-         * Le reflet, qui s'éteint en descendant vers la droite.
-         *
-         * ⚠️ **Blanc, et non phosphore, contrairement à tout le reste de ce skin.** Un
-         * reflet n'est pas de la lumière *émise* par l'écran, c'est de la lumière ambiante
-         * renvoyée par sa vitre : lui donner la teinte du tube en aurait fait une troisième
-         * source verte, et l'écran aurait paru s'allumer par plaques. C'est le raisonnement
-         * qui laisse déjà le balayage en noir pur — une ombre n'a pas de teinte.
-         *
-         * ⚠️ **Deux fois plus faible que celui du casque.** La dalle porte déjà un halo, une
-         * bande lente et un peigne ; un reflet appuyé y aurait fait une quatrième chose à
-         * regarder. La visière du casque, elle, est nue : elle peut le porter franchement.
-         *
-         * ⚠️ **Resserré puis rétabli : voir la note du casque.** La traînée venait du
-         * filtre de lueur, pas d'ici.
-         */
-        id: "reflet", cx: -58, cy: -84, r: 190,
-        arrets: [
-          { a: 0, couleur: "#FFFFFF", opacite: 0.055 },
-          { a: 0.55, couleur: "#FFFFFF", opacite: 0.02 },
-          { a: 1, couleur: "#FFFFFF", opacite: 0 },
-        ],
-      },
-      {
-        /**
-         * Le vignettage, qui va dans l'autre sens : transparent au centre, sombre au bord.
-         *
-         * ⚠️ **Il commence tard — à 55 % — et c'est ce qui le rend discret.** Amorcé au
-         * centre, il grise toute la dalle et l'écran paraît sale plutôt que courbe.
-         */
-        id: "vignette", cx: 0, cy: -14, r: 100,
-        arrets: [
-          { a: 0, couleur: "#000000", opacite: 0 },
-          { a: 0.55, couleur: "#000000", opacite: 0 },
-          { a: 1, couleur: "#000000", opacite: 0.5 },
-        ],
-      },
-    ];
-  },
-  /**
-   * ⚠️ **Les yeux ne sont plus des trous, ce sont des pixels allumés.** C'est la seule
-   * entorse assumée à la règle des préréglages — « les yeux sont des trous, une teinte vive
-   * en fait des pupilles peintes ». Sur un écran, l'inverse est vrai : ce qui se voit est
-   * ce qui émet, et un trou noir sur une dalle noire ne se verrait pas du tout. Leur
-   * géométrie, elle, n'est pas touchée : `Yeux` ne porte qu'une couleur et une lueur.
-   */
-  yeux: p => ({
-    couleur: decalerClarte(p.tete, 0.38),
-    lueur: { rayon: 3.4, couleur: decalerClarte(p.tete, 0.3) },
-    classe: "novac-crt-yeux",
-    /* Le phosphore ne s'allume que sur la dalle : hors d'elle, il n'y a plus d'écran. */
-    decoupe: "dalle",
-  }),
-  /**
-   * La dalle, comme région : ce qui est peint dedans n'en sort pas.
-   *
-   * ⚠️ **Déclarée ici et non recopiée dans chaque aplat.** Quatre couches s'y détourent — le
-   * halo, le peigne, la bande, le vignettage. Écrite quatre fois, la géométrie de l'écran
-   * aurait quatre occasions de diverger au premier changement de proportion ; passant par
-   * `vitre()`, qui sert aussi à *peindre* la dalle, le trou et le verre ne peuvent pas se
-   * désaligner.
-   */
-  decoupes: () => [{ id: "dalle", d: vitre() }],
-  plats: p => {
-    /**
-     * ⚠️ **Tout se déduit de la couleur choisie, rien n'est écrit en dur.** La dalle est
-     * cette teinte très assombrie, le phosphore la même éclaircie, le boîtier la même
-     * désaturée : un terminal ambre ou bleu s'obtient en changeant la couleur, sans toucher
-     * à ce fichier. Un skin qui poserait ses propres teintes rendrait le réglage de couleur
-     * sans effet sur lui.
-     */
-    const dalle = decalerClarte(p.tete, -0.32);
-    const phosphore = decalerClarte(p.tete, 0.3);
-    /**
-     * Les deux clartés du boîtier : sa masse, et ses creux.
-     *
-     * ⚠️ **Le relief se fait par l'ombre seule, jamais par une arête claire.** Il y a eu
-     * une troisième valeur — un cheveu clair posé au-dessus de la vitre, sous les fentes de
-     * la grille, en haut de la touche — pour imiter un bord biseauté. À l'écran ce n'étaient
-     * pas des arêtes, c'étaient des **lignes blanches translucides** posées sur l'objet, et
-     * l'utilisateur les a vues comme telles. La raison tient à l'échelle : un biseau
-     * n'existe qu'au-dessus d'une certaine largeur de trait, et en dessous il ne reste que
-     * le trait. Le creux sombre suffit à enfoncer la vitre — c'est l'ombre qui porte le
-     * relief, la lumière n'était qu'un doublon coûteux.
-     *
-     * ⚠️ **Le rapport de contraste entre le corps et la dalle vaut 2,02, et un test le
-     * garde.** Le premier tour valait 1,10 : mathématiquement différent, visuellement rien.
-     * Deux aplats sombres voisins ont besoin d'à peu près 2 pour se séparer à soixante-trois
-     * pixels — la taille du bandeau, là où cet avatar est le plus souvent regardé.
-     */
-    const corps = matiere(p.tete, 0.28, 0.04);
-    const creux = matiere(p.tete, 0.16, 0.04);
-    const lignes: MotifPlat[] = [];
-    /**
-     * ⚠️ **Le peigne déborde largement de la dalle, et il le faut.** Il court de −130 à 130
-     * quand la vitre s'arrête à 54 : le détourage le coupe, et les lignes des extrémités
-     * restent entières. Bornées au cadre, la dernière paraissait rognée.
-     */
-    for (let y = -130; y <= 130; y += ECRAN.pas) {
-      lignes.push({ d: `M-140 ${y}h280v${ECRAN.trait}h-280Z`, couleur: "#000000",
-                    opacite: 0.22, decoupe: "dalle" });
-    }
-    const g = ECRAN.bandeau.grille;
-    const barres: MotifPlat[] = [];
-    /**
-     * La grille du bandeau : quelques traits fins, sous la vitre, à gauche.
-     *
-     * ⚠️ **Des traits, et pas un haut-parleur dessiné.** Le modèle porte une grille percée,
-     * des vis et une molette ; reproduits, ils tombent sous le pixel à quarante et
-     * deviennent une bouillie grise. Quatre lignes espacées de six unités survivent à la
-     * réduction en devenant une *texture* — on ne les compte plus, mais on lit encore
-     * « surface travaillée », ce qui est tout ce qu'on leur demande.
-     *
-     * ⚠️ **Un seul trait sombre par fente, sans reflet dessous.** Le doublage clair censé
-     * les creuser produisait quatre lignes blanches translucides en travers du bandeau —
-     * bien plus visibles que les fentes qu'elles devaient souligner.
-     */
-    for (let i = 0; i < g.nombre; i++) {
-      barres.push({ d: rectangle(g.x, g.y + i * g.pas, g.largeur, g.trait, g.trait / 2),
-                    couleur: creux });
-    }
-    return [
-      /**
-       * ⚠️ **Le boîtier est peint par le skin, il n'est pas la couleur de la tête.** La
-       * silhouette est remplie par le composant avec la teinte réglée ; ce premier aplat
-       * opaque, détouré comme les autres, la recouvre entièrement. C'est ce qui permet à
-       * l'appareil d'être gris tout en suivant la couleur choisie — sans quoi il aurait
-       * fallu donner aux skins le droit de repeindre la tête, c'est-à-dire de défaire un
-       * réglage de l'utilisateur.
-       */
-      { d: ellipse(0, 0, 150, 150), couleur: corps },
-      // La lumière sur la carrosserie, avant que la vitre ne s'y encastre.
-      { d: ellipse(0, 0, 150, 150), degrade: "boitier" },
-      /**
-       * Le creux où la vitre est posée : la dalle élargie de trois unités, en plus sombre.
-       *
-       * ⚠️ **Un aplat derrière, et non un contour.** Un `stroke` se serait centré sur le
-       * tracé, donc à moitié caché sous la vitre — invisible pour cette moitié-là, et
-       * d'épaisseur variable à l'écran selon la taille de rendu. Un rectangle débordant de
-       * trois unités donne une rainure d'épaisseur exacte que la dalle recouvre proprement.
-       */
-      { d: vitre(3), couleur: creux },
-      // La dalle éteinte, opaque : à partir d'ici, tout est détouré par elle.
-      { d: vitre(), couleur: dalle },
-      // Le halo ensuite : la lueur du faisceau, sous le balayage.
-      { d: ellipse(0, 0, 150, 150), degrade: "halo", classe: "novac-crt-halo",
-        decoupe: "dalle" },
-      // Le balayage, qui traverse la lueur au lieu de s'y interrompre.
-      ...lignes,
-      /**
-       * La bande lente, entre le balayage et le vignettage.
-       *
-       * ⚠️ **Sous le vignettage, sinon elle éclaire les coins en passant.** Le vignettage
-       * doit rester la dernière parole sur les bords : une lueur qui repasse par-dessus lui
-       * ferait clignoter les angles à chaque tour, ce qui est exactement le genre de détail
-       * qu'on ne remarque qu'après l'avoir vu vingt fois.
-       */
-      { d: ellipse(0, -150, 150, 26), degrade: "bande", classe: "novac-crt-bande",
-        decoupe: "dalle" },
-      // Le vignettage par-dessus les lignes : il assombrit les bords, lignes comprises.
-      { d: ellipse(0, 0, 150, 150), degrade: "vignette", decoupe: "dalle" },
-      ...barres,
-      /**
-       * La touche et son témoin, à droite du bandeau.
-       *
-       * ⚠️ **Un seul point allumé, et il emprunte la couleur du phosphore.** Une seconde
-       * source lumineuse d'une autre teinte aurait concurrencé les yeux, qui sont le sujet.
-       * En reprenant exactement la teinte de l'écran, le témoin passe pour une diode du même
-       * appareil, et l'avatar garde une seule couleur — ce qui compte d'autant plus qu'il
-       * est le plus souvent affiché à quarante pixels.
-       */
-      { d: rectangle(10, g.y - 2, 42, 20, 7), couleur: creux },
-      { d: ellipse(70, g.y + 8, 5.5, 5.5), couleur: creux },
-      { d: ellipse(70, g.y + 8, 3, 3), couleur: phosphore, opacite: 0.75 },
-      /**
-       * Le reflet de la vitre, **en dernier et devant les yeux**.
-       *
-       * ⚠️ **Il était sous le vignettage, pour que celui-ci éteigne ses angles.** Son propre
-       * dégradé le fait déjà : mesuré, il est retombé à moins d'un centième d'opacité aux
-       * quatre coins de la dalle, où le vignettage ne trouvait donc rien à éteindre. La
-       * précaution ne coûtait rien mais ne servait rien non plus — et elle plaçait la vitre
-       * derrière le regard, ce qui est le contraire d'une vitre.
-       */
-      { d: refletDeVitre(), degrade: "reflet", decoupe: "dalle", devant: true },
-    ];
-  },
-};
 /**
  * Un casque d'astronaute : coque claire, cerclage de métal, visière noire.
  *
@@ -1618,6 +1369,458 @@ const CHEVALIER: Skin = {
   },
 };
 
+// ── Classique ─────────────────────────────────────────────────────────────────
+
+/**
+ * Met un tracé à l'échelle et le pose : `M`/`L`/`C` absolus déplacés, `c`/`l`/`s` relatifs
+ * seulement agrandis.
+ *
+ * ⚠️ **Le strict nécessaire pour la pomme, pas un interpréteur SVG.** Six commandes, celles
+ * que son tracé emploie ; une commande inconnue lève, plutôt que de laisser passer un dessin
+ * faux en silence.
+ */
+const poser = (d: string, echelle: number, cx: number, cy: number): string => {
+  let sortie = "";
+  const re = /([MLCSmlcsZz])([^MLCSmlcsZz]*)/g;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(d)) !== null) {
+    const cmd = m[1];
+    const nombres = (m[2].match(/-?\d*\.?\d+/g) ?? []).map(Number);
+    if (cmd === "Z" || cmd === "z") { sortie += "Z"; continue; }
+    const absolu = cmd === cmd.toUpperCase();
+    const coords = nombres.map((v, i) =>
+      (v * echelle + (absolu ? (i % 2 === 0 ? cx : cy) : 0)).toFixed(2));
+    sortie += cmd + coords.join(" ");
+  }
+  return sortie;
+};
+
+/**
+ * La pomme, en tracé de référence sur une boîte de 24, telle qu'on la dessine partout.
+ *
+ * ⚠️ **Un tracé connu, pas une courbe écrite à la main.** La première pomme était composée
+ * de six Bézier posées à l'œil : le flanc gauche bombait plus que le droit et la feuille
+ * partait de travers, si bien que le fruit paraissait penché — « mets-le droit ». Un tracé
+ * de référence a ses proportions déjà justes ; on ne le retouche pas, on le pose à l'échelle.
+ */
+const POMME_24 =
+  "M12.152 6.896c-.948 0-2.415-1.078-3.96-1.04-2.04.027-3.91 1.183-4.961 3.014"
+  + "-2.117 3.675-.546 9.103 1.519 12.09 1.013 1.454 2.208 3.09 3.792 3.039"
+  + " 1.52-.065 2.09-.987 3.935-.987 1.831 0 2.35.987 3.96.948 1.637-.026 2.676-1.48"
+  + " 3.676-2.948 1.156-1.688 1.636-3.325 1.662-3.415-.039-.013-3.182-1.221-3.22-4.857"
+  + "-.026-3.04 2.48-4.494 2.597-4.559-1.429-2.09-3.623-2.324-4.39-2.376-2-.156-3.675 1.09"
+  + "-4.61 1.09z"
+  + "M15.53 3.83c.843-1.012 1.4-2.427 1.245-3.83-1.207.052-2.662.805-3.532 1.818"
+  + "-.78.896-1.454 2.338-1.273 3.714 1.338.104 2.715-.688 3.559-1.701z";
+
+/**
+ * La pomme posée sur la façade : vingt-six unités de haut, centrée en (cx, cy).
+ *
+ * ⚠️ **Plate et droite, sans aucun effet de volume.** C'est un signe imprimé sur un boîtier,
+ * pas un objet dessus : ni ombre, ni reflet, ni dégradé du boîtier par-dessus — elle est
+ * peinte après la lumière de la carrosserie, précisément pour n'en recevoir aucune.
+ */
+const POMME_HAUTEUR = 26;
+/** Où commence le corps du fruit dans la boîte de 24 : au-dessus, il n'y a que la feuille. */
+const POMME_SOMMET_DU_CORPS = 5.86;
+const pomme = (cx: number, cy: number) =>
+  poser(POMME_24, POMME_HAUTEUR / 24, cx - 12 * POMME_HAUTEUR / 24, cy - 12 * POMME_HAUTEUR / 24);
+
+/**
+ * Les six bandes de la pomme, de haut en bas.
+ *
+ * ⚠️ **Les seules couleurs écrites en dur de tout ce fichier, et c'est assumé.** Partout
+ * ailleurs, chaque teinte se déduit de la couleur réglée : un boîtier, un phosphore, un
+ * chrome suivent le réglage. Un arc-en-ciel, non — c'est un *signe*, et un signe qui
+ * changerait de couleurs avec la tête cesserait d'être reconnu. Il est fixe pour la même
+ * raison qu'un drapeau l'est.
+ */
+const ARC_EN_CIEL = ["#61BB46", "#FDB827", "#F5821F", "#E03A3E", "#963D97", "#009DDC"];
+
+/**
+ * Un ordinateur d'autrefois : un boîtier beige, un écran noir encastré, et sur la façade
+ * une pomme et une fente à disquette.
+ *
+ * ⚠️ **Le troisième frère du terminal et du casque, sur la même ossature.** Un boîtier, une
+ * ouverture encastrée, un regard derrière ; la silhouette, ses proportions et la géométrie
+ * des yeux ne bougent pas d'un pixel. Ce qui le distingue du terminal, c'est la *matière*
+ * du boîtier — claire, chaude, presque ivoire, quand le terminal est un métal sombre — et
+ * une façade qui raconte l'objet par deux détails : la pomme et la fente. Posés côte à côte
+ * dans la rangée, un écran sombre dans une carrosserie noire et le même dans une
+ * carrosserie beige ne se confondent pas.
+ *
+ * ⚠️ **La façade est une marche en avant, pas un simple tour.** Sur le modèle, la face
+ * avant porte l'écran dans un cadre plus clair, en relief sur le corps. Il est peint ici
+ * comme une plaque un ton plus claire, élargie de onze unités autour de la vitre, avant la
+ * rainure sombre et la dalle. Sans elle, l'objet se lisait comme un terminal repeint en
+ * beige ; avec, il a la face d'un appareil moulé.
+ *
+ * ⚠️ **Tout suit la couleur réglée, hors la pomme.** Le beige proposé n'est qu'une palette
+ * de départ : le corps, la façade, la rainure et la fente se déduisent de la teinte de
+ * tête, l'écran et l'invite de l'accent. Une couleur grise donne un modèle platine, une
+ * bleue un modèle translucide. Voir `ARC_EN_CIEL` pour l'exception.
+ */
+/** Les retraits de l'écran du classique : ceux du premier terminal, sans rayon — superellipse. */
+const DALLE_CLASSIQUE: Dalle = { cote: 18, haut: 18, bas: 46 };
+
+const CLASSIQUE: Skin = {
+  cle: "classique",
+  libelle: "Classique",
+  /* Même raison que le terminal : un appareil composé pour une surface carrée. */
+  formes: ["carre"],
+  /**
+   * Un beige chaud pour la tête, un vert de phosphore pour l'accent.
+   *
+   * ⚠️ **Contrairement au terminal, c'est le *boîtier* qui est réglé, pas l'écran.** Sur le
+   * terminal, la carrosserie est presque invisible et l'écran fait la couleur ; ici c'est
+   * l'inverse — l'objet est beige avant d'être vert. Ce qui s'allume dedans vient de
+   * l'accent, et le reste d'une teinte de tête qu'on voit sur les trois quarts de la
+   * surface.
+   */
+  palette: { tete: "#C4B396", accent: "#3FE05B", yeux: "#7CFF7A" },
+  motifs: () => [],
+  degrades: p => [
+    {
+      /* La lumière sur le boîtier, de la même source haut-gauche que tout le reste. */
+      id: "boitier", cx: -70, cy: -95, r: 235,
+      arrets: [
+        { a: 0, couleur: "#FFFFFF", opacite: 0.16 },
+        { a: 0.55, couleur: "#FFFFFF", opacite: 0.04 },
+        { a: 1, couleur: "#000000", opacite: 0.14 },
+      ],
+    },
+    {
+      /**
+       * La lueur du centre : plus discrète que celle du terminal.
+       *
+       * ⚠️ **L'écran de ce modèle est *noir*, pas vert.** Sa lumière tient dans ce qui s'y
+       * écrit : le point d'invite et les yeux. Un halo appuyé en ferait un tube au phosphore
+       * de plus, et le boîtier clair perdrait ce qui le rend lisible — un trou noir net dans
+       * une matière claire.
+       */
+      id: "halo", cx: 0, cy: -20, r: 96,
+      arrets: [
+        { a: 0, couleur: p.accent, opacite: 0.1 },
+        { a: 0.5, couleur: p.accent, opacite: 0.04 },
+        { a: 1, couleur: p.accent, opacite: 0 },
+      ],
+    },
+    {
+      id: "reflet", cx: -58, cy: -84, r: 190,
+      arrets: [
+        { a: 0, couleur: "#FFFFFF", opacite: 0.09 },
+        { a: 0.55, couleur: "#FFFFFF", opacite: 0.03 },
+        { a: 1, couleur: "#FFFFFF", opacite: 0 },
+      ],
+    },
+    {
+      id: "vignette", cx: 0, cy: -14, r: 100,
+      arrets: [
+        { a: 0, couleur: "#000000", opacite: 0 },
+        { a: 0.6, couleur: "#000000", opacite: 0 },
+        { a: 1, couleur: "#000000", opacite: 0.45 },
+      ],
+    },
+  ],
+  /**
+   * Des pixels allumés, bornés à la dalle — voir le terminal, dont c'est la règle.
+   *
+   * ⚠️ **Tirés de l'accent, jamais de `p.yeux`.** Sur le banc, la palette du skin fournit des
+   * yeux verts et la première version les lisait ; sur le site, `yeux` est la couleur que le
+   * composant déduit de la tête — celle des *trous* d'un visage uni, donc sombre — et les
+   * yeux sortaient gris-vert sur un écran noir, à peine visibles dans le bandeau. Vu à
+   * l'écran en appliquant le skin depuis le sélecteur. L'accent, lui, est celui du skin sur
+   * les deux rendus : c'est le phosphore, et c'est lui qui doit éclairer.
+   */
+  yeux: p => ({
+    couleur: decalerClarte(p.accent, 0.14),
+    lueur: { rayon: 3, couleur: p.accent },
+    classe: "novac-crt-yeux",
+    decoupe: "dalle",
+  }),
+  decoupes: () => [
+    { id: "dalle", d: vitre(0, DALLE_CLASSIQUE) },
+    { id: "pomme", d: pomme(-60, 80) },
+  ],
+  plats: p => {
+    /**
+     * Les matières du boîtier, déduites de la teinte de tête.
+     *
+     * ⚠️ **Saturation imposée à 0,28, plus haute que celle du terminal.** Un beige est une
+     * couleur *chaude* : à la saturation du métal du terminal, il tombait dans un gris
+     * sale. C'est le plafond de `matiere` — quatre fois la saturation réglée — qui retient
+     * un gris réglé près du gris.
+     */
+    const corps = matiere(p.tete, 0.70, 0.28);
+    const facade = matiere(p.tete, 0.78, 0.26);
+    const creux = matiere(p.tete, 0.40, 0.22);
+    const ombre = matiere(p.tete, 0.58, 0.24);
+    /* L'écran : presque noir, à peine teinté de l'accent pour que le noir soit *son* noir. */
+    const dalle = matiere(p.accent, 0.06, 0.3);
+    /**
+     * Les six bandes, réparties sur le **corps** du fruit, la feuille entière en vert.
+     *
+     * ⚠️ **Pas six bandes égales sur toute la hauteur.** Réparties ainsi, le vert ne couvrait
+     * que la feuille et le jaune commençait au sommet du fruit — vu sur le rendu isolé. Sur
+     * le logo, la feuille est verte *et* le haut du fruit aussi : le corps se divise en six,
+     * et la première bande remonte jusqu'à la feuille pour la prendre avec elle.
+     */
+    const bandes: MotifPlat[] = [];
+    const echelle = POMME_HAUTEUR / 24;
+    const hautBoite = 80 - POMME_HAUTEUR / 2;
+    const hautCorps = hautBoite + POMME_SOMMET_DU_CORPS * echelle;
+    const pas = (POMME_HAUTEUR - POMME_SOMMET_DU_CORPS * echelle) / ARC_EN_CIEL.length;
+    for (let i = 0; i < ARC_EN_CIEL.length; i++) {
+      const y0 = i === 0 ? hautBoite : hautCorps + i * pas;
+      const y1 = hautCorps + (i + 1) * pas;
+      bandes.push({ d: `M-80 ${y0.toFixed(2)}h40v${(y1 - y0 + 0.3).toFixed(2)}h-40Z`,
+                    couleur: ARC_EN_CIEL[i], decoupe: "pomme" });
+    }
+    return [
+      { d: ellipse(0, 0, 150, 150), couleur: corps },
+      { d: ellipse(0, 0, 150, 150), degrade: "boitier" },
+      /**
+       * L'encadrement de l'écran, en trois marches : la façade claire, un chanfrein, la
+       * rainure sombre où la vitre s'enfonce.
+       *
+       * ⚠️ **La rainure fait six unités, deux fois celle du terminal.** Le modèle détaillé
+       * montre un bord épais et sombre autour de la dalle, qui est ce qui donne à l'écran
+       * son enfoncement dans une matière claire ; à trois unités, sur un boîtier beige, il
+       * disparaissait et l'écran paraissait collé dessus. Sur le terminal, le boîtier est
+       * sombre et trois suffisent.
+       */
+      { d: vitre(13, DALLE_CLASSIQUE), couleur: ombre, opacite: 0.45 },
+      { d: vitre(12, DALLE_CLASSIQUE), couleur: facade },
+      { d: vitre(6, DALLE_CLASSIQUE), couleur: ombre },
+      { d: vitre(4.5, DALLE_CLASSIQUE), couleur: creux },
+      { d: vitre(0, DALLE_CLASSIQUE), couleur: dalle },
+      { d: ellipse(0, 0, 150, 150), degrade: "halo", classe: "novac-crt-halo", decoupe: "dalle" },
+      /**
+       * ⚠️ **Rien d'écrit sur l'écran : ni chevron, ni tiret.** Le modèle porte un point
+       * d'invite `>_` et la première version le reprenait, en haut à gauche de la dalle.
+       * Retiré à la demande : sur un avatar, l'écran a déjà son sujet — les yeux — et un
+       * signe de plus à côté d'eux se lisait comme un troisième œil. L'écran noir et vide
+       * derrière deux pixels allumés dit « appareil » sans rien ajouter.
+       */
+      { d: ellipse(0, 0, 150, 150), degrade: "vignette", decoupe: "dalle" },
+      /* La pomme, à gauche de la façade : six bandes détourées par le fruit. */
+      ...bandes,
+      /**
+       * La fente à disquette, à droite : une rainure sombre et sa languette.
+       *
+       * ⚠️ **À dix unités sous la façade, et la pomme au même niveau.** La première version
+       * posait la fente à 64, quand la façade descend à 66 : le lecteur mordait sur
+       * l'encadrement de l'écran, signalé aussitôt. Fente et pomme sont descendues
+       * ensemble, pour rester sur une même ligne sous la vitre ; la silhouette laisse
+       * encore six unités de marge sous elles à ces abscisses.
+       *
+       * ⚠️ **Une pilule sombre et sa fente, sans bouton ni languette.** Le modèle détaillé
+       * ne montre que cela : une forme allongée, un cheveu plus clair sur son pourtour, et
+       * la fente presque noire au milieu. La languette de la première version n'y est pas,
+       * et sous soixante pixels elle faisait une tache.
+       */
+      { d: rectangle(22, 76, 48, 11, 5.5), couleur: ombre },
+      { d: rectangle(23, 77, 46, 9, 4.5), couleur: creux },
+      { d: rectangle(27, 80, 38, 3.5, 1.75), couleur: dalle },
+      { d: refletDeVitre(), degrade: "reflet", decoupe: "dalle", devant: true },
+    ];
+  },
+};
+
+// ── Game Boy ─────────────────────────────────────────────────────────────────
+
+/**
+ * L'écran du Game Boy : un rectangle aux coins doux, dans un cadre gris sombre.
+ *
+ * ⚠️ **Le bas descend à 49, et non à 32 comme sur le concept.** Sur le modèle, la dalle
+ * s'arrête plus haut et la façade en dessous est large. Mais les yeux descendent à 38,7 et
+ * sont bornés par la dalle : un écran qui finit à 32 les tronque. La consigne — ne pas
+ * toucher à leur géométrie — l'emporte sur la proportion du concept ; la dalle descend
+ * donc dix unités sous l'œil le plus bas, et c'est la façade qui se resserre.
+ *
+ * ⚠️ **Exportée pour être vérifiée, pas pour être lue ailleurs** — c'est la garde des yeux
+ * qu'un test tient, et il la lit ici.
+ */
+export const DALLE_GAMEBOY: Dalle = { cote: 40, haut: 30, bas: 51, rayon: 8 };
+
+/**
+ * Le cadre gris autour de la dalle : ses retraits, dans le même repère.
+ *
+ * ⚠️ **Le bas du cadre est à 55, et c'est la contrainte qui organise toute la façade.** La
+ * première version le laissait descendre à 58 pendant que le bouton du haut commençait à
+ * 47 : les boutons chevauchaient le cadre, et les fentes passaient sous le bouton du bas —
+ * signalé à l'écran. La dalle ne pouvant remonter (garde des yeux), c'est le cadre qui
+ * s'amincit en bas — six unités contre huit en haut — et la façade qui se range en dessous,
+ * de 58 à 93, sans qu'aucune pièce n'en touche une autre.
+ */
+const CADRE_GAMEBOY: Dalle = { cote: 22, haut: 22, bas: 45, rayon: 14 };
+
+/**
+ * Une fente de haut-parleur, inclinée : un trait épais aux bouts ronds.
+ *
+ * ⚠️ **Un tracé, pas une rotation SVG.** Les aplats n'ont pas de `transform` — et lui en
+ * donner un aurait ouvert un cas que trois rendus devraient suivre. Les quatre coins du
+ * trait se calculent, et deux disques ferment les bouts : c'est une ligne au sens propre.
+ */
+const fente = (cx: number, cy: number, longueur: number, largeur: number, angle: number) => {
+  const c = Math.cos(angle), s = Math.sin(angle);
+  const ax = cx - c * longueur / 2, ay = cy - s * longueur / 2;
+  const bx = cx + c * longueur / 2, by = cy + s * longueur / 2;
+  const nx = -s * largeur / 2, ny = c * largeur / 2;
+  return `M${(ax + nx).toFixed(2)} ${(ay + ny).toFixed(2)}L${(bx + nx).toFixed(2)} ${(by + ny).toFixed(2)}`
+    + `L${(bx - nx).toFixed(2)} ${(by - ny).toFixed(2)}L${(ax - nx).toFixed(2)} ${(ay - ny).toFixed(2)}Z`
+    + ellipse(ax, ay, largeur / 2, largeur / 2) + ellipse(bx, by, largeur / 2, largeur / 2);
+};
+
+/**
+ * Une console de poche : coque gris chaud, cadre sombre, dalle vert olive, et sur la
+ * façade une croix, deux boutons ronds, deux touches en pilule, une diode et un
+ * haut-parleur.
+ *
+ * ⚠️ **Le troisième appareil sur l'ossature commune, et le plus chargé en façade.** Le
+ * classique a deux détails, celui-ci en a cinq — mais chacun est un signe connu de tous, et
+ * c'est leur *ensemble* qui fait reconnaître l'objet au premier regard, plus que la dalle
+ * verte. Aucun n'est plus fin que ce qui survit à quarante pixels : la croix devient un
+ * plus sombre, les boutons deux points rouges, le haut-parleur une texture.
+ *
+ * ⚠️ **La dalle est mate, sans balayage ni reflet.** Un écran à cristaux liquides n'est ni
+ * un tube ni une vitre : le concept le montre uni, d'un vert olive plat, avec pour seule
+ * lumière ce qui s'y allume. Le halo est gardé, très faible, pour que les yeux aient l'air
+ * d'éclairer la dalle ; le reflet de vitre du casque n'y aurait rien à faire.
+ *
+ * ⚠️ **La coque suit la couleur de tête, la dalle suit l'accent.** Une coque bleue ou noire
+ * s'obtient en changeant la couleur ; le vert de la dalle et des yeux vient de l'accent du
+ * skin, comme le phosphore du classique. Les deux boutons ronds et la diode sont rouges
+ * fixes : ce sont des signes, pas des matières — voir l'arc-en-ciel de la pomme.
+ */
+const ROUGE_GAMEBOY = "#A63A5E";
+
+const GAMEBOY: Skin = {
+  cle: "gameboy",
+  libelle: "Game Boy",
+  formes: ["carre"],
+  palette: { tete: "#D9D3C9", accent: "#7FE072", yeux: "#A6FF8F" },
+  motifs: () => [],
+  degrades: p => [
+    {
+      id: "boitier", cx: -70, cy: -95, r: 235,
+      arrets: [
+        { a: 0, couleur: "#FFFFFF", opacite: 0.18 },
+        { a: 0.55, couleur: "#FFFFFF", opacite: 0.04 },
+        { a: 1, couleur: "#000000", opacite: 0.12 },
+      ],
+    },
+    {
+      /* La lueur des yeux sur la dalle : faible, la dalle est mate. */
+      id: "halo", cx: 0, cy: -8, r: 70,
+      arrets: [
+        { a: 0, couleur: p.accent, opacite: 0.16 },
+        { a: 0.6, couleur: p.accent, opacite: 0.05 },
+        { a: 1, couleur: p.accent, opacite: 0 },
+      ],
+    },
+    {
+      /* Chaque bouton rond : une lumière en haut à gauche, comme le boîtier. */
+      id: "boutonRond", cx: 50, cy: 58, r: 28,
+      arrets: [
+        { a: 0, couleur: "#FFFFFF", opacite: 0.22 },
+        { a: 1, couleur: "#000000", opacite: 0.18 },
+      ],
+    },
+  ],
+  /* Des segments allumés, bornés à la dalle : hors d'elle, pas d'écran. */
+  yeux: p => ({
+    couleur: aviver(decalerClarte(p.accent, 0.08), 0.3),
+    lueur: { rayon: 3.2, couleur: p.accent },
+    classe: "novac-crt-yeux",
+    decoupe: "dalle",
+  }),
+  decoupes: () => [{ id: "dalle", d: vitre(0, DALLE_GAMEBOY) }],
+  plats: p => {
+    /**
+     * ⚠️ **Les matières de la coque sont presque neutres, à dessein.** Le concept est un gris
+     * chaud ; à 0,08 de saturation, la teinte réglée colore encore la coque sans en faire un
+     * plastique teinté. Le cadre est le même gris, bien plus sombre, et légèrement plus
+     * saturé pour ne pas virer au noir pur.
+     */
+    const coque = matiere(p.tete, 0.82, 0.08);
+    const rebord = matiere(p.tete, 0.88, 0.08);
+    const rainure = matiere(p.tete, 0.70, 0.06);
+    const cadre = matiere(p.tete, 0.36, 0.05);
+    const cadreSombre = matiere(p.tete, 0.26, 0.05);
+    const touche = matiere(p.tete, 0.45, 0.05);
+    const croix = matiere(p.tete, 0.17, 0.03);
+    /* La dalle : l'accent ramené à un olive sombre — c'est un cristal liquide, pas une lampe. */
+    const dalle = matiere(p.accent, 0.33, 0.28);
+    const dalleOmbre = matiere(p.accent, 0.26, 0.28);
+
+    /**
+     * La façade, de gauche à droite, entre le bas du cadre (55) et le bas de la coque.
+     *
+     * ⚠️ **Chaque pièce est placée contre les autres *et* contre la *face* — pas la
+     * silhouette.** La face s'arrête à 94, où commence le rebord clair ; c'est elle qui
+     * borne le décor, et la première passe la confondait avec la silhouette à 100 : les
+     * fentes du bas, justes dans la forme, mordaient sur le rebord. Vu sur le site.
+     *
+     * ⚠️ **Six unités entre le cadre et le bouton le plus haut, pas trois.** À trois, dans
+     * le bandeau à quarante pixels, c'est un demi-pixel : les deux se touchaient à l'œil.
+     * Boutons ronds de rayon 7 à (44, 74) et (62, 66) : le plus haut commence à 59, le cadre
+     * finit à 55. Les fentes courent de (54, 86) à (75, 77), à quinze unités du bouton le
+     * plus proche ; leur bout le plus bas est à 89,2 en y pour x ≈ 52, où la face monte
+     * encore à 91,7 ; le plus à droite à 76,5 en x pour y ≈ 74, où la face s'étend à 83.
+     *
+     * ⚠️ **Rentrés vers le centre après une troisième passe.** La croix allait jusqu'à −77
+     * et les fentes jusqu'à 79 : dans la forme, mais collés au rebord, et la diode touchait
+     * presque le cadre. Signalé trois fois de suite pour trois pièces : le décor d'une
+     * façade se compose depuis son centre, pas depuis ses bords. La croix va maintenant de
+     * −70 à −44, la diode à (−87, −45) laisse cinq unités au cadre.
+     */
+    const boutons: MotifPlat[] = [];
+    for (const [bx, by] of [[44, 74], [62, 66]]) {
+      boutons.push({ d: ellipse(bx, by + 1, 7, 7), couleur: "#000000", opacite: 0.25 });
+      boutons.push({ d: ellipse(bx, by, 7, 7), couleur: ROUGE_GAMEBOY });
+      boutons.push({ d: ellipse(bx, by, 7, 7), degrade: "boutonRond" });
+      boutons.push({ d: ellipse(bx - 2, by - 2.3, 2.6, 1.8), couleur: "#FFFFFF", opacite: 0.28 });
+    }
+    const hautParleur: MotifPlat[] = [];
+    for (let k = 0; k < 6; k++) {
+      const cx = 54 + k * 4.2, cy = 86 - k * 1.8;
+      hautParleur.push({ d: fente(cx, cy, 7, 2.2, -1.15), couleur: cadre, opacite: 0.75 });
+    }
+    return [
+      /* Le rebord : coque en clair, rainure, face — même construction que les autres. */
+      { d: ellipse(0, 0, 150, 150), couleur: rebord },
+      { d: superellipse(0, 0, 95.5, 95.5), couleur: rainure },
+      { d: superellipse(0, 0, 94, 94), couleur: coque },
+      { d: ellipse(0, 0, 150, 150), degrade: "boitier" },
+      /* Le cadre gris de l'écran, avec son ombre et sa marche intérieure. */
+      { d: vitre(1.5, CADRE_GAMEBOY), couleur: rainure },
+      { d: vitre(0, CADRE_GAMEBOY), couleur: cadre },
+      { d: vitre(0, CADRE_GAMEBOY), degrade: "boitier" },
+      { d: vitre(2.5, DALLE_GAMEBOY), couleur: cadreSombre },
+      { d: vitre(0, DALLE_GAMEBOY), couleur: dalle },
+      /* Une ombre portée par le cadre sur le haut de la dalle : c'est elle qui l'enfonce. */
+      { d: `M-100 -100H100V${-100 + DALLE_GAMEBOY.haut + 4}H-100Z`, couleur: dalleOmbre, decoupe: "dalle" },
+      { d: ellipse(0, 0, 150, 150), degrade: "halo", classe: "novac-crt-halo", decoupe: "dalle" },
+      /* La diode, en haut à gauche de l'écran. */
+      { d: ellipse(-87, -45, 3.8, 3.8), couleur: cadreSombre },
+      { d: ellipse(-87, -45, 2.9, 2.9), couleur: ROUGE_GAMEBOY },
+      { d: ellipse(-87.9, -46.1, 1.1, 0.8), couleur: "#FFFFFF", opacite: 0.35 },
+      /* La croix, en bas à gauche : deux barres et leur creux central. */
+      { d: rectangle(-62.5, 62, 11, 26, 2.5), couleur: croix },
+      { d: rectangle(-70, 69.5, 26, 11, 2.5), couleur: croix },
+      { d: ellipse(-57, 75, 2.8, 2.8), couleur: touche, opacite: 0.5 },
+      /* Les deux touches en pilule, au centre. */
+      { d: rectangle(-27, 71.5, 20, 6.5, 3.25), couleur: cadre },
+      { d: rectangle(-25, 73.2, 16, 3, 1.5), couleur: touche },
+      { d: rectangle(2, 71.5, 20, 6.5, 3.25), couleur: cadre },
+      { d: rectangle(4, 73.2, 16, 3, 1.5), couleur: touche },
+      ...boutons,
+      ...hautParleur,
+    ];
+  },
+};
+
 const UNI: Skin = {
   cle: "uni",
   libelle: "Uni",
@@ -1626,7 +1829,7 @@ const UNI: Skin = {
 };
 
 export const SKINS: Skin[] = [
-  UNI, BASKET, VOLLEY, TENNIS, TERRE, TERMINAL, ASTRONAUTE, CHEVALIER,
+  UNI, BASKET, VOLLEY, TENNIS, TERRE, ASTRONAUTE, CHEVALIER, CLASSIQUE, GAMEBOY,
 ];
 
 /**

@@ -738,7 +738,8 @@ async def get_history(
     import yfinance as yf
 
     from app.services.portfolio_history import (courbe_portefeuille, twr_sur_fenetre,
-                                                dietz_sur_fenetre, simuler_benchmark)
+                                                dietz_sur_fenetre, simuler_benchmark,
+                                                gains_par_ligne)
 
     _get_portfolio_or_404(portfolio_id, db, user)
 
@@ -874,12 +875,40 @@ async def get_history(
     # entière, un « gain sur trois mois » n'ayant pas de sens en euros quand des
     # versements ont eu lieu entre-temps.
     resultat["twr_pct"] = twr_sur_fenetre(resultat["points"], depart.isoformat())
+    # ⚠️ **Le gain se mesure à partir du point qui suit `depart`, et ce n'est pas un détail :
+    # c'est ce qui le mettait en désaccord avec tout le reste.** Le TWR prend le point de
+    # `depart` pour base ; la courbe commence à ce point ; les cartes comparent au dernier
+    # cours connu à cette date. Le gain, lui, prenait pour base la *veille* de `depart` —
+    # un jour de plus, en amont. Mesuré sur « 1 S » sans aucune opération dans la fenêtre :
+    # TWR −0,41 %, gain +0,43 %. Deux signes opposés pour la même semaine, et le sélecteur
+    # affichait le second pendant que les cartes montraient le premier. Sur « 24 h », le
+    # gain couvrait deux séances.
+    #
+    # Décaler le début de mesure d'un point rend à `dietz_sur_fenetre` la base qu'il attend
+    # — « ce que valait le portefeuille juste avant » — en faisant de `depart` cette veille.
+    # Ses propres conventions ne changent pas, ni celles du repère, qui reçoit le même
+    # début. Sur toute la détention, il n'y a rien avant `depart` : on n'y touche pas, et
+    # le gain reste valeur moins capital versé.
+    debut_mesure = depart.isoformat()
+    if depart > debut_reel:
+        suivants = [p["date"] for p in resultat["points"] if p["date"] > depart.isoformat()]
+        if suivants:
+            debut_mesure = suivants[0]
     # Ce que l'argent de l'épargnant a rapporté sur la fenêtre — la question
     # qu'on se pose devant son relevé, distincte du comportement des fonds.
-    gain = dietz_sur_fenetre(resultat["points"], depart.isoformat())
+    gain = dietz_sur_fenetre(resultat["points"], debut_mesure)
     resultat["gain_eur"] = gain["gain_eur"]
     resultat["gain_pct"] = gain["gain_pct"]
     resultat["taux_pct"] = gain["taux_pct"]
+    # Le même gain, ligne par ligne, pour les cartes et le bandeau : voir `gains_par_ligne`.
+    resultat["lignes"] = gains_par_ligne(
+        [
+            {"ticker": t.ticker, "side": t.side, "quantity": t.quantity,
+             "unit_price": t.unit_price, "fees": t.fees or 0.0, "executed_at": t.executed_at}
+            for t in txs
+        ],
+        cours, calendrier, debut_mesure,
+    )
     # Les points complets (flux compris) servent encore à la simulation du
     # repère ; ceux renvoyés au client en sont allégés.
     points_complets = resultat["points"]
@@ -997,7 +1026,8 @@ async def get_history(
     if _BENCHMARK in brut:
         serie = brut[_BENCHMARK].dropna()
         cours_repere = {i.date(): float(v) for i, v in serie.items()}
-        resultat["benchmark_sim"] = simuler_benchmark(points_complets, cours_repere, depart.isoformat())
+        # Même début de mesure que le gain : les deux se soustraient à l'écran.
+        resultat["benchmark_sim"] = simuler_benchmark(points_complets, cours_repere, debut_mesure)
 
         bornes = [
             v for d, v in sorted(cours_repere.items())

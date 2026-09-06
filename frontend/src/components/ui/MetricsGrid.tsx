@@ -14,7 +14,7 @@ function MetricCard({ label, value, sub, color = "text-slate-900", tooltip, metr
   label: string; value: string; sub?: string; color?: string; tooltip?: string; metric?: string; locale?: string;
 }) {
   return (
-    <div className="bg-slate-50 rounded-xl p-4 border border-slate-100 hover:border-slate-200 transition-colors" title={tooltip}>
+    <div className="bg-slate-50 rounded-xl p-4 border border-slate-100 hover:border-slate-200 transition-colors" aria-label={tooltip}>
       <div className="flex items-center gap-0.5 mb-1">
         <p className="text-xs font-medium text-slate-500">{label}</p>
         {metric && locale && <MetricTooltip metric={metric} lang={locale} />}

@@ -759,7 +759,7 @@ export default function BuildPage() {
           revient et la répartition se calculent à partir de là.
         </div>
       </button>
-      <div title="Bientôt disponible" style={{
+      <div aria-label="Bientôt disponible" style={{
                             ...glass,
                             borderRadius: "14px",
                             padding: "28px 24px",
@@ -1176,7 +1176,7 @@ export default function BuildPage() {
     {composition[i].weight.toFixed(1)}%
   </div>
   <button onClick={()=>{ setActifSaisi({ ticker: a.ticker, name: a.name, type: a.type }); setLigneEditee(null); setPanneauTx(true); }}
-    title="Ajouter une transaction sur cet actif"
+    aria-label="Ajouter une transaction sur cet actif"
     style={{ background: "transparent", border: "none", color: "rgba(255,255,255,0.28)",
              cursor: "pointer", fontSize: "15px", lineHeight: 1, flexShrink: 0, padding: "0 2px" }}
     onMouseEnter={(e: any)=>e.currentTarget.style.color = "#9BB9FF"}

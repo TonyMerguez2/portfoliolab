@@ -1,4 +1,5 @@
 "use client";
+import TitreDeCarte from "@/components/ui/TitreDeCarte";
 import { useState } from "react";
 
 import AssetLogo from "@/components/AssetLogo";
@@ -58,12 +59,9 @@ const entete = {
   borderBottom: `1px solid ${CLAIR.bord}`, textAlign: "left" as const,
 };
 
+/** L'en-tête commun à toutes les cartes — voir `TitreDeCarte`. La colonne a déjà son écart. */
 function Titre({ children }: { children: React.ReactNode }) {
-  return (
-    <span style={{ fontFamily: FONT, fontSize: 13, fontWeight: 600, color: CLAIR.texte }}>
-      {children}
-    </span>
-  );
+  return <TitreDeCarte style={{ marginBottom: 0 }}>{children}</TitreDeCarte>;
 }
 
 function Vide({ children }: { children: React.ReactNode }) {
@@ -223,7 +221,7 @@ export function ProchainsResultats({
                     son poids. Sans signe — la statistique dit de combien ça bouge,
                     pas dans quel sens. */}
                 {im && (
-                  <span title={`Amplitude moyenne du titre sur ses ${im.echantillon} `
+                  <span aria-label={`Amplitude moyenne du titre sur ses ${im.echantillon} `
                     + `derniers trimestres, ramenée à son poids de ${im.exposition.toFixed(1)} %`}
                     style={{
                       ...NUM, fontSize: 10, fontWeight: 700, flexShrink: 0,

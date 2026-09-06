@@ -2,10 +2,10 @@
 import { useRef, useEffect, useState, useMemo } from "react";
 import * as d3 from "d3";
 import AssetLogo from "@/components/AssetLogo";
-import { tileData, tileSurface, brandHex, brandRgb, hexToRgb, trackSpecular, releaseSpecular } from "@/lib/tileStyle";
+import { surfaceAplat, brandRgb, hexToRgb } from "@/lib/tileStyle";
 import { assetName } from "@/lib/assets";
+import { encreSur, pourContrasteSur, couleurPerformance } from "@/lib/couleur";
 import TileSparkline from "@/components/charts/TileSparkline";
-import type { RGB } from "@/lib/tileStyle";
 
 type AssetItem = { ticker: string; weight: number; change: number | null; type?: string; price?: number | null; spark?: number[]; updatedAt?: number; value?: number | null; perfEur?: number | null };
 
@@ -106,15 +106,20 @@ export default function LiquidGlassTreemap({ assets: propAssets, onAssetClick }:
   return (
     <div
       ref={containerRef}
-      style={{
-        width: "100%", height: "100%", position: "relative",
-        background: [
-          "radial-gradient(ellipse 60% 50% at 25% 30%, rgba(80,120,255,0.09) 0%, transparent 100%)",
-          "radial-gradient(ellipse 55% 60% at 75% 65%, rgba(60,200,100,0.06) 0%, transparent 100%)",
-          "radial-gradient(ellipse 50% 45% at 55% 20%, rgba(200,100,255,0.05) 0%, transparent 100%)",
-          "#040F22",
-        ].join(", "),
-      }}
+      /**
+       * ⚠️ **Aucun fond : celui de l'application passe au travers.** Trois lueurs radiales —
+       * bleue, verte, violette — couraient ici sur un `#040F22` opaque, ce qui masquait à la
+       * fois le dégradé du `<body>` et la trame de points que `PointsFond` pose sur toutes les
+       * pages depuis la mise en page racine. La carte de chaleur était donc la seule page de
+       * l'application à ne pas reposer sur le même fond, et les trois lueurs se voyaient au
+       * travers des intervalles entre les tuiles. Demandé à l'usage.
+       *
+       * ⚠️ **Transparent, et non le fond recopié.** Le dégradé du `<body>` est en
+       * `background-attachment: fixed` et la trame vit en `z-index: -1` : les reproduire ici
+       * donnerait deux sources pour une même apparence, qui divergeraient au premier changement
+       * de thème. Ne rien peindre est ce qui garantit que c'est le même fond, pas un semblable.
+       */
+      style={{ width: "100%", height: "100%", position: "relative" }}
     >
       <style>{TILE_ANIM}</style>
       {/* Popover pour tuiles mini */}
@@ -187,10 +192,59 @@ export default function LiquidGlassTreemap({ assets: propAssets, onAssetClick }:
         const tier   = getTier(w, h, asset.weight);
         const isHov  = hovered === asset.ticker;
 
-        // Only the brand colour is needed here now; the surface itself comes
-        // from tileSurface, and the glow blobs are gone.
-        const [cr, cg, cb] = tileData(asset.ticker).rgb;
-        const changeColor  = change >= 0 ? "#4ade80" : "#f87171";
+        /**
+         * La teinte de la tuile : sa variation, et rien d'autre.
+         *
+         * ⚠️ **C'est une carte de chaleur, donc la couleur porte la mesure.** Elle a porté la
+         * marque — la couleur exacte de la plaque du logo, qui s'y fondait —, et c'était
+         * lisible comme un annuaire : deux actifs à +4 % et −4 % n'avaient aucune parenté
+         * visuelle. Tranché à l'usage quand la page a reçu son nom : « la couleur dit COMBIEN,
+         * le logo dit QUI ». La plaque du logo redevient donc visible, ce qui est normal —
+         * elle ne se fond plus dans rien.
+         */
+        const teinte = couleurPerformance(asset.change);
+        const [cr, cg, cb] = hexToRgb(teinte);
+
+        /**
+         * L'encre de la tuile, et sa version voilée.
+         *
+         * ⚠️ **Le texte était blanc en dur, ce qui supposait une tuile sombre.** C'était vrai
+         * tant que la surface posait ses lavis sur un fond `rgba(2,10,24,0.38)` : quelle que
+         * soit la couleur de marque, la tuile restait foncée. En aplat elle vaut exactement la
+         * plaque du logo — et certaines plaques sont **blanches** : `#f1f3fa` chez Alphabet,
+         * `#ffffff` chez Meta et Microsoft. Le nom de l'actif y devenait blanc sur blanc.
+         *
+         * ⚠️ **`encreSur` choisit, elle ne corrige pas.** Elle rend le blanc ou l'encre sombre,
+         * selon lequel des deux contraste le mieux avec le fond — sa propre note la réserve aux
+         * « capitales, pastilles et étiquettes de bonne taille », ce que sont ces libellés. Les
+         * opacités d'origine sont conservées telles quelles : c'est la hiérarchie du texte, et
+         * elle ne dépend pas de la couleur.
+         */
+        const encreTuile = encreSur(teinte);
+        const encre = (a: number) =>
+          `color-mix(in srgb, ${encreTuile} ${Math.round(a * 100)}%, transparent)`;
+        /**
+         * Le vert et le rouge de la performance, ramenés dans la plage lisible sur *cette*
+         * tuile.
+         *
+         * ⚠️ **Ils étaient fixes, ce qui supposait une tuile sombre.** Le vert `#4ade80` est
+         * clair : posé sur les plaques claires que l'aplat fait apparaître, il s'efface. Mesuré
+         * sur les tuiles de la page — **1,37:1 sur le vert NVDA**, 1,57 sur le blanc
+         * d'Alphabet, 1,11 sur le bleu pâle de XSX6, là où il tient 4,75 sur le bleu de SPY.
+         * Sous trois pour un, un chiffre de cette taille ne se lit plus ; le vert sur vert de
+         * NVDA ne se voyait tout simplement pas.
+         *
+         * ⚠️ **`pourContrasteSur` et non `pourFond`, et j'ai essayé l'autre d'abord.**
+         * `pourFond` ramène la couleur dans une plage réglée pour du blanc ou du noir : elle ne
+         * regarde jamais le fond réel. Sur la tuile NVDA elle faisait **passer le vert de 1,37 à
+         * 1,03** — le remède aggravait le mal, parce qu'une plage « lisible sur blanc » n'a rien
+         * à dire d'un fond vert. `pourContrasteSur` vise le contraste avec cette tuile-ci.
+         *
+         * ⚠️ **La teinte ne bouge pas, la clarté seule s'adapte.** Le vert doit rester
+         * reconnaissable comme « ça monte » : une couleur qui changerait de teinte selon la
+         * tuile ne serait plus un code, juste un décor.
+         */
+        const changeColor  = pourContrasteSur(change >= 0 ? "#4ade80" : "#f87171", teinte);
         const triangle     = change >= 0 ? "▲" : "▼";
         const changeStr    = `${triangle} ${Math.abs(change).toFixed(2)}%`;
 
@@ -198,24 +252,28 @@ export default function LiquidGlassTreemap({ assets: propAssets, onAssetClick }:
         // the point of these tiles is to read as the same object across pages.
         const tileRadius = 18;
 
-        const surface = tileSurface(asset.ticker, tileRadius);
+        const surface = surfaceAplat(teinte, tileRadius);
 
         const baseStyle: React.CSSProperties = {
           ...surface,
           position:             "absolute",
           left: x, top: y, width: w, height: h,
-          // The .novac-tile edge is painted from currentColor, so the brand
+          // The .novac-tile edge is painted from currentColor, so the tile
           // colour has to be set here for the border to pick it up.
-          color:                brandHex(asset.ticker),
-          // Hover lifts the tile; the surface underneath stays the one above.
+          color:                teinte,
+          /* Le survol soulève la tuile — ombre et échelle seulement. Il ajoutait aussi un
+             `backdrop-filter` plus fort, qui n'a plus rien à filtrer sous un aplat opaque. */
           ...(isHov ? {
-            backdropFilter:       "blur(26px) saturate(1.75) brightness(1.10)",
-            WebkitBackdropFilter: "blur(26px) saturate(1.75) brightness(1.10)",
             boxShadow: `0 20px 48px rgba(0,0,0,0.65), 0 8px 20px rgba(${cr},${cg},${cb},0.32), ${surface.boxShadow}`,
           } : {}),
           transform:            isHov ? "scale(1.07) translateY(-6px) translateZ(0)" : "scale(1) translateY(0) translateZ(0)",
           zIndex:               isHov ? 10 : 1,
-          transition:           "box-shadow 200ms ease, transform 200ms cubic-bezier(0.34,1.4,0.64,1), backdrop-filter 200ms ease, z-index 0ms",
+          /* ⚠️ La couleur est fondue parce qu'elle arrive en retard : elle se lit sur le logo,
+             donc après son chargement, et la tuile sautait du repli à la teinte du logo d'une
+             image à l'autre. Deux cent vingt millisecondes suffisent à en faire un passage
+             plutôt qu'un clignotement. Possible seulement depuis que la surface est un aplat —
+             les lavis d'avant étaient une propriété longue, qui ne s'interpole pas. */
+          transition:           "background-color 220ms ease, box-shadow 200ms ease, transform 200ms cubic-bezier(0.34,1.4,0.64,1), z-index 0ms",
           cursor:               "pointer",
           animationName:        "tileIn",
           animationDuration:    "300ms",
@@ -273,11 +331,10 @@ export default function LiquidGlassTreemap({ assets: propAssets, onAssetClick }:
           const spH = Math.min(Math.round(h * 0.35), 130);
           return (
             <div key={asset.ticker}
-              className="novac-tile"
+              className="novac-tile novac-tile-aplat"
               style={{ ...baseStyle, display: "flex", flexDirection: "column", padding: pad }}
-              onPointerMove={trackSpecular}
               onMouseEnter={() => setHovered(asset.ticker)}
-              onMouseLeave={e => { setHovered(null); releaseSpecular(e); }}
+              onMouseLeave={() => setHovered(null)}
               onClick={() => onAssetClick?.(asset.ticker)}
             >
               {showSpark && (
@@ -294,13 +351,12 @@ export default function LiquidGlassTreemap({ assets: propAssets, onAssetClick }:
               {/* Header */}
               <div style={{ position: "relative", display: "flex", alignItems: "center", gap: headerGap }}>
                 <AssetLogo ticker={asset.ticker} type={asset.type} size={logoSize} radius={Math.round(logoSize * 0.22)}
-                  fallbackBg={`rgba(${cr},${cg},${cb},0.18)`}
-                  fallbackBorder={`rgba(${cr},${cg},${cb},0.35)`}
-                  fallbackTextColor="#F8F9FC" bare/>
+                  fallbackBg="transparent" fallbackBorder="transparent"
+                  fallbackTextColor={encreSur(teinte)} bare/>
                 <div style={{ display: "flex", flexDirection: "column", gap: Math.max(2, tickerFs * 0.12), minWidth: 0 }}>
                   <span style={{
                     fontSize: tickerFs, fontWeight: 700, lineHeight: 1,
-                    color: "rgba(255,255,255,0.93)", fontFamily: FONT,
+                    color: encre(0.93), fontFamily: FONT,
                     letterSpacing: "-0.01em",
                     textShadow: "0 1px 2px rgba(0,0,0,0.30)",
                     whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
@@ -313,13 +369,13 @@ export default function LiquidGlassTreemap({ assets: propAssets, onAssetClick }:
                   {assetName(asset.ticker) && (
                     <span style={{
                       fontSize: Math.max(10, tickerFs * 0.46), fontWeight: 550, lineHeight: 1.1,
-                      color: "rgba(255,255,255,0.90)", fontFamily: FONT,
+                      color: encre(0.90), fontFamily: FONT,
                       whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
                     }}>
                       {assetName(asset.ticker)}
                     </span>
                   )}
-                  <span style={{ fontSize: weightFs, fontWeight: 700, lineHeight: 1, color: "rgba(255,255,255,0.50)", fontFamily: FONT, fontVariantNumeric: "tabular-nums" }}>
+                  <span style={{ fontSize: weightFs, fontWeight: 700, lineHeight: 1, color: encre(0.50), fontFamily: FONT, fontVariantNumeric: "tabular-nums" }}>
                     {asset.weight}%
                   </span>
                 </div>
@@ -329,12 +385,12 @@ export default function LiquidGlassTreemap({ assets: propAssets, onAssetClick }:
                 {asset.value != null ? (
                   <FlipValue
                     value={asset.value.toLocaleString("fr-FR", { maximumFractionDigits: 0 }) + " €"}
-                    style={{ fontSize: valFs, fontWeight: 700, color: "rgba(255,255,255,0.92)", fontFamily: FONT, fontVariantNumeric: "tabular-nums", letterSpacing: "0.01em" }}
+                    style={{ fontSize: valFs, fontWeight: 700, color: encre(0.92), fontFamily: FONT, fontVariantNumeric: "tabular-nums", letterSpacing: "0.01em" }}
                   />
                 ) : asset.price != null ? (
                   <FlipValue
                     value={fmtPrice(asset.price)}
-                    style={{ fontSize: valFs, fontWeight: 700, color: "rgba(255,255,255,0.82)", fontFamily: FONT, fontVariantNumeric: "tabular-nums", letterSpacing: "0.01em" }}
+                    style={{ fontSize: valFs, fontWeight: 700, color: encre(0.82), fontFamily: FONT, fontVariantNumeric: "tabular-nums", letterSpacing: "0.01em" }}
                   />
                 ) : null}
                 {perfBlock(perfFs)}
@@ -356,11 +412,10 @@ export default function LiquidGlassTreemap({ assets: propAssets, onAssetClick }:
             const showSpark = asset.spark && asset.spark.length > 1 && h > 80;
             return (
               <div key={asset.ticker}
-                className="novac-tile"
+                className="novac-tile novac-tile-aplat"
               style={{ ...baseStyle, display: "flex", flexDirection: "column", padding: pad }}
-                onPointerMove={trackSpecular}
-                onMouseEnter={() => setHovered(asset.ticker)}
-                onMouseLeave={e => { setHovered(null); releaseSpecular(e); }}
+                  onMouseEnter={() => setHovered(asset.ticker)}
+                onMouseLeave={() => setHovered(null)}
                 onClick={() => onAssetClick?.(asset.ticker)}
               >
                 {showSpark && (() => {
@@ -374,8 +429,8 @@ export default function LiquidGlassTreemap({ assets: propAssets, onAssetClick }:
                 {/* Header */}
                 <div style={{ position: "relative", display: "flex", flexDirection: "column", alignItems: "flex-start", gap: 3 }}>
                   <AssetLogo ticker={asset.ticker} type={asset.type} size={logoSize} radius={Math.round(logoSize * 0.22)}
-                    fallbackBg={`rgba(${cr},${cg},${cb},0.18)`} fallbackBorder={`rgba(${cr},${cg},${cb},0.35)`} fallbackTextColor="#F8F9FC" bare/>
-                  <span style={{ fontSize: tickerFs, fontWeight: 700, color: "rgba(255,255,255,0.90)", fontFamily: FONT,
+                    fallbackBg="transparent" fallbackBorder="transparent" fallbackTextColor={encreSur(teinte)} bare/>
+                  <span style={{ fontSize: tickerFs, fontWeight: 700, color: encre(0.90), fontFamily: FONT,
                     maxWidth: "100%", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                     {asset.ticker}
                   </span>
@@ -388,7 +443,7 @@ export default function LiquidGlassTreemap({ assets: propAssets, onAssetClick }:
                         ? asset.value.toLocaleString("fr-FR", { maximumFractionDigits: 0 }) + " €"
                         : fmtPrice(asset.price!)}
                       style={{ fontSize: Math.min(perfFs * 1.10, 17), fontWeight: 700,
-                        color: "rgba(255,255,255,0.88)", fontFamily: FONT, fontVariantNumeric: "tabular-nums" }}
+                        color: encre(0.88), fontFamily: FONT, fontVariantNumeric: "tabular-nums" }}
                     />
                   )}
                   {perfBlock(perfFs, 4)}
@@ -401,11 +456,10 @@ export default function LiquidGlassTreemap({ assets: propAssets, onAssetClick }:
           const showSpark = asset.spark && asset.spark.length > 1 && h > 65;
           return (
             <div key={asset.ticker}
-              className="novac-tile"
+              className="novac-tile novac-tile-aplat"
               style={{ ...baseStyle, display: "flex", flexDirection: "column", padding: pad }}
-              onPointerMove={trackSpecular}
               onMouseEnter={() => setHovered(asset.ticker)}
-              onMouseLeave={e => { setHovered(null); releaseSpecular(e); }}
+              onMouseLeave={() => setHovered(null)}
               onClick={() => onAssetClick?.(asset.ticker)}
             >
               {showSpark && (() => {
@@ -419,13 +473,13 @@ export default function LiquidGlassTreemap({ assets: propAssets, onAssetClick }:
               {/* Header */}
               <div style={{ position: "relative", display: "flex", alignItems: "center", gap: 7 }}>
                 <AssetLogo ticker={asset.ticker} type={asset.type} size={logoSize} radius={Math.round(logoSize * 0.22)}
-                  fallbackBg={`rgba(${cr},${cg},${cb},0.18)`} fallbackBorder={`rgba(${cr},${cg},${cb},0.35)`} fallbackTextColor="#F8F9FC" bare/>
+                  fallbackBg="transparent" fallbackBorder="transparent" fallbackTextColor={encreSur(teinte)} bare/>
                 <div style={{ display: "flex", flexDirection: "column", gap: 1, minWidth: 0 }}>
-                  <span style={{ fontSize: tickerFs, fontWeight: 700, lineHeight: 1, color: "rgba(255,255,255,0.90)", fontFamily: FONT,
+                  <span style={{ fontSize: tickerFs, fontWeight: 700, lineHeight: 1, color: encre(0.90), fontFamily: FONT,
                     whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
                     {asset.ticker}
                   </span>
-                  <span style={{ fontSize: tickerFs * 0.72, fontWeight: 700, lineHeight: 1, color: "rgba(255,255,255,0.55)", fontFamily: FONT, fontVariantNumeric: "tabular-nums" }}>
+                  <span style={{ fontSize: tickerFs * 0.72, fontWeight: 700, lineHeight: 1, color: encre(0.55), fontFamily: FONT, fontVariantNumeric: "tabular-nums" }}>
                     {asset.weight}%
                   </span>
                 </div>
@@ -438,7 +492,7 @@ export default function LiquidGlassTreemap({ assets: propAssets, onAssetClick }:
                       ? asset.value.toLocaleString("fr-FR", { maximumFractionDigits: 0 }) + " €"
                       : fmtPrice(asset.price!)}
                     style={{ fontSize: Math.min(perfFs * 1.10, 17), fontWeight: 700,
-                      color: "rgba(255,255,255,0.88)", fontFamily: FONT, fontVariantNumeric: "tabular-nums" }}
+                      color: encre(0.88), fontFamily: FONT, fontVariantNumeric: "tabular-nums" }}
                   />
                 )}
                 {perfBlock(perfFs, 4)}
@@ -453,18 +507,17 @@ export default function LiquidGlassTreemap({ assets: propAssets, onAssetClick }:
         const perfFs   = Math.min(10, Math.max(7, minDim * 0.10));
         return (
           <div key={asset.ticker}
-            className="novac-tile"
+            className="novac-tile novac-tile-aplat"
             style={{ ...baseStyle, display: "flex", flexDirection: "column",
               alignItems: "center", justifyContent: "center", gap: 2, padding: 5 }}
-            onPointerMove={trackSpecular}
             onMouseEnter={() => { setHovered(asset.ticker); setMiniPop({ asset, x, y, w, h }); }}
-            onMouseLeave={e => { setHovered(null); setMiniPop(null); releaseSpecular(e); }}
+            onMouseLeave={() => { setHovered(null); setMiniPop(null); }}
             onClick={() => onAssetClick?.(asset.ticker)}
           >
             <span style={{
               position: "relative",
               fontSize: tickerFs, fontWeight: 700,
-              color: "rgba(255,255,255,0.88)", fontFamily: FONT,
+              color: encre(0.88), fontFamily: FONT,
               whiteSpace: "nowrap", textAlign: "center",
               maxWidth: "100%", overflow: "hidden", textOverflow: "clip",
             }}>

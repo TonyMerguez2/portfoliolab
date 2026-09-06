@@ -15,6 +15,7 @@ import {
 import { type EtatVie, VIE_AU_REPOS, creerVie } from "@/lib/avatarVie";
 import { COULEUR_PAR_DEFAUT, couleurDesYeux } from "@/lib/avatarCouleur";
 import { type MotifPlat, skinParCle } from "@/lib/avatarSkins";
+import { FONT } from "@/lib/typography";
 import type { FormeAvatar } from "@/lib/useCouleurAvatar";
 import { useMorphose } from "@/lib/useMorphose";
 
@@ -518,7 +519,14 @@ export default function AvatarNovac({
   const devant = useMemo(() => aplats.filter(m => m.devant), [aplats]);
 
   /** Un aplat, peint. Partagé par les deux groupes pour qu'ils ne divergent pas. */
-  const peindre = useCallback((m: MotifPlat, i: number) => (
+  const peindre = useCallback((m: MotifPlat, i: number) => m.texte ? (
+    /* Un texte à la place du tracé — voir `MotifPlat.texte`. Même remplissage, même détourage. */
+    <text key={i} x={m.texte.x} y={m.texte.y} fill={remplissage(m)} opacity={m.opacite}
+      fontSize={m.texte.taille} fontWeight={m.texte.graisse ?? 600} fontFamily={FONT}
+      letterSpacing={m.texte.espacement ?? 0} textAnchor="middle" dominantBaseline="middle"
+      clipPath={m.decoupe ? `url(#${m.decoupe}-${marque})` : undefined}
+      style={{ userSelect: "none", pointerEvents: "none" }}>{m.texte.contenu}</text>
+  ) : (
     <path key={i} d={m.d} fill={remplissage(m)} className={m.classe}
       opacity={m.opacite} fillRule={m.regleDeRemplissage}
       clipPath={m.decoupe ? `url(#${m.decoupe}-${marque})` : undefined}

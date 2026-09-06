@@ -209,7 +209,7 @@ export default function AssetHeroCard({
                   <button
                     onClick={toggleFavorite}
                     className="shared-asset-hero-star"
-                    title={isFavorite ? "Retirer des favoris" : "Ajouter aux favoris"}
+                    aria-label={isFavorite ? "Retirer des favoris" : "Ajouter aux favoris"}
                     aria-pressed={isFavorite}
                   >
                     <svg width="13" height="13" viewBox="0 0 24 24" fill={isFavorite ? "#facc15" : "none"} stroke={isFavorite ? "#facc15" : "rgba(255,255,255,0.58)"} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">

@@ -1,4 +1,5 @@
 "use client";
+import TitreDeCarte from "@/components/ui/TitreDeCarte";
 import { useEffect, useMemo, useState } from "react";
 
 import { CountryFlagRounded } from "@appica/country-flags-react";
@@ -292,10 +293,7 @@ export default function EvenementsAVenir({
   return (
     <div data-avatar="curieux"
       style={{ display: "flex", flexDirection: "column", gap: 12, minHeight: 0, flex: 1 }}>
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10 }}>
-        <span style={{ fontFamily: FONT, fontSize: 13, fontWeight: 600, color: CLAIR.texte }}>
-          Événements à venir
-        </span>
+      <TitreDeCarte style={{ marginBottom: 0 }} action={<>
 
         {/* Le jour retenu au calendrier, et de quoi le relâcher.
             ⚠️ Sans cette pastille, une liste filtrée sur une journée creuse
@@ -303,7 +301,7 @@ export default function EvenementsAVenir({
             actif, ni comment en sortir. */}
         {jour && (
           <button type="button" onClick={onEffacerJour}
-            title="Voir toutes les échéances"
+            aria-label="Voir toutes les échéances"
             style={{
               display: "inline-flex", alignItems: "center", gap: 6, cursor: "pointer",
               padding: "3px 8px", borderRadius: RAYONS.plein,
@@ -314,7 +312,7 @@ export default function EvenementsAVenir({
             <span aria-hidden="true" style={{ fontSize: 12, lineHeight: 1 }}>×</span>
           </button>
         )}
-      </div>
+      </>}>Événements à venir</TitreDeCarte>
 
       <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
         {FILTRES.map(f => {
@@ -414,8 +412,8 @@ export default function EvenementsAVenir({
                 fallbackBg={CLAIR.carteCreuse} fallbackBorder={CLAIR.bord}
                 fallbackTextColor={CLAIR.texteSecondaire} bare />
             ) : typeof e.pays === "string" && e.pays.length === 2 ? (
+              /* ⚠️ Sans `title` : la bibliothèque le rend en infobulle native, bannie du site. */
               <CountryFlagRounded code={e.pays} size={28}
-                title={e.ticker ?? undefined}
                 style={{ flexShrink: 0, display: "block" }} />
             ) : (
               <span style={{
@@ -495,7 +493,7 @@ export default function EvenementsAVenir({
                 ? analyse?.impacts[e.ticker] : undefined;
               if (!st) return null;
               return (
-                <span title={`Amplitude moyenne du titre sur ses ${st.echantillon} derniers `
+                <span aria-label={`Amplitude moyenne du titre sur ses ${st.echantillon} derniers `
                   + `trimestres, ramenée à son poids de ${st.exposition.toFixed(1)} %`}
                   style={{
                     ...NUM, fontSize: 10, fontWeight: 700, flexShrink: 0,
@@ -533,7 +531,6 @@ export default function EvenementsAVenir({
                 telecharger(e);
               }}
               aria-label={`Ajouter « ${e.libelle} » à l’agenda`}
-              title="Ajouter à l’agenda"
               style={{
                 width: 22, height: 22, flexShrink: 0, padding: 0, cursor: "pointer",
                 borderRadius: RAYONS.xs, border: `1px solid ${CLAIR.bord}`,

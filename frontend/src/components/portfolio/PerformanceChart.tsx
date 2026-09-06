@@ -12,7 +12,8 @@ import { FONT, NUM } from "@/lib/typography";
 import { enTetesAuth } from "@/lib/session";
 import { COULEUR_OP, COULEUR_OP_CLAIR, GLYPHE_OP, type TypeOp } from "@/lib/journal";
 import { useModeTheme, resoudreJeton } from "@/lib/theme";
-import { RAYONS, JETONS } from "@/lib/palette";
+import { RAYONS, JETONS, CLAIR } from "@/lib/palette";
+import { FlecheTendance, pastille } from "@/components/portfolio/PastilleVariation";
 import { agregerEnBougies } from "@/lib/chart/series";
 import { ancresParJour, dominante, jourAncre } from "@/lib/chart/reperes";
 import { cleSource } from "@/lib/chart/sourceSerie";
@@ -22,6 +23,9 @@ import {
   type Sticker,
 } from "@/lib/chart/stickers";
 import Segments from "@/components/ui/Segments";
+import BoutonOutil from "@/components/ui/BoutonOutil";
+import MarqueMode from "@/components/charts/MarqueMode";
+import FiligraneNovac from "@/components/charts/FiligraneNovac";
 import { API_URL as API } from "@/lib/api";
 import { marqueAvatar } from "@/lib/avatarEtats";
 
@@ -259,40 +263,6 @@ function Pictogramme({ type, taille = GLYPHE }: { type: string; taille?: number 
 }
 
 /**
- * Le pictogramme d'un mode d'affichage.
- *
- * Trois glyphes pleins, sur une boîte de 24 unités, rendus à 14 px comme les
- * autres icônes du bandeau. Ils sont en `fill` et non en trait : c'est le jeu
- * dont ils viennent, et le mélanger avec des tracés au trait de 1,5 aurait donné
- * trois poids différents sur trois boutons voisins.
- *
- * Chaque glyphe désigne l'état qu'il représente, et non celui qui suivrait un
- * clic. Le bouton unique qui faisait tourner les trois modes montrait le mode
- * suivant, parce qu'il n'avait aucun autre moyen d'annoncer où il menait ; une
- * piste à deux pastilles montre l'état retenu, donc chaque pastille porte le
- * sien.
- */
-function MarqueMode({ cible }: { cible: "ligne" | "bougie" }) {
-  const commun = {
-    width: 14, height: 14, viewBox: "0 0 24 24", fill: "currentColor",
-    "aria-hidden": true as const, style: { display: "block" },
-  };
-  if (cible === "bougie") {
-    return (
-      <svg {...commun}>
-        <path d="M6.167 3.25a.97.97 0 0 1 .965.859l.007.113v.973a1.944 1.944 0 0 1 1.94 1.798l.004.146v2.917a1.944 1.944 0 0 1-1.798 1.94L7.139 12v7.778a.972.972 0 0 1-1.938.114l-.007-.114V12a1.944 1.944 0 0 1-1.94-1.8l-.004-.145V7.139A1.945 1.945 0 0 1 5.049 5.2l.145-.004v-.973a.97.97 0 0 1 .973-.972M12 3.25a.97.97 0 0 1 .965.859l.007.113v8.75a1.945 1.945 0 0 1 1.94 1.8l.005.145v2.917a1.945 1.945 0 0 1-1.799 1.94l-.146.005a.973.973 0 0 1-1.937.114l-.007-.114-.146-.005a1.945 1.945 0 0 1-1.793-1.787l-.006-.153v-2.917a1.945 1.945 0 0 1 1.799-1.94l.146-.004v-8.75A.97.97 0 0 1 12 3.25M17.833 3.25a.97.97 0 0 1 .966.859l.007.113a1.944 1.944 0 0 1 1.94 1.799l.004.146v3.889a1.944 1.944 0 0 1-1.799 1.94l-.145.005v7.778a.973.973 0 0 1-1.938.114l-.007-.114V12a1.944 1.944 0 0 1-1.94-1.8l-.004-.145v-3.89a1.945 1.945 0 0 1 1.798-1.939l.146-.005a.97.97 0 0 1 .972-.972" />
-      </svg>
-    );
-  }
-  return (
-    <svg {...commun}>
-      <path d="M15.13 9.438a.97.97 0 0 1 1.355-.16l.091.08 3.89 3.882a.97.97 0 0 1 .275.56l.009.127v4.852a.97.97 0 0 1-.858.964l-.114.007H4.2l-.107-.009-.107-.02-.104-.032-.102-.045-.097-.057-.092-.068-.058-.053-.07-.08-.062-.086-.053-.094-.015-.034-.04-.1-.025-.102-.015-.105-.004-.107.009-.107.018-.102q.015-.057.034-.108l.045-.102.057-.097 3.89-5.824a.97.97 0 0 1 1.132-.378l.11.048 3.187 1.59z" />
-      <path d="M15.142 3.6a.973.973 0 0 1 1.344-.146l.09.08 3.89 3.883a.97.97 0 0 1-1.284 1.453l-.092-.08-3.136-3.13-4.18 5.005a.97.97 0 0 1-1.069.295l-.112-.048L7.43 9.334 5 12.568a.973.973 0 0 1-1.259.26l-.102-.066a.97.97 0 0 1-.262-1.257l.068-.102L6.36 7.521a.97.97 0 0 1 1.106-.331l.107.045 3.2 1.597z" />
-    </svg>
-  );
-}
-
-/**
  * L'habillage du canevas : texte, grille, réticule.
  *
  * lightweight-charts peint sur un canevas et ne sait pas résoudre `var(...)`.
@@ -388,7 +358,7 @@ function PanneauReglages({
           {TEINTES.map(t => {
             const actif = couleur.toLowerCase() === t.valeur.toLowerCase();
             return (
-              <button key={t.valeur} type="button" title={t.nom}
+              <button key={t.valeur} type="button" aria-label={t.nom}
                 aria-pressed={actif} onClick={() => surCouleur(t.valeur)}
                 style={{
                   width: 22, height: 22, borderRadius: RAYONS.xs, cursor: "pointer",
@@ -400,7 +370,7 @@ function PanneauReglages({
                 }} />
             );
           })}
-          <button type="button" title="Rendre la couleur du portefeuille"
+          <button type="button" aria-label="Rendre la couleur du portefeuille"
             onClick={() => surCouleur(null)}
             style={{
               width: 22, height: 22, borderRadius: RAYONS.xs, cursor: "pointer", padding: 0,
@@ -451,7 +421,6 @@ function PanneauStickers({
             const actif = arme === g;
             return (
               <button key={g} type="button" aria-pressed={actif}
-                title={actif ? "Cliquez sur la courbe pour le poser" : "Choisir ce sticker"}
                 // ⚠️ `pointerdown` et non `onClick` : le même appui sert aux deux
                 // gestes. Relâché sur place il arme le glyphe ; traîné jusqu'au
                 // graphique il l'y dépose. C'est le moteur de gestes qui tranche,
@@ -642,6 +611,12 @@ function fmtPct(pct: number): string {
   if (abs >= 1000) return `${signe}${pct.toFixed(0)}%`;
   return `${signe}${pct.toFixed(2)}%`;
 }
+
+/** Le nom entier de chaque fenêtre, pour l'infobulle des périodes non retenues. */
+const PERIOD_LABEL_LONG: Record<Period, string> = {
+  "24h": "Sur 24 heures", "1S": "Sur 1 semaine", "1M": "Sur 1 mois", "3M": "Sur 3 mois",
+  "6M": "Sur 6 mois", "1A": "Sur 1 an", "3A": "Sur 3 ans", "Max": "Depuis le début",
+};
 
 /** Fenêtres en secondes, pour découper la série Max période par période. */
 const PERIOD_SECS: Record<Period, number | null> = {
@@ -2525,80 +2500,101 @@ export default function PerformanceChart({
       : null;
 
   /**
-   * Les périodes : libellé, rendement de la période dessous, et un filet sous
-   * celle qui est active.
+   * Les périodes : une piste de pastilles, le rendement de la fenêtre sous chaque libellé.
    *
-   * Les huit pourcentages sont tirés d'une seule série — celle de la fenêtre
-   * Max — plutôt que d'un appel par période : sinon un même intervalle pourrait
-   * annoncer un chiffre une fois sélectionné et un autre au repos.
+   * ⚠️ **C'était une rangée de `div` cliquables avec un filet sous l'actif, et c'était la
+   * seule commande de la page à ne pas être sur piste.** Le découpage par compte juste
+   * au-dessus, le type de tracé, la répartition : tous en pastilles, l'option retenue en
+   * blanc. La période — la commande qu'on touche le plus — se lisait comme une ligne d'onglets
+   * d'un autre produit. Une `div` n'est pas non plus un bouton : ni tabulation, ni Entrée,
+   * ni focus visible ; le clavier n'y avait aucune prise.
    *
-   * Sorties du bandeau de tête et posées sous le cadre, centrées. Elles y
-   * laissent le haut du graphique à l'encart de survol, qui a besoin du coin
-   * gauche — c'est là que l'œil va chercher ce genre de lecture, et c'est là que
-   * la page graphique la met déjà.
+   * ⚠️ **Le rendement ne s'affiche que sur la période retenue, et la pastille retenue prend
+   * exactement le style de la pastille de performance du bandeau.** Les huit rendements ont d'abord été écrits sous
+   * chaque libellé, puis à côté : lisibles d'un coup, mais la rangée en devenait large et
+   * chargée, huit nombres teintés qui se disputaient l'œil. Demandé ensuite : ne le montrer
+   * que sur la pastille active, et à la taille de la pastille de performance du haut. La
+   * rangée redevient une simple liste de périodes ; le chiffre qui compte — celui de la
+   * fenêtre qu'on regarde — y est en relief, et il répète en petit ce que le bandeau dit en
+   * grand, dans la même forme. Les autres rendements restent lisibles au survol, dans
+   * l'infobulle de chaque période : l'information n'est pas perdue, elle attend qu'on la
+   * demande.
+   *
+   * ⚠️ **Les fenêtres plus anciennes que le portefeuille restent visibles, éteintes.** Elles
+   * se replieraient sur l'origine et répéteraient le chiffre de Max — trois nombres identiques
+   * laissent croire à trois mesures. Elles n'annoncent donc rien, ne se cliquent pas, et leur
+   * infobulle dit depuis quand le portefeuille existe. Retirées, la rangée changerait de
+   * forme le jour du premier anniversaire.
+   *
+   * Sous le cadre, calées à gauche : elles laissent le haut du graphique à l'encart de survol,
+   * qui a besoin du coin gauche.
    */
   const barrePeriodes = (
-    <div style={{ display: "flex", gap: 4, flexWrap: "wrap", justifyContent: "center" }}>
-      {PERIODES.map(p => {
-        const actif = p === period;
-        const pct = rendements[p];
-        // Une fenêtre plus ancienne que le portefeuille se replie sur son
-        // origine et répète le chiffre de Max. Trois nombres identiques
-        // laissent croire à trois mesures : mieux vaut les éteindre.
-        const secs = PERIOD_SECS[p];
-        const anterieure = !!origine && secs != null
-          && Date.now() - secs * 1000 < new Date(origine).getTime();
-        return (
-          <div key={p} onClick={() => { if (!anterieure) onPeriodChange(p); }}
-            title={anterieure ? `Le portefeuille n'existe que depuis le ${new Date(origine!).toLocaleDateString("fr-FR")}` : undefined}
+    /**
+     * ⚠️ **Calée à gauche, sur la marge du bouton « Total » du haut.** Elle a été centrée
+     * d'abord ; demandé ensuite de l'aligner sur la piste des comptes, pour que les deux
+     * rangées de commandes du cadre partent du même bord. Les deux vivent dans le même
+     * conteneur, sans rembourrage propre : un `margin: 0` suffit, et le bord gauche est le
+     * même au pixel.
+     *
+     * Le défilement horizontal reste pour les cadres étroits — vu à 800 px de large, la piste
+     * dépassait du cadre, et il faut pouvoir atteindre « Max ».
+     */
+    <div style={{ display: "flex", overflowX: "auto", scrollbarWidth: "none",
+                  paddingTop: 2, paddingBottom: 2 }}>
+      <div style={{ flexShrink: 0 }}>
+      <Segments
+        taille="sm"
+        sousEnLigne
+        ariaLabel="Période"
+        valeur={period}
+        onChange={onPeriodChange}
+        options={PERIODES.map(p => {
+          const actif = p === period;
+          const pct = rendements[p];
+          const secs = PERIOD_SECS[p];
+          const anterieure = !!origine && secs != null
+            && Date.now() - secs * 1000 < new Date(origine).getTime();
+          return {
+            valeur: p,
+            libelle: p,
+            desactive: anterieure,
+            titre: anterieure
+              ? `Le portefeuille n'existe que depuis le ${new Date(origine!).toLocaleDateString("fr-FR")}`
+              : !actif && pct != null ? `${PERIOD_LABEL_LONG[p]} : ${fmtPct(pct)}` : undefined,
             /**
-             * ⚠️ **La fenêtre éteinte ne publie rien, et le composant savait déjà pourquoi.**
-             * Trois lignes plus haut, `anterieure` désigne une fenêtre plus ancienne que le
-             * portefeuille : elle se replie sur son origine et **répète le chiffre de Max**.
-             * Le code refusait déjà de l'afficher — « trois nombres identiques laissent croire
-             * à trois mesures ». Le donner au visage aurait rendu la même erreur autrement :
-             * trois cases grises qui font toutes la même mimique, sur une mesure qui n'existe
-             * pas. `null` les laisse à « curieux », sans chiffre à surveiller.
+             * ⚠️ **La fenêtre éteinte ne publie rien au visage** : `null` la laisse à
+             * « curieux », sans chiffre à surveiller — voir `marqueAvatar`.
              */
-            {...marqueAvatar(anterieure ? null : pct)}
+            attributs: marqueAvatar(anterieure ? null : pct),
             /**
-             * ⚠️ Une largeur **minimale**, et non fixe. Les quarante-cinq pixels
-             * d'origine étaient plus étroits que leur propre contenu : mesuré à
-             * l'encre dans la police rendue, « +390.48 % » en occupe 58,2 et
-             * « +65.43 % » 50,6, pour un écart de 4 px entre deux cases. Quatre
-             * des huit pourcentages débordaient donc sur leurs voisins et se
-             * touchaient. Le défaut ne datait pas du déplacement de la barre,
-             * mais il devient voyant au centre de l'écran.
+             * ⚠️ **La pastille retenue *est* la pastille de performance du bandeau — le même
+             * style, pas une imitation.** Trois tentatives avant ça, toutes refusées à la vue :
+             * une pastille de variation enfermée dans la pastille blanche ; puis la pastille
+             * blanche colorée avec la variation à 13 px en graisse 700 ; puis la même au
+             * rapport de taille du bandeau. À chaque fois « les proportions ne sont pas les
+             * mêmes » — parce qu'on reprenait une partie des réglages et pas l'objet. Ici
+             * `pastille()` est posé tel quel sur le bouton : fond, encre, 11,5 px, graisse 600,
+             * 3 × 9 px de rembourrage, arrondi, interligne. Le libellé et la variation
+             * héritent tout ; rien n'est redit.
+             *
+             * ⚠️ **Hauteur libre et centrée dans la rangée.** La piste fixe ses boutons à
+             * 22 px ; la pastille du bandeau en fait 20. Elle se pose donc à sa propre hauteur,
+             * centrée, un pixel de jour de chaque côté — c'est le prix d'être identique.
              */
-            style={{ position: "relative", paddingBottom: 4, textAlign: "center",
-                     minWidth: 45, paddingLeft: 3, paddingRight: 3,
-                     cursor: anterieure ? "default" : "pointer", flex: "none",
-                     opacity: anterieure ? 0.3 : 1 }}>
-            <div style={{
-              fontFamily: FONT, fontSize: 12, fontWeight: 500,
-              // Leur variante d'onglets « line » : l'actif passe à
-              // `foreground-intense`, l'inactif reste à `foreground-strong`
-              // — bien plus lumineux que le gris que j'avais.
-              color: actif ? JETONS.texteIntense : JETONS.texteFort,
-              transition: "color 250ms",
-            }}>{p}</div>
-            {pct != null && !anterieure && (
-              <div style={{
-                ...NUM, fontSize: 11, fontWeight: 700,
-                color: pct >= 0 ? JETONS.positif : JETONS.negatif,
-              }}>
-                {fmtPct(pct)}
-              </div>
-            )}
-            {actif && (
-              // Indicateur blanc, comme leur `bg-foreground-intense`, et non
-              // teinté à l'accent : la couleur y désignait le graphique, pas
-              // l'onglet retenu.
-              <div style={{ position: "absolute", bottom: 0, left: 0, right: 0, height: 2, borderRadius: RAYONS.plein, background: JETONS.texteIntense }} />
-            )}
-          </div>
-        );
-      })}
+            styleActif: actif && pct != null && !anterieure
+              ? { ...pastille(pct >= 0 ? CLAIR.positif : CLAIR.negatif), height: "auto", alignSelf: "center" }
+              : undefined,
+            sous: actif && pct != null && !anterieure
+              ? <span style={{ display: "inline-flex", alignItems: "baseline", gap: 4 }}>
+                  <FlecheTendance hausse={pct >= 0} />
+                  {pct >= 0 ? "+" : ""}{pct.toFixed(2)} %
+                </span>
+              : undefined,
+          };
+        })}
+      />
+      </div>
     </div>
   );
 
@@ -2851,24 +2847,11 @@ export default function PerformanceChart({
         )}
         <div style={{ display: "flex", gap: 6, flexShrink: 0, position: "relative" }}>
         {/* Stickers : des repères libres, posés à la main sur le tracé. */}
-        <button type="button"
+        <BoutonOutil titre="Stickers" actif={stickersOuverts || stickerArme != null}
           onClick={e => {
             const r = e.currentTarget.getBoundingClientRect();
             setAncreStickers({ droite: window.innerWidth - r.right, haut: r.bottom + 6 });
             setStickersOuverts(v => !v);
-          }}
-          title="Stickers"
-          style={{
-            // Actif quand le panneau est ouvert **ou** qu'un glyphe attend d'être
-            // posé : le panneau se referme dès le clic sur la courbe, et sans ce
-            // second cas rien ne rappelait qu'on était encore armé.
-            background: stickersOuverts || stickerArme ? JETONS.segmentActif : JETONS.segmentPiste,
-            border: `1px solid ${stickersOuverts || stickerArme ? JETONS.segmentActif : JETONS.bord}`,
-            borderRadius: RAYONS.sm, width: 26, height: 26, cursor: "pointer", flexShrink: 0,
-            display: "flex", alignItems: "center", justifyContent: "center",
-            color: stickersOuverts || stickerArme ? JETONS.segmentEncre : JETONS.texteFort,
-            boxShadow: stickersOuverts || stickerArme ? JETONS.segmentOmbre : "none",
-            transition: "background 250ms, color 250ms",
           }}>
           {/* Sticker qui se décolle. Même compensation de graisse que le
               croisillon : 1,5 sur une boîte de 24 rendue à 14 ne pèserait que
@@ -2877,7 +2860,7 @@ export default function PerformanceChart({
             strokeWidth={2.6} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
             <path d="m20 12-2 .5A6.002 6.002 0 0 1 11.5 6l.5-2m8 8-8-8m8 8a8 8 0 1 1-8-8" />
           </svg>
-        </button>
+        </BoutonOutil>
 
         {/* Le glyphe qui suit le curseur pendant qu'on le traîne.
             Dans un portail et en position fixe : la carte du graphique rogne son
@@ -2907,21 +2890,11 @@ export default function PerformanceChart({
           />
         )}
 
-        <button type="button"
+        <BoutonOutil titre="Personnaliser la grille" actif={grilleOuverte}
           onClick={e => {
             const r = e.currentTarget.getBoundingClientRect();
             setAncreGrille({ droite: window.innerWidth - r.right, haut: r.bottom + 6 });
             setGrilleOuverte(v => !v);
-          }}
-          title="Personnaliser la grille"
-          style={{
-            background: grilleOuverte ? JETONS.segmentActif : JETONS.segmentPiste,
-            border: `1px solid ${grilleOuverte ? JETONS.segmentActif : JETONS.bord}`,
-            borderRadius: RAYONS.sm, width: 26, height: 26, cursor: "pointer", flexShrink: 0,
-            display: "flex", alignItems: "center", justifyContent: "center",
-            color: grilleOuverte ? JETONS.segmentEncre : JETONS.texteFort,
-            boxShadow: grilleOuverte ? JETONS.segmentOmbre : "none",
-            transition: "background 250ms, color 250ms",
           }}>
           {/* Croisillon fourni sur une boîte de 24, rendu à 14 comme les glyphes
               de la piste voisine.
@@ -2936,7 +2909,7 @@ export default function PerformanceChart({
             strokeWidth={2.6} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
             <path d="M3 8h18M3 16h18M8 3v18m8-18v18" />
           </svg>
-        </button>
+        </BoutonOutil>
 
         {grilleOuverte && ancreGrille && (
           <PanneauGrille
@@ -2947,21 +2920,11 @@ export default function PerformanceChart({
           />
         )}
 
-        <button type="button"
+        <BoutonOutil titre="Couleur de la courbe" actif={reglagesOuverts}
           onClick={e => {
             const r = e.currentTarget.getBoundingClientRect();
             setAncreReglages({ droite: window.innerWidth - r.right, haut: r.bottom + 6 });
             setReglagesOuverts(v => !v);
-          }}
-          title="Couleur de la courbe"
-          style={{
-            background: reglagesOuverts ? JETONS.segmentActif : JETONS.segmentPiste,
-            border: `1px solid ${reglagesOuverts ? JETONS.segmentActif : JETONS.bord}`,
-            borderRadius: RAYONS.sm, width: 26, height: 26, cursor: "pointer", flexShrink: 0,
-            display: "flex", alignItems: "center", justifyContent: "center",
-            color: reglagesOuverts ? JETONS.segmentEncre : JETONS.texteFort,
-            boxShadow: reglagesOuverts ? JETONS.segmentOmbre : "none",
-            transition: "background 250ms, color 250ms",
           }}>
           {/* Trois disques qui se chevauchent, en aplat : rien à compenser ici,
               une forme pleine garde son poids à toutes les échelles. */}
@@ -2969,7 +2932,7 @@ export default function PerformanceChart({
             <path d="M19.218 11.08a5.85 5.85 0 0 1-5.508 10.243q.2-.206.386-.429a7.8 7.8 0 0 0 1.745-6.001 7.82 7.82 0 0 0 3.377-3.813M4.795 11.075a7.79 7.79 0 0 0 9.155 4.58 5.85 5.85 0 0 1-2.632 5.133 5.854 5.854 0 0 1-9.044-4.357 5.85 5.85 0 0 1 2.376-5.255z" />
             <path d="M12.004 2.25a5.85 5.85 0 0 1 5.406 3.611 5.848 5.848 0 0 1-4.265 7.977A5.854 5.854 0 0 1 6.151 8.1l.004-.22a5.85 5.85 0 0 1 5.849-5.63" />
           </svg>
-        </button>
+        </BoutonOutil>
 
         {reglagesOuverts && ancreReglages && (
           <PanneauReglages
@@ -3017,6 +2980,8 @@ export default function PerformanceChart({
           // signal que le prochain clic ne déplacera pas la vue.
           cursor: stickerArme ? "crosshair" : undefined,
         }} />
+        {/* Le filigrane, sous les légendes et transparent aux gestes — voir `FiligraneNovac`. */}
+        <FiligraneNovac />
         {/* Repères d'opération, en surcouche.
             Le greffon de la bibliothèque les fait entrer dans l'échelle des
             prix : sur un portefeuille parti de zéro, loger les pastilles sous
@@ -3042,7 +3007,7 @@ export default function PerformanceChart({
               transform: "translate(-50%,-50%)",
               width: taille, height: taille, zIndex: choisi ? 7 : 6,
             }}>
-              <div role="button" tabIndex={0} title={k.titre}
+              <div role="button" tabIndex={0} aria-label={k.titre}
                 onPointerDown={e => {
                   e.preventDefault(); e.stopPropagation();
                   gesteRef.current = { type: "deplace", id: k.id, x0: e.clientX, y0: e.clientY, bouge: false };
@@ -3074,7 +3039,7 @@ export default function PerformanceChart({
                 <>
                   {/* Poignée au coin bas-droit : le coin est la convention, et il
                       évite de recouvrir l'emoji qu'on est en train de régler. */}
-                  <div role="button" tabIndex={-1} aria-label="Étirer le sticker" title="Étirer"
+                  <div role="button" tabIndex={-1} aria-label="Étirer le sticker"
                     onPointerDown={e => {
                       e.preventDefault(); e.stopPropagation();
                       gesteRef.current = { type: "etire", id: k.id, x0: e.clientX, y0: e.clientY, base: k.taille };
@@ -3085,7 +3050,7 @@ export default function PerformanceChart({
                       background: JETONS.segmentActif, border: `1px solid ${JETONS.bordFort}`,
                       cursor: "nwse-resize", boxShadow: JETONS.segmentOmbre, touchAction: "none",
                     }} />
-                  <button type="button" aria-label="Retirer le sticker" title="Retirer"
+                  <button type="button" aria-label="Retirer le sticker"
                     onPointerDown={e => e.stopPropagation()}
                     onClick={e => { e.stopPropagation(); retirerSticker(k.id); }}
                     style={{

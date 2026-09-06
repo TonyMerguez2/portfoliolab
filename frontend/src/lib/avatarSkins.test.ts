@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { ECRAN, PRESETS, SKINS, skinParCle, skinPourForme } from "./avatarSkins";
+import { DALLE_GAMEBOY, PRESETS, SKINS, skinParCle, skinPourForme } from "./avatarSkins";
 import { FORMES_AVATAR } from "./useCouleurAvatar";
 import { clartePercue, contraste, hexVersRvb } from "./couleur";
 import {
@@ -126,64 +126,85 @@ describe("carreauCube", () => {
   });
 });
 
-/** La couleur d'essai du terminal, et les couches qu'on lui compare. */
-const TERMINAL_ESSAI = { tete: "#5C8A3C", accent: "#000000", yeux: "#000000" };
-
 /**
  * Le plus bas relevé des yeux, sur cinquante images — clignements et regard compris.
  *
  * ⚠️ **Une mesure, pas une estimation.** La valeur vient d'un relevé de l'enveloppe des
  * yeux pendant l'animation : `x ∈ [−38,3 ; 31,3]`, `y ∈ [−35 ; 38,7]`. Elle est écrite ici
- * pour que le jour où quelqu'un rétrécit la dalle afin d'élargir le bandeau, le test
+ * pour que le jour où quelqu'un rétrécit la dalle afin d'élargir la façade, le test
  * échoue avant que les yeux ne soient rognés à l'écran.
  */
 const OEIL_LE_PLUS_BAS = 38.7;
 
 /**
- * Le boîtier et la dalle du terminal, retrouvés par leur géométrie et non par leur rang.
+ * La coque et la dalle du Game Boy, retrouvées par leur géométrie et non par leur rang.
  *
  * ⚠️ **La dalle est l'aplat opaque dont le tracé est exactement la région découpée.** C'est
  * la seule caractérisation stable : elle survit à l'insertion d'une couche, alors qu'un
- * index se décale au premier ajout — ce qui vient précisément d'arriver deux fois.
+ * index se décale au premier ajout. La coque est le troisième aplat — la face, après le
+ * rebord et la rainure.
  */
-function couchesDuTerminal() {
-  const skin = skinParCle("terminal");
-  const plats = skin.plats!(TERMINAL_ESSAI);
-  const region = skin.decoupes!(TERMINAL_ESSAI)[0].d;
+function couchesDuGameboy(tete = "#D9D3C9") {
+  const skin = skinParCle("gameboy");
+  const p = { ...skin.palette, tete };
+  const plats = skin.plats!(p);
+  const region = skin.decoupes!(p)[0].d;
   return {
-    boitier: plats[0].couleur!,
+    coque: plats[2].couleur!,
     dalle: plats.find(m => m.d === region && m.couleur)!.couleur!,
   };
 }
 
 describe("skins", () => {
-  it("propose l'uni, les trois ballons, la Terre, le terminal et l'astronaute", () => {
+  it("propose l'uni, les trois ballons, la Terre, l'astronaute, le chevalier, le classique et le Game Boy", () => {
+    /* ⚠️ Plus de « terminal » : retiré à la demande. Un portefeuille qui l'avait enregistré
+       retombe sur l'uni par `skinParCle`, sans lever. */
     expect(SKINS.map(s => s.cle))
-      .toEqual(["uni", "basket", "volley", "tennis", "terre", "terminal",
-                "astronaute", "chevalier"]);
+      .toEqual(["uni", "basket", "volley", "tennis", "terre",
+                "astronaute", "chevalier", "classique", "gameboy"]);
+    expect(skinParCle("terminal").cle).toBe("uni");
   });
 
   /**
-   * ⚠️ **Le terminal est réservé au carré arrondi, et c'est une demande explicite.** Son
-   * écran — vignettage, halo, balayage — est composé pour une surface à peu près carrée ;
-   * détouré par un triangle ou une goutte, il ne raconte plus un moniteur. Le laisser
-   * partout aurait produit des images fausses sur sept formes pour en servir une.
+   * ⚠️ **Le classique est un appareil, comme le Game Boy : carré seulement.** Sa dalle a
+   * ses propres retraits et sa propre forme, mais la même garde sous les yeux.
    */
-  it("réserve le terminal et l'astronaute au carré arrondi", () => {
-    expect(skinPourForme(skinParCle("terminal"), "carre")).toBe(true);
+  it("réserve le classique au carré et borne ses yeux à la dalle", () => {
+    const s = skinParCle("classique");
+    expect(skinPourForme(s, "carre")).toBe(true);
+    expect(skinPourForme(s, "sphere")).toBe(false);
+    expect(s.yeux!(s.palette).decoupe).toBe("dalle");
+    // ⚠️ Les yeux s'allument depuis l'accent : sur le site, `yeux` est la couleur des trous
+    // d'un visage uni, sombre — lue telle quelle, elle éteignait l'écran.
+    const sombre = { ...s.palette, yeux: "#121214" };
+    expect(s.yeux!(sombre).couleur).not.toBe("#121214");
+    expect(s.yeux!(sombre).couleur).toBe(s.yeux!(s.palette).couleur);
+    expect(s.decoupes!(s.palette).map(d => d.id)).toEqual(["dalle", "pomme"]);
+    // Les six bandes de la pomme sont là, détourées par le fruit ; rien d'écrit sur la dalle.
+    const plats = s.plats!(s.palette);
+    expect(plats.filter(m => m.decoupe === "pomme")).toHaveLength(6);
+    expect(plats.some(m => m.decoupe === "dalle" && m.couleur === s.palette.accent)).toBe(false);
+  });
+
+  /**
+   * ⚠️ **Les appareils sont réservés au carré arrondi.** Un écran, une façade et des boutons
+   * sont composés pour une surface à peu près carrée ; détourés par un triangle ou une
+   * goutte, ils ne racontent plus l'objet. Les laisser partout produirait des images fausses
+   * sur sept formes pour en servir une.
+   */
+  it("réserve le Game Boy et l'astronaute au carré arrondi", () => {
+    expect(skinPourForme(skinParCle("gameboy"), "carre")).toBe(true);
     expect(skinPourForme(skinParCle("astronaute"), "carre")).toBe(true);
     for (const f of ["sphere", "coussin", "hexagone", "triangle", "etoile", "goutte"]) {
       expect(skinPourForme(skinParCle("astronaute"), f)).toBe(false);
+      expect(skinPourForme(skinParCle("gameboy"), f)).toBe(false);
     }
     /**
      * ⚠️ **Le nom de la géométrie compte autant que celui des réglages.** Le carré
      * s'appelle `cube` côté solides, et le banc d'essai parle cette langue-là : sans la
      * table de synonymes, le skin y était introuvable — constaté à l'écran, aucun message.
      */
-    expect(skinPourForme(skinParCle("terminal"), "cube")).toBe(true);
-    for (const f of ["sphere", "coussin", "hexagone", "triangle", "etoile", "goutte"]) {
-      expect(skinPourForme(skinParCle("terminal"), f)).toBe(false);
-    }
+    expect(skinPourForme(skinParCle("gameboy"), "cube")).toBe(true);
   });
 
   /**
@@ -198,93 +219,36 @@ describe("skins", () => {
   });
 
   /**
-   * ⚠️ **Tout l'écran se déduit de la couleur choisie, rien n'est écrit en dur.** C'est ce
-   * qui permet au terminal d'être ambre ou bleu sans qu'on y retouche : un skin qui
-   * poserait ses propres teintes rendrait le réglage de couleur sans effet sur lui.
-   *
-   * ⚠️ **Le test nomme les couches qu'il compare, au lieu de toutes les balayer.** Sa
-   * première version exigeait qu'aucune couleur ne soit commune aux deux versions, et
-   * tombait sur les noirs du balayage et du cadre — qui sont volontairement fixes, parce
-   * qu'une ombre n'a pas de teinte. Comparer en bloc, c'était comparer ce qui ne doit pas
-   * changer.
-   *
-   * ⚠️ **Le halo se cherche par son identifiant, pas par son rang.** Il était lu à
-   * `degrades[0]` ; l'ajout de l'éclairage du boîtier en tête de liste a fait échouer ce
-   * test sur une couche volontairement achromatique — un faux négatif provoqué par une
-   * insertion, pas par une régression. Un dégradé porte déjà un nom pour être désigné par
-   * les aplats : s'en servir ici rend le test insensible à l'ordre.
+   * ⚠️ **La coque suit la couleur réglée, la dalle non.** C'est la règle qui permet à la
+   * console d'être grise, bleue ou noire sans qu'on y retouche : un skin qui poserait ses
+   * propres teintes rendrait le réglage de couleur sans effet. La dalle, elle, tient à
+   * l'accent — un cristal liquide ne change pas de vert avec la coque.
    */
-  it("accorde le fond, le halo et les yeux à la couleur choisie", () => {
-    const skin = skinParCle("terminal");
-    const pour = (tete: string) => {
-      const p = { tete, accent: "#000000", yeux: "#000000" };
-      return {
-        fond: skin.plats!(p)[0].couleur!,
-        halo: skin.degrades!(p).find(g => g.id === "halo")!.arrets[0].couleur,
-        yeux: skin.yeux!(p).couleur,
-      };
-    };
-    const vert = pour("#5C8A3C");
-    const ambre = pour("#B08A2E");
-    expect(vert.fond).not.toBe(ambre.fond);
-    expect(vert.halo).not.toBe(ambre.halo);
-    expect(vert.yeux).not.toBe(ambre.yeux);
+  it("accorde la coque à la couleur choisie, et la dalle à l'accent", () => {
+    const gris = couchesDuGameboy("#D9D3C9");
+    const bleu = couchesDuGameboy("#4A6FD9");
+    expect(gris.coque).not.toBe(bleu.coque);
+    expect(gris.dalle).toBe(bleu.dalle);
   });
 
-  /**
-   * ⚠️ **L'écran éteint est presque noir, et les yeux nettement plus clairs que lui.**
-   * C'est ce qui distingue un moniteur d'une pastille colorée : la teinte réglée ne peint
-   * pas la dalle, elle dit ce qui s'y allume. Sans cet écart, le symbole redevient un carré
-   * vert uni sur lequel les yeux ne se détachent plus.
-   */
-  it("garde le fond du terminal presque noir et les yeux lumineux", () => {
-    const { dalle } = couchesDuTerminal();
-    const yeux = skinParCle("terminal").yeux!(TERMINAL_ESSAI).couleur;
-    expect(clartePercue(dalle)).toBeLessThan(clartePercue("#5C8A3C"));
+  it("garde la dalle du Game Boy sombre et ses yeux lumineux", () => {
+    const { dalle } = couchesDuGameboy();
+    const skin = skinParCle("gameboy");
+    const yeux = skin.yeux!(skin.palette).couleur;
     expect(clartePercue(yeux)).toBeGreaterThan(clartePercue(dalle) + 40);
   });
 
-  /**
-   * ⚠️ **Le défaut que ce test retient est passé deux fois.** Le tour du terminal a d'abord
-   * été peint *plus sombre* que la dalle — `#070A04` contre `#10180B`, un rapport de 1,10 —
-   * au motif qu'un cadre sombre « laisse la dalle être la seule chose qu'on regarde ». À
-   * l'écran il n'existait pas : l'utilisateur a signalé deux fois qu'il n'y avait « que
-   * l'écran sur toute la forme ». Un skin peut se tromper de teinte sans qu'aucun test ne
-   * s'en aperçoive, parce qu'un hexadécimal différent suffit à faire croire à une
-   * différence ; c'est le *contraste* qu'il faut mesurer, jamais l'égalité des chaînes.
-   *
-   * ⚠️ **Deux pour la carrosserie, et l'ordre du rapport est vérifié aussi.** Sans la
-   * seconde assertion, un boîtier redevenu plus sombre passerait le seuil et le défaut
-   * reviendrait à l'identique. Le rapport de contraste est symétrique : il dit qu'elles
-   * diffèrent, pas laquelle est la plus claire.
-   */
-  it("rend le boîtier du terminal nettement plus clair que sa dalle", () => {
-    const { boitier, dalle } = couchesDuTerminal();
-    expect(contraste(boitier, dalle)).toBeGreaterThanOrEqual(2);
-    expect(clartePercue(boitier)).toBeGreaterThan(clartePercue(dalle));
+  it("rend la coque du Game Boy nettement plus claire que sa dalle", () => {
+    const { coque, dalle } = couchesDuGameboy();
+    expect(contraste(coque, dalle)).toBeGreaterThanOrEqual(2);
+    expect(clartePercue(coque)).toBeGreaterThan(clartePercue(dalle));
   });
 
-  /**
-   * ⚠️ **La dalle ne descend pas jusqu'aux yeux, et c'est mesuré, pas supposé.** Sur
-   * cinquante relevés — clignements et regard compris — les yeux tiennent dans
-   * `y ∈ [−35 ; 38,7]`. Rétrécir la vitre pour agrandir le bandeau finirait par leur
-   * couper le bas, et la consigne était explicite : ne pas toucher à leur géométrie. Ce
-   * test transforme cette marge en invariant, pour que le prochain réglage de proportion
-   * échoue ici plutôt qu'à l'écran.
-   */
-  it("laisse la dalle du terminal déborder sous les yeux", () => {
-    /* Le repère va de −100 à 100 : le bas de la vitre est à 100 moins son retrait. */
-    expect(100 - ECRAN.dalle.bas).toBeGreaterThan(OEIL_LE_PLUS_BAS + 10);
+  it("laisse la dalle du Game Boy déborder sous les yeux", () => {
+    /* Le repère va de −100 à 100 : le bas de la dalle est à 100 moins son retrait. */
+    expect(100 - DALLE_GAMEBOY.bas).toBeGreaterThan(OEIL_LE_PLUS_BAS + 10);
   });
 
-  /**
-   * ⚠️ **L'astronaute inverse la valeur du terminal, et c'est ce qui les distingue.** Coque
-   * claire, visière noire, là où le terminal est sombre et lumineux au centre. Posés côte à
-   * côte dans la rangée de réglages ils ne peuvent pas se confondre — ce qu'on ne pourrait
-   * pas dire de deux écrans de teintes différentes. Ce test tient cette inversion : une
-   * coque qui s'assombrirait au fil des retouches ramènerait les deux habillages au même
-   * objet sans que rien ne le signale.
-   */
   it("garde la coque de l'astronaute claire et sa visière noire", () => {
     const skin = skinParCle("astronaute");
     const p = { tete: "#4FA3E3", accent: "#000000", yeux: "#000000" };
@@ -321,40 +285,21 @@ describe("skins", () => {
   });
 
   /**
-   * ⚠️ **Le reflet est *une* couche employée deux fois, pas deux couches qui se
-   * ressemblent.** C'est la leçon la plus chère de ce fichier : chaque fois qu'un même
-   * dessin a été recopié — les `<defs>` du banc, le liseré des cartes, le conteneur des
-   * fenêtres — les copies ont fini par diverger, et toujours à l'écran plutôt qu'en test.
-   * Ce test tient le partage lui-même : si quelqu'un remplace un appel par un tracé écrit à
-   * la main pour « juste ajuster un peu », il échoue.
-   *
-   * ⚠️ **Et il vérifie que les deux intensités restent ordonnées.** La dalle du terminal
-   * porte déjà un halo, une bande et un peigne ; sa vitre doit renvoyer moins que la
-   * visière du casque, qui est nue. Uniformiser les deux serait le réflexe de quelqu'un qui
-   * range, et ferait une quatrième chose à regarder sur un écran qui en a déjà trois.
+   * ⚠️ **Le reflet de vitre est partagé entre le casque et le classique, et absent du Game
+   * Boy.** Les deux premiers ont une vitre ; le troisième a un cristal liquide mat, que le
+   * concept montre sans le moindre reflet. Un reflet posé dessus l'aurait fait lire comme
+   * un écran de verre.
    */
-  it("pose le même reflet sur la dalle du terminal et sur la visière du casque", () => {
+  it("pose le reflet de vitre devant le regard, sur le casque comme sur le classique", () => {
     const couche = (cle: string) => {
       const s = skinParCle(cle);
       return s.plats!(s.palette).find(m => m.degrade === "reflet")!;
     };
-    expect(couche("terminal").d).toBe(couche("astronaute").d);
-
-    /**
-     * ⚠️ **Et il passe devant le regard, sur les deux.** Un reflet est sur la face avant du
-     * verre : peint dessous, il donnait un verre derrière lequel les yeux flottaient sans
-     * être couverts, ce qui trahit qu'il n'y a pas vraiment de vitre. C'est le genre de
-     * détail qu'on remet dans le mauvais ordre en réorganisant une liste d'aplats, sans
-     * que rien ne le signale.
-     */
-    expect(couche("terminal").devant).toBe(true);
+    expect(couche("astronaute").d).toBe(couche("classique").d);
     expect(couche("astronaute").devant).toBe(true);
-
-    const force = (cle: string) => {
-      const s = skinParCle(cle);
-      return s.degrades!(s.palette).find(g => g.id === "reflet")!.arrets[0].opacite!;
-    };
-    expect(force("terminal")).toBeLessThan(force("astronaute"));
+    expect(couche("classique").devant).toBe(true);
+    const gb = skinParCle("gameboy");
+    expect(gb.plats!(gb.palette).some(m => m.degrade === "reflet")).toBe(false);
   });
 
   /**
@@ -369,8 +314,8 @@ describe("skins", () => {
    * message, sur le seul skin concerné — le genre de panne qu'on ne trouve qu'à l'œil.
    */
   it("enferme le regard des appareils dans leur vitre", () => {
-    for (const [cle, region] of [["terminal", "dalle"], ["astronaute", "visiere"],
-                                 ["chevalier", "fente"]] as const) {
+    for (const [cle, region] of [["gameboy", "dalle"], ["astronaute", "visiere"],
+                                 ["chevalier", "fente"], ["classique", "dalle"]] as const) {
       const skin = skinParCle(cle);
       expect(skin.yeux!(skin.palette).decoupe).toBe(region);
       expect(skin.decoupes!(skin.palette).map(c => c.id)).toContain(region);

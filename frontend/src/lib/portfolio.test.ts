@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { assetExchange } from "./assets";
 import { arrange, assetClass, compteInfere, enveloppe, relativeDay, valoriser, gainPeriode,
-  variationPonderee, type GridAsset, type Position } from "./portfolio";
+  variationPonderee, gainCumule, type GridAsset, type Position } from "./portfolio";
 
 const a = (ticker: string, o: Partial<GridAsset> = {}): GridAsset => ({
   ticker, weight: 10, price: 100, change: 1, value: 1000, perfEur: 10, ...o,
@@ -331,5 +331,32 @@ describe("variationPonderee", () => {
       { change: NaN, weight: 50 },
       { change: -2, weight: 50 },
     ])).toBe(-2);
+  });
+});
+
+describe("gainCumule", () => {
+  it("additionne ce que les cartes affichent, et rapporte au début de période", () => {
+    /**
+     * ⚠️ Le point que ce test fige : l'en-tête doit **retomber sur ses cartes**. Deux lignes
+     * qui affichent +30 € et +10 € font +40 € en haut, sans qu'une autre source de cours
+     * puisse s'y glisser. Le pourcentage se lit sur 1 960 € de départ (2 000 − 40), pas sur
+     * les 2 000 € d'aujourd'hui.
+     */
+    expect(gainCumule([
+      { value: 1500, perfEur: 30 },
+      { value: 500,  perfEur: 10 },
+    ])).toEqual({ eur: 40, pct: (40 / 1960) * 100 });
+  });
+
+  it("ignore les lignes sans cours au lieu de les compter pour zéro", () => {
+    const g = gainCumule([{ value: 1000, perfEur: -20 }, { value: 800, perfEur: null }]);
+    expect(g?.eur).toBe(-20);
+    // La ligne muette ne pèse pas non plus au dénominateur : on ne sait pas ce qu'elle valait.
+    expect(g?.pct).toBeCloseTo((-20 / 1020) * 100, 10);
+  });
+
+  it("rend null quand rien n'est chiffrable", () => {
+    expect(gainCumule([])).toBe(null);
+    expect(gainCumule([{ value: 10, perfEur: null }])).toBe(null);
   });
 });

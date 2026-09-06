@@ -520,7 +520,7 @@ export default function SimulationPage() {
             ]).map((row, index) => (
               <div
                 key={row.label}
-                title={row.help}
+                aria-label={row.help}
                 style={{
                   display: "flex",
                   alignItems: "center",
@@ -744,7 +744,7 @@ export default function SimulationPage() {
           <Field label="Incertitude">
             <button
               onClick={() => setParamUncertainty((v) => !v)}
-              title="Le rendement et la volatilité sont estimés sur un historique limité : on ne les connaît pas exactement. Cochée, chaque trajectoire utilise des valeurs légèrement différentes, tirées au sort dans la plage plausible. L'intervalle s'élargit beaucoup — c'est le prix de l'honnêteté."
+              aria-label="Le rendement et la volatilité sont estimés sur un historique limité : on ne les connaît pas exactement. Cochée, chaque trajectoire utilise des valeurs légèrement différentes, tirées au sort dans la plage plausible. L'intervalle s'élargit beaucoup — c'est le prix de l'honnêteté."
               style={{
                 display: "inline-flex",
                 alignItems: "center",
@@ -796,7 +796,7 @@ export default function SimulationPage() {
           <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: "10px" }}>
             <button
               onClick={() => setShowGlossary((v) => !v)}
-              title="Comprendre les réglages et le vocabulaire"
+              aria-label="Comprendre les réglages et le vocabulaire"
               style={{
                 width: "34px",
                 height: "34px",
@@ -880,7 +880,7 @@ function SegPills<T extends string | number>({
         return (
           <button
             key={opt.value}
-            title={opt.title}
+            aria-label={opt.title}
             onClick={() => onChange(opt.value)}
             style={{
               padding: "6px 11px",
@@ -946,7 +946,7 @@ function Histogram({ result, t }: { result: MonteCarloResult; t: ReturnType<type
         return (
           <div
             key={i}
-            title={`${fmtCompact(b.range_min)} – ${fmtCompact(b.range_max)} · ${b.pct}%`}
+            aria-label={`${fmtCompact(b.range_min)} – ${fmtCompact(b.range_max)} · ${b.pct}%`}
             style={{
               flex: 1,
               height: `${Math.max(2, (b.count / maxCount) * 100)}%`,

@@ -74,7 +74,7 @@ export default function PastilleEnveloppe({
    *  garde la même allure quelle que soit la taille. */
   const debord = Math.round(diametre * 0.11);
   return (
-    <span title={infobulle} style={{
+    <span aria-label={infobulle} style={{
       position: "absolute", top: -debord, right: -debord, zIndex: 12,
       width: diametre, height: diametre, borderRadius: RAYONS.plein,
       display: "flex", alignItems: "center", justifyContent: "center",

@@ -1,4 +1,5 @@
 "use client";
+import TitreDeCarte from "@/components/ui/TitreDeCarte";
 import type { Projection } from "@/hooks/useProjection";
 import {
   anneeDuMois, bande, bornes, chemin, echelles, graduations, montantCourt,
@@ -114,10 +115,7 @@ export default function ProjectionObjectif({
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 12, minHeight: 0, flex: 1 }}>
-      <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
-        <span style={{ fontFamily: FONT, fontSize: 13, fontWeight: 600, color: CLAIR.texte }}>
-          Projection de l’objectif
-        </span>
+      <TitreDeCarte style={{ marginBottom: 0 }} action={<>
         {/* Le choix de l'objectif projeté. Une liste et non un onglet : cinq objectifs
             tiennent dans un menu, pas dans une rangée d'onglets. */}
         {objectifs.length > 0 && (
@@ -141,7 +139,7 @@ export default function ProjectionObjectif({
             Modifier les paramètres
           </button>
         )}
-      </div>
+      </>}>Projection de l’objectif</TitreDeCarte>
 
       {objectifs.length === 0 && (
         <p style={{ margin: 0, fontFamily: FONT, fontSize: 11, color: CLAIR.texteFaible }}>

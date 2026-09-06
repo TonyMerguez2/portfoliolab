@@ -1,3 +1,4 @@
+import { FONT } from "@/lib/typography";
 import { useId } from "react";
 
 import type { Decoupe, Degrade, MotifPlat } from "@/lib/avatarSkins";
@@ -184,7 +185,6 @@ export function PastilleSkin({
     <button
       type="button"
       onClick={onClick}
-      title={titre}
       aria-label={titre}
       aria-pressed={retenue}
       className="nv-pastille"
@@ -220,12 +220,21 @@ export function PastilleSkin({
              * clignoteraient à côté des couleurs. Un aperçu montre le résultat, il ne le
              * joue pas ; c'est déjà la règle des vignettes de silhouette juste en dessous.
              */
+            m.texte ? (
+              /* Un texte à la place du tracé — voir `MotifPlat.texte`. */
+              <text key={i} x={m.texte.x} y={m.texte.y} opacity={m.opacite}
+                fill={m.degrade ? `url(#${m.degrade}-${marque})` : m.couleur ?? "none"}
+                fontSize={m.texte.taille} fontWeight={m.texte.graisse ?? 600} fontFamily={FONT}
+                letterSpacing={m.texte.espacement ?? 0} textAnchor="middle" dominantBaseline="middle"
+                clipPath={m.decoupe ? `url(#${m.decoupe}-${marque})` : undefined}>{m.texte.contenu}</text>
+            ) : (
             <path key={i} d={m.d} opacity={m.opacite}
               fill={m.degrade ? `url(#${m.degrade}-${marque})` : m.couleur ?? "none"}
               clipPath={m.decoupe ? `url(#${m.decoupe}-${marque})` : undefined}
               fillRule={m.regleDeRemplissage}
               stroke={m.trait ?? "none"} strokeWidth={m.epaisseur ?? 0}
               strokeLinejoin="round" strokeLinecap="round" />
+            )
           ))}
         </g>
       </svg>

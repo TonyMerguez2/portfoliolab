@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="1200" viewBox="0 0 1200 1200">
+  <!--
+    Le seul contour de la forme, sans remplissage.
+
+    Sert de masque CSS pour peindre un liseré tout autour du logo. Le biseau
+    décalé, lui, ne borde que deux côtés — il dit d'où vient la lumière, pas où
+    s'arrête la forme.
+
+    ⚠️ L'épaisseur est donnée dans les unités **locales** du tracé, avant la
+    matrice de placement qui l'agrandit d'un facteur 1,956. Trois unités ici
+    donnent donc ~5,9 unités de la boîte de 1200, soit un peu plus d'un pixel
+    quand le logo est rendu à 260. L'écrire dans les unités finales aurait donné
+    un liseré deux fois trop épais.
+
+    ⚠️ Le trait est centré sur le chemin : sa moitié intérieure est recouverte
+    par le corps du logo, qui est opaque. Ce qu'on voit est donc la moitié
+    extérieure — d'où une épaisseur apparente de moitié.
+  -->
+  <path fill="none" stroke="#000000" stroke-width="3"
+    stroke-linejoin="round" stroke-linecap="round"
+    transform="matrix(-0.004707 -1.956459 1.956459 -0.004707 599.999882 600.000164) translate(-425.281, -306.6755)"
+    d="M 850.56 114.13 L 494.63 114.13 C 456.17 114.13 424.99 82.95 424.99 44.49 L 424.99 0.00 L 208.33 0.00 L 208.33 205.05 L 332.13 205.05 C 370.60 205.05 401.77 236.23 401.77 274.69 L 401.77 274.69 C 401.77 281.73 403.45 288.36 406.36 294.27 C 405.67 294.24 404.99 294.17 404.30 294.17 L 0.00 294.17 L 0.00 499.22 L 355.94 499.22 C 394.40 499.22 425.57 530.40 425.57 568.86 L 425.57 613.35 L 642.23 613.35 L 642.23 408.30 L 518.43 408.30 C 479.97 408.30 448.79 377.12 448.79 338.66 L 448.79 338.66 C 448.79 331.62 447.11 324.99 444.20 319.08 C 444.89 319.11 445.57 319.18 446.27 319.18 L 850.56 319.18 L 850.56 114.13 Z" />
+</svg>

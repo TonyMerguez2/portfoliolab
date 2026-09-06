@@ -1,5 +1,5 @@
 "use client";
-import type { ReactNode } from "react";
+import type { CSSProperties, ReactNode } from "react";
 import { FONT } from "@/lib/typography";
 import { JETONS, RAYONS } from "@/lib/palette";
 
@@ -38,10 +38,41 @@ import { JETONS, RAYONS } from "@/lib/palette";
  * obligatoire en pratique — une icône seule n'a pas de texte, donc rien à
  * annoncer à un lecteur d'écran ni à montrer au survol.
  */
-export type Segment<T extends string> = { valeur: T; libelle: ReactNode; titre?: string };
+export type Segment<T extends string> = {
+  valeur: T; libelle: ReactNode; titre?: string;
+  /**
+   * Une seconde ligne sous le libellé — le rendement sous chaque période, par exemple.
+   *
+   * ⚠️ **Dès qu'une option en porte une, toutes les pastilles prennent la hauteur de la plus
+   * haute** : la piste est en flex, ses enfants s'étirent, et un libellé seul se centre dans
+   * la hauteur commune. Sans ça, une option muette aurait fait une pastille plus basse que
+   * ses voisines, et la piste une dentelure.
+   */
+  sous?: ReactNode;
+  /**
+   * Une option qu'on montre sans l'offrir : une fenêtre plus ancienne que le portefeuille.
+   *
+   * ⚠️ **Montrée éteinte plutôt que retirée**, pour que la rangée ne change pas de forme
+   * au fil des mois — et pour que l'infobulle puisse dire *pourquoi* on ne peut pas.
+   */
+  desactive?: boolean;
+  /** Attributs supplémentaires posés sur le bouton — les `data-*` que l'avatar lit. */
+  attributs?: Record<string, string | number | undefined>;
+  /**
+   * Le style de cette option **quand elle est retenue**, posé par-dessus celui de la piste.
+   *
+   * ⚠️ **Pour une option qui porte un résultat, pas pour décorer.** La période active du
+   * graphique devient, au pixel, la pastille de performance du bandeau — même fond, même
+   * encre, même taille de texte, même rembourrage. Deux mécanismes séparés (un fond, une
+   * encre) ne suffisaient pas : la pastille du bandeau est aussi une *taille*, et l'écart
+   * s'est vu tant qu'on ne reprenait que ses couleurs. La piste ne sait rien de ce que
+   * l'option veut dire ; c'est l'appelant qui décide, et seulement pour l'option retenue.
+   */
+  styleActif?: CSSProperties;
+};
 
 export default function Segments<T extends string>({
-  options, valeur, onChange, taille = "md", picto = false, ariaLabel,
+  options, valeur, onChange, taille = "md", picto = false, ariaLabel, sousEnLigne = false,
 }: {
   options: readonly Segment<T>[];
   valeur: T;
@@ -59,10 +90,22 @@ export default function Segments<T extends string>({
    */
   picto?: boolean;
   ariaLabel?: string;
+  /**
+   * La seconde ligne posée **à côté** du libellé plutôt que dessous.
+   *
+   * ⚠️ **Deux lignes coûtent 62 px de haut sous le graphique, et ça s'est vu.** Le rendement
+   * sous chaque période faisait une piste deux fois et demie plus haute que celle des comptes
+   * juste au-dessus, pour la commande qu'on touche le plus. Sur une ligne, la même information
+   * tient dans les 22 px de la piste voisine ; elle s'étale en largeur, dont le cadre a
+   * toujours à revendre — c'est la hauteur qui manque sous un graphique, jamais la largeur.
+   */
+  sousEnLigne?: boolean;
 }) {
   const petit = taille === "sm";
   // Leur échelle nommée, déjà en v4 : rounded-sm vaut 12 px, rounded-md 14.
   const rayon = petit ? 12 : RAYONS.md;
+  const avecSous = options.some(o => o.sous != null);
+  const deuxLignes = avecSous && !sousEnLigne;
 
   return (
     <div role="tablist" aria-label={ariaLabel} style={{
@@ -76,29 +119,42 @@ export default function Segments<T extends string>({
     }}>
       {options.map(o => {
         const actif = o.valeur === valeur;
+        const eteint = !!o.desactive;
         return (
           <button key={o.valeur} type="button" role="tab" aria-selected={actif}
-            onClick={() => onChange(o.valeur)}
-            title={o.titre} aria-label={o.titre}
+            aria-disabled={eteint || undefined}
+            onClick={() => { if (!eteint) onChange(o.valeur); }} aria-label={o.titre}
+            {...o.attributs}
             style={{
-              padding: picto ? 0 : petit ? "0 10px" : "0 13px",
+              // Sur deux lignes, la hauteur vient du contenu ; le rembourrage vertical
+              // remplace la hauteur fixe, et la piste égalise les pastilles entre elles.
+              padding: picto ? 0 : deuxLignes ? (petit ? "3px 9px" : "4px 11px") : petit ? "0 10px" : "0 13px",
               width: picto ? (petit ? 26 : 30) : undefined,
-              height: petit ? 22 : 26,
+              // Sur deux lignes, la hauteur vient du contenu ; à côté du libellé, la seconde
+              // ligne est de l'encre à la même taille et tient dans la hauteur nominale.
+              height: deuxLignes ? undefined : petit ? 22 : 26,
               borderRadius: rayon,
-              border: "none", cursor: "pointer", whiteSpace: "nowrap",
+              border: "none", cursor: eteint ? "not-allowed" : "pointer", whiteSpace: "nowrap",
               fontFamily: FONT, fontSize: petit ? 11 : 12,
-              fontWeight: 500,
+              fontWeight: 500, lineHeight: 1.2,
               // Une icône ne se cale pas sur une ligne de base comme du texte :
               // sans ce centrage, un pictogramme se posait deux pixels bas.
-              display: "inline-flex", alignItems: "center", justifyContent: "center",
+              display: "inline-flex", flexDirection: deuxLignes ? "column" : "row",
+              alignItems: "center", justifyContent: "center",
+              gap: deuxLignes ? 1 : avecSous ? 5 : 0,
               background: actif ? JETONS.segmentActif : "transparent",
               color: actif ? JETONS.segmentEncre : JETONS.segmentInactif,
               boxShadow: actif ? JETONS.segmentOmbre : "none",
+              // ⚠️ L'option éteinte garde sa place et son libellé, en retrait : retirée,
+              // la rangée changerait de forme selon l'âge du portefeuille.
+              opacity: eteint ? 0.35 : 1,
               transition: "background 250ms, color 250ms",
+              ...(actif ? o.styleActif : undefined),
             }}
-            onMouseEnter={e => { if (!actif) e.currentTarget.style.background = JETONS.segmentSurvol; }}
+            onMouseEnter={e => { if (!actif && !eteint) e.currentTarget.style.background = JETONS.segmentSurvol; }}
             onMouseLeave={e => { if (!actif) e.currentTarget.style.background = "transparent"; }}>
-            {o.libelle}
+            <span>{o.libelle}</span>
+            {o.sous != null && <span>{o.sous}</span>}
           </button>
         );
       })}

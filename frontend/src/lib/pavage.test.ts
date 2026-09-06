@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
-  blocsDuPortefeuille, classeEnClair, poidsLisibles, regrouperLesMiettes, totalDesBlocs,
+  blocsDuPortefeuille, classeEnClair, poidsLisibles, totalDesBlocs,
   type DossierPave,
 } from "./pavage";
 
@@ -160,48 +160,6 @@ describe("le silence", () => {
   });
 });
 
-describe("les miettes", () => {
-  it("réunit sous « Autres » ce qui deviendrait illisible", () => {
-    /**
-     * ⚠️ **La réponse à l'objection qui avait fait retirer la treemap de cet écran.** Une
-     * part de 1 % sur un panneau de trois centimètres devient un trait sans étiquette :
-     * mieux vaut la nommer avec ses semblables que la dessiner illisible.
-     */
-    const blocs = [
-      { cle: "a", nom: "A", valeur: 900, couleur: "#111" },
-      { cle: "b", nom: "B", valeur: 60, couleur: "#222" },
-      { cle: "c", nom: "C", valeur: 25, couleur: "#333" },
-      { cle: "d", nom: "D", valeur: 15, couleur: "#444" },
-    ];
-    const apres = regrouperLesMiettes(blocs);
-    expect(apres.map(b => b.nom)).toEqual(["A", "B", "2 autres"]);
-    expect(apres.find(b => b.cle === "autres")!.valeur).toBe(40);
-  });
-
-  it("ne change rien à la somme", () => {
-    // Regrouper ne doit jamais faire perdre un euro : le tout vaut toujours le portefeuille.
-    const blocs = [
-      { cle: "a", nom: "A", valeur: 900, couleur: "#111" },
-      { cle: "b", nom: "B", valeur: 25, couleur: "#222" },
-      { cle: "c", nom: "C", valeur: 15, couleur: "#333" },
-    ];
-    expect(totalDesBlocs(regrouperLesMiettes(blocs))).toBe(totalDesBlocs(blocs));
-  });
-
-  it("laisse tranquille un bloc seul sous le seuil", () => {
-    /** « 1 autres » serait un rectangle de même taille sous un nom moins précis. */
-    const blocs = [
-      { cle: "a", nom: "A", valeur: 990, couleur: "#111" },
-      { cle: "b", nom: "B", valeur: 10, couleur: "#222" },
-    ];
-    expect(regrouperLesMiettes(blocs).map(b => b.nom)).toEqual(["A", "B"]);
-  });
-
-  it("ne touche pas à un portefeuille vide", () => {
-    expect(regrouperLesMiettes([])).toEqual([]);
-  });
-});
-
 describe("la classe d'une ligne", () => {
   it("suit le type du fournisseur plutôt que la déduction sur le ticker", () => {
     /**
@@ -232,15 +190,28 @@ describe("les poids de mise en page", () => {
      * devient un filet de vingt pixels sur cinquante : aucune découpe ne le rend compact en
      * gardant les aires exactes. On relève donc son aire — et lui seul est faussé.
      */
-    const blocs = [bloc("gros", 5000), bloc("moyen", 4800), bloc("filet", 200)];
+    const blocs = [bloc("gros", 5000), bloc("moyen", 4800), bloc("filet", 100)];
     const poids = poidsLisibles(blocs);
-    expect(poids.find(p => p.bloc.nom === "filet")!.poids).toBeGreaterThan(0.05);
-    expect(poids.find(p => p.bloc.nom === "filet")!.bloc.valeur, "la valeur a bougé").toBe(200);
+    expect(poids.find(p => p.bloc.nom === "filet")!.poids).toBeGreaterThan(0.019);
+    expect(poids.find(p => p.bloc.nom === "filet")!.bloc.valeur, "la valeur a bougé").toBe(100);
+  });
+
+  it("garde une part de 8 % quatre fois plus grande qu'une part de 1 %", () => {
+    /**
+     * ⚠️ **La régression que ce test fige.** À 5,5 % de plancher, 8 % et 1 % faisaient la
+     * même tuile — vu à l'écran. Le plancher relève le filet, il ne doit pas l'égaler à ses
+     * voisins qui n'ont rien demandé.
+     */
+    const blocs = [bloc("gros", 9100), bloc("huit", 800), bloc("un", 100)];
+    const poids = poidsLisibles(blocs);
+    const huit = poids.find(p => p.bloc.nom === "huit")!.poids;
+    const un = poids.find(p => p.bloc.nom === "un")!.poids;
+    expect(huit / un).toBeGreaterThanOrEqual(3.9);
   });
 
   it("fait toujours une surface entière", () => {
     // Sans renormalisation, relever un bloc ferait déborder le pavage de son cadre.
-    const blocs = [bloc("a", 5000), bloc("b", 4800), bloc("c", 200), bloc("d", 60)];
+    const blocs = [bloc("a", 5000), bloc("b", 4800), bloc("c", 100), bloc("d", 30)];
     expect(poidsLisibles(blocs).reduce((s, p) => s + p.poids, 0)).toBeCloseTo(1, 10);
   });
 

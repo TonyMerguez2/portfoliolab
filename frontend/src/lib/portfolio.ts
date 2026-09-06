@@ -190,6 +190,39 @@ export function gainPeriode(valeur: number | null, variation: number | null): nu
 }
 
 /**
+ * Le gain de la période **tel que les cartes le portent**, additionné — et rapporté à ce que
+ * ces mêmes lignes valaient au début de la fenêtre.
+ *
+ * ⚠️ **L'en-tête additionne ses cartes au lieu de relire le gain du serveur, pour ne jamais
+ * pouvoir les contredire.** Les cartes portent le gain par ligne que `/history` calcule sur
+ * les mêmes écritures et les mêmes cours que le sélecteur de période ; la somme retombe donc
+ * sur ce gain — un test côté serveur le garantit. Mais quand ces lignes ne sont pas encore
+ * arrivées, ou que la route a échoué, les cartes retombent sur la variation du cours : lire
+ * alors le gain du serveur en haut aurait mis deux sources à l'écran. Mesuré avant cette
+ * mise en commun, le 4 septembre 2026 : 43 € en haut, 35 € en bas, sur la même journée,
+ * parce que les deux ne lisaient pas les mêmes clôtures. Quoi qu'affichent les cartes,
+ * l'en-tête en est la somme.
+ *
+ * ⚠️ **Le pourcentage se rapporte à la valeur de début, pas à la valeur d'aujourd'hui.** Un
+ * gain de 35 € sur 5 243 € fait 0,67 % ; le rapporter aux 5 278 € d'arrivée donnerait 0,66 %,
+ * et ce serait la seule ligne de la page à compter ainsi. La valeur de début se retrouve par
+ * différence : c'est l'inverse exact de `gainPeriode`.
+ *
+ * ⚠️ **Rend `null` quand aucune ligne n'est chiffrable**, pour la même raison que
+ * `variationPonderee` : un portefeuille sans cours n'a pas gagné zéro, on n'en sait rien.
+ */
+export function gainCumule(
+  lignes: { value: number | null; perfEur: number | null }[],
+): { eur: number; pct: number | null } | null {
+  const chiffrees = lignes.filter(l =>
+    typeof l.perfEur === "number" && isFinite(l.perfEur) && typeof l.value === "number");
+  if (!chiffrees.length) return null;
+  const eur   = chiffrees.reduce((s, l) => s + (l.perfEur as number), 0);
+  const debut = chiffrees.reduce((s, l) => s + ((l.value as number) - (l.perfEur as number)), 0);
+  return { eur, pct: debut > 0 ? (eur / debut) * 100 : null };
+}
+
+/**
  * Valorise les positions issues des transactions.
  *
  * La liste part des positions, pas de l'allocation cible : un actif soldé n'est

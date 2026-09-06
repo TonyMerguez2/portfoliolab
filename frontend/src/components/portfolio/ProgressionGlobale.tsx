@@ -1,4 +1,5 @@
 "use client";
+import TitreDeCarte from "@/components/ui/TitreDeCarte";
 import {
   agregat, alerteRepartition, euros, pourcentageLisible, type Objectif,
 } from "@/lib/objectifs";
@@ -65,9 +66,7 @@ export default function ProgressionGlobale({ objectifs, sommeDesParts }: {
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 6, minHeight: 0, flex: 1 }}>
-      <span style={{ fontFamily: FONT, fontSize: 13, fontWeight: 600, color: CLAIR.texte }}>
-        Progression globale
-      </span>
+      <TitreDeCarte style={{ marginBottom: 0 }}>Progression globale</TitreDeCarte>
 
       {objectifs.length === 0 ? (
         <p style={{ margin: 0, fontFamily: FONT, fontSize: 11, color: CLAIR.texteFaible }}>

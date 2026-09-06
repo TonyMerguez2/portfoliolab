@@ -161,14 +161,224 @@ export function clartePercue(hex: string): number {
   return y > 0.008856 ? 116 * Math.cbrt(y) - 16 : 903.3 * y;
 }
 
+/**
+ * L'**écart perçu** entre deux couleurs — la distance CIE76 dans l'espace L*a*b*.
+ *
+ * ⚠️ **Le rapport de contraste ne pouvait pas répondre à cette question-là, et il a donné une
+ * réponse fausse avec aplomb.** Il ne mesure que la **luminance** : deux couleurs de clarté
+ * voisine mais de teintes opposées y valent 1:1, alors que l'œil les sépare sans effort. Appliqué
+ * aux logos de la carte de chaleur, il réclamait une pastille pour **72 des 99** — dont l'œil vert
+ * de `NVDA` sur sa tuile mauve, parfaitement lisible, à 2,12 seulement. En `ΔE` le même couple
+ * mesure **100**, et le classement redevient celui qu'on voit.
+ *
+ * ⚠️ **Le contraste reste le bon outil pour du texte** : c'est pour lui qu'il est construit, et
+ * la lisibilité d'un glyphe fin dépend bien plus de la clarté que de la teinte. Les deux mesures
+ * coexistent parce qu'elles répondent à deux questions, pas parce qu'on hésite.
+ *
+ * ⚠️ **CIE76 et non CIEDE2000.** La formule récente corrige des écarts que l'on ne mesure pas ici :
+ * on trie des logos en deux tas, pas des nuanciers. Vingt lignes de plus pour un rang inchangé.
+ */
+export function ecartPercu(a: string, b: string): number {
+  const versLab = (hex: string): [number, number, number] => {
+    const lineaire = (v: number) => {
+      const c = v / 255;
+      return c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
+    };
+    const [r, v, bl] = hexVersRvb(hex).map(lineaire);
+    /* Blanc de référence D65, celui de sRGB. */
+    const X = (0.4124 * r + 0.3576 * v + 0.1805 * bl) / 0.95047;
+    const Y = 0.2126 * r + 0.7152 * v + 0.0722 * bl;
+    const Z = (0.0193 * r + 0.1192 * v + 0.9505 * bl) / 1.08883;
+    const f = (t: number) => (t > 0.008856 ? Math.cbrt(t) : 7.787 * t + 16 / 116);
+    return [116 * f(Y) - 16, 500 * (f(X) - f(Y)), 200 * (f(Y) - f(Z))];
+  };
+  const [l1, a1, b1] = versLab(a);
+  const [l2, a2, b2] = versLab(b);
+  return Math.hypot(l1 - l2, a1 - a2, b1 - b2);
+}
+
+/** Deux couleurs mélangées dans l'espace sRGB, `t` allant de l'une à l'autre. */
+export function melanger(a: string, b: string, t: number): string {
+  const [ra, ga, ba] = hexVersRvb(a);
+  const [rb, gb, bb] = hexVersRvb(b);
+  const u = Math.max(0, Math.min(1, t));
+  return rvbVersHex([ra + (rb - ra) * u, ga + (gb - ga) * u, ba + (bb - ba) * u]);
+}
+
 /** Le rapport de contraste entre deux couleurs, de 1 à 21. */
 export function contraste(a: string, b: string): number {
   const [x, y] = [luminance(a), luminance(b)].sort((p, q) => q - p);
   return (x + 0.05) / (y + 0.05);
 }
 
+/**
+ * La variation, en points de pourcentage, au-delà de laquelle la couleur ne se renforce plus.
+ *
+ * ⚠️ **Une échelle fixe, et non l'étendue des données du jour.** Une échelle qui s'ajuste au
+ * plus fort mouvement affiché repeint toute la carte quand un seul actif bouge : la même
+ * hausse de 1 % y paraît pâle un jour et soutenue le lendemain, et deux visites ne se
+ * comparent plus. Trois points est la convention des cartes de chaleur boursières, et c'est à
+ * peu près l'écart-type d'une séance sur une grande valeur.
+ */
+export const SEUIL_CHALEUR = 3;
+
+/**
+ * Le seuil de saturation, par période d'observation.
+ *
+ * ⚠️ **Un seuil unique aurait rendu toutes les longues périodes illisibles.** Sur une séance,
+ * ±3 % couvre l'essentiel des mouvements ; sur un an, la quasi-totalité des titres dépasse
+ * ±3 % et la carte devient **deux blocs unis**, l'un vert l'autre rouge, sans aucune nuance —
+ * la couleur cesse alors de porter une quantité pour ne dire qu'un signe. Les seuils
+ * ci-dessous suivent grossièrement la racine du temps, comme la volatilité : quatre fois la
+ * durée, deux fois l'amplitude.
+ *
+ * ⚠️ **Ils sont écrits et non calculés, parce qu'ils sont un choix de lecture.** Une échelle
+ * déduite de l'écart-type réel du jour serait « juste » mais mobile — et une carte dont
+ * l'échelle bouge n'est plus comparable à elle-même d'une visite à l'autre.
+ */
+export const SEUILS_PAR_PERIODE: Record<string, number> = {
+  "1j": 3,
+  "1s": 6,
+  "1m": 12,
+  "3m": 20,
+  "aaj": 35,
+  "1a": 50,
+};
+
+/**
+ * La couleur d'une tuile de carte de chaleur, selon la variation qu'elle porte.
+ *
+ * Gris neutre à zéro, vert de plus en plus soutenu à la hausse, rouge à la baisse, saturé au
+ * seuil. Les teintes sont celles de `--nv-positif` et `--nv-negatif` : la carte ne parle pas
+ * une autre langue que le reste de l'application.
+ *
+ * ⚠️ **La teinte est fixe de chaque côté, seules la saturation et la clarté portent
+ * l'intensité.** Interpoler entre un neutre ardoise et un vert ferait passer les petites
+ * hausses par le turquoise — une troisième couleur, que l'œil lit comme une troisième
+ * catégorie. En partant d'une saturation nulle, le neutre est un gris pur et aucune teinte
+ * intermédiaire n'apparaît : il n'y a que du vert plus ou moins présent.
+ *
+ * ⚠️ **Toutes les valeurs de la rampe portent du blanc, et c'est une contrainte de
+ * construction, pas un hasard.** La clarté plafonne à 0,30 côté hausse et 0,33 côté baisse
+ * (le rouge a besoin d'un peu plus pour rester rouge). Mesuré sur toute la rampe : **5,24:1 au
+ * pire**, contre le blanc, soit au-dessus des 4,5 du texte courant. C'est ce qui permet à
+ * l'encre de rester la même d'une tuile à l'autre — une carte dont le texte bascule du blanc
+ * au noir selon la case se lit comme deux cartes.
+ *
+ * ⚠️ **Le vert et le rouge de la performance restent lisibles dessus.** Mesuré : `#4ade80` sur
+ * sa propre tuile la plus saturée tient 3,01:1, `#f87171` sur la sienne 3,34:1 — le seuil du
+ * texte large, ce que sont ces chiffres. `pourContrasteSur` les laisse donc presque toujours
+ * intacts, au lieu de les déplacer à chaque tuile.
+ *
+ * ⚠️ **Les teintes se déduisent des deux couleurs, elles ne se recopient pas.** Écrire le degré
+ * à la main, c'est le voir s'écarter du jour où `--nv-positif` change de vert. Et surtout : la
+ * teinte de ce fichier est un **rapport entre zéro et un**, pas un angle en degrés. J'y ai posé
+ * `141.5` en croyant écrire des degrés — `canal()` ne replie l'argument que d'un tour, si bien
+ * que toutes les hausses sortaient **grises**. La baisse, elle, marchait : sa teinte vaut zéro,
+ * qui est la même dans les deux unités. Un demi-tableau juste est ce qui rend l'erreur difficile
+ * à voir ; relevé en mesurant les fonds rendus, pas à l'œil.
+ */
+/** La couleur des trois pôles d'une carte de chaleur. */
+export type PaletteChaleur = { hausse: string; baisse: string; neutre: string };
+
+/**
+ * La palette de secours — les valeurs des jetons, recopiées.
+ *
+ * ⚠️ **Ce module ne lit pas les jetons lui-même, et c'est une leçon payée.** J'y avais mis un
+ * `paletteChaleur()` qui appelait `resoudreJeton`, donc `getComputedStyle`, donc `theme.ts`,
+ * donc React. Ce fichier est une bibliothèque de couleurs **pure** : quatre fichiers de test —
+ * ceux de l'avatar et le sien — l'importent sans DOM, et se sont mis à échouer d'un coup sur
+ * « Cannot find package '@/lib/theme' ». Résoudre un jeton est une affaire de navigateur, donc
+ * de l'appelant ; ici on ne fait que des mathématiques sur des couleurs.
+ *
+ * ⚠️ **Les valeurs doivent suivre `globals.css`.** Elles ne servent qu'au rendu serveur et aux
+ * appelants qui ne résolvent rien ; si la palette y change, les recopier ici.
+ */
+export const PALETTE_SECOURS: PaletteChaleur = {
+  hausse: "#00D492",   // --nv-positif
+  baisse: "#FF6467",   // --nv-negatif
+  neutre: "#3d4757",   // --nv-bord-fort éclairci d'un quart vers --nv-texte-secondaire
+};
+
+/**
+ * ⚠️ **Les cases sont des nuances de la couleur, et non une rampe inventée.** Elles l'étaient :
+ * je construisais une teinte, une saturation et une clarté à la main, avec des plafonds
+ * différents pour le vert et le rouge. C'était juste au sens du contraste et faux au sens de la
+ * palette — la tuile la plus verte n'était **aucune** des couleurs de l'application. Elle est
+ * maintenant exactement `--nv-positif`, et les cases intermédiaires sont ce même vert posé de
+ * plus en plus densément sur le neutre. C'est la grammaire des crans `voile` et `doux`, qui
+ * sont déjà cette couleur à 10 % et 20 % — étendue en continu.
+ *
+ * ⚠️ **L'encre bascule, et il le faut.** Le vert de la palette est clair : à pleine intensité,
+ * du blanc dessus ne tient que 1,94:1, une encre sombre 9,66. `encreSur` choisit donc la bonne
+ * à chaque case, et le pire de toute la rampe est **4,9:1**. J'avais écrit ici qu'une encre qui
+ * bascule « se lit comme deux cartes » et j'avais bridé les couleurs pour l'éviter : c'était
+ * brider la palette pour sauver une règle que je m'étais donnée.
+ */
+export function couleurPerformance(
+  variation: number | null | undefined,
+  seuil = SEUIL_CHALEUR,
+  palette: PaletteChaleur = PALETTE_SECOURS,
+): string {
+  if (variation == null || !Number.isFinite(variation)) return palette.neutre;
+  const t = Math.max(-1, Math.min(1, variation / seuil));
+  return melanger(palette.neutre, t >= 0 ? palette.hausse : palette.baisse, Math.abs(t));
+}
+
 /** Encre presque noire plutôt que noire : le noir pur pique sur une couleur vive. */
 const ENCRE_SOMBRE = "#0B1220";
+
+/**
+ * La même teinte, poussée en clarté jusqu'à contraster avec un fond **donné**.
+ *
+ * ⚠️ **Ce n'est pas `pourFond`, et c'est la distinction qui compte.** `pourFondSombre` et
+ * `pourFondClair` ramènent une couleur dans une plage fixe, réglée pour du noir ou du blanc :
+ * elles ne regardent jamais le fond réel. Cela suffit tant que les fonds sont les deux thèmes
+ * de l'application ; cela ne suffit plus quand le fond est une couleur quelconque — la plaque
+ * d'un logo, par exemple. Mesuré sur la page des marchés : le vert de performance posé sur la
+ * tuile NVDA, elle-même verte, tient **1,37:1** ; passé par `pourFondClair` il tombe à 1,03,
+ * c'est-à-dire qu'il disparaît. La plage « lisible sur blanc » n'a rien à dire d'un fond vert.
+ *
+ * ⚠️ **La teinte et la saturation sont tenues, seule la clarté cède.** Un vert qui vire au
+ * bleu pour se détacher ne serait plus un code de hausse. C'est le même parti que
+ * `assombrirPourBlanc`, dont ceci généralise le principe à un fond quelconque et dans les deux
+ * sens : selon le fond, il faut parfois éclaircir.
+ *
+ * ⚠️ **Les deux sens sont essayés, et le plus proche gagne.** Sur un fond de clarté médiane,
+ * assombrir et éclaircir marchent tous les deux ; prendre le premier trouvé ferait basculer
+ * deux tuiles voisines dans des directions opposées pour un écart de fond d'un centième. On
+ * retient donc le moindre déplacement, ce qui est stable et garde la couleur la plus proche de
+ * celle d'origine.
+ *
+ * ⚠️ **Par dichotomie, comme `assombrirPourBlanc` et pour sa raison.** Un balayage au
+ * centième dépasse la cible d'un écart qui se voit — c'est mesuré là-bas. Vingt itérations
+ * placent le point au millionième près.
+ *
+ * La cible vaut 3 par défaut : le seuil AA du texte large, ce que sont les chiffres auxquels
+ * ceci sert. Pour du texte courant, demander 4,5.
+ */
+export function pourContrasteSur(couleur: string, fond: string, cible = 3): string {
+  if (contraste(couleur, fond) >= cible) return couleur;
+  const [h, s, l] = rvbVersTsl(hexVersRvb(couleur));
+  const a = (clarte: number) => rvbVersHex(tslVersRvb([h, s, clarte]));
+
+  const vers = (extreme: number): { ecart: number; hex: string } | null => {
+    if (contraste(a(extreme), fond) < cible) return null;
+    let proche = l, loin = extreme;
+    for (let i = 0; i < 20; i++) {
+      const milieu = (proche + loin) / 2;
+      if (contraste(a(milieu), fond) >= cible) loin = milieu; else proche = milieu;
+    }
+    return { ecart: Math.abs(loin - l), hex: a(loin) };
+  };
+
+  const candidats = [vers(0), vers(1)].filter(Boolean) as { ecart: number; hex: string }[];
+  /* Aucun des deux bouts n'atteint la cible : le fond est de clarté si médiane qu'aucune
+     variante de cette teinte ne s'en détache. On rend alors l'encre, qui abandonne la teinte
+     mais reste lisible — mieux vaut un chiffre gris qu'un chiffre invisible. */
+  if (!candidats.length) return encreSur(fond);
+  return candidats.sort((x, y) => x.ecart - y.ecart)[0].hex;
+}
 
 /**
  * L'encre à poser sur un fond coloré.

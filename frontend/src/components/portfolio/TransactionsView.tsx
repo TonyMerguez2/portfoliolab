@@ -1,4 +1,5 @@
 "use client";
+import TitreDeCarte from "@/components/ui/TitreDeCarte";
 import { useEffect, useMemo, useState } from "react";
 import AssetLogo from "@/components/AssetLogo";
 import { FONT, NUM } from "@/lib/typography";
@@ -122,7 +123,7 @@ const eur = (v: number, dec = 2) =>
  */
 function Carte({ children, style }: { children: React.ReactNode; style?: React.CSSProperties }) {
   return (
-    <Cadre style={{ padding: "13px 11px 13px 15px", display: "flex", flexDirection: "column", minHeight: 0, ...style }}>
+    <Cadre style={{ padding: "13px 15px", display: "flex", flexDirection: "column", minHeight: 0, ...style }}>
       {children}
     </Cadre>
   );
@@ -156,16 +157,9 @@ function Carte({ children, style }: { children: React.ReactNode; style?: React.C
  * aurait décalé la pilule de la colonne de valeurs qu'elle surmonte, laquelle s'aligne, elle,
  * sur le rembourrage.
  */
+/** L'en-tête commun à toutes les cartes — voir `TitreDeCarte`. */
 function Titre({ children, action }: { children: React.ReactNode; action?: React.ReactNode }) {
-  return (
-    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between",
-                  gap: 8, marginTop: -5, marginBottom: 5, flexShrink: 0 }}>
-      <span style={{ fontFamily: FONT, fontSize: 12.5, fontWeight: 600, color: "rgba(var(--nv-encre-rvb), 0.88)" }}>
-        {children}
-      </span>
-      {action}
-    </div>
-  );
+  return <TitreDeCarte action={action}>{children}</TitreDeCarte>;
 }
 
 function Ligne({ label, valeur, couleur }: { label: string; valeur: React.ReactNode; couleur?: string }) {

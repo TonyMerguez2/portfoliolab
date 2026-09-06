@@ -5,6 +5,8 @@ import { useApp } from "@/lib/AppContext";
 import { enTetesAuth } from "@/lib/session";
 import { surModification } from "@/lib/portefeuilleModifie";
 import { TRENDING } from "@/lib/assets";
+import { trierActifs } from "@/lib/triActifs";
+import type { OrdreActifs } from "@/lib/triActifs";
 import AssetLogo from "@/components/AssetLogo";
 import AvatarNovac from "@/components/AvatarNovac";
 import { lireApparenceAvatar } from "@/lib/useCouleurAvatar";
@@ -285,6 +287,16 @@ export default function GlobalHeader() {
   const [portfolios, setPortfolios] = useState<Portefeuille[]>([]);
   const [showTools, setShowTools] = useState(false);
   const [category, setCategory] = useState("all");
+  /**
+   * L'ordre de la liste, et les capitalisations qui le permettent.
+   *
+   * ⚠️ **« Pertinence » reste le défaut, parce que l'ordre reçu porte déjà une information.**
+   * Quand on a tapé quelque chose, c'est le classement de Yahoo par proximité au texte ; champ
+   * vide, c'est l'ordre du catalogue, du plus connu au moins connu. Trier par taille d'office
+   * ferait perdre les deux.
+   */
+  const [ordre, setOrdre] = useState<OrdreActifs>("pertinence");
+  const [capitalisations, setCapitalisations] = useState<Record<string, number>>({});
   const [displayCount, setDisplayCount] = useState(20);
   const [prices, setPrices] = useState<Record<string,Price>>({});
   const [tickerData, setTickerData] = useState<any[]>([]);
@@ -524,7 +536,45 @@ export default function GlobalHeader() {
     return () => { annule = true; };
   }, [showSearch, portfolios, chiffresPf]);
 
-  const displayAssets = localSearch ? searchResults.filter(a => category === "all" || a.type === category) : filteredAssets.slice(0, displayCount);
+  const assietteTri = localSearch
+    ? searchResults.filter(a => category === "all" || a.type === category)
+    : filteredAssets;
+
+  /**
+   * ⚠️ **Le tri porte sur la liste **entière**, jamais sur la page affichée.** La liste à champ
+   * vide se dévoile par vingt au défilement ; trier après la découpe classerait les vingt
+   * premiers entre eux et laisserait la plus grosse capitalisation au fond, invisible. On trie
+   * puis on découpe — l'ordre inverse donnerait un classement faux qui *paraît* juste.
+   */
+  const displayAssets = localSearch
+    ? trierActifs(assietteTri, ordre, capitalisations)
+    : trierActifs(assietteTri, ordre, capitalisations).slice(0, displayCount);
+
+  /**
+   * Les capitalisations des actifs qu'on pourrait avoir à classer.
+   *
+   * ⚠️ **Demandées seulement quand le tri les réclame.** Elles coûtent un aller-retour réseau
+   * par actif inconnu du cache serveur ; les charger d'office ferait payer ce prix à qui ne
+   * trie jamais.
+   *
+   * ⚠️ **Demandées pour toute l'assiette, pas pour la page.** Même raison que le tri : classer
+   * suppose de connaître tout ce qu'on classe.
+   */
+  useEffect(() => {
+    if (!showSearch || ordre !== "capitalisation") return;
+    const manquants = assietteTri.map(a => a.ticker).filter(t => !(t in capitalisations));
+    if (!manquants.length) return;
+    let vivant = true;
+    (async () => {
+      try {
+        const r = await fetch(`${API_URL}/api/v1/capitalisations?tickers=${encodeURIComponent(manquants.slice(0, 200).join(","))}`);
+        const d = await r.json();
+        if (vivant && d && typeof d === "object") setCapitalisations(prev => ({ ...prev, ...d }));
+      } catch { /* le tri retombe sur la pertinence pour les inconnus */ }
+    })();
+    return () => { vivant = false; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [showSearch, ordre, category, localSearch, searchResults.length]);
 
   /**
    * Ce que la palette propose, en une seule suite.
@@ -787,21 +837,54 @@ export default function GlobalHeader() {
             * avec sa marge négative — sans elle, la piste rogne son propre anneau de survol.
             */}
           <div style={{ padding:"10px 14px", borderBottom:`1px solid ${JETONS.bord}`,
-            overflowX:"auto", scrollbarWidth:"none" }}>
-            <Segments
-              taille="sm"
-              ariaLabel="Filtrer les résultats"
-              valeur={category}
-              onChange={v => { setCategory(v); setDisplayCount(20); }}
-              options={[
-                { valeur: "all", libelle: "Tous" },
-                { valeur: "PORTEFEUILLE", libelle: "Portefeuilles" },
-                { valeur: "EQUITY", libelle: "Actions" },
-                { valeur: "ETF", libelle: "Fonds" },
-                { valeur: "INDEX", libelle: "Indices" },
-                { valeur: "CRYPTOCURRENCY", libelle: "Crypto" },
-              ]}
-            />
+            display:"flex", alignItems:"center", gap:10 }}>
+            <div style={{ flex:1, minWidth:0, overflowX:"auto", scrollbarWidth:"none" }}>
+              <Segments
+                taille="sm"
+                ariaLabel="Filtrer les résultats"
+                valeur={category}
+                onChange={v => { setCategory(v); setDisplayCount(20); }}
+                options={[
+                  { valeur: "all", libelle: "Tous" },
+                  { valeur: "PORTEFEUILLE", libelle: "Portefeuilles" },
+                  { valeur: "EQUITY", libelle: "Actions" },
+                  { valeur: "ETF", libelle: "Fonds" },
+                  { valeur: "INDEX", libelle: "Indices" },
+                  { valeur: "CRYPTOCURRENCY", libelle: "Crypto" },
+                ]}
+              />
+            </div>
+            {/**
+              * ⚠️ **Un bouton à bascule, et non une septième pastille dans la piste de gauche.**
+              * Celle-ci répond à « quoi montrer » ; le tri répond à « dans quel ordre ». Les
+              * mêler ferait croire à un filtre de plus, et « Capitalisation » y **exclurait**
+              * les autres au lieu de les réordonner.
+              *
+              * ⚠️ **`flexShrink: 0`, parce que son voisin défile.** La piste des catégories peut
+              * déborder ; sans cette borne, le bouton serait le premier comprimé et son libellé
+              * se couperait avant que le défilement ne s'active.
+              */}
+            <button
+              type="button"
+              onClick={() => setOrdre(o => o === "capitalisation" ? "pertinence" : "capitalisation")}
+              aria-pressed={ordre === "capitalisation"}
+              aria-label={ordre === "capitalisation"
+                ? "Revenir à l'ordre par pertinence"
+                : "Classer par capitalisation, du plus gros au plus petit"}
+              style={{
+                flexShrink:0, display:"flex", alignItems:"center", gap:6,
+                padding:"5px 10px", borderRadius:8, cursor:"pointer",
+                fontSize:12, fontWeight:600, letterSpacing:"-0.01em",
+                border:`1px solid ${ordre === "capitalisation" ? "var(--nv-accent)" : JETONS.bord}`,
+                background: ordre === "capitalisation" ? "var(--nv-accent)" : "transparent",
+                color: ordre === "capitalisation" ? "#fff" : JETONS.texteSecondaire,
+              }}>
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none"
+                stroke="currentColor" strokeWidth="2.2" strokeLinecap="round">
+                <path d="M4 18h4M4 12h9M4 6h16" />
+              </svg>
+              Capitalisation
+            </button>
           </div>
 
           {/* ⚠️ La liste seule défile, et c'est elle qui porte la hauteur : `flex: 1` sur un
@@ -812,8 +895,13 @@ export default function GlobalHeader() {
             {resultats.map((r, i) => {
               /* L'en-tête paraît au premier de chaque genre, et nulle part ailleurs :
                  c'est la suite qui le décide, pas deux blocs écrits à la file. */
+              /* ⚠️ L'en-tête suit l'ordre, il ne le contredit pas. « POPULAIRES » décrivait
+                 l'ordre du catalogue ; laissé tel quel sous un tri par taille, il annonçait une
+                 chose et la liste en montrait une autre. */
               const entete = i === 0 || resultats[i - 1].genre !== r.genre
-                ? (r.genre === "portefeuille" ? "PORTEFEUILLES" : localSearch ? null : "POPULAIRES")
+                ? (r.genre === "portefeuille" ? "PORTEFEUILLES"
+                   : ordre === "capitalisation" ? "PAR CAPITALISATION"
+                   : localSearch ? null : "POPULAIRES")
                 : null;
               return (
                 <div key={r.cle}>

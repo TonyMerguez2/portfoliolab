@@ -15,7 +15,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 import pytest
 
-from app.services.portfolio_history import (courbe_portefeuille, twr_sur_fenetre,
+from app.services.portfolio_history import (courbe_portefeuille, twr_sur_fenetre, gains_par_ligne,
     dietz_sur_fenetre, simuler_benchmark)
 
 
@@ -540,3 +540,56 @@ def test_intraday_expose_le_capital_engage():
     assert [p["value"] for p in pts] == [1000.0, 1000.0, 1500.0]
     net = [p["value"] - p["invested"] for p in pts]
     assert net == [0.0, 0.0, -2.0], "seuls les frais subsistent, pas le versement"
+
+
+class TestGainsParLigne:
+    """Le gain de la fenêtre, titre par titre — et qui se somme au gain du portefeuille."""
+
+    @staticmethod
+    def _cas():
+        # A monte de 10 à 12 sur cinq jours ; on en tient 10 dès le début et on en
+        # rachète 10 le quatrième jour, à 12. B ne bouge pas.
+        d = jours(date(2026, 1, 1), 5)
+        cours = {"A": {d[0]: 10.0, d[1]: 11.0, d[2]: 12.0, d[3]: 12.0, d[4]: 12.0},
+                 "B": {j: 5.0 for j in d}}
+        txs = [tx("A", 10, 10.0, d[0]), tx("B", 4, 5.0, d[0]), tx("A", 10, 12.0, d[3])]
+        return d, cours, txs
+
+    def test_un_achat_dans_la_fenetre_n_est_pas_un_gain(self):
+        """
+        ⚠️ Le défaut que ce test fige : appliquer la hausse du cours à la quantité d'aujourd'hui.
+        Vingt parts × (12 − 10) feraient +40 € ; dix seulement ont vu la hausse, et les dix
+        autres ont été payées 12. Le gain réel est +20 €.
+        """
+        d, cours, txs = self._cas()
+        g = gains_par_ligne(txs, cours, d, d[0].isoformat())
+        assert g["A"]["gain_eur"] == pytest.approx(20.0)
+        assert g["B"]["gain_eur"] == pytest.approx(0.0)
+        # 20 € sur 220 € mis sur la table (100 + 120).
+        assert g["A"]["gain_pct"] == pytest.approx(20 / 220 * 100, abs=1e-3)  # arrondi à 4 décimales
+
+    def test_la_somme_des_lignes_est_le_gain_du_portefeuille(self):
+        """Même base, mêmes flux : les cartes doivent s'additionner au bandeau, au centime."""
+        d, cours, txs = self._cas()
+        r = courbe_portefeuille(txs, cours, d)
+        for depuis in (d[0], d[2], d[3]):
+            total = dietz_sur_fenetre(r["points"], depuis.isoformat())["gain_eur"]
+            lignes = gains_par_ligne(txs, cours, d, depuis.isoformat())
+            assert sum(l["gain_eur"] for l in lignes.values()) == pytest.approx(total, abs=1e-6)
+
+    def test_fenetre_ouverte_apres_le_premier_achat(self):
+        """Depuis le 3e jour : A vaut 120 la veille (10 × 12), 240 à la fin, 120 versés → 0."""
+        d, cours, txs = self._cas()
+        g = gains_par_ligne(txs, cours, d, d[3].isoformat())
+        assert g["A"]["gain_eur"] == pytest.approx(0.0, abs=1e-9)
+        assert g["A"]["value"] == pytest.approx(240.0)
+
+    def test_position_soldee_omise(self):
+        d = jours(date(2026, 1, 1), 3)
+        cours = {"A": {j: 10.0 for j in d}}
+        txs = [tx("A", 10, 10.0, d[0]), tx("A", 10, 10.0, d[2], side="SELL")]
+        assert "A" not in gains_par_ligne(txs, cours, d, d[0].isoformat())
+
+    def test_fenetre_vide(self):
+        d, cours, txs = self._cas()
+        assert gains_par_ligne(txs, cours, d, "2030-01-01") == {}

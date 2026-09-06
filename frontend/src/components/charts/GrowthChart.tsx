@@ -22,6 +22,12 @@ import {
 import { buildComparison, previousSessionClose } from "@/lib/chart/comparison";
 import { couleurGrille, LIBELLE_GRILLE, STYLES_GRILLE, type StyleGrille } from "@/lib/grille";
 import { API_URL } from "@/lib/api";
+import { resoudreJeton } from "@/lib/theme";
+import Segments from "@/components/ui/Segments";
+import BoutonOutil from "@/components/ui/BoutonOutil";
+import FiligraneNovac from "@/components/charts/FiligraneNovac";
+import { FlecheTendance, pastille } from "@/components/portfolio/PastilleVariation";
+import { CLAIR } from "@/lib/palette";
 
 // Fetch config par intervalle — charge tout le disponible Yahoo en un seul fetch
 const INTERVAL_FETCH_CONFIG: Record<string, { apiPeriod: string; apiInterval: string }> = {
@@ -622,7 +628,15 @@ export default function GrowthChart({
     try {
       const blackDisplay = displayMode === "black";
       const bg  = dark ? "rgba(0,0,0,0)" : "#ffffff";
-      const txt = blackDisplay ? "rgba(255,255,255,0.58)" : dark ? "var(--nv-texte-secondaire)" : "#64748b";
+      /**
+       * ⚠️ **Résolu en couleur véritable, pas laissé en `var(...)`.** lightweight-charts peint
+       * sur un canevas et ne sait rien faire d'une variable CSS : il retombait sur du noir, et
+       * les valeurs des deux axes disparaissaient sur le fond sombre — signalé à l'écran, et
+       * mesuré : « 200.0 », « 100.0 » rendus en encre sombre sur sombre. Le portefeuille passe
+       * déjà par `resoudreJeton` pour la même raison ; le secours reprend la valeur du thème.
+       */
+      const txt = blackDisplay ? "rgba(255,255,255,0.58)"
+        : resoudreJeton("--nv-texte-secondaire", dark ? "#99A1AF" : "#64748b");
       const initGrid = resolveGridPreset(gridPreset, displayMode, dark);
       const initVisible = gridPreset !== "none";
 
@@ -641,14 +655,14 @@ export default function GrowthChart({
         crosshair: {
           mode: CrosshairMode.Normal,
           vertLine: {
-            color: blackDisplay ? "rgba(255,255,255,0.28)" : dark ? "rgba(255,255,255,0.2)" : "var(--nv-texte-secondaire)",
+            color: blackDisplay ? "rgba(255,255,255,0.28)" : dark ? "rgba(255,255,255,0.2)" : resoudreJeton("--nv-texte-secondaire", "#64748b"),
             style: LineStyle.Solid,
             width: 1,
             labelBackgroundColor: blackDisplay ? "#202020" : dark ? "#334155" : "#1e293b",
             labelVisible: !hideControls,
           },
           horzLine: {
-            color: blackDisplay ? "rgba(255,255,255,0.28)" : dark ? "rgba(255,255,255,0.2)" : "var(--nv-texte-secondaire)",
+            color: blackDisplay ? "rgba(255,255,255,0.28)" : dark ? "rgba(255,255,255,0.2)" : resoudreJeton("--nv-texte-secondaire", "#64748b"),
             style: LineStyle.Solid,
             width: 1,
             labelBackgroundColor: blackDisplay ? "#202020" : dark ? "#334155" : "#1e293b",
@@ -993,7 +1007,9 @@ export default function GrowthChart({
   useEffect(() => {
     if (!chartRef.current) return;
     const bg  = dark ? "rgba(0,0,0,0)" : "#ffffff";
-    const txt = displayMode === "black" ? "rgba(255,255,255,0.58)" : dark ? "var(--nv-texte-secondaire)" : "#64748b";
+    // Même résolution que ci-dessus : le canevas ne lit pas les variables CSS.
+    const txt = displayMode === "black" ? "rgba(255,255,255,0.58)"
+      : resoudreJeton("--nv-texte-secondaire", dark ? "#99A1AF" : "#64748b");
     chartRef.current.applyOptions({
       layout: { background: { type: ColorType.Solid, color: bg }, textColor: txt },
     });
@@ -1543,32 +1559,19 @@ export default function GrowthChart({
       <div className="flex items-center justify-between px-2 py-1 shrink-0 gap-2">
         <div className="flex items-center min-w-0">{leftSlot ?? null}</div>
 
-        <div className="flex items-center gap-1 shrink-0">
+        <div className="flex items-center gap-1.5 shrink-0">
           {rightSlot}
 
           {/* Grid picker — dark mode only */}
           {dark && (
             <div style={{ position: "relative" }}>
-              <button
-                onClick={() => setShowGridPicker(v => !v)}
-                title="Personnaliser la grille"
-                className="chart-action-btn"
-                style={{
-                  width: 30, height: 30, borderRadius: 9,
-                  border: `1px solid ${showGridPicker ? "rgba(155,185,255,0.40)" : "rgba(255,255,255,0.12)"}`,
-                  background: showGridPicker ? "rgba(155,185,255,0.18)" : "rgba(255,255,255,0.06)",
-                  color: showGridPicker ? "#9BB9FF" : "rgba(255,255,255,0.4)",
-                  cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center",
-                  transition: "all 0.15s",
-                }}
-              >
-                <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth={1.5}>
-                  <line x1="0" y1="4.7" x2="14" y2="4.7"/>
-                  <line x1="0" y1="9.3" x2="14" y2="9.3"/>
-                  <line x1="4.7" y1="0" x2="4.7" y2="14"/>
-                  <line x1="9.3" y1="0" x2="9.3" y2="14"/>
+              <BoutonOutil actif={showGridPicker} onClick={() => setShowGridPicker(v => !v)} titre="Personnaliser la grille">
+                {/* Même croisillon que le bandeau du portefeuille, même graisse compensée. */}
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                  strokeWidth={2.6} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <path d="M3 8h18M3 16h18M8 3v18m8-18v18" />
                 </svg>
-              </button>
+              </BoutonOutil>
 
               {showGridPicker && (
                 <>
@@ -1685,6 +1688,8 @@ export default function GrowthChart({
         ) : (
           <div ref={containerRef} style={{ width: "100%", height: "100%" }} />
         )}
+        {/* Le filigrane, sous la légende et transparent aux gestes — voir `FiligraneNovac`. */}
+        {!hideControls && <FiligraneNovac />}
         <canvas
           ref={glowCanvasRef}
           style={{ position: "absolute", top: 0, left: 0, width: "100%", height: "100%", pointerEvents: "none", zIndex: 5, mixBlendMode: "screen" }}
@@ -1704,36 +1709,64 @@ export default function GrowthChart({
         )}
       </div>
 
-      {/* Comparison mode toggle */}
+      {/* Comparison mode toggle — la même piste que le reste, calée à gauche comme les périodes. */}
       {hasComparison && (
-        <div className="flex justify-center gap-2 pb-1 shrink-0">
-          {(["perf", "raw"] as const).map(m => (
-            <button key={m} onClick={() => setComparisonMode(m)} style={{
-              fontSize: 10, fontWeight: comparisonMode === m ? 700 : 500,
-              padding: "2px 10px", borderRadius: 5,
-              border: comparisonMode === m ? `1px solid ${portfolioColor}66` : "1px solid transparent",
-              color: comparisonMode === m ? portfolioColor : (dark ? "rgba(255,255,255,0.45)" : "var(--nv-texte-secondaire)"),
-              background: comparisonMode === m ? `${portfolioColor}18` : "transparent",
-              cursor: "pointer", transition: "all 0.15s",
-            }}>
-              {m === "perf" ? "Performance" : "Prix réel"}
-            </button>
-          ))}
+        <div style={{ display: "flex", padding: "4px 0 0", flexShrink: 0 }}>
+          <Segments
+            taille="sm"
+            ariaLabel="Lecture de la comparaison"
+            valeur={comparisonMode}
+            onChange={setComparisonMode}
+            options={[
+              { valeur: "perf" as const, libelle: "Performance", titre: "Les deux courbes ramenées à une base commune" },
+              { valeur: "raw" as const, libelle: "Prix réel", titre: "Chaque courbe à son prix" },
+            ]}
+          />
         </div>
       )}
 
-      {/* Period buttons */}
-      {!hideControls && <div className="flex justify-center gap-4 py-2 flex-wrap shrink-0">
-        {(["24h","1S","1M","3M","6M","1A","3A","Max"] as const).map(key => {
+      {/**
+        * Les périodes : la même piste que sous le graphique du portefeuille, aux mêmes règles.
+        *
+        * ⚠️ **Ce rail était l'ancien dessin du portefeuille — libellé, pourcentage dessous, filet
+        * de couleur sous l'actif — et il a été refait là-bas, en plusieurs passes, à l'écran.**
+        * Le reprendre ici tel quel, c'est reprendre les décisions déjà prises : de vrais boutons
+        * sur piste comme toutes les commandes de la page ; le rendement sur la période retenue
+        * seulement, et la pastille retenue prend *exactement* le style de la pastille de
+        * performance du bandeau — `pastille()` posé tel quel, vert ou rouge selon le signe ;
+        * les autres rendements dans l'infobulle ; les fenêtres qu'on ne peut pas servir
+        * montrées éteintes plutôt que retirées ; calée à gauche, défilement pour les cadres
+        * étroits. Voir `barrePeriodes` dans `PerformanceChart` pour le pourquoi de chacune.
+        *
+        * ⚠️ **Deux raisons d'éteindre, ici.** « 24 h » en comparaison entre places aux
+        * horaires différents, comme avant ; et une fenêtre qui remonte avant le premier point
+        * de l'historique — elle se replierait sur ce premier point et répéterait le chiffre de
+        * Max, trois nombres identiques pour trois mesures. C'est la règle de l'origine du
+        * portefeuille, transposée à l'historique du titre.
+        */}
+      {!hideControls && (() => {
+        const premierJour = periodSource.length ? String(periodSource[0].date).slice(0, 10) : null;
+        const fmt = (pct: number) => {
+          const sg = pct >= 0 ? "+" : ""; const a = Math.abs(pct);
+          return a >= 10000 ? `${sg}${(pct / 1000).toFixed(0)}k%` : a >= 1000 ? `${sg}${pct.toFixed(0)}%` : `${sg}${pct.toFixed(2)}%`;
+        };
+        const LONG: Record<string, string> = {
+          "24h": "Sur 24 heures", "1S": "Sur 1 semaine", "1M": "Sur 1 mois", "3M": "Sur 3 mois",
+          "6M": "Sur 6 mois", "1A": "Sur 1 an", "3A": "Sur 3 ans", "Max": "Sur tout l'historique",
+        };
+        const options = (["24h","1S","1M","3M","6M","1A","3A","Max"] as const).map(key => {
           const isActive = periodFilter === key;
+          const visibleSecs = (PERIOD_VISIBLE_SECS as Record<string, number | undefined>)[key] ?? null;
+          const cutStr = visibleSecs ? new Date(Date.now() - visibleSecs * 1000).toISOString().slice(0, 10) : null;
+          const verrouIntraday = intradayLocked && key === "24h";
+          // Une fenêtre plus ancienne que l'historique : le premier point est *après* son début.
+          const anterieure = !!premierJour && !!cutStr && key !== "24h" && premierJour > cutStr;
           let pct: number | null = null;
           if (isActive) {
             pct = periodPerfPct;
           } else if (key === "24h") {
             pct = dailyChangePct ?? null;
           } else {
-            const visibleSecs = (PERIOD_VISIBLE_SECS as Record<string, number | undefined>)[key] ?? null;
-            const cutStr = visibleSecs ? new Date(Date.now() - visibleSecs * 1000).toISOString().slice(0, 10) : null;
             // Same clamp as the active button, so no period claims a return
             // reaching back before the compared asset existed.
             const floor = comparisonStart && (!cutStr || comparisonStart > cutStr) ? comparisonStart : cutStr;
@@ -1748,77 +1781,76 @@ export default function GrowthChart({
               pct = (pts[pts.length - 1].value as number - (pts[0].value as number)) / (pts[0].value as number) * 100;
             }
           }
-          return (
-            <div
-              key={key}
-              className="relative pb-1 text-center w-[48px] flex-none"
-              title={intradayLocked && key === "24h"
-                ? "Indisponible en comparaison entre places aux horaires différents : une seule séance quotidienne ne suffit pas à comparer."
-                : undefined}
-              style={{
-                cursor: intradayLocked && key === "24h" ? "not-allowed" : "pointer",
-                opacity: intradayLocked && key === "24h" ? 0.35 : 1,
-              }}
-              onClick={() => { if (!(intradayLocked && key === "24h")) handlePeriodChange(key); }}
-            >
-              <div className="text-xs font-semibold" style={{ color: isActive ? portfolioColor : "var(--nv-texte-secondaire)" }}>
-                {key}
-              </div>
-              {pct !== null && (
-                <div className="text-xs font-bold tabular-nums"
-                  style={{ color: pct >= 0 ? "var(--nv-positif)" : "var(--nv-negatif)" }}>
-                  {(() => { const s = pct >= 0 ? "+" : ""; const a = Math.abs(pct); return a >= 10000 ? `${s}${(pct/1000).toFixed(0)}k%` : a >= 1000 ? `${s}${pct.toFixed(0)}%` : `${s}${pct.toFixed(1)}%`; })()}
-                </div>
-              )}
-              {isActive && (
-                <div className="absolute bottom-0 left-0 right-0 h-0.5 rounded-sm" style={{ background: portfolioColor }}/>
-              )}
+          const montre = isActive && pct != null && !verrouIntraday && !anterieure;
+          return {
+            valeur: key,
+            libelle: key,
+            desactive: verrouIntraday || anterieure,
+            titre: verrouIntraday
+              ? "Indisponible en comparaison entre places aux horaires différents : une seule séance quotidienne ne suffit pas à comparer."
+              : anterieure
+                ? `L'historique ne remonte qu'au ${new Date(premierJour!).toLocaleDateString("fr-FR")}`
+                : !isActive && pct != null ? `${LONG[key]} : ${fmt(pct)}` : undefined,
+            styleActif: montre
+              ? { ...pastille(pct! >= 0 ? CLAIR.positif : CLAIR.negatif), height: "auto", alignSelf: "center" as const }
+              : undefined,
+            sous: montre
+              ? <span style={{ display: "inline-flex", alignItems: "baseline", gap: 4 }}>
+                  <FlecheTendance hausse={pct! >= 0} />
+                  {fmt(pct!).replace("%", " %")}
+                </span>
+              : undefined,
+          };
+        });
+        return (
+          <div style={{ display: "flex", overflowX: "auto", scrollbarWidth: "none", padding: "6px 0", flexShrink: 0 }}>
+            <div style={{ flexShrink: 0 }}>
+              <Segments
+                taille="sm"
+                sousEnLigne
+                ariaLabel="Période"
+                valeur={periodFilter}
+                onChange={handlePeriodChange}
+                options={options}
+              />
             </div>
-          );
-        })}
-      </div>}
+          </div>
+        );
+      })()}
 
-      {/* Interval selector — uniquement en mode ticker */}
+      {/**
+        * Le pas des barres : la même piste, sous les périodes, calée sur le même bord.
+        *
+        * ⚠️ **Un pas interdit se montre éteint, avec la raison en infobulle.** Il était grisé
+        * sans un mot ; or il y a deux raisons distinctes de l'interdire — la période ne le
+        * prévoit pas, ou la comparaison entre places aux horaires différents le rend illisible —
+        * et l'épargnant ne peut pas deviner laquelle. Le pas quotidien reste offert quand
+        * l'intraday est verrouillé, sans quoi une période courte n'aurait plus aucun pas.
+        */}
       {!hideControls && ticker && (
-        <div className="flex justify-center gap-2 pb-2 shrink-0">
-          {(["1m","5m","15m","1h","1d","1W"] as const).map(iv => {
-            const allowed = PERIOD_ALLOWED_INTERVALS[periodFilter] ?? [];
-            const blockedByComparison = intradayLocked && ["1m","5m","15m","1h"].includes(iv);
-            // Short periods only list intraday intervals; when those are locked
-            // the daily bar becomes the fallback so the period stays usable.
-            const dailyFallback = intradayLocked && iv === "1d";
-            const isAllowed = (allowed.includes(iv) || dailyFallback) && !blockedByComparison;
-            const isActive  = intervalKey === iv;
-            return (
-              <button
-                key={iv}
-                disabled={!isAllowed}
-                title={blockedByComparison
-                  ? "Indisponible en comparaison : les deux actifs cotent sur des places aux horaires différents. À cette finesse, la courbe comparée serait un palier plat les trois quarts du temps."
-                  : undefined}
-                onClick={() => { if (isAllowed) { setIntervalKey(iv); onIntervalChange?.(iv); } }}
-                style={{
-                  fontSize: 10, fontWeight: isActive ? 700 : 500,
-                  padding: "2px 7px", borderRadius: 5,
-                  border: isActive
-                    ? `1px solid ${portfolioColor}66`
-                    : "1px solid transparent",
-                  color: !isAllowed
-                    ? (dark ? "rgba(255,255,255,0.15)" : "var(--nv-texte)")
-                    : isActive
-                      ? portfolioColor
-                      : (dark ? "rgba(255,255,255,0.45)" : "var(--nv-texte-secondaire)"),
-                  background: isActive
-                    ? `${portfolioColor}18`
-                    : "transparent",
-                  cursor: isAllowed ? "pointer" : "not-allowed",
-                  transition: "all 0.15s",
-                }}
-              >
-                {iv}
-              </button>
-            );
-          })}
+        <div style={{ display: "flex", overflowX: "auto", scrollbarWidth: "none", padding: "0 0 6px", flexShrink: 0 }}>
+          <div style={{ flexShrink: 0 }}>
+            <Segments
+              taille="sm"
+              ariaLabel="Pas des barres"
+              valeur={intervalKey}
+              onChange={iv => { setIntervalKey(iv); onIntervalChange?.(iv); }}
+              options={(["1m","5m","15m","1h","1d","1W"] as const).map(iv => {
+                const allowed = PERIOD_ALLOWED_INTERVALS[periodFilter] ?? [];
+                const blockedByComparison = intradayLocked && ["1m","5m","15m","1h"].includes(iv);
+                const dailyFallback = intradayLocked && iv === "1d";
+                const isAllowed = (allowed.includes(iv) || dailyFallback) && !blockedByComparison;
+                return {
+                  valeur: iv,
+                  libelle: iv,
+                  desactive: !isAllowed,
+                  titre: blockedByComparison
+                    ? "Indisponible en comparaison : les deux actifs cotent sur des places aux horaires différents. À cette finesse, la courbe comparée serait un palier plat les trois quarts du temps."
+                    : !isAllowed ? `Pas trop ${["1m","5m","15m","1h"].includes(iv) ? "fin" : "large"} pour la période ${periodFilter}` : undefined,
+                };
+              })}
+            />
+          </div>
         </div>
       )}
 

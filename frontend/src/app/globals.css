@@ -1174,6 +1174,49 @@ canvas + div {
   background-size: 256px 256px;
 }
 
+/* La tuile en aplat n'a rien à dissoudre.
+
+   Le tramage ci-dessus existe contre les paliers des lavis de `tileSurface()` ; une tuile
+   peinte d'une seule couleur — `surfaceAplat()`, pour que la plaque du logo s'y fonde — n'en
+   traverse aucun. Le bruit n'y masquerait plus rien et ferait le contraire de ce qu'on
+   demande : un fond uniforme. Le liseré, lui, reste — c'est `::before`, et il est voulu. */
+.novac-tile-aplat::after {
+  content: none;
+}
+
+/* Carte de chaleur : la tuile visée s'encadre.
+
+   ⚠️ **En CSS et non en React, et c'est la seule façon tenable.** La carte porte cinq cents
+   tuiles ; les encadrer depuis un état ferait un rendu de tout l'arbre à chaque changement de
+   tuile survolée. Un `:hover` ne coûte rien — le navigateur le résout sans rien remonter au
+   composant, et la mesure qui a sorti l'infobulle de l'état React vaut ici mot pour mot.
+
+   ⚠️ **`outline` et non `box-shadow`.** Les tuiles posent `box-shadow: none` en ligne pour
+   s'alléger — elles se touchent, une ombre portée n'y décolle rien —, et une règle en ligne
+   l'emporte sur la feuille de style : un `box-shadow` de survol écrit ici ne se serait jamais
+   affiché. C'est la même contrainte que `.novac-bouton-doux` documente plus haut. `outline`
+   n'est posé nulle part en ligne, donc il passe.
+
+   ⚠️ **Le décalage est négatif pour que le trait rentre dans la tuile.** Posé à l'extérieur, il
+   mordrait sur les quatre voisines — sur une carte où les tuiles sont séparées de deux pixels,
+   l'encadré paraîtrait appartenir à la mauvaise. */
+.nv-chaleur-tuile {
+  box-shadow: none;
+}
+/* ⚠️ **L'accent et non le blanc, pour que les deux encadrés se répondent.** Le blanc disait
+   « survolé » aussi bien que l'accent, mais le cadre du secteur, lui, est en accent : deux
+   couleurs pour un même geste donnaient deux signaux sans rapport apparent. Un seul suffit. */
+/* ⚠️ **L'épaisseur vient d'une variable, parce que le trait est *dans* la couche grossie.**
+   Écrit `2px` en dur, il valait bien deux pixels à l'échelle d'origine — et seize à ×8, la
+   transformation multipliant tout ce qu'elle contient. `--chaleur-trait` est posé par le
+   composant à `2 ⁄ zoom` : le trait reste donc à deux pixels vus, quel que soit le cran. Le
+   décalage suit, sinon le trait sortirait de la tuile et mordrait sur ses voisines. */
+.nv-chaleur-tuile:hover {
+  outline: var(--chaleur-trait, 2px) solid var(--nv-accent);
+  outline-offset: calc(-1 * var(--chaleur-trait, 2px));
+  z-index: 3;
+}
+
 /* Coquille : décale le contenu de la largeur du panneau latéral.
 
    La largeur est publiée par SideNav dans --novac-nav-w. Passer par une
@@ -1733,57 +1776,21 @@ canvas + div {
 }
 
 /* ══════════════════════════════════════════════════════════════════════════
-   Le rail de navigation : sa silhouette et ses infobulles.
+   Le rail de navigation : ses infobulles.
 
-   ⚠️ **Le raccord concave est ce qui fait toute la forme, et il ne peut pas
-   s'écrire en `border-radius`.** Un arrondi CSS creuse *vers l'intérieur* de la
-   boîte ; ici il faut le contraire — la matière doit se retirer en s'éloignant
-   du rail, pour que celui-ci paraisse sortir du bord de l'écran plutôt que d'y
-   flotter. Chaque raccord est donc un carré de la couleur de la barre auquel on
-   soustrait un quart de disque, par un masque radial.
+   ⚠️ **Sa silhouette n'est plus ici, et ce qui en restait était mort.** Deux
+   pseudo-éléments `.nv-rail::before/::after` y dessinaient les raccords concaves
+   d'alors — un carré dont un masque radial retranchait un quart de disque —, et
+   la classe `nv-rail` avait cessé d'être posée sur quoi que ce soit le jour où
+   le rail est passé au `clip-path`. Ils tiraient leur taille d'une variable
+   `--nv-raccord` que plus rien ne définissait ; la règle ne s'appliquait donc à
+   aucun élément, avec une taille nulle. Retirés en refaisant la languette.
 
-   ⚠️ **Le disque est tangent aux deux droites qu'il doit relier.** Son centre
-   tombe exactement sur le coin haut-droit du carré : il est alors tangent au
-   flanc de l'épine (à gauche) et au bord supérieur du rail (en bas), et les deux
-   courbes se rejoignent sans cassure. Un centre placé ailleurs laisse une arête.
-
-   ⚠️ **Les bornes du masque sont en pixels, pas en pourcentage.** Le carré fait
-   exactement le rayon de côté : à `transparent 99%` la transition tombait sur
-   deux dixièmes de pixel et crénelait. Un demi-pixel de fondu, posé en longueur,
-   suit le rayon quel qu'il soit.
-
-   ⚠️ **Chaque pièce refait le flou pour son compte.** L'épine, le rail et les
-   deux raccords sont quatre éléments distincts qui se juxtaposent sans se
-   recouvrir — se recouvrir doublerait l'opacité d'un fond translucide et
-   dessinerait la couture. Mais un fond translucide sans flou à côté d'un fond
-   translucide flouté se voit tout autant : le filtre suit donc la couleur,
-   partout où elle est posée. */
-.nv-rail::before,
-.nv-rail::after {
-  content: "";
-  position: absolute;
-  left: 0;
-  width: var(--nv-raccord);
-  height: var(--nv-raccord);
-  background: var(--nv-barre-fond);
-  -webkit-backdrop-filter: blur(24px) saturate(1.4);
-  backdrop-filter: blur(24px) saturate(1.4);
-  pointer-events: none;
-}
-.nv-rail::before {
-  top: calc(-1 * var(--nv-raccord));
-  -webkit-mask-image: radial-gradient(circle at 100% 0,
-    transparent var(--nv-raccord), #000 calc(var(--nv-raccord) + 0.5px));
-  mask-image: radial-gradient(circle at 100% 0,
-    transparent var(--nv-raccord), #000 calc(var(--nv-raccord) + 0.5px));
-}
-.nv-rail::after {
-  bottom: calc(-1 * var(--nv-raccord));
-  -webkit-mask-image: radial-gradient(circle at 100% 100%,
-    transparent var(--nv-raccord), #000 calc(var(--nv-raccord) + 0.5px));
-  mask-image: radial-gradient(circle at 100% 100%,
-    transparent var(--nv-raccord), #000 calc(var(--nv-raccord) + 0.5px));
-}
+   ⚠️ **Un masque radial ne saurait de toute façon plus la dessiner.** Un quart
+   de disque retranché d'un carré est un raccord qui tourne d'un quart ; l'encoche
+   en S d'une languette, elle, relie deux bords parallèles par deux arcs plus
+   courts qu'un quart. Cela se trace, cela ne se masque pas — voir `silhouette`
+   dans `SideNav.tsx`. */
 
 /* ⚠️ **Le nom passe dans une infobulle, faute de place pour l'écrire.** Le rail
    ne montre que des icônes : sans elle, cinq destinations se devineraient au

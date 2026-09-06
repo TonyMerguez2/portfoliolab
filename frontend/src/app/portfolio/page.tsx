@@ -16,7 +16,7 @@ import PanneauFrais from "@/components/portfolio/PanneauFrais";
 import {
   type Analyse, type EtatAnalyse, type Tolerance,
 } from "@/lib/analyse";
-import { bandeDuScore, pilierLePlusFaible } from "@/lib/portfolio-score/types";
+import { bandeDuScore } from "@/lib/portfolio-score/types";
 import PerformanceChart from "@/components/portfolio/PerformanceChart";
 import AssetGrid from "@/components/portfolio/AssetGrid";
 import CarteCompte, { APERCUS_MAX, CARTE_COMPTE } from "@/components/portfolio/CarteCompte";
@@ -30,7 +30,7 @@ import PortfolioTabs from "@/components/portfolio/PortfolioTabs";
 import { donutArcs } from "@/lib/donut";
 import { operationsDuDossier, repartirEnDossiers } from "@/lib/dossiers";
 import { jouerEtalement, releverLesCartes, type Positions } from "@/lib/etalement";
-import { assetClass, compteInfere, valoriser, variationPonderee, type Enveloppe, type GridAsset } from "@/lib/portfolio";
+import { assetClass, compteInfere, gainCumule, valoriser, variationPonderee, type Enveloppe, type GridAsset } from "@/lib/portfolio";
 import { assetExchange } from "@/lib/assets";
 import RadarChart from "@/components/charts/RadarChart";
 import { enTetesAuth } from "@/lib/session";
@@ -444,6 +444,15 @@ function PortfolioPageInner() {
   const [period,        setPeriod]        = useState<Period>("Max")   // Vue d'ensemble en arrivant : une journée ne dit rien d'un portefeuille;
   const [mounted,       setMounted]       = useState(false);
   const [sparkHistory,    setSparkHistory]    = useState<Record<string, number[]>>({});
+  /**
+   * Les lignes dont la série historique est arrivée.
+   *
+   * ⚠️ **Une référence et non un état : elle ne doit déclencher aucun rendu.** Elle ne sert qu'à
+   * savoir, au tour de prix suivant, s'il faut remplacer le dernier point ou en ajouter un. La
+   * mettre dans l'état ferait redessiner toutes les cartes à chaque arrivée de série, pour une
+   * information que personne n'affiche.
+   */
+  const avecHistorique = useRef<Set<string>>(new Set());
   const [priceUpdatedAt,  setPriceUpdatedAt]  = useState<Record<string, number>>({});
   const [editingValue,    setEditingValue]    = useState(false);
   const [valueInput,      setValueInput]      = useState("");
@@ -630,6 +639,17 @@ function PortfolioPageInner() {
   /** Ce que l'argent versé a rapporté sur la période : gain en euros et en %. */
   const [gain, setGain] = useState<{ eur: number; pct: number | null } | null>(null);
   /**
+   * Le même gain, ligne par ligne, sur la même fenêtre et les mêmes cours.
+   *
+   * ⚠️ **C'est ce que les cartes et le bandeau affichent — pas la variation du cours.** La
+   * variation du cours appliquée à la quantité d'aujourd'hui comptait comme gagnée la hausse
+   * de parts pas encore achetées : +444 € sur ESE.PA sur six mois, pour +234 € réels. Le
+   * serveur, qui tient les écritures et les cours, est le seul à pouvoir faire le compte
+   * juste — et c'est lui qui alimente le sélecteur de période, donc tout se recoupe.
+   */
+  const [lignesPeriode, setLignesPeriode] =
+    useState<Record<string, { gain_eur: number; gain_pct: number | null }> | null>(null);
+  /**
    * Les écritures jalonnées sur la courbe, comme dans l'onglet Transactions.
    *
    * La même courbe sur deux onglets voisins doit porter les mêmes repères :
@@ -815,10 +835,12 @@ function PortfolioPageInner() {
       .then((d: {
         twr_pct?: number | null; benchmark_pct?: number | null; start?: string | null;
         gain_eur?: number | null; gain_pct?: number | null;
+        lignes?: Record<string, { gain_eur: number; gain_pct: number | null }> | null;
         benchmark_sim?: { value: number | null; gain_eur: number | null; gain_pct: number | null };
       } | null) => {
         if (annule) return;
         setTwr(typeof d?.twr_pct === "number" ? d.twr_pct : null);
+        setLignesPeriode(d?.lignes ?? null);
         setRepere(typeof d?.benchmark_pct === "number" ? d.benchmark_pct : null);
         setOrigine(d?.start ?? null);
         setGain(typeof d?.gain_eur === "number"
@@ -830,7 +852,7 @@ function PortfolioPageInner() {
           ? { value: sim.value, gain_eur: sim.gain_eur, gain_pct: sim.gain_pct }
           : null);
       })
-      .catch(() => { if (!annule) { setTwr(null); setRepere(null); setGain(null); setSimRepere(null); } });
+      .catch(() => { if (!annule) { setTwr(null); setRepere(null); setGain(null); setSimRepere(null); setLignesPeriode(null); } });
     return () => { annule = true; };
   }, [portfolio?.id, surTransactions, period, txRefreshKey]);
 
@@ -936,8 +958,24 @@ function PortfolioPageInner() {
       const jour = op.executed_at.slice(0, 10);
       if (!premier[op.ticker] || jour < premier[op.ticker]) premier[op.ticker] = jour;
     }
-    return tickersSuivis.map(t => premier[t] ?? "").join(",");
-  }, [reperesOperations, tickersSuivis]);
+    /**
+     * ⚠️ **Une ligne sans opération enregistrée retombe sur l'origine du portefeuille, et non
+     * sur « pas de borne ».** Le champ vide laissait passer **tout** l'historique du titre : sur
+     * la même rangée, `NFLX` et `NVDA` — qui ont des opérations — montraient +2,1 % et +3,1 %
+     * sur quatre points, pendant que `META` et `GOOG` — qui n'en ont pas — annonçaient
+     * **+1 464 %** et **+13 374 %** sur quarante points. D'où des courbes lisses à côté de
+     * courbes détaillées, et deux échelles de pourcentage sur la même ligne.
+     *
+     * ⚠️ **Ce n'est pas un repli approximatif : c'est la bonne borne.** Une ligne du portefeuille
+     * ne peut pas être détenue avant que le portefeuille existe. À défaut de sa propre date
+     * d'achat, celle du premier mouvement est la plus ancienne qu'elle puisse avoir.
+     *
+     * ⚠️ **Sans origine connue, on ne borne rien** — un portefeuille sans aucune transaction n'a
+     * pas de date de naissance à opposer, et inventer un jour serait pire que ne pas couper.
+     */
+    const repli = origine ? origine.slice(0, 10) : "";
+    return tickersSuivis.map(t => premier[t] ?? repli).join(",");
+  }, [reperesOperations, tickersSuivis, origine]);
 
   useEffect(() => {
     if (!tickersSuivis.length) return;
@@ -972,9 +1010,22 @@ function PortfolioPageInner() {
           // d'un montant qui ne bougeait plus.
           setPrices(map);
 
-          // Ce tour n'apporte que le prix courant : la série de fond vient de
-          // l'appel voisin, et ne dépend pas de la période. On lui ajoute le
-          // dernier prix, qui bouge plus vite que le pas historique.
+          /**
+           * ⚠️ **Le prix courant **remplace** le dernier point ; il ne s'ajoute plus.** L'ancienne
+           * version faisait `[...serie, prix].slice(-60)` à chaque tour. Or les prix sont relus
+           * tous les quarts de minute : au bout d'une heure, les quarante points d'historique
+           * étaient intégralement chassés par les relevés en direct, et la courbe ne montrait plus
+           * que les dernières minutes — sur n'importe quelle période. Signalé à l'écran : « des
+           * courbes qui n'ont pas l'air d'être sur période max ». Elles ne l'étaient plus.
+           *
+           * ⚠️ **Le dernier point de la série **est** maintenant, donc le remplacer est exact.**
+           * L'historique se termine au présent ; y ajouter le présent une seconde fois allongeait
+           * la fenêtre sans rien apprendre, en plus de la faire dériver.
+           *
+           * ⚠️ **L'accumulation reste, mais pour les seules lignes sans historique.** Un ticker
+           * dont la série n'est jamais arrivée n'a que ses relevés successifs ; les lui retirer
+           * laisserait une carte à un point, donc sans courbe du tout.
+           */
           const newUpdatedAt: Record<string, number> = {};
           setSparkHistory(prev => {
             const next = { ...prev };
@@ -986,10 +1037,11 @@ function PortfolioPageInner() {
                 newUpdatedAt[p.symbol] = Date.now();
                 return;
               }
-              if (Math.abs(p.price - serie[serie.length - 1]) > 0.0001) {
-                next[p.symbol] = [...serie, p.price].slice(-60);
-                newUpdatedAt[p.symbol] = Date.now(); // prix réellement changé
-              }
+              if (Math.abs(p.price - serie[serie.length - 1]) <= 0.0001) return;
+              next[p.symbol] = avecHistorique.current.has(p.symbol)
+                ? [...serie.slice(0, -1), p.price]
+                : [...serie, p.price].slice(-60);
+              newUpdatedAt[p.symbol] = Date.now(); // prix réellement changé
             });
             return next;
           });
@@ -1007,34 +1059,50 @@ function PortfolioPageInner() {
   /**
    * La série de fond des courbes de carte : depuis le premier achat, toujours.
    *
-   * Elle ne suit pas la période, contrairement au graphique du haut. Une carte
-   * porte un gain calculé sur le prix de revient, donc figé sur toute la
-   * détention ; une courbe qui, elle, se recadrait sur 24 h faisait raconter
-   * deux histoires différentes au même rectangle — le tracé montrait la
-   * journée, le chiffre à côté montrait six mois.
+   * ⚠️ **Elle suit désormais la période, et ce choix en renverse un précédent qu'il faut
+   * connaître.** Le raisonnement d'avant tenait : la carte affiche un gain calculé sur le prix de
+   * revient, donc figé sur toute la détention ; une courbe recadrée sur 24 h faisait raconter deux
+   * histoires au même rectangle. Sauf que « ne pas suivre » ne voulait pas dire « une période
+   * fixe » : chaque ligne était tracée **depuis son propre achat**, si bien que deux cartes
+   * voisines, de même taille, montraient l'une trois jours et l'autre un an — sans rien qui le
+   * signale. L'incomparabilité entre cartes est un défaut plus grave que le décalage entre la
+   * courbe et le chiffre d'une même carte, parce qu'elle est invisible.
    *
-   * D'où un appel distinct de celui des prix, et bien plus rare : cette série
-   * ne bouge qu'au changement de portefeuille ou d'achat, quand les prix sont
-   * relus tous les quarts de minute.
+   * ⚠️ **Le décalage subsiste, et il n'est pas résolu par ce changement.** Sur « 24h », le tracé
+   * montre la journée pendant que la plus-value à côté montre toute la détention. Le rendre
+   * cohérent demanderait que le chiffre suive la période lui aussi — donc d'abandonner le prix de
+   * revient, qui est ce que l'utilisateur veut voir. Les deux ne peuvent pas être vrais ensemble ;
+   * ce qui change, c'est qu'au moins toutes les cartes parlent maintenant de la même fenêtre.
+   *
+   * ⚠️ **`depuis` reste, et n'a rien à voir avec la période.** Il borne chaque ligne à sa date de
+   * détention : sans lui, « 1 an » sur une position ouverte il y a trois mois dessinerait neuf
+   * mois pendant lesquels elle n'était pas détenue.
+   *
+   * D'où un appel distinct de celui des prix : cette série ne bouge qu'au changement de
+   * portefeuille, d'achat ou de période, quand les prix sont relus tous les quarts de minute.
    */
   useEffect(() => {
     if (!tickersSuivis.length) return;
     let annule = false;
     const tickers = tickersSuivis.join(",");
     fetch(`${API_URL}/api/v1/prices?tickers=${encodeURIComponent(tickers)}`
-        + `&period=max&depuis=${encodeURIComponent(depuisParTicker)}`)
+        + `&period=${PERIOD_MAP[period]}&depuis=${encodeURIComponent(depuisParTicker)}`)
       .then(r => r.json())
       .then((list: PriceData[]) => {
         if (annule) return;
         setSparkHistory(prev => {
           const next = { ...prev };
-          list.forEach(p => { if (p.series?.length) next[p.symbol] = p.series; });
+          list.forEach(p => {
+            if (!p.series?.length) return;
+            next[p.symbol] = p.series;
+            avecHistorique.current.add(p.symbol);
+          });
           return next;
         });
       })
       .catch(() => {});
     return () => { annule = true; };
-  }, [tickersSuivis, depuisParTicker]);
+  }, [tickersSuivis, depuisParTicker, period]);
 
   // Benchmark SPY — fetch séparé, silencieux en cas d'échec
   useEffect(() => {
@@ -1065,10 +1133,16 @@ function PortfolioPageInner() {
         const vif = prixCrypto[a.ticker];
         const suit = vif != null && p.quantity != null;
         const value = suit ? p.quantity! * vif : a.value;
+        /* Le gain de la fenêtre vient des écritures quand le serveur l'a rendu ; à défaut
+           — le temps qu'il arrive, ou s'il a échoué — la variation du cours reste le repli,
+           avec son défaut connu. Voir `lignesPeriode`. */
+        const ligne = lignesPeriode?.[a.ticker];
         return {
           ...a,
           price:    vif ?? a.price,
           value,
+          change:   ligne ? ligne.gain_pct : a.change,
+          perfEur:  ligne ? ligne.gain_eur : a.perfEur,
           quantity: p.quantity,
           avgCost:  p.avg_cost,
           invested: p.invested,
@@ -1095,7 +1169,7 @@ function PortfolioPageInner() {
         : null;
       return { ...a, price, change, value, perfEur };
     });
-  }, [portfolio, prices, surTransactions, positions, prixCrypto]);
+  }, [portfolio, prices, surTransactions, positions, prixCrypto, lignesPeriode]);
 
   const totalWeight    = enriched.reduce((s, a) => s + a.weight, 0);
 
@@ -1341,6 +1415,26 @@ function PortfolioPageInner() {
    * moyenne pondérée des actifs à défaut.
    */
   const perfPeriode = surTransactions ? twr : weightedChange;
+  /**
+   * Le gain du bloc « Performance » sur la fenêtre choisie — hors « Max ».
+   *
+   * ⚠️ **Le bloc était le seul chiffre de la page à ignorer la période.** Les cartes suivent
+   * la fenêtre depuis qu'on le leur a demandé ; le bandeau, lui, annonçait toujours le total
+   * depuis l'achat, sous « Depuis le début », quelle que soit la période sélectionnée sous le
+   * graphique. On passait de « 24 h » à « 1 an » et rien ne bougeait en haut, pendant que tout
+   * bougeait en dessous.
+   *
+   * ⚠️ **Additionné depuis les cartes, pas relu du serveur** — voir `gainCumule` pour la
+   * mesure qui a tranché : les deux sources ne lisent pas les mêmes clôtures, et l'en-tête
+   * doit retomber sur ses cartes avant d'être juste au centime près.
+   *
+   * ⚠️ **« Max » reste la plus-value vs prix de revient**, calculée plus bas comme avant :
+   * c'est ce que les cartes montrent aussi sur cette fenêtre, et c'est le seul sens que
+   * « depuis le début » puisse avoir. Ici, `null` veut dire « pas de fenêtre à suivre ».
+   */
+  const gainSurPeriode = useMemo(
+    () => (period === "Max" ? null : gainCumule(enriched)),
+    [period, enriched]);
   const isUp       = (perfPeriode ?? 0) >= 0;
   const perfColor  = isUp ? CLAIR.positif : CLAIR.negatif;
 
@@ -1515,18 +1609,37 @@ function PortfolioPageInner() {
    * mêmes cartes : deux conversions séparées auraient fini par afficher deux valeurs
    * différentes pour la même ligne.
    */
-  const versCarte = useCallback((a: typeof enriched[number]): GridAsset => ({
-    ticker: a.ticker, weight: a.weight,
-    change: a.change, type: a.type, price: a.price,
-    spark:     sparkHistory[a.ticker] ?? assetSparks[a.ticker],
-    updatedAt: priceUpdatedAt[a.ticker],
-    value:     a.value,
-    perfEur:   a.perfEur,
-    pnlEur:    a.pnlEur,
-    pnlPct:    a.invested && a.pnlEur != null ? (a.pnlEur / a.invested) * 100 : null,
-    avgCost:   a.avgCost,
-    quantity:  a.quantity,
-  }), [sparkHistory, assetSparks, priceUpdatedAt]);
+  const versCarte = useCallback((a: typeof enriched[number]): GridAsset => {
+    const pnlPct = a.invested && a.pnlEur != null ? (a.pnlEur / a.invested) * 100 : null;
+    /**
+     * ⚠️ **Sur « Max », la carte porte la plus-value vs PRU, pas la variation du cours depuis
+     * le premier achat — et la différence se voyait à l'en-tête.** Signalé : les cartes disaient
+     * +470 €, +57 €, +62 € — 589 € en tout — sous un bandeau à +312,64 €. Recalculé à part : les
+     * gains vs PRU font 230 €, 52 €, 31 €, soit **313 €**, à quarante centimes du bandeau. Les
+     * cartes avaient donc tort, et c'est ma bascule sur la variation de période qui les avait
+     * trompées : `change` mesure le cours depuis la **première** opération, comme si tout avait
+     * été acheté ce jour-là. Or vous avez renforcé plus cher ensuite — ESE.PA a monté de 14,7 %
+     * depuis février, mais votre position n'a gagné que 6,7 %.
+     *
+     * ⚠️ **« Max » veut dire « depuis que je détiens », et la seule mesure juste de cela est le
+     * PRU.** Les autres fenêtres gardent la variation du cours : sur 24 h ou un mois, elle est ce
+     * qu'on demande, et le PRU n'y a rien à dire. Sans écritures — donc sans PRU — on retombe sur
+     * la variation, qui est alors la seule chose qu'on sache.
+     */
+    const surDetention = period === "Max" && a.pnlEur != null;
+    return {
+      ticker: a.ticker, weight: a.weight, type: a.type, price: a.price,
+      change:    surDetention ? pnlPct   : a.change,
+      perfEur:   surDetention ? (a.pnlEur ?? null) : a.perfEur,
+      spark:     sparkHistory[a.ticker] ?? assetSparks[a.ticker],
+      updatedAt: priceUpdatedAt[a.ticker],
+      value:     a.value,
+      pnlEur:    a.pnlEur,
+      pnlPct,
+      avgCost:   a.avgCost,
+      quantity:  a.quantity,
+    };
+  }, [sparkHistory, assetSparks, priceUpdatedAt, period]);
 
   /**
    * ⚠️ **Le personnage ne parle que de ce qui aboutit, et il faut donc savoir si ça aboutit.**
@@ -2063,7 +2176,7 @@ function PortfolioPageInner() {
                 ) : (
                   <span
                     onDoubleClick={() => { setNomSaisi(portfolio.name); setRenomme(true); }}
-                    title="Double-cliquez pour renommer"
+                    aria-label="Double-cliquez pour renommer"
                     style={{ fontSize: 13, fontWeight: 700, color: CLAIR.texte, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", cursor: "text" }}>
                     {portfolio.name}
                   </span>
@@ -2102,7 +2215,7 @@ function PortfolioPageInner() {
     <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
       <span style={{ display: "flex", alignItems: "center", gap: 6 }}>
         <p style={{ margin: 0, fontSize: 11.5, fontWeight: 500, color: CLAIR.texteSecondaire }}>Valeur totale</p>
-        <button onClick={() => setMasque(v => !v)} title={masque ? "Afficher les montants" : "Masquer les montants"}
+        <button onClick={() => setMasque(v => !v)}
           aria-label={masque ? "Afficher les montants" : "Masquer les montants"}
           style={{ background: "none", border: "none", cursor: "pointer", padding: 0, display: "flex", color: CLAIR.texteFaible }}>
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round">
@@ -2203,7 +2316,12 @@ function PortfolioPageInner() {
         {/* ⚠️ Un point médian entre le capital et la date : ce sont deux faits distincts,
             et « 4 959,91 € investis depuis fév. 2026 » se lisait comme une seule phrase où
             la somme semblait porter sur la période plutôt que sur le total. */}
-        {origine && <><span style={{ opacity: 0.5 }}> · </span>{libellePeriode.toLowerCase()}</>}
+        {/* ⚠️ **Toujours « depuis le… », quelle que soit la période.** Le capital investi ne
+            dépend pas de la fenêtre choisie sous le graphique ; « 4 959,91 € investis · sur
+            6 mois » affirmait le contraire, et c'était faux : tout n'a pas été versé en six
+            mois. */}
+        {origine && <><span style={{ opacity: 0.5 }}> · </span>
+          depuis le {new Date(origine).toLocaleDateString("fr-FR", { day: "numeric", month: "long", year: "numeric" })}</>}
       </div>
     ) : gainAffiche != null && (
       <div style={{ fontSize: 11, fontFamily: FONT, color: gainAffiche.eur >= 0 ? CLAIR.positif : CLAIR.negatif, fontWeight: 600 }}>
@@ -2288,8 +2406,15 @@ function PortfolioPageInner() {
         ? { eur: (titresSurvoles ?? survolCourbe.valeur) - survolCourbe.investi,
             base: survolCourbe.investi }
         : null;
-      const plEur = survolGain ? survolGain.eur : valeurTitres - cb;
-      const plPct = (plEur / (survolGain ? survolGain.base : cb)) * 100;
+      /* Trois cas, par priorité : la date survolée, puis la fenêtre choisie, puis toute la
+         détention. Le survol garde la main parce qu'il répond à une question posée à la
+         souris, plus précise que la période. */
+      const plEur = survolGain ? survolGain.eur
+        : gainSurPeriode ? gainSurPeriode.eur
+        : valeurTitres - cb;
+      const plPct = survolGain ? (plEur / survolGain.base) * 100
+        : gainSurPeriode ? (gainSurPeriode.pct ?? 0)
+        : (plEur / cb) * 100;
       const plCol = plEur >= 0 ? CLAIR.positif : CLAIR.negatif;
       /**
        * ⚠️ **Le gain passe devant la note, et c'était l'inverse.** Mesuré dans le
@@ -2355,7 +2480,11 @@ function PortfolioPageInner() {
             le partage des marges automatiques — 5 px au-dessus du chiffre contre 3 en
             dessous, alors qu'elles sont censées être égales par construction. */}
         <div style={{ fontSize: 11, fontFamily: FONT, color: CLAIR.texteAttenue }}>
-          {survolGain ? "À cette date" : "Depuis le début"}
+          {/* La mention suit le chiffre : « Aujourd'hui », « Sur 1 semaine »… et
+              « Depuis le début » seulement quand le chiffre parle bien de toute la
+              détention. Un gain d'une semaine sous « Depuis le début » serait un mensonge
+              de quatre mots. */}
+          {survolGain ? "À cette date" : gainSurPeriode ? libellePeriode : "Depuis le début"}
         </div>
         </div>
       );
@@ -2370,8 +2499,9 @@ function PortfolioPageInner() {
             place. */}
         {scoreSante != null && <>
           <div style={{ width: 1, alignSelf: "stretch", background: CLAIR.carteCreuse }} />
-          {/* Santé du patrimoine : le titre chiffré passe en tête, la carte
-              de droite ne garde que le détail par critère. */}
+          {/* ⚠️ **« NOVAC Score » et non « Santé du patrimoine »**, renommé à la demande : c'est
+              le nom que porte la carte de l'onglet Analyse qui détaille cette même note, et le
+              bandeau l'annonçait autrement. Un seul nom pour un seul chiffre. */}
           {/**
             * ⚠️ **L'anneau se centre dans la rangée, le titre reste sur sa ligne.** Les deux
             * exigences se contredisent si le bloc s'aligne d'un seul tenant : centré, son
@@ -2383,7 +2513,7 @@ function PortfolioPageInner() {
             */}
           <div style={{ display: "flex", alignSelf: "stretch", alignItems: "flex-start", gap: 12, minWidth: 170 }}>
             <div>
-              <p style={{ margin: "0 0 6px", fontSize: 11.5, fontWeight: 500, color: CLAIR.texteSecondaire }}>Santé du patrimoine</p>
+              <p style={{ margin: "0 0 6px", fontSize: 11.5, fontWeight: 500, color: CLAIR.texteSecondaire }}>NOVAC Score</p>
               {/* ⚠️ **La note est dans l'anneau, « /100 » et la mention dehors.** L'anneau
                   dit déjà la proportion ; y empiler le dénominateur et le qualificatif
                   aurait demandé trois tailles de texte dans soixante-trois pixels. */}
@@ -2400,6 +2530,12 @@ function PortfolioPageInner() {
                   </span>
                 </div>
               </div>
+              {/* ⚠️ Le profil de risque n'est pas affiché ici pour l'instant : posé sous la note
+                  une première fois, retiré à la demande en attendant de décider où il vit.
+                  ⚠️ **En attendant, rien n'ouvre plus le panneau de profil** : ses deux portes
+                  précédentes — la bande de l'onglet Analyse, puis la carte du score — ont été
+                  retirées l'une après l'autre. Le panneau et son état restent ; la porte est à
+                  reposer quand la place sera choisie. */}
             </div>
           </div>
         </>}
@@ -2926,213 +3062,34 @@ function PortfolioPageInner() {
           * vient pour comprendre pourquoi elle vaut ce qu'elle vaut ; c'est le moment exact
           * où l'on veut lui donner ce qui lui manque.
           */}
-        <div style={{ padding: `0 ${MARGE}px 10px`, flexShrink: 0 }}>
-
-            {fraisOuvert && ancreFrais && (
-              <PanneauFrais
-                lignes={(analyse?.poids ?? []).map(p => ({ ticker: p.ticker, part: p.part }))}
-                valeurs={analyse?.frais_lignes ?? {}}
-                surFrais={enregistrerFrais}
-                fermer={() => setFraisOuvert(false)}
-                ancre={ancreFrais}
-              />
-            )}
-            {profilOuvert && ancreProfil && (
-              <PanneauProfil
-                profil={analyse?.profil ?? null}
-                surProfil={enregistrerProfil}
-                fermer={() => setProfilOuvert(false)}
-                ancre={ancreProfil}
-              />
-            )}
-            {etatAnalyse === "charge" && (
-              <p style={{ margin: 0, fontSize: 11.5, color: CLAIR.texteFaible }}>Analyse en cours…</p>
-            )}
-            {etatAnalyse === "vide" && (
-              // Dire **pourquoi** il n'y a pas de note. Un cours manquant et un
-              // portefeuille vide n'appellent pas la même action, et les confondre
-              // enverrait ajouter des transactions à qui en a déjà.
-              analyse?.source === "incomplet" ? (
-                <p style={{ margin: 0, fontSize: 11.5, color: CLAIR.texteFaible, lineHeight: 1.5 }}>
-                  Score indisponible : le cours de{" "}
-                  <span style={{ color: CLAIR.texte, fontWeight: 600 }}>
-                    {(analyse.sans_cours ?? []).join(", ")}
-                  </span>{" "}
-                  n&apos;a pas pu être lu. Noter sans cette ligne reviendrait à la
-                  retirer du portefeuille.
-                </p>
-              ) : (
-                <p style={{ margin: 0, fontSize: 11.5, color: CLAIR.texteFaible, lineHeight: 1.5 }}>
-                  Pas encore de score : ajoutez des transactions, ou une composition
-                  et une valeur totale.
-                </p>
-              )
-            )}
-            {etatAnalyse === "prêt" && analyse && (() => {
-              /**
-               * Le nom des facteurs qui **font** la note, pour l'infobulle du titre.
-               *
-               * ⚠️ Réduit à des noms depuis que les barres ont quitté cette vue. Il
-               * portait aussi les notes, les lectures et les explications ; les garder
-               * aurait laissé croire que le panneau les affiche encore.
-               *
-               * Les indicatifs en sont écartés : ce panneau s'appelle « Détail du
-               * score », et y citer des facteurs qui n'y entrent pas serait à
-               * contresens. Ils vivent dans l'onglet Analyse.
-               *
-               * La liste est **dérivée** et non écrite à la main. Celle qui vivait ici
-               * citait la corrélation, la sensibilité au marché et la liquidité :
-               * trois facteurs qui ne notaient déjà plus, et deux qui n'existent plus.
-               */
-              const piliers = analyse.novac?.piliers ?? [];
-              const nomsNotants = piliers
-                .filter(pil => pil.poids_effectif > 0)
-                .map(pil => pil.libelle.toLowerCase());
-              // ⚠️ La couverture compte les **piliers** mesurés, non les métriques :
-              // c'est l'unité que l'écran affiche à côté de la note, et mélanger les
-              // deux granularités donnerait « 9/11 » sans qu'on sache de quoi.
-              const couverture = {
-                mesures: piliers.filter(pil => pil.score != null).length,
-                total: piliers.length,
-              };
-              const faible = pilierLePlusFaible(piliers);
-              // ⚠️ La confiance n'est **pas** la note : elle dit la qualité des
-              // données. « 76, confiance 58 % » signifie « ce portefeuille semble
-              // correct, mais je connais mal ce qu'il contient ».
-              const confiance = analyse.novac?.confiance ?? null;
-              return (
-                <>
-                  {(() => {
-                    /**
-                     * L'invite à déclarer son profil, quand il manque.
-                     *
-                     * ⚠️ Sans elle, la volatilité se tait et rien ne le dit :
-                     * l'utilisateur voit seulement une note calculée sur moins de
-                     * critères, sans savoir qu'il lui manque une réponse à donner.
-                     * « Ce facteur attend votre profil » est actionnable ; une note
-                     * discrètement plus basse ne l'est pas.
-                     *
-                     * Le nombre vient de `FACTEURS_DU_PROFIL` et le texte s'accorde
-                     * seul : ils étaient trois avant l'audit — bêta supprimé, perte
-                     * maximale passée en indicatif — et un libellé écrit en dur
-                     * aurait menti sans que rien n'échoue.
-                     */
-                    // Les piliers qui n'ont aucun sens sans intention déclarée :
-                    // juger un niveau de risque dans l'absolu revient à décréter le
-                    // projet de l'épargnant à sa place.
-                    const enAttente = piliers.filter(
-                      pil => (pil.cle === "risque" || pil.cle === "adequation")
-                             && pil.score == null);
-                    if (!enAttente.length) return null;
-                    return (
-                      <button type="button"
-                        onClick={e => {
-                          const r = e.currentTarget.getBoundingClientRect();
-                          setAncreProfil({ droite: window.innerWidth - r.right, haut: r.bottom + 6 });
-                          setProfilOuvert(true);
-                        }}
-                        style={{
-                          display: "block", width: "100%", textAlign: "left",
-                          margin: "0 0 9px", padding: "7px 8px", cursor: "pointer",
-                          borderRadius: RAYONS.xs, background: CLAIR.carteCreuse,
-                          border: `1px solid ${JETONS.bord}`,
-                          fontFamily: FONT, fontSize: 10.5, color: CLAIR.texteAttenue,
-                          lineHeight: 1.45,
-                        }}>
-                        <span style={{ color: CLAIR.texte, fontWeight: 600 }}>
-                          Déclarez votre profil de risque
-                        </span>{" "}
-                        pour que {enAttente.length === 1 ? "ce pilier soit noté" : `ces ${enAttente.length} piliers soient notés`} :{" "}
-                        {enAttente.map(pil => pil.libelle.toLowerCase()).join(", ")}.
-                      </button>
-                    );
-                  })()}
-                  {(() => {
-                    /**
-                     * L'invite à saisir les frais courants, quand ils manquent.
-                     *
-                     * ⚠️ C'est le **seul** facteur qui ne se rétablit jamais seul. Le
-                     * fournisseur de cours ne publie pas le TER des ETF domiciliés en
-                     * Europe : mesuré sur un vrai PEA, un seul des trois fonds
-                     * l'annonçait, soit 10 % du portefeuille — sous le seuil de
-                     * couverture, donc aucune note, définitivement.
-                     *
-                     * Sans cette invite, l'utilisateur voit « — » sans savoir qu'il
-                     * peut y remédier lui-même, et que le chiffre est sur le document
-                     * d'information de chacun de ses fonds. Les frais sont le facteur
-                     * le plus prédictif du résultat relatif sur vingt ans, et le seul
-                     * qui soit certain : ne pas les mesurer est le manque le plus
-                     * coûteux du score.
-                     */
-                    const f = piliers
-                      .flatMap(pil => pil.metriques)
-                      .find(m => m.cle === "frais_fonds");
-                    // Poids nul : aucun fonds détenu, donc aucun frais courant à
-                    // saisir. Proposer la saisie serait inviter à un geste impossible.
-                    if (!f || f.poids <= 0 || !(analyse.poids ?? []).length) return null;
-                    // Mesurés, les frais restent modifiables : l'invite devient un
-                    // simple lien, pour ne pas encombrer un panneau où tout va bien.
-                    const mesure = f.score != null;
-                    return (
-                      <button type="button"
-                        onClick={e => {
-                          const r = e.currentTarget.getBoundingClientRect();
-                          setAncreFrais({ droite: window.innerWidth - r.right, haut: r.bottom + 6 });
-                          setFraisOuvert(true);
-                        }}
-                        /* ⚠️ Encadré seulement quand il y a quelque chose à faire.
-                           Une fois les frais saisis, ce bloc bleu restait le plus
-                           voyant du panneau — au-dessus du profil et de la cause de la
-                           note — pour une action secondaire déjà accomplie. Il devient
-                           alors un simple lien. */
-                        style={{
-                          display: "block", width: "100%", textAlign: "left",
-                          margin: mesure ? "0 0 6px" : "0 0 9px",
-                          padding: mesure ? 0 : "7px 8px", cursor: "pointer",
-                          borderRadius: RAYONS.xs,
-                          background: mesure ? "none" : CLAIR.carteCreuse,
-                          border: mesure ? "none" : `1px solid ${JETONS.bord}`,
-                          fontFamily: FONT, fontSize: 10.5, color: CLAIR.texteAttenue,
-                          lineHeight: 1.45,
-                        }}>
-                        <span style={{ color: CLAIR.texte, fontWeight: mesure ? 500 : 600 }}>
-                          {mesure ? "Modifier les frais des fonds" : "Saisissez les frais de vos fonds"}
-                        </span>
-                        {!mesure && (
-                          <> pour que ce facteur soit noté : le fournisseur de cours ne
-                          publie pas le TER des ETF européens.</>
-                        )}
-                      </button>
-                    );
-                  })()}
-                  {analyse.profil && (
-                    <p style={{ margin: "0 0 9px", fontSize: 10.5, color: CLAIR.texteAttenue, lineHeight: 1.45 }}>
-                      Profil : <span style={{ color: CLAIR.texte, fontWeight: 600 }}>
-                        {analyse.profil.horizon_annees} ans, {analyse.profil.tolerance}
-                      </span>{" "}
-                      — cible {analyse.profil.volatilite.toFixed(0)} % de volatilité.{" "}
-                      <button type="button"
-                        onClick={e => {
-                          const r = e.currentTarget.getBoundingClientRect();
-                          setAncreProfil({ droite: window.innerWidth - r.right, haut: r.bottom + 6 });
-                          setProfilOuvert(true);
-                        }}
-                        style={{
-                          background: "none", border: "none", padding: 0, cursor: "pointer",
-                          fontFamily: FONT, fontSize: 10.5, color: CLAIR.texte,
-                        }}>Modifier</button>
-                    </p>
-                  )}
-                  {/* ⚠️ **Le lien « Voir le détail du score » a disparu avec le
-                      déménagement, et c'est heureux.** Il menait à cet onglet-ci : resté en
-                      place, il aurait proposé d'aller là où l'on se trouve déjà. Les sept
-                      barres de facteurs qu'il desservait sont juste en dessous. */}
-                </>
-              );
-            })()}
-        </div>
+        {/**
+          * ⚠️ **Plus de bande au-dessus de l'analyse — demandé deux fois.** Elle portait les
+          * invites au profil et aux frais, puis une ligne de liens ; l'une et l'autre
+          * prenaient la hauteur des cartes. Les deux panneaux restent, ancrés depuis les
+          * cartes elles-mêmes : le profil depuis la cellule « Profil » du score, les frais
+          * depuis la métrique « frais des fonds » dans le détail du pilier. Ils s'ouvrent là
+          * où l'on lit ce qui leur manque, et n'occupent rien tant qu'ils sont fermés.
+          */}
+        {fraisOuvert && ancreFrais && (
+          <PanneauFrais
+            lignes={(analyse?.poids ?? []).map(p => ({ ticker: p.ticker, part: p.part }))}
+            valeurs={analyse?.frais_lignes ?? {}}
+            surFrais={enregistrerFrais}
+            fermer={() => setFraisOuvert(false)}
+            ancre={ancreFrais}
+          />
+        )}
+        {profilOuvert && ancreProfil && (
+          <PanneauProfil
+            profil={analyse?.profil ?? null}
+            surProfil={enregistrerProfil}
+            fermer={() => setProfilOuvert(false)}
+            ancre={ancreProfil}
+          />
+        )}
         {portfolio && (
-          <AnalyseView analyse={analyse} etat={etatAnalyse} />
+          <AnalyseView analyse={analyse} etat={etatAnalyse} visible={dashView === "analyse"}
+            onFrais={ancre => { setAncreFrais(ancre); setFraisOuvert(true); }} />
         )}
       </div>
 
@@ -3159,7 +3116,7 @@ function PortfolioPageInner() {
               hauteur offerte — voir `CalendrierEvenements` — donc il n'y a plus rien à
               faire défiler. Le cadre devient une colonne pour que le calendrier puisse
               le remplir. */}
-          <Cadre style={{ width: 300, flexShrink: 0, padding: "16px 18px",
+          <Cadre style={{ width: 300, flexShrink: 0, padding: "13px 15px",
             display: "flex", flexDirection: "column", minHeight: 0 }}>
             <CalendrierEvenements evenements={echeances}
               selection={jourChoisi} onJour={setJourChoisi} />
@@ -3169,7 +3126,7 @@ function PortfolioPageInner() {
               du portefeuille en leur collant « Résultats trimestriels » et un
               « J+3, J+6, J+9 » calculé depuis l'indice de la boucle. Aucune de ces
               dates n'existait, et rien ne le disait. */}
-          <Cadre style={{ flex: 1, minWidth: 0, padding: "16px 18px",
+          <Cadre style={{ flex: 1, minWidth: 0, padding: "13px 15px",
             display: "flex", flexDirection: "column", minHeight: 0 }}>
             <EvenementsAVenir portfolioId={portfolio?.id} onEvenements={setEvtsReponse}
               analyse={analyseEvts.donnees}
@@ -3178,7 +3135,7 @@ function PortfolioPageInner() {
               tickerChoisi={tickerChoisi} onChoisirTicker={setTickerChoisi} />
           </Cadre>
 
-          <Cadre style={{ width: 340, flexShrink: 0, padding: "16px 18px", overflowY: "auto" }}>
+          <Cadre style={{ width: 340, flexShrink: 0, padding: "13px 15px", overflowY: "auto" }}>
             <ImpactPotentiel donnees={analyseEvts.donnees} etat={analyseEvts.etat}
               ticker={tickerChoisi} detail={impactTitre.impact}
               etatDetail={impactTitre.etat}
@@ -3189,17 +3146,17 @@ function PortfolioPageInner() {
         {/* ── Rangée basse : ce qui s'est passé, et les deux vues détaillées ── */}
         <div style={{ display: "flex", flex: 1, minHeight: 0, gap: 12 }}>
           <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", gap: 10, minHeight: 0 }}>
-            <Cadre style={{ flex: 1, padding: "16px 18px", display: "flex", flexDirection: "column", minHeight: 0 }}>
+            <Cadre style={{ flex: 1, padding: "13px 15px", display: "flex", flexDirection: "column", minHeight: 0 }}>
               <HistoriqueEvenements donnees={analyseEvts.donnees} etat={analyseEvts.etat} />
             </Cadre>
           </div>
 
-          <Cadre style={{ width: 300, flexShrink: 0, padding: "16px 18px",
+          <Cadre style={{ width: 300, flexShrink: 0, padding: "13px 15px",
             display: "flex", flexDirection: "column", minHeight: 0 }}>
             <DividendesAVenir evenements={echeances} />
           </Cadre>
 
-          <Cadre style={{ width: 340, flexShrink: 0, padding: "16px 18px",
+          <Cadre style={{ width: 340, flexShrink: 0, padding: "13px 15px",
             display: "flex", flexDirection: "column", minHeight: 0 }}>
             <ProchainsResultats evenements={echeances} analyse={analyseEvts.donnees}
               tickerChoisi={tickerChoisi} onChoisirTicker={setTickerChoisi} />
@@ -3308,7 +3265,7 @@ function PortfolioPageInner() {
               manque de place, puisque c'est lui qui a un plancher — la courbe ne descend pas
               sous 150 pixels. Sur une fenêtre courte, ce sont ses mentions du bas qui passent
               sous la ligne de flottaison, pas la moitié de l'onglet. */}
-          <Cadre style={{ padding: "14px 16px", display: "flex",
+          <Cadre style={{ padding: "13px 15px", display: "flex",
             flexDirection: "column", minHeight: 0, overflowY: "auto" }}>
             <ProjectionObjectif
               objectifs={listeObjectifs}
@@ -3344,7 +3301,7 @@ function PortfolioPageInner() {
                 de la colonne. La progression a de quoi l'employer — elle défile dès que son
                 contenu dépasse — et elle reste celle qui cède quand la place manque, son
                 `flexShrink` implicite étant inchangé. */}
-            <Cadre style={{ padding: "14px 16px", display: "flex", flexGrow: 1,
+            <Cadre style={{ padding: "13px 15px", display: "flex", flexGrow: 1,
               flexDirection: "column", minHeight: 0, overflowY: "auto" }}>
               <ProgressionGlobale objectifs={listeObjectifs}
                 sommeDesParts={objectifs.donnees?.somme_des_parts ?? null} />

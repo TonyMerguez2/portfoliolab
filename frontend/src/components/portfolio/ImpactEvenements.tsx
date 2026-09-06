@@ -1,4 +1,5 @@
 "use client";
+import TitreDeCarte from "@/components/ui/TitreDeCarte";
 import { useMemo } from "react";
 
 import type { AnalyseEvenements, EtatChargement, Impact } from "@/hooks/useAnalyseEvenements";
@@ -128,17 +129,14 @@ export function ImpactPotentiel({
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 10, minHeight: 0 }}>
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
-        <span style={{ fontFamily: FONT, fontSize: 13, fontWeight: 600, color: CLAIR.texte }}>
-          Impact potentiel sur votre portefeuille
-        </span>
+      <TitreDeCarte style={{ marginBottom: 0 }} action={<>
 
         {/* ⚠️ Sans cette pastille, le panneau montre le même titre qu'on l'ait
             choisi ou non : par défaut il affiche le plus réactif, qui est souvent
             celui qu'on vient de cliquer. Rien ne dirait alors qu'une sélection est
             active, ni comment revenir à la vue d'ensemble. */}
         {ticker && onEffacer && (
-          <button type="button" onClick={onEffacer} title="Revenir à la vue d’ensemble"
+          <button type="button" onClick={onEffacer} aria-label="Revenir à la vue d’ensemble"
             style={{
               display: "inline-flex", alignItems: "center", gap: 5, cursor: "pointer",
               flexShrink: 0, padding: "3px 8px", borderRadius: RAYONS.plein,
@@ -149,7 +147,7 @@ export function ImpactPotentiel({
             <span aria-hidden="true" style={{ fontSize: 12, lineHeight: 1 }}>×</span>
           </button>
         )}
-      </div>
+      </>}>Impact potentiel sur votre portefeuille</TitreDeCarte>
 
       {enCours && (
         <p style={{ margin: 0, fontFamily: FONT, fontSize: 11, color: CLAIR.texteFaible }}>
@@ -251,9 +249,7 @@ export function HistoriqueEvenements({
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 10, minHeight: 0, flex: 1 }}>
-      <span style={{ fontFamily: FONT, fontSize: 13, fontWeight: 600, color: CLAIR.texte }}>
-        Historique des événements
-      </span>
+      <TitreDeCarte style={{ marginBottom: 0 }}>Historique des événements</TitreDeCarte>
 
       {etat === "charge" && (
         <p style={{ margin: 0, fontFamily: FONT, fontSize: 11, color: CLAIR.texteFaible }}>Calcul…</p>

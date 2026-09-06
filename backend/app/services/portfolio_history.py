@@ -326,6 +326,88 @@ def dietz_sur_fenetre(points: list[dict], depuis: str) -> dict:
     }
 
 
+def gains_par_ligne(
+    transactions: list[dict],
+    cours: dict[str, dict[date, float]],
+    jours: Iterable[date],
+    depuis: str,
+) -> dict[str, dict]:
+    """
+    Le gain de l'épargnant sur la fenêtre, **ligne par ligne** — la même mesure que
+    `dietz_sur_fenetre`, découpée par titre. La somme des lignes est le gain du portefeuille.
+
+    ⚠️ **Pourquoi cette fonction existe : les cartes annonçaient +615 € sur six mois pour un
+    portefeuille qui n'a gagné que +318 € depuis février.** Chaque carte appliquait la hausse du
+    cours sur six mois à la quantité détenue *aujourd'hui* — dont l'essentiel a été acheté en
+    mai, juin et juillet, à des prix déjà montés. La hausse de mars à mai était comptée comme un
+    gain sur des parts qu'on ne possédait pas encore. Mesuré sur ESE.PA : +444 € affichés, +234 €
+    réels. Le bandeau, qui additionne les cartes, héritait du même chiffre, et le sélecteur de
+    période, calculé ici, en disait un autre.
+
+    ⚠️ **Même base que le gain du portefeuille, au jour près.** `depuis` est le premier jour de
+    *mesure* ; la valeur d'ouverture est celle du dernier jour du calendrier qui le précède, et
+    les opérations de ce jour-là — ou d'avant — sont dans cette valeur, pas dans les flux. C'est
+    exactement le découpage de `dietz_sur_fenetre` : les deux ne peuvent se sommer qu'à cette
+    condition, et un test le vérifie.
+
+    ⚠️ **Sans veille, la ligne commence à zéro** et toutes ses opérations sont des flux : c'est le
+    cas de « Max », et le gain vaut alors valeur moins capital versé — la plus-value que la page
+    connaît déjà. Une ligne dont un cours manque à l'une des deux bornes est omise plutôt que
+    chiffrée à zéro.
+    """
+    jours = sorted(jours)
+    fenetre = [j for j in jours if j.isoformat() >= depuis]
+    if not fenetre:
+        return {}
+    avant = [j for j in jours if j.isoformat() < depuis]
+    base = avant[-1] if avant else None
+    fin = fenetre[-1]
+
+    def cours_le(ticker: str, jour: date) -> float | None:
+        serie = cours.get(ticker, {})
+        anterieurs = [j for j in serie if j <= jour]
+        return serie[max(anterieurs)] if anterieurs else None
+
+    lignes: dict[str, dict[str, float]] = {}
+    for t in transactions:
+        d = t["executed_at"]
+        if hasattr(d, "date"):
+            d = d.date()
+        q = float(t["quantity"])
+        prix = float(t["unit_price"])
+        frais = float(t.get("fees") or 0.0)
+        signe = 1.0 if str(t["side"]).upper() == "BUY" else -1.0
+        e = lignes.setdefault(t["ticker"], {"q_debut": 0.0, "q_fin": 0.0, "flux": 0.0})
+        e["q_fin"] += signe * q
+        if base is not None and d <= base:
+            e["q_debut"] += signe * q
+        else:
+            e["flux"] += signe * q * prix + frais
+
+    resultat: dict[str, dict] = {}
+    for ticker, e in lignes.items():
+        if abs(e["q_fin"]) < 1e-9:
+            continue
+        p_fin = cours_le(ticker, fin)
+        if p_fin is None:
+            continue
+        v_debut = 0.0
+        if base is not None and abs(e["q_debut"]) > 1e-9:
+            p_debut = cours_le(ticker, base)
+            if p_debut is None:
+                continue
+            v_debut = e["q_debut"] * p_debut
+        v_fin = e["q_fin"] * p_fin
+        gain = v_fin - v_debut - e["flux"]
+        engage = v_debut + e["flux"]
+        resultat[ticker] = {
+            "gain_eur": round(gain, 4),
+            "gain_pct": round(gain / engage * 100, 4) if engage > 1e-9 else None,
+            "value":    round(v_fin, 4),
+        }
+    return resultat
+
+
 def simuler_benchmark(
     points: list[dict],
     cours_repere: dict[date, float],

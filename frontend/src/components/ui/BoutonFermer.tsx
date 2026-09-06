@@ -48,7 +48,7 @@ export default function BoutonFermer({
 }) {
   const signe = Math.round(taille * 0.7);
   return (
-    <button type="button" onClick={onClick} title={titre} aria-label={titre}
+    <button type="button" onClick={onClick} aria-label={titre}
       className="novac-lisere novac-bouton-doux" ref={ancrerLisere}
       style={{
         width: taille, height: taille, flexShrink: 0, boxSizing: "border-box", padding: 0,

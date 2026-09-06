@@ -1,15 +1,18 @@
 "use client";
-import { useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 import TileCard from "@/components/TileCard";
 import AssetLogo from "@/components/AssetLogo";
 import TileSparkline from "@/components/charts/TileSparkline";
 import ChiffresRoulants from "@/components/ui/ChiffresRoulants";
-import { brandHex } from "@/lib/tileStyle";
-import { assetName } from "@/lib/assets";
+import { couleurActif } from "@/lib/tileStyle";
+import { demanderNom, nomConnu, surNouveauNom } from "@/lib/nomsActifs";
+import { BRAND_COLORS } from "@/lib/assets";
 import type { GridAsset } from "@/lib/portfolio";
 import { FONT, NUM } from "@/lib/typography";
 import { RAYONS } from "@/lib/palette";
+import { melanger } from "@/lib/couleur";
+import { useModeTheme } from "@/lib/theme";
 import { useClignotement, styleClignotement } from "@/lib/clignotement";
 
 /**
@@ -93,9 +96,36 @@ export default function CarteActif({
    */
   inerte?: boolean;
 }) {
+  /**
+   * La teinte tirée du logo, pour les actifs que la table de marques ne connaît pas.
+   *
+   * ⚠️ **Sans elle, cette carte ne pouvait pas égaler celle de la page graphique.** Là-bas,
+   * un actif absent de `BRAND_COLORS` prend la couleur extraite de son logo ; ici il prenait un
+   * hachage de son ticker. Le même actif portait donc deux couleurs selon la page. Demandé à
+   * l'usage que les deux se ressemblent — il fallait pour cela que les deux *cherchent* la même
+   * chose, pas seulement qu'elles la mettent en forme pareil.
+   *
+   * ⚠️ **On ne demande l'extraction que si la table ne répond pas.** Poser le rappel dans tous
+   * les cas ferait, sur une grille de vingt cartes, vingt lectures de pixels dont dix-neuf
+   * seraient jetées — la table primant de toute façon. C'est la même condition que la page
+   * graphique applique, et elle vaut ici pour la même raison.
+   */
+  const [extraite, setExtraite] = useState<string | null>(null);
+  const sansMarque = !BRAND_COLORS[a.ticker];
+  const couleur = couleurActif(a.ticker, { extraite, clair: useModeTheme() === "clair" });
+
   const up = (a.change ?? 0) >= 0;
   const chg = up ? "var(--nv-positif)" : "var(--nv-negatif)";
-  const name = useMemo(() => assetName(a.ticker), [a.ticker]);
+  /**
+   * ⚠️ **Le nom vient du catalogue quand il l'a, du serveur sinon.** `assetName` ne connaît que
+   * les cent soixante et un actifs de `TRENDING` : `ETZ.PA` et `PAEJ.PA`, deux lignes d'un vrai
+   * PEA, n'y sont pas et leurs cartes restaient **muettes** sous le ticker pendant que leur
+   * voisine affichait le sien. L'abonnement redessine la carte quand le nom arrive.
+   */
+  const [, redessiner] = useState(0);
+  useEffect(() => surNouveauNom(() => redessiner(n => n + 1)), []);
+  useEffect(() => { demanderNom(a.ticker); }, [a.ticker]);
+  const name = nomConnu(a.ticker);
 
   /**
    * ⚠️ **`novac-tile` est portée aussi par les cartes d'aperçu.** Ce n'est pas un simple
@@ -110,11 +140,11 @@ export default function CarteActif({
     <TileCard ticker={a.ticker} radius={CARTE_ACTIF.rayon} glowStrength={0}
       reflet={false}
       className="novac-tile"
-      colorHex={brandHex(a.ticker)}
+      colorHex={couleur}
       onClick={inerte ? undefined : onClick}
       containerStyle={{
         height: CARTE_ACTIF.hauteur, width: CARTE_ACTIF.largeur, flexShrink: 0,
-        color: brandHex(a.ticker),
+        color: couleur,
         // Une carte d'aperçu ne se clique pas et ne se survole pas : elle est là pour
         // montrer ce que le dossier contient, et c'est le dossier qu'on ouvre.
         pointerEvents: inerte ? "none" : undefined,
@@ -141,7 +171,8 @@ export default function CarteActif({
         <AssetLogo ticker={a.ticker} type={a.type || "EQUITY"}
           size={CARTE_ACTIF.logo.cote} radius={CARTE_ACTIF.logo.rayon}
           fallbackBg="rgba(255,255,255,0.10)" fallbackBorder="rgba(255,255,255,0.16)"
-          fallbackTextColor="#fff" bare />
+          fallbackTextColor="#fff" bare
+          onColorExtracted={sansMarque ? setExtraite : undefined} />
         <div style={{ minWidth: 0, flex: 1 }}>
           <div style={{ fontFamily: FONT, fontSize: 15, fontWeight: 700, color: "rgba(255,255,255,0.94)",
             lineHeight: 1.15, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
@@ -154,7 +185,44 @@ export default function CarteActif({
             </div>
           )}
         </div>
-        <span style={{ ...NUM, fontSize: 11, fontWeight: 700, color: "rgba(255,255,255,0.50)", flexShrink: 0 }}>
+        {/**
+          * Le poids de la ligne, en **pastille**.
+          *
+          * ⚠️ **Une pastille et non un texte nu, parce que ce nombre ne parle pas de l'actif.**
+          * Tout le reste de la ligne — sigle, intitulé, cours — décrit le titre ; le poids décrit
+          * sa **place dans le portefeuille**. Posé en gris clair à côté du reste, il se lisait
+          * comme une donnée de marché de plus. Le cerner le range dans une autre catégorie sans
+          * qu'il faille l'expliquer.
+          *
+          * ⚠️ **`flexShrink: 0` et pas de retour à la ligne :** c'est le seul élément de la
+          * rangée qui ne doit jamais céder de place. L'intitulé, lui, s'ellipse — il est déjà
+          * tronqué sur deux des trois cartes.
+          *
+          * ⚠️ **Elle emprunte sa forme aux pastilles de l'application, elle n'en invente pas une.**
+          * `3px 8px` de rembourrage et `RAYONS.plein` : c'est ce qu'emploient déjà le filtre de
+          * `ImpactEvenements` et celui d'`EvenementsAVenir`. J'avais écrit `borderRadius: 8`, qui
+          * n'est même pas sur l'échelle des rayons — une quatrième façon d'arrondir un coin dans
+          * une interface qui en avait déjà trois.
+          *
+          * ⚠️ **Teintée de la couleur de l'actif, et non d'un gris neutre.** La carte entière
+          * porte cette teinte ; une pastille grise s'y posait comme une pièce rapportée. Le voile
+          * reste léger — c'est un cadre, pas un aplat — et le texte reste clair : sur une carte
+          * verte, un chiffre vert sur voile vert ne se lirait plus.
+          */}
+        <span style={{
+          ...NUM, fontSize: 11, fontWeight: 700, flexShrink: 0, whiteSpace: "nowrap",
+          /* ⚠️ Le chiffre est teinté, mais **éclairci** de moitié vers le blanc : la couleur
+             brute sur son propre voile ne se lirait pas — un vert à 100 % sur un voile vert à
+             12 %, c'est deux fois la même teinte. Mélangée au blanc, elle garde la marque et
+             retrouve le contraste. */
+          color: melanger(couleur, "#ffffff", 0.5),
+          padding: "3px 8px", borderRadius: RAYONS.plein,
+          background: `${couleur}1F`,
+          /* ⚠️ Liseré volontairement ténu : à 35 % il faisait un cadre, à 20 % un bord, à 13 %
+             il ne fait plus que **fermer** la forme. C'est le voile qui porte la pastille ; le
+             trait n'est là que pour lui donner une arête, pas pour la souligner. */
+          border: `1px solid ${couleur}21`,
+        }}>
           {a.weight.toFixed(a.weight < 10 ? 1 : 0)}%
         </span>
       </div>
@@ -171,48 +239,72 @@ export default function CarteActif({
       {/* Cours et variation */}
         <div style={{ marginTop: 10 }}>
           <Cours prix={a.price ?? null} />
-          {/* Ce que la ligne a rapporté depuis son achat, et non la
-              variation du cours sur la période affichée. Sur la fenêtre
-              Max, un ETF né en 2021 annonçait « +520 % · +2 992 € » sur
-              une position ouverte en février, qui n'a jamais rapporté
-              cela. On retombe sur la variation quand le prix de revient
-              est inconnu — portefeuilles sans transactions. */}
-          {a.pnlEur != null ? (() => {
-            const gagne = a.pnlEur >= 0;
+          {/**
+            * La performance de la ligne **sur la période affichée**, en euros et en part.
+            *
+            * ⚠️ **Elle montrait le gain depuis l'achat, ce qui contredisait la courbe juste en
+            * dessous.** Celle-ci suit maintenant le sélecteur de période ; laisser le chiffre sur
+            * toute la détention faisait dire deux choses au même rectangle — le tracé montrait la
+            * semaine, le nombre à côté montrait six mois. Les deux parlent désormais de la même
+            * fenêtre.
+            *
+            * ⚠️ **Ce qu'on perd, et pourquoi c'est acceptable :** la plus-value depuis l'achat
+            * n'est plus affichée. Le **PRU** reste, lui, et c'est ce qui permet encore de la
+            * situer — il ne dépend d'aucune période, contrairement aux deux nombres devant lui.
+            *
+            * ⚠️ **`change` et `perfEur` viennent du même appel que la courbe**, avec le même
+            * `period`. Il n'y a donc pas deux sources à tenir d'accord : c'est la même réponse
+            * qui alimente le tracé et le chiffre.
+            */}
+          {(() => {
+            const pct = a.change;
+            const gagne = (pct ?? 0) >= 0;
             const col = gagne ? "var(--nv-positif)" : "var(--nv-negatif)";
             return (
               <div style={{ ...NUM, fontSize: 12.5, fontWeight: 600, color: col, marginTop: 3 }}>
-                {gagne ? "+" : ""}{Math.round(a.pnlEur).toLocaleString("fr-FR")} €
-                {a.pnlPct != null && (
-                  <span style={{ opacity: 0.62, marginLeft: 5 }}>
-                    {gagne ? "+" : ""}{a.pnlPct.toFixed(1)} %
+                {a.perfEur != null
+                  ? `${gagne ? "+" : ""}${Math.round(a.perfEur).toLocaleString("fr-FR")} €`
+                  : "—"}
+                {/* ⚠️ Même opacité que le montant : les deux disent la **même** performance, l'une
+                    en euros et l'autre en part. En atténuer une revenait à la présenter comme
+                    secondaire alors qu'elle est souvent celle qu'on lit en premier. */}
+                {pct != null && (
+                  <span style={{ marginLeft: 5 }}>
+                    {gagne ? "+" : ""}{pct.toFixed(1)} %
                   </span>
                 )}
+                {/* ⚠️ Plus lisible qu'avant mais plus **maigre** que les deux performances :
+                    c'est la hiérarchie qui distingue, pas l'effacement. À 0,42 le PRU se
+                    devinait ; à 0,60 il se lit, et sa graisse plus fine dit qu'il vient après. */}
                 {a.avgCost != null && (
-                  <span style={{ opacity: 0.42, marginLeft: 5, fontWeight: 500 }}>
+                  <span style={{ opacity: 0.60, marginLeft: 5, fontWeight: 400 }}>
                     · PRU {eur(a.avgCost)}
                   </span>
                 )}
               </div>
             );
-          })() : (
-            <div style={{ ...NUM, fontSize: 12.5, fontWeight: 600, color: chg, marginTop: 3 }}>
-              {a.change != null ? `${up ? "+" : ""}${a.change.toFixed(2)} %` : "—"}
-              {a.perfEur != null && (
-                <span style={{ opacity: 0.62, marginLeft: 5 }}>
-                  {up ? "+" : ""}{Math.round(a.perfEur).toLocaleString("fr-FR")} €
-                </span>
-              )}
-            </div>
-          )}
+          })()}
         </div>
 
         {/* Courbe sur toute la largeur, comme au concept : rangée à
             droite sur la moitié de la carte, elle laissait un vide à
             gauche que rien ne venait occuper. */}
+        {/**
+          * ⚠️ **La courbe prend la couleur de l'**actif**, pas celle de sa performance.** Elle
+          * était verte ou rouge selon le sens du jour, comme le chiffre juste au-dessus. Mais la
+          * carte entière est déjà teintée de la marque : une courbe verte sur une carte bleue
+          * jurait, et surtout elle répétait une information que le pourcentage donne déjà en
+          * toutes lettres. Sur trois lignes toutes en hausse, la maquette montre deux courbes
+          * vertes et une **bleue** — c'est l'actif qu'on distingue d'un coup d'œil, pas son
+          * signe.
+          *
+          * ⚠️ **Le sens de la variation reste dit, une fois.** Le montant et le pourcentage
+          * gardent `chg` : c'est leur rôle. Le retirer là aussi aurait supprimé l'information au
+          * lieu de la déplacer.
+          */}
         <div style={{ flex: 1, display: "flex", alignItems: "flex-end", minHeight: 0, marginLeft: -2 }}>
           {a.spark && a.spark.length > 1 && (
-            <TileSparkline pts={a.spark} color={chg} w={222} h={42} updatedAt={a.updatedAt} />
+            <TileSparkline pts={a.spark} color={couleur} w={222} h={50} updatedAt={a.updatedAt} enrichi />
           )}
         </div>
 

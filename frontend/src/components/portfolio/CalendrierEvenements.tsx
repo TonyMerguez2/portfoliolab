@@ -1,4 +1,5 @@
 "use client";
+import TitreDeCarte from "@/components/ui/TitreDeCarte";
 import { useMemo, useState } from "react";
 
 import { CLAIR, JETONS, RAYONS } from "@/lib/palette";
@@ -101,11 +102,7 @@ export default function CalendrierEvenements({
     // « flex: 1 » de la grille ne partage rien. C'est ce qui fait que les semaines
     // s'étirent jusqu'au bas du panneau au lieu de le déborder.
     <div style={{ display: "flex", flexDirection: "column", gap: 10, minHeight: 0, height: "100%" }}>
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8,
-        flexShrink: 0 }}>
-        <span style={{ fontFamily: FONT, fontSize: 13, fontWeight: 600, color: CLAIR.texte }}>
-          Calendrier
-        </span>
+      <TitreDeCarte style={{ marginBottom: 0 }} action={
         <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
           {fleche(-1)}
           <span style={{ fontFamily: FONT, fontSize: 11, fontWeight: 600, color: CLAIR.texteSecondaire,
@@ -114,7 +111,7 @@ export default function CalendrierEvenements({
           </span>
           {fleche(1)}
         </div>
-      </div>
+      }>Calendrier</TitreDeCarte>
 
       {/* ⚠️ L'en-tête des jours est sorti de la grille des cases. Les deux ne
           partageaient qu'une seule grille, donc une seule règle de hauteur : impossible
@@ -153,7 +150,7 @@ export default function CalendrierEvenements({
           return (
             <div key={c.iso}
               onClick={cliquable ? () => onJour!(choisi ? null : c.iso) : undefined}
-              title={cliquable
+              aria-label={cliquable
                 ? (choisi ? "Cliquer pour voir toutes les échéances"
                           : "Ne voir que les échéances de ce jour")
                 : undefined}

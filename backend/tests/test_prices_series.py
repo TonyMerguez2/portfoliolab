@@ -9,7 +9,7 @@ from datetime import datetime, timedelta
 import pandas as pd
 import pytest
 
-from app.api.routes.backtest import (_downsample, _intraday_session, _session_with_base,
+from app.api.routes.backtest import (_downsample, _intraday_24h, _session_with_base,
                                      _trim_depuis, _trim_to_period)
 
 
@@ -122,14 +122,23 @@ class TestTrimDepuis:
         s = self._serie(5)
         assert len(_trim_depuis(s, "pas-une-date")) == len(s)
 
-    def test_borne_postérieure_garde_de_quoi_tracer(self):
+    def test_borne_postérieure_garde_deux_points_et_pas_toute_la_série(self):
         """
         Une date plus récente que toute la série ne laisserait qu'un point, et
-        une sparkline d'un point est un pixel. Mieux vaut une courbe trop
-        longue qu'une carte vide.
+        une sparkline d'un point est un pixel. On garde donc **les deux derniers**.
+
+        ⚠️ **Ce test affirmait l'inverse, et l'écran a tranché.** Il exigeait la
+        série entière — « mieux vaut une courbe trop longue qu'une carte vide ».
+        Le principe était bon, la conséquence non : une ligne achetée la veille
+        faisait afficher `AAPL` à **+331 078 %** sur quarante points, à côté de
+        voisines bornées à quatre points et +2 %. Deux points suffisent à tracer,
+        et ils parlent de la détention au lieu de l'histoire du titre.
         """
         s = self._serie(5)
-        assert len(_trim_depuis(s, "2099-01-01")) == len(s)
+        coupe = _trim_depuis(s, "2099-01-01")
+        assert len(coupe) == 2
+        # Ce sont bien les deux plus récents, pas deux points quelconques.
+        assert list(coupe.values) == list(s.values[-2:])
 
 
 class TestDownsample:
@@ -158,45 +167,46 @@ class TestDownsample:
         assert _downsample([], max_points=40) == []
 
 
-class TestIntradaySession:
+class TestIntraday24h:
     @staticmethod
     def _frame():
-        """Deux séances de trois barres, deux tickers."""
-        sessions = [
-            pd.Timestamp("2026-07-27").date(), pd.Timestamp("2026-07-27").date(), pd.Timestamp("2026-07-27").date(),
-            pd.Timestamp("2026-07-28").date(), pd.Timestamp("2026-07-28").date(), pd.Timestamp("2026-07-28").date(),
-        ]
-        close = pd.DataFrame(
+        """Deux séances de trois barres, deux tickers, à un jour d'écart."""
+        idx = (list(pd.date_range("2026-07-27 09:00", periods=3, freq="15min", tz="Europe/Paris"))
+               + list(pd.date_range("2026-07-28 09:00", periods=3, freq="15min", tz="Europe/Paris")))
+        return pd.DataFrame(
             {"AAPL": [10.0, 11.0, 12.0, 20.0, 21.0, 22.0],
              "MSFT": [30.0, 31.0, 32.0, 40.0, 41.0, 42.0]},
-            index=pd.date_range("2026-07-27", periods=6, freq="15min", tz="America/New_York"),
+            index=pd.DatetimeIndex(idx),
         )
-        return close, sessions
 
-    def test_ne_garde_que_la_derniere_seance(self):
-        """Le point capital : une fenêtre de deux jours enjambe une clôture.
-
-        Prendre les N dernières barres ferait apparaître le saut de nuit
-        (12 → 20 ici), que la variation du jour ne contient pas.
-        """
-        close, sessions = self._frame()
-        assert _intraday_session(close, sessions, "AAPL", 2) == [20.0, 21.0, 22.0]
+    def test_vingt_quatre_heures_depuis_la_derniere_barre(self):
+        """Le point capital : la fenêtre remonte d'un jour depuis la dernière barre, donc la
+        séance de la veille y entre — pas seulement la séance en cours, qui à l'ouverture ne
+        compte qu'une barre ou deux."""
+        close = self._frame()
+        # Dernière barre : 28/07 09:30 ; fenêtre depuis 27/07 09:30 inclus → 09:00 et 09:15
+        # de la veille sortent, sa barre de 09:30 reste.
+        assert _intraday_24h(close, "AAPL", 2) == [12.0, 20.0, 21.0, 22.0]
 
     def test_isole_le_bon_ticker(self):
-        close, sessions = self._frame()
-        assert _intraday_session(close, sessions, "MSFT", 2) == [40.0, 41.0, 42.0]
+        assert _intraday_24h(self._frame(), "MSFT", 2) == [32.0, 40.0, 41.0, 42.0]
 
     def test_ticker_absent(self):
-        close, sessions = self._frame()
-        assert _intraday_session(close, sessions, "TSLA", 2) == []
+        assert _intraday_24h(self._frame(), "TSLA", 2) == []
 
     def test_sans_donnee(self):
-        assert _intraday_session(None, None, "AAPL", 1) == []
+        assert _intraday_24h(None, "AAPL", 1) == []
 
     def test_ticker_unique_en_serie(self):
         """Sur un seul ticker, yfinance renvoie une Series, pas un DataFrame."""
-        close, sessions = self._frame()
-        assert _intraday_session(close["AAPL"], sessions, "AAPL", 1) == [20.0, 21.0, 22.0]
+        close = self._frame()
+        assert _intraday_24h(close["AAPL"], "AAPL", 1) == [12.0, 20.0, 21.0, 22.0]
+
+    def test_un_dimanche_rend_toute_la_seance_du_vendredi(self):
+        """⚠️ Depuis la dernière barre, pas depuis l'horloge : un week-end, la fenêtre
+        d'horloge serait vide et la carte n'aurait rien à tracer."""
+        close = self._frame().iloc[:3]  # seule la « veille » a coté
+        assert _intraday_24h(close, "AAPL", 2) == [10.0, 11.0, 12.0]
 
 
 class TestSessionWithBase:

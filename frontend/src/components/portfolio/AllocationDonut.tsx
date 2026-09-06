@@ -89,7 +89,7 @@ export default function AllocationDonut({
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
         <span style={{ display: "flex", alignItems: "center", gap: 5, fontFamily: FONT, fontSize: 12.5, fontWeight: 600, color: CLAIR.texte }}>
           Répartition
-          <span title="Part de chaque ligne dans la valeur totale du portefeuille."
+          <span aria-label="Part de chaque ligne dans la valeur totale du portefeuille."
             style={{ display: "flex", color: CLAIR.texteFaible, cursor: "help" }}>
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
               <circle cx="12" cy="12" r="10" /><path d="M12 16v-4M12 8h.01" strokeLinecap="round" />

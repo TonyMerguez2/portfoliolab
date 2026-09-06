@@ -287,7 +287,7 @@ function Carte({ o, onModifier }: { o: Objectif; onModifier?: (o: Objectif) => v
             capital — et c'est cette raison que l'épargnant doit pouvoir corriger. */}
         <span style={{ ...NUM, fontSize: 10.5, fontWeight: 700, whiteSpace: "nowrap",
           color: reste ? "rgba(255,255,255,0.80)" : "rgba(255,255,255,0.38)" }}
-          title={reste ? undefined
+          aria-label={reste ? undefined
             : "Renseignez un versement mensuel — et un rendement attendu pour un objectif de capital."}>
           {reste === "atteint" ? "atteint" : reste ? `reste ${reste}` : "durée inconnue"}
         </span>
@@ -357,8 +357,7 @@ function CarteAjout({ vide, onAjouter }: { vide: boolean; onAjouter: () => void 
   const [survol, setSurvol] = useState(false);
 
   return (
-    <button type="button" onClick={onAjouter}
-      title="Ajouter un objectif" aria-label="Ajouter un objectif"
+    <button type="button" onClick={onAjouter} aria-label="Ajouter un objectif"
       onMouseEnter={() => setSurvol(true)}
       onMouseLeave={() => setSurvol(false)}
       style={{

@@ -71,7 +71,7 @@ export default function WatchBand({
         {notables.length > 0 && (
           <div style={{ display: "flex", alignItems: "center", flexShrink: 0 }}>
             {notables.slice(0, 3).map((a, i) => (
-              <div key={a.ticker} title={`${a.ticker} ${a.change! >= 0 ? "+" : ""}${a.change!.toFixed(2)} %`}
+              <div key={a.ticker} aria-label={`${a.ticker} ${a.change! >= 0 ? "+" : ""}${a.change!.toFixed(2)} %`}
                 {...marqueAvatar(a.change)}
                 style={{
                   width: 26, height: 26, borderRadius: "50%", overflow: "hidden",

@@ -178,38 +178,6 @@ export const totalDesBlocs = (blocs: Bloc[]) =>
   blocs.reduce((s, b) => s + b.valeur, 0);
 
 /**
- * Réunit sous « Autres » ce qui deviendrait un filet illisible.
- *
- * ⚠️ **C'est la réponse à l'objection qui avait fait retirer la treemap d'ici.** Le poids
- * codé par la surface rend les petites lignes minuscules ; vu à l'écran sur un panneau de
- * trois centimètres, une ligne à 15 % réduite à un trait vertical sans étiquette. Plutôt que
- * de dessiner ce qu'on ne peut pas lire, on le rassemble et on le nomme.
- *
- * ⚠️ **Le seuil est une part, pas un nombre de pixels.** Un nombre de pixels dépendrait de
- * la taille du panneau, donc changerait la composition de l'image d'un écran à l'autre : le
- * même portefeuille ne se raconterait pas pareil sur un portable et sur un moniteur.
- *
- * ⚠️ **Rien n'est regroupé s'il n'y a rien à gagner.** Un seul bloc sous le seuil devient
- * « Autres » tout seul — un rectangle de même taille, avec un nom moins précis. On ne
- * regroupe donc qu'à partir de deux.
- */
-export function regrouperLesMiettes(
-  blocs: Bloc[], seuil = 0.04,
-): Bloc[] {
-  const total = totalDesBlocs(blocs);
-  if (total <= 0) return blocs;
-  const miettes = blocs.filter(b => b.valeur / total < seuil);
-  if (miettes.length < 2) return blocs;
-  const gardes = blocs.filter(b => b.valeur / total >= seuil);
-  return [...gardes, {
-    cle: "autres",
-    nom: `${miettes.length} autres`,
-    valeur: miettes.reduce((s, b) => s + b.valeur, 0),
-    couleur: "#3A4256",
-  }];
-}
-
-/**
  * Le poids de mise en page de chaque bloc — l'aire qu'il occupera.
  *
  * ⚠️ **C'est le seul endroit du module où l'image ment un peu, et il faut le savoir.** Un
@@ -228,16 +196,24 @@ export function regrouperLesMiettes(
  *
  * ⚠️ **Rien ne bouge si tous les blocs sont au-dessus du plancher**, ce qui est le cas
  * ordinaire. La distorsion n'existe que là où elle sert.
+ *
+ * ⚠️ **Le plancher est descendu de 5,5 % à 2 %, parce qu'à 5,5 % l'image mentait trop.** Vu
+ * à l'écran : une ligne à 8 % et une ligne à 1 % faisaient la même tuile, et l'utilisateur
+ * ne pouvait plus lire les poids sur les aires — ce qui est pourtant tout ce qu'une carte en
+ * arbre promet. À 2 %, une part de 1 % est deux fois relevée et reste quatre fois plus
+ * petite qu'une part de 8 % ; elle n'est plus un filet, mais elle n'est plus un mensonge
+ * non plus. Le nom d'une si petite tuile ne tient pas dessus : la ligne de lecture le
+ * porte, c'est son rôle.
  */
 export function poidsLisibles(
-  blocs: Bloc[], plancher = 0.055,
+  blocs: Bloc[], plancher = 0.02,
 ): { bloc: Bloc; poids: number }[] {
   const total = totalDesBlocs(blocs);
   if (total <= 0) return blocs.map(bloc => ({ bloc, poids: 0 }));
 
-  // ⚠️ Le plancher ne peut pas dépasser une part égale : à six blocs, un plancher de 5,5 %
-  // laisse de la marge, mais à vingt il exigerait 110 % de la surface. On le borne donc à ce
-  // que la surface permet, faute de quoi la renormalisation les égaliserait tous.
+  // ⚠️ Le plancher ne peut pas dépasser une part égale : à vingt blocs il tient encore, mais
+  // à soixante il exigerait 120 % de la surface. On le borne donc à ce que la surface permet,
+  // faute de quoi la renormalisation les égaliserait tous.
   const borne = Math.min(plancher, 1 / Math.max(1, blocs.length));
   const releves = blocs.map(bloc => ({
     bloc, poids: Math.max(bloc.valeur / total, borne),
