@@ -1377,9 +1377,19 @@ function PortfolioPageInner() {
    * qui recouvrirait un échec serait la pire des deux paroles. Le salut n'occupe donc que le
    * silence.
    */
+  /**
+   * ⚠️ **Le salut attend que la page ait quelque chose à montrer.** Relevé à l'écran : pendant
+   * les secondes de chargement, « Bonjour Sacha ! » s'étalait en grand contre un bandeau qui
+   * affichait « Non défini » en valeur totale et rien en performance. Une politesse posée
+   * contre un écran vide ne se lit pas comme un accueil mais comme un défaut d'affichage —
+   * d'autant qu'elle pousse le nom du portefeuille pour prendre sa place.
+   *
+   * Il ne s'agit pas de le retarder d'un délai arbitraire : il s'affiche dès que les chiffres
+   * sont là, c'est-à-dire au moment où il a un écran à saluer.
+   */
   const paroleAffichee = parleEnContexteDense(expressionParlee)
     ? { cle: expressionParlee, nom: null as string | null }
-    : salue ? { cle: "content", nom: nomCompte }
+    : salue && !loading ? { cle: "content", nom: nomCompte }
     : null;
   /**
    * ⚠️ **Le thème est lu ici parce que la parole se corrige dans les deux sens.** La couleur
@@ -2640,9 +2650,11 @@ function PortfolioPageInner() {
               * que la courbe, juste au-dessus, doit rendre. Le graphique se redessinait donc à
               * une autre taille une à deux secondes après l'ouverture de la page.
               *
-              * Le repli reproduit donc la géométrie exacte de l'état chargé : une rangée
-              * incompressible de la bonne hauteur, puis le reste en `flex: 1`. Rien ne bouge
-              * quand le contenu se substitue à elle.
+              * Le repli est donc **exactement** cette rangée : une hauteur fixe, et rien
+              * d'élastique. C'est la seconde version — la première ajoutait un `flex: 1` sous
+              * la rangée réservée, si bien que l'attente prenait *plus* de place que l'état
+              * chargé et écrasait la courbe à mi-hauteur, avec un grand vide dessous. Ce qui
+              * reste après cette rangée appartient au graphique, dans les deux états.
               *
               * ⚠️ On réemploie `HAUTEUR_DOSSIERS`, qui existait déjà et vaut exactement cela :
               * son commentaire annonce « l'invariant qui empêche la courbe de changer de taille
@@ -2650,12 +2662,11 @@ function PortfolioPageInner() {
               * même invariant vaut. Une constante recopiée à 232 aurait divergé au premier
               * ajustement de la carte d'un dossier.
               */
-            <>
-              <div style={{ height: HAUTEUR_DOSSIERS, flexShrink: 0 }} aria-hidden="true" />
-              <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", color: CLAIR.texteFaible, fontSize: 12 }}>
-                Chargement…
-              </div>
-            </>
+            <div style={{ height: HAUTEUR_DOSSIERS, flexShrink: 0, display: "flex",
+                          alignItems: "center", justifyContent: "center",
+                          color: CLAIR.texteFaible, fontSize: 12 }}>
+              Chargement…
+            </div>
           ) : (<>
             {/* Grille à cartes égales. La treemap pondérée codait le poids
                 par la surface : les petites lignes en devenaient illisibles,
