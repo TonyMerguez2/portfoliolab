@@ -21,10 +21,18 @@ novac.xyz, www.novac.xyz {
 	# ici ouvrirait un chemin où la porte n'existe pas, et où les données du site seraient
 	# lisibles sans code d'accès.
 	reverse_proxy 127.0.0.1:3000
-
-	# Les journaux, pour savoir qui vient et ce qui casse.
-	log {
-		output file /var/log/caddy/novac.log
-		format json
-	}
 }
+
+# ⚠️ **Pas de bloc `log` vers un fichier**, et c'est une correction, pas un oubli. Il y en
+# avait un vers /var/log/caddy/novac.log ; Caddy refusait alors de charger sa configuration —
+# « open /var/log/caddy/novac.log: permission denied » —, y compris avec le dossier créé et
+# donné au bon compte : l'unité systemd du paquet Debian confine les écritures de Caddy à
+# quelques chemins, et /var/log/caddy n'en fait pas partie. Résultat, Caddy restait sur sa
+# configuration par défaut, servait une page d'accueil en clair sur le port 80 et n'obtenait
+# aucun certificat. Un fichier de journal a fait tomber le HTTPS.
+#
+# Sans ce bloc, Caddy écrit dans le journal du système, qui est de toute façon l'endroit où on
+# regarde :
+#
+#     journalctl -u caddy -f
+#     journalctl -u caddy | grep -i certificate
