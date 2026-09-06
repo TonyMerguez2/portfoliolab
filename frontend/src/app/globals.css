@@ -303,13 +303,14 @@
      bien que le point le plus vif ne vaut pas 28 % mais 1 − (1 − 0,065)(1 −
      0,28), soit 32,7 % — cinq fois le repos. C'est ce rapport qui se voit,
      pas la valeur brute. */
-  /* ⚠️ **0,10 et non 0,065 : la trame disparaissait aux extrémités du dégradé.** Le point
-     est un gris translucide : sur le plateau clair du milieu il se détache, mais sur le
-     `#030712` du haut et du bas il ne laissait qu'un écart de six niveaux sur deux cent
-     cinquante-six — au-dessous de ce qu'un écran ordinaire montre. Relevé à l'usage : « dans
-     les extrémités les plus sombres on ne voit plus les pointillés ». */
-  --nv-point:             rgba(106,114,130,0.10);
-  --nv-point-vif:         rgba(106,114,130,0.28);
+  /* ⚠️ **Les deux opacités viennent d'Appica UI, lues dans le paquet.** Son motif « dots »
+     pose la trame à `bg-current/12` et son halo à `bg-current/64` en sombre, `/58` en clair,
+     sur `--border-intense` — qui vaut `oklch(0.551 0.027 264.364)`, soit exactement le
+     `rgb(106,114,130)` que nous employions déjà. Le gris était donc juste ; les opacités, non :
+     la trame a valu 0,065 puis 0,10, et le halo 0,28 au lieu de 0,64. Le halo était plus de
+     deux fois trop faible, ce qui explique qu'on ne le remarquait guère. */
+  --nv-point:             rgba(106,114,130,0.12);
+  --nv-point-vif:         rgba(106,114,130,0.64);
 
   /* La barre latérale. Elle est translucide et floute ce qui passe dessous :
      ses fonds ne peuvent donc pas être les jetons de carte, qui sont opaques. */
@@ -415,9 +416,9 @@
      rampe plutôt qu'un noir pur, qui piquerait sur du blanc. Un gris sombre sur
      blanc se voit un peu mieux qu'un gris clair sur noir, d'où une opacité
      légèrement moindre qu'en sombre. */
-  /* Même correction, thème clair — voir la note du thème sombre. */
-  --nv-point:             rgba(106,114,130,0.085);
-  --nv-point-vif:         rgba(106,114,130,0.24);
+  /* Mêmes jetons Appica, thème clair — voir la note du thème sombre. */
+  --nv-point:             rgba(106,114,130,0.12);
+  --nv-point-vif:         rgba(106,114,130,0.58);
 
   /* La barre suit la page. L'état actif quitte le blanc translucide pour
      l'accent : sur fond clair, un voile blanc sur blanc ne marque rien. */
@@ -896,8 +897,13 @@
      Elle tombait à 30 % dès la mi-rayon, ce qui resserrait tout en une tache
      étroite autour du curseur ; à 45 % la lueur respire sur les 200 px
      annoncés au lieu d'en éteindre la moitié. */
-  -webkit-mask-image: radial-gradient(200px circle at var(--nv-mx, -9999px) var(--nv-my, -9999px), #000 0%, rgba(0,0,0,0.45) 50%, transparent 82%);
-  mask-image: radial-gradient(200px circle at var(--nv-mx, -9999px) var(--nv-my, -9999px), #000 0%, rgba(0,0,0,0.45) 50%, transparent 82%);
+  /* ⚠️ **La retombée est celle d'Appica, au caractère près** : pleine jusqu'à 5 %, point de
+     mi-parcours à 35 %, éteinte à 100 % d'un rayon de 200 px. Le « 35% » seul, sans couleur,
+     n'est pas un arrêt mais une *indication de milieu* : elle déplace le point où le fondu est
+     à moitié fait, ce qu'aucune paire d'arrêts ne sait exprimer. La nôtre s'éteignait à 82 %
+     avec un demi-ton à 50 %, donc plus tôt et plus mollement. */
+  -webkit-mask-image: radial-gradient(200px circle at var(--nv-mx, -9999px) var(--nv-my, -9999px), #000 0%, #000 5%, 35%, transparent 100%);
+  mask-image: radial-gradient(200px circle at var(--nv-mx, -9999px) var(--nv-my, -9999px), #000 0%, #000 5%, 35%, transparent 100%);
 }
 
 /* La trame vaut pour les deux thèmes ; seules ses couleurs changent. */
