@@ -6,6 +6,7 @@ from __future__ import annotations
 import logging
 import re
 import threading
+import time
 
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
@@ -16,6 +17,9 @@ from app.core.config import get_settings
 from app.services import memoire_courte
 from app.services.rankings import start_preload
 from app.services.chaleur import PERIODES, carte
+
+#: Le répit laissé au serveur avant de préchauffer, en secondes.
+_DELAI_PRECHAUFFAGE = 30
 from app.api.routes.backtest import router as backtest_router
 from app.api.routes.portfolios import router as portfolios_router
 from app.api.routes.auth import router as auth_router
@@ -146,13 +150,32 @@ def _prechauffer_chaleur() -> None:
     simultanés de cinq cents titres, c'est exactement ce que le fournisseur
     étrangle. En série, le serveur répond pendant ce temps et la charge reste
     celle d'un visiteur.
+
+    ⚠️ **Une seule période au démarrage, et non les six — corrigé sur mesure en production.**
+    « Les six tiennent en une minute et quelques » était vrai sur une machine de travail. Sur
+    un serveur, où le fournisseur répond bien plus lentement à une adresse de centre de
+    données, chaque période coûte **quarante secondes** : mesuré, 255 s pour les six. Pendant
+    ces quatre minutes, le serveur ne « répond pas pendant ce temps » du tout — il se bat avec
+    son propre préchauffage pour le même réseau, et une page de portefeuille qui se calcule en
+    0,4 s hors charge mettait de vingt à quatre-vingt-dix secondes. C'est ce qui a fait
+    diagnostiquer une lenteur du portefeuille alors que la lenteur venait d'ici.
+
+    ⚠️ **Ce que ça coûte, et c'est assumé** : ouvrir la carte de chaleur sur une période autre
+    que « 1j » dans les minutes qui suivent un redémarrage attendra une quarantaine de
+    secondes — l'inconvénient que le préchauffage des six avait justement été écrit pour
+    éviter. Mais il ne touche qu'une page et qu'un bouton, quand l'autre défaut touchait toutes
+    les pages et tous les visiteurs. Les cinq autres périodes se calculent à la demande et
+    restent en cache ensuite.
+
+    ⚠️ **Et pas tout de suite** : `_DELAI` laisse au serveur le temps de répondre aux premiers
+    visiteurs, qui arrivent précisément après un déploiement.
     """
     def tache() -> None:
-        for periode in PERIODES:
-            try:
-                carte(periode)
-            except Exception:
-                logger.exception("Préchauffage de la carte de chaleur : échec (%s)", periode)
+        time.sleep(_DELAI_PRECHAUFFAGE)
+        try:
+            carte(PERIODES[0])
+        except Exception:
+            logger.exception("Préchauffage de la carte de chaleur : échec (%s)", PERIODES[0])
 
     threading.Thread(target=tache, daemon=True, name="prechauffage-chaleur").start()
 
