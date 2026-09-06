@@ -98,6 +98,7 @@ function Porte() {
   return (
     <main style={{ minHeight: "100vh", position: "relative", overflow: "hidden",
                    fontFamily: FONT, color: JETONS.surFond }}>
+      <Decor />
       <div style={{ position: "relative", zIndex: 1, maxWidth: 1000, margin: "0 auto",
                     padding: "clamp(40px, 8vh, 96px) 24px 72px",
                     display: "flex", flexDirection: "column",
@@ -238,40 +239,6 @@ function Porte() {
           </p>
         </section>
 
-        {/* ── Ce qu'il y a derrière ──────────────────────────────────────── */}
-        <section style={{ width: "100%" }}>
-          <Intertitre>Aperçu · exemples chiffrés</Intertitre>
-          {/* ⚠️ Six aperçus et non trois, à la demande, et le dessin y prend le dessus : il
-              occupe toute la largeur de la carte sur une bande haute, le texte se resserre
-              dessous. Un aperçu qu'on lit plus qu'on ne regarde ne montre rien. */}
-          <div style={{ display: "grid", gap: 12,
-                        gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))" }}>
-            <Apercu titre="Une note, et ce qui la fonde"
-              texte="Cinq piliers sur cent. Un pilier non mesurable est écarté, jamais compté à zéro.">
-              <AnneauScore />
-            </Apercu>
-            <Apercu titre="La courbe de votre patrimoine"
-              texte="Reconstruite depuis vos opérations réelles, comparée au marché sur la même fenêtre.">
-              <Courbe />
-            </Apercu>
-            <Apercu titre="Ce que vous détenez vraiment"
-              texte="En transparence des fonds : trois ETF, c'est des centaines de sociétés.">
-              <MosaiqueApercu />
-            </Apercu>
-            <Apercu titre="Chaque ligne, son gain"
-              texte="Quantité détenue et prix de revient issus de vos écritures, pas d'une pondération cible.">
-              <CartesActifs />
-            </Apercu>
-            <Apercu titre="Vos comptes, rangés"
-              texte="PEA, compte-titres, livrets, compte courant. Les espèces comptent dans le patrimoine, jamais dans la performance.">
-              <Dossiers />
-            </Apercu>
-            <Apercu titre="La fenêtre que vous voulez"
-              texte="De la séance du jour à tout l'historique, la performance suit la période choisie.">
-              <RailPeriodes />
-            </Apercu>
-          </div>
-        </section>
       </div>
     </main>
   );
@@ -350,7 +317,7 @@ function PastilleAlpha() {
         style={{ display: "inline-flex", alignItems: "center", gap: 7, marginTop: 20,
                  padding: "5px 13px", borderRadius: RAYONS.plein,
                  background: JETONS.carteCreuse,
-                 color: JETONS.texteSecondaire, fontSize: 10.5, fontWeight: 600,
+                 color: JETONS.negatif, fontSize: 10.5, fontWeight: 600,
                  letterSpacing: "0.14em" }}>
         <span aria-hidden="true" style={{ width: 5, height: 5, borderRadius: 3,
                                           background: JETONS.negatif, flexShrink: 0 }} />
@@ -360,50 +327,77 @@ function PastilleAlpha() {
   );
 }
 
-function Intertitre({ children }: { children: React.ReactNode }) {
+/**
+ * Ce qu'il y a derrière la porte, aperçu par-dessus l'épaule.
+ *
+ * ⚠️ **Six cartes d'exemple alignées ont été essayées, et retirées : elles n'appelaient
+ * personne.** Présentés en rangée avec un titre et un paragraphe chacun, ces morceaux
+ * d'interface devenaient une brochure — on les lit, on ne les désire pas. Éparpillés derrière
+ * la porte, à demi effacés, ils font l'inverse : on aperçoit un patrimoine rangé, des notes,
+ * des courbes, et l'on veut voir le reste. C'est la promesse au lieu de la démonstration.
+ *
+ * ⚠️ **Voilés vers le centre, jamais floutés.** Un flou coûte cher à peindre et donne l'image
+ * d'une capture ratée ; un voile radial laisse les formes nettes tout en dégageant l'axe où
+ * vivent le nom et la porte. La lisibilité de la carte prime sur tout le reste — c'est elle
+ * qui fait entrer.
+ *
+ * ⚠️ **Rien ici n'est cliquable ni annoncé.** `aria-hidden` et `pointer-events: none` : au
+ * clavier comme au lecteur d'écran, cette page n'a que deux champs et deux boutons.
+ */
+function Decor() {
+  /* Places et tailles : les positions en pourcentage pour que la composition tienne du
+     téléphone au grand écran, les largeurs en pixels pour que les pièces restent lisibles. */
+  const pieces: { style: React.CSSProperties; contenu: React.ReactNode }[] = [
+    { style: { top: "5%",     left: "2%",    width: 300 }, contenu: <CartesActifs /> },
+    { style: { top: "3%",     right: "3%",   width: 220 }, contenu: <Dossiers /> },
+    { style: { top: "33%",    left: "5%",    width: 150 }, contenu: <MosaiqueApercu /> },
+    { style: { top: "29%",    right: "6%",   width: 100 }, contenu: <AnneauScore /> },
+    { style: { bottom: "15%", left: "8%",    width: 96  }, contenu: <Avatar /> },
+    { style: { bottom: "8%",  right: "5%",   width: 240 }, contenu: <Courbe /> },
+    { style: { bottom: "27%", right: "17%",  width: 250 }, contenu: <RailPeriodes /> },
+    { style: { bottom: "33%", left: "21%",   width: 90  }, contenu: <AnneauScore note={41} /> },
+  ];
   return (
-    <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 14 }}>
-      <span style={{ fontFamily: FONT, fontSize: 10, fontWeight: 600, letterSpacing: "0.14em",
-                     textTransform: "uppercase", color: JETONS.texteFaible, whiteSpace: "nowrap" }}>
-        {children}
-      </span>
-      <span style={{ flex: 1, height: 1, background: JETONS.bord }} />
+    <div aria-hidden="true" style={{ position: "absolute", inset: 0, pointerEvents: "none",
+                                     overflow: "hidden", zIndex: 0 }}>
+      <div style={{
+        position: "absolute", inset: 0,
+        /* ⚠️ Le masque **et** son préfixe WebKit : Safari ne connaît toujours pas la forme
+           standard, et sans lui le décor s'y afficherait à pleine force sous la porte. */
+        maskImage: "radial-gradient(ellipse 46% 54% at 50% 44%, transparent 26%, #000 76%)",
+        WebkitMaskImage: "radial-gradient(ellipse 46% 54% at 50% 44%, transparent 26%, #000 76%)",
+      }}>
+        {pieces.map((p, i) => (
+          <div key={i} style={{ position: "absolute", opacity: 0.5, ...p.style }}>
+            {p.contenu}
+          </div>
+        ))}
+      </div>
     </div>
   );
 }
 
-function Apercu({ titre, texte, children }: {
-  titre: string; texte: string; children: React.ReactNode;
-}) {
+/** Le personnage, réduit à sa silhouette et à son regard. */
+function Avatar() {
   return (
-    <Cadre style={{ padding: 14 }}>
-      <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-      {/* ⚠️ Hauteur fixe : six dessins de natures différentes doivent poser leurs titres sur
-          la même ligne, sinon la grille se lit comme des cartes mal alignées. Le dessin est
-          centré et débordant est masqué — chacun est tracé pour cette bande. */}
-      <div style={{ height: 104, borderRadius: RAYONS.sm, background: JETONS.carteCreuse,
-                    display: "flex", alignItems: "center", justifyContent: "center",
-                    overflow: "hidden" }}>
-        {children}
-      </div>
-      <div>
-        <div style={{ fontFamily: FONT, fontSize: 12.5, fontWeight: 600, color: JETONS.texte,
-                      marginBottom: 4 }}>{titre}</div>
-        <p style={{ margin: 0, fontFamily: FONT, fontSize: 11.5, lineHeight: 1.55,
-                    color: JETONS.texteAttenue }}>{texte}</p>
-        </div>
-      </div>
-    </Cadre>
+    <svg width="96" height="96" viewBox="0 0 96 96" aria-hidden="true">
+      {/* La superellipse du site, approchée par un arrondi généreux : à cette taille et sous
+          un voile, l'exposant exact ne se distingue pas d'un rayon. */}
+      <rect x="4" y="4" width="88" height="88" rx="30" fill="#6366F1" />
+      <circle cx="34" cy="46" r="6" fill="#0B1220" />
+      <circle cx="62" cy="46" r="6" fill="#0B1220" />
+    </svg>
   );
 }
 
 /** L'anneau du score, à la mesure de celui du bandeau. */
-function AnneauScore() {
-  const score = 75, r = 34, c = 2 * Math.PI * r;
+function AnneauScore({ note = 75 }: { note?: number }) {
+  const score = note, r = 34, c = 2 * Math.PI * r;
   return (
     <svg width="92" height="92" viewBox="0 0 92 92" role="img" aria-label="Exemple de note : 75 sur 100">
       <circle cx="46" cy="46" r={r} fill="none" stroke={JETONS.bordFort} strokeWidth="9" />
-      <circle cx="46" cy="46" r={r} fill="none" stroke={JETONS.positif} strokeWidth="9"
+      <circle cx="46" cy="46" r={r} fill="none"
+        stroke={score >= 60 ? JETONS.positif : JETONS.negatif} strokeWidth="9"
         strokeLinecap="round" strokeDasharray={`${(c * score) / 100} ${c}`}
         transform="rotate(-90 46 46)" />
       <text x="46" y="46" textAnchor="middle" dominantBaseline="central"
