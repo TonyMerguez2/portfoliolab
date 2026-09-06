@@ -9,6 +9,7 @@ import { champ, HAUTEUR_SAISIE, RAYON_SAISIE } from "@/components/ui/saisie";
 import CarteActif from "@/components/portfolio/CarteActif";
 import CarteCompte from "@/components/portfolio/CarteCompte";
 import AvatarNovac from "@/components/AvatarNovac";
+import { ChoixCouleur, ChoixSilhouette, Reglage } from "@/components/portfolio/ChoixApparence";
 import type { GridAsset } from "@/lib/portfolio";
 
 /**
@@ -29,6 +30,25 @@ import type { GridAsset } from "@/lib/portfolio";
  * faisant passer pour un portefeuille réel serait une promesse fausse ; les taire rendrait les
  * dessins illisibles. Ils portent la mention « aperçu », une fois, en tête du bloc.
  */
+
+/**
+ * La surface des deux champs de cette page.
+ *
+ * ⚠️ **`.novac-surface-saisie` ne convient pas ici, et c'est une question de contexte.** Sa
+ * couleur est `--nv-bord`, `#101828` : posée dans une carte, elle se creuse joliment ; posée
+ * *directement sur la page*, elle vaut exactement la teinte médiane du dégradé de fond, et
+ * le champ disparaît. Ailleurs sur le site il y a toujours une carte entre les deux ; ici il
+ * n'y en a pas. La surface est donc relevée d'un cran, à `bordFort`, avec un liseré qui la
+ * détache franchement.
+ *
+ * Même raison pour les deux boutons : ils gardent la pastille blanche même désactivés, et ne
+ * font que s'estomper. Le fond creusé qu'ils portaient au repos se confondait lui aussi avec
+ * la page, si bien qu'« Entrer » et « Rejoindre » n'existaient qu'une fois le champ rempli.
+ */
+const SURFACE_CHAMP: React.CSSProperties = {
+  background: JETONS.bordFort,
+  border: `1px solid ${JETONS.bordFort}`,
+};
 
 type Etat = "repos" | "envoi" | "refus" | "panne";
 type EtatInscription = "repos" | "envoi" | "fait" | "deja" | "refus" | "panne";
@@ -162,17 +182,17 @@ function Porte() {
                   aria-label="Votre adresse e-mail"
                   onChange={e => { setEmail(e.target.value); if (inscription !== "repos") setInscription("repos"); }}
                   placeholder="vous@exemple.com"
-                  className="novac-surface-saisie"
-                  style={{ ...champ, flex: 1, width: "auto", minWidth: 0, textAlign: "left",
-                           borderColor: inscription === "refus" ? JETONS.negatif : undefined }} />
+                  style={{ ...champ, ...SURFACE_CHAMP, flex: 1, width: "auto", minWidth: 0,
+                           textAlign: "left",
+                           borderColor: inscription === "refus" ? JETONS.negatif : JETONS.bordFort }} />
                 <button type="submit" disabled={!email || inscription === "envoi"}
                   style={{ padding: "0 20px", height: HAUTEUR_SAISIE, borderRadius: RAYON_SAISIE,
                            flexShrink: 0, border: "none",
-                           background: email ? JETONS.segmentActif : JETONS.carteCreuse,
-                           color: email ? JETONS.segmentEncre : JETONS.texteFaible,
+                           background: JETONS.segmentActif, color: JETONS.segmentEncre,
+                           opacity: email ? 1 : 0.45,
                            cursor: email && inscription !== "envoi" ? "pointer" : "default",
                            fontFamily: FONT, fontSize: 13, fontWeight: 600,
-                           transition: "background 200ms, color 200ms" }}>
+                           transition: "opacity 200ms" }}>
                   {inscription === "envoi" ? "…" : "Rejoindre"}
                 </button>
               </div>
@@ -195,16 +215,17 @@ function Porte() {
               <input id="code" type="password" value={code} autoComplete="current-password"
                 autoFocus placeholder="Code d'accès"
                 onChange={e => { setCode(e.target.value); if (etat !== "repos") setEtat("repos"); }}
-                className="novac-surface-saisie"
-                style={{ ...champ, flex: 1, width: "auto", minWidth: 0, textAlign: "left",
-                         borderColor: etat === "refus" ? JETONS.negatif : undefined }} />
+                style={{ ...champ, ...SURFACE_CHAMP, flex: 1, width: "auto", minWidth: 0,
+                         textAlign: "left",
+                         borderColor: etat === "refus" ? JETONS.negatif : JETONS.bordFort }} />
               <button type="submit" disabled={!code || etat === "envoi"}
                 style={{ padding: "0 16px", height: HAUTEUR_SAISIE, borderRadius: RAYON_SAISIE,
                          flexShrink: 0, border: "none",
-                         background: code ? JETONS.segmentActif : JETONS.carteCreuse,
-                         color: code ? JETONS.segmentEncre : JETONS.texteFaible,
+                         background: JETONS.segmentActif, color: JETONS.segmentEncre,
+                         opacity: code ? 1 : 0.45,
                          cursor: code && etat !== "envoi" ? "pointer" : "default",
-                         fontFamily: FONT, fontSize: 13, fontWeight: 600 }}>
+                         fontFamily: FONT, fontSize: 13, fontWeight: 600,
+                         transition: "opacity 200ms" }}>
                 {etat === "envoi" ? "…" : "Entrer"}
               </button>
             </div>
@@ -341,13 +362,26 @@ function Decor() {
                  value: number, perfEur: number, spark: number[]): GridAsset =>
     ({ ticker, weight, price, change, value, perfEur, spark });
 
+  /* ⚠️ **Les pièces sont nues, sans panneau derrière — corrigé à la demande.** Elles étaient
+     posées dans des `Cadre` portant « Vue générale », « Mes comptes »… Or un dossier, une
+     carte d'actif ou une carte d'objectif *sont déjà* des objets finis, avec leur fond et
+     leur bord : les enfermer ajoutait un second cadre autour du premier, et le décor se
+     lisait comme une capture d'écran découpée plutôt que comme des morceaux du site. */
   const pieces: { style: React.CSSProperties; recul: number; contenu: React.ReactNode }[] = [
-    { style: { top: "9%", left: "-2%", width: 380 }, recul: 1, contenu: <PanneauVueGenerale /> },
-    { style: { top: "8%", right: "-1%", width: 400 }, recul: 1, contenu: <PanneauComptes /> },
-    { style: { bottom: "6%", left: "1%", width: 360 }, recul: 2, contenu: <PanneauObjectif /> },
-    { style: { bottom: "7%", right: "3%", width: 220 }, recul: 2,
-      contenu: <CarteActif inerte a={actif("ESE.PA", 42, 33.6, 6.19, 5267, 307.03,
-        [30.1, 30.6, 30.4, 31.2, 31.0, 31.9, 32.4, 32.2, 33.1, 33.6])} /> },
+    { style: { top: "8%", left: "3%" }, recul: 1,
+      contenu: <CarteCompte nom="PEA Trade Republic" couleur="#5B6CF0"
+        compte={<span style={{ ...NUM }}>5 266,94 €</span>} icone={<IconeTitres />} /> },
+    { style: { top: "6%", right: "4%" }, recul: 1,
+      contenu: <CarteCompte nom="Crédit agricole épargne" couleur="#00D492"
+        compte={<span style={{ ...NUM }}>5 000,00 €</span>} icone={<IconeEpargne />} /> },
+    { style: { top: "38%", left: "5%", width: 210 }, recul: 2,
+      contenu: <CarteActif inerte a={actif("AAPL", 38, 319.97, 4.12, 6399, 253.1,
+        [301, 305, 303, 309, 307, 313, 316, 314, 318, 319.97])} /> },
+    { style: { top: "36%", right: "6%", width: 210 }, recul: 2,
+      contenu: <CarteActif inerte a={actif("NVDA", 27, 230.36, -1.84, 4607, -86.4,
+        [238, 236, 239, 234, 235, 231, 233, 229, 231.2, 230.36])} /> },
+    { style: { bottom: "7%", left: "6%", width: 300 }, recul: 2, contenu: <CarteObjectif /> },
+    { style: { bottom: "6%", right: "5%", width: 250 }, recul: 3, contenu: <ReglagesAvatar /> },
   ];
 
   return (
@@ -357,8 +391,8 @@ function Decor() {
         position: "absolute", inset: 0, transformStyle: "preserve-3d",
         /* ⚠️ Le masque **et** son préfixe WebKit : Safari ne connaît toujours pas la forme
            standard, et sans lui le décor s'y afficherait à pleine force sous le texte. */
-        maskImage: "radial-gradient(ellipse 40% 58% at 50% 48%, transparent 30%, #000 82%)",
-        WebkitMaskImage: "radial-gradient(ellipse 40% 58% at 50% 48%, transparent 30%, #000 82%)",
+        maskImage: "radial-gradient(ellipse 38% 56% at 50% 48%, transparent 32%, #000 84%)",
+        WebkitMaskImage: "radial-gradient(ellipse 38% 56% at 50% 48%, transparent 32%, #000 84%)",
       }}>
         {pieces.map((p, i) => {
           const gauche = "left" in p.style;
@@ -366,9 +400,9 @@ function Decor() {
             <div key={i} style={{
               position: "absolute", ...p.style,
               transformOrigin: gauche ? "left center" : "right center",
-              transform: `translateZ(${-90 * p.recul}px) rotateY(${gauche ? 22 : -22}deg) rotateX(3deg)`,
+              transform: `translateZ(${-80 * p.recul}px) rotateY(${gauche ? 20 : -20}deg) rotateX(3deg)`,
               filter: `blur(${0.5 * p.recul}px)`,
-              opacity: 0.8 - 0.12 * p.recul,
+              opacity: 0.82 - 0.1 * p.recul,
             }}>
               {p.contenu}
             </div>
@@ -379,51 +413,13 @@ function Decor() {
   );
 }
 
-/** Le panneau « Vue générale » : la valeur, sa variation, la note, le rail de périodes. */
-function PanneauVueGenerale() {
-  return (
-    <Cadre style={{ padding: "13px 15px" }}>
-      <TitreDeCarte>Vue générale</TitreDeCarte>
-      <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12 }}>
-        <div>
-          <div style={{ ...NUM, fontSize: 27, fontWeight: 700, color: JETONS.texteIntense,
-                        letterSpacing: "-0.01em" }}>10 336,94 €</div>
-          <div style={{ ...NUM, fontSize: 12, fontWeight: 600, color: JETONS.positif, marginTop: 4 }}>
-            +307,03 €  (+7,10 %)
-          </div>
-          <div style={{ fontFamily: FONT, fontSize: 10.5, color: JETONS.texteFaible, marginTop: 3 }}>
-            depuis le 6 février 2026
-          </div>
-        </div>
-        <Anneau note={75} taille={72} />
-      </div>
-      <div style={{ marginTop: 12 }}><RailPeriodes /></div>
-    </Cadre>
-  );
-}
-
-/** Le panneau « Mes comptes » : deux dossiers, tels que le tableau de bord les range. */
-function PanneauComptes() {
-  return (
-    <Cadre style={{ padding: "13px 15px" }}>
-      <TitreDeCarte>Mes comptes</TitreDeCarte>
-      <div style={{ display: "flex", gap: 10 }}>
-        <CarteCompte nom="Crédit agricole épargne" couleur="#00D492"
-          compte={<span style={{ ...NUM }}>5 000,00 €</span>} icone={<IconeEpargne />} />
-        <CarteCompte nom="PEA Trade Republic" couleur="#5B6CF0"
-          compte={<span style={{ ...NUM }}>5 266,94 €</span>} icone={<IconeTitres />} />
-      </div>
-    </Cadre>
-  );
-}
-
-/** Le panneau « Mes objectifs » : un objectif et sa progression. */
-function PanneauObjectif() {
+/** Une carte d'objectif, nue, comme celles de l'onglet Objectifs. */
+function CarteObjectif() {
   const part = 56;
   return (
-    <Cadre style={{ padding: "13px 15px" }}>
-      <TitreDeCarte>Mes objectifs</TitreDeCarte>
-      <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10 }}>
+    <div style={{ background: JETONS.carte, border: `1px solid ${JETONS.bord}`,
+                  borderRadius: RAYONS.md, padding: "13px 15px" }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 12 }}>
         <span style={{ width: 30, height: 30, borderRadius: RAYONS.sm, flexShrink: 0,
                        background: `${JETONS.accent}22`, color: JETONS.accent,
                        display: "flex", alignItems: "center", justifyContent: "center" }}>
@@ -449,7 +445,36 @@ function PanneauObjectif() {
       <div style={{ fontFamily: FONT, fontSize: 10.5, color: JETONS.texteFaible, marginTop: 8 }}>
         Objectif prévu en 2028
       </div>
-    </Cadre>
+    </div>
+  );
+}
+
+/**
+ * Le réglage d'apparence du personnage, avec ses vrais sélecteurs.
+ *
+ * ⚠️ `ChoixCouleur` et `ChoixSilhouette` sont ceux du site, montés tels quels. Leurs
+ * rappels ne font rien : la pièce est derrière un masque, hors du parcours au clavier.
+ */
+function ReglagesAvatar() {
+  const rien = () => {};
+  return (
+    <div style={{ background: JETONS.carte, border: `1px solid ${JETONS.bord}`,
+                  borderRadius: RAYONS.md, padding: "13px 15px",
+                  display: "flex", flexDirection: "column", gap: 12 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 11 }}>
+        <AvatarNovac taille={44} etat="content" suivi={false} vivant={false}
+          couleur="#6366F1" forme="sphere" />
+        <span style={{ fontFamily: FONT, fontSize: 12.5, fontWeight: 600, color: JETONS.texte }}>
+          Votre mascotte
+        </span>
+      </div>
+      <Reglage titre="Couleur">
+        <ChoixCouleur couleur="#6366F1" onChoisir={rien} taille={22} parRangee={7} />
+      </Reglage>
+      <Reglage titre="Silhouette">
+        <ChoixSilhouette forme="sphere" onChoisir={rien} couleur="#6366F1" taille={26} />
+      </Reglage>
+    </div>
   );
 }
 
