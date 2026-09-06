@@ -157,25 +157,6 @@ function Porte() {
                             color: etat === "refus" || etat === "panne" ? JETONS.negatif : JETONS.texteFaible }}>
                 {etat === "refus" && "Code incorrect."}
                 {etat === "panne" && "Le serveur n'a pas répondu."}
-        {/* ── Ce qu'il y a derrière ──────────────────────────────────────── */}
-        <section style={{ width: "100%" }}>
-          <Intertitre>Aperçu · exemples chiffrés</Intertitre>
-          <div style={{ display: "grid", gap: 14,
-                        gridTemplateColumns: "repeat(auto-fit, minmax(230px, 1fr))" }}>
-            <Apercu titre="Une note, et ce qui la fonde"
-              texte="Cinq piliers notés sur cent : diversification, risque, construction, qualité, adéquation. Un pilier non mesurable est écarté, jamais compté à zéro.">
-              <AnneauScore />
-            </Apercu>
-            <Apercu titre="La courbe de votre patrimoine"
-              texte="Reconstruite depuis vos opérations réelles, pas depuis une allocation cible. Comparée au marché sur la même fenêtre.">
-              <Courbe />
-            </Apercu>
-            <Apercu titre="Ce que vous détenez vraiment"
-              texte="En transparence des fonds : trois ETF, c'est trois lignes mais des centaines de sociétés, réparties par secteur et par zone.">
-              <Mosaique />
-            </Apercu>
-          </div>
-        </section>
 
               </div>
 
@@ -259,6 +240,26 @@ function Porte() {
             Novac est en cours de construction. Rien de ce qui s&apos;y affiche
             n&apos;est un conseil en investissement.
           </p>
+        </section>
+
+        {/* ── Ce qu'il y a derrière ──────────────────────────────────────── */}
+        <section style={{ width: "100%" }}>
+          <Intertitre>Aperçu · exemples chiffrés</Intertitre>
+          <div style={{ display: "grid", gap: 14,
+                        gridTemplateColumns: "repeat(auto-fit, minmax(230px, 1fr))" }}>
+            <Apercu titre="Une note, et ce qui la fonde"
+              texte="Cinq piliers notés sur cent : diversification, risque, construction, qualité, adéquation. Un pilier non mesurable est écarté, jamais compté à zéro.">
+              <AnneauScore />
+            </Apercu>
+            <Apercu titre="La courbe de votre patrimoine"
+              texte="Reconstruite depuis vos opérations réelles, pas depuis une allocation cible. Comparée au marché sur la même fenêtre.">
+              <Courbe />
+            </Apercu>
+            <Apercu titre="Ce que vous détenez vraiment"
+              texte="En transparence des fonds : trois ETF, c'est trois lignes mais des centaines de sociétés, réparties par secteur et par zone.">
+              <Mosaique />
+            </Apercu>
+          </div>
         </section>
       </div>
     </main>
