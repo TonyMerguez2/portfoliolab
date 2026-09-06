@@ -174,6 +174,29 @@ export default function Home() {
     <div className="fixed inset-0 overflow-hidden">
 
       {/**
+        * ⚠️ **Le haut de la page redevient un dégradé lisse : la trame de points ne commence
+        * qu'en bas.** Demandé. La trame court sur toute la hauteur — c'est `PointsFond`, monté
+        * dans la mise en page racine, donc commun à toutes les pages — et derrière un titre
+        * de soixante pixels elle faisait un grain qui se disputait la lecture.
+        *
+        * ⚠️ **On la couvre, on ne la modifie pas.** Toucher `.nv-points` ou son montage aurait
+        * changé le fond de tout le produit ; il ne devait changer que sur l'accueil. Ce voile
+        * reprend donc exactement le dégradé du `body` — même couleurs, même sens — et s'efface
+        * vers le bas. Le fond garde ses teintes, seul le grain disparaît en haut.
+        *
+        * ⚠️ `z-index: -1` le place derrière le contenu de la page mais devant la trame, qui
+        * est au même rang et plus haut dans le document. Un `0` l'aurait fait passer au-dessus
+        * du titre.
+        */}
+      <div aria-hidden="true" style={{
+        position: "absolute", inset: 0, zIndex: -1, pointerEvents: "none",
+        background: "var(--nv-fond-degrade)",
+        backgroundAttachment: "fixed",
+        maskImage: "linear-gradient(to bottom, #000 0%, #000 42%, transparent 82%)",
+        WebkitMaskImage: "linear-gradient(to bottom, #000 0%, #000 42%, transparent 82%)",
+      }} />
+
+      {/**
         * Le logo en filigrane.
         *
         * ⚠️ **Il ne cherche plus à être lu, et c'est le changement de fond.** Les versions
