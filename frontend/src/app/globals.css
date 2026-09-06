@@ -1852,31 +1852,34 @@ canvas + div {
 
 /* ⚠️ La place du cœur s'interpole comme une longueur, pas comme une chaîne : sans ces deux
    déclarations, le déplacement se ferait par sauts d'une étape à l'autre. */
-@property --nv-x {
-  syntax: "<percentage>";
+/* ⚠️ Un décalage en **longueur**, pas en pourcentage : il doit valoir un multiple exact du
+   pas de la trame — 14 px — pour que les points retombent sur la grille du fond. */
+@property --nv-pas {
+  syntax: "<length>";
   inherits: false;
-  initial-value: -16%;
-}
-@property --nv-y {
-  syntax: "<percentage>";
-  inherits: false;
-  initial-value: -24%;
+  initial-value: 0px;
 }
 
 @keyframes nv-respire {
-  /* ⚠️ **La pulsation passe par `transform`, et c'est le troisième essai qui tient.** Animer
-     `mask-size` ne repeint pas : la valeur change dans le modèle — mesuré, 1005 px puis
-     1085 px — et l'écran ne bouge pas. Animer `mask-position` repeint, en revanche, d'où la
-     dérive en diagonale qu'on a vue et qu'on ne voulait pas. Une transformation, elle, est
-     composée par le processeur graphique : elle se voit toujours.
-
-     ⚠️ Le prix, assumé : l'échelle emporte la trame de points avec la forme, donc la grille
-     de la silhouette ne coïncide plus au pixel près avec celle du fond pendant le souffle. À
-     trois pour cent, cela se lit comme un frémissement — ce qu'on cherche — et non comme deux
-     trames qui se battent. */
-  0%, 100% { transform: scale(0.97); opacity: 0.74; }
-  50%      { transform: scale(1.03); opacity: 1;    }
+  /* ⚠️ **La forme avance d'un point à la fois, jamais entre deux.** Trois essais ont précédé,
+     et chacun a appris une chose : `mask-size` ne se repeint pas — la valeur change, l'écran
+     non ; `mask-position` se repeint, mais glissait alors en continu, ce qui faisait dériver
+     le logo ; et `transform: scale` se repeint aussi, seulement il emporte la trame avec lui
+     et **crée des points là où il n'y en avait pas**, entre ceux du fond. C'est ce dernier
+     défaut qui condamnait la solution : la silhouette doit être faite des points existants,
+     pas d'une seconde grille désalignée.
+  
+     Le décalage vaut donc 0, 14 ou 28 pixels — un pas de trame, jamais une fraction — et la
+     cadence est en `step-end` : la forme saute d'un point au suivant, elle ne glisse pas. Le
+     souffle vient de l'opacité, qui ne déplace rien. */
+  0%   { --nv-pas: 0px;  opacity: 0.58; }
+  20%  { --nv-pas: 14px; opacity: 0.76; }
+  40%  { --nv-pas: 28px; opacity: 1;    }
+  60%  { --nv-pas: 14px; opacity: 0.86; }
+  80%  { --nv-pas: 0px;  opacity: 0.68; }
+  100% { --nv-pas: 0px;  opacity: 0.58; }
 }
+
 
 
 /**
@@ -1922,22 +1925,21 @@ canvas + div {
   -webkit-mask-size: var(--nv-logo-cote), var(--nv-logo-cote);
   mask-size: var(--nv-logo-cote), var(--nv-logo-cote);
 
-  -webkit-mask-position: right -16% bottom -24%, right -16% bottom -24%;
-  mask-position: right -16% bottom -24%, right -16% bottom -24%;
+  /* Le décalage porte sur la forme seule ; le dégradé de densité reste où il est. */
+  -webkit-mask-position:
+    right calc(-16% + var(--nv-pas)) bottom calc(-24% + var(--nv-pas)),
+    right -16% bottom -24%;
+  mask-position:
+    right calc(-16% + var(--nv-pas)) bottom calc(-24% + var(--nv-pas)),
+    right -16% bottom -24%;
 
   -webkit-mask-composite: source-in;
   mask-composite: intersect;
 
-  /* ⚠️ Le point fixe du souffle est le centre visible de la forme, pas celui de l'écran :
-     la silhouette occupe la moitié droite et déborde en bas. Autour du centre de l'écran,
-     elle aurait glissé au lieu d'enfler. */
-  transform-origin: 82% 58%;
-  will-change: transform;
-
-  /* Sept secondes : un souffle qu'on remarque en s'arrêtant, jamais en lisant. */
-  animation: nv-respire 7s ease-in-out infinite;
+  /* Huit secondes, en `step-end` : cinq paliers d'un peu plus d'une seconde et demie. */
+  animation: nv-respire 8s step-end infinite;
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .nv-silhouette { animation: none; transform: none; opacity: 0.9; }
+  .nv-silhouette { animation: none; --nv-pas: 0px; opacity: 0.9; }
 }
