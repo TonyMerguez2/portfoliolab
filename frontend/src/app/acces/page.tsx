@@ -3,6 +3,7 @@ import { Suspense, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { FONT, NUM } from "@/lib/typography";
 import { JETONS, RAYONS } from "@/lib/palette";
+import Cadre from "@/components/ui/Cadre";
 
 /**
  * La porte de l'alpha fermée : entrer avec un code, ou laisser son adresse.
@@ -96,39 +97,66 @@ function Porte() {
   return (
     <main style={{ minHeight: "100vh", position: "relative", overflow: "hidden",
                    fontFamily: FONT, color: JETONS.surFond }}>
-      <Filigrane />
-
       <div style={{ position: "relative", zIndex: 1, maxWidth: 1000, margin: "0 auto",
                     padding: "clamp(40px, 8vh, 96px) 24px 72px",
                     display: "flex", flexDirection: "column",
                     alignItems: "center", gap: "clamp(36px, 7vh, 64px)" }}>
 
-        {/* ── L'enseigne, reprise de la page d'accueil ───────────────────── */}
+        {/* ── L'enseigne : le logo, puis le nom ─────────────────────────── */}
         <header style={{ textAlign: "center" }}>
-          {/* ⚠️ 0,35 em d'espacement et la marge droite négative qui le compense : c'est
-              exactement le mot-symbole de la page d'accueil. Sans la marge, le mot paraît
-              décalé à gauche de la moitié d'un espacement. */}
-          <h1 style={{ margin: 0, fontSize: "clamp(30px, 6vw, 44px)", fontWeight: 700,
-                       letterSpacing: "0.35em", marginRight: "-0.35em",
-                       color: JETONS.surFond }}>
-            NOVAC
-          </h1>
-          <p style={{ margin: "14px 0 0", fontSize: 12, fontWeight: 300,
-                      letterSpacing: "0.22em", marginRight: "-0.22em",
+          {/* ⚠️ **« Novac » et non « NOVAC », à la demande.** La capitale espacée est le
+              mot-symbole de la page d'accueil, qui est une affiche ; ici le nom accompagne un
+              logo et une porte, et une casse normale se lit comme un nom plutôt que comme une
+              enseigne. L'espacement tombe donc aussi : il n'a de sens qu'en capitales. */}
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 12 }}>
+            <Logo taille={38} />
+            <span style={{ fontSize: "clamp(27px, 5vw, 36px)", fontWeight: 700,
+                           letterSpacing: "-0.01em", color: JETONS.surFond }}>
+              Novac
+            </span>
+          </div>
+          <p style={{ margin: "12px 0 0", fontSize: 11.5, fontWeight: 400,
+                      letterSpacing: "0.2em", marginRight: "-0.2em",
                       color: JETONS.surFondAttenue, textTransform: "uppercase" }}>
             Find the optimal path
           </p>
-          <span style={{ display: "inline-flex", alignItems: "center", gap: 7, marginTop: 22,
+          <span style={{ display: "inline-flex", alignItems: "center", gap: 7, marginTop: 20,
                          padding: "4px 12px", borderRadius: RAYONS.plein,
-                         background: JETONS.accentVoile,
-                         border: `1px solid ${JETONS.accentBord}`,
-                         color: JETONS.accent, fontSize: 10.5, fontWeight: 600,
+                         background: JETONS.carteCreuse,
+                         border: `1px solid ${JETONS.bord}`,
+                         color: JETONS.texteSecondaire, fontSize: 10.5, fontWeight: 600,
                          letterSpacing: "0.14em" }}>
             <Pouls />
             ALPHA FERMÉE
           </span>
         </header>
 
+        {/* ── La porte ───────────────────────────────────────────────────── */}
+        <section style={{ width: "100%", maxWidth: 400 }}>
+          {/* ⚠️ `Cadre`, et non un panneau bricolé à la main. C'est le conteneur de tout le
+              site — double anneau, voile d'intervalle, arrondis mesurés — et la porte n'a
+              aucune raison d'en avoir un autre. La version précédente empilait un fond, un
+              liseré et une ombre portée qui ne ressemblaient à rien d'autre ici. */}
+          <Cadre style={{ padding: 22 }}>
+            <form onSubmit={ouvrir}>
+              <label htmlFor="code" style={{ display: "block", fontSize: 12.5, fontWeight: 600,
+                                             color: JETONS.texte, marginBottom: 8 }}>
+                Code d&apos;accès
+              </label>
+              <input id="code" type="password" value={code} autoComplete="current-password"
+                onChange={e => { setCode(e.target.value); if (etat !== "repos") setEtat("repos"); }}
+                placeholder="••••••••"
+                style={{ width: "100%", boxSizing: "border-box", padding: "10px 12px",
+                         borderRadius: RAYONS.sm, background: JETONS.carteCreuse,
+                         border: `1px solid ${etat === "refus" ? JETONS.negatif : JETONS.bord}`,
+                         color: JETONS.texte, fontFamily: FONT, fontSize: 13, outline: "none" }} />
+
+              {/* ⚠️ La ligne d'état occupe sa place en permanence : sans elle, le bouton
+                  sautait de dix-huit pixels à la première erreur. */}
+              <div style={{ minHeight: 18, marginTop: 6, fontSize: 11.5,
+                            color: etat === "refus" || etat === "panne" ? JETONS.negatif : JETONS.texteFaible }}>
+                {etat === "refus" && "Code incorrect."}
+                {etat === "panne" && "Le serveur n'a pas répondu."}
         {/* ── Ce qu'il y a derrière ──────────────────────────────────────── */}
         <section style={{ width: "100%" }}>
           <Intertitre>Aperçu · exemples chiffrés</Intertitre>
@@ -149,30 +177,6 @@ function Porte() {
           </div>
         </section>
 
-        {/* ── La porte ───────────────────────────────────────────────────── */}
-        <section style={{ width: "100%", maxWidth: 400 }}>
-          <div style={{ background: JETONS.carte, border: `1px solid ${JETONS.bord}`,
-                        borderRadius: RAYONS.lg, padding: 22,
-                        boxShadow: "0 24px 60px rgba(0,0,0,0.45)" }}>
-            <form onSubmit={ouvrir}>
-              <label htmlFor="code" style={{ display: "block", fontSize: 12.5, fontWeight: 600,
-                                             color: JETONS.texte, marginBottom: 8 }}>
-                Code d&apos;accès
-              </label>
-              <input id="code" type="password" value={code} autoComplete="current-password"
-                onChange={e => { setCode(e.target.value); if (etat !== "repos") setEtat("repos"); }}
-                placeholder="••••••••"
-                style={{ width: "100%", boxSizing: "border-box", padding: "10px 12px",
-                         borderRadius: RAYONS.sm, background: JETONS.carteCreuse,
-                         border: `1px solid ${etat === "refus" ? JETONS.negatif : JETONS.bord}`,
-                         color: JETONS.texte, fontFamily: FONT, fontSize: 13, outline: "none" }} />
-
-              {/* ⚠️ La ligne d'état occupe sa place en permanence : sans elle, le bouton
-                  sautait de dix-huit pixels à la première erreur. */}
-              <div style={{ minHeight: 18, marginTop: 6, fontSize: 11.5,
-                            color: etat === "refus" || etat === "panne" ? JETONS.negatif : JETONS.texteFaible }}>
-                {etat === "refus" && "Code incorrect."}
-                {etat === "panne" && "Le serveur n'a pas répondu."}
               </div>
 
               <button type="submit" disabled={!code || etat === "envoi"}
@@ -226,12 +230,19 @@ function Porte() {
                              background: JETONS.carteCreuse,
                              border: `1px solid ${inscription === "refus" ? JETONS.negatif : JETONS.bord}`,
                              color: JETONS.texte, fontFamily: FONT, fontSize: 13, outline: "none" }} />
+                  {/* ⚠️ **La pastille blanche du site, pas un bouton bleu.** L'accent sert
+                      ici aux liens et aux mentions, jamais à un bouton d'action : partout
+                      ailleurs — pistes de période, outils du graphique, « Entrer » juste
+                      au-dessus — l'action retenue est une pastille blanche à encre noire. Un
+                      bouton bleu à côté d'elle faisait deux vocabulaires dans la même carte. */}
                   <button type="submit" disabled={!email || inscription === "envoi"}
                     style={{ padding: "9px 15px", borderRadius: RAYONS.sm, flexShrink: 0,
-                             border: `1px solid ${JETONS.accentBord}`,
-                             background: JETONS.accentVoile, color: JETONS.accent,
+                             border: "none",
+                             background: email ? JETONS.segmentActif : JETONS.carteCreuse,
+                             color: email ? JETONS.segmentEncre : JETONS.texteFaible,
                              cursor: email && inscription !== "envoi" ? "pointer" : "default",
-                             fontFamily: FONT, fontSize: 13, fontWeight: 600 }}>
+                             fontFamily: FONT, fontSize: 13, fontWeight: 600,
+                             transition: "background 200ms, color 200ms" }}>
                     {inscription === "envoi" ? "…" : "Rejoindre"}
                   </button>
                 </div>
@@ -241,7 +252,7 @@ function Porte() {
                 </div>
               </form>
             )}
-          </div>
+          </Cadre>
 
           <p style={{ margin: "18px 0 0", textAlign: "center", fontSize: 11,
                       color: JETONS.surFondAttenue, lineHeight: 1.65 }}>
@@ -257,23 +268,22 @@ function Porte() {
 /* ── Pièces ──────────────────────────────────────────────────────────────── */
 
 /**
- * Le logo, en filigrane, derrière tout le reste.
+ * Le logo, à gauche du nom.
  *
- * ⚠️ **Le même procédé que la page d'accueil** : le dessin sert de masque et laisse passer le
- * dégradé de fond teinté d'un souffle d'accent, plutôt que d'être peint. C'est ce qui le rend
- * présent sans être une image posée dessus — il fait partie du fond, il ne s'y ajoute pas.
+ * ⚠️ **Il a d'abord été posé en filigrane derrière la page, et retiré à la demande.** Le
+ * procédé — le dessin en masque du dégradé de fond — est celui de la page d'accueil, où il a
+ * sa place parce que cette page-là n'a rien d'autre à montrer. Ici, la porte, les aperçus et
+ * le fond pointillé occupent déjà l'espace : une quatrième couche faisait un fond chargé.
+ *
+ * Peint en encre pleine et non en masque de dégradé : à cette taille, un dégradé se réduit à
+ * une teinte plate, avec la fragilité du masque en plus.
  */
-function Filigrane() {
+function Logo({ taille = 34 }: { taille?: number }) {
   return (
-    <div aria-hidden="true"
+    <span aria-hidden="true"
       style={{
-        position: "absolute", top: "-12%", right: "-18%",
-        width: "min(760px, 90vw)", aspectRatio: "1", pointerEvents: "none",
-        opacity: 0.55,
-        background: [
-          "linear-gradient(rgba(var(--nv-accent-rvb), 0.07), rgba(var(--nv-accent-rvb), 0.07))",
-          "var(--nv-fond-degrade)",
-        ].join(", "),
+        width: taille, height: taille, flexShrink: 0, display: "block",
+        background: JETONS.surFond,
         maskImage: "url(/logo-hivesync.svg)", WebkitMaskImage: "url(/logo-hivesync.svg)",
         maskSize: "contain", WebkitMaskSize: "contain",
         maskRepeat: "no-repeat", WebkitMaskRepeat: "no-repeat",
@@ -310,9 +320,8 @@ function Apercu({ titre, texte, children }: {
   titre: string; texte: string; children: React.ReactNode;
 }) {
   return (
-    <div style={{ background: JETONS.carte, border: `1px solid ${JETONS.bord}`,
-                  borderRadius: RAYONS.md, padding: 16, display: "flex",
-                  flexDirection: "column", gap: 12 }}>
+    <Cadre style={{ padding: 16 }}>
+      <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
       {/* Hauteur fixe : trois dessins de natures différentes doivent poser leurs titres
           sur la même ligne, sinon la rangée se lit comme trois cartes mal alignées. */}
       <div style={{ height: 92, display: "flex", alignItems: "center", justifyContent: "center" }}>
@@ -323,8 +332,9 @@ function Apercu({ titre, texte, children }: {
                       marginBottom: 5 }}>{titre}</div>
         <p style={{ margin: 0, fontFamily: FONT, fontSize: 11.5, lineHeight: 1.55,
                     color: JETONS.texteAttenue }}>{texte}</p>
+        </div>
       </div>
-    </div>
+    </Cadre>
   );
 }
 
