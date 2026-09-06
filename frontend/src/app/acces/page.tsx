@@ -5,6 +5,10 @@ import { FONT, NUM } from "@/lib/typography";
 import { JETONS, RAYONS } from "@/lib/palette";
 import Cadre from "@/components/ui/Cadre";
 import { champ, HAUTEUR_SAISIE, RAYON_SAISIE } from "@/components/ui/saisie";
+import CarteActif from "@/components/portfolio/CarteActif";
+import CarteCompte from "@/components/portfolio/CarteCompte";
+import AvatarNovac from "@/components/AvatarNovac";
+import type { GridAsset } from "@/lib/portfolio";
 
 /**
  * La porte de l'alpha fermée : entrer avec un code, ou laisser son adresse.
@@ -330,209 +334,130 @@ function PastilleAlpha() {
 /**
  * Ce qu'il y a derrière la porte, aperçu par-dessus l'épaule.
  *
- * ⚠️ **Six cartes d'exemple alignées ont été essayées, et retirées : elles n'appelaient
- * personne.** Présentés en rangée avec un titre et un paragraphe chacun, ces morceaux
- * d'interface devenaient une brochure — on les lit, on ne les désire pas. Éparpillés derrière
- * la porte, à demi effacés, ils font l'inverse : on aperçoit un patrimoine rangé, des notes,
- * des courbes, et l'on veut voir le reste. C'est la promesse au lieu de la démonstration.
+ * ⚠️ **Ce sont les vrais composants du site, et c'est la seconde version.** La première
+ * dessinait des imitations — des rectangles colorés en guise de dossiers, deux lignes de
+ * texte en guise de cartes d'actif — qui ne ressemblaient à rien de ce qu'on trouve derrière
+ * la porte. Une vitrine qui montre autre chose que la boutique est pire que pas de vitrine :
+ * elle promet faux. `CarteActif`, `CarteCompte` et `AvatarNovac` sont donc montés tels quels,
+ * avec les mêmes props que dans le tableau de bord.
  *
- * ⚠️ **Voilés vers le centre, jamais floutés.** Un flou coûte cher à peindre et donne l'image
- * d'une capture ratée ; un voile radial laisse les formes nettes tout en dégageant l'axe où
- * vivent le nom et la porte. La lisibilité de la carte prime sur tout le reste — c'est elle
- * qui fait entrer.
+ * ⚠️ **`inerte` sur les cartes d'actif** : le mode existait déjà pour l'aperçu d'un dossier,
+ * et il retire le clic comme le survol. Sans lui, le décor entrerait dans le parcours au
+ * clavier et mènerait nulle part.
  *
- * ⚠️ **Rien ici n'est cliquable ni annoncé.** `aria-hidden` et `pointer-events: none` : au
- * clavier comme au lecteur d'écran, cette page n'a que deux champs et deux boutons.
+ * ⚠️ **La profondeur vient d'une perspective et d'un flou léger**, pas d'une simple
+ * transparence. Chaque pièce est inclinée dans le plan et reculée sur l'axe Z : celles du
+ * fond sont plus floues et plus petites, comme des fenêtres ouvertes derrière celle-ci. Une
+ * opacité uniforme donnait une brochure passée à l'eau ; la perspective donne un décor.
+ *
+ * ⚠️ **Le voile radial reste et prime sur tout.** Le décor s'efface vers le centre pour que
+ * le nom et la porte se lisent sans effort — c'est la carte qui fait entrer, pas le décor.
+ *
+ * ⚠️ **Rien n'est atteignable** : `aria-hidden` et `pointer-events: none`. Au clavier comme
+ * au lecteur d'écran, cette page n'a que deux champs et deux boutons.
  */
 function Decor() {
-  /* Places et tailles : les positions en pourcentage pour que la composition tienne du
-     téléphone au grand écran, les largeurs en pixels pour que les pièces restent lisibles. */
-  const pieces: { style: React.CSSProperties; contenu: React.ReactNode }[] = [
-    { style: { top: "5%",     left: "2%",    width: 300 }, contenu: <CartesActifs /> },
-    { style: { top: "3%",     right: "3%",   width: 220 }, contenu: <Dossiers /> },
-    { style: { top: "33%",    left: "5%",    width: 150 }, contenu: <MosaiqueApercu /> },
-    { style: { top: "29%",    right: "6%",   width: 100 }, contenu: <AnneauScore /> },
-    { style: { bottom: "15%", left: "8%",    width: 96  }, contenu: <Avatar /> },
-    { style: { bottom: "8%",  right: "5%",   width: 240 }, contenu: <Courbe /> },
-    { style: { bottom: "27%", right: "17%",  width: 250 }, contenu: <RailPeriodes /> },
-    { style: { bottom: "33%", left: "21%",   width: 90  }, contenu: <AnneauScore note={41} /> },
+  const actif = (ticker: string, weight: number, price: number, change: number,
+                 value: number, perfEur: number, spark: number[]): GridAsset =>
+    ({ ticker, weight, price, change, value, perfEur, spark });
+
+  /** Une pièce : sa place, son recul, et ce qu'elle montre. */
+  const pieces: { style: React.CSSProperties; recul: number; contenu: React.ReactNode }[] = [
+    { style: { top: "7%", left: "4%" }, recul: 1,
+      contenu: <CarteActif inerte a={actif("ESE.PA", 42, 33.6, 6.19, 5267, 307.03,
+        [30.1, 30.6, 30.4, 31.2, 31.0, 31.9, 32.4, 32.2, 33.1, 33.6])} /> },
+    { style: { top: "30%", left: "9%" }, recul: 2,
+      contenu: <CarteActif inerte a={actif("CW8.PA", 31, 512.4, -0.84, 3118, -26.4,
+        [518, 516, 519, 514, 515, 511, 513, 510, 512.9, 512.4])} /> },
+    { style: { top: "5%", right: "5%" }, recul: 2,
+      contenu: <CarteCompte nom="PEA Trade Republic" couleur="#5B6CF0"
+        compte={<span style={{ ...NUM }}>5 266,94 €</span>} icone={<IconeTitres />} /> },
+    { style: { bottom: "12%", right: "7%" }, recul: 1,
+      contenu: <CarteCompte nom="Crédit agricole épargne" couleur="#00D492"
+        compte={<span style={{ ...NUM }}>5 000,00 €</span>} icone={<IconeEpargne />} /> },
+    { style: { top: "31%", right: "9%" }, recul: 3,
+      contenu: <Anneau note={75} taille={96} /> },
+    { style: { bottom: "32%", left: "24%" }, recul: 3,
+      contenu: <Anneau note={41} taille={72} /> },
+    { style: { bottom: "13%", left: "10%" }, recul: 2,
+      contenu: <AvatarNovac taille={86} etat="content" suivi={false} vivant={false}
+        couleur="#6366F1" forme="sphere" /> },
   ];
+
   return (
     <div aria-hidden="true" style={{ position: "absolute", inset: 0, pointerEvents: "none",
-                                     overflow: "hidden", zIndex: 0 }}>
+                                     overflow: "hidden", zIndex: 0, perspective: 1400 }}>
       <div style={{
-        position: "absolute", inset: 0,
+        position: "absolute", inset: 0, transformStyle: "preserve-3d",
         /* ⚠️ Le masque **et** son préfixe WebKit : Safari ne connaît toujours pas la forme
            standard, et sans lui le décor s'y afficherait à pleine force sous la porte. */
-        maskImage: "radial-gradient(ellipse 46% 54% at 50% 44%, transparent 26%, #000 76%)",
-        WebkitMaskImage: "radial-gradient(ellipse 46% 54% at 50% 44%, transparent 26%, #000 76%)",
+        maskImage: "radial-gradient(ellipse 44% 52% at 50% 44%, transparent 22%, #000 74%)",
+        WebkitMaskImage: "radial-gradient(ellipse 44% 52% at 50% 44%, transparent 22%, #000 74%)",
       }}>
-        {pieces.map((p, i) => (
-          <div key={i} style={{ position: "absolute", opacity: 0.5, ...p.style }}>
-            {p.contenu}
-          </div>
-        ))}
+        {pieces.map((p, i) => {
+          const gauche = "left" in p.style;
+          return (
+            <div key={i} style={{
+              position: "absolute", ...p.style,
+              /* Les pièces de gauche se tournent vers la droite et l'inverse : elles regardent
+                 toutes vers la porte, comme des panneaux disposés autour d'elle. */
+              transform: `translateZ(${-70 * p.recul}px) rotateY(${gauche ? 14 : -14}deg) rotateX(4deg)`,
+              filter: `blur(${0.6 * p.recul}px)`,
+              opacity: 0.72 - 0.1 * p.recul,
+            }}>
+              {p.contenu}
+            </div>
+          );
+        })}
       </div>
     </div>
   );
 }
 
-/** Le personnage, réduit à sa silhouette et à son regard. */
-function Avatar() {
+/** Les deux icônes de dossier, reprises de la rangée « Vos comptes ». */
+function IconeTitres() {
   return (
-    <svg width="96" height="96" viewBox="0 0 96 96" aria-hidden="true">
-      {/* La superellipse du site, approchée par un arrondi généreux : à cette taille et sous
-          un voile, l'exposant exact ne se distingue pas d'un rayon. */}
-      <rect x="4" y="4" width="88" height="88" rx="30" fill="#6366F1" />
-      <circle cx="34" cy="46" r="6" fill="#0B1220" />
-      <circle cx="62" cy="46" r="6" fill="#0B1220" />
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+      <path d="M4 19h16v2H4zM6 10h3v7H6zm4.5-4h3v11h-3zM15 12h3v5h-3z" />
+    </svg>
+  );
+}
+function IconeEpargne() {
+  return (
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+      <path d="M3 7a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2zm2 0v2h14V7zm0 4v6h14v-6z" />
     </svg>
   );
 }
 
-/** L'anneau du score, à la mesure de celui du bandeau. */
-function AnneauScore({ note = 75 }: { note?: number }) {
-  const score = note, r = 34, c = 2 * Math.PI * r;
+/**
+ * L'anneau du score, dessiné comme `CircleScore` du tableau de bord.
+ *
+ * ⚠️ Celui-là n'est pas exporté — il vit dans la page du portefeuille. Sa géométrie est donc
+ * reprise à l'identique plutôt qu'approchée : épaisseur à 16 % du diamètre, bouts arrondis, et
+ * la retenue d'une épaisseur sur la longueur remplie, sans quoi un score de 100 se recouvre
+ * lui-même et un score de 0 laisse une pastille.
+ */
+function Anneau({ note, taille }: { note: number; taille: number }) {
+  const epaisseur = Math.max(8, taille * 0.16);
+  const rayon = (taille - epaisseur) / 2;
+  const perimetre = 2 * Math.PI * rayon;
+  const rempli = note === 0 ? 0 : Math.max(epaisseur, (note / 100) * perimetre - epaisseur);
+  const couleur = note >= 60 ? JETONS.positif : JETONS.negatif;
   return (
-    <svg width="92" height="92" viewBox="0 0 92 92" role="img" aria-label="Exemple de note : 75 sur 100">
-      <circle cx="46" cy="46" r={r} fill="none" stroke={JETONS.bordFort} strokeWidth="9" />
-      <circle cx="46" cy="46" r={r} fill="none"
-        stroke={score >= 60 ? JETONS.positif : JETONS.negatif} strokeWidth="9"
-        strokeLinecap="round" strokeDasharray={`${(c * score) / 100} ${c}`}
-        transform="rotate(-90 46 46)" />
-      <text x="46" y="46" textAnchor="middle" dominantBaseline="central"
-        style={{ ...NUM, fontSize: 22, fontWeight: 700, fill: JETONS.texteIntense }}>{score}</text>
-    </svg>
-  );
-}
-
-/** Une courbe de patrimoine et son repère de marché. */
-function Courbe() {
-  const patrimoine = "M2,64 L18,58 L34,60 L50,46 L66,49 L82,34 L98,30 L114,22 L130,25 L146,12";
-  const repere     = "M2,66 L18,63 L34,64 L50,57 L66,58 L82,50 L98,49 L114,44 L130,45 L146,38";
-  return (
-    <svg width="148" height="76" viewBox="0 0 148 76" role="img"
-      aria-label="Exemple de courbe de patrimoine, comparée au marché">
-      <defs>
-        <linearGradient id="nv-aire" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stopColor={JETONS.accent} stopOpacity="0.28" />
-          <stop offset="100%" stopColor={JETONS.accent} stopOpacity="0" />
-        </linearGradient>
-      </defs>
-      <path d={`${patrimoine} L146,74 L2,74 Z`} fill="url(#nv-aire)" />
-      <path d={repere} fill="none" stroke={JETONS.texteFaible} strokeWidth="1.5"
-        strokeDasharray="3 3" strokeLinecap="round" />
-      <path d={patrimoine} fill="none" stroke={JETONS.accent} strokeWidth="2"
-        strokeLinecap="round" strokeLinejoin="round" />
-      <circle cx="146" cy="12" r="3" fill={JETONS.accent} />
-    </svg>
-  );
-}
-
-/** La mosaïque de répartition, aux aires fidèles aux poids. */
-function MosaiqueApercu() {
-  const blocs = [
-    { x: 0,  y: 0,  l: 78, h: 44, c: "#50A2FF", t: "42 %" },
-    { x: 80, y: 0,  l: 62, h: 44, c: "#a78bfa", t: "31 %" },
-    { x: 0,  y: 46, l: 46, h: 30, c: "#FF8904", t: "15 %" },
-    { x: 48, y: 46, l: 42, h: 30, c: "#00D492", t: "8 %" },
-    { x: 92, y: 46, l: 50, h: 30, c: "#22d3ee", t: "4 %" },
-  ];
-  return (
-    <svg width="142" height="76" viewBox="0 0 142 76" role="img"
-      aria-label="Exemple de répartition en mosaïque">
-      {blocs.map(b => (
-        <g key={b.c}>
-          <rect x={b.x} y={b.y} width={b.l} height={b.h} rx="3" fill={b.c} />
-          <text x={b.x + 6} y={b.y + b.h / 2} dominantBaseline="central"
-            style={{ ...NUM, fontSize: 11, fontWeight: 700, fill: "#0B1220" }}>{b.t}</text>
-        </g>
-      ))}
-    </svg>
-  );
-}
-
-/** Deux cartes d'actif, avec leur variation et leur courbe miniature. */
-function CartesActifs() {
-  const lignes = [
-    { nom: "ESE.PA",  valeur: "5 267 €", pct: "+6,19 %", positif: true,
-      d: "M0,17 L11,15 L22,18 L33,11 L44,13 L55,6 L66,4" },
-    { nom: "CW8.PA",  valeur: "3 118 €", pct: "−0,84 %", positif: false,
-      d: "M0,7 L11,9 L22,6 L33,12 L44,10 L55,15 L66,17" },
-  ];
-  return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 7, width: "100%", padding: "0 14px" }}>
-      {lignes.map(l => (
-        <div key={l.nom} style={{ display: "flex", alignItems: "center", gap: 10,
-                                  background: JETONS.carte, borderRadius: RAYONS.sm,
-                                  padding: "8px 10px" }}>
-          <span style={{ fontFamily: FONT, fontSize: 11, fontWeight: 600, color: JETONS.texte,
-                         width: 52, flexShrink: 0 }}>{l.nom}</span>
-          <svg width="68" height="22" viewBox="0 0 68 22" style={{ flexShrink: 0 }} aria-hidden="true">
-            <path d={l.d} fill="none" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"
-              stroke={l.positif ? JETONS.positif : JETONS.negatif} />
-          </svg>
-          <span style={{ ...NUM, fontSize: 11, color: JETONS.texteSecondaire, marginLeft: "auto" }}>
-            {l.valeur}
-          </span>
-          <span style={{ ...NUM, fontSize: 10.5, fontWeight: 700, width: 52, textAlign: "right",
-                         color: l.positif ? JETONS.positif : JETONS.negatif }}>{l.pct}</span>
-        </div>
-      ))}
-    </div>
-  );
-}
-
-/** Trois dossiers de compte, comme la rangée du tableau de bord. */
-function Dossiers() {
-  const dossiers = [
-    { nom: "PEA",            montant: "5 267 €", couleur: "#5B6CF0" },
-    { nom: "Épargne",        montant: "5 000 €", couleur: "#00D492" },
-    { nom: "Compte courant", montant: "70 €",    couleur: "#FF8904" },
-  ];
-  return (
-    <div style={{ display: "flex", gap: 7, width: "100%", padding: "0 14px" }}>
-      {dossiers.map(d => (
-        <div key={d.nom} style={{ flex: 1, minWidth: 0, borderRadius: RAYONS.sm,
-                                  background: `${d.couleur}1F`,
-                                  border: `1px solid ${d.couleur}3D`,
-                                  padding: "9px 9px 10px" }}>
-          {/* La languette du dossier, réduite à son signe : un onglet en haut à gauche. */}
-          <span aria-hidden="true" style={{ display: "block", width: 16, height: 3, borderRadius: 2,
-                                            background: d.couleur, marginBottom: 8 }} />
-          <div style={{ fontFamily: FONT, fontSize: 9.5, fontWeight: 600, color: JETONS.texteSecondaire,
-                        whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{d.nom}</div>
-          <div style={{ ...NUM, fontSize: 11.5, fontWeight: 700, color: JETONS.texteIntense,
-                        marginTop: 2, whiteSpace: "nowrap" }}>{d.montant}</div>
-        </div>
-      ))}
-    </div>
-  );
-}
-
-/** Le rail de périodes, avec la performance sur la pastille retenue. */
-function RailPeriodes() {
-  const periodes = ["24h", "1S", "1M", "3M", "6M", "1A"];
-  const retenue = "6M";
-  return (
-    <div style={{ display: "flex", alignItems: "center", gap: 4, padding: "4px 5px",
-                  borderRadius: RAYONS.plein, background: JETONS.carte }}>
-      {periodes.map(p => (
-        <span key={p} style={{
-          display: "inline-flex", alignItems: "center", gap: 5,
-          padding: p === retenue ? "3px 9px" : "3px 7px", borderRadius: RAYONS.plein,
-          fontFamily: FONT, fontSize: 10.5, fontWeight: p === retenue ? 600 : 500,
-          background: p === retenue ? JETONS.segmentActif : "transparent",
-          color: p === retenue ? JETONS.segmentEncre : JETONS.texteFaible,
-        }}>
-          {p}
-          {p === retenue && (
-            <span style={{ ...NUM, fontSize: 10, fontWeight: 700, color: JETONS.positif }}>
-              +4,18 %
-            </span>
-          )}
-        </span>
-      ))}
+    <div style={{ position: "relative", width: taille, height: taille }}>
+      <svg width={taille} height={taille} style={{ display: "block", transform: "rotate(-90deg)" }}>
+        <circle cx={taille / 2} cy={taille / 2} r={rayon} fill="none"
+          stroke={JETONS.bordFort} strokeWidth={epaisseur} />
+        <circle cx={taille / 2} cy={taille / 2} r={rayon} fill="none"
+          stroke={couleur} strokeWidth={epaisseur} strokeLinecap="round"
+          strokeDasharray={`${rempli} ${perimetre}`} />
+      </svg>
+      <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center",
+                    justifyContent: "center", ...NUM, fontSize: taille * 0.3, fontWeight: 700,
+                    color: JETONS.texteIntense }}>
+        {note}
+      </div>
     </div>
   );
 }
