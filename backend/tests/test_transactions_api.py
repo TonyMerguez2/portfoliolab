@@ -380,10 +380,10 @@ def test_analyse_sans_ecritures_utilise_les_poids_declares(client, monkeypatch):
     # Les cours et yfinance sont coupés : on vérifie le choix de la source et des
     # poids, pas la capacité du réseau à répondre. Sans cela le test sortait
     # vraiment sur Internet et se faisait limiter.
-    async def pas_de_cours(_tickers):
+    def pas_de_cours(_tickers):
         return {}
 
-    monkeypatch.setattr(routes, "fetch_current_prices", pas_de_cours)
+    monkeypatch.setattr(routes, "fetch_current_prices_sync", pas_de_cours)
     monkeypatch.setattr(yfinance, "download", lambda *a, **k: (_ for _ in ()).throw(RuntimeError("réseau coupé")))
 
     r = client.get(f"/api/v1/portfolios/{pid}/analysis")
@@ -412,10 +412,10 @@ def test_analyse_sans_ecritures_ni_poids_ne_note_pas(client, monkeypatch):
     r = client.post("/api/v1/portfolios", json={"name": "Vide", "assets": []})
     pid = r.json()["id"]
 
-    async def pas_de_cours(_tickers):
+    def pas_de_cours(_tickers):
         return {}
 
-    monkeypatch.setattr(routes, "fetch_current_prices", pas_de_cours)
+    monkeypatch.setattr(routes, "fetch_current_prices_sync", pas_de_cours)
 
     d = client.get(f"/api/v1/portfolios/{pid}/analysis").json()
     assert d["source"] == "aucune"
@@ -438,10 +438,10 @@ def test_le_profil_se_declare_et_revient_dans_l_analyse(client, monkeypatch):
 
     pid = creer_portefeuille(client, "Avec profil")
 
-    async def pas_de_cours(_tickers):
+    def pas_de_cours(_tickers):
         return {}
 
-    monkeypatch.setattr(routes, "fetch_current_prices", pas_de_cours)
+    monkeypatch.setattr(routes, "fetch_current_prices_sync", pas_de_cours)
     monkeypatch.setattr(yfinance, "download",
                         lambda *a, **k: (_ for _ in ()).throw(RuntimeError("réseau coupé")))
 
@@ -567,10 +567,10 @@ def test_les_frais_saisis_se_declarent_et_notent(client, monkeypatch):
     assert client.post(f"/api/v1/portfolios/{pid}/transactions",
                        json=ecriture("ESE.PA", 10, 100.0, "2026-01-05")).status_code == 201
 
-    async def cours(tickers):
+    def cours(tickers):
         return {t: 150.0 for t in tickers}
 
-    monkeypatch.setattr(routes, "fetch_current_prices", cours)
+    monkeypatch.setattr(routes, "fetch_current_prices_sync", cours)
     monkeypatch.setattr(yfinance, "download",
                         lambda *a, **k: (_ for _ in ()).throw(RuntimeError("réseau coupé")))
     # ⚠️ Un **fonds**, et non une action. Saisir un TER sur un titre détenu en direct
@@ -613,10 +613,10 @@ def test_l_analyse_rend_les_frais_par_ligne_avec_leur_provenance(client, monkeyp
               ecriture("MUET.PA", 10, 100.0, "2026-01-05")):
         assert client.post(f"/api/v1/portfolios/{pid}/transactions", json=e).status_code == 201
 
-    async def cours(tickers):
+    def cours(tickers):
         return {t: 150.0 for t in tickers}
 
-    monkeypatch.setattr(routes, "fetch_current_prices", cours)
+    monkeypatch.setattr(routes, "fetch_current_prices_sync", cours)
     monkeypatch.setattr(yfinance, "download",
                         lambda *a, **k: (_ for _ in ()).throw(RuntimeError("réseau coupé")))
     # Un fonds dont le fournisseur connaît le TER, un autre non.
@@ -660,10 +660,10 @@ def test_sans_fonds_les_frais_sont_sans_objet(client, monkeypatch):
     assert client.post(f"/api/v1/portfolios/{pid}/transactions",
                        json=ecriture("TSLA", 10, 100.0, "2026-01-05")).status_code == 201
 
-    async def cours(tickers):
+    def cours(tickers):
         return {t: 150.0 for t in tickers}
 
-    monkeypatch.setattr(routes, "fetch_current_prices", cours)
+    monkeypatch.setattr(routes, "fetch_current_prices_sync", cours)
     monkeypatch.setattr(yfinance, "download",
                         lambda *a, **k: (_ for _ in ()).throw(RuntimeError("réseau coupé")))
     monkeypatch.setattr(routes, "_details_titre", lambda t: {
@@ -696,10 +696,10 @@ def test_une_crypto_compte_comme_un_actif_unique(client, monkeypatch):
               ecriture("DOGE-USD", 4, 100.0, "2026-01-05", type_actif="CRYPTOCURRENCY")):
         assert client.post(f"/api/v1/portfolios/{pid}/transactions", json=e).status_code == 201
 
-    async def cours(tickers):
+    def cours(tickers):
         return {t: 100.0 for t in tickers}
 
-    monkeypatch.setattr(routes, "fetch_current_prices", cours)
+    monkeypatch.setattr(routes, "fetch_current_prices_sync", cours)
     monkeypatch.setattr(yfinance, "download",
                         lambda *a, **k: (_ for _ in ()).throw(RuntimeError("réseau coupé")))
     # Ce que le fournisseur rend réellement pour une crypto : ni secteur, ni pays.
@@ -1118,10 +1118,10 @@ def test_l_analyse_ne_rend_que_les_facteurs_retenus(client, monkeypatch):
     assert client.post(f"/api/v1/portfolios/{pid}/transactions",
                        json=ecriture("AAPL", 10, 100.0, "2026-01-05")).status_code == 201
 
-    async def cours(tickers):
+    def cours(tickers):
         return {t: 150.0 for t in tickers}
 
-    monkeypatch.setattr(routes, "fetch_current_prices", cours)
+    monkeypatch.setattr(routes, "fetch_current_prices_sync", cours)
     monkeypatch.setattr(yfinance, "download",
                         lambda *a, **k: (_ for _ in ()).throw(RuntimeError("réseau coupé")))
 
@@ -1162,10 +1162,10 @@ def test_analyse_refuse_de_noter_si_un_cours_manque(client, monkeypatch):
               ecriture("MSFT", 5, 200.0, "2026-01-05")):
         assert client.post(f"/api/v1/portfolios/{pid}/transactions", json=e).status_code == 201
 
-    async def un_seul_cours(tickers):
+    def un_seul_cours(tickers):
         return {"AAPL": 150.0}          # MSFT reste sans cours
 
-    monkeypatch.setattr(routes, "fetch_current_prices", un_seul_cours)
+    monkeypatch.setattr(routes, "fetch_current_prices_sync", un_seul_cours)
     monkeypatch.setattr(yfinance, "download",
                         lambda *a, **k: (_ for _ in ()).throw(RuntimeError("réseau coupé")))
 
@@ -1185,10 +1185,10 @@ def test_analyse_complete_annonce_aucune_ligne_manquante(client, monkeypatch):
     assert client.post(f"/api/v1/portfolios/{pid}/transactions",
                        json=ecriture("AAPL", 10, 100.0, "2026-01-05")).status_code == 201
 
-    async def cours(tickers):
+    def cours(tickers):
         return {t: 150.0 for t in tickers}
 
-    monkeypatch.setattr(routes, "fetch_current_prices", cours)
+    monkeypatch.setattr(routes, "fetch_current_prices_sync", cours)
     monkeypatch.setattr(yfinance, "download",
                         lambda *a, **k: (_ for _ in ()).throw(RuntimeError("réseau coupé")))
     monkeypatch.setattr(analyse, "facteurs_de_risque",
@@ -1214,10 +1214,10 @@ def test_le_courtage_vient_des_ecritures(client, monkeypatch):
     assert client.post(f"/api/v1/portfolios/{pid}/transactions",
                        json=ecriture("AAPL", 10, 100.0, "2026-01-05", fees=2.0)).status_code == 201
 
-    async def cours(tickers):
+    def cours(tickers):
         return {t: 100.0 for t in tickers}
 
-    monkeypatch.setattr(routes, "fetch_current_prices", cours)
+    monkeypatch.setattr(routes, "fetch_current_prices_sync", cours)
     monkeypatch.setattr(yfinance, "download",
                         lambda *a, **k: (_ for _ in ()).throw(RuntimeError("réseau coupé")))
 

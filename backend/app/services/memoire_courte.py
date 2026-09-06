@@ -91,17 +91,34 @@ def memorise(nom: str):
     pour un portefeuille de même identifiant.
     """
     import functools
+    import inspect
 
     def decorateur(fn):
-        @functools.wraps(fn)
-        async def enveloppe(*args, **kwargs):
+        def cle_de(kwargs):
             utilisateur = kwargs.get("user")
-            cle = (nom, kwargs.get("portfolio_id"), kwargs.get("period"),
-                   getattr(utilisateur, "id", None))
+            return (nom, kwargs.get("portfolio_id"), kwargs.get("period"),
+                    getattr(utilisateur, "id", None))
+
+        # ⚠️ Les deux formes, parce que les routes lourdes sont repassées en `def` : une route
+        # `async def` s'exécute *sur* la boucle d'événements et la retient pendant chaque appel
+        # bloquant. Une enveloppe uniquement asynchrone les aurait forcées à le rester.
+        if inspect.iscoroutinefunction(fn):
+            @functools.wraps(fn)
+            async def enveloppe_async(*args, **kwargs):
+                cle = cle_de(kwargs)
+                deja = lire(cle)
+                if deja is not None:
+                    return deja
+                return retenir(cle, await fn(*args, **kwargs))
+            return enveloppe_async
+
+        @functools.wraps(fn)
+        def enveloppe(*args, **kwargs):
+            cle = cle_de(kwargs)
             deja = lire(cle)
             if deja is not None:
                 return deja
-            return retenir(cle, await fn(*args, **kwargs))
+            return retenir(cle, fn(*args, **kwargs))
         return enveloppe
 
     return decorateur

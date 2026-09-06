@@ -105,6 +105,34 @@ def check_delete_feasible(
     return True, ""
 
 
+def fetch_current_prices_sync(tickers: list[str]) -> dict[str, float]:
+    """
+    La même chose, sans boucle d'événements.
+
+    ⚠️ **Pour les routes qui redeviennent synchrones.** Une route `async def` s'exécute *sur*
+    la boucle d'événements ; tout appel bloquant qu'elle contient — et yfinance en est un —
+    la retient. Mesuré sur le serveur : le même téléchargement prenait 0,3 s dans un
+    processus nu et de 40 à 90 s sous uvicorn, le processus passant tout son temps dans
+    `curl_cffi`. Une route `def` est confiée par FastAPI à un fil d'exécution séparé, où
+    bloquer ne gêne personne. Voir `get_history`.
+    """
+    if not tickers:
+        return {}
+    from concurrent.futures import ThreadPoolExecutor
+    import yfinance as yf
+
+    def _un(ticker: str) -> tuple[str, float] | None:
+        try:
+            price = yf.Ticker(ticker).fast_info.get("lastPrice")
+            return (ticker, float(price)) if price and price > 0 else None
+        except Exception:
+            return None
+
+    with ThreadPoolExecutor(max_workers=min(8, len(tickers))) as pool:
+        obtenus = list(pool.map(_un, tickers))
+    return dict(p for p in obtenus if p)
+
+
 async def fetch_current_prices(tickers: list[str]) -> dict[str, float]:
     """
     Récupère le dernier prix disponible pour chaque ticker via yfinance.

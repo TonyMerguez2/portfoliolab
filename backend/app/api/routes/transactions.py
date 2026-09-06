@@ -35,6 +35,7 @@ from app.core.auth import require_auth
 from app.api.routes.comptes import porte_des_titres
 from app.models.user import User
 from app.utils.positions import (
+    fetch_current_prices_sync,
     compute_positions,
     check_sell_feasible,
     check_delete_feasible,
@@ -297,7 +298,7 @@ def delete_transaction(
 
 @router.get("/{portfolio_id}/positions")
 @memorise("positions")
-async def get_positions(
+def get_positions(
     portfolio_id: str,
     db:           Session = Depends(get_db),
     user:         User    = Depends(require_auth),
@@ -348,7 +349,7 @@ async def get_positions(
     pos_map = compute_positions(all_txs)
     tickers = list(pos_map.keys())
 
-    prices = await fetch_current_prices(tickers)
+    prices = fetch_current_prices_sync(tickers)
 
     positions  = []
     total_val  = 0.0
@@ -721,7 +722,7 @@ def _journal_par_compte(comptes, db) -> dict:
 
 @router.get("/{portfolio_id}/history")
 @memorise("history")
-async def get_history(
+def get_history(
     portfolio_id: str,
     period:       str     = Query("max"),
     db:           Session = Depends(get_db),
@@ -1595,7 +1596,7 @@ def _details_titre(ticker: str) -> dict:
 
 @router.get("/{portfolio_id}/history/comptes")
 @memorise("history-comptes")
-async def get_history_par_compte(
+def get_history_par_compte(
     portfolio_id: str,
     period:       str     = Query("max"),
     db:           Session = Depends(get_db),
@@ -1850,7 +1851,7 @@ async def get_history_par_compte(
 
 @router.get("/{portfolio_id}/analysis")
 @memorise("analysis")
-async def get_analysis(
+def get_analysis(
     portfolio_id: str,
     db:           Session = Depends(get_db),
     user:         User    = Depends(require_auth),
@@ -1921,7 +1922,7 @@ async def get_analysis(
         total = float(portefeuille.total_value or 0.0)
         source = "poids"
     else:
-        prix = await fetch_current_prices(tickers)
+        prix = fetch_current_prices_sync(tickers)
 
         # ⚠️ Une ligne sans cours **arrête** l'analyse, elle ne s'omet pas.
         #
