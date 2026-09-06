@@ -217,27 +217,8 @@ export default function Home() {
         * de points, et la silhouette se serait lue comme une seconde trame plutôt que comme
         * la même, renforcée.
         */}
-      <div aria-hidden="true" className="fixed pointer-events-none" style={{
-        inset: 0, zIndex: 0,
-        /**
-         * ⚠️ **`--nv-point-vif`, l'encre exacte du point sous le curseur.** Elle valait un
-         * accent bleu à 0,34 : la silhouette se lisait comme une trame *étrangère* posée sur
-         * le fond, d'une autre couleur que les points qu'elle prétend renforcer. Le jeton vif
-         * est celui que `.nv-points::after` allume au survol — même gris, même famille — si
-         * bien que la silhouette a exactement l'aspect d'une zone de trame éclairée en
-         * permanence. C'est ce qu'elle doit être.
-         *
-         * ⚠️ Et c'est un jeton, donc il suit les deux thèmes : 0,28 en sombre, 0,24 en clair.
-         * Une valeur écrite ici aurait figé l'un des deux.
-         */
-        backgroundImage:
-          "radial-gradient(circle at 1px 1px, var(--nv-point-vif) 1px, transparent 1.5px)",
-        backgroundSize: "14px 14px",
-        maskImage: "url(/logo-hivesync.svg)", WebkitMaskImage: "url(/logo-hivesync.svg)",
-        maskSize: "min(115vh, 1300px)", WebkitMaskSize: "min(115vh, 1300px)",
-        maskRepeat: "no-repeat", WebkitMaskRepeat: "no-repeat",
-        maskPosition: "right -16% bottom -24%", WebkitMaskPosition: "right -16% bottom -24%",
-      }} />
+      <div aria-hidden="true" className="fixed pointer-events-none nv-silhouette"
+        style={{ inset: 0, zIndex: 0 }} />
 
       {/**
         * ⚠️ **Le texte descend pour laisser voir le logo.** Centré comme lui, il se posait

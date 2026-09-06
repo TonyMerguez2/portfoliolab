@@ -1825,3 +1825,62 @@ canvas + div {
   border: 5px solid transparent;
   border-right-color: var(--nv-carte);
 }
+
+/* ── La silhouette du logo, en points, qui respire ──────────────────────────
+
+   ⚠️ **Deux couches de masque, croisées, et non une.** La première est le dessin du logo,
+   la seconde un dégradé radial qui éteint les bords : sans elle, la silhouette avait la même
+   densité partout et se lisait comme un aplat découpé. `mask-composite: intersect` ne garde
+   que ce que les deux laissent passer — la forme *et* le cœur. C'est ce que fait la lueur
+   sous le curseur, qui s'éteint elle aussi vers ses bords.
+
+   ⚠️ **Le préfixe WebKit prend `source-in` là où la norme dit `intersect`.** Les deux
+   décrivent la même opération ; l'ancienne syntaxe reste nécessaire tant que Safari ne suit
+   pas, et l'oublier donne une silhouette sans masque du tout.
+
+   ⚠️ **La respiration passe par une variable de nombre, pas par `mask-size` directement.**
+   Une taille de masque à deux couches s'écrit « a, b » : l'animer demanderait de réécrire les
+   deux valeurs à chaque image, dont celle qui ne doit pas bouger. Un facteur déclaré en
+   `@property` s'interpole tout seul, et le `calc` le répercute sur la seule couche du voile.
+   Sans la déclaration `@property`, le navigateur interpole entre deux chaînes et le souffle
+   se fait par sauts. */
+@property --nv-souffle {
+  syntax: "<number>";
+  inherits: false;
+  initial-value: 1;
+}
+
+@keyframes nv-respire {
+  0%, 100% { --nv-souffle: 0.96; opacity: 0.88; }
+  50%      { --nv-souffle: 1.08; opacity: 1; }
+}
+
+.nv-silhouette {
+  --nv-logo-cote: min(115vh, 1300px);
+  background-image: radial-gradient(circle at 1px 1px, var(--nv-point-vif) 1px, transparent 1.5px);
+  background-size: 14px 14px;
+
+  -webkit-mask-image: url(/logo-hivesync.svg),
+    radial-gradient(closest-side, #000 18%, rgba(0, 0, 0, 0.55) 58%, transparent 92%);
+  mask-image: url(/logo-hivesync.svg),
+    radial-gradient(closest-side, #000 18%, rgba(0, 0, 0, 0.55) 58%, transparent 92%);
+
+  -webkit-mask-size: var(--nv-logo-cote), calc(var(--nv-logo-cote) * var(--nv-souffle));
+  mask-size: var(--nv-logo-cote), calc(var(--nv-logo-cote) * var(--nv-souffle));
+
+  -webkit-mask-position: right -16% bottom -24%, right -16% bottom -24%;
+  mask-position: right -16% bottom -24%, right -16% bottom -24%;
+
+  -webkit-mask-repeat: no-repeat, no-repeat;
+  mask-repeat: no-repeat, no-repeat;
+
+  -webkit-mask-composite: source-in;
+  mask-composite: intersect;
+
+  /* Sept secondes : un souffle qu'on remarque en s'arrêtant, jamais en lisant. */
+  animation: nv-respire 7s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .nv-silhouette { animation: none; --nv-souffle: 1.02; opacity: 0.95; }
+}
