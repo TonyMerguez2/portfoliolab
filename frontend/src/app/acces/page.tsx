@@ -3,9 +3,8 @@ import { Suspense, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { FONT, NUM } from "@/lib/typography";
 import { JETONS, RAYONS } from "@/lib/palette";
-import { champ, HAUTEUR_SAISIE, RAYON_SAISIE } from "@/components/ui/saisie";
+import { champ, HAUTEUR_SAISIE } from "@/components/ui/saisie";
 import Cadre from "@/components/ui/Cadre";
-import { ancrerLisere } from "@/components/ui/lisere";
 
 /**
  * La porte de l'alpha fermée : entrer avec un code, ou laisser son adresse.
@@ -27,23 +26,40 @@ import { ancrerLisere } from "@/components/ui/lisere";
  */
 
 /**
- * La surface des deux champs de cette page.
+ * L'effet de bord des deux champs, celui de la barre de recherche.
  *
- * ⚠️ **`.novac-surface-saisie` ne convient pas ici, et c'est une question de contexte.** Sa
- * couleur est `--nv-bord`, `#101828` : posée dans une carte, elle se creuse joliment ; posée
- * *directement sur la page*, elle vaut exactement la teinte médiane du dégradé de fond, et
- * le champ disparaît. Ailleurs sur le site il y a toujours une carte entre les deux ; ici il
- * n'y en a pas. La surface est donc relevée d'un cran, à `bordFort`, avec un liseré qui la
- * détache franchement.
+ * ⚠️ **`.novac-surface-saisie` ne pouvait pas servir telle quelle, et il a fallu deux essais
+ * pour comprendre laquelle de ses deux moitiés reprendre.** Sa *couleur* est
+ * `--nv-bord`, `#101828` : posée dans une carte elle se creuse joliment, posée directement
+ * sur cette page elle vaut la teinte médiane du dégradé de fond, et le champ disparaît. Mais
+ * son *comportement* est exactement ce qui était demandé — un bord transparent au repos, qui
+ * s'allume au survol, et un champ qui se creuse au foyer, prenant la couleur du panneau pour
+ * devenir un trou plutôt qu'une plaque cerclée.
  *
- * Même raison pour les deux boutons : ils gardent la pastille blanche même désactivés, et ne
- * font que s'estomper. Le fond creusé qu'ils portaient au repos se confondait lui aussi avec
- * la page, si bien qu'« Entrer » et « Rejoindre » n'existaient qu'une fois le champ rempli.
+ * On reprend donc le comportement à la lettre, avec une surface relevée d'un cran pour qu'il
+ * se voie sur cette page-ci. ⚠️ Une classe locale et non des styles en ligne : ni `:hover` ni
+ * `:focus-within` ne s'écrivent dans un attribut `style`, et c'est précisément l'état qu'on
+ * veut voir.
+ *
+ * Le rayon est celui de la barre de recherche, `RAYONS.xl`, et non celui des champs de
+ * formulaire : cette page n'a pas de formulaire dense, elle a deux pastilles isolées.
  */
-const SURFACE_CHAMP: React.CSSProperties = {
-  background: JETONS.bordFort,
-  border: `1px solid ${JETONS.bordFort}`,
-};
+const STYLE_CHAMPS = `
+  .nv-champ {
+    background: var(--nv-bord-fort);
+    border: 1px solid transparent;
+    color: var(--nv-texte);
+    outline: none;
+    transition: background 150ms, border-color 150ms, box-shadow 150ms;
+  }
+  .nv-champ:hover { border-color: var(--nv-texte-attenue); }
+  .nv-champ:focus, .nv-champ:focus-visible, .nv-champ:focus-within {
+    background: var(--nv-carte);
+    border-color: var(--nv-texte-attenue);
+    box-shadow: 0 0 0 1px var(--nv-texte-attenue);
+  }
+  .nv-champ-refus, .nv-champ-refus:hover { border-color: var(--nv-negatif); }
+`;
 
 type Etat = "repos" | "envoi" | "refus" | "panne";
 type EtatInscription = "repos" | "envoi" | "fait" | "deja" | "refus" | "panne";
@@ -119,6 +135,7 @@ function Porte() {
   return (
     <main style={{ minHeight: "100vh", position: "relative", overflow: "hidden",
                    fontFamily: FONT, color: JETONS.surFond }}>
+      <style>{STYLE_CHAMPS}</style>
       <Decor />
       <div style={{ position: "relative", zIndex: 1, minHeight: "100vh",
                     display: "flex", flexDirection: "column", alignItems: "center",
@@ -170,27 +187,18 @@ function Porte() {
               */
             <form onSubmit={inscrire} noValidate>
               <div style={{ display: "flex", gap: 8 }}>
-                {/* ⚠️ **Le liseré vit sur une enveloppe, pas sur le champ.** `.novac-lisere`
-                    le trace dans un `::before` — et un `<input>` n'a pas de pseudo-élément.
-                    C'est pourquoi il manquait ici alors qu'il est demandé : il ne suffisait
-                    pas de poser la classe. `ancrerLisere` calcule l'angle de la diagonale
-                    depuis les dimensions réelles, pour que le dégradé s'éteigne exactement
-                    au milieu des deux grands côtés. */}
-                <span className="novac-lisere" ref={ancrerLisere}
-                  style={{ flex: 1, minWidth: 0, display: "block", borderRadius: RAYON_SAISIE,
-                           color: inscription === "refus" ? JETONS.negatif : JETONS.texteSecondaire }}>
-                  <input type="email" value={email} inputMode="email" autoComplete="email"
-                    aria-label="Votre adresse e-mail"
-                    onChange={e => { setEmail(e.target.value); if (inscription !== "repos") setInscription("repos"); }}
-                    placeholder="vous@exemple.com"
-                    style={{ ...champ, ...SURFACE_CHAMP, border: "none", textAlign: "left" }} />
-                </span>
+                <input type="email" value={email} inputMode="email" autoComplete="email"
+                  aria-label="Votre adresse e-mail"
+                  className={`nv-champ${inscription === "refus" ? " nv-champ-refus" : ""}`}
+                  onChange={e => { setEmail(e.target.value); if (inscription !== "repos") setInscription("repos"); }}
+                  placeholder="vous@exemple.com"
+                  style={{ ...champ, flex: 1, width: "auto", minWidth: 0, textAlign: "left",
+                           borderRadius: RAYONS.xl }} />
                 <button type="submit" disabled={!email || inscription === "envoi"}
-                  className="novac-lisere" ref={ancrerLisere}
-                  style={{ padding: "0 20px", height: HAUTEUR_SAISIE, borderRadius: RAYON_SAISIE,
+                  style={{ padding: "0 20px", height: HAUTEUR_SAISIE,
                            flexShrink: 0, border: "none",
                            background: JETONS.segmentActif, color: JETONS.segmentEncre,
-                           opacity: email ? 1 : 0.45,
+                           borderRadius: RAYONS.xl, opacity: email ? 1 : 0.45,
                            cursor: email && inscription !== "envoi" ? "pointer" : "default",
                            fontFamily: FONT, fontSize: 13, fontWeight: 600,
                            transition: "opacity 200ms" }}>
@@ -213,20 +221,17 @@ function Porte() {
         {codeOuvert ? (
           <form onSubmit={ouvrir} style={{ width: "100%", maxWidth: 300 }}>
             <div style={{ display: "flex", gap: 8 }}>
-              <span className="novac-lisere" ref={ancrerLisere}
-                style={{ flex: 1, minWidth: 0, display: "block", borderRadius: RAYON_SAISIE,
-                         color: etat === "refus" ? JETONS.negatif : JETONS.texteSecondaire }}>
-                <input id="code" type="password" value={code} autoComplete="current-password"
-                  autoFocus placeholder="Code d'accès"
-                  onChange={e => { setCode(e.target.value); if (etat !== "repos") setEtat("repos"); }}
-                  style={{ ...champ, ...SURFACE_CHAMP, border: "none", textAlign: "left" }} />
-              </span>
+              <input id="code" type="password" value={code} autoComplete="current-password"
+                autoFocus placeholder="Code d'accès"
+                className={`nv-champ${etat === "refus" ? " nv-champ-refus" : ""}`}
+                onChange={e => { setCode(e.target.value); if (etat !== "repos") setEtat("repos"); }}
+                style={{ ...champ, flex: 1, width: "auto", minWidth: 0, textAlign: "left",
+                         borderRadius: RAYONS.xl }} />
               <button type="submit" disabled={!code || etat === "envoi"}
-                className="novac-lisere" ref={ancrerLisere}
-                style={{ padding: "0 16px", height: HAUTEUR_SAISIE, borderRadius: RAYON_SAISIE,
+                style={{ padding: "0 16px", height: HAUTEUR_SAISIE,
                          flexShrink: 0, border: "none",
                          background: JETONS.segmentActif, color: JETONS.segmentEncre,
-                         opacity: code ? 1 : 0.45,
+                         borderRadius: RAYONS.xl, opacity: code ? 1 : 0.45,
                          cursor: code && etat !== "envoi" ? "pointer" : "default",
                          fontFamily: FONT, fontSize: 13, fontWeight: 600,
                          transition: "opacity 200ms" }}>
