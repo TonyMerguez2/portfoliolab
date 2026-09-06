@@ -4,6 +4,7 @@ import { useSearchParams } from "next/navigation";
 import { FONT, NUM } from "@/lib/typography";
 import { JETONS, RAYONS } from "@/lib/palette";
 import Cadre from "@/components/ui/Cadre";
+import { champ, HAUTEUR_SAISIE, RAYON_SAISIE } from "@/components/ui/saisie";
 
 /**
  * La porte de l'alpha fermée : entrer avec un code, ou laisser son adresse.
@@ -120,15 +121,7 @@ function Porte() {
                       color: JETONS.surFondAttenue, textTransform: "uppercase" }}>
             Find the optimal path
           </p>
-          <span style={{ display: "inline-flex", alignItems: "center", gap: 7, marginTop: 20,
-                         padding: "4px 12px", borderRadius: RAYONS.plein,
-                         background: JETONS.carteCreuse,
-                         border: `1px solid ${JETONS.bord}`,
-                         color: JETONS.texteSecondaire, fontSize: 10.5, fontWeight: 600,
-                         letterSpacing: "0.14em" }}>
-            <Pouls />
-            ALPHA FERMÉE
-          </span>
+          <PastilleAlpha />
         </header>
 
         {/* ── La porte ───────────────────────────────────────────────────── */}
@@ -143,13 +136,17 @@ function Porte() {
                                              color: JETONS.texte, marginBottom: 8 }}>
                 Code d&apos;accès
               </label>
+              {/* ⚠️ **`champ` et `.novac-surface-saisie`, comme toutes les saisies du site.**
+                  Cette page avait les siennes : arrondi 10 au lieu de 18, hauteur libre au lieu
+                  de 40, un liseré peint en `border` là où le site le pose en pseudo-élément
+                  masqué — un `border` raccourcit la boîte de deux pixels sans changer son
+                  rayon, et les deux arcs se croisent dans les angles. La classe porte aussi le
+                  survol et le focus, qu'un style en ligne ne sait pas exprimer. */}
               <input id="code" type="password" value={code} autoComplete="current-password"
                 onChange={e => { setCode(e.target.value); if (etat !== "repos") setEtat("repos"); }}
                 placeholder="••••••••"
-                style={{ width: "100%", boxSizing: "border-box", padding: "10px 12px",
-                         borderRadius: RAYONS.sm, background: JETONS.carteCreuse,
-                         border: `1px solid ${etat === "refus" ? JETONS.negatif : JETONS.bord}`,
-                         color: JETONS.texte, fontFamily: FONT, fontSize: 13, outline: "none" }} />
+                className="novac-surface-saisie"
+                style={{ ...champ, borderColor: etat === "refus" ? JETONS.negatif : undefined }} />
 
               {/* ⚠️ La ligne d'état occupe sa place en permanence : sans elle, le bouton
                   sautait de dix-huit pixels à la première erreur. */}
@@ -161,7 +158,7 @@ function Porte() {
               </div>
 
               <button type="submit" disabled={!code || etat === "envoi"}
-                style={{ width: "100%", marginTop: 4, padding: "11px 12px", borderRadius: RAYONS.sm,
+                style={{ width: "100%", marginTop: 4, height: HAUTEUR_SAISIE, borderRadius: RAYON_SAISIE,
                          border: "none", cursor: code && etat !== "envoi" ? "pointer" : "default",
                          background: code ? JETONS.segmentActif : JETONS.carteCreuse,
                          color: code ? JETONS.segmentEncre : JETONS.texteFaible,
@@ -207,18 +204,17 @@ function Porte() {
                     aria-label="Votre adresse e-mail"
                     onChange={e => { setEmail(e.target.value); if (inscription !== "repos") setInscription("repos"); }}
                     placeholder="vous@exemple.com"
-                    style={{ flex: 1, minWidth: 0, padding: "9px 12px", borderRadius: RAYONS.sm,
-                             background: JETONS.carteCreuse,
-                             border: `1px solid ${inscription === "refus" ? JETONS.negatif : JETONS.bord}`,
-                             color: JETONS.texte, fontFamily: FONT, fontSize: 13, outline: "none" }} />
+                    className="novac-surface-saisie"
+                    style={{ ...champ, flex: 1, width: "auto", minWidth: 0,
+                             borderColor: inscription === "refus" ? JETONS.negatif : undefined }} />
                   {/* ⚠️ **La pastille blanche du site, pas un bouton bleu.** L'accent sert
                       ici aux liens et aux mentions, jamais à un bouton d'action : partout
                       ailleurs — pistes de période, outils du graphique, « Entrer » juste
                       au-dessus — l'action retenue est une pastille blanche à encre noire. Un
                       bouton bleu à côté d'elle faisait deux vocabulaires dans la même carte. */}
                   <button type="submit" disabled={!email || inscription === "envoi"}
-                    style={{ padding: "9px 15px", borderRadius: RAYONS.sm, flexShrink: 0,
-                             border: "none",
+                    style={{ padding: "0 16px", height: HAUTEUR_SAISIE, borderRadius: RAYON_SAISIE,
+                             flexShrink: 0, border: "none",
                              background: email ? JETONS.segmentActif : JETONS.carteCreuse,
                              color: email ? JETONS.segmentEncre : JETONS.texteFaible,
                              cursor: email && inscription !== "envoi" ? "pointer" : "default",
@@ -245,19 +241,34 @@ function Porte() {
         {/* ── Ce qu'il y a derrière ──────────────────────────────────────── */}
         <section style={{ width: "100%" }}>
           <Intertitre>Aperçu · exemples chiffrés</Intertitre>
-          <div style={{ display: "grid", gap: 14,
-                        gridTemplateColumns: "repeat(auto-fit, minmax(230px, 1fr))" }}>
+          {/* ⚠️ Six aperçus et non trois, à la demande, et le dessin y prend le dessus : il
+              occupe toute la largeur de la carte sur une bande haute, le texte se resserre
+              dessous. Un aperçu qu'on lit plus qu'on ne regarde ne montre rien. */}
+          <div style={{ display: "grid", gap: 12,
+                        gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))" }}>
             <Apercu titre="Une note, et ce qui la fonde"
-              texte="Cinq piliers notés sur cent : diversification, risque, construction, qualité, adéquation. Un pilier non mesurable est écarté, jamais compté à zéro.">
+              texte="Cinq piliers sur cent. Un pilier non mesurable est écarté, jamais compté à zéro.">
               <AnneauScore />
             </Apercu>
             <Apercu titre="La courbe de votre patrimoine"
-              texte="Reconstruite depuis vos opérations réelles, pas depuis une allocation cible. Comparée au marché sur la même fenêtre.">
+              texte="Reconstruite depuis vos opérations réelles, comparée au marché sur la même fenêtre.">
               <Courbe />
             </Apercu>
             <Apercu titre="Ce que vous détenez vraiment"
-              texte="En transparence des fonds : trois ETF, c'est trois lignes mais des centaines de sociétés, réparties par secteur et par zone.">
-              <Mosaique />
+              texte="En transparence des fonds : trois ETF, c'est des centaines de sociétés.">
+              <MosaiqueApercu />
+            </Apercu>
+            <Apercu titre="Chaque ligne, son gain"
+              texte="Quantité détenue et prix de revient issus de vos écritures, pas d'une pondération cible.">
+              <CartesActifs />
+            </Apercu>
+            <Apercu titre="Vos comptes, rangés"
+              texte="PEA, compte-titres, livrets, compte courant. Les espèces comptent dans le patrimoine, jamais dans la performance.">
+              <Dossiers />
+            </Apercu>
+            <Apercu titre="La fenêtre que vous voulez"
+              texte="De la séance du jour à tout l'historique, la performance suit la période choisie.">
+              <RailPeriodes />
             </Apercu>
           </div>
         </section>
@@ -293,14 +304,58 @@ function Logo({ taille = 34 }: { taille?: number }) {
   );
 }
 
-/** Le point qui bat dans la pastille « alpha fermée ». */
-function Pouls() {
+/**
+ * La pastille « alpha fermée », avec son liseré rouge qui tourne.
+ *
+ * ⚠️ **Le liseré tourne, il ne clignote pas.** Un `border` ne sait pas se dégrader le long
+ * d'un contour ; la technique est celle du site — un pseudo-élément masqué, voir
+ * `.novac-lisere` — mais avec un dégradé **conique** que l'on fait pivoter. Le point vif du
+ * dégradé parcourt donc le tour de la pastille, et la rotation est continue : rien ne
+ * s'allume ni ne s'éteint, ce qui serait une alarme plutôt qu'un signe de vie.
+ *
+ * ⚠️ **Le rouge est celui des pertes du site**, `negatif`, et non un rouge choisi à part :
+ * c'est déjà la couleur qui veut dire « attention » partout ailleurs. Le fond et l'encre
+ * restent sobres — un rouge plein ferait une alerte, quand il ne s'agit que de dire que le
+ * site n'est pas encore ouvert.
+ *
+ * ⚠️ **`@property` déclare l'angle comme une vraie grandeur**, sans quoi le navigateur
+ * interpole entre deux chaînes de caractères et la rotation se fait par sauts. Les
+ * navigateurs qui l'ignorent gardent une pastille fixe, correctement dessinée.
+ */
+function PastilleAlpha() {
   return (
     <>
-      <style>{`@keyframes nv-pouls { 0%,100% { opacity: 1 } 50% { opacity: .35 } }
-        @media (prefers-reduced-motion: reduce) { .nv-pouls { animation: none !important } }`}</style>
-      <span className="nv-pouls" style={{ width: 5, height: 5, borderRadius: 3,
-        background: JETONS.accent, animation: "nv-pouls 2.4s ease-in-out infinite" }} />
+      <style>{`
+        @property --nv-tour { syntax: "<angle>"; inherits: false; initial-value: 0deg; }
+        @keyframes nv-tourne { to { --nv-tour: 360deg; } }
+        .nv-alpha { position: relative; isolation: isolate; }
+        .nv-alpha::before {
+          content: ''; position: absolute; inset: 0; border-radius: inherit;
+          padding: 1px; pointer-events: none;
+          background: conic-gradient(from var(--nv-tour),
+            transparent 0deg, transparent 250deg,
+            rgba(var(--nv-negatif-rvb), 0.25) 300deg,
+            rgba(var(--nv-negatif-rvb), 1) 345deg,
+            rgba(var(--nv-negatif-rvb), 0.25) 352deg,
+            transparent 360deg);
+          -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+          -webkit-mask-composite: xor; mask-composite: exclude;
+          animation: nv-tourne 3.2s linear infinite;
+        }
+        @media (prefers-reduced-motion: reduce) {
+          .nv-alpha::before { animation: none; background: rgba(var(--nv-negatif-rvb), 0.55); }
+        }
+      `}</style>
+      <span className="nv-alpha"
+        style={{ display: "inline-flex", alignItems: "center", gap: 7, marginTop: 20,
+                 padding: "5px 13px", borderRadius: RAYONS.plein,
+                 background: JETONS.carteCreuse,
+                 color: JETONS.texteSecondaire, fontSize: 10.5, fontWeight: 600,
+                 letterSpacing: "0.14em" }}>
+        <span aria-hidden="true" style={{ width: 5, height: 5, borderRadius: 3,
+                                          background: JETONS.negatif, flexShrink: 0 }} />
+        ALPHA FERMÉE
+      </span>
     </>
   );
 }
@@ -321,16 +376,19 @@ function Apercu({ titre, texte, children }: {
   titre: string; texte: string; children: React.ReactNode;
 }) {
   return (
-    <Cadre style={{ padding: 16 }}>
+    <Cadre style={{ padding: 14 }}>
       <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-      {/* Hauteur fixe : trois dessins de natures différentes doivent poser leurs titres
-          sur la même ligne, sinon la rangée se lit comme trois cartes mal alignées. */}
-      <div style={{ height: 92, display: "flex", alignItems: "center", justifyContent: "center" }}>
+      {/* ⚠️ Hauteur fixe : six dessins de natures différentes doivent poser leurs titres sur
+          la même ligne, sinon la grille se lit comme des cartes mal alignées. Le dessin est
+          centré et débordant est masqué — chacun est tracé pour cette bande. */}
+      <div style={{ height: 104, borderRadius: RAYONS.sm, background: JETONS.carteCreuse,
+                    display: "flex", alignItems: "center", justifyContent: "center",
+                    overflow: "hidden" }}>
         {children}
       </div>
       <div>
         <div style={{ fontFamily: FONT, fontSize: 12.5, fontWeight: 600, color: JETONS.texte,
-                      marginBottom: 5 }}>{titre}</div>
+                      marginBottom: 4 }}>{titre}</div>
         <p style={{ margin: 0, fontFamily: FONT, fontSize: 11.5, lineHeight: 1.55,
                     color: JETONS.texteAttenue }}>{texte}</p>
         </div>
@@ -378,7 +436,7 @@ function Courbe() {
 }
 
 /** La mosaïque de répartition, aux aires fidèles aux poids. */
-function Mosaique() {
+function MosaiqueApercu() {
   const blocs = [
     { x: 0,  y: 0,  l: 78, h: 44, c: "#50A2FF", t: "42 %" },
     { x: 80, y: 0,  l: 62, h: 44, c: "#a78bfa", t: "31 %" },
@@ -397,5 +455,90 @@ function Mosaique() {
         </g>
       ))}
     </svg>
+  );
+}
+
+/** Deux cartes d'actif, avec leur variation et leur courbe miniature. */
+function CartesActifs() {
+  const lignes = [
+    { nom: "ESE.PA",  valeur: "5 267 €", pct: "+6,19 %", positif: true,
+      d: "M0,17 L11,15 L22,18 L33,11 L44,13 L55,6 L66,4" },
+    { nom: "CW8.PA",  valeur: "3 118 €", pct: "−0,84 %", positif: false,
+      d: "M0,7 L11,9 L22,6 L33,12 L44,10 L55,15 L66,17" },
+  ];
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 7, width: "100%", padding: "0 14px" }}>
+      {lignes.map(l => (
+        <div key={l.nom} style={{ display: "flex", alignItems: "center", gap: 10,
+                                  background: JETONS.carte, borderRadius: RAYONS.sm,
+                                  padding: "8px 10px" }}>
+          <span style={{ fontFamily: FONT, fontSize: 11, fontWeight: 600, color: JETONS.texte,
+                         width: 52, flexShrink: 0 }}>{l.nom}</span>
+          <svg width="68" height="22" viewBox="0 0 68 22" style={{ flexShrink: 0 }} aria-hidden="true">
+            <path d={l.d} fill="none" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"
+              stroke={l.positif ? JETONS.positif : JETONS.negatif} />
+          </svg>
+          <span style={{ ...NUM, fontSize: 11, color: JETONS.texteSecondaire, marginLeft: "auto" }}>
+            {l.valeur}
+          </span>
+          <span style={{ ...NUM, fontSize: 10.5, fontWeight: 700, width: 52, textAlign: "right",
+                         color: l.positif ? JETONS.positif : JETONS.negatif }}>{l.pct}</span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+/** Trois dossiers de compte, comme la rangée du tableau de bord. */
+function Dossiers() {
+  const dossiers = [
+    { nom: "PEA",            montant: "5 267 €", couleur: "#5B6CF0" },
+    { nom: "Épargne",        montant: "5 000 €", couleur: "#00D492" },
+    { nom: "Compte courant", montant: "70 €",    couleur: "#FF8904" },
+  ];
+  return (
+    <div style={{ display: "flex", gap: 7, width: "100%", padding: "0 14px" }}>
+      {dossiers.map(d => (
+        <div key={d.nom} style={{ flex: 1, minWidth: 0, borderRadius: RAYONS.sm,
+                                  background: `${d.couleur}1F`,
+                                  border: `1px solid ${d.couleur}3D`,
+                                  padding: "9px 9px 10px" }}>
+          {/* La languette du dossier, réduite à son signe : un onglet en haut à gauche. */}
+          <span aria-hidden="true" style={{ display: "block", width: 16, height: 3, borderRadius: 2,
+                                            background: d.couleur, marginBottom: 8 }} />
+          <div style={{ fontFamily: FONT, fontSize: 9.5, fontWeight: 600, color: JETONS.texteSecondaire,
+                        whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{d.nom}</div>
+          <div style={{ ...NUM, fontSize: 11.5, fontWeight: 700, color: JETONS.texteIntense,
+                        marginTop: 2, whiteSpace: "nowrap" }}>{d.montant}</div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+/** Le rail de périodes, avec la performance sur la pastille retenue. */
+function RailPeriodes() {
+  const periodes = ["24h", "1S", "1M", "3M", "6M", "1A"];
+  const retenue = "6M";
+  return (
+    <div style={{ display: "flex", alignItems: "center", gap: 4, padding: "4px 5px",
+                  borderRadius: RAYONS.plein, background: JETONS.carte }}>
+      {periodes.map(p => (
+        <span key={p} style={{
+          display: "inline-flex", alignItems: "center", gap: 5,
+          padding: p === retenue ? "3px 9px" : "3px 7px", borderRadius: RAYONS.plein,
+          fontFamily: FONT, fontSize: 10.5, fontWeight: p === retenue ? 600 : 500,
+          background: p === retenue ? JETONS.segmentActif : "transparent",
+          color: p === retenue ? JETONS.segmentEncre : JETONS.texteFaible,
+        }}>
+          {p}
+          {p === retenue && (
+            <span style={{ ...NUM, fontSize: 10, fontWeight: 700, color: JETONS.positif }}>
+              +4,18 %
+            </span>
+          )}
+        </span>
+      ))}
+    </div>
   );
 }
