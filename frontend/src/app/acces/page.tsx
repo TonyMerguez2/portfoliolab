@@ -73,6 +73,33 @@ const STYLE_CHAMPS = `
    * nom, la promesse et le champ — ce pour quoi on y vient — sur un fond propre.
    */
   @media (max-width: 900px) { .nv-decor { display: none; } }
+
+  /**
+   * La carte se coupe en deux : le formulaire à gauche, la démonstration à droite.
+   *
+   * ⚠️ **Une grille et non deux colonnes flottantes** : les deux moitiés doivent faire la
+   * même hauteur quoi qu'il arrive, sinon la vidéo dépasse du cadre ou laisse un trou sous
+   * elle. « minmax(0, …) » empêche la colonne de texte de refuser de se resserrer — sans lui,
+   * une adresse longue dans le champ élargirait la carte au-delà de l'écran.
+   */
+  .nv-porte {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1.05fr);
+    align-items: stretch;
+  }
+  .nv-demo { min-height: 460px; }
+
+  /**
+   * ⚠️ **Sous 900 px, une seule colonne et la vidéo passe dessous, plus courte.** Elle n'est
+   * pas retirée comme l'était le décor : ici elle *est* l'argument, et une page qui promet un
+   * tableau de bord sans en montrer un ne promet rien. Mais elle passe après le formulaire —
+   * sur un téléphone, on décide en trois secondes, et ce qu'on doit trouver d'abord est le
+   * champ.
+   */
+  @media (max-width: 900px) {
+    .nv-porte { grid-template-columns: minmax(0, 1fr); }
+    .nv-demo { min-height: 0; aspect-ratio: 880 / 568; }
+  }
 `;
 
 type Etat = "repos" | "envoi" | "refus" | "panne";
@@ -151,126 +178,133 @@ function Porte() {
                    fontFamily: FONT, color: JETONS.surFond }}>
       <style>{STYLE_CHAMPS}</style>
       <Decor />
+      {/**
+        * ⚠️ **Une carte au centre, coupée en deux : ce qu'on remplit à gauche, ce qu'on
+        * regarde à droite.** Les quatre captures posées aux coins ont vécu deux versions ;
+        * elles montraient bien le site mais laissaient le formulaire seul au milieu d'un
+        * décor, sans rien qui les relie. Dans une carte, la démonstration devient l'argument
+        * du formulaire d'à côté — on voit ce à quoi on s'inscrit.
+        */}
       <div style={{ position: "relative", zIndex: 1, minHeight: "100vh",
-                    display: "flex", flexDirection: "column", alignItems: "center",
-                    justifyContent: "center", gap: 22,
-                    padding: "72px 24px", textAlign: "center" }}>
-
-        <div style={{ display: "flex", alignItems: "center", gap: 15 }}>
-          <Logo taille={52} />
-          <span style={{ fontSize: 38, fontWeight: 700, letterSpacing: "-0.015em",
-                         color: JETONS.surFond }}>Novac</span>
-        </div>
-
-        <PastilleAlpha />
-
-        {/* ⚠️ **Le titre porte la demande, et non « Code d'accès ».** La porte reste, mais elle
-            n'est plus le sujet : la plupart des visiteurs de cette page n'ont pas de code et
-            n'en auront pas — ce qu'on attend d'eux, c'est une adresse. La hiérarchie doit dire
-            laquelle des deux actions les concerne. */}
-        <h1 style={{ margin: 0, fontSize: "clamp(34px, 6.2vw, 60px)", fontWeight: 700,
-                     lineHeight: 1.08, letterSpacing: "-0.025em", maxWidth: 15 + "ch",
-                     color: JETONS.surFond, textWrap: "balance" }}>
-          Rejoignez la liste d&apos;attente
-        </h1>
-
-        {/* ⚠️ Le paragraphe d'explication est retiré, à la demande : trois lignes sur ce que
-            fait Novac, à côté d'un décor qui le montre déjà. Le titre et le décor disent la
-            même chose, l'un en mots et l'autre en images ; les deux ensemble alourdissent. */}
-
-        {/* ── La liste d'attente, action principale ──────────────────────── */}
-        <div style={{ width: "100%", maxWidth: 460, marginTop: 6 }}>
-          {inscrit ? (
-            /* ⚠️ Le formulaire disparaît une fois l'adresse prise : le laisser invitait à
-               réessayer, et « déjà inscrit » se lit alors comme un échec. */
-            <Cadre style={{ padding: "18px 20px" }}>
-              <div style={{ fontSize: 14, fontWeight: 600, color: JETONS.positif, marginBottom: 5 }}>
-                {inscription === "deja" ? "Vous y êtes déjà." : "C'est noté."}
+                    display: "flex", alignItems: "center", justifyContent: "center",
+                    padding: "48px 24px 24px" }}>
+        <Cadre style={{ width: "100%", maxWidth: 1060 }}>
+          <div className="nv-porte">
+            {/* ── À gauche : ce qu'il faut remplir ─────────────────────── */}
+            <div style={{ padding: "34px 34px 30px", display: "flex", flexDirection: "column",
+                          justifyContent: "center", minWidth: 0 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 11, marginBottom: 26 }}>
+                <Logo taille={26} />
+                <span style={{ fontSize: 17, fontWeight: 700, letterSpacing: "-0.01em",
+                               color: JETONS.surFond }}>Novac</span>
               </div>
-              <div style={{ fontSize: 12, color: JETONS.texteAttenue, lineHeight: 1.55 }}>
-                Nous vous écrirons à l&apos;ouverture des accès.
-              </div>
-            </Cadre>
-          ) : (
-            /**
-              * ⚠️ `noValidate` : sans lui, `type="email"` fait refuser l'envoi par le
-              * navigateur, qui affiche sa propre bulle grise. C'est l'encadré natif que le
-              * reste du site a chassé, et il parle la langue du navigateur, pas celle de la
-              * page. Le champ garde son type pour le clavier des téléphones ; le refus vient
-              * du serveur et s'affiche dans nos mots.
-              */
-            <form onSubmit={inscrire} noValidate>
-              <div style={{ display: "flex", gap: 8 }}>
-                <input type="email" value={email} inputMode="email" autoComplete="email"
-                  aria-label="Votre adresse e-mail"
-                  className={`nv-champ${inscription === "refus" ? " nv-champ-refus" : ""}`}
-                  onChange={e => { setEmail(e.target.value); if (inscription !== "repos") setInscription("repos"); }}
-                  placeholder="vous@exemple.com"
-                  style={{ ...champ, flex: 1, width: "auto", minWidth: 0, textAlign: "left",
-                           borderRadius: RAYONS.xl }} />
-                <button type="submit" disabled={!email || inscription === "envoi"}
-                  style={{ padding: "0 20px", height: HAUTEUR_SAISIE,
-                           flexShrink: 0, border: "none",
-                           background: JETONS.segmentActif, color: JETONS.segmentEncre,
-                           borderRadius: RAYONS.xl, opacity: email ? 1 : 0.45,
-                           cursor: email && inscription !== "envoi" ? "pointer" : "default",
-                           fontFamily: FONT, fontSize: 13, fontWeight: 600,
-                           transition: "opacity 200ms" }}>
-                  {inscription === "envoi" ? "…" : "Rejoindre"}
-                </button>
-              </div>
-              <div style={{ minHeight: 18, marginTop: 7, fontSize: 11.5, color: JETONS.negatif }}>
-                {inscription === "refus" && "Cette adresse ne semble pas valide."}
-                {inscription === "panne" && "Le serveur n'a pas répondu."}
-              </div>
-            </form>
-          )}
-        </div>
 
-        {/* ── La porte, action secondaire ────────────────────────────────── */}
-        {/* ⚠️ Repliée derrière un mot, et non supprimée : ceux qui ont un code sont une
-            poignée, et leur donner un champ permanent au milieu de la page ferait croire aux
-            autres qu'il leur en faut un. Le champ s'ouvre sur demande et prend le focus, pour
-            qu'un invité n'ait pas à cliquer deux fois. */}
-        {codeOuvert ? (
-          <form onSubmit={ouvrir} style={{ width: "100%", maxWidth: 300 }}>
-            <div style={{ display: "flex", gap: 8 }}>
-              <input id="code" type="password" value={code} autoComplete="current-password"
-                autoFocus placeholder="Code d'accès"
-                className={`nv-champ${etat === "refus" ? " nv-champ-refus" : ""}`}
-                onChange={e => { setCode(e.target.value); if (etat !== "repos") setEtat("repos"); }}
-                style={{ ...champ, flex: 1, width: "auto", minWidth: 0, textAlign: "left",
-                         borderRadius: RAYONS.xl }} />
-              <button type="submit" disabled={!code || etat === "envoi"}
-                style={{ padding: "0 16px", height: HAUTEUR_SAISIE,
-                         flexShrink: 0, border: "none",
-                         background: JETONS.segmentActif, color: JETONS.segmentEncre,
-                         borderRadius: RAYONS.xl, opacity: code ? 1 : 0.45,
-                         cursor: code && etat !== "envoi" ? "pointer" : "default",
-                         fontFamily: FONT, fontSize: 13, fontWeight: 600,
-                         transition: "opacity 200ms" }}>
-                {etat === "envoi" ? "…" : "Entrer"}
-              </button>
+              <PastilleAlpha />
+
+              <h1 style={{ margin: "18px 0 12px", fontSize: "clamp(30px, 3.4vw, 42px)",
+                           fontWeight: 700, lineHeight: 1.08, letterSpacing: "-0.025em",
+                           color: JETONS.surFond, textWrap: "balance" }}>
+                Rejoignez la liste d&apos;attente
+              </h1>
+
+              <p style={{ margin: "0 0 22px", maxWidth: "40ch", fontSize: 13.5, lineHeight: 1.6,
+                          color: JETONS.surFondAttenue }}>
+                Suivez votre patrimoine entier — portefeuilles, comptes, objectifs — et
+                comprenez ce qui le fait bouger.
+              </p>
+
+              {inscrit ? (
+                /* ⚠️ Le formulaire disparaît une fois l'adresse prise : le laisser invitait à
+                   réessayer, et « déjà inscrit » se lit alors comme un échec. */
+                <div>
+                  <div style={{ fontSize: 14, fontWeight: 600, color: JETONS.positif, marginBottom: 5 }}>
+                    {inscription === "deja" ? "Vous y êtes déjà." : "C'est noté."}
+                  </div>
+                  <div style={{ fontSize: 12.5, color: JETONS.texteAttenue, lineHeight: 1.55 }}>
+                    Nous vous écrirons à l&apos;ouverture des accès.
+                  </div>
+                </div>
+              ) : (
+                /**
+                  * ⚠️ `noValidate` : sans lui, `type="email"` fait refuser l'envoi par le
+                  * navigateur, qui affiche sa propre bulle grise. C'est l'encadré natif que le
+                  * reste du site a chassé, et il parle sa langue, pas celle de la page. Le
+                  * champ garde son type pour le clavier des téléphones ; le refus vient du
+                  * serveur et s'affiche dans nos mots.
+                  */
+                <form onSubmit={inscrire} noValidate>
+                  <div style={{ display: "flex", gap: 8 }}>
+                    <input type="email" value={email} inputMode="email" autoComplete="email"
+                      aria-label="Votre adresse e-mail"
+                      className={`nv-champ${inscription === "refus" ? " nv-champ-refus" : ""}`}
+                      onChange={e => { setEmail(e.target.value); if (inscription !== "repos") setInscription("repos"); }}
+                      placeholder="vous@exemple.com"
+                      style={{ ...champ, flex: 1, width: "auto", minWidth: 0, textAlign: "left",
+                               borderRadius: RAYONS.xl }} />
+                    <button type="submit" disabled={!email || inscription === "envoi"}
+                      style={{ padding: "0 20px", height: HAUTEUR_SAISIE, borderRadius: RAYONS.xl,
+                               flexShrink: 0, border: "none",
+                               background: JETONS.segmentActif, color: JETONS.segmentEncre,
+                               opacity: email ? 1 : 0.45,
+                               cursor: email && inscription !== "envoi" ? "pointer" : "default",
+                               fontFamily: FONT, fontSize: 13, fontWeight: 600,
+                               transition: "opacity 200ms" }}>
+                      {inscription === "envoi" ? "…" : "Rejoindre"}
+                    </button>
+                  </div>
+                  <div style={{ minHeight: 18, marginTop: 7, fontSize: 11.5, color: JETONS.negatif }}>
+                    {inscription === "refus" && "Cette adresse ne semble pas valide."}
+                    {inscription === "panne" && "Le serveur n'a pas répondu."}
+                  </div>
+                </form>
+              )}
+
+              {/* ⚠️ La porte reste, repliée derrière un mot : ceux qui ont un code sont une
+                  poignée, et leur donner un champ permanent ferait croire aux autres qu'il
+                  leur en faut un. */}
+              <div style={{ marginTop: 14 }}>
+                {codeOuvert ? (
+                  <form onSubmit={ouvrir}>
+                    <div style={{ display: "flex", gap: 8, maxWidth: 320 }}>
+                      <input id="code" type="password" value={code} autoComplete="current-password"
+                        autoFocus placeholder="Code d'accès"
+                        className={`nv-champ${etat === "refus" ? " nv-champ-refus" : ""}`}
+                        onChange={e => { setCode(e.target.value); if (etat !== "repos") setEtat("repos"); }}
+                        style={{ ...champ, flex: 1, width: "auto", minWidth: 0, textAlign: "left",
+                                 borderRadius: RAYONS.xl }} />
+                      <button type="submit" disabled={!code || etat === "envoi"}
+                        style={{ padding: "0 16px", height: HAUTEUR_SAISIE, borderRadius: RAYONS.xl,
+                                 flexShrink: 0, border: "none",
+                                 background: JETONS.segmentActif, color: JETONS.segmentEncre,
+                                 opacity: code ? 1 : 0.45,
+                                 cursor: code && etat !== "envoi" ? "pointer" : "default",
+                                 fontFamily: FONT, fontSize: 13, fontWeight: 600,
+                                 transition: "opacity 200ms" }}>
+                        {etat === "envoi" ? "…" : "Entrer"}
+                      </button>
+                    </div>
+                    <div style={{ minHeight: 18, marginTop: 7, fontSize: 11.5, color: JETONS.negatif }}>
+                      {etat === "refus" && "Code incorrect."}
+                      {etat === "panne" && "Le serveur n'a pas répondu."}
+                    </div>
+                  </form>
+                ) : (
+                  <button type="button" onClick={() => setCodeOuvert(true)}
+                    style={{ background: "none", border: "none", padding: 0, cursor: "pointer",
+                             fontFamily: FONT, fontSize: 12, color: JETONS.surFondAttenue,
+                             textDecoration: "underline", textUnderlineOffset: 3 }}>
+                    J&apos;ai un code d&apos;accès
+                  </button>
+                )}
+              </div>
             </div>
-            <div style={{ minHeight: 18, marginTop: 7, fontSize: 11.5, color: JETONS.negatif }}>
-              {etat === "refus" && "Code incorrect."}
-              {etat === "panne" && "Le serveur n'a pas répondu."}
-            </div>
-          </form>
-        ) : (
-          <button type="button" onClick={() => setCodeOuvert(true)}
-            style={{ background: "none", border: "none", padding: 0, cursor: "pointer",
-                     fontFamily: FONT, fontSize: 12, color: JETONS.surFondAttenue,
-                     textDecoration: "underline", textUnderlineOffset: 3 }}>
-            J&apos;ai un code d&apos;accès
-          </button>
-        )}
 
+            {/* ── À droite : la démonstration ──────────────────────────── */}
+            <Demonstration />
+          </div>
+        </Cadre>
       </div>
 
-      {/* ⚠️ La mention descend en pied de page, à la demande. Posée sous le formulaire, elle
-          se lisait comme une condition de l'inscription ; au bas de l'écran, elle est ce
-          qu'elle est — une mention légale, qui doit être visible sans rien commander. */}
       {/* ⚠️ `sticky` et non `absolute` : posée en absolu, elle se superposait au contenu dès
           que la page devenait plus haute que l'écran — le cas sur téléphone. En `sticky` elle
           se colle au bas de l'écran quand il reste de la place, et reprend sa place dans le
@@ -390,84 +424,62 @@ function PastilleAlpha() {
  * lecteur d'écran, cette page n'a que deux champs et deux boutons.
  */
 function Decor() {
-  /**
-   * ⚠️ **De vraies captures, prises sur un compte de démonstration.** Les versions
-   * précédentes reconstituaient les écrans à la main : d'abord des rectangles colorés qui ne
-   * ressemblaient à rien du site, puis des compositions fidèles mais qui restaient des
-   * imitations. Ce sont maintenant des images de l'application, avec ses vraies courbes, ses
-   * vrais logos et ses vrais calculs.
-   *
-   * ⚠️ **Jamais le portefeuille de quelqu'un.** Cette page est publique : une capture d'un
-   * compte réel y publierait des montants, des lignes détenues et des noms de comptes. Le
-   * compte `demo@novac.fyi` existe pour cela — chiffres inventés, titres réels pour que les
-   * cours et les logos soient justes. Voir `deploiement/` et le script de semis.
-   *
-   * Les images se refont en une commande quand l'interface change :
-   *     cd frontend && node capturer-demo.mjs
-   */
-  /**
-   * ⚠️ **Les deux grands écrans ne débordent plus des bords.** Ils étaient posés à `-6 %` et
-   * `-7 %` : le tiers d'un tableau de bord sortait de l'écran, et la rotation coupait le
-   * reste en biais. Une capture tronquée à l'oblique ne se lit pas comme une fenêtre en
-   * perspective mais comme une image mal cadrée. Elles rentrent maintenant en entier, un peu
-   * plus petites, et la perspective seule fait la profondeur.
-   */
-  const pieces: { style: React.CSSProperties; recul: number; src: string; alt: string }[] = [
-    { style: { top: "6%", left: "1%", width: 520 }, recul: 1,
-      src: "/apercus/tableau-de-bord.png", alt: "" },
-    { style: { top: "10%", right: "1%", width: 310 }, recul: 2,
-      src: "/apercus/objectif.png", alt: "" },
-    { style: { bottom: "24%", left: "2%", width: 235 }, recul: 2,
-      src: "/apercus/carte-actif.png", alt: "" },
-    { style: { bottom: "3%", left: "13%", width: 220 }, recul: 2,
-      src: "/apercus/solana.png", alt: "" },
-    { style: { bottom: "3%", right: "1%", width: 500 }, recul: 1,
-      src: "/apercus/graphique.png", alt: "" },
-  ];
-
   return (
     <div aria-hidden="true" className="nv-decor"
-      style={{ position: "absolute", inset: 0, pointerEvents: "none",
-               overflow: "hidden", zIndex: 0, perspective: 1700 }}>
-      <div style={{
-        position: "absolute", inset: 0, transformStyle: "preserve-3d",
-        /* ⚠️ Le masque **et** son préfixe WebKit : Safari ne connaît toujours pas la forme
-           standard, et sans lui le décor s'y afficherait à pleine force sous le texte. */
-        maskImage: "radial-gradient(ellipse 34% 52% at 50% 46%, transparent 36%, #000 88%)",
-        WebkitMaskImage: "radial-gradient(ellipse 34% 52% at 50% 46%, transparent 36%, #000 88%)",
+      style={{
+        position: "absolute", top: "-18%", right: "-14%", pointerEvents: "none",
+        width: "min(820px, 78vw)", aspectRatio: "1", zIndex: 0, opacity: 0.5,
         /**
-         * ⚠️ **L'atténuation est posée ici, sur la couche entière, et non sur chaque image.**
-         * Une opacité par pièce les rend translucides *les unes aux autres* : deux cartes qui
-         * se recouvrent laissent voir celle de dessous à travers celle de dessus, ce qui ne
-         * ressemble à rien. Sur la couche, les pièces se composent d'abord entre elles —
-         * chacune opaque, celle de devant cachant celle de derrière — et l'ensemble s'atténue
-         * ensuite d'un seul coup. Le recouvrement redevient un empilement.
+         * ⚠️ **Le procédé de la page d'accueil : le dessin sert de masque au fond, il n'est
+         * pas peint.** Le filigrane laisse passer le dégradé de la page teinté d'un souffle
+         * d'accent, ce qui le fait *partie* du fond au lieu d'une image posée dessus. Les
+         * quatre captures qui occupaient les coins ont vécu ici : elles sont maintenant dans
+         * la vidéo, à leur place, en mouvement — ce qu'aucune image fixe ne montre.
          */
-        opacity: 0.88,
-      }}>
-        {pieces.map((p, i) => {
-          const gauche = "left" in p.style;
-          return (
-            /* ⚠️ `<img>` et non `next/image` : ces quatre fichiers sont des décors de taille
-               fixe, servis une fois, sur une page sans mise en page fluide. L'optimiseur de
-               Next demanderait une route serveur pour un gain nul ici. */
-            // eslint-disable-next-line @next/next/no-img-element
-            <img key={i} src={p.src} alt={p.alt} style={{
-              position: "absolute", ...p.style, height: "auto", display: "block",
-              borderRadius: RAYONS.md,
-              transformOrigin: gauche ? "left center" : "right center",
-              /* ⚠️ Vingt-deux degrés, comme le concept : les pièces se tournent franchement
-                 vers l'axe du titre au lieu de rester presque de face. Au-delà, le bord
-                 éloigné d'un écran de cinq cents pixels cesse d'être lisible. */
-              transform: `translateZ(${-80 * p.recul}px) rotateY(${gauche ? 22 : -22}deg) rotateX(3deg)`,
-              /* ⚠️ `brightness` et non `opacity` pour marquer l'éloignement : une image plus
-                 sombre reste opaque, une image atténuée devient un calque. Voir la couche. */
-              filter: `blur(${0.4 * p.recul}px) brightness(${(1 - 0.13 * p.recul).toFixed(2)})`,
-              boxShadow: "0 30px 70px rgba(0,0,0,0.55)",
-            }} />
-          );
-        })}
-      </div>
+        background: [
+          "linear-gradient(rgba(var(--nv-accent-rvb), 0.08), rgba(var(--nv-accent-rvb), 0.08))",
+          "var(--nv-fond-degrade)",
+        ].join(", "),
+        maskImage: "url(/logo-hivesync.svg)", WebkitMaskImage: "url(/logo-hivesync.svg)",
+        maskSize: "contain", WebkitMaskSize: "contain",
+        maskRepeat: "no-repeat", WebkitMaskRepeat: "no-repeat",
+        maskPosition: "center", WebkitMaskPosition: "center",
+      }} />
+  );
+}
+
+
+/**
+ * La démonstration : une visite du site, filmée sur le compte de démonstration.
+ *
+ * ⚠️ **Filmée, et jamais sur le portefeuille de quelqu'un.** Cette page est publique ; une
+ * capture d'un compte réel y publierait des montants, des lignes détenues et des noms de
+ * comptes. Le compte `demo@novac.fyi` existe pour cela — chiffres inventés, titres réels
+ * pour que les cours et les logos soient justes. La vidéo se refait en une commande quand
+ * l'interface change : `cd frontend && node filmer-demo.mjs`.
+ *
+ * ⚠️ **Muette, en boucle, sans commande.** Une démonstration de décor n'est pas un film qu'on
+ * regarde : elle tourne pendant qu'on lit à côté. Le son couperait la lecture, et une barre
+ * de lecture inviterait à un geste qui n'a rien à donner. `playsInline` est ce qui l'empêche
+ * de passer en plein écran sur iPhone, où la lecture automatique bascule sinon.
+ *
+ * ⚠️ **`poster` n'est pas un ornement** : sur une connexion lente, la première image s'affiche
+ * pendant que la vidéo charge, au lieu d'un rectangle noir dans la carte.
+ */
+function Demonstration() {
+  return (
+    <div className="nv-demo" style={{ position: "relative", overflow: "hidden",
+                                      background: JETONS.fondProfond }}>
+      <video
+        src="/apercus/demonstration.webm"
+        poster="/apercus/demonstration-affiche.png"
+        autoPlay muted loop playsInline preload="metadata"
+        aria-hidden="true"
+        style={{ display: "block", width: "100%", height: "100%", objectFit: "cover" }} />
+      {/* ⚠️ Un voile très léger, du côté du texte : sans lui, le bord clair de la vidéo vient
+          buter contre la colonne de gauche et les deux moitiés se disputent l'œil. */}
+      <div aria-hidden="true" style={{ position: "absolute", inset: 0, pointerEvents: "none",
+        background: `linear-gradient(90deg, ${JETONS.carte} 0%, rgba(0,0,0,0) 22%)` }} />
     </div>
   );
 }
