@@ -59,6 +59,20 @@ const STYLE_CHAMPS = `
     box-shadow: 0 0 0 1px var(--nv-texte-attenue);
   }
   .nv-champ-refus, .nv-champ-refus:hover { border-color: var(--nv-negatif); }
+
+  /**
+   * ⚠️ **Le décor disparaît sous 900 px, et ce n'est pas une facilité.** Mesuré à 375 px : la
+   * carte d'objectif recouvrait le nom du site, celle d'Apple passait derrière le champ
+   * e-mail, et la capture de NVDA sous la mention légale. Les pièces sont posées en
+   * pourcentages depuis les quatre coins d'une composition pensée en paysage ; sur une
+   * colonne de trois cent soixante-quinze pixels, ces quatre coins se rejoignent au milieu et
+   * il n'y a plus de marge où les loger.
+   *
+   * Les réduire n'aurait rien réglé : à cette largeur, un tableau de bord lisible tient déjà
+   * toute la place, et illisible il ne montre plus rien. Sur téléphone la page garde donc le
+   * nom, la promesse et le champ — ce pour quoi on y vient — sur un fond propre.
+   */
+  @media (max-width: 900px) { .nv-decor { display: none; } }
 `;
 
 type Etat = "repos" | "envoi" | "refus" | "panne";
@@ -257,8 +271,12 @@ function Porte() {
       {/* ⚠️ La mention descend en pied de page, à la demande. Posée sous le formulaire, elle
           se lisait comme une condition de l'inscription ; au bas de l'écran, elle est ce
           qu'elle est — une mention légale, qui doit être visible sans rien commander. */}
-      <p style={{ position: "absolute", bottom: 22, left: 0, right: 0, zIndex: 1,
-                  margin: 0, textAlign: "center", fontFamily: FONT, fontSize: 11,
+      {/* ⚠️ `sticky` et non `absolute` : posée en absolu, elle se superposait au contenu dès
+          que la page devenait plus haute que l'écran — le cas sur téléphone. En `sticky` elle
+          se colle au bas de l'écran quand il reste de la place, et reprend sa place dans le
+          flux quand il n'y en a plus. */}
+      <p style={{ position: "sticky", bottom: 22, zIndex: 1, marginTop: -30,
+                  marginBottom: 22, textAlign: "center", fontFamily: FONT, fontSize: 11,
                   color: JETONS.surFondAttenue, lineHeight: 1.6, padding: "0 24px" }}>
         Novac est en cours de construction. Rien de ce qui s&apos;y affiche n&apos;est un
         conseil en investissement.
@@ -408,8 +426,9 @@ function Decor() {
   ];
 
   return (
-    <div aria-hidden="true" style={{ position: "absolute", inset: 0, pointerEvents: "none",
-                                     overflow: "hidden", zIndex: 0, perspective: 1700 }}>
+    <div aria-hidden="true" className="nv-decor"
+      style={{ position: "absolute", inset: 0, pointerEvents: "none",
+               overflow: "hidden", zIndex: 0, perspective: 1700 }}>
       <div style={{
         position: "absolute", inset: 0, transformStyle: "preserve-3d",
         /* ⚠️ Le masque **et** son préfixe WebKit : Safari ne connaît toujours pas la forme
