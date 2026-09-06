@@ -74,6 +74,9 @@ async function capturerElement(url, texte, fichier, remonte = 0, attente = 22000
   await p.close();
 }
 
+await capturer(`https://novac.fyi/portfolio?id=${demo.pid}`, "tableau-de-bord.png");
+await capturer("https://novac.fyi/chart?ticker=NVDA", "graphique.png", 26000);
+
 // La carte d'objectif, sur l'onglet Objectifs.
 await capturerElement(`https://novac.fyi/portfolio?id=${demo.pid}`, "Retraite à 62 ans",
   "objectif.png", 3, 20000,
@@ -84,5 +87,10 @@ await capturerElement(`https://novac.fyi/portfolio?id=${demo.pid}`, "Retraite à
 await capturerElement(`https://novac.fyi/portfolio?id=${demo.pid}`, "Apple Inc.",
   "carte-actif.png", 3, 20000,
   async p => { await p.getByText("CTO", { exact: true }).first().click().catch(() => {}); });
+
+// La carte de Solana, dans le même dossier.
+await capturerElement(`https://novac.fyi/portfolio?id=${demo.pid}`, "Solana",
+  "solana.png", 3, 20000,
+  async p => { await p.getByText("Crypto", { exact: true }).first().click().catch(() => {}); });
 
 await navigateur.close();

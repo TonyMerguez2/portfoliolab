@@ -387,16 +387,26 @@ function Decor() {
    * Les images se refont en une commande quand l'interface change :
    *     cd frontend && node capturer-demo.mjs
    */
+  /**
+   * ⚠️ **Les deux grands écrans ne débordent plus des bords.** Ils étaient posés à `-6 %` et
+   * `-7 %` : le tiers d'un tableau de bord sortait de l'écran, et la rotation coupait le
+   * reste en biais. Une capture tronquée à l'oblique ne se lit pas comme une fenêtre en
+   * perspective mais comme une image mal cadrée. Elles rentrent maintenant en entier, un peu
+   * plus petites, et la perspective seule fait la profondeur.
+   */
   const pieces: { style: React.CSSProperties; recul: number; src: string; alt: string }[] = [
-    { style: { top: "3%", left: "-6%", width: 620 }, recul: 1,
+    { style: { top: "6%", left: "2%", width: 520 }, recul: 1,
       src: "/apercus/tableau-de-bord.png", alt: "" },
-    { style: { top: "9%", right: "-2%", width: 330 }, recul: 2,
+    { style: { top: "10%", right: "2%", width: 310 }, recul: 2,
       src: "/apercus/objectif.png", alt: "" },
-    { style: { bottom: "6%", left: "3%", width: 210 }, recul: 2,
+    { style: { bottom: "20%", left: "3%", width: 175 }, recul: 2,
       src: "/apercus/carte-actif.png", alt: "" },
-    { style: { bottom: "2%", right: "-7%", width: 580 }, recul: 1,
+    { style: { bottom: "4%", left: "13%", width: 165 }, recul: 3,
+      src: "/apercus/solana.png", alt: "" },
+    { style: { bottom: "4%", right: "2%", width: 500 }, recul: 1,
       src: "/apercus/graphique.png", alt: "" },
   ];
+
   return (
     <div aria-hidden="true" style={{ position: "absolute", inset: 0, pointerEvents: "none",
                                      overflow: "hidden", zIndex: 0, perspective: 1700 }}>
@@ -418,7 +428,7 @@ function Decor() {
               position: "absolute", ...p.style, height: "auto", display: "block",
               borderRadius: RAYONS.md,
               transformOrigin: gauche ? "left center" : "right center",
-              transform: `translateZ(${-80 * p.recul}px) rotateY(${gauche ? 17 : -17}deg) rotateX(3deg)`,
+              transform: `translateZ(${-80 * p.recul}px) rotateY(${gauche ? 13 : -13}deg) rotateX(3deg)`,
               filter: `blur(${0.4 * p.recul}px)`,
               opacity: 0.88 - 0.1 * p.recul,
               boxShadow: "0 30px 70px rgba(0,0,0,0.55)",
