@@ -1850,35 +1850,33 @@ canvas + div {
   initial-value: 1;
 }
 
-@keyframes nv-respire {
-  0%, 100% { --nv-souffle: 0.96; opacity: 0.88; }
-  50%      { --nv-souffle: 1.08; opacity: 1; }
+/* ⚠️ La place du cœur s'interpole comme une longueur, pas comme une chaîne : sans ces deux
+   déclarations, le déplacement se ferait par sauts d'une étape à l'autre. */
+@property --nv-x {
+  syntax: "<percentage>";
+  inherits: false;
+  initial-value: -16%;
+}
+@property --nv-y {
+  syntax: "<percentage>";
+  inherits: false;
+  initial-value: -24%;
 }
 
-.nv-silhouette {
-  --nv-logo-cote: min(115vh, 1300px);
-  background-image: radial-gradient(circle at 1px 1px, var(--nv-point-vif) 1px, transparent 1.5px);
-  background-size: 14px 14px;
+@keyframes nv-respire {
+  /* ⚠️ **Le cœur se promène, il ne fait pas que gonfler.** Une taille qui enfle et se
+     rétracte de douze pour cent ne se voyait pas : le masque du logo borne déjà la forme, et
+     l'œil ne perçoit pas un bord de dégradé qui bouge sous une trame. Un cœur *déplacé*, lui,
+     rallume des points là où il n'y en avait pas et en éteint ailleurs — c'est le même
+     mouvement que la lueur sous le curseur, et il se lit tout de suite.
 
-  -webkit-mask-image: url(/logo-hivesync.svg),
-    radial-gradient(closest-side, #000 18%, rgba(0, 0, 0, 0.55) 58%, transparent 92%);
-  mask-image: url(/logo-hivesync.svg),
-    radial-gradient(closest-side, #000 18%, rgba(0, 0, 0, 0.55) 58%, transparent 92%);
-
-  -webkit-mask-size: var(--nv-logo-cote), calc(var(--nv-logo-cote) * var(--nv-souffle));
-  mask-size: var(--nv-logo-cote), calc(var(--nv-logo-cote) * var(--nv-souffle));
-
-  -webkit-mask-position: right -16% bottom -24%, right -16% bottom -24%;
-  mask-position: right -16% bottom -24%, right -16% bottom -24%;
-
-  -webkit-mask-repeat: no-repeat, no-repeat;
-  mask-repeat: no-repeat, no-repeat;
-
-  -webkit-mask-composite: source-in;
-  mask-composite: intersect;
-
-  /* Sept secondes : un souffle qu'on remarque en s'arrêtant, jamais en lisant. */
-  animation: nv-respire 7s ease-in-out infinite;
+     Les quatre étapes décrivent une boucle fermée : sans retour au point de départ, le
+     dernier saut se ferait d'un coup. */
+  0%   { --nv-souffle: 0.92; --nv-x: -4%;  --nv-y: -34%; opacity: 0.72; }
+  25%  { --nv-souffle: 1.10; --nv-x: -20%; --nv-y: -22%; opacity: 1;    }
+  50%  { --nv-souffle: 0.96; --nv-x: -28%; --nv-y: -8%;  opacity: 0.80; }
+  75%  { --nv-souffle: 1.12; --nv-x: -12%; --nv-y: -20%; opacity: 1;    }
+  100% { --nv-souffle: 0.92; --nv-x: -4%;  --nv-y: -34%; opacity: 0.72; }
 }
 
 @media (prefers-reduced-motion: reduce) {
