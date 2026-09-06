@@ -1855,22 +1855,30 @@ canvas + div {
 @property --nv-x {
   syntax: "<percentage>";
   inherits: false;
-  initial-value: -16%;
+  initial-value: 70%;
 }
 @property --nv-y {
   syntax: "<percentage>";
   inherits: false;
-  initial-value: -24%;
+  initial-value: 35%;
 }
 
 @keyframes nv-respire {
   /* Quatre étapes en boucle fermée : sans retour au point de départ, le dernier saut se
      ferait d'un coup. Le cœur traverse la forme en diagonale, puis revient. */
-  0%   { --nv-souffle: 0.62; --nv-x: 4%;   --nv-y: -40%; opacity: 0.55; }
-  25%  { --nv-souffle: 0.86; --nv-x: -18%; --nv-y: -26%; opacity: 1;    }
-  50%  { --nv-souffle: 0.66; --nv-x: -34%; --nv-y: -6%;  opacity: 0.65; }
-  75%  { --nv-souffle: 0.88; --nv-x: -14%; --nv-y: -22%; opacity: 1;    }
-  100% { --nv-souffle: 0.62; --nv-x: 4%;   --nv-y: -40%; opacity: 0.55; }
+  /* ⚠️ **Des coordonnées d'écran, et non des retraits depuis le coin.** Elles étaient
+     exprimées en « right -x% bottom -y% », comme la forme — mais la forme déborde
+     volontairement de l'écran en bas à droite, si bien que le cœur passait l'essentiel de sa
+     course dans la partie *invisible* du logo. L'animation tournait, les valeurs changeaient,
+     et l'écran ne bougeait pas d'un pixel : vérifié en soustrayant deux captures, l'écart
+     était nul même amplifié quatorze fois.
+
+     Ici l'élément couvre l'écran : 70 % 28 % désigne un point qu'on voit. */
+  0%   { --nv-souffle: 0.50; --nv-x: 66%; --nv-y: 22%; opacity: 0.6; }
+  25%  { --nv-souffle: 0.62; --nv-x: 86%; --nv-y: 44%; opacity: 1;   }
+  50%  { --nv-souffle: 0.48; --nv-x: 74%; --nv-y: 70%; opacity: 0.7; }
+  75%  { --nv-souffle: 0.64; --nv-x: 62%; --nv-y: 40%; opacity: 1;   }
+  100% { --nv-souffle: 0.50; --nv-x: 66%; --nv-y: 22%; opacity: 0.6; }
 }
 
 /**
@@ -1926,8 +1934,8 @@ canvas + div {
   -webkit-mask-size: var(--nv-logo-cote), calc(var(--nv-logo-cote) * var(--nv-souffle));
   mask-size: var(--nv-logo-cote), calc(var(--nv-logo-cote) * var(--nv-souffle));
 
-  -webkit-mask-position: right -16% bottom -24%, right var(--nv-x) bottom var(--nv-y);
-  mask-position: right -16% bottom -24%, right var(--nv-x) bottom var(--nv-y);
+  -webkit-mask-position: right -16% bottom -24%, var(--nv-x) var(--nv-y);
+  mask-position: right -16% bottom -24%, var(--nv-x) var(--nv-y);
 
   -webkit-mask-repeat: no-repeat, no-repeat;
   mask-repeat: no-repeat, no-repeat;
