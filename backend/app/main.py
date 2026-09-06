@@ -170,12 +170,16 @@ def _prechauffer_chaleur() -> None:
     ⚠️ **Et pas tout de suite** : `_DELAI` laisse au serveur le temps de répondre aux premiers
     visiteurs, qui arrivent précisément après un déploiement.
     """
+    # ⚠️ `PERIODES` est un dictionnaire, pas une liste : `PERIODES[0]` lève un `KeyError`
+    # dans un fil détaché, où il ne fait tomber personne et ne se voit que dans les tests.
+    defaut = next(iter(PERIODES))
+
     def tache() -> None:
         time.sleep(_DELAI_PRECHAUFFAGE)
         try:
-            carte(PERIODES[0])
+            carte(defaut)
         except Exception:
-            logger.exception("Préchauffage de la carte de chaleur : échec (%s)", PERIODES[0])
+            logger.exception("Préchauffage de la carte de chaleur : échec (%s)", defaut)
 
     threading.Thread(target=tache, daemon=True, name="prechauffage-chaleur").start()
 
