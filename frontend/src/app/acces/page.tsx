@@ -395,15 +395,15 @@ function Decor() {
    * plus petites, et la perspective seule fait la profondeur.
    */
   const pieces: { style: React.CSSProperties; recul: number; src: string; alt: string }[] = [
-    { style: { top: "6%", left: "2%", width: 520 }, recul: 1,
+    { style: { top: "6%", left: "1%", width: 520 }, recul: 1,
       src: "/apercus/tableau-de-bord.png", alt: "" },
-    { style: { top: "10%", right: "2%", width: 310 }, recul: 2,
+    { style: { top: "10%", right: "1%", width: 310 }, recul: 2,
       src: "/apercus/objectif.png", alt: "" },
-    { style: { bottom: "20%", left: "3%", width: 175 }, recul: 2,
+    { style: { bottom: "24%", left: "2%", width: 235 }, recul: 2,
       src: "/apercus/carte-actif.png", alt: "" },
-    { style: { bottom: "4%", left: "13%", width: 165 }, recul: 3,
+    { style: { bottom: "3%", left: "13%", width: 220 }, recul: 2,
       src: "/apercus/solana.png", alt: "" },
-    { style: { bottom: "4%", right: "2%", width: 500 }, recul: 1,
+    { style: { bottom: "3%", right: "1%", width: 500 }, recul: 1,
       src: "/apercus/graphique.png", alt: "" },
   ];
 
@@ -416,6 +416,15 @@ function Decor() {
            standard, et sans lui le décor s'y afficherait à pleine force sous le texte. */
         maskImage: "radial-gradient(ellipse 34% 52% at 50% 46%, transparent 36%, #000 88%)",
         WebkitMaskImage: "radial-gradient(ellipse 34% 52% at 50% 46%, transparent 36%, #000 88%)",
+        /**
+         * ⚠️ **L'atténuation est posée ici, sur la couche entière, et non sur chaque image.**
+         * Une opacité par pièce les rend translucides *les unes aux autres* : deux cartes qui
+         * se recouvrent laissent voir celle de dessous à travers celle de dessus, ce qui ne
+         * ressemble à rien. Sur la couche, les pièces se composent d'abord entre elles —
+         * chacune opaque, celle de devant cachant celle de derrière — et l'ensemble s'atténue
+         * ensuite d'un seul coup. Le recouvrement redevient un empilement.
+         */
+        opacity: 0.88,
       }}>
         {pieces.map((p, i) => {
           const gauche = "left" in p.style;
@@ -428,9 +437,13 @@ function Decor() {
               position: "absolute", ...p.style, height: "auto", display: "block",
               borderRadius: RAYONS.md,
               transformOrigin: gauche ? "left center" : "right center",
-              transform: `translateZ(${-80 * p.recul}px) rotateY(${gauche ? 13 : -13}deg) rotateX(3deg)`,
-              filter: `blur(${0.4 * p.recul}px)`,
-              opacity: 0.88 - 0.1 * p.recul,
+              /* ⚠️ Vingt-deux degrés, comme le concept : les pièces se tournent franchement
+                 vers l'axe du titre au lieu de rester presque de face. Au-delà, le bord
+                 éloigné d'un écran de cinq cents pixels cesse d'être lisible. */
+              transform: `translateZ(${-80 * p.recul}px) rotateY(${gauche ? 22 : -22}deg) rotateX(3deg)`,
+              /* ⚠️ `brightness` et non `opacity` pour marquer l'éloignement : une image plus
+                 sombre reste opaque, une image atténuée devient un calque. Voir la couche. */
+              filter: `blur(${0.4 * p.recul}px) brightness(${(1 - 0.13 * p.recul).toFixed(2)})`,
               boxShadow: "0 30px 70px rgba(0,0,0,0.55)",
             }} />
           );
