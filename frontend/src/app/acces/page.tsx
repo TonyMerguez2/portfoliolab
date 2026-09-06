@@ -424,28 +424,21 @@ function PastilleAlpha() {
  * lecteur d'écran, cette page n'a que deux champs et deux boutons.
  */
 function Decor() {
-  return (
-    <div aria-hidden="true" className="nv-decor"
-      style={{
-        position: "absolute", top: "-18%", right: "-14%", pointerEvents: "none",
-        width: "min(820px, 78vw)", aspectRatio: "1", zIndex: 0, opacity: 0.5,
-        /**
-         * ⚠️ **Le procédé de la page d'accueil : le dessin sert de masque au fond, il n'est
-         * pas peint.** Le filigrane laisse passer le dégradé de la page teinté d'un souffle
-         * d'accent, ce qui le fait *partie* du fond au lieu d'une image posée dessus. Les
-         * quatre captures qui occupaient les coins ont vécu ici : elles sont maintenant dans
-         * la vidéo, à leur place, en mouvement — ce qu'aucune image fixe ne montre.
-         */
-        background: [
-          "linear-gradient(rgba(var(--nv-accent-rvb), 0.08), rgba(var(--nv-accent-rvb), 0.08))",
-          "var(--nv-fond-degrade)",
-        ].join(", "),
-        maskImage: "url(/logo-hivesync.svg)", WebkitMaskImage: "url(/logo-hivesync.svg)",
-        maskSize: "contain", WebkitMaskSize: "contain",
-        maskRepeat: "no-repeat", WebkitMaskRepeat: "no-repeat",
-        maskPosition: "center", WebkitMaskPosition: "center",
-      }} />
-  );
+  /**
+   * ⚠️ **Le même fond que l'accueil, à la lettre.** Cette page portait son propre filigrane :
+   * le dessin du logo servant de masque au dégradé, donc une forme *plus claire* que le fond.
+   * L'accueil, lui, a fini par le dessiner avec la trame de points — la même que celle du
+   * fond, simplement plus dense — et cette version-là respire. Deux pages d'entrée avec deux
+   * fonds différents, c'était une incohérence de plus à tenir à jour.
+   *
+   * La classe `.nv-silhouette` porte tout : la trame, ses deux masques, le dégradé de densité
+   * et le battement par fondu entre deux tailles. Rien à recopier ici.
+   *
+   * ⚠️ La classe `nv-decor` reste : c'est elle qui efface le tout sous 900 px, où la
+   * composition en paysage n'a plus de place. Voir `STYLE_CHAMPS`.
+   */
+  return <div aria-hidden="true" className="nv-decor nv-silhouette"
+    style={{ position: "fixed", inset: 0, pointerEvents: "none", zIndex: 0 }} />;
 }
 
 
