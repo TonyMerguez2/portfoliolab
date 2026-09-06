@@ -1,4 +1,5 @@
 "use client";
+import { recuperer } from "@/lib/requete";
 import { useRouter } from "next/navigation";
 import { useEffect, useId, useState } from "react";
 
@@ -331,7 +332,7 @@ export default function PanneauCreation({ onFermer }: { onFermer: () => void }) 
     setEnvoi(true);
     setErreur(null);
     try {
-      const reponse = await fetch(`${API_URL}/api/v1/portfolios`, {
+      const reponse = await recuperer(`${API_URL}/api/v1/portfolios`, {
         method: "POST",
         headers: { "Content-Type": "application/json", ...enTetesAuth() },
         body: JSON.stringify({
@@ -383,7 +384,7 @@ export default function PanneauCreation({ onFermer }: { onFermer: () => void }) 
       }
 
       if (brouillon) {
-        const r = await fetch(`${API_URL}/api/v1/portfolios/${id}/transactions`, {
+        const r = await recuperer(`${API_URL}/api/v1/portfolios/${id}/transactions`, {
           method: "POST",
           headers: { "Content-Type": "application/json", ...enTetesAuth() },
           body: JSON.stringify({

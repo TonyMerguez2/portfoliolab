@@ -1,4 +1,5 @@
 "use client";
+import { recuperer } from "@/lib/requete";
 import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
@@ -357,7 +358,7 @@ export default function SideNav() {
       return;
     }
     let annule = false;
-    fetch(`${API_URL}/api/v1/auth/me`, { headers: { Authorization: `Bearer ${token}` } })
+    recuperer(`${API_URL}/api/v1/auth/me`, { headers: { Authorization: `Bearer ${token}` } })
       .then(r => (r.ok ? r.json() : Promise.reject(new Error("session close"))))
       .then((u) => {
         if (annule) return;

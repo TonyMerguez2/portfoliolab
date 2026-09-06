@@ -3639,14 +3639,47 @@ const ORDRE_COMPTES: Enveloppe[] = ["PEA", "CTO", "Crypto"];
 
 export default function PortfolioPage() {
   return (
-    <Suspense fallback={
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "center",
-        height: "100vh", background: "var(--novac-bg, #040F22)",
-        color: CLAIR.texteFaible, fontSize: 12 }}>
-        Chargement…
-      </div>
-    }>
-      <PortfolioPageInner />
+    <Suspense fallback={<VoileChargement />}>
+      <PortefeuilleMonte />
     </Suspense>
   );
+}
+
+function VoileChargement() {
+  return (
+    <div style={{ display: "flex", alignItems: "center", justifyContent: "center",
+      height: "100vh", background: "var(--novac-bg, #040F22)",
+      color: CLAIR.texteFaible, fontSize: 12 }}>
+      Chargement…
+    </div>
+  );
+}
+
+/**
+ * La page entière change de portefeuille d'un coup, ou ne change pas.
+ *
+ * ⚠️ **La `key` est tout le correctif, et elle vaut une explication.** Changer de
+ * portefeuille ne remplaçait que l'objet `portfolio` — donc le nom, la couleur et l'avatar,
+ * tout de suite. Les prix, les positions, les courbes, les comptes et les objectifs, eux,
+ * restaient ceux du portefeuille précédent jusqu'à ce que chacun de leurs appels revienne,
+ * chacun à son heure. À l'écran : le nouvel avatar à côté de l'ancienne valeur totale, puis
+ * les cartes qui basculent une à une pendant plusieurs secondes. Chaque morceau était juste,
+ * l'ensemble ne l'était jamais.
+ *
+ * Remettre à zéro chaque état à la main aurait voulu dire les énumérer — une trentaine — et
+ * se souvenir d'ajouter le trente et unième le jour où il apparaît. Une `key` qui change
+ * démonte le composant et le remonte : aucun état ne survit, par construction, et il n'y a
+ * rien à tenir à jour.
+ *
+ * Ce que ça coûte : on revoit l'écran de chargement entre deux portefeuilles, là où l'ancien
+ * comportement montrait immédiatement quelque chose — de faux. Un instant de vide franc vaut
+ * mieux qu'un affichage qui mélange deux patrimoines.
+ */
+function PortefeuilleMonte() {
+  const { activePortfolio } = useApp();
+  const parametres = useSearchParams();
+  /* L'adresse prime sur le contexte : un lien partagé vers un portefeuille précis doit
+     l'emporter sur celui qui était actif dans ce navigateur. */
+  const cle = parametres.get("id") ?? (activePortfolio ? String(activePortfolio.id) : "aucun");
+  return <PortfolioPageInner key={cle} />;
 }

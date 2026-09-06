@@ -1,4 +1,5 @@
 "use client";
+import { recuperer } from "@/lib/requete";
 import { useEffect, useRef, useState, memo, useCallback, useMemo } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { useApp } from "@/lib/AppContext";
@@ -309,7 +310,7 @@ export default function GlobalHeader() {
   const isLanding = pathname === "/";
   const isChartPage = pathname === "/chart";
   useEffect(() => {
-    fetch(`${API_URL}/api/v1/portfolios`, { headers: enTetesAuth() })
+    recuperer(`${API_URL}/api/v1/portfolios`, { headers: enTetesAuth() })
       .then(r => r.json())
       .then(d => { if (Array.isArray(d)) setPortfolios(d); })
       .catch(() => {});
@@ -334,7 +335,7 @@ export default function GlobalHeader() {
   // Ticker tape
   useEffect(() => {
     const fetch_prices = async () => {
-      try { const r = await fetch(`${API_URL}/ticker`); const d = await r.json(); if (Array.isArray(d)) setTickerData(d); } catch {}
+      try { const r = await recuperer(`${API_URL}/ticker`); const d = await r.json(); if (Array.isArray(d)) setTickerData(d); } catch {}
     };
     fetch_prices(); const iv = setInterval(fetch_prices, 300000); return () => clearInterval(iv);
   }, []);
@@ -353,7 +354,7 @@ export default function GlobalHeader() {
   // Fetch prices for visible assets
   const fetchPrices = async (tickers: string[]) => {
     try {
-      const r = await fetch(`${API_URL}/api/v1/prices?tickers=${encodeURIComponent(tickers.join(","))}`);
+      const r = await recuperer(`${API_URL}/api/v1/prices?tickers=${encodeURIComponent(tickers.join(","))}`);
       const d = await r.json();
       if (Array.isArray(d)) {
         const p: Record<string,Price> = {};
@@ -381,7 +382,7 @@ export default function GlobalHeader() {
     clearTimeout(debounce.current);
     debounce.current = setTimeout(async () => {
       try {
-        const r = await fetch(`${API_URL}/api/v1/search?q=${encodeURIComponent(localSearch)}`);
+        const r = await recuperer(`${API_URL}/api/v1/search?q=${encodeURIComponent(localSearch)}`);
         const d = await r.json();
         const api: Asset[] = (d?.results || []).map((x: any) => ({ ticker: x.ticker, type: x.type || "EQUITY", name: x.name || x.ticker }));
         const seen = new Set(api.map(a => a.ticker));
@@ -471,7 +472,7 @@ export default function GlobalHeader() {
     setPortfolios(l => l.filter(x => String(x.id) !== String(cible.id)));
     if (String(activePortfolio?.id ?? "") === String(cible.id)) setActivePortfolio(null);
     try {
-      const r = await fetch(`${API_URL}/api/v1/portfolios/${encodeURIComponent(cible.id)}`,
+      const r = await recuperer(`${API_URL}/api/v1/portfolios/${encodeURIComponent(cible.id)}`,
         { method: "DELETE", headers: enTetesAuth() });
       if (!r.ok) throw new Error("refus");
     } catch {
@@ -513,7 +514,7 @@ export default function GlobalHeader() {
     let annule = false;
     Promise.all(aLire.map(async p => {
       try {
-        const r = await fetch(
+        const r = await recuperer(
           `${API_URL}/api/v1/portfolios/${encodeURIComponent(p.id)}/positions`,
           { headers: enTetesAuth() });
         if (!r.ok) throw new Error("refus");
@@ -567,7 +568,7 @@ export default function GlobalHeader() {
     let vivant = true;
     (async () => {
       try {
-        const r = await fetch(`${API_URL}/api/v1/capitalisations?tickers=${encodeURIComponent(manquants.slice(0, 200).join(","))}`);
+        const r = await recuperer(`${API_URL}/api/v1/capitalisations?tickers=${encodeURIComponent(manquants.slice(0, 200).join(","))}`);
         const d = await r.json();
         if (vivant && d && typeof d === "object") setCapitalisations(prev => ({ ...prev, ...d }));
       } catch { /* le tri retombe sur la pertinence pour les inconnus */ }

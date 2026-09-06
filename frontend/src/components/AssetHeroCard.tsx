@@ -1,4 +1,5 @@
 "use client";
+import { recuperer } from "@/lib/requete";
 
 import { useEffect, useMemo, useState } from "react";
 import AssetLogo from "@/components/AssetLogo";
@@ -90,8 +91,8 @@ export default function AssetHeroCard({
     // once the backend is healthy again.
     const load = (attempt = 0) => {
       Promise.all([
-        fetch(`${API_URL}/api/v1/prices?tickers=${encodeURIComponent(ticker)}`).then(r => r.json()),
-        fetch(`${API_URL}/api/v1/quote/${encodeURIComponent(ticker)}`).then(r => r.json()),
+        recuperer(`${API_URL}/api/v1/prices?tickers=${encodeURIComponent(ticker)}`).then(r => r.json()),
+        recuperer(`${API_URL}/api/v1/quote/${encodeURIComponent(ticker)}`).then(r => r.json()),
       ])
         .then(([prices, nextQuote]) => {
           if (cancelled) return;
