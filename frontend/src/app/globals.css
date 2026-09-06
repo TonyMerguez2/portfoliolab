@@ -1864,49 +1864,82 @@ canvas + div {
 }
 
 @keyframes nv-respire {
-  /* ⚠️ **Le cœur se promène, il ne fait pas que gonfler.** Une taille qui enfle et se
-     rétracte de douze pour cent ne se voyait pas : le masque du logo borne déjà la forme, et
-     l'œil ne perçoit pas un bord de dégradé qui bouge sous une trame. Un cœur *déplacé*, lui,
-     rallume des points là où il n'y en avait pas et en éteint ailleurs — c'est le mouvement
-     de la lueur sous le curseur, et il se lit tout de suite.
-
-     Les quatre étapes forment une boucle fermée : sans retour au point de départ, le dernier
-     saut se ferait d'un coup. */
-  0%   { --nv-souffle: 0.92; --nv-x: -4%;  --nv-y: -34%; opacity: 0.72; }
-  25%  { --nv-souffle: 1.10; --nv-x: -20%; --nv-y: -22%; opacity: 1;    }
-  50%  { --nv-souffle: 0.96; --nv-x: -28%; --nv-y: -8%;  opacity: 0.80; }
-  75%  { --nv-souffle: 1.12; --nv-x: -12%; --nv-y: -20%; opacity: 1;    }
-  100% { --nv-souffle: 0.92; --nv-x: -4%;  --nv-y: -34%; opacity: 0.72; }
+  /* Quatre étapes en boucle fermée : sans retour au point de départ, le dernier saut se
+     ferait d'un coup. Le cœur traverse la forme en diagonale, puis revient. */
+  0%   { --nv-souffle: 0.62; --nv-x: 4%;   --nv-y: -40%; opacity: 0.55; }
+  25%  { --nv-souffle: 0.86; --nv-x: -18%; --nv-y: -26%; opacity: 1;    }
+  50%  { --nv-souffle: 0.66; --nv-x: -34%; --nv-y: -6%;  opacity: 0.65; }
+  75%  { --nv-souffle: 0.88; --nv-x: -14%; --nv-y: -22%; opacity: 1;    }
+  100% { --nv-souffle: 0.62; --nv-x: 4%;   --nv-y: -40%; opacity: 0.55; }
 }
 
+/**
+ * La silhouette du logo, en deux couches.
+ *
+ * ⚠️ **La forme et la lueur sont séparées, et c'est ce qui rend le mouvement visible.** Une
+ * seule couche portait la trame *et* le voile mouvant : toute la silhouette avait donc la même
+ * clarté, si bien que déplacer le voile ne faisait que déplacer un bord qu'aucun contraste ne
+ * dessinait. Mesuré et pourtant invisible à l'œil, deux fois de suite.
+ *
+ * La forme est maintenant une trame **sourde**, posée une fois pour toutes ; la lueur est une
+ * seconde trame, **vive**, qui se promène dedans. C'est exactement le rapport qu'ont le fond
+ * pointillé et la lueur sous le curseur : l'un est là, l'autre passe.
+ */
 .nv-silhouette {
   --nv-logo-cote: min(115vh, 1300px);
-  --nv-x: -16%;
-  --nv-y: -24%;
+  background-image: radial-gradient(circle at 1px 1px, var(--nv-point) 1px, transparent 1.5px);
+  background-size: 14px 14px;
+
+  -webkit-mask-image: url(/logo-hivesync.svg);
+  mask-image: url(/logo-hivesync.svg);
+  -webkit-mask-size: var(--nv-logo-cote);
+  mask-size: var(--nv-logo-cote);
+  -webkit-mask-position: right -16% bottom -24%;
+  mask-position: right -16% bottom -24%;
+  -webkit-mask-repeat: no-repeat;
+  mask-repeat: no-repeat;
+}
+
+/**
+ * La lueur qui parcourt la forme.
+ *
+ * ⚠️ **Elle porte sa propre trame, elle n'éclaire pas celle du dessous.** Rien en CSS ne
+ * permet d'aviver des points existants ; on en superpose donc de plus vifs, exactement au même
+ * pas et au même départ — le motif se recale sur le coin de l'écran des deux côtés, donc les
+ * deux grilles coïncident au pixel et l'on ne voit qu'une trame qui s'allume.
+ *
+ * ⚠️ Ses deux masques se croisent : la forme du logo, et le cœur mouvant. `intersect` ne garde
+ * que ce que les deux laissent passer, sans quoi la lueur déborderait de la silhouette.
+ */
+.nv-silhouette::after {
+  content: "";
+  position: absolute;
+  inset: 0;
   background-image: radial-gradient(circle at 1px 1px, var(--nv-point-vif) 1px, transparent 1.5px);
   background-size: 14px 14px;
 
   -webkit-mask-image: url(/logo-hivesync.svg),
-    radial-gradient(closest-side, #000 6%, rgba(0, 0, 0, 0.62) 42%, rgba(0, 0, 0, 0.18) 70%, transparent 96%);
+    radial-gradient(closest-side, #000 0%, rgba(0, 0, 0, 0.55) 45%, transparent 88%);
   mask-image: url(/logo-hivesync.svg),
-    radial-gradient(closest-side, #000 6%, rgba(0, 0, 0, 0.62) 42%, rgba(0, 0, 0, 0.18) 70%, transparent 96%);
+    radial-gradient(closest-side, #000 0%, rgba(0, 0, 0, 0.55) 45%, transparent 88%);
 
   -webkit-mask-size: var(--nv-logo-cote), calc(var(--nv-logo-cote) * var(--nv-souffle));
   mask-size: var(--nv-logo-cote), calc(var(--nv-logo-cote) * var(--nv-souffle));
 
-  /* La forme reste où elle est ; seul le cœur de la lueur se déplace. */
   -webkit-mask-position: right -16% bottom -24%, right var(--nv-x) bottom var(--nv-y);
   mask-position: right -16% bottom -24%, right var(--nv-x) bottom var(--nv-y);
 
   -webkit-mask-repeat: no-repeat, no-repeat;
   mask-repeat: no-repeat, no-repeat;
 
+  /* ⚠️ Le préfixe WebKit dit `source-in` là où la norme dit `intersect`. L'oublier donne, sur
+     Safari, une lueur sans masque — donc un rectangle de points plein écran. */
   -webkit-mask-composite: source-in;
   mask-composite: intersect;
 
-  animation: nv-respire 11s ease-in-out infinite;
+  animation: nv-respire 9s ease-in-out infinite;
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .nv-silhouette { animation: none; --nv-souffle: 1.02; opacity: 0.95; }
+  .nv-silhouette::after { animation: none; --nv-souffle: 0.8; opacity: 0.8; }
 }
