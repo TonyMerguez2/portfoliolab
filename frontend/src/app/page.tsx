@@ -173,28 +173,6 @@ export default function Home() {
       */
     <div className="fixed inset-0 overflow-hidden">
 
-      {/**
-        * ⚠️ **Le haut de la page redevient un dégradé lisse : la trame de points ne commence
-        * qu'en bas.** Demandé. La trame court sur toute la hauteur — c'est `PointsFond`, monté
-        * dans la mise en page racine, donc commun à toutes les pages — et derrière un titre
-        * de soixante pixels elle faisait un grain qui se disputait la lecture.
-        *
-        * ⚠️ **On la couvre, on ne la modifie pas.** Toucher `.nv-points` ou son montage aurait
-        * changé le fond de tout le produit ; il ne devait changer que sur l'accueil. Ce voile
-        * reprend donc exactement le dégradé du `body` — même couleurs, même sens — et s'efface
-        * vers le bas. Le fond garde ses teintes, seul le grain disparaît en haut.
-        *
-        * ⚠️ `z-index: -1` le place derrière le contenu de la page mais devant la trame, qui
-        * est au même rang et plus haut dans le document. Un `0` l'aurait fait passer au-dessus
-        * du titre.
-        */}
-      <div aria-hidden="true" style={{
-        position: "absolute", inset: 0, zIndex: -1, pointerEvents: "none",
-        background: "var(--nv-fond-degrade)",
-        backgroundAttachment: "fixed",
-        maskImage: "linear-gradient(to bottom, #000 0%, #000 42%, transparent 82%)",
-        WebkitMaskImage: "linear-gradient(to bottom, #000 0%, #000 42%, transparent 82%)",
-      }} />
 
       {/**
         * Le logo en filigrane.
@@ -273,6 +251,35 @@ export default function Home() {
           backgroundAttachment: "scroll, fixed",
           maskImage: "url(/logo-hivesync.svg)",
           WebkitMaskImage: "url(/logo-hivesync.svg)",
+          maskSize: "contain", WebkitMaskSize: "contain",
+          maskRepeat: "no-repeat", WebkitMaskRepeat: "no-repeat",
+          maskPosition: "center", WebkitMaskPosition: "center",
+        }} />
+
+        {/**
+          * La silhouette, dessinée par la trame elle-même.
+          *
+          * ⚠️ **Ce ne sont pas des points ajoutés : ce sont les mêmes, rendus plus présents.**
+          * La couche reprend exactement le motif de `.nv-points` — même rayon, même pas de
+          * 14 px — dans une encre plus soutenue, et le logo lui sert de masque. Là où la forme
+          * passe, les points existants paraissent donc appuyés ; ailleurs, rien ne change. Une
+          * seconde trame décalée d'un demi-pixel aurait moiré contre la première.
+          *
+          * ⚠️ **Le pas est ancré sur le coin de l'écran, comme la trame du fond.** `.nv-points`
+          * est en `position: fixed` et son motif part de l'origine du cadre ; cette couche est
+          * posée au même endroit et à la même taille, sinon les deux grilles se décaleraient et
+          * la silhouette se lirait comme une seconde trame plutôt que comme la même, renforcée.
+          *
+          * ⚠️ **Sous le filigrane, pas au-dessus.** Le filigrane est un aplat qui éclaircit le
+          * fond ; posée par-dessus, la silhouette pointillée l'aurait piqueté au lieu de le
+          * doubler. Dessous, elle épaissit son bord et lui donne de la matière.
+          */}
+        <div aria-hidden="true" style={{
+          position: "fixed", inset: 0, pointerEvents: "none", zIndex: -1,
+          backgroundImage:
+            "radial-gradient(circle at 1px 1px, rgba(var(--nv-accent-rvb), 0.30) 1px, transparent 1.5px)",
+          backgroundSize: "14px 14px",
+          maskImage: "url(/logo-hivesync.svg)", WebkitMaskImage: "url(/logo-hivesync.svg)",
           maskSize: "contain", WebkitMaskSize: "contain",
           maskRepeat: "no-repeat", WebkitMaskRepeat: "no-repeat",
           maskPosition: "center", WebkitMaskPosition: "center",
@@ -376,13 +383,26 @@ export default function Home() {
           * redevient le centre visible. Chaque ligne annule le sien, d'où deux valeurs.
           */}
         <div style={{ textAlign: "center" }}>
-          {/* ⚠️ **Cinquante-deux plutôt que trente-six.** Le mot est seul au centre d'un écran
-              vide, avec un filigrane large derrière lui : à 36 il flottait sans tenir la page.
-              L'interlettrage reste à 0,35 em — il se calcule sur la taille, donc l'espacement
-              suit l'agrandissement sans qu'on y touche. */}
-          <h1 style={{ color: text, fontSize: "52px", fontWeight: 700, letterSpacing: "0.35em", transition: "color 0.4s ease", margin: 0, marginRight: "-0.35em" }}>
-            NOVAC
-          </h1>
+          {/**
+            * ⚠️ **« Novac » en casse normale, le logo à sa gauche.** Le mot était en capitales
+            * espacées de 0,35 em — une enseigne, qui tenait la page à elle seule quand elle
+            * était seule. Flanquée du logo, elle en devient le doublon : le dessin dit déjà
+            * « marque », le mot n'a plus qu'à la nommer. L'espacement tombe avec la casse, il
+            * n'avait de sens qu'en capitales.
+            */}
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: "18px" }}>
+            <span aria-hidden="true" style={{
+              width: "54px", height: "54px", flexShrink: 0, display: "block",
+              background: text, transition: "background 0.4s ease",
+              maskImage: "url(/logo-hivesync.svg)", WebkitMaskImage: "url(/logo-hivesync.svg)",
+              maskSize: "contain", WebkitMaskSize: "contain",
+              maskRepeat: "no-repeat", WebkitMaskRepeat: "no-repeat",
+              maskPosition: "center", WebkitMaskPosition: "center",
+            }} />
+            <h1 style={{ color: text, fontSize: "52px", fontWeight: 700, letterSpacing: "-0.015em", transition: "color 0.4s ease", margin: 0 }}>
+              Novac
+            </h1>
+          </div>
           <p style={{ color: text, opacity: 0.7, fontSize: "12px", fontWeight: 300, letterSpacing: "0.22em", marginTop: "10px", marginRight: "-0.22em", transition: "color 0.4s ease" }}>
             {fullTagline}
           </p>
