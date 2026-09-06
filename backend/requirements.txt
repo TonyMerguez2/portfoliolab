@@ -3,6 +3,23 @@ uvicorn[standard]==0.27.1
 pydantic==2.6.1
 pydantic-settings==2.2.1
 
+# Base de données, comptes et téléversements
+#
+# ⚠️ Ces cinq lignes manquaient, et rien ne le disait tant qu'on ne travaillait
+# que sur cette machine : elles étaient installées dans le venv local depuis les
+# chantiers qui les ont introduites — la base, puis les comptes, puis les images
+# de portefeuille — sans jamais être déclarées. Le défaut n'est apparu qu'à la
+# première installation ailleurs : l'API montait, puis mourait sur
+# `ModuleNotFoundError: No module named 'sqlalchemy'`.
+#
+# Un fichier de dépendances ne se vérifie que sur une machine vierge. Celle-ci
+# l'a fait pour nous.
+SQLAlchemy==2.0.50
+python-jose[cryptography]==3.5.0
+bcrypt==5.0.0
+python-multipart==0.0.32
+requests==2.34.2
+
 # Financial data
 yfinance==0.2.36
 pandas==2.2.0
