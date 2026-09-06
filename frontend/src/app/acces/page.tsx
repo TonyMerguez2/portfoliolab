@@ -130,9 +130,9 @@ function Porte() {
                     justifyContent: "center", gap: 22,
                     padding: "72px 24px", textAlign: "center" }}>
 
-        <div style={{ display: "flex", alignItems: "center", gap: 11 }}>
-          <Logo taille={30} />
-          <span style={{ fontSize: 23, fontWeight: 700, letterSpacing: "-0.01em",
+        <div style={{ display: "flex", alignItems: "center", gap: 15 }}>
+          <Logo taille={52} />
+          <span style={{ fontSize: 38, fontWeight: 700, letterSpacing: "-0.015em",
                          color: JETONS.surFond }}>Novac</span>
         </div>
 
@@ -148,12 +148,9 @@ function Porte() {
           Rejoignez la liste d&apos;attente
         </h1>
 
-        <p style={{ margin: 0, maxWidth: "52ch", fontSize: 14.5, lineHeight: 1.6,
-                    color: JETONS.surFondAttenue }}>
-          Un tableau de bord pour suivre votre patrimoine entier — portefeuilles, comptes,
-          objectifs — et comprendre ce qui le fait bouger. Rien n&apos;y est estimé : ce qui
-          manque de données le dit.
-        </p>
+        {/* ⚠️ Le paragraphe d'explication est retiré, à la demande : trois lignes sur ce que
+            fait Novac, à côté d'un décor qui le montre déjà. Le titre et le décor disent la
+            même chose, l'un en mots et l'autre en images ; les deux ensemble alourdissent. */}
 
         {/* ── La liste d'attente, action principale ──────────────────────── */}
         <div style={{ width: "100%", maxWidth: 460, marginTop: 6 }}>
@@ -325,7 +322,7 @@ function PastilleAlpha() {
       <span className="nv-alpha"
         style={{ display: "inline-flex", alignItems: "center", gap: 7, marginTop: 20,
                  padding: "5px 13px", borderRadius: RAYONS.plein,
-                 background: JETONS.carteCreuse,
+                 background: `rgba(var(--nv-negatif-rvb), 0.12)`,
                  color: JETONS.negatif, fontSize: 10.5, fontWeight: 600,
                  letterSpacing: "0.14em" }}>
         <span aria-hidden="true" style={{ width: 5, height: 5, borderRadius: 3,
@@ -358,41 +355,25 @@ function PastilleAlpha() {
  * lecteur d'écran, cette page n'a que deux champs et deux boutons.
  */
 function Decor() {
-  const actif = (ticker: string, weight: number, price: number, change: number,
-                 value: number, perfEur: number, spark: number[]): GridAsset =>
-    ({ ticker, weight, price, change, value, perfEur, spark });
-
-  /* ⚠️ **Les pièces sont nues, sans panneau derrière — corrigé à la demande.** Elles étaient
-     posées dans des `Cadre` portant « Vue générale », « Mes comptes »… Or un dossier, une
-     carte d'actif ou une carte d'objectif *sont déjà* des objets finis, avec leur fond et
-     leur bord : les enfermer ajoutait un second cadre autour du premier, et le décor se
-     lisait comme une capture d'écran découpée plutôt que comme des morceaux du site. */
+  /* ⚠️ **Quatre pièces, une par coin, et de tailles différentes.** Six morceaux éparpillés
+     faisaient un semis sans hiérarchie ; quatre écrans posés aux angles laissent le centre
+     libre et donnent à chaque coin une raison d'être regardé. Le tableau de bord est le plus
+     grand parce que c'est la page qu'on ouvre en premier. */
   const pieces: { style: React.CSSProperties; recul: number; contenu: React.ReactNode }[] = [
-    { style: { top: "8%", left: "3%" }, recul: 1,
-      contenu: <CarteCompte nom="PEA Trade Republic" couleur="#5B6CF0"
-        compte={<span style={{ ...NUM }}>5 266,94 €</span>} icone={<IconeTitres />} /> },
-    { style: { top: "6%", right: "4%" }, recul: 1,
-      contenu: <CarteCompte nom="Crédit agricole épargne" couleur="#00D492"
-        compte={<span style={{ ...NUM }}>5 000,00 €</span>} icone={<IconeEpargne />} /> },
-    { style: { top: "38%", left: "5%", width: 210 }, recul: 2,
-      contenu: <CarteActif inerte a={actif("AAPL", 38, 319.97, 4.12, 6399, 253.1,
-        [301, 305, 303, 309, 307, 313, 316, 314, 318, 319.97])} /> },
-    { style: { top: "36%", right: "6%", width: 210 }, recul: 2,
-      contenu: <CarteActif inerte a={actif("NVDA", 27, 230.36, -1.84, 4607, -86.4,
-        [238, 236, 239, 234, 235, 231, 233, 229, 231.2, 230.36])} /> },
-    { style: { bottom: "7%", left: "6%", width: 300 }, recul: 2, contenu: <CarteObjectif /> },
-    { style: { bottom: "6%", right: "5%", width: 250 }, recul: 3, contenu: <ReglagesAvatar /> },
+    { style: { top: "4%", left: "-4%", width: 460 }, recul: 1, contenu: <EcranTableauDeBord /> },
+    { style: { top: "8%", right: "-1%", width: 300 }, recul: 2, contenu: <CarteObjectif /> },
+    { style: { bottom: "5%", left: "2%", width: 240 }, recul: 2, contenu: <EcranCarteActif /> },
+    { style: { bottom: "3%", right: "-3%", width: 420 }, recul: 1, contenu: <EcranGraphique /> },
   ];
-
   return (
     <div aria-hidden="true" style={{ position: "absolute", inset: 0, pointerEvents: "none",
-                                     overflow: "hidden", zIndex: 0, perspective: 1600 }}>
+                                     overflow: "hidden", zIndex: 0, perspective: 1700 }}>
       <div style={{
         position: "absolute", inset: 0, transformStyle: "preserve-3d",
         /* ⚠️ Le masque **et** son préfixe WebKit : Safari ne connaît toujours pas la forme
            standard, et sans lui le décor s'y afficherait à pleine force sous le texte. */
-        maskImage: "radial-gradient(ellipse 38% 56% at 50% 48%, transparent 32%, #000 84%)",
-        WebkitMaskImage: "radial-gradient(ellipse 38% 56% at 50% 48%, transparent 32%, #000 84%)",
+        maskImage: "radial-gradient(ellipse 36% 54% at 50% 46%, transparent 34%, #000 86%)",
+        WebkitMaskImage: "radial-gradient(ellipse 36% 54% at 50% 46%, transparent 34%, #000 86%)",
       }}>
         {pieces.map((p, i) => {
           const gauche = "left" in p.style;
@@ -400,9 +381,9 @@ function Decor() {
             <div key={i} style={{
               position: "absolute", ...p.style,
               transformOrigin: gauche ? "left center" : "right center",
-              transform: `translateZ(${-80 * p.recul}px) rotateY(${gauche ? 20 : -20}deg) rotateX(3deg)`,
+              transform: `translateZ(${-80 * p.recul}px) rotateY(${gauche ? 18 : -18}deg) rotateX(3deg)`,
               filter: `blur(${0.5 * p.recul}px)`,
-              opacity: 0.82 - 0.1 * p.recul,
+              opacity: 0.85 - 0.09 * p.recul,
             }}>
               {p.contenu}
             </div>
@@ -413,9 +394,170 @@ function Decor() {
   );
 }
 
+/** Une courbe de patrimoine et son repère de marché, à la taille qu'on lui donne. */
+function Courbe({ largeur, hauteur }: { largeur: number; hauteur: number }) {
+  const pts = [64, 58, 60, 46, 49, 34, 30, 22, 25, 12];
+  const rep = [66, 63, 64, 57, 58, 50, 49, 44, 45, 38];
+  const x = (i: number) => (i / (pts.length - 1)) * largeur;
+  const y = (v: number) => (v / 76) * hauteur;
+  const trace = (s: number[]) => s.map((v, i) => `${i ? "L" : "M"}${x(i).toFixed(1)},${y(v).toFixed(1)}`).join(" ");
+  return (
+    <svg width={largeur} height={hauteur} viewBox={`0 0 ${largeur} ${hauteur}`} aria-hidden="true">
+      <defs>
+        <linearGradient id="nv-aire-acces" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor={JETONS.accent} stopOpacity="0.32" />
+          <stop offset="100%" stopColor={JETONS.accent} stopOpacity="0" />
+        </linearGradient>
+      </defs>
+      <path d={`${trace(pts)} L${largeur},${hauteur} L0,${hauteur} Z`} fill="url(#nv-aire-acces)" />
+      <path d={trace(rep)} fill="none" stroke={JETONS.texteFaible} strokeWidth="1.4"
+        strokeDasharray="3 3" strokeLinecap="round" />
+      <path d={trace(pts)} fill="none" stroke={JETONS.accent} strokeWidth="2"
+        strokeLinecap="round" strokeLinejoin="round" />
+      {pts.map((v, i) => (
+        <circle key={i} cx={x(i)} cy={y(v)} r="2.6" fill={JETONS.accent} />
+      ))}
+    </svg>
+  );
+}
+
+/**
+ * L'écran du tableau de bord, tel qu'on l'ouvre.
+ *
+ * ⚠️ **Une composition des vrais composants, et non une capture.** Une capture de l'écran
+ * réel montrerait le patrimoine de quelqu'un sur une page publique : les montants, les
+ * lignes détenues, les comptes. Ce qui est ici est assemblé avec `Cadre`, `TitreDeCarte`,
+ * `CarteCompte` et l'anneau du bandeau, aux chiffres d'exemple.
+ */
+function EcranTableauDeBord() {
+  return (
+    <Cadre style={{ padding: "12px 14px" }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 11, marginBottom: 12 }}>
+        <AvatarNovac taille={38} etat="content" suivi={false} vivant={false}
+          couleur="#6366F1" forme="sphere" />
+        <div style={{ minWidth: 0 }}>
+          <div style={{ fontFamily: FONT, fontSize: 11.5, fontWeight: 600, color: JETONS.texte }}>
+            Patrimoine Sacha D.
+          </div>
+          <div style={{ fontFamily: FONT, fontSize: 9.5, color: JETONS.texteFaible }}>3 actifs</div>
+        </div>
+        <div style={{ marginLeft: "auto", textAlign: "right" }}>
+          <div style={{ ...NUM, fontSize: 22, fontWeight: 700, color: JETONS.texteIntense }}>
+            10 336,94 €
+          </div>
+          <div style={{ ...NUM, fontSize: 11, fontWeight: 600, color: JETONS.positif }}>
+            +307,03 € (+7,10 %)
+          </div>
+        </div>
+        <Anneau note={75} taille={46} />
+      </div>
+
+      {/* La rangée d'onglets, celle du tableau de bord. */}
+      <div style={{ display: "flex", gap: 14, borderBottom: `1px solid ${JETONS.bord}`,
+                    paddingBottom: 7, marginBottom: 11 }}>
+        {["Vue générale", "Transactions", "Analyse", "Événements"].map((o, i) => (
+          <span key={o} style={{ fontFamily: FONT, fontSize: 10, fontWeight: i === 0 ? 600 : 500,
+                                 color: i === 0 ? JETONS.texteIntense : JETONS.texteFaible }}>{o}</span>
+        ))}
+      </div>
+
+      <div style={{ background: JETONS.carteCreuse, borderRadius: RAYONS.sm, padding: "10px 12px",
+                    marginBottom: 10 }}>
+        <Courbe largeur={404} hauteur={84} />
+        <div style={{ marginTop: 8 }}><RailPeriodes /></div>
+      </div>
+
+      <TitreDeCarte>Vos comptes</TitreDeCarte>
+      <div style={{ display: "flex", gap: 8 }}>
+        <CarteCompte nom="PEA Trade Republic" couleur="#5B6CF0"
+          compte={<span style={{ ...NUM }}>5 266,94 €</span>} icone={<IconeTitres />} />
+        <CarteCompte nom="Crédit agricole épargne" couleur="#00D492"
+          compte={<span style={{ ...NUM }}>5 000,00 €</span>} icone={<IconeEpargne />} />
+      </div>
+    </Cadre>
+  );
+}
+
+/** La carte d'un actif, seule, telle que la grille la range. */
+function EcranCarteActif() {
+  const a: GridAsset = {
+    ticker: "AAPL", weight: 38, price: 319.97, change: 4.12, value: 6399,
+    perfEur: 253.1,
+    spark: [301, 305, 303, 309, 307, 313, 316, 314, 318, 319.97],
+  };
+  return <CarteActif inerte a={a} />;
+}
+
+/**
+ * L'écran de la page d'un actif seul.
+ *
+ * ⚠️ **Composé, lui aussi, et pour une raison technique en plus de la première.** La vraie
+ * page trace sa courbe avec lightweight-charts, qui a besoin d'un canevas vivant et de
+ * données : la monter en décor ferait payer une bibliothèque de graphiques et un appel réseau
+ * à une page qui n'a rien à afficher. Le bandeau, les pastilles d'intervalle et les boutons
+ * d'outil sont ceux du site.
+ */
+function EcranGraphique() {
+  return (
+    <Cadre style={{ padding: "12px 14px" }}>
+      <div style={{ display: "flex", alignItems: "flex-start", gap: 10, marginBottom: 10 }}>
+        <div>
+          <div style={{ fontFamily: FONT, fontSize: 13, fontWeight: 700, color: JETONS.texteIntense }}>
+            NVDA
+          </div>
+          <div style={{ fontFamily: FONT, fontSize: 9.5, color: JETONS.texteFaible }}>
+            NVIDIA Corporation
+          </div>
+        </div>
+        <div style={{ marginLeft: "auto", textAlign: "right" }}>
+          <div style={{ ...NUM, fontSize: 17, fontWeight: 700, color: JETONS.texteIntense }}>
+            230,36 $
+          </div>
+          <div style={{ ...NUM, fontSize: 10.5, fontWeight: 600, color: JETONS.negatif }}>
+            −1,84 %
+          </div>
+        </div>
+      </div>
+      <div style={{ background: JETONS.carteCreuse, borderRadius: RAYONS.sm, padding: "10px 12px" }}>
+        <Courbe largeur={366} hauteur={104} />
+      </div>
+      <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 10 }}>
+        <RailIntervalles />
+        <div style={{ marginLeft: "auto", display: "flex", gap: 5 }}>
+          {[0, 1, 2].map(i => (
+            <span key={i} style={{ width: 22, height: 22, borderRadius: RAYONS.sm,
+                                   background: JETONS.segmentPiste,
+                                   border: `1px solid ${JETONS.bord}` }} />
+          ))}
+        </div>
+      </div>
+    </Cadre>
+  );
+}
+
+/** Le rail d'intervalles de la page d'un actif. */
+function RailIntervalles() {
+  const crans = ["1m", "5m", "15m", "1H", "4H", "1J"];
+  const retenu = "1J";
+  return (
+    <div style={{ display: "inline-flex", alignItems: "center", gap: 3, padding: "3px 4px",
+                  borderRadius: RAYONS.plein, background: JETONS.segmentPiste }}>
+      {crans.map(c => (
+        <span key={c} style={{ padding: "3px 8px", borderRadius: RAYONS.plein,
+                               fontFamily: FONT, fontSize: 10,
+                               fontWeight: c === retenu ? 600 : 500,
+                               background: c === retenu ? JETONS.segmentActif : "transparent",
+                               color: c === retenu ? JETONS.segmentEncre : JETONS.texteFaible }}>
+          {c}
+        </span>
+      ))}
+    </div>
+  );
+}
+
 /** Une carte d'objectif, nue, comme celles de l'onglet Objectifs. */
 function CarteObjectif() {
-  const part = 56;
+  const part = 34;
   return (
     <div style={{ background: JETONS.carte, border: `1px solid ${JETONS.bord}`,
                   borderRadius: RAYONS.md, padding: "13px 15px" }}>
@@ -424,17 +566,17 @@ function CarteObjectif() {
                        background: `${JETONS.accent}22`, color: JETONS.accent,
                        display: "flex", alignItems: "center", justifyContent: "center" }}>
           <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-            <path d="M12 3 2 12h3v8h5v-5h4v5h5v-8h3z" />
+            <path d="M12 2a5 5 0 0 1 5 5v3h1a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2v-8a2 2 0 0 1 2-2h1V7a5 5 0 0 1 5-5m0 2a3 3 0 0 0-3 3v3h6V7a3 3 0 0 0-3-3" />
           </svg>
         </span>
         <span style={{ fontFamily: FONT, fontSize: 12.5, fontWeight: 600, color: JETONS.texte }}>
-          Achat résidence principale
+          Retraite à 62 ans
         </span>
         <span style={{ ...NUM, marginLeft: "auto", fontSize: 12.5, fontWeight: 700,
                        color: JETONS.texteIntense }}>{part} %</span>
       </div>
       <div style={{ ...NUM, fontSize: 11.5, color: JETONS.texteSecondaire, marginBottom: 7 }}>
-        28 000 € / 50 000 €
+        102 000 € / 300 000 €
       </div>
       {/* La piste est celle des barres du score : `bordFort`, le vide de l'anneau. */}
       <span style={{ display: "block", height: 8, borderRadius: 4, background: JETONS.bordFort,
@@ -443,7 +585,7 @@ function CarteObjectif() {
                        background: JETONS.positif }} />
       </span>
       <div style={{ fontFamily: FONT, fontSize: 10.5, color: JETONS.texteFaible, marginTop: 8 }}>
-        Objectif prévu en 2028
+        Objectif prévu en 2061
       </div>
     </div>
   );
