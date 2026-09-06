@@ -1,5 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
 from sqlalchemy.orm import Session
+from app.services.memoire_courte import memorise
 from app.core.database import get_db, Portfolio
 from app.core.auth import require_auth, get_current_user
 from app.models.user import User
@@ -182,6 +183,7 @@ def update_portfolio(
     return p
 
 @router.get("/{portfolio_id}/events")
+@memorise("events")
 def portfolio_events(
     portfolio_id: str,
     db: Session = Depends(get_db), user: User = Depends(require_auth),
@@ -242,6 +244,7 @@ def portfolio_event_impact(
 
 
 @router.get("/{portfolio_id}/events/transparence")
+@memorise("events-transparence")
 def portfolio_events_transparence(
     portfolio_id: str,
     db: Session = Depends(get_db), user: User = Depends(require_auth),
@@ -289,6 +292,7 @@ def portfolio_events_transparence(
 
 
 @router.get("/{portfolio_id}/events/analyse")
+@memorise("events-analyse")
 def portfolio_events_analyse(
     portfolio_id: str,
     db: Session = Depends(get_db), user: User = Depends(require_auth),
