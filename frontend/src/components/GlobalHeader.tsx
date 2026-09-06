@@ -514,13 +514,37 @@ export default function GlobalHeader() {
     let annule = false;
     Promise.all(aLire.map(async p => {
       try {
-        const r = await recuperer(
-          `${API_URL}/api/v1/portfolios/${encodeURIComponent(p.id)}/positions`,
-          { headers: enTetesAuth() });
+        /**
+         * ⚠️ **Les titres *plus* les liquidités, comme le bandeau de la page — corrigé sur
+         * signalement.** La palette ne lisait que `/positions`, donc les seuls titres, et
+         * annonçait 5 266,94 € là où la page affichait 10 336,94 € pour le même portefeuille.
+         * Les 5 070 € d'écart étaient un livret et un compte courant. Deux chiffres différents
+         * pour la même chose, à deux endroits de l'écran, et rien pour dire lequel croire.
+         *
+         * La formule est celle de la page, à la lettre : valeur des titres, plus la somme des
+         * soldes déclarés. Un compte sans solde saisi n'en déclare pas zéro — `solde` vaut
+         * `null` — et n'entre donc pas dans l'addition.
+         *
+         * ⚠️ Une nuance assumée : la page corrige en plus les lignes de cryptomonnaie avec le
+         * cours en direct, ce que la palette ne fait pas. L'écart n'existe que sur un
+         * portefeuille qui en détient, et il vaut la fraîcheur d'un cours, pas un poste
+         * entier de patrimoine.
+         */
+        const [r, rc] = await Promise.all([
+          recuperer(`${API_URL}/api/v1/portfolios/${encodeURIComponent(p.id)}/positions`,
+                    { headers: enTetesAuth() }),
+          recuperer(`${API_URL}/api/v1/portfolios/${encodeURIComponent(p.id)}/comptes`,
+                    { headers: enTetesAuth() }),
+        ]);
         if (!r.ok) throw new Error("refus");
         const d = await r.json();
+        const comptes = rc.ok ? await rc.json() : [];
+        const liquidites = Array.isArray(comptes)
+          ? comptes.reduce((s: number, c: { solde?: number | null }) => s + (c?.solde ?? 0), 0)
+          : 0;
+        const titres = Number.isFinite(d?.total_value) ? (d.total_value as number) : null;
         return [String(p.id), {
-          valeur: Number.isFinite(d?.total_value) ? d.total_value : null,
+          valeur: titres != null ? titres + liquidites : (liquidites > 0 ? liquidites : null),
           variation: Number.isFinite(d?.total_pnl_pct) ? d.total_pnl_pct : null,
           lignes: Array.isArray(d?.positions) ? d.positions.length : 0,
         }] as const;

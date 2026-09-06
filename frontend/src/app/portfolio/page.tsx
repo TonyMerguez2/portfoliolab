@@ -2632,9 +2632,30 @@ function PortfolioPageInner() {
               s'ouvre d'un seul tenant, dossiers déclarés compris, au lieu de se compléter
               sous les yeux. Voir `comptesCharges`. */}
           {loading || !comptesCharges ? (
-            <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", color: CLAIR.texteFaible, fontSize: 12 }}>
-              Chargement…
-            </div>
+            /**
+              * ⚠️ **L'attente a la forme de ce qu'elle attend, sinon le graphique se rétracte.**
+              * Le repli était un seul bloc en `flex: 1`. Une fois les comptes arrivés, le vrai
+              * contenu ajoute au-dessus de la grille une rangée de dossiers qui, elle, ne se
+              * comprime pas : mesuré à l'écran, **232 pixels** qui apparaissent d'un coup et
+              * que la courbe, juste au-dessus, doit rendre. Le graphique se redessinait donc à
+              * une autre taille une à deux secondes après l'ouverture de la page.
+              *
+              * Le repli reproduit donc la géométrie exacte de l'état chargé : une rangée
+              * incompressible de la bonne hauteur, puis le reste en `flex: 1`. Rien ne bouge
+              * quand le contenu se substitue à elle.
+              *
+              * ⚠️ On réemploie `HAUTEUR_DOSSIERS`, qui existait déjà et vaut exactement cela :
+              * son commentaire annonce « l'invariant qui empêche la courbe de changer de taille
+              * quand on ouvre un dossier ». Il manquait seulement au repli du chargement, où le
+              * même invariant vaut. Une constante recopiée à 232 aurait divergé au premier
+              * ajustement de la carte d'un dossier.
+              */
+            <>
+              <div style={{ height: HAUTEUR_DOSSIERS, flexShrink: 0 }} aria-hidden="true" />
+              <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", color: CLAIR.texteFaible, fontSize: 12 }}>
+                Chargement…
+              </div>
+            </>
           ) : (<>
             {/* Grille à cartes égales. La treemap pondérée codait le poids
                 par la surface : les petites lignes en devenaient illisibles,
