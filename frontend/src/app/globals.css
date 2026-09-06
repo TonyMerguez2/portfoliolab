@@ -1864,16 +1864,20 @@ canvas + div {
 }
 
 @keyframes nv-respire {
-  /* ⚠️ **Une pulsation, plus une dérive.** La forme montait et redescendait en diagonale : le
-     déplacement se lisait avant le souffle, et le logo semblait glisser plutôt que respirer.
-     Seule la taille varie maintenant, et un peu plus franchement qu'avant — six pour cent au
-     lieu de quatre — puisqu'elle porte le mouvement à elle seule.
+  /* ⚠️ **La pulsation passe par `transform`, et c'est le troisième essai qui tient.** Animer
+     `mask-size` ne repeint pas : la valeur change dans le modèle — mesuré, 1005 px puis
+     1085 px — et l'écran ne bouge pas. Animer `mask-position` repeint, en revanche, d'où la
+     dérive en diagonale qu'on a vue et qu'on ne voulait pas. Une transformation, elle, est
+     composée par le processeur graphique : elle se voit toujours.
 
-     La place ne bouge plus : `--nv-x` et `--nv-y` gardent leur valeur de repos, écrite dans la
-     règle. Les laisser dans les étapes les aurait figés à la valeur de la dernière lue. */
-  0%, 100% { --nv-souffle: 0.96; opacity: 0.74; }
-  50%      { --nv-souffle: 1.06; opacity: 1;    }
+     ⚠️ Le prix, assumé : l'échelle emporte la trame de points avec la forme, donc la grille
+     de la silhouette ne coïncide plus au pixel près avec celle du fond pendant le souffle. À
+     trois pour cent, cela se lit comme un frémissement — ce qu'on cherche — et non comme deux
+     trames qui se battent. */
+  0%, 100% { transform: scale(0.97); opacity: 0.74; }
+  50%      { transform: scale(1.03); opacity: 1;    }
 }
+
 
 /**
  * La silhouette du logo, dessinée par la trame de points.
@@ -1915,19 +1919,25 @@ canvas + div {
   -webkit-mask-repeat: no-repeat, no-repeat;
   mask-repeat: no-repeat, no-repeat;
 
-  -webkit-mask-size: calc(var(--nv-logo-cote) * var(--nv-souffle)), var(--nv-logo-cote);
-  mask-size: calc(var(--nv-logo-cote) * var(--nv-souffle)), var(--nv-logo-cote);
+  -webkit-mask-size: var(--nv-logo-cote), var(--nv-logo-cote);
+  mask-size: var(--nv-logo-cote), var(--nv-logo-cote);
 
-  -webkit-mask-position: right var(--nv-x) bottom var(--nv-y), right -16% bottom -24%;
-  mask-position: right var(--nv-x) bottom var(--nv-y), right -16% bottom -24%;
+  -webkit-mask-position: right -16% bottom -24%, right -16% bottom -24%;
+  mask-position: right -16% bottom -24%, right -16% bottom -24%;
 
   -webkit-mask-composite: source-in;
   mask-composite: intersect;
 
-  /* Neuf secondes : un souffle qu'on remarque en s'arrêtant, jamais en lisant. */
-  animation: nv-respire 9s ease-in-out infinite;
+  /* ⚠️ Le point fixe du souffle est le centre visible de la forme, pas celui de l'écran :
+     la silhouette occupe la moitié droite et déborde en bas. Autour du centre de l'écran,
+     elle aurait glissé au lieu d'enfler. */
+  transform-origin: 82% 58%;
+  will-change: transform;
+
+  /* Sept secondes : un souffle qu'on remarque en s'arrêtant, jamais en lisant. */
+  animation: nv-respire 7s ease-in-out infinite;
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .nv-silhouette { animation: none; --nv-souffle: 1; opacity: 0.9; }
+  .nv-silhouette { animation: none; transform: none; opacity: 0.9; }
 }
