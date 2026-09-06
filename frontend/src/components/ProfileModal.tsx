@@ -1,4 +1,5 @@
 "use client";
+import { recuperer } from "@/lib/requete";
 import { useState, useRef } from "react";
 import { fermerSession } from "@/lib/session";
 import { API_URL } from "@/lib/api";
@@ -31,7 +32,7 @@ export default function ProfileModal({ user, onClose, onUpdate, dark = false }: 
     try {
       const form = new FormData();
       form.append("file", file);
-      const res = await fetch(`${API_URL}/api/v1/auth/avatar`, {
+      const res = await recuperer(`${API_URL}/api/v1/auth/avatar`, {
         method: "POST",
         headers: { Authorization: `Bearer ${token}` },
         body: form,
@@ -50,7 +51,7 @@ export default function ProfileModal({ user, onClose, onUpdate, dark = false }: 
   const handleSave = async () => {
     setLoading(true);
     try {
-      const res = await fetch(`${API_URL}/api/v1/auth/profile`, {
+      const res = await recuperer(`${API_URL}/api/v1/auth/profile`, {
         method: "PUT",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
         body: JSON.stringify({ username }),

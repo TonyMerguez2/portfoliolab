@@ -28,10 +28,16 @@
  * enregistrements identiques envoyés coup sur coup sont deux intentions, pas une.
  */
 
-/** Combien de temps une réponse peut resservir. Deux secondes : la durée d'un montage de page. */
-const FRAICHEUR = 2000;
+/**
+ * Combien de temps une réponse **déjà rendue** peut resservir.
+ *
+ * ⚠️ Trois secondes, et surtout pas davantage : au-delà, un cours ou un solde qu'on vient de
+ * modifier pourrait se relire périmé. Le partage des appels *en vol*, lui, n'a pas de durée —
+ * voir ci-dessous.
+ */
+const GRACE = 3000;
 
-type Entree = { promesse: Promise<Response>; pose: number };
+type Entree = { promesse: Promise<Response>; rendue: number | null };
 
 const enCours = new Map<string, Entree>();
 
@@ -51,28 +57,39 @@ export function recuperer(url: string, init?: RequestInit): Promise<Response> {
   if (methode !== "GET") return fetch(url, init);
 
   const k = cle(url, init);
-  const now = Date.now();
   const deja = enCours.get(k);
-  if (deja && now - deja.pose < FRAICHEUR) {
+
+  /**
+   * ⚠️ **Tant que l'appel est en vol, on le partage sans limite de temps** — c'est la
+   * correction d'un défaut de la première version, qui comparait l'heure de *départ* à une
+   * fenêtre de deux secondes. Un appel qui mettait trois secondes cessait donc d'être
+   * partagé au bout de deux, alors qu'il n'avait même pas répondu : les doublons repartaient
+   * en double sur exactement les appels les plus lents, ceux qu'il fallait mutualiser en
+   * priorité. Mesuré sur le site : `history?period=max`, `transactions` et
+   * `events/transparence` partaient toujours deux fois.
+   *
+   * Une fois la réponse rendue, elle ne resservira plus que `GRACE` millisecondes : c'est un
+   * cache, et un cache doit être court.
+   */
+  if (deja && (deja.rendue === null || Date.now() - deja.rendue < GRACE)) {
     /* ⚠️ `clone()` est obligatoire : le corps d'une réponse ne se lit qu'une fois, et le
-       deuxième appelant recevrait un flux déjà consommé. Le clone se fait à la lecture, pas au
-       dépôt, pour que la réponse d'origine reste intacte pour le suivant. */
+       deuxième appelant recevrait un flux déjà consommé. */
     return deja.promesse.then(r => r.clone());
   }
 
-  const promesse = fetch(url, init);
-  enCours.set(k, { promesse, pose: now });
+  const entree: Entree = { promesse: fetch(url, init), rendue: null };
+  enCours.set(k, entree);
 
-  /* ⚠️ L'entrée est retirée à l'échec, jamais gardée : mémoriser une panne de réseau
-     pendant deux secondes ferait échouer d'emblée les appels qui suivent, alors que le
-     réseau est peut-être déjà revenu. */
-  promesse.catch(() => { enCours.delete(k); });
-  setTimeout(() => {
-    const e = enCours.get(k);
-    if (e && e.promesse === promesse) enCours.delete(k);
-  }, FRAICHEUR);
+  entree.promesse.then(
+    () => { entree.rendue = Date.now(); setTimeout(() => {
+      if (enCours.get(k) === entree) enCours.delete(k);
+    }, GRACE); },
+    /* ⚠️ L'entrée part à l'échec, jamais gardée : mémoriser une panne de réseau ferait
+       échouer d'emblée les appels suivants, alors que le réseau est peut-être déjà revenu. */
+    () => { if (enCours.get(k) === entree) enCours.delete(k); },
+  );
 
-  return promesse.then(r => r.clone());
+  return entree.promesse.then(r => r.clone());
 }
 
 /**

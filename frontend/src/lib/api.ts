@@ -1,3 +1,4 @@
+import { recuperer } from "@/lib/requete";
 import type {
   BacktestRequest,
   BacktestResponse,
@@ -43,7 +44,7 @@ class ApiError extends Error {
 }
 
 async function post<TReq, TRes>(path: string, body: TReq): Promise<TRes> {
-  const res = await fetch(`${API_URL}${path}`, {
+  const res = await recuperer(`${API_URL}${path}`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
@@ -58,7 +59,7 @@ async function post<TReq, TRes>(path: string, body: TReq): Promise<TRes> {
 }
 
 async function get<TRes>(path: string): Promise<TRes> {
-  const res = await fetch(`${API_URL}${path}`);
+  const res = await recuperer(`${API_URL}${path}`);
   if (!res.ok) throw new ApiError(res.status, "Request failed");
   return res.json() as Promise<TRes>;
 }

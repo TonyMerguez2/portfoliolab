@@ -1,4 +1,5 @@
 "use client";
+import { recuperer } from "@/lib/requete";
 import { useState } from "react";
 import { enregistrerSession } from "@/lib/session";
 import { API_URL } from "@/lib/api";
@@ -28,7 +29,7 @@ export default function AuthModal({ onClose, onAuth, dark = false }: Props) {
     try {
       const endpoint = mode === "login" ? "/api/v1/auth/login" : "/api/v1/auth/register";
       const body = mode === "login" ? { email, password } : { email, password, username };
-      const res = await fetch(`${API_URL}${endpoint}`, {
+      const res = await recuperer(`${API_URL}${endpoint}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body),

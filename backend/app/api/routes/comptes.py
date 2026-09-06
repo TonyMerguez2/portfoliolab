@@ -29,6 +29,7 @@ from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from app.core.auth import require_auth
+from app.services.memoire_courte import memorise
 from app.core.database import (Compte, MouvementTresorerie, Portfolio,
                                 Transaction, get_db)
 from app.models.user import User
@@ -257,6 +258,7 @@ def genres():
 
 
 @router.get("/{portfolio_id}/comptes")
+@memorise("comptes")
 def lister(portfolio_id: str, db: Session = Depends(get_db),
            user: User = Depends(require_auth)):
     p = _portefeuille(portfolio_id, user, db)
@@ -466,6 +468,7 @@ def _mouvements_du_compte(c: Compte, db: Session) -> list[MouvementTresorerie]:
 
 
 @router.get("/{portfolio_id}/mouvements")
+@memorise("mouvements")
 def lister_les_mouvements_du_portefeuille(portfolio_id: str,
                                           db: Session = Depends(get_db),
                                           user: User = Depends(require_auth)):

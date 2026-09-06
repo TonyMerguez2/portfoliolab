@@ -1,4 +1,5 @@
 "use client";
+import { recuperer } from "@/lib/requete";
 import { useEffect, useRef, useState } from "react";
 import AuthModal from "@/components/AuthModal";
 import Header from "@/components/Header";
@@ -69,7 +70,7 @@ export default function Home() {
   useEffect(() => {
     const fetch_prices = async () => {
       try {
-        const res = await fetch(`${API_URL}/ticker`);
+        const res = await recuperer(`${API_URL}/ticker`);
         const data = await res.json();
         if (Array.isArray(data)) setTickerData(data);
       } catch {}

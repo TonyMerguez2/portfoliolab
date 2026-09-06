@@ -1289,7 +1289,7 @@ export default function PerformanceChart({
     const url = surTransactions && portfolioId
       ? `${API}/api/v1/portfolios/${portfolioId}/history?period=${PERIOD_API[period]}`
       : `${API}/api/v1/portfolio-history?tickers=${encodeURIComponent(tickers)}&weights=${encodeURIComponent(weights)}&period=${PERIOD_API[period]}`;
-    fetch(url, { headers: enTetesAuth() })
+    recuperer(url, { headers: enTetesAuth() })
       .then(r => r.json())
       .then((d: { points?: HistoryPoint[]; start?: string | null; sans_cours?: string[] }) => {
         if (cancelled) return;

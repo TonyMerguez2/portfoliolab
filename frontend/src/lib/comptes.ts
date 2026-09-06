@@ -123,7 +123,7 @@ export async function lireGenres(): Promise<GenreCompte[]> {
 }
 
 export async function lireComptes(portefeuille: string): Promise<Compte[]> {
-  const r = await fetch(
+  const r = await recuperer(
     `${API_URL}/api/v1/portfolios/${encodeURIComponent(portefeuille)}/comptes`,
     { headers: enTetesAuth() },
   );
@@ -150,7 +150,7 @@ async function ouRaler(r: Response, defaut: string): Promise<never> {
 export async function creerCompte(
   portefeuille: string, compte: CompteASoumettre,
 ): Promise<Compte> {
-  const r = await fetch(
+  const r = await recuperer(
     `${API_URL}/api/v1/portfolios/${encodeURIComponent(portefeuille)}/comptes`,
     {
       method: "POST",
@@ -165,7 +165,7 @@ export async function creerCompte(
 export async function modifierCompte(
   portefeuille: string, id: string, compte: CompteASoumettre,
 ): Promise<Compte> {
-  const r = await fetch(
+  const r = await recuperer(
     `${API_URL}/api/v1/portfolios/${encodeURIComponent(portefeuille)}/comptes/${id}`,
     {
       method: "PUT",
@@ -197,7 +197,7 @@ const cheminMouvements = (portefeuille: string, compte: string) =>
 export async function listerMouvements(
   portefeuille: string, compte: string,
 ): Promise<Mouvement[]> {
-  const r = await fetch(cheminMouvements(portefeuille, compte), { headers: enTetesAuth() });
+  const r = await recuperer(cheminMouvements(portefeuille, compte), { headers: enTetesAuth() });
   if (!r.ok) return ouRaler(r, "Le journal du compte n'a pas pu être lu.");
   return r.json();
 }
@@ -233,7 +233,7 @@ export async function enregistrerMouvement(
   portefeuille: string, compte: string,
   mouvement: { date: string; montant: number; note?: string | null },
 ): Promise<{ mouvement: Mouvement; compte: Compte }> {
-  const r = await fetch(cheminMouvements(portefeuille, compte), {
+  const r = await recuperer(cheminMouvements(portefeuille, compte), {
     method: "POST",
     headers: { "Content-Type": "application/json", ...enTetesAuth() },
     body: JSON.stringify(mouvement),
@@ -246,7 +246,7 @@ export async function enregistrerMouvement(
 export async function supprimerMouvement(
   portefeuille: string, compte: string, id: string,
 ): Promise<{ compte: Compte }> {
-  const r = await fetch(`${cheminMouvements(portefeuille, compte)}/${id}`, {
+  const r = await recuperer(`${cheminMouvements(portefeuille, compte)}/${id}`, {
     method: "DELETE", headers: enTetesAuth(),
   });
   if (!r.ok) return ouRaler(r, "Le mouvement n'a pas pu être supprimé.");
@@ -254,7 +254,7 @@ export async function supprimerMouvement(
 }
 
 export async function supprimerCompte(portefeuille: string, id: string): Promise<void> {
-  const r = await fetch(
+  const r = await recuperer(
     `${API_URL}/api/v1/portfolios/${encodeURIComponent(portefeuille)}/comptes/${id}`,
     { method: "DELETE", headers: enTetesAuth() },
   );
@@ -272,7 +272,7 @@ export async function supprimerCompte(portefeuille: string, id: string): Promise
 export async function rattacherOperations(
   portefeuille: string, id: string, operations: number[],
 ): Promise<{ rattachees: number; deplacees: number }> {
-  const r = await fetch(
+  const r = await recuperer(
     `${API_URL}/api/v1/portfolios/${encodeURIComponent(portefeuille)}/comptes/${id}/operations`,
     {
       method: "POST",

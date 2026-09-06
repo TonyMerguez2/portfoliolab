@@ -1,4 +1,5 @@
 "use client";
+import { recuperer } from "@/lib/requete";
 import TitreDeCarte from "@/components/ui/TitreDeCarte";
 import { useEffect, useState } from "react";
 
@@ -130,7 +131,7 @@ export default function PanneauActivite({
     setCharge(false);
     const base = `${API_URL}/api/v1/portfolios/${portfolioId}`;
     const lire = (chemin: string) =>
-      fetch(`${base}${chemin}`, { headers: enTetesAuth() })
+      recuperer(`${base}${chemin}`, { headers: enTetesAuth() })
         .then(r => (r.ok ? r.json() : null))
         .catch(() => null);
 

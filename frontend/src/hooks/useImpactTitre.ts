@@ -1,4 +1,5 @@
 "use client";
+import { recuperer } from "@/lib/requete";
 import { useEffect, useState } from "react";
 
 import type { Impact } from "@/hooks/useAnalyseEvenements";
@@ -35,7 +36,7 @@ export function useImpactTitre(portfolioId?: string, ticker?: string | null): {
     setEtat("charge");
     const url = `${API}/api/v1/portfolios/${portfolioId}/events/impact`
       + `?ticker=${encodeURIComponent(ticker)}`;
-    fetch(url, { headers: enTetesAuth() })
+    recuperer(url, { headers: enTetesAuth() })
       .then(r => (r.ok ? r.json() : Promise.reject(new Error(String(r.status)))))
       .then((d: { impact: (Impact & { ticker: string }) | null }) => {
         if (annule) return;

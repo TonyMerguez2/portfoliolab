@@ -1,4 +1,5 @@
 "use client";
+import { recuperer } from "@/lib/requete";
 import { useState, useRef, useEffect, useMemo, useCallback } from "react";
 import {
   createChart, IChartApi, ISeriesApi,
@@ -492,7 +493,7 @@ export default function GrowthChart({
     if (!config) { setAdaptiveData([]); return; }
 
     let cancelled = false;
-    fetch(`${API_URL}/api/v1/intraday?ticker=${encodeURIComponent(ticker)}&period=${config.apiPeriod}&interval=${config.apiInterval}`)
+    recuperer(`${API_URL}/api/v1/intraday?ticker=${encodeURIComponent(ticker)}&period=${config.apiPeriod}&interval=${config.apiInterval}`)
       .then(r => r.json())
       .then(data => {
         if (cancelled || !Array.isArray(data)) return;
@@ -519,7 +520,7 @@ export default function GrowthChart({
   useEffect(() => {
     if (!ticker) { setDailyHistory([]); return; }
     let cancelled = false;
-    fetch(`${API_URL}/api/v1/intraday?ticker=${encodeURIComponent(ticker)}&period=max&interval=1d`)
+    recuperer(`${API_URL}/api/v1/intraday?ticker=${encodeURIComponent(ticker)}&period=max&interval=1d`)
       .then(r => r.json())
       .then(data => { if (!cancelled && Array.isArray(data)) setDailyHistory(normalizeOhlcPoints(data)); })
       .catch(() => { if (!cancelled) setDailyHistory([]); });
@@ -548,7 +549,7 @@ export default function GrowthChart({
     const config = INTERVAL_FETCH_CONFIG[intervalKey];
     if (!config) { setBmAdaptiveData([]); return; }
     let cancelled = false;
-    fetch(`${API_URL}/api/v1/intraday?ticker=${encodeURIComponent(benchmarkTicker)}&period=${config.apiPeriod}&interval=${config.apiInterval}`)
+    recuperer(`${API_URL}/api/v1/intraday?ticker=${encodeURIComponent(benchmarkTicker)}&period=${config.apiPeriod}&interval=${config.apiInterval}`)
       .then(r => r.json())
       .then(data => { if (!cancelled && Array.isArray(data)) setBmAdaptiveData(normalizeOhlcPoints(data)); })
       .catch(() => { if (!cancelled) setBmAdaptiveData([]); });

@@ -1,4 +1,5 @@
 "use client";
+import { recuperer } from "@/lib/requete";
 import BoutonOutil from "@/components/ui/BoutonOutil";
 import { FONT } from "@/lib/typography";
 import { JETONS } from "@/lib/palette";
@@ -383,7 +384,7 @@ async function fetchCryptoRank(ticker: string): Promise<number | null> {
   const id = CRYPTO_COINGECKO_IDS[ticker.toUpperCase()];
   if (!id) return null;
   try {
-    const response = await fetch(`https://api.coingecko.com/api/v3/coins/markets?vs_currency=usd&ids=${encodeURIComponent(id)}`);
+    const response = await recuperer(`https://api.coingecko.com/api/v3/coins/markets?vs_currency=usd&ids=${encodeURIComponent(id)}`);
     if (!response.ok) return null;
     const data = await response.json();
     const rank = Array.isArray(data) ? Number(data[0]?.market_cap_rank) : NaN;
@@ -555,8 +556,8 @@ function ChartContent() {
       (async () => {
         try {
           const [pricesRes, backtestRes] = await Promise.all([
-            fetch(`${API_URL}/api/v1/prices?tickers=${encodeURIComponent(ticker)}`),
-            fetch(`${API_URL}/api/v1/backtest`, {
+            recuperer(`${API_URL}/api/v1/prices?tickers=${encodeURIComponent(ticker)}`),
+            recuperer(`${API_URL}/api/v1/backtest`, {
               method: "POST",
               headers: { "Content-Type": "application/json" },
               body: JSON.stringify({ assets: [{ ticker, weight: 100 }], period: "max", benchmark: "^GSPC", risk_free_rate: 0.035 }),
@@ -578,7 +579,7 @@ function ChartContent() {
     } else if (isPortfolio && activePortfolio) {
       setLoading(true);
       setError(null);
-      fetch(`${API_URL}/api/v1/backtest`, {
+      recuperer(`${API_URL}/api/v1/backtest`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ assets: activePortfolio.assets, period: "max", benchmark: "^GSPC", risk_free_rate: 0.035 }),
@@ -628,7 +629,7 @@ function ChartContent() {
   useEffect(() => {
     if (!ticker || isCrypto) return;
     const interval = setInterval(() => {
-      fetch(`${API_URL}/api/v1/prices?tickers=${encodeURIComponent(ticker)}`)
+      recuperer(`${API_URL}/api/v1/prices?tickers=${encodeURIComponent(ticker)}`)
         .then(r => r.json())
         .then((d: any[]) => { if (Array.isArray(d) && d.length > 0) setCurrentPrice({ price: d[0].price, change: d[0].change }); })
         .catch(() => {});
@@ -639,7 +640,7 @@ function ChartContent() {
   // Quote (infos marché) — chargé une fois par ticker
   useEffect(() => {
     if (!ticker) { setQuote(null); return; }
-    fetch(`${API_URL}/api/v1/quote/${encodeURIComponent(ticker)}`)
+    recuperer(`${API_URL}/api/v1/quote/${encodeURIComponent(ticker)}`)
       .then(r => r.json())
       .then(async d => {
         if (d.error) return;
@@ -665,7 +666,7 @@ function ChartContent() {
     const controller = new AbortController();
     setSimilar([]);
     setSimilarLoading(true);
-    fetch(`${API_URL}/api/v1/similar/${encodeURIComponent(ticker)}?by=${similarBy}`, { signal:controller.signal })
+    recuperer(`${API_URL}/api/v1/similar/${encodeURIComponent(ticker)}?by=${similarBy}`, { signal:controller.signal })
       .then(r => r.json())
       .then((d: unknown) => { if (Array.isArray(d)) setSimilar(d); })
       .catch(error => { if (error instanceof Error && error.name !== "AbortError") setSimilar([]); })
@@ -677,7 +678,7 @@ function ChartContent() {
   useEffect(() => {
     if (!ticker) { setNews([]); return; }
     setNewsLoading(true);
-    fetch(`${API_URL}/api/v1/news/${encodeURIComponent(ticker)}?lang=fr`)
+    recuperer(`${API_URL}/api/v1/news/${encodeURIComponent(ticker)}?lang=fr`)
       .then(r => r.json())
       .then((d: unknown) => { if (Array.isArray(d)) setNews(d); })
       .catch(() => {})
@@ -686,7 +687,7 @@ function ChartContent() {
 
   // Taux de change (open.er-api.com, gratuit, sans auth)
   useEffect(() => {
-    fetch("https://open.er-api.com/v6/latest/USD")
+    recuperer("https://open.er-api.com/v6/latest/USD")
       .then(r => r.json())
       .then(d => { if (d.rates) setFxRates({ USD: 1, ...d.rates }); })
       .catch(() => {});
@@ -726,7 +727,7 @@ function ChartContent() {
   useEffect(() => {
     if (!customBmTicker) { setBmCurrentPrice(null); return; }
     // fetch initial dans tous les cas
-    fetch(`${API_URL}/api/v1/prices?tickers=${encodeURIComponent(customBmTicker)}`)
+    recuperer(`${API_URL}/api/v1/prices?tickers=${encodeURIComponent(customBmTicker)}`)
       .then(r => r.json())
       .then((d: any[]) => { if (Array.isArray(d) && d.length > 0) setBmCurrentPrice({ price: d[0].price, change: d[0].change }); })
       .catch(() => {});
@@ -735,7 +736,7 @@ function ChartContent() {
   useEffect(() => {
     if (!customBmTicker) { setBmQuote(null); return; }
     setBmQuote(null);
-    fetch(`${API_URL}/api/v1/quote/${encodeURIComponent(customBmTicker)}`)
+    recuperer(`${API_URL}/api/v1/quote/${encodeURIComponent(customBmTicker)}`)
       .then(r => r.json())
       .then(async d => {
         if (d.error) return;
@@ -769,7 +770,7 @@ function ChartContent() {
   useEffect(() => {
     if (!customBmTicker || isBmCrypto) return;
     const interval = setInterval(() => {
-      fetch(`${API_URL}/api/v1/prices?tickers=${encodeURIComponent(customBmTicker)}`)
+      recuperer(`${API_URL}/api/v1/prices?tickers=${encodeURIComponent(customBmTicker)}`)
         .then(r => r.json())
         .then((d: any[]) => { if (Array.isArray(d) && d.length > 0) setBmCurrentPrice({ price: d[0].price, change: d[0].change }); })
         .catch(() => {});
@@ -781,7 +782,7 @@ function ChartContent() {
   useEffect(() => {
     if (!customBmTicker) { setRawCustomBmData([]); return; }
     setCustomBmLoading(true);
-    fetch(`${API_URL}/api/v1/intraday?ticker=${encodeURIComponent(customBmTicker)}&period=max&interval=1d`)
+    recuperer(`${API_URL}/api/v1/intraday?ticker=${encodeURIComponent(customBmTicker)}&period=max&interval=1d`)
       .then(r => r.json())
       .then(data => {
         if (!Array.isArray(data)) { setRawCustomBmData([]); return; }

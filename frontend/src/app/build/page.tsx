@@ -1,4 +1,5 @@
 "use client";
+import { recuperer } from "@/lib/requete";
 import React, { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { useApp } from "@/lib/AppContext";
@@ -247,7 +248,7 @@ export default function BuildPage() {
     const searchRef = useRef<any>(null);
     const fetchPrices = (tickers: string[])=>{
         if (!tickers.length) return;
-        fetch("".concat(API_URL, "/api/v1/prices?tickers=").concat(encodeURIComponent(tickers.slice(0, 50).join(",")))).then((r: any)=>r.json()).then((data: any)=>{
+        recuperer("".concat(API_URL, "/api/v1/prices?tickers=").concat(encodeURIComponent(tickers.slice(0, 50).join(",")))).then((r: any)=>r.json()).then((data: any)=>{
             if (!Array.isArray(data)) return;
             const map: Record<string, { price: number; change: number }> = {};
             data.forEach((d: any)=>{
@@ -334,7 +335,7 @@ export default function BuildPage() {
         }
         setIsSearching(true);
         try {
-            const res = await fetch("".concat(API_URL, "/api/v1/search?q=").concat(encodeURIComponent(q)));
+            const res = await recuperer("".concat(API_URL, "/api/v1/search?q=").concat(encodeURIComponent(q)));
             const data = await res.json();
             const api = data.results || [];
             // Merge: API first, then local not already present
@@ -495,7 +496,7 @@ export default function BuildPage() {
         setPriceError([]);
         try {
             const tickers = preset.assets.map((a)=>a.ticker).join(",");
-            const res = await fetch("".concat(API_URL, "/api/v1/price-at?tickers=").concat(encodeURIComponent(tickers), "&date=").concat(investDate));
+            const res = await recuperer("".concat(API_URL, "/api/v1/price-at?tickers=").concat(encodeURIComponent(tickers), "&date=").concat(investDate));
             const cours: Record<string, number> = await res.json();
             const manquants = sansCours(preset.assets, cours);
             if (manquants.length > 0) {
@@ -526,7 +527,7 @@ export default function BuildPage() {
         });
         for (const tx of aEnvoyer){
             try {
-                const res = await fetch("".concat(API_URL, "/api/v1/portfolios/").concat(portfolioId, "/transactions"), {
+                const res = await recuperer("".concat(API_URL, "/api/v1/portfolios/").concat(portfolioId, "/transactions"), {
                     method: "POST",
                     headers: {
                         "Content-Type": "application/json",
@@ -602,7 +603,7 @@ export default function BuildPage() {
                 return;
             }
             try {
-                const contr = await fetch("".concat(API_URL, "/api/v1/auth/me"), {
+                const contr = await recuperer("".concat(API_URL, "/api/v1/auth/me"), {
                     headers: { Authorization: "Bearer ".concat(token) }
                 });
                 if (!contr.ok) {
@@ -621,7 +622,7 @@ export default function BuildPage() {
             // Le capital réellement engagé se lit sur les écritures, pas sur une
             // saisie séparée : les deux finiraient par diverger.
             const investi = capitalEngage(lignes);
-            const pRes2 = await fetch("".concat(API_URL, "/api/v1/portfolios"), {
+            const pRes2 = await recuperer("".concat(API_URL, "/api/v1/portfolios"), {
                 method: "POST",
                 headers: {
                     "Content-Type": "application/json",

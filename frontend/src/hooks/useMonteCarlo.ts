@@ -1,4 +1,5 @@
 "use client";
+import { recuperer } from "@/lib/requete";
 import { useState } from "react";
 import { API_URL } from "@/lib/api";
 
@@ -68,7 +69,7 @@ export function useMonteCarlo() {
         ? `${API_URL}/api/v1/monte-carlo-advanced?target=${params.target_value}`
         : `${API_URL}/api/v1/monte-carlo-advanced`;
 
-      const res = await fetch(url, {
+      const res = await recuperer(url, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ ...params, period: params.period ?? "5y" }),

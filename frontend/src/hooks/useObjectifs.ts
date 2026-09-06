@@ -75,7 +75,7 @@ export function useObjectifs(portfolioId?: string) {
     setErreurEcriture(null);
     const base = `${API}/api/v1/portfolios/${portfolioId}/objectifs`;
     try {
-      const r = await fetch(id ? `${base}/${id}` : base, {
+      const r = await recuperer(id ? `${base}/${id}` : base, {
         method: methode,
         headers: { ...enTetesAuth(), "Content-Type": "application/json" },
         body: saisie ? JSON.stringify(saisie) : undefined,

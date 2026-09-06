@@ -1,4 +1,5 @@
 "use client";
+import { recuperer } from "@/lib/requete";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import AssetLogo from "@/components/AssetLogo";
 import FenetreModale from "@/components/ui/FenetreModale";
@@ -293,7 +294,7 @@ export default function TransactionModal({
   // ── Prefill ticker ───────────────────────────────────────────────────────────
   useEffect(() => {
     if (!isOpen || !prefillTicker || prefillAsset) return;
-    fetch(`${API}/api/v1/search?q=${encodeURIComponent(prefillTicker)}`)
+    recuperer(`${API}/api/v1/search?q=${encodeURIComponent(prefillTicker)}`)
       .then(r => r.json())
       .then((d: any) => {
         const results: SearchAsset[] = (d?.results || []).map((x: any) => ({
@@ -314,7 +315,7 @@ export default function TransactionModal({
     if (!isOpen || !selectedAsset || prixEdite.current) return;
     let annule = false;
     setFetchingPrice(true);
-    fetch(`${API}/api/v1/price-at?tickers=${encodeURIComponent(selectedAsset.ticker)}&date=${date}`)
+    recuperer(`${API}/api/v1/price-at?tickers=${encodeURIComponent(selectedAsset.ticker)}&date=${date}`)
       .then(r => r.json())
       .then((d: any) => {
         if (annule || prixEdite.current) return;
@@ -333,7 +334,7 @@ export default function TransactionModal({
     clearTimeout(debounceRef.current);
     debounceRef.current = setTimeout(async () => {
       try {
-        const r = await fetch(`${API}/api/v1/search?q=${encodeURIComponent(searchQuery)}`);
+        const r = await recuperer(`${API}/api/v1/search?q=${encodeURIComponent(searchQuery)}`);
         const d = await r.json();
         const items: SearchAsset[] = (d?.results || []).map((x: any) => ({
           ticker: x.ticker, type: x.type || "EQUITY", name: x.name || x.ticker,
@@ -349,7 +350,7 @@ export default function TransactionModal({
     if (!selectedAsset || side !== "SELL" || !portfolioId) { setHeldQty(null); return; }
     const token = localStorage.getItem("novac_token");
     if (!token) return;
-    fetch(`${API}/api/v1/portfolios/${portfolioId}/positions`, {
+    recuperer(`${API}/api/v1/portfolios/${portfolioId}/positions`, {
       headers: { Authorization: `Bearer ${token}` },
     })
       .then(r => r.json())
@@ -723,7 +724,7 @@ export default function TransactionModal({
        * d'interdire, mais en silence et après coup.
        */
       const compteFinal = resoudreLeCompte ? await resoudreLeCompte(compteId) : compteId;
-      const res = await fetch(`${API}/api/v1/portfolios/${portfolioId}/transactions`, {
+      const res = await recuperer(`${API}/api/v1/portfolios/${portfolioId}/transactions`, {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
         body: JSON.stringify({
