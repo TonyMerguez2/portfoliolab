@@ -5,6 +5,7 @@ import { FONT, NUM } from "@/lib/typography";
 import { JETONS, RAYONS } from "@/lib/palette";
 import { champ, HAUTEUR_SAISIE, RAYON_SAISIE } from "@/components/ui/saisie";
 import Cadre from "@/components/ui/Cadre";
+import { ancrerLisere } from "@/components/ui/lisere";
 
 /**
  * La porte de l'alpha fermée : entrer avec un code, ou laisser son adresse.
@@ -169,14 +170,23 @@ function Porte() {
               */
             <form onSubmit={inscrire} noValidate>
               <div style={{ display: "flex", gap: 8 }}>
-                <input type="email" value={email} inputMode="email" autoComplete="email"
-                  aria-label="Votre adresse e-mail"
-                  onChange={e => { setEmail(e.target.value); if (inscription !== "repos") setInscription("repos"); }}
-                  placeholder="vous@exemple.com"
-                  style={{ ...champ, ...SURFACE_CHAMP, flex: 1, width: "auto", minWidth: 0,
-                           textAlign: "left",
-                           borderColor: inscription === "refus" ? JETONS.negatif : JETONS.bordFort }} />
+                {/* ⚠️ **Le liseré vit sur une enveloppe, pas sur le champ.** `.novac-lisere`
+                    le trace dans un `::before` — et un `<input>` n'a pas de pseudo-élément.
+                    C'est pourquoi il manquait ici alors qu'il est demandé : il ne suffisait
+                    pas de poser la classe. `ancrerLisere` calcule l'angle de la diagonale
+                    depuis les dimensions réelles, pour que le dégradé s'éteigne exactement
+                    au milieu des deux grands côtés. */}
+                <span className="novac-lisere" ref={ancrerLisere}
+                  style={{ flex: 1, minWidth: 0, display: "block", borderRadius: RAYON_SAISIE,
+                           color: inscription === "refus" ? JETONS.negatif : JETONS.texteSecondaire }}>
+                  <input type="email" value={email} inputMode="email" autoComplete="email"
+                    aria-label="Votre adresse e-mail"
+                    onChange={e => { setEmail(e.target.value); if (inscription !== "repos") setInscription("repos"); }}
+                    placeholder="vous@exemple.com"
+                    style={{ ...champ, ...SURFACE_CHAMP, border: "none", textAlign: "left" }} />
+                </span>
                 <button type="submit" disabled={!email || inscription === "envoi"}
+                  className="novac-lisere" ref={ancrerLisere}
                   style={{ padding: "0 20px", height: HAUTEUR_SAISIE, borderRadius: RAYON_SAISIE,
                            flexShrink: 0, border: "none",
                            background: JETONS.segmentActif, color: JETONS.segmentEncre,
@@ -203,13 +213,16 @@ function Porte() {
         {codeOuvert ? (
           <form onSubmit={ouvrir} style={{ width: "100%", maxWidth: 300 }}>
             <div style={{ display: "flex", gap: 8 }}>
-              <input id="code" type="password" value={code} autoComplete="current-password"
-                autoFocus placeholder="Code d'accès"
-                onChange={e => { setCode(e.target.value); if (etat !== "repos") setEtat("repos"); }}
-                style={{ ...champ, ...SURFACE_CHAMP, flex: 1, width: "auto", minWidth: 0,
-                         textAlign: "left",
-                         borderColor: etat === "refus" ? JETONS.negatif : JETONS.bordFort }} />
+              <span className="novac-lisere" ref={ancrerLisere}
+                style={{ flex: 1, minWidth: 0, display: "block", borderRadius: RAYON_SAISIE,
+                         color: etat === "refus" ? JETONS.negatif : JETONS.texteSecondaire }}>
+                <input id="code" type="password" value={code} autoComplete="current-password"
+                  autoFocus placeholder="Code d'accès"
+                  onChange={e => { setCode(e.target.value); if (etat !== "repos") setEtat("repos"); }}
+                  style={{ ...champ, ...SURFACE_CHAMP, border: "none", textAlign: "left" }} />
+              </span>
               <button type="submit" disabled={!code || etat === "envoi"}
+                className="novac-lisere" ref={ancrerLisere}
                 style={{ padding: "0 16px", height: HAUTEUR_SAISIE, borderRadius: RAYON_SAISIE,
                          flexShrink: 0, border: "none",
                          background: JETONS.segmentActif, color: JETONS.segmentEncre,
@@ -234,12 +247,17 @@ function Porte() {
           </button>
         )}
 
-        <p style={{ margin: "10px 0 0", maxWidth: "46ch", fontSize: 11,
-                    color: JETONS.surFondAttenue, lineHeight: 1.65 }}>
-          Novac est en cours de construction. Rien de ce qui s&apos;y affiche n&apos;est un
-          conseil en investissement.
-        </p>
       </div>
+
+      {/* ⚠️ La mention descend en pied de page, à la demande. Posée sous le formulaire, elle
+          se lisait comme une condition de l'inscription ; au bas de l'écran, elle est ce
+          qu'elle est — une mention légale, qui doit être visible sans rien commander. */}
+      <p style={{ position: "absolute", bottom: 22, left: 0, right: 0, zIndex: 1,
+                  margin: 0, textAlign: "center", fontFamily: FONT, fontSize: 11,
+                  color: JETONS.surFondAttenue, lineHeight: 1.6, padding: "0 24px" }}>
+        Novac est en cours de construction. Rien de ce qui s&apos;y affiche n&apos;est un
+        conseil en investissement.
+      </p>
     </main>
   );
 }
