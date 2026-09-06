@@ -149,8 +149,13 @@
      il n'y a aucune arête. C'est une bande de Mach, et elle est apparue à l'usage.
      Les arrêts suivent maintenant deux `smoothstep` — montée, puis descente — dont la dérivée
      s'annule aux bornes. Le plateau existe toujours, mais on y entre et on en sort sans
-     angle. Les couleurs de départ, de sommet et de fin sont inchangées. */
-  --nv-fond-degrade:      linear-gradient(to bottom, #030712 0%, #040914 12%, #080D1A 25%, #0C1220 38%, #0F1626 50%, #101828 62%, #101727 75%, #080E1B 88%, #030712 100%);
+     angle. Les couleurs de départ, de sommet et de fin sont inchangées.
+
+     ⚠️ **Et il est symétrique** : la descente a exactement la longueur et la courbe de la
+     montée. La première correction gardait le déséquilibre d'origine — le haut s'éclaircissait
+     sur soixante-deux pour cent de la hauteur quand le bas s'assombrissait sur vingt-huit — si
+     bien que les deux extrémités n'avaient pas le même fondu. Relevé à l'usage. */
+  --nv-fond-degrade:      linear-gradient(to bottom, #030712 0%, #060B17 10%, #0B1220 20%, #101727 30%, #101828 40%, #101828 50%, #101828 60%, #101727 70%, #0B1220 80%, #060B17 90%, #030712 100%);
   /* Le palier du dégradé ci-dessus — sa couleur entre 55 % et 83 % de la hauteur.
      Nommée parce qu'une forme creusée dans le fond doit s'y confondre : la
      remplir du dégradé lui-même donnait des taches, celui-ci variant sur la
@@ -290,7 +295,12 @@
      bien que le point le plus vif ne vaut pas 28 % mais 1 − (1 − 0,065)(1 −
      0,28), soit 32,7 % — cinq fois le repos. C'est ce rapport qui se voit,
      pas la valeur brute. */
-  --nv-point:             rgba(106,114,130,0.065);
+  /* ⚠️ **0,10 et non 0,065 : la trame disparaissait aux extrémités du dégradé.** Le point
+     est un gris translucide : sur le plateau clair du milieu il se détache, mais sur le
+     `#030712` du haut et du bas il ne laissait qu'un écart de six niveaux sur deux cent
+     cinquante-six — au-dessous de ce qu'un écran ordinaire montre. Relevé à l'usage : « dans
+     les extrémités les plus sombres on ne voit plus les pointillés ». */
+  --nv-point:             rgba(106,114,130,0.10);
   --nv-point-vif:         rgba(106,114,130,0.28);
 
   /* La barre latérale. Elle est translucide et floute ce qui passe dessous :
@@ -326,7 +336,7 @@
   --nv-fond:              #FFFFFF;
   --nv-fond-profond:      #F3F4F6;
   /* Même correction, même méthode, pour le thème clair — voir la note du thème sombre. */
-  --nv-fond-degrade:      linear-gradient(to bottom, #FFFFFF 0%, #FEFEFE 12%, #FBFBFC 25%, #F7F8F9 38%, #F4F5F7 50%, #F3F4F6 62%, #F3F4F6 75%, #FAFAFB 88%, #FFFFFF 100%);
+  --nv-fond-degrade:      linear-gradient(to bottom, #FFFFFF 0%, #FCFDFD 10%, #F7F8F9 20%, #F3F4F6 30%, #F3F4F6 40%, #F3F4F6 50%, #F3F4F6 60%, #F3F4F6 70%, #F7F8F9 80%, #FCFDFD 90%, #FFFFFF 100%);
   --nv-fond-plateau:      #F3F4F6;
   --nv-carte:             #FFFFFF;
   --nv-carte-creuse:      #F9FAFB;
@@ -397,7 +407,8 @@
      rampe plutôt qu'un noir pur, qui piquerait sur du blanc. Un gris sombre sur
      blanc se voit un peu mieux qu'un gris clair sur noir, d'où une opacité
      légèrement moindre qu'en sombre. */
-  --nv-point:             rgba(106,114,130,0.055);
+  /* Même correction, thème clair — voir la note du thème sombre. */
+  --nv-point:             rgba(106,114,130,0.085);
   --nv-point-vif:         rgba(106,114,130,0.24);
 
   /* La barre suit la page. L'état actif quitte le blanc translucide pour
