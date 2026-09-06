@@ -1864,19 +1864,16 @@ canvas + div {
 }
 
 @keyframes nv-respire {
-  /* ⚠️ **C'est la forme qui bouge, pas un voile posé dessus.** Deux tentatives ont précédé :
-     un voile radial dont la taille enflait, puis un second dont le cœur se promenait. Les
-     deux tournaient — les valeurs changeaient, l'animation était « running » — et l'écran ne
-     bougeait pas d'un pixel : vérifié en soustrayant deux captures, l'écart restait nul même
-     amplifié quatorze fois. La forme déborde de l'écran en bas à droite, et le voile passait
-     sa course dans la partie qu'on ne voit pas.
+  /* ⚠️ **Une pulsation, plus une dérive.** La forme montait et redescendait en diagonale : le
+     déplacement se lisait avant le souffle, et le logo semblait glisser plutôt que respirer.
+     Seule la taille varie maintenant, et un peu plus franchement qu'avant — six pour cent au
+     lieu de quatre — puisqu'elle porte le mouvement à elle seule.
 
-     Ici c'est le masque du logo lui-même qui respire et dérive. Ses bords balaient donc la
-     trame fixe : des points s'allument d'un côté, s'éteignent de l'autre. Le mouvement est
-     dans ce que l'on voit, par construction. */
-  0%   { --nv-souffle: 0.97; --nv-x: -16%; --nv-y: -24%; opacity: 0.72; }
-  50%  { --nv-souffle: 1.05; --nv-x: -12%; --nv-y: -28%; opacity: 1;    }
-  100% { --nv-souffle: 0.97; --nv-x: -16%; --nv-y: -24%; opacity: 0.72; }
+     La place ne bouge plus : `--nv-x` et `--nv-y` gardent leur valeur de repos, écrite dans la
+     règle. Les laisser dans les étapes les aurait figés à la valeur de la dernière lue. */
+  0%, 100% { --nv-souffle: 0.96; opacity: 0.74; }
+  50%      { --nv-souffle: 1.06; opacity: 1;    }
+}
 }
 
 /**
