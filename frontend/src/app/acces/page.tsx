@@ -4,6 +4,7 @@ import { useSearchParams } from "next/navigation";
 import { FONT, NUM } from "@/lib/typography";
 import { JETONS, RAYONS } from "@/lib/palette";
 import Cadre from "@/components/ui/Cadre";
+import TitreDeCarte from "@/components/ui/TitreDeCarte";
 import { champ, HAUTEUR_SAISIE, RAYON_SAISIE } from "@/components/ui/saisie";
 import CarteActif from "@/components/portfolio/CarteActif";
 import CarteCompte from "@/components/portfolio/CarteCompte";
@@ -49,6 +50,7 @@ function Porte() {
   const [etat, setEtat] = useState<Etat>("repos");
   const [email, setEmail] = useState("");
   const [inscription, setInscription] = useState<EtatInscription>("repos");
+  const [codeOuvert, setCodeOuvert] = useState(false);
 
   async function ouvrir(e: React.FormEvent) {
     e.preventDefault();
@@ -103,146 +105,128 @@ function Porte() {
     <main style={{ minHeight: "100vh", position: "relative", overflow: "hidden",
                    fontFamily: FONT, color: JETONS.surFond }}>
       <Decor />
-      <div style={{ position: "relative", zIndex: 1, maxWidth: 1000, margin: "0 auto",
-                    padding: "clamp(40px, 8vh, 96px) 24px 72px",
-                    display: "flex", flexDirection: "column",
-                    alignItems: "center", gap: "clamp(36px, 7vh, 64px)" }}>
+      <div style={{ position: "relative", zIndex: 1, minHeight: "100vh",
+                    display: "flex", flexDirection: "column", alignItems: "center",
+                    justifyContent: "center", gap: 22,
+                    padding: "72px 24px", textAlign: "center" }}>
 
-        {/* ── L'enseigne : le logo, puis le nom ─────────────────────────── */}
-        <header style={{ textAlign: "center" }}>
-          {/* ⚠️ **« Novac » et non « NOVAC », à la demande.** La capitale espacée est le
-              mot-symbole de la page d'accueil, qui est une affiche ; ici le nom accompagne un
-              logo et une porte, et une casse normale se lit comme un nom plutôt que comme une
-              enseigne. L'espacement tombe donc aussi : il n'a de sens qu'en capitales. */}
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 12 }}>
-            <Logo taille={38} />
-            <span style={{ fontSize: "clamp(27px, 5vw, 36px)", fontWeight: 700,
-                           letterSpacing: "-0.01em", color: JETONS.surFond }}>
-              Novac
-            </span>
-          </div>
-          <p style={{ margin: "12px 0 0", fontSize: 11.5, fontWeight: 400,
-                      letterSpacing: "0.2em", marginRight: "-0.2em",
-                      color: JETONS.surFondAttenue, textTransform: "uppercase" }}>
-            Find the optimal path
-          </p>
-          <PastilleAlpha />
-        </header>
+        <div style={{ display: "flex", alignItems: "center", gap: 11 }}>
+          <Logo taille={30} />
+          <span style={{ fontSize: 23, fontWeight: 700, letterSpacing: "-0.01em",
+                         color: JETONS.surFond }}>Novac</span>
+        </div>
 
-        {/* ── La porte ───────────────────────────────────────────────────── */}
-        <section style={{ width: "100%", maxWidth: 400 }}>
-          {/* ⚠️ `Cadre`, et non un panneau bricolé à la main. C'est le conteneur de tout le
-              site — double anneau, voile d'intervalle, arrondis mesurés — et la porte n'a
-              aucune raison d'en avoir un autre. La version précédente empilait un fond, un
-              liseré et une ombre portée qui ne ressemblaient à rien d'autre ici. */}
-          <Cadre style={{ padding: 22 }}>
-            <form onSubmit={ouvrir}>
-              <label htmlFor="code" style={{ display: "block", fontSize: 12.5, fontWeight: 600,
-                                             color: JETONS.texte, marginBottom: 8 }}>
-                Code d&apos;accès
-              </label>
-              {/* ⚠️ **`champ` et `.novac-surface-saisie`, comme toutes les saisies du site.**
-                  Cette page avait les siennes : arrondi 10 au lieu de 18, hauteur libre au lieu
-                  de 40, un liseré peint en `border` là où le site le pose en pseudo-élément
-                  masqué — un `border` raccourcit la boîte de deux pixels sans changer son
-                  rayon, et les deux arcs se croisent dans les angles. La classe porte aussi le
-                  survol et le focus, qu'un style en ligne ne sait pas exprimer. */}
-              <input id="code" type="password" value={code} autoComplete="current-password"
-                onChange={e => { setCode(e.target.value); if (etat !== "repos") setEtat("repos"); }}
-                placeholder="••••••••"
-                className="novac-surface-saisie"
-                style={{ ...champ, borderColor: etat === "refus" ? JETONS.negatif : undefined }} />
+        <PastilleAlpha />
 
-              {/* ⚠️ La ligne d'état occupe sa place en permanence : sans elle, le bouton
-                  sautait de dix-huit pixels à la première erreur. */}
-              <div style={{ minHeight: 18, marginTop: 6, fontSize: 11.5,
-                            color: etat === "refus" || etat === "panne" ? JETONS.negatif : JETONS.texteFaible }}>
-                {etat === "refus" && "Code incorrect."}
-                {etat === "panne" && "Le serveur n'a pas répondu."}
+        {/* ⚠️ **Le titre porte la demande, et non « Code d'accès ».** La porte reste, mais elle
+            n'est plus le sujet : la plupart des visiteurs de cette page n'ont pas de code et
+            n'en auront pas — ce qu'on attend d'eux, c'est une adresse. La hiérarchie doit dire
+            laquelle des deux actions les concerne. */}
+        <h1 style={{ margin: 0, fontSize: "clamp(34px, 6.2vw, 60px)", fontWeight: 700,
+                     lineHeight: 1.08, letterSpacing: "-0.025em", maxWidth: 15 + "ch",
+                     color: JETONS.surFond, textWrap: "balance" }}>
+          Rejoignez la liste d&apos;attente
+        </h1>
 
+        <p style={{ margin: 0, maxWidth: "52ch", fontSize: 14.5, lineHeight: 1.6,
+                    color: JETONS.surFondAttenue }}>
+          Un tableau de bord pour suivre votre patrimoine entier — portefeuilles, comptes,
+          objectifs — et comprendre ce qui le fait bouger. Rien n&apos;y est estimé : ce qui
+          manque de données le dit.
+        </p>
+
+        {/* ── La liste d'attente, action principale ──────────────────────── */}
+        <div style={{ width: "100%", maxWidth: 460, marginTop: 6 }}>
+          {inscrit ? (
+            /* ⚠️ Le formulaire disparaît une fois l'adresse prise : le laisser invitait à
+               réessayer, et « déjà inscrit » se lit alors comme un échec. */
+            <Cadre style={{ padding: "18px 20px" }}>
+              <div style={{ fontSize: 14, fontWeight: 600, color: JETONS.positif, marginBottom: 5 }}>
+                {inscription === "deja" ? "Vous y êtes déjà." : "C'est noté."}
               </div>
+              <div style={{ fontSize: 12, color: JETONS.texteAttenue, lineHeight: 1.55 }}>
+                Nous vous écrirons à l&apos;ouverture des accès.
+              </div>
+            </Cadre>
+          ) : (
+            /**
+              * ⚠️ `noValidate` : sans lui, `type="email"` fait refuser l'envoi par le
+              * navigateur, qui affiche sa propre bulle grise. C'est l'encadré natif que le
+              * reste du site a chassé, et il parle la langue du navigateur, pas celle de la
+              * page. Le champ garde son type pour le clavier des téléphones ; le refus vient
+              * du serveur et s'affiche dans nos mots.
+              */
+            <form onSubmit={inscrire} noValidate>
+              <div style={{ display: "flex", gap: 8 }}>
+                <input type="email" value={email} inputMode="email" autoComplete="email"
+                  aria-label="Votre adresse e-mail"
+                  onChange={e => { setEmail(e.target.value); if (inscription !== "repos") setInscription("repos"); }}
+                  placeholder="vous@exemple.com"
+                  className="novac-surface-saisie"
+                  style={{ ...champ, flex: 1, width: "auto", minWidth: 0, textAlign: "left",
+                           borderColor: inscription === "refus" ? JETONS.negatif : undefined }} />
+                <button type="submit" disabled={!email || inscription === "envoi"}
+                  style={{ padding: "0 20px", height: HAUTEUR_SAISIE, borderRadius: RAYON_SAISIE,
+                           flexShrink: 0, border: "none",
+                           background: email ? JETONS.segmentActif : JETONS.carteCreuse,
+                           color: email ? JETONS.segmentEncre : JETONS.texteFaible,
+                           cursor: email && inscription !== "envoi" ? "pointer" : "default",
+                           fontFamily: FONT, fontSize: 13, fontWeight: 600,
+                           transition: "background 200ms, color 200ms" }}>
+                  {inscription === "envoi" ? "…" : "Rejoindre"}
+                </button>
+              </div>
+              <div style={{ minHeight: 18, marginTop: 7, fontSize: 11.5, color: JETONS.negatif }}>
+                {inscription === "refus" && "Cette adresse ne semble pas valide."}
+                {inscription === "panne" && "Le serveur n'a pas répondu."}
+              </div>
+            </form>
+          )}
+        </div>
 
+        {/* ── La porte, action secondaire ────────────────────────────────── */}
+        {/* ⚠️ Repliée derrière un mot, et non supprimée : ceux qui ont un code sont une
+            poignée, et leur donner un champ permanent au milieu de la page ferait croire aux
+            autres qu'il leur en faut un. Le champ s'ouvre sur demande et prend le focus, pour
+            qu'un invité n'ait pas à cliquer deux fois. */}
+        {codeOuvert ? (
+          <form onSubmit={ouvrir} style={{ width: "100%", maxWidth: 300 }}>
+            <div style={{ display: "flex", gap: 8 }}>
+              <input id="code" type="password" value={code} autoComplete="current-password"
+                autoFocus placeholder="Code d'accès"
+                onChange={e => { setCode(e.target.value); if (etat !== "repos") setEtat("repos"); }}
+                className="novac-surface-saisie"
+                style={{ ...champ, flex: 1, width: "auto", minWidth: 0, textAlign: "left",
+                         borderColor: etat === "refus" ? JETONS.negatif : undefined }} />
               <button type="submit" disabled={!code || etat === "envoi"}
-                style={{ width: "100%", marginTop: 4, height: HAUTEUR_SAISIE, borderRadius: RAYON_SAISIE,
-                         border: "none", cursor: code && etat !== "envoi" ? "pointer" : "default",
+                style={{ padding: "0 16px", height: HAUTEUR_SAISIE, borderRadius: RAYON_SAISIE,
+                         flexShrink: 0, border: "none",
                          background: code ? JETONS.segmentActif : JETONS.carteCreuse,
                          color: code ? JETONS.segmentEncre : JETONS.texteFaible,
-                         fontFamily: FONT, fontSize: 13, fontWeight: 600,
-                         transition: "background 200ms, color 200ms" }}>
-                {etat === "envoi" ? "Ouverture…" : "Entrer"}
+                         cursor: code && etat !== "envoi" ? "pointer" : "default",
+                         fontFamily: FONT, fontSize: 13, fontWeight: 600 }}>
+                {etat === "envoi" ? "…" : "Entrer"}
               </button>
-            </form>
-
-            <div style={{ display: "flex", alignItems: "center", gap: 10, margin: "22px 0 18px" }}>
-              <span style={{ flex: 1, height: 1, background: JETONS.bord }} />
-              <span style={{ fontSize: 10, color: JETONS.texteFaible, letterSpacing: "0.12em" }}>
-                PAS ENCORE DE CODE
-              </span>
-              <span style={{ flex: 1, height: 1, background: JETONS.bord }} />
             </div>
+            <div style={{ minHeight: 18, marginTop: 7, fontSize: 11.5, color: JETONS.negatif }}>
+              {etat === "refus" && "Code incorrect."}
+              {etat === "panne" && "Le serveur n'a pas répondu."}
+            </div>
+          </form>
+        ) : (
+          <button type="button" onClick={() => setCodeOuvert(true)}
+            style={{ background: "none", border: "none", padding: 0, cursor: "pointer",
+                     fontFamily: FONT, fontSize: 12, color: JETONS.surFondAttenue,
+                     textDecoration: "underline", textUnderlineOffset: 3 }}>
+            J&apos;ai un code d&apos;accès
+          </button>
+        )}
 
-            {inscrit ? (
-              /* ⚠️ Le formulaire disparaît une fois l'adresse prise : le laisser invitait à
-                 réessayer, et « déjà inscrit » se lit alors comme un échec. */
-              <div style={{ textAlign: "center", padding: "6px 0 2px" }}>
-                <div style={{ fontSize: 13, fontWeight: 600, color: JETONS.positif, marginBottom: 5 }}>
-                  {inscription === "deja" ? "Vous y êtes déjà." : "C'est noté."}
-                </div>
-                <div style={{ fontSize: 11.5, color: JETONS.texteAttenue, lineHeight: 1.55 }}>
-                  Nous vous écrirons à l&apos;ouverture des accès.
-                </div>
-              </div>
-            ) : (
-              /**
-                * ⚠️ `noValidate` : sans lui, `type="email"` fait refuser l'envoi par le
-                * navigateur, qui affiche sa propre bulle grise — « Veuillez inclure @ ». C'est
-                * l'encadré natif que le reste du site a chassé, et il parle la langue du
-                * navigateur, pas celle de la page. Le champ garde son type pour le clavier des
-                * téléphones ; le refus vient du serveur et s'affiche dans nos mots.
-                */
-              <form onSubmit={inscrire} noValidate>
-                <p style={{ margin: "0 0 10px", fontSize: 11.5, color: JETONS.texteAttenue, lineHeight: 1.55 }}>
-                  Laissez votre adresse : vous recevrez un code dès qu&apos;une place se libère.
-                </p>
-                <div style={{ display: "flex", gap: 8 }}>
-                  <input type="email" value={email} inputMode="email" autoComplete="email"
-                    aria-label="Votre adresse e-mail"
-                    onChange={e => { setEmail(e.target.value); if (inscription !== "repos") setInscription("repos"); }}
-                    placeholder="vous@exemple.com"
-                    className="novac-surface-saisie"
-                    style={{ ...champ, flex: 1, width: "auto", minWidth: 0,
-                             borderColor: inscription === "refus" ? JETONS.negatif : undefined }} />
-                  {/* ⚠️ **La pastille blanche du site, pas un bouton bleu.** L'accent sert
-                      ici aux liens et aux mentions, jamais à un bouton d'action : partout
-                      ailleurs — pistes de période, outils du graphique, « Entrer » juste
-                      au-dessus — l'action retenue est une pastille blanche à encre noire. Un
-                      bouton bleu à côté d'elle faisait deux vocabulaires dans la même carte. */}
-                  <button type="submit" disabled={!email || inscription === "envoi"}
-                    style={{ padding: "0 16px", height: HAUTEUR_SAISIE, borderRadius: RAYON_SAISIE,
-                             flexShrink: 0, border: "none",
-                             background: email ? JETONS.segmentActif : JETONS.carteCreuse,
-                             color: email ? JETONS.segmentEncre : JETONS.texteFaible,
-                             cursor: email && inscription !== "envoi" ? "pointer" : "default",
-                             fontFamily: FONT, fontSize: 13, fontWeight: 600,
-                             transition: "background 200ms, color 200ms" }}>
-                    {inscription === "envoi" ? "…" : "Rejoindre"}
-                  </button>
-                </div>
-                <div style={{ minHeight: 18, marginTop: 6, fontSize: 11.5, color: JETONS.negatif }}>
-                  {inscription === "refus" && "Cette adresse ne semble pas valide."}
-                  {inscription === "panne" && "Le serveur n'a pas répondu."}
-                </div>
-              </form>
-            )}
-          </Cadre>
-
-          <p style={{ margin: "18px 0 0", textAlign: "center", fontSize: 11,
-                      color: JETONS.surFondAttenue, lineHeight: 1.65 }}>
-            Novac est en cours de construction. Rien de ce qui s&apos;y affiche
-            n&apos;est un conseil en investissement.
-          </p>
-        </section>
-
+        <p style={{ margin: "10px 0 0", maxWidth: "46ch", fontSize: 11,
+                    color: JETONS.surFondAttenue, lineHeight: 1.65 }}>
+          Novac est en cours de construction. Rien de ce qui s&apos;y affiche n&apos;est un
+          conseil en investissement.
+        </p>
       </div>
     </main>
   );
@@ -332,78 +316,59 @@ function PastilleAlpha() {
 }
 
 /**
- * Ce qu'il y a derrière la porte, aperçu par-dessus l'épaule.
+ * Ce qu'il y a derrière la porte : des panneaux du site, inclinés vers le centre.
  *
- * ⚠️ **Ce sont les vrais composants du site, et c'est la seconde version.** La première
- * dessinait des imitations — des rectangles colorés en guise de dossiers, deux lignes de
- * texte en guise de cartes d'actif — qui ne ressemblaient à rien de ce qu'on trouve derrière
- * la porte. Une vitrine qui montre autre chose que la boutique est pire que pas de vitrine :
- * elle promet faux. `CarteActif`, `CarteCompte` et `AvatarNovac` sont donc montés tels quels,
- * avec les mêmes props que dans le tableau de bord.
+ * ⚠️ **Troisième version, et les deux premières disent pourquoi celle-ci.** Six vignettes
+ * alignées avec titre et paragraphe faisaient une brochure — on la lit, on ne la désire pas.
+ * Des fragments dessinés à la main faisaient pire : ils ne ressemblaient pas au site, donc ils
+ * promettaient faux. Ici ce sont des **panneaux entiers**, montés avec les composants réels, et
+ * penchés vers l'axe du texte comme des écrans posés autour de celui qu'on regarde.
  *
- * ⚠️ **`inerte` sur les cartes d'actif** : le mode existait déjà pour l'aperçu d'un dossier,
- * et il retire le clic comme le survol. Sans lui, le décor entrerait dans le parcours au
- * clavier et mènerait nulle part.
+ * ⚠️ **Chaque pièce regarde la porte.** Celles de gauche pivotent vers la droite, celles de
+ * droite vers la gauche, toutes reculées sur l'axe Z et légèrement floutées à mesure qu'elles
+ * s'éloignent. C'est ce qui fait la profondeur : une opacité uniforme donnait une brochure
+ * passée à l'eau.
  *
- * ⚠️ **La profondeur vient d'une perspective et d'un flou léger**, pas d'une simple
- * transparence. Chaque pièce est inclinée dans le plan et reculée sur l'axe Z : celles du
- * fond sont plus floues et plus petites, comme des fenêtres ouvertes derrière celle-ci. Une
- * opacité uniforme donnait une brochure passée à l'eau ; la perspective donne un décor.
+ * ⚠️ **Le voile radial prime sur tout le reste.** Le décor s'efface vers le centre pour que le
+ * titre et le formulaire se lisent sans effort — c'est le formulaire qui recueille les
+ * adresses, pas le décor.
  *
- * ⚠️ **Le voile radial reste et prime sur tout.** Le décor s'efface vers le centre pour que
- * le nom et la porte se lisent sans effort — c'est la carte qui fait entrer, pas le décor.
- *
- * ⚠️ **Rien n'est atteignable** : `aria-hidden` et `pointer-events: none`. Au clavier comme
- * au lecteur d'écran, cette page n'a que deux champs et deux boutons.
+ * ⚠️ **Rien n'est atteignable** : `aria-hidden` et `pointer-events: none`. Au clavier comme au
+ * lecteur d'écran, cette page n'a que deux champs et deux boutons.
  */
 function Decor() {
   const actif = (ticker: string, weight: number, price: number, change: number,
                  value: number, perfEur: number, spark: number[]): GridAsset =>
     ({ ticker, weight, price, change, value, perfEur, spark });
 
-  /** Une pièce : sa place, son recul, et ce qu'elle montre. */
   const pieces: { style: React.CSSProperties; recul: number; contenu: React.ReactNode }[] = [
-    { style: { top: "7%", left: "4%" }, recul: 1,
+    { style: { top: "9%", left: "-2%", width: 380 }, recul: 1, contenu: <PanneauVueGenerale /> },
+    { style: { top: "8%", right: "-1%", width: 400 }, recul: 1, contenu: <PanneauComptes /> },
+    { style: { bottom: "6%", left: "1%", width: 360 }, recul: 2, contenu: <PanneauObjectif /> },
+    { style: { bottom: "7%", right: "3%", width: 220 }, recul: 2,
       contenu: <CarteActif inerte a={actif("ESE.PA", 42, 33.6, 6.19, 5267, 307.03,
         [30.1, 30.6, 30.4, 31.2, 31.0, 31.9, 32.4, 32.2, 33.1, 33.6])} /> },
-    { style: { top: "30%", left: "9%" }, recul: 2,
-      contenu: <CarteActif inerte a={actif("CW8.PA", 31, 512.4, -0.84, 3118, -26.4,
-        [518, 516, 519, 514, 515, 511, 513, 510, 512.9, 512.4])} /> },
-    { style: { top: "5%", right: "5%" }, recul: 2,
-      contenu: <CarteCompte nom="PEA Trade Republic" couleur="#5B6CF0"
-        compte={<span style={{ ...NUM }}>5 266,94 €</span>} icone={<IconeTitres />} /> },
-    { style: { bottom: "12%", right: "7%" }, recul: 1,
-      contenu: <CarteCompte nom="Crédit agricole épargne" couleur="#00D492"
-        compte={<span style={{ ...NUM }}>5 000,00 €</span>} icone={<IconeEpargne />} /> },
-    { style: { top: "31%", right: "9%" }, recul: 3,
-      contenu: <Anneau note={75} taille={96} /> },
-    { style: { bottom: "32%", left: "24%" }, recul: 3,
-      contenu: <Anneau note={41} taille={72} /> },
-    { style: { bottom: "13%", left: "10%" }, recul: 2,
-      contenu: <AvatarNovac taille={86} etat="content" suivi={false} vivant={false}
-        couleur="#6366F1" forme="sphere" /> },
   ];
 
   return (
     <div aria-hidden="true" style={{ position: "absolute", inset: 0, pointerEvents: "none",
-                                     overflow: "hidden", zIndex: 0, perspective: 1400 }}>
+                                     overflow: "hidden", zIndex: 0, perspective: 1600 }}>
       <div style={{
         position: "absolute", inset: 0, transformStyle: "preserve-3d",
         /* ⚠️ Le masque **et** son préfixe WebKit : Safari ne connaît toujours pas la forme
-           standard, et sans lui le décor s'y afficherait à pleine force sous la porte. */
-        maskImage: "radial-gradient(ellipse 44% 52% at 50% 44%, transparent 22%, #000 74%)",
-        WebkitMaskImage: "radial-gradient(ellipse 44% 52% at 50% 44%, transparent 22%, #000 74%)",
+           standard, et sans lui le décor s'y afficherait à pleine force sous le texte. */
+        maskImage: "radial-gradient(ellipse 40% 58% at 50% 48%, transparent 30%, #000 82%)",
+        WebkitMaskImage: "radial-gradient(ellipse 40% 58% at 50% 48%, transparent 30%, #000 82%)",
       }}>
         {pieces.map((p, i) => {
           const gauche = "left" in p.style;
           return (
             <div key={i} style={{
               position: "absolute", ...p.style,
-              /* Les pièces de gauche se tournent vers la droite et l'inverse : elles regardent
-                 toutes vers la porte, comme des panneaux disposés autour d'elle. */
-              transform: `translateZ(${-70 * p.recul}px) rotateY(${gauche ? 14 : -14}deg) rotateX(4deg)`,
-              filter: `blur(${0.6 * p.recul}px)`,
-              opacity: 0.72 - 0.1 * p.recul,
+              transformOrigin: gauche ? "left center" : "right center",
+              transform: `translateZ(${-90 * p.recul}px) rotateY(${gauche ? 22 : -22}deg) rotateX(3deg)`,
+              filter: `blur(${0.5 * p.recul}px)`,
+              opacity: 0.8 - 0.12 * p.recul,
             }}>
               {p.contenu}
             </div>
@@ -411,6 +376,80 @@ function Decor() {
         })}
       </div>
     </div>
+  );
+}
+
+/** Le panneau « Vue générale » : la valeur, sa variation, la note, le rail de périodes. */
+function PanneauVueGenerale() {
+  return (
+    <Cadre style={{ padding: "13px 15px" }}>
+      <TitreDeCarte>Vue générale</TitreDeCarte>
+      <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12 }}>
+        <div>
+          <div style={{ ...NUM, fontSize: 27, fontWeight: 700, color: JETONS.texteIntense,
+                        letterSpacing: "-0.01em" }}>10 336,94 €</div>
+          <div style={{ ...NUM, fontSize: 12, fontWeight: 600, color: JETONS.positif, marginTop: 4 }}>
+            +307,03 €  (+7,10 %)
+          </div>
+          <div style={{ fontFamily: FONT, fontSize: 10.5, color: JETONS.texteFaible, marginTop: 3 }}>
+            depuis le 6 février 2026
+          </div>
+        </div>
+        <Anneau note={75} taille={72} />
+      </div>
+      <div style={{ marginTop: 12 }}><RailPeriodes /></div>
+    </Cadre>
+  );
+}
+
+/** Le panneau « Mes comptes » : deux dossiers, tels que le tableau de bord les range. */
+function PanneauComptes() {
+  return (
+    <Cadre style={{ padding: "13px 15px" }}>
+      <TitreDeCarte>Mes comptes</TitreDeCarte>
+      <div style={{ display: "flex", gap: 10 }}>
+        <CarteCompte nom="Crédit agricole épargne" couleur="#00D492"
+          compte={<span style={{ ...NUM }}>5 000,00 €</span>} icone={<IconeEpargne />} />
+        <CarteCompte nom="PEA Trade Republic" couleur="#5B6CF0"
+          compte={<span style={{ ...NUM }}>5 266,94 €</span>} icone={<IconeTitres />} />
+      </div>
+    </Cadre>
+  );
+}
+
+/** Le panneau « Mes objectifs » : un objectif et sa progression. */
+function PanneauObjectif() {
+  const part = 56;
+  return (
+    <Cadre style={{ padding: "13px 15px" }}>
+      <TitreDeCarte>Mes objectifs</TitreDeCarte>
+      <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10 }}>
+        <span style={{ width: 30, height: 30, borderRadius: RAYONS.sm, flexShrink: 0,
+                       background: `${JETONS.accent}22`, color: JETONS.accent,
+                       display: "flex", alignItems: "center", justifyContent: "center" }}>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+            <path d="M12 3 2 12h3v8h5v-5h4v5h5v-8h3z" />
+          </svg>
+        </span>
+        <span style={{ fontFamily: FONT, fontSize: 12.5, fontWeight: 600, color: JETONS.texte }}>
+          Achat résidence principale
+        </span>
+        <span style={{ ...NUM, marginLeft: "auto", fontSize: 12.5, fontWeight: 700,
+                       color: JETONS.texteIntense }}>{part} %</span>
+      </div>
+      <div style={{ ...NUM, fontSize: 11.5, color: JETONS.texteSecondaire, marginBottom: 7 }}>
+        28 000 € / 50 000 €
+      </div>
+      {/* La piste est celle des barres du score : `bordFort`, le vide de l'anneau. */}
+      <span style={{ display: "block", height: 8, borderRadius: 4, background: JETONS.bordFort,
+                     overflow: "hidden" }}>
+        <span style={{ display: "block", height: "100%", width: `${part}%`, borderRadius: 4,
+                       background: JETONS.positif }} />
+      </span>
+      <div style={{ fontFamily: FONT, fontSize: 10.5, color: JETONS.texteFaible, marginTop: 8 }}>
+        Objectif prévu en 2028
+      </div>
+    </Cadre>
   );
 }
 
@@ -458,6 +497,39 @@ function Anneau({ note, taille }: { note: number; taille: number }) {
                     color: JETONS.texteIntense }}>
         {note}
       </div>
+    </div>
+  );
+}
+
+/**
+ * Le rail de périodes, avec la performance sur la pastille retenue.
+ *
+ * ⚠️ `Segments` n'est pas employé ici : il attend un `onChange` et un état, donc un rail
+ * qu'on peut manipuler. Celui-ci est un décor derrière un masque, hors du parcours au
+ * clavier ; lui donner un état vivant l'aurait fait exister pour rien.
+ */
+function RailPeriodes() {
+  const periodes = ["24h", "1S", "1M", "3M", "6M", "1A", "Max"];
+  const retenue = "6M";
+  return (
+    <div style={{ display: "inline-flex", alignItems: "center", gap: 3, padding: "3px 4px",
+                  borderRadius: RAYONS.plein, background: JETONS.segmentPiste }}>
+      {periodes.map(p => (
+        <span key={p} style={{
+          display: "inline-flex", alignItems: "center", gap: 5,
+          padding: p === retenue ? "3px 9px" : "3px 8px", borderRadius: RAYONS.plein,
+          fontFamily: FONT, fontSize: 10.5, fontWeight: p === retenue ? 600 : 500,
+          background: p === retenue ? JETONS.segmentActif : "transparent",
+          color: p === retenue ? JETONS.segmentEncre : JETONS.texteFaible,
+        }}>
+          {p}
+          {p === retenue && (
+            <span style={{ ...NUM, fontSize: 10, fontWeight: 700, color: JETONS.positif }}>
+              +4,18 %
+            </span>
+          )}
+        </span>
+      ))}
     </div>
   );
 }
