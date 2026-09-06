@@ -15,9 +15,14 @@ mkdirSync(SORTIE, { recursive: true });
 
 const navigateur = await chromium.launch();
 const contexte = await navigateur.newContext({
-  viewport: { width: 1280, height: 800 },
+  /* ⚠️ **1600 × 1000 et non 1280 × 800.** La vidéo finit dans une boîte d'environ 540 px de
+     large sur un écran dense, soit 1080 px réels : filmée à 1280 puis recadrée, il ne restait
+     plus assez de matière et le texte de l'interface partait en bouillie. On filme large et on
+     réduit — l'inverse ne se rattrape pas. */
+  viewport: { width: 1600, height: 1000 },
+  deviceScaleFactor: 1,
   colorScheme: "dark",
-  recordVideo: { dir: SORTIE, size: { width: 1280, height: 800 } },
+  recordVideo: { dir: SORTIE, size: { width: 1600, height: 1000 } },
 });
 
 // La porte de l'alpha, ouverte hors caméra.
@@ -42,18 +47,18 @@ const page = await contexte.newPage();
 await page.goto(`https://novac.fyi/portfolio?id=${demo.pid}`, { waitUntil: "networkidle", timeout: 90000 }).catch(() => {});
 await page.waitForTimeout(26000);   // les cours, les courbes et les dossiers arrivent
 
-const clic = async (texte, pause = 4200) => {
+const clic = async (texte, pause = 2600) => {
   await page.getByText(texte, { exact: true }).first().click({ timeout: 8000 }).catch(() => {});
   await page.waitForTimeout(pause);
 };
 
 // La visite : la vue générale, puis ce qu'on peut en faire.
 await page.waitForTimeout(3500);
-await clic("Analyse", 6000);
-await clic("Transactions", 5000);
-await clic("Objectifs", 5000);
-await clic("Vue générale", 4000);
-await clic("Crypto", 5000);          // un dossier s'ouvre sur ses cartes d'actif
+await clic("Analyse", 3600);
+await clic("Transactions", 3000);
+await clic("Objectifs", 3000);
+await clic("Vue générale", 2600);
+await clic("Crypto", 3400);          // un dossier s'ouvre sur ses cartes d'actif
 
 await page.close();                  // c'est la fermeture qui écrit la vidéo
 await contexte.close();

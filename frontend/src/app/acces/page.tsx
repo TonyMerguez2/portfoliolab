@@ -470,12 +470,24 @@ function Demonstration() {
   return (
     <div className="nv-demo" style={{ position: "relative", overflow: "hidden",
                                       background: JETONS.fondProfond }}>
+      {/**
+        * ⚠️ **Deux encodages, et l'ordre compte.** Le navigateur retient la première source
+        * qu'il sait lire : VP9 d'abord, parce qu'à qualité égale il pèse deux fois moins que
+        * le H.264 ; celui-ci ensuite, pour les Safari qui ne lisent pas le WebM.
+        *
+        * ⚠️ La première version était encodée en VP8 — le seul codec du ffmpeg embarqué par
+        * Playwright — à 620 kb/s sur une image de 880 px. Le texte de l'interface y partait en
+        * bouillie. Filmée à 1600 px et réencodée en VP9, elle est deux fois plus définie et
+        * *plus légère* : 674 ko contre 1,5 Mo.
+        */}
       <video
-        src="/apercus/demonstration.webm"
-        poster="/apercus/demonstration-affiche.png"
+        poster="/apercus/demonstration-affiche.jpg"
         autoPlay muted loop playsInline preload="metadata"
         aria-hidden="true"
-        style={{ display: "block", width: "100%", height: "100%", objectFit: "cover" }} />
+        style={{ display: "block", width: "100%", height: "100%", objectFit: "cover" }}>
+        <source src="/apercus/demonstration.webm" type="video/webm" />
+        <source src="/apercus/demonstration.mp4" type="video/mp4" />
+      </video>
       {/* ⚠️ Un voile très léger, du côté du texte : sans lui, le bord clair de la vidéo vient
           buter contre la colonne de gauche et les deux moitiés se disputent l'œil. */}
       <div aria-hidden="true" style={{ position: "absolute", inset: 0, pointerEvents: "none",
