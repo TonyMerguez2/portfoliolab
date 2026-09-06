@@ -170,6 +170,23 @@ def _prechauffer_chaleur() -> None:
     ⚠️ **Et pas tout de suite** : `_DELAI` laisse au serveur le temps de répondre aux premiers
     visiteurs, qui arrivent précisément après un déploiement.
     """
+    # ⚠️ **Éteint par défaut, et il faut savoir pourquoi avant de le rallumer.** Réduire le
+    # préchauffage de six périodes à une n'a pas suffi : mesuré au navigateur pendant la
+    # quarantaine de secondes que dure une seule, **toutes** les requêtes du site répondaient
+    # en 21 secondes — y compris `/portfolios`, qui n'est qu'une lecture SQLite et se rend en
+    # 0,01 s hors charge. Ce n'est donc pas le réseau qui sature, c'est le processeur : deux
+    # cœurs, et l'assemblage pandas de cinq cents titres tient le GIL. Le serveur cesse
+    # simplement de servir.
+    #
+    # La carte se calcule donc à la demande et reste en cache ensuite. Le premier visiteur de
+    # cette page-là paie quarante secondes ; personne d'autre ne paie rien. C'est le contraire
+    # exact du réglage précédent, où tout le monde payait pour cette page.
+    #
+    # Pour le rallumer sur une machine plus large : NOVAC_PRECHAUFFER_CHALEUR=1.
+    if os.environ.get("NOVAC_PRECHAUFFER_CHALEUR") != "1":
+        logger.info("Préchauffage de la carte de chaleur : désactivé (voir main.py)")
+        return
+
     # ⚠️ `PERIODES` est un dictionnaire, pas une liste : `PERIODES[0]` lève un `KeyError`
     # dans un fil détaché, où il ne fait tomber personne et ne se voit que dans les tests.
     defaut = next(iter(PERIODES))
