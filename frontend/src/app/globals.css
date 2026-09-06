@@ -1897,14 +1897,36 @@ canvas + div {
   background-image: radial-gradient(circle at 1px 1px, var(--nv-point-vif) 1px, transparent 1.5px);
   background-size: 14px 14px;
 
-  -webkit-mask-image: url(/logo-hivesync.svg);
-  mask-image: url(/logo-hivesync.svg);
-  -webkit-mask-repeat: no-repeat;
-  mask-repeat: no-repeat;
-  -webkit-mask-size: calc(var(--nv-logo-cote) * var(--nv-souffle));
-  mask-size: calc(var(--nv-logo-cote) * var(--nv-souffle));
-  -webkit-mask-position: right var(--nv-x) bottom var(--nv-y);
-  mask-position: right var(--nv-x) bottom var(--nv-y);
+  /**
+   * ⚠️ **Deux couches croisées : la forme, puis la densité.** Sans la seconde, tous les points
+   * de la silhouette ont la même clarté et l'ensemble se lit comme un aplat découpé — alors
+   * que la lueur sous le curseur, elle, est dense au cœur et s'éteint vers ses bords. C'est ce
+   * rapport-là qu'on reprend.
+   *
+   * ⚠️ **Seule la forme respire ; le dégradé de densité ne bouge pas.** Il est ancré à la place
+   * nominale du logo, sans quoi la zone dense se déplacerait avec la forme et l'on perdrait le
+   * repère qui fait lire un cœur et des bords.
+   *
+   * ⚠️ Le préfixe WebKit dit `source-in` là où la norme dit `intersect` : les deux décrivent la
+   * même opération, et oublier l'ancienne syntaxe donne sur Safari une silhouette sans masque
+   * du tout — donc un rectangle de points plein écran.
+   */
+  -webkit-mask-image: url(/logo-hivesync.svg),
+    radial-gradient(closest-side, #000 8%, rgba(0, 0, 0, 0.62) 46%, rgba(0, 0, 0, 0.22) 72%, transparent 96%);
+  mask-image: url(/logo-hivesync.svg),
+    radial-gradient(closest-side, #000 8%, rgba(0, 0, 0, 0.62) 46%, rgba(0, 0, 0, 0.22) 72%, transparent 96%);
+
+  -webkit-mask-repeat: no-repeat, no-repeat;
+  mask-repeat: no-repeat, no-repeat;
+
+  -webkit-mask-size: calc(var(--nv-logo-cote) * var(--nv-souffle)), var(--nv-logo-cote);
+  mask-size: calc(var(--nv-logo-cote) * var(--nv-souffle)), var(--nv-logo-cote);
+
+  -webkit-mask-position: right var(--nv-x) bottom var(--nv-y), right -16% bottom -24%;
+  mask-position: right var(--nv-x) bottom var(--nv-y), right -16% bottom -24%;
+
+  -webkit-mask-composite: source-in;
+  mask-composite: intersect;
 
   /* Neuf secondes : un souffle qu'on remarque en s'arrêtant, jamais en lisant. */
   animation: nv-respire 9s ease-in-out infinite;
