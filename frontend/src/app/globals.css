@@ -859,6 +859,19 @@
      lui donne un bord adouci plutôt qu'un carré d'un pixel. */
   background-image: radial-gradient(circle at 1px 1px, var(--nv-point) 1px, transparent 1.5px);
   background-size: 14px 14px;
+
+  /* ⚠️ **La trame se dissipe en haut et en bas.** Elle courait d'un bord à l'autre à densité
+     constante, et venait buter contre les extrémités sombres du dégradé — une trame qui
+     s'arrête net au bord d'écran se lit comme un motif posé sur la page, pas comme une matière
+     du fond. Elle s'éteint donc là où le fond s'assombrit, ce qui est aussi là où l'œil se
+     repose : le grain vit au centre, où l'on regarde.
+
+     ⚠️ Le masque porte sur `.nv-points` et non sur son motif seul, si bien que la lueur du
+     curseur — un pseudo-élément de cette même couche — s'éteint avec elle. C'est voulu : une
+     lueur qui survivrait au bord alors que la trame a disparu éclairerait des points qui
+     n'existent plus. */
+  -webkit-mask-image: linear-gradient(to bottom, transparent 0%, #000 22%, #000 78%, transparent 100%);
+  mask-image: linear-gradient(to bottom, transparent 0%, #000 22%, #000 78%, transparent 100%);
 }
 
 .nv-points::after {
