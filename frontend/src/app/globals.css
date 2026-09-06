@@ -151,11 +151,15 @@
      s'annule aux bornes. Le plateau existe toujours, mais on y entre et on en sort sans
      angle. Les couleurs de départ, de sommet et de fin sont inchangées.
 
+     ⚠️ **Le sommet vaut `#161D2B` et non plus `#101828`** : un cran plus clair, un cran moins
+     bleu, choisi sur un échantillon fourni. Les extrémités ne changent pas — c'est le plateau
+     du milieu qui s'éclaircit, donc l'écart haut/milieu se creuse un peu.
+
      ⚠️ **Et il est symétrique** : la descente a exactement la longueur et la courbe de la
      montée. La première correction gardait le déséquilibre d'origine — le haut s'éclaircissait
      sur soixante-deux pour cent de la hauteur quand le bas s'assombrissait sur vingt-huit — si
      bien que les deux extrémités n'avaient pas le même fondu. Relevé à l'usage. */
-  --nv-fond-degrade:      linear-gradient(to bottom, #030712 0%, #060B17 10%, #0B1220 20%, #101727 30%, #101828 40%, #101828 50%, #101828 60%, #101727 70%, #0B1220 80%, #060B17 90%, #030712 100%);
+  --nv-fond-degrade:      linear-gradient(to bottom, #030712 0%, #070C17 10%, #0F1522 20%, #151C2A 30%, #161D2B 40%, #161D2B 50%, #161D2B 60%, #151C2A 70%, #0F1522 80%, #070C17 90%, #030712 100%);
   /* Le palier du dégradé ci-dessus — sa couleur entre 55 % et 83 % de la hauteur.
      Nommée parce qu'une forme creusée dans le fond doit s'y confondre : la
      remplir du dégradé lui-même donnait des taches, celui-ci variant sur la
