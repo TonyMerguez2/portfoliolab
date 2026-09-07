@@ -21,13 +21,25 @@ import { useEffect, useRef, useState } from "react";
  * largeur est fausse de plusieurs pour cent, et le premier changement de mot se ferait avec un
  * décalage visible. `document.fonts.ready` attend Geist avant la première mesure.
  */
-export default function MotQuiDefile({ mots, intervalle = 2600, transition = 420, style }: {
+export default function MotQuiDefile({ mots, suffixe = "", intervalle = 2600, transition = 420, style, className }: {
   mots: string[];
+  /**
+   * Ce qui suit le mot et doit s'effacer avec lui — un point final, en pratique.
+   *
+   * ⚠️ **Il ne peut pas rester dehors.** Laissé dans la phrase, le point reste immobile
+   * pendant que le mot s'efface : on voit alors une ponctuation flotter seule au bout d'un
+   * vide, puis le mot suivant venir s'y coller. Il fait partie du groupe qui s'efface, donc
+   * du même `<span>` — et de la largeur mesurée, sinon la boîte serait trop courte d'un
+   * point à chaque changement.
+   */
+  suffixe?: string;
   /** Durée d'affichage d'un mot, transition comprise. */
   intervalle?: number;
   /** Durée du fondu et du glissement, en millisecondes. */
   transition?: number;
   style?: React.CSSProperties;
+  /** Posée sur la boîte extérieure, pour la piloter depuis une feuille de style. */
+  className?: string;
 }) {
   const [index, setIndex] = useState(0);
   const [sortant, setSortant] = useState(false);
@@ -61,7 +73,7 @@ export default function MotQuiDefile({ mots, intervalle = 2600, transition = 420
       mesures.current.forEach(n => n && obs!.observe(n));
     });
     return () => obs?.disconnect();
-  }, [mots]);
+  }, [mots, suffixe]);
 
   useEffect(() => {
     if (!anime || mots.length < 2) return;
@@ -86,7 +98,7 @@ export default function MotQuiDefile({ mots, intervalle = 2600, transition = 420
 
   return (
     <>
-      <span style={{
+      <span className={className} style={{
         display: "inline-block", verticalAlign: "bottom", overflow: "visible",
         /* Tant que rien n'est mesuré, la boîte s'ajuste au contenu : la phrase est juste dès
            le premier rendu, avant même que la police soit arrivée. */
@@ -102,7 +114,7 @@ export default function MotQuiDefile({ mots, intervalle = 2600, transition = 420
             ? `opacity ${transition}ms ease, transform ${transition}ms cubic-bezier(0.4, 0, 0.2, 1)`
             : "none",
         }}>
-          {mots[index]}
+          {mots[index]}{suffixe}
         </span>
       </span>
 
@@ -119,7 +131,7 @@ export default function MotQuiDefile({ mots, intervalle = 2600, transition = 420
         whiteSpace: "nowrap", pointerEvents: "none",
       }}>
         {mots.map((m, i) => (
-          <span key={m} ref={n => { mesures.current[i] = n; }}>{m}</span>
+          <span key={m} ref={n => { mesures.current[i] = n; }}>{m}{suffixe}</span>
         ))}
       </span>
     </>
