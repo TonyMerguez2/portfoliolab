@@ -1923,7 +1923,23 @@ canvas + div {
   -webkit-background-clip: text;
   background-clip: text;
   -webkit-text-fill-color: transparent;
-  animation: nv-remplir var(--nv-remplissage, 2600ms) linear forwards;
+  /* ⚠️ **Deux animations sur la même déclaration, et l'entrée ne se fige pas.** Le
+     remplissage garde son état final (`forwards`) : sans quoi le mot se viderait d'un coup à
+     la fin. L'entrée, elle, est en `backwards` — elle pose son état de départ avant de
+     commencer, puis **rend la main** ; en `forwards` elle garderait `opacity: 1` en propre, et
+     l'animation de sortie ne pourrait plus rien effacer. */
+  animation:
+    nv-remplir var(--nv-remplissage, 2600ms) linear forwards,
+    nv-entree var(--nv-passage, 320ms) ease backwards;
+}
+
+/* ⚠️ **La sortie remplace les deux animations, d'où le `background-position` réécrit ici.**
+   Une déclaration `animation` en écrase une autre entièrement : le remplissage perd son
+   `forwards` au moment où la sortie prend la main, et le mot se reviderait en partant. Fixer
+   la position à 0 le garde plein pendant qu'il s'efface. */
+.nv-mot--sortie {
+  background-position: 0 0;
+  animation: nv-sortie var(--nv-passage, 320ms) ease forwards;
 }
 
 @keyframes nv-remplir {
@@ -1931,12 +1947,23 @@ canvas + div {
   to   { background-position: 0% 0;   }
 }
 
+/* Le mot arrive d'en bas et repart vers le haut : le regard suit une file qui avance, pas un
+   objet qui fait l'aller-retour. */
+@keyframes nv-entree {
+  from { opacity: 0; transform: translateY(0.16em); }
+  to   { opacity: 1; transform: none; }
+}
+@keyframes nv-sortie {
+  from { opacity: 1; transform: none; }
+  to   { opacity: 0; transform: translateY(-0.16em); }
+}
+
 /* ⚠️ **Sans animation, le mot est simplement plein.** Le laisser dans son encre discrète le
    rendrait deux fois moins lisible que le reste du titre, pour un réglage qui demande moins de
    mouvement et non moins de contraste. La rotation s'arrête aussi : elle est déclenchée par la
    fin de l'animation, qui n'a plus lieu. */
 @media (prefers-reduced-motion: reduce) {
-  .nv-mot {
+  .nv-mot, .nv-mot--sortie {
     animation: none;
     background-image: none;
     -webkit-text-fill-color: currentColor;
