@@ -33,6 +33,16 @@ export function modeCourant(): ModeTheme {
  */
 export function definirMode(mode: ModeTheme): void {
   document.documentElement.setAttribute("data-theme", mode);
+  /**
+   * ⚠️ **La classe `dark` est celle d'Appica, et elle doit suivre le même interrupteur.**
+   * Leurs composants ne connaissent pas `data-theme` : leur variante sombre s'écrit
+   * `&:is(.dark *)`, donc elle ne s'applique qu'en présence de cette classe sur la racine.
+   * Sans elle, un bouton ou un champ d'Appica se rend **en clair sur un site sombre** — vu sur
+   * la porte de l'alpha, dont la pastille de version sortait blanche alors que la même
+   * pastille est sombre sur l'accueil. La différence tenait à ce que l'accueil posait la
+   * classe pour son propre compte, et lui seul.
+   */
+  document.documentElement.classList.toggle("dark", mode === "sombre");
   try {
     localStorage.setItem(CLE, mode);
   } catch {

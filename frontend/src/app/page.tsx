@@ -22,24 +22,10 @@ import { CLAIR, RAYONS } from "@/lib/palette";
  * disait une intention sans dire un service ; celle-ci reprend les mots de la page
  * publique, pour que les deux entrées du site promettent la même chose.
  */
-/**
- * ⚠️ **L'espace final n'est pas une coquille.** Le `<br />` qui suit colle les deux morceaux
- * dans le texte du nœud : sans lui, un lecteur d'écran prononce « patrimoine,et ». Il ne se
- * voit pas à l'écran — une espace en fin de ligne est absorbée par la mise en page.
- */
-const PHRASE_HAUT = "Tout votre patrimoine, ";
-const PHRASE_BAS = "et ce qui le fait ";
-/**
- * ⚠️ **Les cinq verbes ne disent pas la même chose, et c'est voulu.** « Évoluer » et
- * « changer » décrivent, « performer » et « grandir » promettent, « résister » rassure. La
- * phrase change donc de registre au fil du cycle. Choisis à la demande, après que j'aie
- * signalé qu'un verbe de gain se lit comme une promesse de rendement sur un produit qui écrit
- * en pied de page ne donner aucun conseil en investissement.
- */
-const VERBES = ["évoluer", "performer", "résister", "grandir", "changer"];
 import PiluleAction from "@/components/portfolio/PiluleAction";
 import PanneauCreation from "@/components/portfolio/PanneauCreation";
 import MotQuiDefile from "@/components/MotQuiDefile";
+import { PHRASE_HAUT, PHRASE_BAS, VERBES } from "@/lib/phrase";
 export default function Home() {
   const mouseRef = useRef({ x: 0.5, y: 0.5 });
   const [dark, setDark] = useState(true);

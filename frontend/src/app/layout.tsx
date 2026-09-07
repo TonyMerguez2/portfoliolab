@@ -35,14 +35,22 @@ export const metadata: Metadata = {
  * D'où ce script exécuté avant le corps du document. Il est bloquant, mais il
  * ne fait que lire une clé et écrire un attribut.
  */
+/**
+ * ⚠️ **Deux marques pour un seul thème, et les deux sont posées avant l'hydratation.**
+ * `data-theme` est celle du site ; `dark` est celle qu'attendent les composants d'Appica, dont
+ * la variante sombre s'écrit `&:is(.dark *)`. La poser plus tard ferait paraître leurs
+ * composants en clair le temps d'un rendu.
+ */
 const SCRIPT_THEME = `(function(){try{
   var m = localStorage.getItem('novac-theme');
   if (m !== 'clair' && m !== 'sombre') {
     m = matchMedia('(prefers-color-scheme: light)').matches ? 'clair' : 'sombre';
   }
   document.documentElement.setAttribute('data-theme', m);
+  document.documentElement.classList.toggle('dark', m === 'sombre');
 }catch(e){
   document.documentElement.setAttribute('data-theme','sombre');
+  document.documentElement.classList.add('dark');
 }})();`;
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
