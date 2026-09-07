@@ -151,6 +151,10 @@ function Porte() {
       if (r.status === 422) { setInscription("refus"); return; }
       if (!r.ok) { setInscription("panne"); return; }
       const d = (await r.json()) as { deja?: boolean };
+      /* ⚠️ Le champ se vide à l'acceptation, pas à l'envoi : vidé avant la réponse, un refus
+         du serveur laisserait l'adresse à retaper alors qu'elle était juste à une lettre
+         près. */
+      setEmail("");
       setInscription(d.deja ? "deja" : "fait");
     } catch {
       setInscription("panne");
@@ -205,7 +209,7 @@ function Porte() {
           */}
         <h1 style={{ margin: 0, maxWidth: "14ch",
                      fontSize: "clamp(30px, 4.4vw, 56px)", fontWeight: 700,
-                     letterSpacing: "-0.03em", lineHeight: 1.08, color: JETONS.surFond }}>
+                     letterSpacing: "-0.03em", lineHeight: 1.08, color: JETONS.texteIntense }}>
           Liste d&apos;attente pour l&apos;{VERSION.toLowerCase()}
         </h1>
 
@@ -226,7 +230,10 @@ function Porte() {
           * l'empêche de déborder sur un téléphone, pas un retour à la ligne.
           */}
         <p style={{ margin: "18px 0 0", fontSize: "clamp(11px, 1.35vw, 17px)", lineHeight: 1.45,
-                    color: JETONS.surFond, whiteSpace: "nowrap" }}>
+                    /* ⚠️ `texteIntense` et non `surFond` : le second vaut #D1D5DC, un gris
+                       clair, quand la phrase de l'accueil est en blanc franc. Les deux pages
+                       affichent la même phrase — elles doivent l'écrire de la même encre. */
+                    color: JETONS.texteIntense, whiteSpace: "nowrap" }}>
           {PHRASE_HAUT}{PHRASE_BAS}
           <MotQuiDefile mots={VERBES} suffixe="." largeur="6ch" />
         </p>
@@ -263,8 +270,20 @@ function Porte() {
                 data-invalid={inscription === "refus" || undefined}
                 onChange={e => { setEmail(e.target.value); if (inscription !== "repos") setInscription("repos"); }}
                 className="flex-1 min-w-0" />
-              <Button type="submit" size="md" disabled={!email || inscription === "envoi"}>
-                {inscription === "envoi" ? "…" : "Rejoindre"}
+              {/**
+                * ⚠️ **Une flèche et non le mot « Rejoindre ».** Le champ dit déjà ce qu'on y
+                * met, et son étiquette accessible reste : `aria-label` porte l'action pour qui
+                * n'a que le dessin. La même flèche qu'en bas, pour que les deux gestes de la
+                * page se ressemblent.
+                *
+                * ⚠️ **Carré, `icon-md`, à la hauteur du champ.** Les crans d'icône du composant
+                * sont carrés par construction : lui donner `md` en aurait fait un bouton large
+                * et vide autour d'un dessin de dix-huit pixels.
+                */}
+              <Button type="submit" variant="outline" size="icon-md"
+                aria-label="Rejoindre la liste d'attente"
+                disabled={!email || inscription === "envoi"}>
+                <ArrowUpRight />
               </Button>
             </div>
             <div style={{ minHeight: 18, marginTop: 7, fontSize: 11.5, color: JETONS.negatif }}>
