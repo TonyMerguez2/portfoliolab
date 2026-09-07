@@ -19,8 +19,19 @@ export const config = {
   matcher: [
     /* Tout, sauf ce que le navigateur charge pour peindre la page elle-même. Les fichiers
        statiques n'ont rien à protéger — ils sont les mêmes pour tous — et les faire passer
-       par la porte aurait cassé la page de la porte. */
-    "/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico|woff2?|txt|xml)$).*)",
+       par la porte aurait cassé la page de la porte.
+
+       ⚠️ **La liste des extensions se tient à jour, et l'oubli ne se voit pas.** `webm` et
+       `mp4` n'y étaient pas : la vidéo de démonstration de la porte partait donc en 307 vers
+       la porte elle-même, qui répondait du HTML à une balise `<video>`. Aucune erreur en
+       console, aucune image cassée — juste une affiche figée à la place d'une vidéo, sur la
+       seule page publique du site. Les captures, elles, passaient : `png` était de la liste.
+
+       Le remède serait d'exclure toute adresse portant une extension plutôt que d'énumérer ;
+       ce n'est pas fait ici parce que les routes de l'API n'en portent pas et que la règle
+       inverse — protéger ce qui n'a pas d'extension — laisserait passer une page nommée
+       `bilan.html` le jour où il y en aura une. */
+    "/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp|avif|ico|woff2?|txt|xml|mp4|webm|mov|m4v)$).*)",
   ],
 };
 
