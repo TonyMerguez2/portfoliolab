@@ -1,5 +1,5 @@
 "use client";
-import { Suspense, useState } from "react";
+import { Suspense, useEffect, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { FONT, NUM } from "@/lib/typography";
 import { JETONS, RAYONS } from "@/lib/palette";
@@ -106,6 +106,16 @@ const LONGUEUR_CODE = 6;
  * ⚠️ **Le texte de remplacement décrit l'écran, il ne le nomme pas.** « tableau-de-bord.png »
  * n'apprend rien à qui ne voit pas l'image ; ce qu'on y trouve, si.
  */
+/** Le cadre d'une diapositive : format constant, surface de panneau, coins du carrousel. */
+const cadreDiapo: React.CSSProperties = {
+  /* ⚠️ **16/10 et non 3/2 : c'est le format de la vidéo, qui mène la galerie.** Elle est
+     filmée en 1600 × 1000 ; un cadre à 3/2 lui aurait ajouté deux bandes horizontales pour
+     rien. Les captures, elles, s'y logent avec de fines bandes — 1,606 et 1,265 contre 1,6 —
+     et c'est le bon compromis : ce qu'on vient voir est la vidéo. */
+  aspectRatio: "16 / 10", width: "100%", overflow: "hidden",
+  borderRadius: 16, background: JETONS.carte,
+};
+
 const APERCUS = [
   { fichier: "tableau-de-bord.png", texte: "La vue générale : valeur totale, performance et score du patrimoine" },
   { fichier: "graphique.png", texte: "La courbe d'un portefeuille, avec ses achats repérés" },
@@ -122,6 +132,31 @@ function Porte() {
   const [email, setEmail] = useState("");
   const [inscription, setInscription] = useState<EtatInscription>("repos");
   const [codeOuvert, setCodeOuvert] = useState(false);
+
+  /**
+   * ⚠️ **`autoPlay` ne suffit pas toujours, et son échec est silencieux.** Les navigateurs le
+   * refusent dans plusieurs cas — onglet ouvert en arrière-plan, économie d'énergie, première
+   * image pas encore décodée au moment où l'attribut est lu. Rien n'est signalé : la vidéo
+   * reste sur son affiche, immobile, et l'on croit à une image fixe. On redemande donc la
+   * lecture à chaque fois que le navigateur annonce pouvoir la tenir.
+   *
+   * ⚠️ **Le refus se rattrape en silence, lui aussi.** `play()` rend une promesse qui échoue
+   * si la politique du navigateur l'interdit ; ne pas l'attraper ferait remonter une erreur
+   * dans la console à chaque visite, pour une situation prévue.
+   */
+  const video = useRef<HTMLVideoElement>(null);
+  useEffect(() => {
+    const v = video.current;
+    if (!v) return;
+    const lancer = () => { v.play().catch(() => { /* refusé par le navigateur */ }); };
+    lancer();
+    v.addEventListener("canplay", lancer);
+    document.addEventListener("visibilitychange", lancer);
+    return () => {
+      v.removeEventListener("canplay", lancer);
+      document.removeEventListener("visibilitychange", lancer);
+    };
+  }, []);
 
   /**
    * ⚠️ **Le code est passé en argument, il n'est pas relu dans l'état.** Le champ à six cases
@@ -402,21 +437,36 @@ function Porte() {
         <BorderBeam className="rounded-2xl">
           <Carousel loop>
             <CarouselContent>
+              {/**
+                * ⚠️ **`object-contain` et non `cover` : les six pièces n'ont pas le même
+                * format.** Mesurés — les deux captures d'écran 1,606, les trois cartes 1,265,
+                * la vidéo 1,552 — pour un cadre à 1,5. `cover` remplit le cadre en rognant ce
+                * qui dépasse : la vidéo y perdait ses bords gauche et droit, les cartes
+                * davantage encore. `contain` montre la pièce entière et laisse deux bandes.
+                *
+                * ⚠️ **Les bandes portent la surface des panneaux, pas le fond de page.** Un
+                * vide de la couleur du fond aurait donné un cadre qui semble mal découpé ;
+                * une surface franche se lit comme une marge voulue.
+                */}
               <CarouselSlide>
-                <video
-                  className="aspect-3/2 w-full rounded-2xl object-cover"
-                  autoPlay muted loop playsInline preload="metadata"
-                  poster="/apercus/demonstration-affiche.jpg"
-                  aria-label="Le tableau de bord de Novac en fonctionnement">
-                  <source src="/apercus/demonstration.webm" type="video/webm" />
-                  <source src="/apercus/demonstration.mp4" type="video/mp4" />
-                </video>
+                <div style={cadreDiapo}>
+                  <video ref={video}
+                    className="h-full w-full object-contain"
+                    autoPlay muted loop playsInline preload="auto"
+                    poster="/apercus/demonstration-affiche.jpg"
+                    aria-label="Le tableau de bord de Novac en fonctionnement">
+                    <source src="/apercus/demonstration.webm" type="video/webm" />
+                    <source src="/apercus/demonstration.mp4" type="video/mp4" />
+                  </video>
+                </div>
               </CarouselSlide>
               {APERCUS.map(a => (
                 <CarouselSlide key={a.fichier}>
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src={`/apercus/${a.fichier}`} alt={a.texte}
-                    className="aspect-3/2 w-full rounded-2xl object-cover" />
+                  <div style={cadreDiapo}>
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img src={`/apercus/${a.fichier}`} alt={a.texte}
+                      className="h-full w-full object-contain" />
+                  </div>
                 </CarouselSlide>
               ))}
             </CarouselContent>
