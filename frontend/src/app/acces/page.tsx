@@ -240,63 +240,69 @@ function Porte() {
 
         <div style={{ height: 34 }} />
 
-        {inscrit ? (
-          /* ⚠️ Le formulaire disparaît une fois l'adresse prise : le laisser invitait à
-             réessayer, et « déjà inscrit » se lit alors comme un échec. */
-          <div>
-            <div style={{ fontSize: 15, fontWeight: 600, color: JETONS.positif, marginBottom: 5 }}>
-              {inscription === "deja" ? "Vous y êtes déjà." : "C'est noté."}
-            </div>
-            <div style={{ fontSize: 13, color: JETONS.texteAttenue, lineHeight: 1.55 }}>
-              Nous vous écrirons à l&apos;ouverture des accès.
-            </div>
+        {/**
+          * ⚠️ **Le formulaire ne disparaît plus une fois l'adresse prise.** Il cédait la place
+          * au message ; on ne voyait donc plus ce qu'on venait d'écrire, et se tromper d'adresse
+          * ne laissait aucun moyen de se reprendre. La confirmation s'affiche là où s'affichent
+          * les refus — même ligne, même place, seule la couleur change.
+          *
+          * ⚠️ `noValidate` : sans lui, `type="email"` fait refuser l'envoi par le navigateur,
+          * qui affiche sa propre bulle grise. C'est l'encadré natif que le reste du site a
+          * chassé, et il parle sa langue, pas celle de la page. Le champ garde son type pour le
+          * clavier des téléphones ; le refus vient du serveur et s'affiche dans nos mots.
+          */}
+        <form onSubmit={inscrire} noValidate style={{ width: "100%", maxWidth: 420 }}>
+          <div style={{ display: "flex", gap: 8, alignItems: "stretch" }}>
+            {/**
+              * ⚠️ **`data-invalid` plutôt qu'une classe à nous.** Le champ d'Appica porte déjà
+              * son état de refus — bord et anneau rouges — et l'attend sous cette forme. Lui
+              * superposer notre `.nv-champ-refus` peindrait deux bords l'un sur l'autre.
+              */}
+            <Input type="email" value={email} inputMode="email" autoComplete="email"
+              aria-label="Votre adresse e-mail" placeholder="vous@exemple.com"
+              data-invalid={inscription === "refus" || undefined}
+              onChange={e => { setEmail(e.target.value); if (inscription !== "repos") setInscription("repos"); }}
+              className="flex-1 min-w-0" />
+            {/**
+              * ⚠️ **Une flèche et non le mot « Rejoindre ».** Le champ dit déjà ce qu'on y met,
+              * et l'action reste nommée par `aria-label` pour qui n'a que le dessin. La même
+              * flèche qu'en bas, pour que les deux gestes de la page se ressemblent.
+              *
+              * ⚠️ **Carré, `icon-md`, à la hauteur du champ.** Les crans d'icône du composant
+              * sont carrés par construction : `md` en aurait fait un bouton large et vide
+              * autour d'un dessin de dix-huit pixels.
+              */}
+            <Button type="submit" variant="outline" size="icon-md"
+              aria-label="Rejoindre la liste d'attente"
+              disabled={!email || inscription === "envoi"}>
+              <Coche montree={inscrit} />
+            </Button>
           </div>
-        ) : (
-          /**
-            * ⚠️ `noValidate` : sans lui, `type="email"` fait refuser l'envoi par le navigateur,
-            * qui affiche sa propre bulle grise. C'est l'encadré natif que le reste du site a
-            * chassé, et il parle sa langue, pas celle de la page. Le champ garde son type pour
-            * le clavier des téléphones ; le refus vient du serveur et s'affiche dans nos mots.
-            */
-          <form onSubmit={inscrire} noValidate style={{ width: "100%", maxWidth: 420 }}>
-            <div style={{ display: "flex", gap: 8, alignItems: "stretch" }}>
-              {/**
-                * ⚠️ **`data-invalid` plutôt qu'une classe à nous.** Le champ d'Appica porte
-                * déjà son état de refus — bord et anneau rouges — et l'attend sous cette forme.
-                * Lui superposer notre `.nv-champ-refus` peindrait deux bords l'un sur l'autre.
-                */}
-              <Input type="email" value={email} inputMode="email" autoComplete="email"
-                aria-label="Votre adresse e-mail" placeholder="vous@exemple.com"
-                data-invalid={inscription === "refus" || undefined}
-                onChange={e => { setEmail(e.target.value); if (inscription !== "repos") setInscription("repos"); }}
-                className="flex-1 min-w-0" />
-              {/**
-                * ⚠️ **Une flèche et non le mot « Rejoindre ».** Le champ dit déjà ce qu'on y
-                * met, et son étiquette accessible reste : `aria-label` porte l'action pour qui
-                * n'a que le dessin. La même flèche qu'en bas, pour que les deux gestes de la
-                * page se ressemblent.
-                *
-                * ⚠️ **Carré, `icon-md`, à la hauteur du champ.** Les crans d'icône du composant
-                * sont carrés par construction : lui donner `md` en aurait fait un bouton large
-                * et vide autour d'un dessin de dix-huit pixels.
-                */}
-              <Button type="submit" variant="outline" size="icon-md"
-                aria-label="Rejoindre la liste d'attente"
-                disabled={!email || inscription === "envoi"}>
-                <ArrowUpRight />
-              </Button>
-            </div>
-            <div style={{ minHeight: 18, marginTop: 7, fontSize: 11.5, color: JETONS.negatif }}>
-              {inscription === "refus" && "Cette adresse ne semble pas valide."}
-              {inscription === "panne" && "Le serveur n'a pas répondu."}
-            </div>
-          </form>
-        )}
+          {/**
+            * ⚠️ **Une seule ligne pour les trois issues, et sa hauteur est réservée.** Refus,
+            * panne et confirmation s'y succèdent au même endroit ; `minHeight` empêche la page
+            * de sauter quand elle se remplit.
+            */}
+          <div style={{ minHeight: 18, marginTop: 7, fontSize: 11.5,
+                        color: inscrit ? JETONS.positif : JETONS.negatif }}>
+            {inscription === "refus" && "Cette adresse ne semble pas valide."}
+            {inscription === "panne" && "Le serveur n'a pas répondu."}
+            {inscription === "fait" && "C'est noté. Nous vous écrirons à l'ouverture des accès."}
+            {inscription === "deja" && "Vous y êtes déjà. Nous vous écrirons à l'ouverture."}
+          </div>
+        </form>
 
         {/* ⚠️ La porte reste repliée derrière un bouton : ceux qui ont un code sont une
             poignée, et leur donner un champ permanent ferait croire aux autres qu'il leur en
             faut un. */}
-        <div style={{ marginTop: 18 }}>
+        {/**
+          * ⚠️ **Hauteur réservée : la colonne est centrée, tout ce qui change de taille ici
+          * déplace le titre.** Le bouton fait 48 pixels, le champ à six cases et sa ligne de
+          * message en font 65 : sans cette réserve, la page remontait d'une dizaine de pixels
+          * au moment où les cases apparaissent. Relevé à l'usage.
+          */}
+        <div style={{ marginTop: 18, height: 70, display: "flex",
+                      alignItems: "center", justifyContent: "center" }}>
           {codeOuvert ? (
             <form onSubmit={e => ouvrir(code, e)}>
               {/**
@@ -353,6 +359,43 @@ function Porte() {
         conseil en investissement.
       </p>
     </main>
+  );
+}
+
+/**
+ * La flèche d'envoi, qui devient une coche une fois l'adresse prise.
+ *
+ * ⚠️ **Les deux dessins sont montés en permanence, superposés.** Une transition CSS ne joue
+ * que sur un élément déjà présent : monter la coche au moment de la confirmation la ferait
+ * apparaître d'un coup, sans le tracé. Ils se croisent donc en opacité, et la coche se dessine
+ * par son trait.
+ *
+ * ⚠️ **Le tracé est celui du bouton de copie d'Appica, à la lettre** — même chemin, même
+ * `pathLength` de 1, même `stroke-dasharray: 1 2`. Le trait est un pointillé dont le vide vaut
+ * deux fois le plein : déplacer son décalage de 1,02 à 0 fait courir le plein d'un bout à
+ * l'autre du chemin, ce qui *dessine* la coche au lieu de la révéler.
+ */
+function Coche({ montree }: { montree: boolean }) {
+  const commun = {
+    width: 18, height: 18, viewBox: "0 0 24 24", fill: "none", stroke: "currentColor",
+    strokeWidth: 1.5, strokeLinecap: "round" as const, strokeLinejoin: "round" as const,
+    "aria-hidden": true,
+    style: { position: "absolute" as const, inset: 0, margin: "auto",
+             transition: "opacity 180ms ease" },
+  };
+  return (
+    <span style={{ position: "relative", display: "inline-block", width: 18, height: 18 }}>
+      <svg {...commun} style={{ ...commun.style, opacity: montree ? 0 : 1 }}>
+        <path d="M7 17 17 7M7 7h10v10" />
+      </svg>
+      <svg {...commun} style={{ ...commun.style, opacity: montree ? 1 : 0 }}>
+        <path d="M4.3 12.55 L9.25 17.5 L19.7 6.5" pathLength={1} strokeDasharray="1 2"
+          style={{ strokeDashoffset: montree ? 0 : 1.02,
+                   transition: montree
+                     ? "stroke-dashoffset 350ms ease-out 100ms"
+                     : "stroke-dashoffset 200ms ease-in" }} />
+      </svg>
+    </span>
   );
 }
 
