@@ -60,19 +60,6 @@ const STYLE_CHAMPS = `
   }
   .nv-champ-refus, .nv-champ-refus:hover { border-color: var(--nv-negatif); }
 
-  /**
-   * ⚠️ **Le décor disparaît sous 900 px, et ce n'est pas une facilité.** Mesuré à 375 px : la
-   * carte d'objectif recouvrait le nom du site, celle d'Apple passait derrière le champ
-   * e-mail, et la capture de NVDA sous la mention légale. Les pièces sont posées en
-   * pourcentages depuis les quatre coins d'une composition pensée en paysage ; sur une
-   * colonne de trois cent soixante-quinze pixels, ces quatre coins se rejoignent au milieu et
-   * il n'y a plus de marge où les loger.
-   *
-   * Les réduire n'aurait rien réglé : à cette largeur, un tableau de bord lisible tient déjà
-   * toute la place, et illisible il ne montre plus rien. Sur téléphone la page garde donc le
-   * nom, la promesse et le champ — ce pour quoi on y vient — sur un fond propre.
-   */
-  @media (max-width: 900px) { .nv-decor { display: none; } }
 
   /**
    * La carte se coupe en deux : le formulaire à gauche, la démonstration à droite.
@@ -434,10 +421,12 @@ function Decor() {
    * La classe `.nv-silhouette` porte tout : la trame, ses deux masques, le dégradé de densité
    * et le battement par fondu entre deux tailles. Rien à recopier ici.
    *
-   * ⚠️ La classe `nv-decor` reste : c'est elle qui efface le tout sous 900 px, où la
-   * composition en paysage n'a plus de place. Voir `STYLE_CHAMPS`.
+   * ⚠️ **Plus de coupure sous 900 px.** Une règle effaçait le décor sur téléphone, et
+   * c'était juste tant qu'il s'agissait d'une grande image posée dans un coin. Un fond plein
+   * écran n'encombre rien : l'accueil garde le sien sur téléphone, cette page fait pareil,
+   * sans quoi « le même fond » ne serait vrai que sur grand écran.
    */
-  return <div aria-hidden="true" className="nv-decor nv-silhouette"
+  return <div aria-hidden="true" className="nv-silhouette"
     style={{ position: "fixed", inset: 0, pointerEvents: "none", zIndex: 0 }} />;
 }
 
