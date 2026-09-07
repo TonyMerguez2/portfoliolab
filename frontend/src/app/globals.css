@@ -2144,18 +2144,23 @@ canvas + div {
   .nv-points::after { display: none; }
 }
 
-/* ⚠️ **Sur téléphone, le fondu de la trame se lisait comme une tache éclairée.** Il éteint les
-   points sur les 22 % du haut et du bas de l'écran, ce qui laisse au milieu une bande de points
-   nettement plus vifs — mesuré 26 contre 16 en haut. Sur un grand écran, la transition est
-   assez longue pour passer inaperçue ; sur un téléphone, elle se resserre sur neuf cents pixels
-   et l'œil y voit un halo, comme si le curseur s'y trouvait. Signalé à l'usage.
+/* ⚠️ **Sur téléphone, la trame n'apparaît que dans la moitié basse.** Le haut de l'écran y
+   portait des points visibles — signalé deux fois, et deux fois mal traité de ma part : j'ai
+   d'abord soupçonné la lueur du curseur, qui était éteinte, puis raccourci le fondu, ce qui a
+   **rendu ces points plus vifs** au lieu de les enlever.
 
-   Le fondu n'est pas supprimé — il empêche les points de buter contre les extrémités sombres du
-   dégradé — mais réduit à une lisière : la trame est uniforme partout ailleurs. */
+   Ce que le fondu doit faire ici est l'inverse : éteindre franchement le haut. Le dégradé de
+   fond y est à son plus sombre, donc c'est là que des points d'encre constante ressortent le
+   plus — et c'est le seul endroit de la page où rien ne les justifie, l'enseigne et le titre
+   ayant besoin d'un fond calme.
+
+   ⚠️ **Aucun palier dans la moitié haute, et c'est la condition à tenir.** Un fondu court y
+   dessine une lisière que l'œil lit comme une tache éclairée. Celui-ci monte sans arrêt du haut
+   jusqu'à mi-hauteur : il n'y a aucune arête à voir. */
 @media (max-width: 700px) {
   .nv-points {
-    -webkit-mask-image: linear-gradient(to bottom, transparent 0%, #000 5%, #000 95%, transparent 100%);
-    mask-image: linear-gradient(to bottom, transparent 0%, #000 5%, #000 95%, transparent 100%);
+    -webkit-mask-image: linear-gradient(to bottom, transparent 0%, transparent 26%, #000 62%, #000 82%, transparent 100%);
+    mask-image: linear-gradient(to bottom, transparent 0%, transparent 26%, #000 62%, #000 82%, transparent 100%);
   }
 }
 
