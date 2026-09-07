@@ -2015,26 +2015,25 @@ canvas + div {
    La lueur sous le curseur n'a jamais eu ce défaut : son masque est un dégradé, donc déjà
    sans bord. C'est cette propreté-là qu'on rejoint. */
 .nv-silhouette {
-  --nv-logo-cote: min(64vh, 660px);
+  --nv-logo-cote: min(115vh, 1300px);
   background-image: radial-gradient(circle at 1px 1px, var(--nv-point-vif) 1px, transparent 1.5px);
   /* ⚠️ Le pas et l'origine sont ceux de `.nv-points` : cette couche et le fond partagent donc
      la même grille, au pixel. C'est toute la raison d'être de ce montage. */
   background-size: 14px 14px;
 
   -webkit-mask-image: url(/logo-hivesync-doux.svg),
-    radial-gradient(closest-side, #000 18%, rgba(0, 0, 0, 0.78) 52%, rgba(0, 0, 0, 0.40) 76%, transparent 98%);
+    radial-gradient(closest-side, #000 8%, rgba(0, 0, 0, 0.62) 46%, rgba(0, 0, 0, 0.22) 72%, transparent 96%);
   mask-image: url(/logo-hivesync-doux.svg),
-    radial-gradient(closest-side, #000 18%, rgba(0, 0, 0, 0.78) 52%, rgba(0, 0, 0, 0.40) 76%, transparent 98%);
+    radial-gradient(closest-side, #000 8%, rgba(0, 0, 0, 0.62) 46%, rgba(0, 0, 0, 0.22) 72%, transparent 96%);
   -webkit-mask-repeat: no-repeat, no-repeat;
   mask-repeat: no-repeat, no-repeat;
-  /* ⚠️ **Elle tient maintenant dans l'écran, et c'est ce qui la rend reconnaissable.** À
-     1035 px ancrée au-delà du coin, on n'en voyait qu'un fragment de courbe : une texture plus
-     dense, jamais le logo. La marque entière est désormais visible, posée dans la moitié
-     droite. Le débord était voulu — une forme coupée se lit comme de la matière, une forme
-     entière comme un objet qu'on montre — mais un fragment illisible ne se lisait ni comme
-     l'un ni comme l'autre. */
-  -webkit-mask-position: right 6% bottom 4%, right 6% bottom 4%;
-  mask-position: right 6% bottom 4%, right 6% bottom 4%;
+  /* ⚠️ **Le débord et la grande taille sont voulus : ne les « corrigez » pas.** On n'en voit
+     qu'un fragment de courbe, et c'est le point — une forme coupée par le bord se lit comme de
+     la matière, une forme entière posée dans l'écran se lit comme un objet qu'on montre. J'ai
+     essayé de la rendre reconnaissable, à 660 px et entièrement visible : le logo se lisait
+     alors, mais il devenait une illustration au lieu d'un fond. Rejeté à l'usage. */
+  -webkit-mask-position: right -16% bottom -24%, right -16% bottom -24%;
+  mask-position: right -16% bottom -24%, right -16% bottom -24%;
   -webkit-mask-size: var(--nv-logo-cote), var(--nv-logo-cote);
   mask-size: var(--nv-logo-cote), var(--nv-logo-cote);
   -webkit-mask-composite: source-in;
