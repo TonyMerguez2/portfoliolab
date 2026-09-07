@@ -8,6 +8,8 @@ import MotQuiDefile from "@/components/MotQuiDefile";
 import { PHRASE_HAUT, PHRASE_BAS, VERBES } from "@/lib/phrase";
 import { VERSION } from "@/lib/version";
 import { Button } from "@appica/ui-react/button";
+import { Input } from "@appica/ui-react/input";
+import { OTPField, OTPFieldInput } from "@appica/ui-react/otp-field";
 import { Chip } from "@appica/ui-react/chip";
 import { GradientGlow } from "@appica/ui-react/gradient-glow";
 import { ArrowUpRight } from "@appica/icons-react";
@@ -84,6 +86,15 @@ export default function PageAcces() {
   );
 }
 
+/**
+ * Le nombre de chiffres du code d'accès.
+ *
+ * ⚠️ **Le champ à cases impose une longueur connue d'avance** : il en dessine autant qu'on lui
+ * en annonce. Changer le code sans changer ce nombre donnerait un champ qui ne se remplit
+ * jamais, ou qui se valide avant la fin.
+ */
+const LONGUEUR_CODE = 6;
+
 function Porte() {
   const parametres = useSearchParams();
 
@@ -93,15 +104,21 @@ function Porte() {
   const [inscription, setInscription] = useState<EtatInscription>("repos");
   const [codeOuvert, setCodeOuvert] = useState(false);
 
-  async function ouvrir(e: React.FormEvent) {
-    e.preventDefault();
-    if (!code || etat === "envoi") return;
+  /**
+   * ⚠️ **Le code est passé en argument, il n'est pas relu dans l'état.** Le champ à six cases
+   * se valide de lui-même dès la sixième frappe : appeler ce geste depuis son `onValueChange`
+   * lirait un état que React n'a pas encore appliqué, donc un code amputé de son dernier
+   * chiffre — refusé une fois sur une, sans rien pour l'expliquer.
+   */
+  async function ouvrir(saisi: string, e?: React.FormEvent) {
+    e?.preventDefault();
+    if (saisi.length < LONGUEUR_CODE || etat === "envoi") return;
     setEtat("envoi");
     try {
       const r = await fetch("/api/acces", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ motDePasse: code }),
+        body: JSON.stringify({ motDePasse: saisi }),
       });
       if (!r.ok) { setEtat("refus"); return; }
       /**
@@ -209,7 +226,7 @@ function Porte() {
           * l'empêche de déborder sur un téléphone, pas un retour à la ligne.
           */}
         <p style={{ margin: "18px 0 0", fontSize: "clamp(11px, 1.35vw, 17px)", lineHeight: 1.45,
-                    color: JETONS.surFondAttenue, whiteSpace: "nowrap" }}>
+                    color: JETONS.surFond, whiteSpace: "nowrap" }}>
           {PHRASE_HAUT}{PHRASE_BAS}
           <MotQuiDefile mots={VERBES} suffixe="." largeur="6ch" />
         </p>
@@ -235,24 +252,20 @@ function Porte() {
             * le clavier des téléphones ; le refus vient du serveur et s'affiche dans nos mots.
             */
           <form onSubmit={inscrire} noValidate style={{ width: "100%", maxWidth: 420 }}>
-            <div style={{ display: "flex", gap: 8 }}>
-              <input type="email" value={email} inputMode="email" autoComplete="email"
-                aria-label="Votre adresse e-mail"
-                className={`nv-champ${inscription === "refus" ? " nv-champ-refus" : ""}`}
+            <div style={{ display: "flex", gap: 8, alignItems: "stretch" }}>
+              {/**
+                * ⚠️ **`data-invalid` plutôt qu'une classe à nous.** Le champ d'Appica porte
+                * déjà son état de refus — bord et anneau rouges — et l'attend sous cette forme.
+                * Lui superposer notre `.nv-champ-refus` peindrait deux bords l'un sur l'autre.
+                */}
+              <Input type="email" value={email} inputMode="email" autoComplete="email"
+                aria-label="Votre adresse e-mail" placeholder="vous@exemple.com"
+                data-invalid={inscription === "refus" || undefined}
                 onChange={e => { setEmail(e.target.value); if (inscription !== "repos") setInscription("repos"); }}
-                placeholder="vous@exemple.com"
-                style={{ ...champ, flex: 1, width: "auto", minWidth: 0, textAlign: "left",
-                         borderRadius: RAYONS.xl }} />
-              <button type="submit" disabled={!email || inscription === "envoi"}
-                style={{ padding: "0 20px", height: HAUTEUR_SAISIE, borderRadius: RAYONS.xl,
-                         flexShrink: 0, border: "none",
-                         background: JETONS.segmentActif, color: JETONS.segmentEncre,
-                         opacity: email ? 1 : 0.45,
-                         cursor: email && inscription !== "envoi" ? "pointer" : "default",
-                         fontFamily: FONT, fontSize: 13, fontWeight: 600,
-                         transition: "opacity 200ms" }}>
+                className="flex-1 min-w-0" />
+              <Button type="submit" size="md" disabled={!email || inscription === "envoi"}>
                 {inscription === "envoi" ? "…" : "Rejoindre"}
-              </button>
+              </Button>
             </div>
             <div style={{ minHeight: 18, marginTop: 7, fontSize: 11.5, color: JETONS.negatif }}>
               {inscription === "refus" && "Cette adresse ne semble pas valide."}
@@ -266,25 +279,28 @@ function Porte() {
             faut un. */}
         <div style={{ marginTop: 18 }}>
           {codeOuvert ? (
-            <form onSubmit={ouvrir}>
-              <div style={{ display: "flex", gap: 8, width: "100%", maxWidth: 320 }}>
-                <input id="code" type="password" value={code} autoComplete="current-password"
-                  autoFocus placeholder="Code d'accès"
-                  className={`nv-champ${etat === "refus" ? " nv-champ-refus" : ""}`}
-                  onChange={e => { setCode(e.target.value); if (etat !== "repos") setEtat("repos"); }}
-                  style={{ ...champ, flex: 1, width: "auto", minWidth: 0, textAlign: "left",
-                           borderRadius: RAYONS.xl }} />
-                <button type="submit" disabled={!code || etat === "envoi"}
-                  style={{ padding: "0 16px", height: HAUTEUR_SAISIE, borderRadius: RAYONS.xl,
-                           flexShrink: 0, border: "none",
-                           background: JETONS.segmentActif, color: JETONS.segmentEncre,
-                           opacity: code ? 1 : 0.45,
-                           cursor: code && etat !== "envoi" ? "pointer" : "default",
-                           fontFamily: FONT, fontSize: 13, fontWeight: 600,
-                           transition: "opacity 200ms" }}>
-                  {etat === "envoi" ? "…" : "Entrer"}
-                </button>
-              </div>
+            <form onSubmit={e => ouvrir(code, e)}>
+              {/**
+                * ⚠️ **Six cases, et plus de bouton « Entrer ».** Le code ne fait que des
+                * chiffres et sa longueur est connue : il n'y a rien à confirmer une fois la
+                * sixième case remplie. Un bouton n'aurait servi qu'à réclamer un geste de plus
+                * pour un formulaire déjà complet.
+                *
+                * ⚠️ **Le champ garde le type mot de passe des navigateurs par ses cases**, mais
+                * il affiche les chiffres : masquer six chiffres qu'on vient de taper n'ajoute
+                * rien contre un regard par-dessus l'épaule, et retire la relecture.
+                */}
+              <OTPField length={LONGUEUR_CODE} value={code} aria-label="Code d'accès"
+                onValueChange={(v) => {
+                  setCode(v);
+                  if (etat !== "repos") setEtat("repos");
+                  if (v.length === LONGUEUR_CODE) ouvrir(v);
+                }}>
+                {Array.from({ length: LONGUEUR_CODE }, (_, i) => (
+                  <OTPFieldInput key={i} placeholder="•" inputMode="numeric"
+                    aria-label={`Chiffre ${i + 1} sur ${LONGUEUR_CODE}`} />
+                ))}
+              </OTPField>
               <div style={{ minHeight: 18, marginTop: 7, fontSize: 11.5, color: JETONS.negatif }}>
                 {etat === "refus" && "Code incorrect."}
                 {etat === "panne" && "Le serveur n'a pas répondu."}
