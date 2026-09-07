@@ -1900,13 +1900,19 @@ canvas + div {
 
 /* ⚠️ La place du cœur s'interpole comme une longueur, pas comme une chaîne : sans ces deux
    déclarations, le déplacement se ferait par sauts d'une étape à l'autre. */
+/* ⚠️ **Le sommet est un palier, pas un point.** Les deux couches se croisaient à 50 % et
+   repartaient aussitôt : la silhouette pleinement ouverte ne durait qu'une image, si bien
+   qu'on voyait un passage et non une inspiration. Le palier de 40 à 68 % la retient environ
+   une seconde sept — sur les six secondes du cycle — avant qu'elle ne se referme. Les deux
+   séries gardent les mêmes bornes, sans quoi elles se croiseraient de travers et l'on verrait
+   les deux tailles ensemble à mi-course. */
 @keyframes nv-respire-petit {
-  0%, 100% { opacity: 1;    }
-  50%      { opacity: 0.15; }
+  0%, 100%  { opacity: 1;    }
+  40%, 68%  { opacity: 0.15; }
 }
 @keyframes nv-respire-grand {
-  0%, 100% { opacity: 0.15; }
-  50%      { opacity: 1;    }
+  0%, 100%  { opacity: 0.15; }
+  40%, 68%  { opacity: 1;    }
 }
 
 /**

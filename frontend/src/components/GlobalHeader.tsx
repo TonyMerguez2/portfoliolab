@@ -761,7 +761,12 @@ export default function GlobalHeader() {
         * le commentaire de `globals.css` dit déjà pourquoi.
         */}
       {/**
-        * L'enseigne : le logo, le nom, la version.
+        * L'enseigne : le nom et la version.
+        *
+        * ⚠️ **Le dessin n'y est plus.** Il y a tenu deux jours, à 30 puis 34 px. Le rail le
+        * porte déjà — c'est même ce qui avait justifié de le retirer du centre de l'accueil —
+        * et le remettre à quarante pixels de là le montrait deux fois sur la même ligne de
+        * regard. Le nom et sa version suffisent à tenir ce bout de bandeau.
         *
         * ⚠️ **Elle est ici et non dans la page d'accueil.** Elle y a vécu une version, posée
         * en absolu au-dessus du contenu : elle disparaissait donc dès qu'on quittait
@@ -785,16 +790,6 @@ export default function GlobalHeader() {
         position: "fixed", top: "12px", left: "20px", height: "36px", zIndex: 50,
         display: "flex", alignItems: "center", gap: "10px", pointerEvents: "none",
       }}>
-        <span aria-hidden="true" style={{
-          width: "34px", height: "34px", flexShrink: 0, display: "block",
-          /* ⚠️ `surFond` et non `texte` : l'enseigne est posée sur le fond de page, hors
-             carte. Les deux se confondent en sombre et divergent en clair. */
-          background: JETONS.surFond,
-          maskImage: "url(/logo-hivesync.svg)", WebkitMaskImage: "url(/logo-hivesync.svg)",
-          maskSize: "contain", WebkitMaskSize: "contain",
-          maskRepeat: "no-repeat", WebkitMaskRepeat: "no-repeat",
-          maskPosition: "center", WebkitMaskPosition: "center",
-        }} />
         <span style={{ color: JETONS.surFond, fontSize: "22px", fontWeight: 600, letterSpacing: "-0.012em" }}>
           Novac
         </span>
