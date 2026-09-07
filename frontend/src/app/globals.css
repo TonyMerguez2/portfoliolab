@@ -1942,9 +1942,19 @@ canvas + div {
   animation: nv-sortie var(--nv-passage, 240ms) ease forwards;
 }
 
+/* ⚠️ **Le balayage occupe le premier tiers, le reste est un palier.** La première version
+   étalait le remplissage sur toute la durée d'affichage : le verbe — le seul mot de la phrase
+   qui dise ce que le produit fait — passait donc l'essentiel de son temps à moitié effacé,
+   pendant que le reste du titre était plein. Il se remplit maintenant en 41 % du cycle, soit
+   sept dixièmes de seconde, puis reste plein une seconde avant de céder la place. Même
+   cadence, mais lisible la moitié du temps au lieu d'un instant.
+
+   ⚠️ Le palier n'allonge pas l'animation : c'est elle qui déclenche la suite, sa durée doit
+   donc rester le temps d'affichage du mot. */
 @keyframes nv-remplir {
-  from { background-position: 100% 0; }
-  to   { background-position: 0% 0;   }
+  0%   { background-position: 100% 0; }
+  41%  { background-position: 0% 0;   }
+  100% { background-position: 0% 0;   }
 }
 
 /* Le mot arrive d'en bas et repart vers le haut : le regard suit une file qui avance, pas un
@@ -2005,20 +2015,26 @@ canvas + div {
    La lueur sous le curseur n'a jamais eu ce défaut : son masque est un dégradé, donc déjà
    sans bord. C'est cette propreté-là qu'on rejoint. */
 .nv-silhouette {
-  --nv-logo-cote: min(115vh, 1300px);
+  --nv-logo-cote: min(64vh, 660px);
   background-image: radial-gradient(circle at 1px 1px, var(--nv-point-vif) 1px, transparent 1.5px);
   /* ⚠️ Le pas et l'origine sont ceux de `.nv-points` : cette couche et le fond partagent donc
      la même grille, au pixel. C'est toute la raison d'être de ce montage. */
   background-size: 14px 14px;
 
   -webkit-mask-image: url(/logo-hivesync-doux.svg),
-    radial-gradient(closest-side, #000 8%, rgba(0, 0, 0, 0.62) 46%, rgba(0, 0, 0, 0.22) 72%, transparent 96%);
+    radial-gradient(closest-side, #000 18%, rgba(0, 0, 0, 0.78) 52%, rgba(0, 0, 0, 0.40) 76%, transparent 98%);
   mask-image: url(/logo-hivesync-doux.svg),
-    radial-gradient(closest-side, #000 8%, rgba(0, 0, 0, 0.62) 46%, rgba(0, 0, 0, 0.22) 72%, transparent 96%);
+    radial-gradient(closest-side, #000 18%, rgba(0, 0, 0, 0.78) 52%, rgba(0, 0, 0, 0.40) 76%, transparent 98%);
   -webkit-mask-repeat: no-repeat, no-repeat;
   mask-repeat: no-repeat, no-repeat;
-  -webkit-mask-position: right -16% bottom -24%, right -16% bottom -24%;
-  mask-position: right -16% bottom -24%, right -16% bottom -24%;
+  /* ⚠️ **Elle tient maintenant dans l'écran, et c'est ce qui la rend reconnaissable.** À
+     1035 px ancrée au-delà du coin, on n'en voyait qu'un fragment de courbe : une texture plus
+     dense, jamais le logo. La marque entière est désormais visible, posée dans la moitié
+     droite. Le débord était voulu — une forme coupée se lit comme de la matière, une forme
+     entière comme un objet qu'on montre — mais un fragment illisible ne se lisait ni comme
+     l'un ni comme l'autre. */
+  -webkit-mask-position: right 6% bottom 4%, right 6% bottom 4%;
+  mask-position: right 6% bottom 4%, right 6% bottom 4%;
   -webkit-mask-size: var(--nv-logo-cote), var(--nv-logo-cote);
   mask-size: var(--nv-logo-cote), var(--nv-logo-cote);
   -webkit-mask-composite: source-in;

@@ -1,9 +1,12 @@
 "use client";
 import { recuperer } from "@/lib/requete";
+import { useRouter } from "next/navigation";
+import { FONT } from "@/lib/typography";
 import { useEffect, useRef, useState } from "react";
 import AuthModal from "@/components/AuthModal";
 import Header from "@/components/Header";
 import { API_URL } from "@/lib/api";
+import { enTetesAuth } from "@/lib/session";
 import { CLAIR, RAYONS } from "@/lib/palette";
 
 /**
@@ -13,7 +16,12 @@ import { CLAIR, RAYONS } from "@/lib/palette";
  * disait une intention sans dire un service ; celle-ci reprend les mots de la page
  * publique, pour que les deux entrées du site promettent la même chose.
  */
-const PHRASE_HAUT = "Tout votre patrimoine,";
+/**
+ * ⚠️ **L'espace final n'est pas une coquille.** Le `<br />` qui suit colle les deux morceaux
+ * dans le texte du nœud : sans lui, un lecteur d'écran prononce « patrimoine,et ». Il ne se
+ * voit pas à l'écran — une espace en fin de ligne est absorbée par la mise en page.
+ */
+const PHRASE_HAUT = "Tout votre patrimoine, ";
 const PHRASE_BAS = "et ce qui le fait ";
 /**
  * ⚠️ **Les cinq verbes ne disent pas la même chose, et c'est voulu.** « Évoluer » et
@@ -33,6 +41,19 @@ export default function Home() {
   /** Le panneau de création est-il ouvert ? */
   const [creation, setCreation] = useState(false);
   const [user, setUser] = useState<any>(null);
+  /**
+   * Les portefeuilles du compte, pour savoir quoi proposer.
+   *
+   * ⚠️ **`null` n'est pas « aucun » : c'est « on ne sait pas encore ».** La distinction décide
+   * du libellé du bouton. Avec un simple tableau vide au départ, l'accueil d'un habitué
+   * affichait « Créer un portefeuille » pendant la seconde de chargement, puis basculait sur
+   * « Ouvrir » — un clignotement à chaque visite, et le risque de cliquer sur la mauvaise
+   * action. Tant que la réponse n'est pas là, le bouton garde le libellé neutre et n'ouvre
+   * rien de contradictoire.
+   */
+  const [portefeuilles, setPortefeuilles] = useState<any[] | null>(null);
+  const aDesPortefeuilles = (portefeuilles?.length ?? 0) > 0;
+  const router = useRouter();
   const [showAuth, setShowAuth] = useState(false);
   /**
    * ⚠️ **La demande de création survit à la connexion.** Le contrôle de session vivait au
@@ -56,6 +77,18 @@ export default function Home() {
     const u = localStorage.getItem("novac_user");
     if (u) setUser(JSON.parse(u));
   }, []);
+
+  /**
+   * ⚠️ **Interrogé même sans session connue.** Le compte est lu dans le stockage local, qui
+   * peut être vide alors qu'un jeton valide existe encore — la requête tranche, pas la
+   * supposition. Sans jeton, l'API répond une liste vide et le bouton reste sur la création.
+   */
+  useEffect(() => {
+    recuperer(`${API_URL}/api/v1/portfolios`, { headers: enTetesAuth() })
+      .then(r => r.json())
+      .then(d => setPortefeuilles(Array.isArray(d) ? d : []))
+      .catch(() => setPortefeuilles([]));
+  }, [user]);
   const targetMouse = useRef({ x: 0, y: 0 });
   const smoothMouse = useRef({ x: 0, y: 0 });
   const haloRef = useRef(0);
@@ -264,7 +297,14 @@ export default function Home() {
             * mais un paragraphe. `clamp` la laisse respirer sur grand écran sans casser le
             * petit.
             */}
-          <h1 style={{
+          {/**
+            * ⚠️ **Le titre porte un nom stable, et c'est indispensable ici.** Son texte change
+            * toutes les deux secondes : sans `aria-label`, la phrase entendue dépend du verbe
+            * qui passait à cet instant, et rien n'annonce les suivants. Le nom fixe donne la
+            * phrase entière avec le premier verbe ; la rotation reste un effet visuel, ce
+            * qu'elle est.
+            */}
+          <h1 aria-label={`${PHRASE_HAUT}${PHRASE_BAS}${VERBES[0]}.`} style={{
             /**
              * ⚠️ **`margin: 0 auto` centre la boîte ; `textAlign` ne centre que l'encre
              * dedans.** Sans lui, le titre bridé à 16 caractères se colle à gauche de son
@@ -326,14 +366,47 @@ export default function Home() {
             * composant. « Ajouter un compte » déclare 170 parce qu'il est plus court — 141 de
             * large — et tombe donc à 169,6. Ici rien à redire.
             */}
-          <PiluleAction
-            libelle="Créer un portefeuille"
-            onClick={() => {
-              if (user) { setCreation(true); return; }
-              setCreerApresConnexion(true);
-              setShowAuth(true);
-            }}
-            fond={CLAIR.accent} fondSurvol={CLAIR.accentFort}/>
+          {/**
+            * ⚠️ **L'accueil proposait de créer un portefeuille à qui en avait déjà six.** Le
+            * libellé était fixe : un habitué, connecté, avatar affiché dans le rail, arrivait
+            * sur une page dont la seule action ignorait tout ce qu'il possédait — il devait
+            * passer par le rail pour retrouver ce qu'il venait voir. L'action principale est
+            * maintenant celle qu'il attend, et la création passe au second rang sans
+            * disparaître.
+            */}
+          {aDesPortefeuilles ? (
+            <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "14px" }}>
+              <PiluleAction
+                libelle="Ouvrir mon portefeuille"
+                onClick={() => router.push("/portfolio")}
+                fond={CLAIR.accent} fondSurvol={CLAIR.accentFort}/>
+              {/**
+                * ⚠️ **Un lien et non une seconde pilule.** Deux pilules côte à côte se
+                * disputent le regard et rien ne dit laquelle est la principale ; en dessous et
+                * en texte, la création reste atteignable sans prétendre au même rang.
+                */}
+              <button onClick={() => setCreation(true)}
+                style={{
+                  background: "transparent", border: "none", cursor: "pointer", padding: 0,
+                  color: text, opacity: 0.5, fontSize: "13px", fontFamily: FONT,
+                  textDecoration: "underline", textUnderlineOffset: "3px",
+                  transition: "opacity 0.2s",
+                }}
+                onMouseEnter={e => (e.currentTarget.style.opacity = "0.8")}
+                onMouseLeave={e => (e.currentTarget.style.opacity = "0.5")}>
+                Créer un autre portefeuille
+              </button>
+            </div>
+          ) : (
+            <PiluleAction
+              libelle="Créer un portefeuille"
+              onClick={() => {
+                if (user) { setCreation(true); return; }
+                setCreerApresConnexion(true);
+                setShowAuth(true);
+              }}
+              fond={CLAIR.accent} fondSurvol={CLAIR.accentFort}/>
+          )}
         </div>
 
       </div>
