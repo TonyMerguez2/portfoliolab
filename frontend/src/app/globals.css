@@ -2159,16 +2159,25 @@ canvas + div {
   }
 }
 
-/* ⚠️ **La silhouette est retirée sur téléphone, après trois réglages qui n'ont rien réglé.**
-   Elle y a été absente, puis trop grande, puis resserrée dans un coin — et à chaque fois le
-   fond portait une tache de points plus vifs, signalée trois fois. Je ne l'ai **jamais
-   reproduite** en émulation, sur aucune largeur essayée : je ne peux donc pas la corriger par
-   un réglage, seulement retirer la seule couche capable de produire une zone *bornée* de points
-   plus denses. La trame du fond, elle, est uniforme horizontalement — elle ne peut pas faire
-   une tache.
+/* ⚠️ **La silhouette revient sur téléphone, mais éteinte de plus de moitié.** La retirer a
+   confirmé ce que trois réglages de taille et de position n'avaient pas su montrer : c'était
+   bien elle, et non la trame, qui faisait la tache de points vifs signalée trois fois. La
+   trame est uniforme horizontalement ; elle ne pouvait pas produire une zone bornée.
 
-   ⚠️ **Ne pas la remettre sans un moyen de vérifier sur un vrai téléphone.** Le grand écran la
-   garde entière : cette règle ne touche que les largeurs de téléphone. */
+   ⚠️ **Ce n'est donc pas sa taille qui était en cause, c'est son encre.** À 0,76 sur un écran
+   de poche, son cœur passe du fond à six fois sa densité en quelques centimètres : l'œil y lit
+   une lampe, pas une texture. À 0,30 — deux fois et demie la trame au lieu de six — la forme
+   se devine sans jamais s'allumer.
+
+   ⚠️ **Ancrée au coin, sans décalage en pourcentage.** Les décalages relatifs se calculaient
+   sur l'espace libre, donc sur une hauteur de fenêtre que Safari sur iPhone ne définit pas
+   comme les autres : la silhouette se retrouvait en haut de l'écran alors qu'elle était calée
+   en bas ailleurs. Un ancrage franc ne dépend d'aucune arithmétique. */
 @media (max-width: 700px) {
-  .nv-silhouette { display: none; }
+  .nv-silhouette {
+    --nv-point-logo: rgba(106, 114, 130, 0.30);
+    --nv-logo-cote: min(80vw, 380px);
+    -webkit-mask-position: right bottom, right bottom;
+    mask-position: right bottom, right bottom;
+  }
 }
