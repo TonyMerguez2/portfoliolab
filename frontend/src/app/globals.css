@@ -2124,13 +2124,8 @@ canvas + div {
    ⚠️ **La mesure passe donc en largeur, pas en hauteur.** `vh` est le mauvais repère sur un
    écran deux fois plus haut que large.
 
-   ⚠️ **Et elle est passée par 130vw avant d'atterrir à 88.** Débordant d'un tiers, la
-   silhouette se lisait — mais elle occupait toute la largeur et la moitié de la hauteur, ce
-   qui en faisait le sujet de la page plutôt que son fond. Signalé à l'usage : « il prend toute
-   la place ». Sous la largeur de l'écran, et calée dans le coin bas droit, elle redevient de
-   la matière.
-
-   Les deux pages d'entrée en profitent : elles partagent cette couche. */
+   ⚠️ **Et elle est passée par 130vw, puis 88, avant d'être retirée.** Trop grande elle occupait
+   toute la largeur, resserrée elle laissait encore une tache. Voir la règle plus bas. */
 /* ⚠️ **La lueur du curseur est retirée sur téléphone, en CSS et plus seulement en JavaScript.**
    `PointsFond` s'abstenait déjà de suivre le pointeur quand l'appareil n'a pas de survol
    — `(hover: hover) and (pointer: fine)` —, ce qui laissait le masque à −9999 px, donc éteint.
@@ -2164,10 +2159,16 @@ canvas + div {
   }
 }
 
+/* ⚠️ **La silhouette est retirée sur téléphone, après trois réglages qui n'ont rien réglé.**
+   Elle y a été absente, puis trop grande, puis resserrée dans un coin — et à chaque fois le
+   fond portait une tache de points plus vifs, signalée trois fois. Je ne l'ai **jamais
+   reproduite** en émulation, sur aucune largeur essayée : je ne peux donc pas la corriger par
+   un réglage, seulement retirer la seule couche capable de produire une zone *bornée* de points
+   plus denses. La trame du fond, elle, est uniforme horizontalement — elle ne peut pas faire
+   une tache.
+
+   ⚠️ **Ne pas la remettre sans un moyen de vérifier sur un vrai téléphone.** Le grand écran la
+   garde entière : cette règle ne touche que les largeurs de téléphone. */
 @media (max-width: 700px) {
-  .nv-silhouette {
-    --nv-logo-cote: min(88vw, 410px);
-    -webkit-mask-position: right -10% bottom 4%, right -10% bottom 4%;
-    mask-position: right -10% bottom 4%, right -10% bottom 4%;
-  }
+  .nv-silhouette { display: none; }
 }
