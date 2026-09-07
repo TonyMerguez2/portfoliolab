@@ -102,7 +102,22 @@ const RACCORD = 47;
  * la course, et il n'est plus sur le cercle. Le navigateur redimensionne alors les rayons en
  * silence pour boucler le tracé, et la tangente aux extrémités part avec.
  */
-const ETALEMENT = Math.sqrt(4 * RACCORD ** 2 - (LARGEUR - 2 * RACCORD) ** 2);
+/**
+ * La largeur de la bande qui prolonge le rail jusqu'aux bords de l'écran.
+ *
+ * ⚠️ **C'est une bande de la matière du rail, pas un trait tracé.** Premier essai : un pixel et
+ * demi, peint avec le liseré. Résultat, une barre grise collée au bord de l'écran, qui se lisait
+ * comme une bordure de fenêtre et non comme la suite du menu — signalé à l'usage. Le rail se
+ * reconnaît à sa surface, pas à un contour : la bande doit donc être assez large pour porter
+ * cette surface.
+ *
+ * ⚠️ **Seize pixels, soit un quart du rail.** Assez pour se lire comme une colonne, pas assez
+ * pour se disputer la place avec le corps du menu.
+ */
+const FILET = 16;
+
+const COURSE = LARGEUR - FILET;
+const ETALEMENT = Math.sqrt(4 * RACCORD ** 2 - (COURSE - 2 * RACCORD) ** 2);
 /** Le côté d'une rangée, l'écart entre deux, et le rembourrage du rail. */
 const RANGEE = 40, ECART = 4, MARGE = 9;
 /**
@@ -160,15 +175,6 @@ const RANGEE = 40, ECART = 4, MARGE = 9;
  * puisque le tracé la contient — le rail grandit avec son contenu, qui change quand la
  * session s'ouvre.
  */
-/**
- * L'épaisseur du filet qui prolonge le rail jusqu'aux bords de l'écran.
- *
- * ⚠️ **Un pixel et demi, et non un.** Le rail est en `position: fixed` sur un écran dont le
- * rapport de pixels vaut souvent deux : un filet d'un pixel CSS y tombe sur une frontière et se
- * rend en deux demi-pixels gris, donc plus pâle que sa couleur. Un et demi couvre toujours au
- * moins un pixel physique plein.
- */
-const FILET = 1.5;
 
 /**
  * Le tracé du rail, du haut de l'écran au bas.
@@ -193,13 +199,13 @@ const silhouette = (hRangees: number, hEcran: number) => {
     `M${FILET},0`,
     `L${FILET},${haut}`,
     // La cascade du haut : le creux part tangent au filet…
-    `A${r},${r} 0 0 0 ${l / 2},${haut + v / 2}`,
+    `A${r},${r} 0 0 0 ${FILET + (l - FILET) / 2},${haut + v / 2}`,
     // …puis le bombé reprend sa tangente et arrive tangent au flanc.
     `A${r},${r} 0 0 1 ${l},${haut + v}`,
     // Le flanc, droit sur toute la hauteur des rangées.
     `L${l},${bas - v}`,
     // La cascade du bas, la même en miroir : le bombé quitte le flanc…
-    `A${r},${r} 0 0 1 ${l / 2},${bas - v / 2}`,
+    `A${r},${r} 0 0 1 ${FILET + (l - FILET) / 2},${bas - v / 2}`,
     // …et le creux rejoint le filet, tangent lui aussi.
     `A${r},${r} 0 0 0 ${FILET},${bas}`,
     // Le filet reprend, jusqu'au bas de l'écran.
@@ -478,12 +484,6 @@ export default function SideNav() {
            au centre. C'est `justifyContent` qui les y tient — l'ancien centrage par `top: 50%`
            n'a plus lieu d'être, la boîte ne se dimensionne plus sur le contenu. */
         display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
-        /* ⚠️ **Le filet doit être peint, pas seulement découpé.** La matière du rail est un
-           voile flouté : une bande d'un pixel et demi de ce voile ne se distingue pas du fond —
-           mesuré à un niveau de gris d'écart, autant dire rien. Le liseré, lui, porte une
-           couleur franche. La découpe le réduit au filet en haut et en bas, et le laisse courir
-           le long du flanc gauche au milieu, où il se confond avec le bord de l'écran. */
-        borderLeft: `${FILET}px solid var(--nv-bord-fort)`,
 
         /* ⚠️ **La découpe emporte aussi l'infobulle, et `overflow` n'y peut rien.** Un
            `clip-path` coupe tous les descendants, positionnés ou non : la bulle des noms sort
