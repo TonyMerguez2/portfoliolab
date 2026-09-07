@@ -198,11 +198,20 @@ function Porte() {
           * Le verbe garde sa ligne : sa largeur pousserait le texte qui précède à chaque
           * rotation, le bloc étant centré — c'est la raison qui a valu trois tentatives sur
           * l'accueil.
+          *
+          * ⚠️ **Sur une seule ligne ici, contrairement à l'accueil.** Le verbe est donc dans la
+          * phrase, avec une place réservée de six caractères — la moyenne des cinq. Sans cette
+          * réserve, « performer » et « grandir » n'ayant pas la même largeur, tout le texte qui
+          * précède glisserait à chaque rotation.
+          *
+          * ⚠️ **`nowrap` et pas de largeur maximale** : la ligne doit rester entière. Elle
+          * mesure une cinquantaine de caractères, donc le corps la borne — c'est le `clamp` qui
+          * l'empêche de déborder sur un téléphone, pas un retour à la ligne.
           */}
-        <p style={{ margin: "18px 0 0", fontSize: "clamp(14px, 1.5vw, 17px)", lineHeight: 1.45,
-                    color: JETONS.surFondAttenue, maxWidth: "34ch" }}>
+        <p style={{ margin: "18px 0 0", fontSize: "clamp(11px, 1.35vw, 17px)", lineHeight: 1.45,
+                    color: JETONS.surFondAttenue, whiteSpace: "nowrap" }}>
           {PHRASE_HAUT}{PHRASE_BAS}
-          <MotQuiDefile mots={VERBES} suffixe="." />
+          <MotQuiDefile mots={VERBES} suffixe="." largeur="6ch" />
         </p>
 
         <div style={{ height: 34 }} />

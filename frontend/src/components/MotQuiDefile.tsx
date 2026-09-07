@@ -26,17 +26,28 @@ import { useState } from "react";
  * nœud a changé ; il faut un nouvel élément. Changer la clé à chaque mot force React à en
  * monter un, et le remplissage repart de zéro.
  *
- * ⚠️ **Le verbe occupe sa propre ligne.** Placé dans la phrase, sa largeur poussait le texte
- * qui précède à chaque rotation, puisque le titre est centré. Trois façons de l'éviter ont été
- * essayées — mesurer les mots et animer la largeur, réserver la largeur du plus long, réserver
- * une largeur moyenne et laisser déborder — et toutes compensaient le défaut au lieu de le
- * retirer. Seul sur sa ligne, le verbe ne pousse plus rien : ce qui le précède est immobile par
- * construction.
+ * ⚠️ **Deux façons de poser le mot, et le choix n'est pas cosmétique.** Par défaut il occupe
+ * sa propre ligne : rien ne le précède, donc sa largeur ne pousse rien. Avec `largeur`, il
+ * s'insère dans la phrase — et il faut alors lui **réserver** une place fixe, faute de quoi le
+ * texte qui le précède glisse à chaque rotation, le bloc étant centré. Un mot plus long que sa
+ * réserve déborde simplement vers la droite : c'est voulu, et c'est le seul moyen de garder la
+ * phrase immobile sans laisser un trou après les mots courts.
  */
-export default function MotQuiDefile({ mots, suffixe = "", remplissage = 1700, passage = 240, style }: {
+export default function MotQuiDefile({ mots, suffixe = "", largeur, remplissage = 1700, passage = 240, style }: {
   mots: string[];
   /** Ce qui suit le mot et se remplit avec lui — un point final, en pratique. */
   suffixe?: string;
+  /**
+   * La place réservée au mot dans la phrase, en `ch`. Omise, il prend sa propre ligne.
+   *
+   * ⚠️ **En `ch`, jamais en pixels** : le corps du texte varie avec la fenêtre, une largeur en
+   * pixels ne serait juste qu'à une taille d'écran.
+   *
+   * ⚠️ **La valeur juste est la moyenne des mots**, pas le plus long ni le plus court : trop
+   * étroite, tous débordent et la phrase penche à droite ; trop large, tous laissent un blanc
+   * et elle penche à gauche.
+   */
+  largeur?: string;
   /**
    * Durée du remplissage, en millisecondes : c'est aussi le temps d'affichage du mot.
    *
@@ -54,7 +65,18 @@ export default function MotQuiDefile({ mots, suffixe = "", remplissage = 1700, p
   const [sortie, setSortie] = useState(false);
 
   return (
-    <span style={{ display: "block", ...style }}>
+    <span style={largeur
+      ? {
+          display: "inline-block", width: largeur, verticalAlign: "bottom",
+          /* Le débordement doit rester visible — c'est lui qu'on cherche. */
+          whiteSpace: "nowrap", overflow: "visible",
+          /* ⚠️ L'alignement du bloc descend jusqu'ici : sans ce `left`, le mot se centrerait
+             *dans* sa réserve, et son début se déplacerait à chaque rotation — exactement ce
+             que la largeur fixe doit empêcher. */
+          textAlign: "left",
+          ...style,
+        }
+      : { display: "block", ...style }}>
       <span
         key={index}
         className={sortie ? "nv-mot nv-mot--sortie" : "nv-mot"}
