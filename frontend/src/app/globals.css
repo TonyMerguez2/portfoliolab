@@ -311,6 +311,11 @@
      deux fois trop faible, ce qui explique qu'on ne le remarquait guère. */
   --nv-point:             rgba(106,114,130,0.12);
   --nv-point-vif:         rgba(106,114,130,0.64);
+  /* ⚠️ **Le logo a ses propres encres, et il le faut.** Il partageait `--nv-point-vif` avec la
+     lueur qui suit le curseur : le rendre plus present aurait éclairci la lueur d'autant, alors
+     que celle-ci est calée sur une référence extérieure. Deux usages, deux jetons. */
+  --nv-point-logo:        rgba(106,114,130,0.76);
+  --nv-point-logo-doux:   rgba(106,114,130,0.30);
 
   /* La barre latérale. Elle est translucide et floute ce qui passe dessous :
      ses fonds ne peuvent donc pas être les jetons de carte, qui sont opaques. */
@@ -419,6 +424,8 @@
   /* Mêmes jetons Appica, thème clair — voir la note du thème sombre. */
   --nv-point:             rgba(106,114,130,0.12);
   --nv-point-vif:         rgba(106,114,130,0.58);
+  --nv-point-logo:        rgba(106,114,130,0.70);
+  --nv-point-logo-doux:   rgba(106,114,130,0.28);
 
   /* La barre suit la page. L'état actif quitte le blanc translucide pour
      l'accent : sur fond clair, un voile blanc sur blanc ne marque rien. */
@@ -2016,10 +2023,27 @@ canvas + div {
    sans bord. C'est cette propreté-là qu'on rejoint. */
 .nv-silhouette {
   --nv-logo-cote: min(115vh, 1300px);
-  background-image: radial-gradient(circle at 1px 1px, var(--nv-point-vif) 1px, transparent 1.5px);
-  /* ⚠️ Le pas et l'origine sont ceux de `.nv-points` : cette couche et le fond partagent donc
-     la même grille, au pixel. C'est toute la raison d'être de ce montage. */
-  background-size: 14px 14px;
+  /* ⚠️ **Deux trames, et la seconde tombe exactement entre les points de la première.** Le
+     logo devait se faire plus dense que le fond sans devenir une seconde grille désalignée —
+     c'est la contrainte qui a fait échouer quatre tentatives d'animation, et elle vaut ici
+     aussi. Un pas plus court, 11 ou 12 px, aurait battu contre le fond et moiré. Un décalage
+     d'exactement **un demi-pas dans les deux axes** ajoute un point au centre de chaque carré
+     de la trame : la densité double, la grille reste celle du fond, et aucun point ne se
+     retrouve à côté d'un autre.
+
+     ⚠️ **Les points ajoutés sont plus petits et plus pâles que les autres.** À égalité, le
+     doublement se lisait comme un aplat : on ne voyait plus une trame dense mais une tache. En
+     retrait, ils épaississent la matière sans prendre le premier plan — c'est ce qui garde
+     l'effet discret.
+
+     ⚠️ **Le pas et l'origine de la trame principale restent ceux de `.nv-points`.** Cette
+     couche et le fond partagent donc la même grille, au pixel : toute la raison d'être du
+     montage. */
+  background-image:
+    radial-gradient(circle at 1px 1px, var(--nv-point-logo) 1.5px, transparent 2.05px),
+    radial-gradient(circle at 1px 1px, var(--nv-point-logo-doux) 1.05px, transparent 1.6px);
+  background-size: 14px 14px, 14px 14px;
+  background-position: 0 0, 7px 7px;
 
   -webkit-mask-image: url(/logo-hivesync-doux.svg),
     radial-gradient(closest-side, #000 8%, rgba(0, 0, 0, 0.62) 46%, rgba(0, 0, 0, 0.22) 72%, transparent 96%);

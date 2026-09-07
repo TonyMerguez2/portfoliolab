@@ -8,16 +8,21 @@
     s'applique au *rendu* de l'élément, jamais à son masque ; la seule façon d'adoucir un
     masque est de fournir une image déjà floue. C'est ce fichier.
 
-    ⚠️ L'écart-type vaut 6 unités du viewBox. Le masque est affiché à 1035 px pour 1200
-    d'origine, soit 0,8625 : six unités valent donc 5,2 pixels à l'écran, et la transition
-    d'un flou gaussien s'étale sur environ trois écarts-types — quinze pixels, soit un pas de
-    trame. Chaque point traverse ainsi le bord en s'éteignant, entier, au lieu d'être coupé.
+    ⚠️ L'écart-type vaut 11 unités du viewBox. Le masque est affiché à 1035 px pour 1200
+    d'origine, soit 0,8625 : onze unités valent donc 9,5 pixels à l'écran, et la transition
+    d'un flou gaussien s'étale sur environ trois écarts-types — vingt-huit pixels, soit deux
+    pas de trame. Chaque point traverse ainsi le bord en s'éteignant, entier, au lieu d'être
+    coupé, et le passage vers la trame du fond occupe deux rangées de points plutôt qu'une.
+
+    ⚠️ Il a valu 6, ce qui suffisait à ne plus trancher les points mais laissait un contour
+    encore net. Ne pas monter beaucoup plus haut : le flou ronge les parties fines du dessin
+    avant d'adoucir quoi que ce soit de plus.
 
     ⚠️ La région du filtre est élargie de 20 % de chaque côté. Par défaut elle épouse la boîte
     du tracé, et le flou s'y trouverait tranché net — ce que le fondu doit précisément éviter.
   -->
   <filter id="fondu" x="-20%" y="-20%" width="140%" height="140%" color-interpolation-filters="sRGB">
-    <feGaussianBlur stdDeviation="6" />
+    <feGaussianBlur stdDeviation="11" />
   </filter>
   <g filter="url(#fondu)">
   <path fill="#000000" fill-rule="nonzero"
