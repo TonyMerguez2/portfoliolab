@@ -6,6 +6,8 @@ import { usePathname } from "next/navigation";
 import { useApp } from "@/lib/AppContext";
 import ProfileModal from "@/components/ProfileModal";
 import AuthModal from "@/components/AuthModal";
+import { Avatar, AvatarImage, AvatarFallback } from "@appica/ui-react/avatar";
+import { UserFilled } from "@appica/icons-react";
 import { basculerMode, useModeTheme } from "@/lib/theme";
 import { API_URL } from "@/lib/api";
 
@@ -200,6 +202,23 @@ type Pictogramme = { trace: string[]; contour?: boolean };
  * un trait d'environ 1,1 pixel — plus léger que la masse des pleins qui l'entourent, et c'est
  * le seul écart de graisse du jeu. Assumé : la forme prime, et elle n'a pas d'autre version.
  */
+/**
+ * Les initiales tirées d'un pseudonyme ou d'une adresse.
+ *
+ * ⚠️ **Deux lettres quand le nom en offre deux, une sinon.** « Marie Dupont » donne MD,
+ * « camille » donne C. Prendre systématiquement les deux premières lettres d'un mot unique
+ * donnerait « CA », qui se lit comme un sigle et non comme une initiale.
+ *
+ * ⚠️ **L'adresse est coupée avant l'arobase.** Sans quoi « sacha@exemple.fr » donnerait SE —
+ * la seconde lettre venant du fournisseur de courrier, qui ne dit rien de la personne.
+ */
+const initiales = (nom: string | undefined) => {
+  const base = (nom ?? "").split("@")[0].trim();
+  if (!base) return "?";
+  const mots = base.split(/[\s._-]+/).filter(Boolean);
+  return (mots.length > 1 ? mots[0][0] + mots[1][0] : mots[0][0]).toUpperCase();
+};
+
 const icon = (p: Pictogramme) => (
   <svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"
     fill={p.contour ? "none" : "currentColor"}
@@ -476,25 +495,26 @@ export default function SideNav() {
         <Rangee nom={user.username?.split(" ")[0] || user.email || "Compte"}
           onClick={() => setShowProfile(true)}
           enfant={
-            <span style={{
-              width: 26, height: 26, borderRadius: "50%", overflow: "hidden",
-              display: "flex", alignItems: "center", justifyContent: "center",
-              border: "1px solid var(--nv-bord-fort)", background: "var(--nv-carte-creuse)",
-            }}>
-              {user.avatar_url ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img
+            /**
+              * ⚠️ **Le repli n'est plus une branche `if`, et c'est le composant qui le tient.**
+              * L'enveloppe posait l'image quand `avatar_url` existait, l'initiale sinon, et
+              * masquait l'image en `onError` quand elle ne se chargeait pas — un repli qui ne
+              * repliait sur rien : la case restait vide. `Avatar` affiche son `Fallback` tant
+              * que l'image n'a pas *abouti*, absente comme cassée. Le cas « adresse présente
+              * mais fichier disparu » se soigne donc tout seul.
+              *
+              * ⚠️ **La taille est donnée en pixels, pas en cran.** Le composant accepte les
+              * deux ; les crans nommés vont de 20 à 64 et aucun ne vaut 26, la mesure de la
+              * boîte des rangées de ce rail.
+              */
+            <Avatar size={26} shape="rounded">
+              {user.avatar_url && (
+                <AvatarImage
                   src={user.avatar_url.startsWith("/uploads") ? `${API_URL}${user.avatar_url}` : user.avatar_url}
-                  alt=""
-                  style={{ width: "100%", height: "100%", objectFit: "cover" }}
-                  onError={e => { (e.target as HTMLImageElement).style.display = "none"; }}
-                />
-              ) : (
-                <span style={{ fontSize: 11, fontWeight: 700, color: "var(--nv-texte)", userSelect: "none" }}>
-                  {(user.username || user.email || "?")[0].toUpperCase()}
-                </span>
+                  alt="" />
               )}
-            </span>
+              <AvatarFallback>{initiales(user.username || user.email)}</AvatarFallback>
+            </Avatar>
           } />
       )}
 
@@ -514,9 +534,17 @@ export default function SideNav() {
           * forme étrangère. `icon()` peint en `currentColor`, donc l'enveloppe suffit.
           */
         <Rangee nom="Se connecter" onClick={() => setShowAuth(true)} enfant={
-          <span style={{ display: "flex", color: "var(--nv-accent)" }}>
-            {icon(ICONS.connexion)}
-          </span>
+          /**
+            * ⚠️ **La même enveloppe que la session ouverte, avec une silhouette dedans.** Les
+            * deux états occupent ainsi la même forme au même endroit : se connecter ne déplace
+            * rien, la silhouette cède simplement la place au visage. Avec un pictogramme nu,
+            * la rangée changeait de masse à la connexion.
+            */
+          <Avatar size={26} shape="rounded">
+            <AvatarFallback>
+              <UserFilled />
+            </AvatarFallback>
+          </Avatar>
         } />
       )}
 
