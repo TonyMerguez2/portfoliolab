@@ -6,7 +6,7 @@ import { usePathname } from "next/navigation";
 import { useApp } from "@/lib/AppContext";
 import ProfileModal from "@/components/ProfileModal";
 import AuthModal from "@/components/AuthModal";
-import { Avatar, AvatarImage, AvatarFallback } from "@appica/ui-react/avatar";
+import { Avatar, AvatarImage, AvatarFallback, AvatarBadge } from "@appica/ui-react/avatar";
 import { UserFilled } from "@appica/icons-react";
 import { basculerMode, useModeTheme } from "@/lib/theme";
 import { API_URL } from "@/lib/api";
@@ -514,6 +514,14 @@ export default function SideNav() {
                   alt="" />
               )}
               <AvatarFallback>{initiales(user.username || user.email)}</AvatarFallback>
+              {/**
+                * ⚠️ **La pastille ne paraît que sur la session ouverte, et c'est tout son
+                * sens.** Verte, en bas à droite, elle dit « connecté » — la mettre aussi sur la
+                * silhouette hors session la viderait de sens. Elle mesure 30 % de l'avatar,
+                * soit huit pixels ici, et son halo bat en continu ; le réglage système « moins
+                * d'animations » l'arrête, le composant s'en charge.
+                */}
+              <AvatarBadge animate />
             </Avatar>
           } />
       )}
