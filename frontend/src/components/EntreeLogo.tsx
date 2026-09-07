@@ -55,7 +55,7 @@ export default function EntreeLogo() {
         animation: `nv-entree-voile ${RETRAIT}ms ease-in ${TRACE + REMPLISSAGE}ms forwards`,
       }}
     >
-      <svg viewBox={LOGO_VUE} width="132" height="132" fill="none" aria-hidden="true">
+      <svg viewBox={LOGO_VUE} width="150" height="150" fill="none" aria-hidden="true">
         {/**
           * ⚠️ **Deux fois le même chemin : l'un se trace, l'autre se remplit.** Un seul ne
           * saurait pas faire les deux — le contour s'anime par son pointillé, le remplissage par
@@ -70,7 +70,20 @@ export default function EntreeLogo() {
         <g transform={LOGO_TRANSFORME}>
           <path
             d={LOGO_CHEMIN}
-            stroke="var(--nv-texte-intense)" strokeWidth={1.5 / 1.112}
+            stroke="var(--nv-texte-intense)" strokeWidth={1.6}
+            /**
+              * ⚠️ **`vectorEffect` : sans lui, le trait faisait un sixième de pixel.** Une
+              * épaisseur de trait s'exprime dans les unités du dessin, que la boîte réduit
+              * ensuite — ici de 1200 à 132, et la matrice du logo ajoute son propre facteur :
+              * 1,5 unité devenait **0,165 pixel** à l'écran. Le navigateur peint alors un trait
+              * plus fin qu'un pixel, qu'il ne peut rendre qu'en le diluant : d'où un contour
+              * pâle, haché, qui paraît granuleux.
+              *
+              * `non-scaling-stroke` sort l'épaisseur de cette arithmétique — 1,6 veut dire
+              * 1,6 pixel à l'écran, quelle que soit la taille du logo. C'est aussi ce qui
+              * garantit que le trait ne changera pas si l'on redimensionne le dessin.
+              */
+            vectorEffect="non-scaling-stroke"
             strokeLinecap="round" strokeLinejoin="round"
             pathLength={1} strokeDasharray={1}
             style={{ animation: `nv-entree-trace ${TRACE}ms cubic-bezier(0.65, 0, 0.35, 1) forwards` }}
