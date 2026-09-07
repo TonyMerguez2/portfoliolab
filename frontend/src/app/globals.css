@@ -1886,52 +1886,15 @@ canvas + div {
    décrivent la même opération ; l'ancienne syntaxe reste nécessaire tant que Safari ne suit
    pas, et l'oublier donne une silhouette sans masque du tout.
 
-   ⚠️ **La respiration passe par une variable de nombre, pas par `mask-size` directement.**
-   Une taille de masque à deux couches s'écrit « a, b » : l'animer demanderait de réécrire les
-   deux valeurs à chaque image, dont celle qui ne doit pas bouger. Un facteur déclaré en
-   `@property` s'interpole tout seul, et le `calc` le répercute sur la seule couche du voile.
-   Sans la déclaration `@property`, le navigateur interpole entre deux chaînes et le souffle
-   se fait par sauts. */
-@property --nv-souffle {
-  syntax: "<number>";
-  inherits: false;
-  initial-value: 1;
-}
-
-/* ⚠️ La place du cœur s'interpole comme une longueur, pas comme une chaîne : sans ces deux
-   déclarations, le déplacement se ferait par sauts d'une étape à l'autre. */
-/* ⚠️ **Le sommet est un palier, et il est du côté de la petite taille.** Les deux couches se
-   croisaient à mi-course et repartaient aussitôt : le moment le plus dense ne durait qu'une
-   image, on voyait un passage et non une inspiration. Le palier le retient 28 % du cycle,
-   soit une seconde sept sur six.
-
-   ⚠️ **Lequel des deux bouts est le plus dense ne se devine pas — il se compte.** Je l'avais
-   posé sur la grande taille, en raisonnant qu'elle couvre plus de surface donc pose plus de
-   points. Faux : à masque plus large, le dégradé qui éteint les bords s'élargit avec lui et
-   dilue le cœur. Relevé sur la page, en comptant les points au-dessus du seuil dans un carré
-   de 460 sur 400 : **4137 à la petite taille contre 2772 à la grande**. Le palier tenait donc
-   exactement le creux. Signalé à l'usage — « les points les plus visibles n'apparaissent pas
-   plus longtemps ».
-
-   ⚠️ **Le palier enjambe la fin du cycle**, d'où les quatre étapes : 86 % → 100 % est le même
-   instant que 0 % → 14 %. L'écrire en une seule borne l'aurait coupé en deux moitiés de
-   moitié de durée. */
-@keyframes nv-respire-petit {
-  0%, 14%   { opacity: 1;    }
-  50%       { opacity: 0.15; }
-  86%, 100% { opacity: 1;    }
-}
-@keyframes nv-respire-grand {
-  0%, 14%   { opacity: 0.15; }
-  50%       { opacity: 1;    }
-  86%, 100% { opacity: 0.15; }
-}
+*/
 
 /**
  * La silhouette du logo, dessinée par la trame de points.
  *
- * ⚠️ **Elle enfle par fondu entre deux tailles, et non par étirement.** Quatre essais ont
- * précédé, et chacun a appris une contrainte :
+ * ⚠️ **Elle est fixe. Ne tentez pas de l'animer : quatre voies ont été essayées et fermées.**
+ * Une cinquième — le fondu croisé entre deux tailles — a fonctionné, vécu deux jours, puis été
+ * retirée à la demande. L'histoire reste ici parce que les contraintes, elles, tiennent
+ * toujours :
  *
  * — `mask-size` **ne se repeint pas** : la valeur change dans le modèle, l'écran non.
  * — `mask-position` se repeint, mais ne fait que translater : le logo montait au lieu d'enfler.
@@ -1941,49 +1904,41 @@ canvas + div {
  * — Avancer par pas entiers de 14 px respectait la grille, mais un saut est un saut : rien de
  *   fluide, et toujours une translation.
  *
- * D'où deux couches figées, l'une un peu plus grande que l'autre, dont les opacités se
- * croisent. Aucune ne bouge, aucune ne s'étire : les points restent exactement là où le fond
- * les met. Ce qui varie est *lequel des deux contours est allumé*, et l'œil lit une forme qui
- * respire. L'opacité est composée par le processeur graphique, donc le fondu est continu.
+ * La leçon commune : **les points doivent rester exactement là où le fond les met.** Toute
+ * animation qui déplace ou étire la couche crée une seconde grille désalignée, et la
+ * silhouette cesse d'être « le fond, en plus dense » pour devenir un objet posé dessus.
  */
-.nv-silhouette,
-.nv-silhouette::after {
+/* ⚠️ **La silhouette ne respire plus : elle est arrêtée sur son plein.** Deux couches se
+   croisaient — une petite à pleine encre, une grande à 0,15 — pour donner une pulsation. Le
+   cycle est retiré à la demande, et la couche `::after` avec : elle n'existait que pour être
+   la seconde moitié d'un fondu. Ce qui reste est l'image la plus dense du cycle, celle
+   mesurée à 4137 points contre 2772 pour l'autre extrémité.
+
+   ⚠️ **Le masque est la version au bord fondu, et c'est le point de tout ceci.** Un contour
+   net tranche les points qu'il croise : le long du bord, on voyait des moitiés de point, donc
+   des fragments carrés au lieu de ronds. `filter: blur()` ne peut rien ici — il agit sur le
+   rendu, jamais sur le masque —, d'où un second fichier SVG portant le flou. Voir les
+   commentaires de `logo-hivesync-doux.svg` pour l'écart-type et la région du filtre.
+
+   La lueur sous le curseur n'a jamais eu ce défaut : son masque est un dégradé, donc déjà
+   sans bord. C'est cette propreté-là qu'on rejoint. */
+.nv-silhouette {
   --nv-logo-cote: min(115vh, 1300px);
   background-image: radial-gradient(circle at 1px 1px, var(--nv-point-vif) 1px, transparent 1.5px);
-  /* ⚠️ Le pas et l'origine sont ceux de `.nv-points` : les deux couches et le fond partagent
-     donc la même grille, au pixel. C'est toute la raison d'être de ce montage. */
+  /* ⚠️ Le pas et l'origine sont ceux de `.nv-points` : cette couche et le fond partagent donc
+     la même grille, au pixel. C'est toute la raison d'être de ce montage. */
   background-size: 14px 14px;
 
-  -webkit-mask-image: url(/logo-hivesync.svg),
+  -webkit-mask-image: url(/logo-hivesync-doux.svg),
     radial-gradient(closest-side, #000 8%, rgba(0, 0, 0, 0.62) 46%, rgba(0, 0, 0, 0.22) 72%, transparent 96%);
-  mask-image: url(/logo-hivesync.svg),
+  mask-image: url(/logo-hivesync-doux.svg),
     radial-gradient(closest-side, #000 8%, rgba(0, 0, 0, 0.62) 46%, rgba(0, 0, 0, 0.22) 72%, transparent 96%);
   -webkit-mask-repeat: no-repeat, no-repeat;
   mask-repeat: no-repeat, no-repeat;
   -webkit-mask-position: right -16% bottom -24%, right -16% bottom -24%;
   mask-position: right -16% bottom -24%, right -16% bottom -24%;
-  -webkit-mask-composite: source-in;
-  mask-composite: intersect;
-}
-
-.nv-silhouette {
   -webkit-mask-size: var(--nv-logo-cote), var(--nv-logo-cote);
   mask-size: var(--nv-logo-cote), var(--nv-logo-cote);
-  animation: nv-respire-petit 6s ease-in-out infinite;
-}
-
-/* La grande, dessous, qui se révèle quand la petite s'efface. */
-.nv-silhouette::after {
-  content: "";
-  position: absolute;
-  inset: 0;
-  --nv-logo-grand: calc(var(--nv-logo-cote) * 1.09);
-  -webkit-mask-size: var(--nv-logo-grand), var(--nv-logo-grand);
-  mask-size: var(--nv-logo-grand), var(--nv-logo-grand);
-  animation: nv-respire-grand 6s ease-in-out infinite;
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .nv-silhouette { animation: none; opacity: 0.9; }
-  .nv-silhouette::after { animation: none; opacity: 0; }
+  -webkit-mask-composite: source-in;
+  mask-composite: intersect;
 }

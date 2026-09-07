@@ -13,9 +13,18 @@ import { CLAIR, RAYONS } from "@/lib/palette";
  * disait une intention sans dire un service ; celle-ci reprend les mots de la page
  * publique, pour que les deux entrées du site promettent la même chose.
  */
-const PHRASE = "Tout votre patrimoine, et ce qui le fait bouger.";
+const PHRASE_AVANT = "Tout votre patrimoine, et ce qui le fait ";
+/**
+ * ⚠️ **Les cinq verbes ne disent pas la même chose, et c'est voulu.** « Évoluer » et
+ * « changer » décrivent, « performer » et « grandir » promettent, « résister » rassure. La
+ * phrase change donc de registre au fil du cycle. Choisis à la demande, après que j'aie
+ * signalé qu'un verbe de gain se lit comme une promesse de rendement sur un produit qui écrit
+ * en pied de page ne donner aucun conseil en investissement.
+ */
+const VERBES = ["évoluer", "performer", "résister", "grandir", "changer"];
 import PiluleAction from "@/components/portfolio/PiluleAction";
 import PanneauCreation from "@/components/portfolio/PanneauCreation";
+import MotQuiDefile from "@/components/MotQuiDefile";
 export default function Home() {
   const mouseRef = useRef({ x: 0.5, y: 0.5 });
   const [dark, setDark] = useState(true);
@@ -266,7 +275,7 @@ export default function Home() {
             letterSpacing: "-0.03em", lineHeight: 1.08,
             transition: "color 0.4s ease",
           }}>
-            {PHRASE}
+            {PHRASE_AVANT}<MotQuiDefile mots={VERBES} />.
           </h1>
         </div>
 

@@ -1,0 +1,27 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="1200" viewBox="0 0 1200 1200">
+  <!--
+    Le logo, **au bord fondu**, pour servir de masque à la trame de points.
+
+    ⚠️ Pourquoi un second fichier plutôt qu'un flou en CSS. Un masque à bord net tranche les
+    points qu'il croise : le long du contour, la moitié d'un point s'affiche et l'autre non,
+    ce qui donne des fragments carrés au lieu de points ronds. `filter: blur()` en CSS
+    s'applique au *rendu* de l'élément, jamais à son masque ; la seule façon d'adoucir un
+    masque est de fournir une image déjà floue. C'est ce fichier.
+
+    ⚠️ L'écart-type vaut 6 unités du viewBox. Le masque est affiché à 1035 px pour 1200
+    d'origine, soit 0,8625 : six unités valent donc 5,2 pixels à l'écran, et la transition
+    d'un flou gaussien s'étale sur environ trois écarts-types — quinze pixels, soit un pas de
+    trame. Chaque point traverse ainsi le bord en s'éteignant, entier, au lieu d'être coupé.
+
+    ⚠️ La région du filtre est élargie de 20 % de chaque côté. Par défaut elle épouse la boîte
+    du tracé, et le flou s'y trouverait tranché net — ce que le fondu doit précisément éviter.
+  -->
+  <filter id="fondu" x="-20%" y="-20%" width="140%" height="140%" color-interpolation-filters="sRGB">
+    <feGaussianBlur stdDeviation="6" />
+  </filter>
+  <g filter="url(#fondu)">
+  <path fill="#000000" fill-rule="nonzero"
+    transform="matrix(1.112183 0 0 1.112093 600 600) translate(-525.5, -499)"
+    d="M 631.70 983.90 C 621.77 981.57 606.05 970.81 567.50 939.99 C 503.29 888.64 450.19 840.33 379.98 769.38 C 283.75 672.13 199.68 570.54 122.29 458.00 C 91.20 412.78 69.57 376.90 51.47 340.50 C 5.86 248.76 -7.36 183.84 11.70 145.18 C 25.39 117.40 55.39 110.88 101.46 125.67 C 145.45 139.79 208.35 172.07 281.00 217.81 C 334.14 251.26 370.18 275.89 514.50 377.36 C 560.15 409.45 572.49 421.18 582.99 442.50 C 588.54 453.76 589.94 458.78 589.98 467.60 C 590.02 477.94 586.75 484.49 579.67 488.27 C 576.24 490.10 573.99 490.47 567.00 490.39 C 559.07 490.30 556.69 489.68 531.50 481.22 C 486.29 466.03 460.56 460.51 438.16 461.19 C 426.90 461.53 424.89 461.87 419.96 464.26 C 405.25 471.40 396.76 487.17 395.34 510.00 C 392.00 563.74 443.79 668.87 527.38 778.00 C 540.31 794.88 578.12 841.98 594.42 861.50 C 602.68 871.40 619.81 890.08 632.48 903.00 C 657.95 928.98 661.70 934.24 664.59 948.09 C 669.34 970.90 652.83 988.88 631.70 983.90 Z M 985.00 878.91 C 967.83 876.88 940.52 868.54 911.00 856.31 C 892.19 848.52 847.20 826.38 826.00 814.48 C 767.78 781.80 670.81 718.29 553.00 635.69 C 499.88 598.45 489.89 590.34 478.64 575.35 C 455.73 544.83 453.63 515.03 473.90 508.15 C 482.05 505.39 487.48 506.45 518.81 516.94 C 589.84 540.72 620.45 543.80 637.42 528.86 C 657.32 511.35 659.79 480.08 644.97 433.50 C 616.22 343.12 522.58 204.50 418.02 97.52 C 386.12 64.88 381.58 57.85 381.53 41.00 C 381.50 30.02 383.14 25.82 389.80 19.80 C 394.86 15.22 399.68 13.68 407.39 14.17 C 415.31 14.68 420.39 17.33 437.91 30.08 C 525.36 93.72 611.10 170.06 695.04 259.00 C 823.48 395.10 898.51 486.68 950.81 571.19 C 1002.77 655.15 1035.98 730.97 1045.65 787.70 C 1048.05 801.75 1048.05 826.08 1045.67 836.50 C 1043.47 846.08 1037.50 858.94 1032.60 864.63 C 1022.71 876.13 1005.38 881.33 985.00 878.91 Z" />
+  </g>
+</svg>
