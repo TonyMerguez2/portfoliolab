@@ -1888,6 +1888,61 @@ canvas + div {
 
 */
 
+/* ── Le mot qui se remplit ──────────────────────────────────────────────────
+
+   Le verbe apparaît dans une encre discrète, puis le blanc le traverse de gauche à droite.
+   Quand il est plein, le mot suivant prend sa place et l'encre repart discrète.
+
+   ⚠️ **Le remplissage est un dégradé sur le texte, pas un voile posé dessus.** Un calque qui
+   se déplierait au-dessus du mot devrait connaître sa couleur de fond pour le masquer — donc
+   dépendre du thème, et se voir dès qu'un point de la trame passe derrière. Ici c'est le
+   glyphe lui-même qui est peint : `background-clip: text` découpe le dégradé à la forme des
+   lettres, et il n'y a rien par-dessus.
+
+   ⚠️ **`-webkit-text-fill-color` et non `color: transparent`.** Rendre la couleur transparente
+   rendrait aussi `currentColor` transparent — le dégradé serait alors invisible, puisqu'il est
+   fait de cette même couleur. `-webkit-text-fill-color` vide le glyphe *sans* toucher à
+   `color`, qui reste la couleur du thème et sert de matière au dégradé.
+
+   ⚠️ **Le dégradé fait deux fois la largeur du mot.** Il porte la couleur pleine sur sa
+   première moitié et l'encre discrète sur la seconde ; le faire glisser de 100 % à 0 % promène
+   la frontière d'un bord à l'autre. Une seule largeur ne laisserait pas de quoi couvrir le mot
+   avant et après le passage.
+
+   ⚠️ **La frontière est adoucie sur six pour cent.** Une coupure nette à 50 % donnait un bord
+   de lame qui se voyait comme un défaut d'affichage ; six pour cent de deux largeurs font douze
+   pour cent du mot, assez pour lire un passage plutôt qu'une arête. */
+.nv-mot {
+  background-image: linear-gradient(90deg,
+    currentColor 0%, currentColor 47%,
+    color-mix(in srgb, currentColor 30%, transparent) 53%,
+    color-mix(in srgb, currentColor 30%, transparent) 100%);
+  background-size: 200% 100%;
+  background-position: 100% 0;
+  background-repeat: no-repeat;
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  animation: nv-remplir var(--nv-remplissage, 2600ms) linear forwards;
+}
+
+@keyframes nv-remplir {
+  from { background-position: 100% 0; }
+  to   { background-position: 0% 0;   }
+}
+
+/* ⚠️ **Sans animation, le mot est simplement plein.** Le laisser dans son encre discrète le
+   rendrait deux fois moins lisible que le reste du titre, pour un réglage qui demande moins de
+   mouvement et non moins de contraste. La rotation s'arrête aussi : elle est déclenchée par la
+   fin de l'animation, qui n'a plus lieu. */
+@media (prefers-reduced-motion: reduce) {
+  .nv-mot {
+    animation: none;
+    background-image: none;
+    -webkit-text-fill-color: currentColor;
+  }
+}
+
 /**
  * La silhouette du logo, dessinée par la trame de points.
  *
