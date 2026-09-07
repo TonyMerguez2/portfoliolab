@@ -871,8 +871,19 @@
      `radial-gradient(circle at 1px 1px, #000 1px, transparent 1.5px)` répété
      tous les 14 px. Le point fait donc 1 px de plein et s'éteint à 1,5, ce qui
      lui donne un bord adouci plutôt qu'un carré d'un pixel. */
-  background-image: radial-gradient(circle at 1px 1px, var(--nv-point) 1px, transparent 1.5px);
+  /* ⚠️ **Le centre du point doit être à au moins un rayon du bord de sa tuile.** Écrit
+     « circle at 1px 1px » avec une extinction à 1,5, le dégradé déborde de la tuile d'un demi
+     pixel en haut et à gauche — et un fond ne se répète pas par-dessus lui-même : ce demi
+     pixel est **coupé**, pas reporté. Le point perdait donc son quart supérieur gauche et se
+     lisait comme un carré à encoche. Invisible tant que le point faisait 1 px de plein ; criant
+     dès qu'on l'a grossi pour le logo.
+
+     Le centre est donc posé sur le rayon d'extinction, et la couche décalée d'autant en
+     arrière : le point retrouve sa place au pixel près — même origine, même pas — mais sa
+     tuile lui laisse la place d'être rond. */
+  background-image: radial-gradient(circle at 1.5px 1.5px, var(--nv-point) 1px, transparent 1.5px);
   background-size: 14px 14px;
+  background-position: -0.5px -0.5px;
 
   /* ⚠️ **La trame se dissipe en haut et en bas.** Elle courait d'un bord à l'autre à densité
      constante, et venait buter contre les extrémités sombres du dégradé — une trame qui
@@ -892,8 +903,12 @@
   content: "";
   position: absolute;
   inset: 0;
-  background-image: radial-gradient(circle at 1px 1px, var(--nv-point-vif) 1px, transparent 1.5px);
+  /* Même correction de tuile que la couche du dessous — voir son commentaire. Les deux doivent
+     la porter à l'identique, sinon leurs grilles se décalent d'un demi-pixel et la lueur ne
+     tombe plus sur les points qu'elle est censée éclairer. */
+  background-image: radial-gradient(circle at 1.5px 1.5px, var(--nv-point-vif) 1px, transparent 1.5px);
   background-size: 14px 14px;
+  background-position: -0.5px -0.5px;
   /* Hors écran tant que la souris n'a pas bougé : sans cela, la lueur
      apparaîtrait dans le coin haut-gauche au chargement.
 
@@ -2033,8 +2048,11 @@ canvas + div {
      ⚠️ **Ce qui reste pour la rendre plus présente : le rayon et l'encre, jamais le nombre.**
      Les mêmes points, dessinés plus gros et plus soutenus. Le pas et l'origine sont ceux de
      `.nv-points`, au pixel : toute la raison d'être du montage. */
-  background-image: radial-gradient(circle at 1px 1px, var(--nv-point-logo) 1.5px, transparent 2.05px);
+  background-image: radial-gradient(circle at 2.05px 2.05px, var(--nv-point-logo) 1.5px, transparent 2.05px);
   background-size: 14px 14px;
+  /* Le décalage vaut le rayon d'extinction moins 1 : le centre retombe exactement là où le
+     fond pose les siens. Voir le commentaire de `.nv-points`. */
+  background-position: -1.05px -1.05px;
 
   -webkit-mask-image: url(/logo-hivesync-doux.svg),
     radial-gradient(closest-side, #000 8%, rgba(0, 0, 0, 0.62) 46%, rgba(0, 0, 0, 0.22) 72%, transparent 96%);
