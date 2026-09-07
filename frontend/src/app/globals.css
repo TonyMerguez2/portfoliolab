@@ -2144,6 +2144,21 @@ canvas + div {
   .nv-points::after { display: none; }
 }
 
+/* ⚠️ **Sur téléphone, le fondu de la trame se lisait comme une tache éclairée.** Il éteint les
+   points sur les 22 % du haut et du bas de l'écran, ce qui laisse au milieu une bande de points
+   nettement plus vifs — mesuré 26 contre 16 en haut. Sur un grand écran, la transition est
+   assez longue pour passer inaperçue ; sur un téléphone, elle se resserre sur neuf cents pixels
+   et l'œil y voit un halo, comme si le curseur s'y trouvait. Signalé à l'usage.
+
+   Le fondu n'est pas supprimé — il empêche les points de buter contre les extrémités sombres du
+   dégradé — mais réduit à une lisière : la trame est uniforme partout ailleurs. */
+@media (max-width: 700px) {
+  .nv-points {
+    -webkit-mask-image: linear-gradient(to bottom, transparent 0%, #000 5%, #000 95%, transparent 100%);
+    mask-image: linear-gradient(to bottom, transparent 0%, #000 5%, #000 95%, transparent 100%);
+  }
+}
+
 @media (max-width: 700px) {
   .nv-silhouette {
     --nv-logo-cote: min(88vw, 410px);

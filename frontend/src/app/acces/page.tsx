@@ -110,7 +110,11 @@ const LONGUEUR_CODE = 6;
  */
 const cadreVideo: React.CSSProperties = {
   aspectRatio: "16 / 10", width: "100%", overflow: "hidden",
-  borderRadius: 16, background: JETONS.carte,
+  /* ⚠️ **24 et non 16 : c'est le rayon du faisceau qui commande.** `BorderBeam` arrive en
+     `rounded-2xl`, soit 24 px, et ses couches suivent en `rounded-[inherit]`. Le cadre en
+     portait 16 : le faisceau décrivait donc un coin plus rond que le contenu qu'il entoure, et
+     l'écart se voyait aux quatre angles. Mesuré avant de corriger — 24 contre 16. */
+  borderRadius: 24, background: JETONS.carte,
 };
 
 function Porte() {
