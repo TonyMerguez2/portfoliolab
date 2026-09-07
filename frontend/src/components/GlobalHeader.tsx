@@ -24,6 +24,10 @@ import { lireApparenceAvatar } from "@/lib/useCouleurAvatar";
  */
 const VIGNETTE = 28;
 import { JETONS, RAYONS } from "@/lib/palette";
+import {
+  Autocomplete, AutocompleteInput, AutocompleteContent,
+  AutocompleteEmpty, AutocompleteList, AutocompleteItem,
+} from "@appica/ui-react/autocomplete";
 import { VERSION } from "@/lib/version";
 import { brandHex } from "@/lib/tileStyle";
 import { HAUTEUR_SAISIE, RAYON_SAISIE, champ } from "@/components/ui/saisie";
@@ -46,6 +50,14 @@ import { API_URL } from "@/lib/api";
  * seconde d'intervalle. Deux rayons feraient deux boîtes.
  */
 const RAYON_RECHERCHE = RAYONS.xl;
+
+/** Une ligne du champ de recherche du bandeau. */
+type ElementRecherche = {
+  cle: string;
+  libelle: string;
+  detail: string;
+  r: { genre: "portefeuille"; p: Portefeuille } | { genre: "actif"; a: Asset };
+};
 
 type Asset = { ticker: string; type: string; name: string; };
 type Portefeuille = {
@@ -285,6 +297,8 @@ export default function GlobalHeader() {
   const [localSearch, setLocalSearch] = useState("");
   const [searchResults, setSearchResults] = useState<Asset[]>([]);
   const [showSearch, setShowSearch] = useState(false);
+  /** Le champ du bandeau est-il déplié ? Sert à ne charger que ce qu'il montre. */
+  const [champOuvert, setChampOuvert] = useState(false);
   const searchRef = useRef<HTMLInputElement>(null);
   const [portfolios, setPortfolios] = useState<Portefeuille[]>([]);
   const [showTools, setShowTools] = useState(false);
@@ -631,6 +645,23 @@ export default function GlobalHeader() {
    * l'index, parfois avec un `blur()`. Rouverte, elle gardait alors la ligne surlignée de
    * la fois d'avant. Un seul geste, appelé de partout.
    */
+  /**
+   * Les résultats mis à plat pour le champ du bandeau.
+   *
+   * ⚠️ **Un libellé et un détail, pas la ligne complète de la palette.** Celle-ci affiche un
+   * logo, un cours, une variation et un nombre de lignes ; les reprendre dans une liste
+   * déroulante de trois cent vingt pixels donnerait des lignes illisibles. Le champ nomme,
+   * la palette détaille — c'est la différence entre les deux, et elle est voulue.
+   *
+   * ⚠️ **Les portefeuilles d'abord, comme dans la palette.** Ce qui vous appartient passe
+   * avant ce que le marché propose.
+   */
+  const elementsRecherche = useMemo<ElementRecherche[]>(() => resultats.slice(0, 24).map(r =>
+    r.genre === "portefeuille"
+      ? { cle: r.cle, libelle: r.p.name, detail: "Portefeuille", r }
+      : { cle: r.cle, libelle: r.a.name || r.a.ticker, detail: r.a.ticker, r }
+  ), [resultats]);
+
   const fermerPalette = useCallback(() => {
     setShowSearch(false);
     setHighlightIndex(-1);
@@ -808,27 +839,65 @@ export default function GlobalHeader() {
         </span>
       </div>
 
-      <button type="button" onClick={() => setShowSearch(true)}
-        className="novac-surface-saisie"
-        aria-label="Rechercher un actif, un ETF, un indice"
-        style={{
-          position:"fixed", top:"12px", right:"20px", zIndex:50, width:"320px",
-          display:"flex", alignItems:"center", gap:"8px", height:"36px", padding:"0 12px",
-          borderRadius:RAYON_RECHERCHE, boxSizing:"border-box", cursor:"pointer",
-          outline:"none", textAlign:"left",
-        }}>
-        {/* La loupe du concept. Trait de 2,0 et non 1,5 : leur valeur suppose un rendu à
-            24 px, où elle donne 1,5. Sur une boîte de 18 il faut 2,0 pour ce poids. */}
-        <svg width="18" height="18" fill="none" viewBox="0 0 24 24" stroke="currentColor"
-          strokeWidth={2.0} strokeLinecap="round" strokeLinejoin="round"
-          style={{ flexShrink:0, color:JETONS.texteIntense }}>
-          <path d="m21 21-6-6M3 10a7 7 0 1 0 14 0 7 7 0 0 0-14 0"/>
-        </svg>
-        <span style={{ color:JETONS.texte, fontSize:"12px", opacity:0.55, flex:1, minWidth:0,
-          overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>
-          Rechercher un actif, un ETF, un indice…
-        </span>
-      </button>
+      {/**
+        * La recherche du bandeau.
+        *
+        * ⚠️ **C'était un bouton qui ouvrait la palette ; c'est maintenant un champ qui répond
+        * sur place.** Demandé explicitement, avec le composant d'Appica. La loupe et le texte
+        * d'invite sont conservés — le premier passe par `startSlot`, qui les pose *dans* le
+        * cadre du champ plutôt qu'à côté.
+        *
+        * ⚠️ **La palette complète n'est pas perdue : ⌘K l'ouvre toujours.** Elle porte ce que
+        * ce champ ne sait pas faire — les catégories, le tri par capitalisation, les cours en
+        * direct, la suppression d'un portefeuille. Supprimer son déclencheur sans le dire
+        * aurait rendu tout cela inatteignable sans que rien ne le signale.
+        *
+        * ⚠️ **Le filtrage reste le nôtre.** Le composant sait filtrer sa liste sur ce qu'on
+        * tape ; nos résultats viennent déjà filtrés — du serveur pour les actifs, de
+        * `portefeuillesTrouves` pour les portefeuilles. Laisser le sien s'appliquer par-dessus
+        * relancerait un filtre sur des libellés déjà choisis, et masquerait par exemple un
+        * actif trouvé par son nom quand on a tapé son symbole.
+        */}
+      <div style={{ position: "fixed", top: "12px", right: "20px", zIndex: 50, width: "320px" }}>
+        <Autocomplete
+          items={elementsRecherche}
+          value={localSearch}
+          onValueChange={(v) => setLocalSearch(v)}
+          onOpenChange={(o) => setChampOuvert(o)}
+          filter={() => true}
+          openOnInputClick
+        >
+          <AutocompleteInput
+            placeholder="Rechercher un actif, un ETF, un indice…"
+            aria-label="Rechercher un actif, un ETF, un indice"
+            startSlot={
+              /* La loupe du concept. Trait de 2,0 et non 1,5 : leur valeur suppose un rendu à
+                 24 px, où elle donne 1,5. Sur une boîte de 18 il faut 2,0 pour ce poids. */
+              <svg width="18" height="18" fill="none" viewBox="0 0 24 24" stroke="currentColor"
+                strokeWidth={2.0} strokeLinecap="round" strokeLinejoin="round"
+                style={{ flexShrink: 0, opacity: 0.7 }}>
+                <path d="m21 21-6-6M3 10a7 7 0 1 0 14 0 7 7 0 0 0-14 0"/>
+              </svg>
+            }
+          />
+          <AutocompleteContent>
+            <AutocompleteEmpty>Aucun résultat.</AutocompleteEmpty>
+            <AutocompleteList>
+              {(item: ElementRecherche) => (
+                <AutocompleteItem key={item.cle} value={item}
+                  onClick={() => { setLocalSearch(""); ouvrirResultat(item.r); }}>
+                  <span style={{ display: "flex", alignItems: "baseline", gap: 8, minWidth: 0 }}>
+                    <span style={{ fontWeight: 500 }}>{item.libelle}</span>
+                    {item.detail && (
+                      <span style={{ opacity: 0.55, fontSize: 12 }}>{item.detail}</span>
+                    )}
+                  </span>
+                </AutocompleteItem>
+              )}
+            </AutocompleteList>
+          </AutocompleteContent>
+        </Autocomplete>
+      </div>
 
       {showSearch && (
         /**
