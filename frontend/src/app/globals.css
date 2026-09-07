@@ -1929,8 +1929,8 @@ canvas + div {
      commencer, puis **rend la main** ; en `forwards` elle garderait `opacity: 1` en propre, et
      l'animation de sortie ne pourrait plus rien effacer. */
   animation:
-    nv-remplir var(--nv-remplissage, 2600ms) linear forwards,
-    nv-entree var(--nv-passage, 320ms) ease backwards;
+    nv-remplir var(--nv-remplissage, 1700ms) linear forwards,
+    nv-entree var(--nv-passage, 240ms) ease backwards;
 }
 
 /* ⚠️ **La sortie remplace les deux animations, d'où le `background-position` réécrit ici.**
@@ -1939,7 +1939,7 @@ canvas + div {
    la position à 0 le garde plein pendant qu'il s'efface. */
 .nv-mot--sortie {
   background-position: 0 0;
-  animation: nv-sortie var(--nv-passage, 320ms) ease forwards;
+  animation: nv-sortie var(--nv-passage, 240ms) ease forwards;
 }
 
 @keyframes nv-remplir {

@@ -33,11 +33,18 @@ import { useState } from "react";
  * retirer. Seul sur sa ligne, le verbe ne pousse plus rien : ce qui le précède est immobile par
  * construction.
  */
-export default function MotQuiDefile({ mots, suffixe = "", remplissage = 2600, passage = 320, style }: {
+export default function MotQuiDefile({ mots, suffixe = "", remplissage = 1700, passage = 240, style }: {
   mots: string[];
   /** Ce qui suit le mot et se remplit avec lui — un point final, en pratique. */
   suffixe?: string;
-  /** Durée du remplissage, en millisecondes : c'est aussi le temps d'affichage du mot. */
+  /**
+   * Durée du remplissage, en millisecondes : c'est aussi le temps d'affichage du mot.
+   *
+   * ⚠️ **Elle borne la vitesse par le bas, pas par le haut.** Descendre encore ferait passer
+   * le balayage plus vite que la lecture : on verrait le mot changer sans avoir eu le temps de
+   * le lire, ce qui donne une impression de nervosité plutôt que de mouvement. Avec le passage,
+   * un verbe tient l'écran un peu moins de deux secondes.
+   */
   remplissage?: number;
   /** Durée de l'effacement et de l'arrivée, en millisecondes. */
   passage?: number;
