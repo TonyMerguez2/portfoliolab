@@ -256,17 +256,19 @@ export default function Home() {
           */}
         <div style={{ textAlign: "center" }}>
           {/**
-            * ⚠️ **« Novac » en casse normale, le logo à sa gauche.** Le mot était en capitales
-            * espacées de 0,35 em — une enseigne, qui tenait la page à elle seule quand elle
-            * était seule. Flanquée du logo, elle en devient le doublon : le dessin dit déjà
-            * « marque », le mot n'a plus qu'à la nommer. L'espacement tombe avec la casse, il
-            * n'avait de sens qu'en capitales.
-            */}
-          {/**
-            * ⚠️ **Les trois pièces forment un ensemble, pas trois éléments centrés.** Le logo
-            * dépasse le mot d'un bon quart — c'est lui qui donne sa hauteur au bloc, le mot
-            * s'y loge. Le rapport se tient entre le côté du logo et le corps du mot, jamais
-            * en pixels absolus : changer l'un sans l'autre casse l'assemblage.
+            * ⚠️ **« Novac » en casse normale, sans le dessin à sa gauche.** Le mot fut en
+            * capitales espacées de 0,35 em — une enseigne, qui tenait la page seule. Puis
+            * flanqué du logo, qui le doublait. Le logo est parti à son tour : **le rail de
+            * navigation le porte déjà**, dans le même blanc, cent trente pixels plus haut, et
+            * cette page est derrière la porte à code — quiconque l'atteint voit donc le rail.
+            * La marque s'affichait deux fois à l'écran ; la seconde n'apprenait rien.
+            *
+            * ⚠️ **Ce qui rend le retrait possible, c'est le 800.** En 700 le mot avait besoin
+            * d'un appui à sa gauche. Alléger la graisse sans remettre le dessin laisserait le
+            * bloc sans centre de gravité.
+            *
+            * ⚠️ **`/acces` garde le sien** : page publique, sans rail, où le mot serait la
+            * seule marque visible pour qui ne connaît pas encore le produit.
             *
             * ⚠️ **C'est le bloc entier qui est centré, donc « Novac » ne l'est plus.** La
             * pastille pèse à droite et pousse le mot vers la gauche. C'est voulu : une marque
@@ -274,14 +276,6 @@ export default function Home() {
             * ferait flotter la pastille hors de l'axe.
             */}
           <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: "12px" }}>
-            <span aria-hidden="true" style={{
-              width: "60px", height: "60px", flexShrink: 0, display: "block",
-              background: text, transition: "background 0.4s ease",
-              maskImage: "url(/logo-hivesync.svg)", WebkitMaskImage: "url(/logo-hivesync.svg)",
-              maskSize: "contain", WebkitMaskSize: "contain",
-              maskRepeat: "no-repeat", WebkitMaskRepeat: "no-repeat",
-              maskPosition: "center", WebkitMaskPosition: "center",
-            }} />
             <h1 style={{ color: text, fontSize: "50px", fontWeight: 800, letterSpacing: "-0.025em", transition: "color 0.4s ease", margin: 0 }}>
               Novac
             </h1>
