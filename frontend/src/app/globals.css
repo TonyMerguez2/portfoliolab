@@ -1900,19 +1900,31 @@ canvas + div {
 
 /* ⚠️ La place du cœur s'interpole comme une longueur, pas comme une chaîne : sans ces deux
    déclarations, le déplacement se ferait par sauts d'une étape à l'autre. */
-/* ⚠️ **Le sommet est un palier, pas un point.** Les deux couches se croisaient à 50 % et
-   repartaient aussitôt : la silhouette pleinement ouverte ne durait qu'une image, si bien
-   qu'on voyait un passage et non une inspiration. Le palier de 40 à 68 % la retient environ
-   une seconde sept — sur les six secondes du cycle — avant qu'elle ne se referme. Les deux
-   séries gardent les mêmes bornes, sans quoi elles se croiseraient de travers et l'on verrait
-   les deux tailles ensemble à mi-course. */
+/* ⚠️ **Le sommet est un palier, et il est du côté de la petite taille.** Les deux couches se
+   croisaient à mi-course et repartaient aussitôt : le moment le plus dense ne durait qu'une
+   image, on voyait un passage et non une inspiration. Le palier le retient 28 % du cycle,
+   soit une seconde sept sur six.
+
+   ⚠️ **Lequel des deux bouts est le plus dense ne se devine pas — il se compte.** Je l'avais
+   posé sur la grande taille, en raisonnant qu'elle couvre plus de surface donc pose plus de
+   points. Faux : à masque plus large, le dégradé qui éteint les bords s'élargit avec lui et
+   dilue le cœur. Relevé sur la page, en comptant les points au-dessus du seuil dans un carré
+   de 460 sur 400 : **4137 à la petite taille contre 2772 à la grande**. Le palier tenait donc
+   exactement le creux. Signalé à l'usage — « les points les plus visibles n'apparaissent pas
+   plus longtemps ».
+
+   ⚠️ **Le palier enjambe la fin du cycle**, d'où les quatre étapes : 86 % → 100 % est le même
+   instant que 0 % → 14 %. L'écrire en une seule borne l'aurait coupé en deux moitiés de
+   moitié de durée. */
 @keyframes nv-respire-petit {
-  0%, 100%  { opacity: 1;    }
-  40%, 68%  { opacity: 0.15; }
+  0%, 14%   { opacity: 1;    }
+  50%       { opacity: 0.15; }
+  86%, 100% { opacity: 1;    }
 }
 @keyframes nv-respire-grand {
-  0%, 100%  { opacity: 0.15; }
-  40%, 68%  { opacity: 1;    }
+  0%, 14%   { opacity: 0.15; }
+  50%       { opacity: 1;    }
+  86%, 100% { opacity: 0.15; }
 }
 
 /**
