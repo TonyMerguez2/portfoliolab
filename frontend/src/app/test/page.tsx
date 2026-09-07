@@ -3,7 +3,7 @@ import { useState, useEffect } from "react";
 import LiquidGlassTreemap from "@/components/charts/LiquidGlassTreemap";
 import AssetLogo from "@/components/AssetLogo";
 
-const FONT      = "'Inter', 'SF Pro Display', system-ui, sans-serif";
+const FONT      = "'Geist', 'SF Pro Display', system-ui, sans-serif";
 const FONT_MONO = "'SF Mono', 'Fira Code', monospace";
 
 type Period = "1J" | "7J" | "1M" | "3M" | "1A";

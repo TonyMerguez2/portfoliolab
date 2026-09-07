@@ -4,6 +4,7 @@ import * as d3 from "d3";
 import AssetLogo from "@/components/AssetLogo";
 import { surfaceAplat, brandRgb, hexToRgb } from "@/lib/tileStyle";
 import { assetName } from "@/lib/assets";
+import { FONT } from "@/lib/typography";
 import { encreSur, pourContrasteSur, couleurPerformance } from "@/lib/couleur";
 import TileSparkline from "@/components/charts/TileSparkline";
 
@@ -53,10 +54,11 @@ function getTier(w: number, h: number, weight = 0): Tier {
   return "mini";
 }
 
-// Même pile que le corps de page, donc que les cartes d'actif. Les chiffres
-// étaient en monospace : d'où un pourcentage qui ne ressemblait pas au leur.
-// Les chiffres tabulaires suffisent à les aligner sans changer de famille.
-const FONT = "Inter, -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', sans-serif";
+// Les chiffres étaient en monospace : d'où un pourcentage qui ne ressemblait pas à
+// celui des cartes d'actif. Les chiffres tabulaires les alignent sans changer de famille.
+//
+// ⚠️ La pile était recopiée ici, et le passage d'Inter à Geist l'a oubliée : ce fichier a
+// gardé Inter pendant que le reste changeait. Elle vient maintenant du jeton commun.
 
 const TILE_ANIM = `
 @keyframes tileIn {

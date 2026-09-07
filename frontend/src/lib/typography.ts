@@ -10,7 +10,7 @@ import type { CSSProperties } from "react";
  * même montant ne se lisait donc pas pareil selon l'endroit.
  */
 export const FONT =
-  "Inter, -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', sans-serif";
+  "Geist, -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', sans-serif";
 
 /**
  * Style des valeurs chiffrées.

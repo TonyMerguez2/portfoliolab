@@ -1,14 +1,23 @@
 import type { Metadata } from "next";
 import { AppProvider } from "@/lib/AppContext";
 import { AvatarProvider } from "@/lib/AvatarContext";
-import { Inter } from "next/font/google";
+import { Geist } from "next/font/google";
 import "./globals.css";
 import GlobalHeader from "@/components/GlobalHeader";
 import SideNav from "@/components/SideNav";
 import PointsFond from "@/components/PointsFond";
 import CadreSite from "@/components/CadreSite";
 
-const inter = Inter({ subsets: ["latin"] });
+/**
+ * Police de l'application.
+ *
+ * ⚠️ **Le nom déclaré ici doit rester celui de la pile `FONT`.** `next/font` enregistre la
+ * famille sous son vrai nom — « Geist », et non un nom haché — donc le `fontFamily` en ligne
+ * que porte presque tout composant la retrouve. Renommer d'un côté seulement ferait
+ * silencieusement retomber la page sur la police système, sans rien casser de visible : on
+ * s'en apercevrait des semaines plus tard, sur une capture.
+ */
+const geist = Geist({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
   title: "NOVAC — Analyse de Portefeuille",
@@ -44,7 +53,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <head>
         <script dangerouslySetInnerHTML={{ __html: SCRIPT_THEME }} />
       </head>
-      <body className={inter.className}>
+      <body className={geist.className}>
         <PointsFond />
         <AppProvider>
           {/* L'avatar vit dans le bandeau, mais ce qu'il exprime vient des pages :

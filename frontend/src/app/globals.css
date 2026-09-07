@@ -43,7 +43,7 @@
     background: var(--nv-fond-degrade, var(--novac-bg));
     background-attachment: fixed;
     color: var(--novac-text-primary);
-    font-family: Inter, -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", sans-serif;
+    font-family: Geist, -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", sans-serif;
   }
   button,
   input,
@@ -728,7 +728,7 @@
      du journal étaient en Inter — un ancêtre de la carte d'actif impose une autre pile, et
      la pilule en héritait sans que personne ne l'ait voulu. Une étiquette possède sa
      typographie comme elle possède sa taille. */
-  font-family: Inter, -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", sans-serif;
+  font-family: Geist, -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", sans-serif;
   /* ⚠️ Sans cela, la même classe ne rend pas pareil sur un <button> et sur un <span> : le
      navigateur ajoute au premier son propre habillage. Le journal s'en sert sur des boutons,
      la page graphique sur des libellés. */
