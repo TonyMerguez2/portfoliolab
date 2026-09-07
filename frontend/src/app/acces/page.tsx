@@ -12,12 +12,8 @@ import { Input } from "@appica/ui-react/input";
 import { OTPField, OTPFieldInput } from "@appica/ui-react/otp-field";
 import { Chip } from "@appica/ui-react/chip";
 import { GradientGlow } from "@appica/ui-react/gradient-glow";
-import { ArrowUpRight, ChevronLeft, ChevronRight } from "@appica/icons-react";
+import { ArrowUpRight } from "@appica/icons-react";
 import { BorderBeam } from "@appica/ui-react/border-beam";
-import {
-  Carousel, CarouselContent, CarouselSlide,
-  CarouselPrev, CarouselNext, CarouselPagination,
-} from "@appica/ui-react/carousel";
 
 /**
  * La porte de l'alpha fermée : entrer avec un code, ou laisser son adresse.
@@ -101,28 +97,21 @@ export default function PageAcces() {
 const LONGUEUR_CODE = 6;
 
 /**
- * Les captures qui suivent la vidéo dans la galerie.
+ * Le cadre de la vidéo : son format, une surface de panneau, les coins du faisceau.
  *
- * ⚠️ **Le texte de remplacement décrit l'écran, il ne le nomme pas.** « tableau-de-bord.png »
- * n'apprend rien à qui ne voit pas l'image ; ce qu'on y trouve, si.
+ * ⚠️ **16/10, le format de la vidéo.** Elle est filmée en 1600 × 1000 et servie en 1152 × 720 :
+ * tout autre rapport lui ajouterait des bandes pour rien. Le cadre a porté un temps six pièces
+ * de formats différents, ce qui obligeait à un compromis ; il n'en porte plus qu'une, dont il
+ * prend exactement la mesure.
+ *
+ * ⚠️ **La surface reste, bien qu'il n'y ait plus de bande à couvrir.** Elle porte le fond du
+ * lecteur avant que la première image n'arrive : sans elle, on verrait le fond de page à
+ * travers, et le cadre semblerait vide le temps du chargement.
  */
-/** Le cadre d'une diapositive : format constant, surface de panneau, coins du carrousel. */
-const cadreDiapo: React.CSSProperties = {
-  /* ⚠️ **16/10 et non 3/2 : c'est le format de la vidéo, qui mène la galerie.** Elle est
-     filmée en 1600 × 1000 ; un cadre à 3/2 lui aurait ajouté deux bandes horizontales pour
-     rien. Les captures, elles, s'y logent avec de fines bandes — 1,606 et 1,265 contre 1,6 —
-     et c'est le bon compromis : ce qu'on vient voir est la vidéo. */
+const cadreVideo: React.CSSProperties = {
   aspectRatio: "16 / 10", width: "100%", overflow: "hidden",
   borderRadius: 16, background: JETONS.carte,
 };
-
-const APERCUS = [
-  { fichier: "tableau-de-bord.png", texte: "La vue générale : valeur totale, performance et score du patrimoine" },
-  { fichier: "graphique.png", texte: "La courbe d'un portefeuille, avec ses achats repérés" },
-  { fichier: "objectif.png", texte: "Un objectif d'épargne et sa projection" },
-  { fichier: "carte-actif.png", texte: "La fiche d'une action, avec son cours et sa position" },
-  { fichier: "solana.png", texte: "La fiche d'une cryptomonnaie" },
-];
 
 function Porte() {
   const parametres = useSearchParams();
@@ -435,53 +424,22 @@ function Porte() {
       <div style={{ position: "relative", zIndex: 1, margin: "40px auto 0",
                     width: "100%", maxWidth: 880, padding: "0 24px" }}>
         <BorderBeam className="rounded-2xl">
-          <Carousel loop>
-            <CarouselContent>
-              {/**
-                * ⚠️ **`object-contain` et non `cover` : les six pièces n'ont pas le même
-                * format.** Mesurés — les deux captures d'écran 1,606, les trois cartes 1,265,
-                * la vidéo 1,552 — pour un cadre à 1,5. `cover` remplit le cadre en rognant ce
-                * qui dépasse : la vidéo y perdait ses bords gauche et droit, les cartes
-                * davantage encore. `contain` montre la pièce entière et laisse deux bandes.
-                *
-                * ⚠️ **Les bandes portent la surface des panneaux, pas le fond de page.** Un
-                * vide de la couleur du fond aurait donné un cadre qui semble mal découpé ;
-                * une surface franche se lit comme une marge voulue.
-                */}
-              <CarouselSlide>
-                <div style={cadreDiapo}>
-                  <video ref={video}
-                    className="h-full w-full object-contain"
-                    autoPlay muted loop playsInline preload="auto"
-                    poster="/apercus/demonstration-affiche.jpg"
-                    aria-label="Le tableau de bord de Novac en fonctionnement">
-                    <source src="/apercus/demonstration.webm" type="video/webm" />
-                    <source src="/apercus/demonstration.mp4" type="video/mp4" />
-                  </video>
-                </div>
-              </CarouselSlide>
-              {APERCUS.map(a => (
-                <CarouselSlide key={a.fichier}>
-                  <div style={cadreDiapo}>
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img src={`/apercus/${a.fichier}`} alt={a.texte}
-                      className="h-full w-full object-contain" />
-                  </div>
-                </CarouselSlide>
-              ))}
-            </CarouselContent>
-            <CarouselPrev render={
-              <Button variant="outline" size="icon-md" className="rounded-full">
-                <ChevronLeft />
-              </Button>
-            } />
-            <CarouselNext render={
-              <Button variant="outline" size="icon-md" className="rounded-full">
-                <ChevronRight />
-              </Button>
-            } />
-            <CarouselPagination className="absolute inset-x-0 top-full mt-5 justify-center" />
-          </Carousel>
+          {/**
+            * ⚠️ **Plus de carrousel : il n'y a qu'une pièce à montrer.** Il en a porté six — la
+            * vidéo puis cinq captures — et n'en garde qu'une à la demande. Le composant est
+            * donc retiré, avec ses flèches et sa pagination : trois commandes qui ne mènent
+            * nulle part se lisent comme une panne, pas comme une sobriété.
+            */}
+          <div style={cadreVideo}>
+            <video ref={video}
+              className="h-full w-full object-contain"
+              autoPlay muted loop playsInline preload="auto"
+              poster="/apercus/demonstration-affiche.jpg"
+              aria-label="Le tableau de bord de Novac en fonctionnement">
+              <source src="/apercus/demonstration.webm" type="video/webm" />
+              <source src="/apercus/demonstration.mp4" type="video/mp4" />
+            </video>
+          </div>
         </BorderBeam>
       </div>
 
