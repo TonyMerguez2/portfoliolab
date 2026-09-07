@@ -2,6 +2,8 @@
 import { recuperer } from "@/lib/requete";
 import { useRouter } from "next/navigation";
 import AvatarNovac from "@/components/AvatarNovac";
+import { Button } from "@appica/ui-react/button";
+import { ArrowUpRight } from "@appica/icons-react";
 import { lireApparenceAvatar } from "@/lib/useCouleurAvatar";
 import { useApp } from "@/lib/AppContext";
 import { FONT } from "@/lib/typography";
@@ -392,34 +394,35 @@ export default function Home() {
           {aDesPortefeuilles ? (
             <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "14px" }}>
               {/**
-                * ⚠️ **L'avatar remplace le glyphe, et il reste vivant.** `suivi` est laissé à
-                * son défaut : la tête continue de bouger et de suivre le curseur comme partout
-                * ailleurs. Le figer en aurait fait une icône — or c'est justement parce qu'il
-                * respire qu'on le reconnaît comme *son* portefeuille et non comme un
-                * pictogramme de portefeuille.
+                * ⚠️ **Le bouton d'Appica, et non la pilule du site.** Demandé explicitement.
+                * C'est donc le premier bouton du produit qui ne suit pas `PiluleAction` : il a
+                * sa hauteur, son rayon, sa teinte et son survol. L'écart se voit, et il se
+                * verra tant que les autres n'auront pas suivi.
                 *
-                * ⚠️ **Dix-huit pixels dans une pilule qui en fait vingt-six.** Le reste est le
-                * rembourrage vertical ; à vingt, l'avatar touchait le bord et la pilule cessait
-                * d'être un objet posé pour devenir un cadre autour d'une image.
+                * ⚠️ **`data-icon` n'est pas décoratif : il pilote le rembourrage.** Les classes
+                * de taille du composant portent `has-data-[icon=start]:ps-3.5` et
+                * `has-data-[icon=end]:pe-3.5` — le bouton resserre le côté où une icône se
+                * trouve. Omettre l'attribut ne casse rien de visible tout de suite, mais laisse
+                * le rembourrage d'un bouton sans icône de chaque côté.
+                *
+                * ⚠️ **L'avatar est enveloppé, l'icône ne l'est pas.** `data-icon` doit être posé
+                * sur l'enfant direct que le bouton observe ; `AvatarNovac` rend son propre
+                * arbre et ne transmet pas les attributs inconnus. L'enveloppe porte donc la
+                * marque à sa place.
+                *
+                * ⚠️ **L'avatar reste vivant.** `suivi` est laissé à son défaut : la tête bouge
+                * et suit le curseur comme partout ailleurs. Le figer en aurait fait une icône —
+                * or c'est parce qu'il respire qu'on le reconnaît comme *son* portefeuille et
+                * non comme un pictogramme de portefeuille.
                 */}
-              <PiluleAction
-                libelle={portefeuilleOuvert?.name ? `Ouvrir ${portefeuilleOuvert.name}` : "Ouvrir mon portefeuille"}
-                onClick={() => router.push("/portfolio")}
-                debut={
-                  <AvatarNovac taille={18} couleur={apparence.couleur} forme={apparence.forme}
-                    skin={apparence.skin} style={{ marginLeft: -3 }} />
-                }
-                fin={
-                  /* La flèche de sortie du modèle : elle dit qu'on quitte cet écran, là où le
-                     « plus » disait qu'on ajoutait sans partir. */
-                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none"
-                    stroke="currentColor" strokeWidth={2}
-                    strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"
-                    style={{ marginRight: -2, opacity: 0.85 }}>
-                    <path d="M7 17 17 7M7 7h10v10" />
-                  </svg>
-                }
-                fond={CLAIR.accent} fondSurvol={CLAIR.accentFort}/>
+              <Button size="lg" onClick={() => router.push("/portfolio")}>
+                <span data-icon="start" style={{ display: "inline-flex" }}>
+                  <AvatarNovac taille={20} couleur={apparence.couleur} forme={apparence.forme}
+                    skin={apparence.skin} />
+                </span>
+                {portefeuilleOuvert?.name ? `Ouvrir ${portefeuilleOuvert.name}` : "Ouvrir mon portefeuille"}
+                <ArrowUpRight data-icon="end" />
+              </Button>
               {/**
                 * ⚠️ **Un lien et non une seconde pilule.** Deux pilules côte à côte se
                 * disputent le regard et rien ne dit laquelle est la principale ; en dessous et

@@ -1,4 +1,35 @@
 @import 'tailwindcss';
+/*
+  Les jetons et la couche de base d'Appica UI, dont les composants sont désormais employés
+  — le bouton d'ouverture du portefeuille, pour commencer.
+
+  ⚠️ **Placé ici, avant la couche de base de Novac, et cet ordre est la seule chose qui protège
+  le fond de page.** Leur feuille pose `body { @apply bg-background text-foreground }` dans
+  `@layer base` ; la nôtre pose le dégradé dans *la même* couche. Deux règles d'une même couche
+  se départagent par l'ordre du source : la nôtre doit venir après. L'importer plus bas
+  effacerait le dégradé du site sans autre avertissement qu'un fond devenu uni.
+
+  ⚠️ **Leur couche de base touche `*`, pas seulement leurs composants.** Elle impose la couleur
+  de bordure par défaut et un contour de focus de 3 px à tout le document. C'est le prix d'entrée
+  du paquet, et il se paie sur toutes les pages — pas seulement là où l'on emploie un de leurs
+  composants.
+*/
+@import '@appica/ui-react/styles.css';
+/*
+  ⚠️ **Sans cette ligne, leurs composants sortent nus.** Tailwind v4 découvre les classes en
+  lisant les sources du projet, et **il ignore `node_modules` par défaut**. Les classes du
+  bouton d'Appica vivent dans son paquet compilé : elles n'étaient donc générées nulle part, et
+  le bouton se rendait sans hauteur, sans fond ni rayon — 24 px de haut, fond transparent, alors
+  que ses classes annonçaient `h-12 rounded-lg bg-primary`. Rien dans la console ne le signale ;
+  seule la mesure le montre.
+*/
+@source "../../node_modules/@appica/ui-react/dist/components/button";
+/*
+  ⚠️ **La portée est réduite au bouton, et ce n'est pas de la coquetterie.** Scruter tout
+  `dist` fait générer les utilitaires de leurs quarante composants : la feuille du site passait
+  de 54 à 231 Ko pour un seul bouton. Chaque composant d'Appica qu'on adoptera devra donc être
+  ajouté ici — sans quoi il sortira nu, comme le bouton l'a fait avant cette ligne.
+*/
 
 /*
   The default border color has changed to `currentcolor` in Tailwind CSS v4,
