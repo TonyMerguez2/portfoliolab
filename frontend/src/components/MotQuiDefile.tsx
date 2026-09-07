@@ -1,56 +1,45 @@
 "use client";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 
 /**
- * Un mot qui se remplace par le suivant, en place, sans bousculer la phrase autour.
+ * Un mot qui se remplace par le suivant, seul sur sa ligne.
  *
- * ⚠️ **Le problème n'est pas le fondu, c'est la largeur.** « résister » et « performer » ne
- * mesurent pas la même chose : remplacer l'un par l'autre dans un texte centré recale toute la
- * ligne, et la phrase entière tressaute à chaque changement. Deux façons d'éviter ça, une
- * mauvaise et une bonne. La mauvaise fige la boîte sur le mot le plus long — après « grandir »
- * il reste alors un trou que rien n'explique. La bonne mesure chaque mot et **anime la
- * largeur** en même temps que le fondu : la phrase se resserre et s'étire au rythme du mot,
- * ce qui se lit comme un mouvement voulu plutôt que comme un défaut de calage.
+ * ⚠️ **La ligne à lui seul est ce qui rend ce composant simple.** Une première version gardait
+ * le verbe dans la phrase, à la suite de « et ce qui le fait ». Comme « performer » et
+ * « grandir » ne mesurent pas la même chose et que le titre est centré, chaque changement
+ * recalait la ligne entière : le texte qui précède glissait à chaque rotation. Pour l'empêcher,
+ * cette version mesurait chaque mot sur un exemplaire invisible, attendait
+ * `document.fonts.ready`, écoutait un `ResizeObserver` et animait la largeur de la boîte — une
+ * machinerie entière au service d'un défaut de mise en page.
  *
- * ⚠️ **Les largeurs se mesurent, elles ne se devinent pas.** Le corps du titre est en `clamp`,
- * donc il change avec la fenêtre ; une largeur calculée une fois serait fausse au premier
- * redimensionnement. Un exemplaire invisible de chaque mot est donc rendu dans le flux, à côté,
- * et un `ResizeObserver` relève les mesures à chaque changement de gabarit.
+ * ⚠️ **Isoler le verbe supprime la cause au lieu de la compenser.** Seul sur sa ligne, il ne
+ * pousse plus rien : ce qui le précède est figé par construction, et sa propre largeur n'a plus
+ * d'importance puisque la ligne se centre d'elle-même. Il ne reste qu'un fondu. Les mesures,
+ * l'observateur, l'animation de largeur et le `!important` qui allait avec ont disparu — ainsi
+ * que la règle qui isolait déjà le verbe sous 560 px, devenue le cas général.
  *
- * ⚠️ **Rien ne bouge tant que la police n'est pas là.** Mesurée avec la police de secours, la
- * largeur est fausse de plusieurs pour cent, et le premier changement de mot se ferait avec un
- * décalage visible. `document.fonts.ready` attend Geist avant la première mesure.
+ * ⚠️ **Le point final est passé ici, avec le mot.** Laissé dans la phrase, il restait immobile
+ * pendant que le verbe s'efface : une ponctuation flottant seule au bout d'un vide, puis le mot
+ * suivant venant s'y coller.
  */
-export default function MotQuiDefile({ mots, suffixe = "", intervalle = 2600, transition = 420, style, className }: {
+export default function MotQuiDefile({ mots, suffixe = "", intervalle = 2600, transition = 420, style }: {
   mots: string[];
-  /**
-   * Ce qui suit le mot et doit s'effacer avec lui — un point final, en pratique.
-   *
-   * ⚠️ **Il ne peut pas rester dehors.** Laissé dans la phrase, le point reste immobile
-   * pendant que le mot s'efface : on voit alors une ponctuation flotter seule au bout d'un
-   * vide, puis le mot suivant venir s'y coller. Il fait partie du groupe qui s'efface, donc
-   * du même `<span>` — et de la largeur mesurée, sinon la boîte serait trop courte d'un
-   * point à chaque changement.
-   */
+  /** Ce qui suit le mot et s'efface avec lui — un point final, en pratique. */
   suffixe?: string;
   /** Durée d'affichage d'un mot, transition comprise. */
   intervalle?: number;
-  /** Durée du fondu et du glissement, en millisecondes. */
+  /** Durée du fondu, en millisecondes. */
   transition?: number;
   style?: React.CSSProperties;
-  /** Posée sur la boîte extérieure, pour la piloter depuis une feuille de style. */
-  className?: string;
 }) {
   const [index, setIndex] = useState(0);
   const [sortant, setSortant] = useState(false);
-  const [largeurs, setLargeurs] = useState<number[]>([]);
-  const mesures = useRef<(HTMLSpanElement | null)[]>([]);
 
   /**
    * ⚠️ **Le réglage système l'emporte sur l'effet.** Qui a demandé moins d'animations ne veut
    * pas d'un mot qui change tout seul toutes les deux secondes et demie — c'est exactement le
-   * genre de mouvement périphérique que ce réglage vise. La phrase garde alors son premier
-   * mot, et le sens ne dépend d'aucun des cinq autres.
+   * genre de mouvement périphérique que ce réglage vise. La phrase garde alors son premier mot,
+   * et son sens ne dépend d'aucun des autres.
    */
   const [anime, setAnime] = useState(false);
   useEffect(() => {
@@ -62,78 +51,30 @@ export default function MotQuiDefile({ mots, suffixe = "", intervalle = 2600, tr
   }, []);
 
   useEffect(() => {
-    const relever = () => {
-      const l = mesures.current.map(n => (n ? n.getBoundingClientRect().width : 0));
-      if (l.every(v => v > 0)) setLargeurs(l);
-    };
-    let obs: ResizeObserver | undefined;
-    document.fonts.ready.then(() => {
-      relever();
-      obs = new ResizeObserver(relever);
-      mesures.current.forEach(n => n && obs!.observe(n));
-    });
-    return () => obs?.disconnect();
-  }, [mots, suffixe]);
-
-  useEffect(() => {
     if (!anime || mots.length < 2) return;
     /**
      * ⚠️ **Deux temps et non un.** Le mot sortant s'efface d'abord, le suivant entre ensuite :
      * les croiser ferait se superposer deux textes à mi-course, illisibles l'un sur l'autre.
-     * Le second temps dure le même laps que le premier, d'où l'intervalle amputé de la
-     * transition avant de relancer le cycle.
      */
     const t1 = setTimeout(() => {
       setSortant(true);
-      const t2 = setTimeout(() => {
-        setIndex(i => (i + 1) % mots.length);
-        setSortant(false);
-      }, transition);
-      return () => clearTimeout(t2);
+      setTimeout(() => { setIndex(i => (i + 1) % mots.length); setSortant(false); }, transition);
     }, intervalle);
     return () => clearTimeout(t1);
   }, [index, anime, mots.length, intervalle, transition]);
 
-  const largeur = largeurs[index];
-
   return (
-    <>
-      <span className={className} style={{
-        display: "inline-block", verticalAlign: "bottom", overflow: "visible",
-        /* Tant que rien n'est mesuré, la boîte s'ajuste au contenu : la phrase est juste dès
-           le premier rendu, avant même que la police soit arrivée. */
-        width: largeur ? `${largeur}px` : "auto",
-        transition: anime ? `width ${transition}ms cubic-bezier(0.4, 0, 0.2, 1)` : "none",
-        ...style,
+    <span style={{ display: "block", ...style }}>
+      <span style={{
+        display: "inline-block", whiteSpace: "nowrap",
+        opacity: sortant ? 0 : 1,
+        transform: sortant ? "translateY(-0.16em)" : "translateY(0)",
+        transition: anime
+          ? `opacity ${transition}ms ease, transform ${transition}ms cubic-bezier(0.4, 0, 0.2, 1)`
+          : "none",
       }}>
-        <span style={{
-          display: "inline-block", whiteSpace: "nowrap",
-          opacity: sortant ? 0 : 1,
-          transform: sortant ? "translateY(-0.16em)" : "translateY(0)",
-          transition: anime
-            ? `opacity ${transition}ms ease, transform ${transition}ms cubic-bezier(0.4, 0, 0.2, 1)`
-            : "none",
-        }}>
-          {mots[index]}{suffixe}
-        </span>
+        {mots[index]}{suffixe}
       </span>
-
-      {/**
-        * Les exemplaires qui servent à mesurer.
-        *
-        * ⚠️ **Ils sont dans le flux, pas en `position: absolute`.** Un élément sorti du flux
-        * n'hérite pas de la largeur disponible et se mesure sur une ligne infinie — ce qui
-        * conviendrait ici, mais casserait dès qu'un mot devrait se couper. Ils sont donc posés
-        * dans un conteneur de hauteur nulle, invisible et hors de l'arbre d'accessibilité.
-        */}
-      <span aria-hidden="true" style={{
-        position: "absolute", visibility: "hidden", height: 0, overflow: "hidden",
-        whiteSpace: "nowrap", pointerEvents: "none",
-      }}>
-        {mots.map((m, i) => (
-          <span key={m} ref={n => { mesures.current[i] = n; }}>{m}{suffixe}</span>
-        ))}
-      </span>
-    </>
+    </span>
   );
 }

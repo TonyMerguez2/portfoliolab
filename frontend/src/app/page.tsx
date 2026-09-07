@@ -181,22 +181,6 @@ export default function Home() {
       */
     <div className="fixed inset-0 overflow-hidden">
       {/**
-        * ⚠️ **Sous 560 px, le verbe prend sa propre ligne, et c'est une nécessité de calcul.**
-        * Le nombre de lignes de la phrase dépend de la longueur du verbe : « performer »
-        * dépasse les autres et fait basculer le texte d'une ligne de plus, si bien que le bloc
-        * entier sautait quatre fois par cycle. Sur grand écran, une boîte de 18 ch règle le
-        * problème — elle est plus large que la plus longue des cinq versions. Sur téléphone
-        * la boîte n'est plus libre : elle vaut la largeur de l'écran, et il existe toujours
-        * une largeur où un verbe passe et l'autre non. Isoler le verbe sur sa ligne rend le
-        * découpage **indépendant du mot affiché**, donc constant par construction.
-        *
-        * ⚠️ **`!important`, pour la même raison que l'enseigne.** La boîte porte son
-        * `display: inline-block` en style en ligne, et un style en ligne l'emporte sur toute
-        * feuille : sans le marqueur, la règle ne s'appliquait pas et la phrase continuait de
-        * sauter à 360 et 430 px. Relevé par la mesure, pas à l'œil.
-        */}
-      <style>{`@media (max-width: 559px) { .nv-verbe { display: block !important; } }`}</style>
-      {/**
         * La silhouette du logo, dessinée par la trame de points.
         *
         * ⚠️ **Elle remplace le filigrane, qui est supprimé.** Le filigrane était un aplat
@@ -287,19 +271,18 @@ export default function Home() {
              * gauche pendant que la salutation et le bouton restaient au milieu.
              */
             /**
-             * ⚠️ **18 ch, et pas 16 : c'est « performer » qui fixe la largeur.** Le verbe le
-             * plus long portait la seconde ligne à 705 px là où la boîte en faisait 665, si
-             * bien que la phrase passait à trois lignes sur ce mot-là seulement — et le bloc
-             * entier sautait d'une ligne quatre fois par cycle. Mesuré : 17,6 ch au corps
-             * maximal, arrondi à 18. Toute retouche de la liste des verbes demande de refaire
-             * cette mesure.
+             * ⚠️ **La largeur ne dépend plus des verbes.** Elle a valu 18 ch le temps que le
+             * verbe partage la ligne de « et ce qui le fait » : il fallait alors que la boîte
+             * contienne la plus longue des cinq versions, faute de quoi « performer » ajoutait
+             * une ligne à lui seul. Le verbe ayant sa ligne, seule la phrase fixe dicte la
+             * mesure, et 16 ch lui suffisent — c'est la valeur d'origine.
              */
-            color: text, margin: "0 auto", maxWidth: "min(18ch, 100%)",
+            color: text, margin: "0 auto", maxWidth: "min(16ch, 100%)",
             fontSize: "clamp(28px, 4.6vw, 60px)", fontWeight: 700,
             letterSpacing: "-0.03em", lineHeight: 1.08,
             transition: "color 0.4s ease",
           }}>
-            {PHRASE_AVANT}<MotQuiDefile mots={VERBES} suffixe="." className="nv-verbe" />
+            {PHRASE_AVANT}<MotQuiDefile mots={VERBES} suffixe="." />
           </h1>
         </div>
 
