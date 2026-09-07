@@ -3,6 +3,7 @@ import { recuperer } from "@/lib/requete";
 import { useRouter } from "next/navigation";
 import AvatarNovac from "@/components/AvatarNovac";
 import { Button } from "@appica/ui-react/button";
+import { GradientGlow } from "@appica/ui-react/gradient-glow";
 import { ArrowUpRight } from "@appica/icons-react";
 import { lireApparenceAvatar } from "@/lib/useCouleurAvatar";
 import { useApp } from "@/lib/AppContext";
@@ -419,6 +420,18 @@ export default function Home() {
                 * or c'est parce qu'il respire qu'on le reconnaît comme *son* portefeuille et
                 * non comme un pictogramme de portefeuille.
                 */}
+              {/**
+                * ⚠️ **Le rayon du halo doit être écrit, il ne se devine pas.** L'enveloppe
+                * arrive en `rounded-2xl` et ses deux couches suivent en `rounded-[inherit]` ;
+                * le bouton, lui, tient son rayon de sa taille — 16 px pour `lg`. Sans cette
+                * classe, les angles du halo dépassaient de ceux du bouton.
+                *
+                * ⚠️ **`pressScale` existe précisément pour ce cas.** Le bouton se comprime à
+                * l'appui (`active:scale-[0.97]`) ; sans lui le halo restait à sa taille et
+                * débordait le temps du clic. C'est écrit dans leur documentation du composant.
+                */}
+              <GradientGlow from="#8EC5FF" via="#EFADF7" to="#FFD69B"
+                pressScale className="rounded-[16px]">
               <Button size="lg" onClick={() => router.push("/portfolio")}>
                 <span data-icon="start" style={{ display: "inline-flex" }}>
                   {/**
@@ -435,6 +448,7 @@ export default function Home() {
                 {portefeuilleOuvert?.name ? `Ouvrir ${portefeuilleOuvert.name}` : "Ouvrir mon portefeuille"}
                 <ArrowUpRight data-icon="end" />
               </Button>
+              </GradientGlow>
               {/**
                 * ⚠️ **Un lien et non une seconde pilule.** Deux pilules côte à côte se
                 * disputent le regard et rien ne dit laquelle est la principale ; en dessous et

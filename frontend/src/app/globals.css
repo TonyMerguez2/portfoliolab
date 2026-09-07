@@ -24,6 +24,7 @@
   seule la mesure le montre.
 */
 @source "../../node_modules/@appica/ui-react/dist/components/button";
+@source "../../node_modules/@appica/ui-react/dist/components/gradient-glow";
 /*
   ⚠️ **La portée est réduite au bouton, et ce n'est pas de la coquetterie.** Scruter tout
   `dist` fait générer les utilitaires de leurs quarante composants : la feuille du site passait
