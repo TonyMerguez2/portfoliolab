@@ -160,20 +160,53 @@ const RANGEE = 40, ECART = 4, MARGE = 9;
  * puisque le tracé la contient — le rail grandit avec son contenu, qui change quand la
  * session s'ouvre.
  */
-const silhouette = (h: number) => {
+/**
+ * L'épaisseur du filet qui prolonge le rail jusqu'aux bords de l'écran.
+ *
+ * ⚠️ **Un pixel et demi, et non un.** Le rail est en `position: fixed` sur un écran dont le
+ * rapport de pixels vaut souvent deux : un filet d'un pixel CSS y tombe sur une frontière et se
+ * rend en deux demi-pixels gris, donc plus pâle que sa couleur. Un et demi couvre toujours au
+ * moins un pixel physique plein.
+ */
+const FILET = 1.5;
+
+/**
+ * Le tracé du rail, du haut de l'écran au bas.
+ *
+ * ⚠️ **Deux hauteurs, et elles ne disent pas la même chose.** `hRangees` est ce que le contenu
+ * occupe — il change quand la session s'ouvre ou qu'une rangée apparaît ; `hEcran` est la
+ * fenêtre. La première décide où les cascades se posent, la seconde jusqu'où le filet court. Les
+ * confondre donnerait un rail dont les plis suivent la taille de la fenêtre.
+ *
+ * ⚠️ **Le filet et le rail sont un seul tracé, pas trois éléments.** Un filet posé en `<div>`
+ * au-dessus et au-dessous aurait sa propre matière : le rail porte un flou d'arrière-plan, et
+ * deux rectangles voisins l'auraient reproduit à l'identique ou pas du tout, avec une jointure
+ * visible à chaque bout. Ici la découpe traverse, et la matière est continue.
+ */
+const silhouette = (hRangees: number, hEcran: number) => {
   const l = LARGEUR, r = RACCORD, v = ETALEMENT;
+  // Les rangées sont centrées dans la fenêtre : les cascades se posent de part et d'autre.
+  const haut = Math.max(0, (hEcran - hRangees) / 2);
+  const bas = haut + hRangees;
   return [
-    // La cascade du haut : le creux part tangent au bord de l'écran…
-    "M0,0",
-    `A${r},${r} 0 0 0 ${l / 2},${v / 2}`,
+    // Le filet, du haut de l'écran jusqu'à l'amorce de la cascade.
+    `M${FILET},0`,
+    `L${FILET},${haut}`,
+    // La cascade du haut : le creux part tangent au filet…
+    `A${r},${r} 0 0 0 ${l / 2},${haut + v / 2}`,
     // …puis le bombé reprend sa tangente et arrive tangent au flanc.
-    `A${r},${r} 0 0 1 ${l},${v}`,
+    `A${r},${r} 0 0 1 ${l},${haut + v}`,
     // Le flanc, droit sur toute la hauteur des rangées.
-    `L${l},${h - v}`,
+    `L${l},${bas - v}`,
     // La cascade du bas, la même en miroir : le bombé quitte le flanc…
-    `A${r},${r} 0 0 1 ${l / 2},${h - v / 2}`,
-    // …et le creux rejoint le bord de l'écran, tangent lui aussi.
-    `A${r},${r} 0 0 0 0,${h}`,
+    `A${r},${r} 0 0 1 ${l / 2},${bas - v / 2}`,
+    // …et le creux rejoint le filet, tangent lui aussi.
+    `A${r},${r} 0 0 0 ${FILET},${bas}`,
+    // Le filet reprend, jusqu'au bas de l'écran.
+    `L${FILET},${hEcran}`,
+    // Puis le bord gauche referme le tracé.
+    `L0,${hEcran}`,
+    "L0,0",
     "Z",
   ].join(" ");
 };
@@ -340,16 +373,26 @@ export default function SideNav() {
    * que les autres. Un `ResizeObserver` répond à ce qui est, pas à ce qu'on croit compter.
    */
   const [decoupe, setDecoupe] = useState("");
+  /**
+   * ⚠️ **On mesure le contenu, pas le rail : le rail fait maintenant toute la hauteur.** Il
+   * était haut comme ses rangées, et sa propre boîte suffisait donc à placer les plis. Depuis
+   * que le filet le prolonge d'un bord à l'autre, sa hauteur vaut celle de la fenêtre et ne dit
+   * plus rien du contenu. C'est l'enveloppe des rangées qu'on observe.
+   *
+   * ⚠️ **La fenêtre change sans que le contenu bouge**, et le tracé doit suivre : d'où
+   * l'écoute de `resize` en plus de l'observateur de taille.
+   */
   const ancrerRail = useCallback((el: HTMLElement | null) => {
     if (!el) return;
     const poser = () => {
       const h = el.getBoundingClientRect().height;
-      if (h > 0) setDecoupe(`path("${silhouette(h)}")`);
+      if (h > 0) setDecoupe(`path("${silhouette(h, window.innerHeight)}")`);
     };
     poser();
     const ro = new ResizeObserver(poser);
     ro.observe(el);
-    return () => ro.disconnect();
+    window.addEventListener("resize", poser);
+    return () => { ro.disconnect(); window.removeEventListener("resize", poser); };
   }, []);
   const [user, setUser] = useState<{ username?: string; email?: string; avatar_url?: string } | null>(null);
   const [showProfile, setShowProfile] = useState(false);
@@ -428,16 +471,20 @@ export default function SideNav() {
     <nav
       aria-label="Navigation principale"
       data-avatar="curieux"
-      ref={ancrerRail}
       style={{
-        position: "fixed", left: 0, top: "50%", transform: "translateY(-50%)",
+        position: "fixed", left: 0, top: 0, height: "100vh",
         width: LARGEUR, zIndex: 60,
-        display: "flex", flexDirection: "column", alignItems: "center", gap: ECART,
-        /* ⚠️ Le rembourrage porte l'étalement des deux cascades : la découpe mange ces
-           pixels-là, et sans eux la première et la dernière rangée entreraient dans la courbe.
-           Arrondi ici et nulle part ailleurs : un demi-pixel de rembourrage ne se voit pas, un
-           demi-pixel d'étalement défait la tangence des arcs. */
-        padding: `${Math.round(ETALEMENT + MARGE)}px 0`,
+        /* ⚠️ Le rail occupe toute la hauteur pour porter son filet ; ses rangées, elles, restent
+           au centre. C'est `justifyContent` qui les y tient — l'ancien centrage par `top: 50%`
+           n'a plus lieu d'être, la boîte ne se dimensionne plus sur le contenu. */
+        display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
+        /* ⚠️ **Le filet doit être peint, pas seulement découpé.** La matière du rail est un
+           voile flouté : une bande d'un pixel et demi de ce voile ne se distingue pas du fond —
+           mesuré à un niveau de gris d'écart, autant dire rien. Le liseré, lui, porte une
+           couleur franche. La découpe le réduit au filet en haut et en bas, et le laisse courir
+           le long du flanc gauche au milieu, où il se confond avec le bord de l'écran. */
+        borderLeft: `${FILET}px solid var(--nv-bord-fort)`,
+
         /* ⚠️ **La découpe emporte aussi l'infobulle, et `overflow` n'y peut rien.** Un
            `clip-path` coupe tous les descendants, positionnés ou non : la bulle des noms sort
            à onze pixels du flanc et se perd donc à la coupe. Un `overflow: visible` traînait
@@ -449,6 +496,20 @@ export default function SideNav() {
         ...FLOU,
       }}
     >
+      {/**
+        * ⚠️ **Une enveloppe autour des rangées, et elle a une raison précise.** C'est elle
+        * qu'on mesure pour placer les cascades : le rail, lui, fait la hauteur de la fenêtre
+        * depuis qu'il porte son filet, et sa boîte ne dit donc plus rien du contenu.
+        *
+        * ⚠️ **Le rembourrage porte l'étalement des deux cascades**, comme il le faisait sur le
+        * rail : la découpe mange ces pixels-là, et sans eux la première et la dernière rangée
+        * entreraient dans la courbe. Arrondi ici et nulle part ailleurs — un demi-pixel de
+        * rembourrage ne se voit pas, un demi-pixel d'étalement défait la tangence des arcs.
+        */}
+      <div ref={ancrerRail} style={{
+        display: "flex", flexDirection: "column", alignItems: "center", gap: ECART,
+        padding: `${Math.round(ETALEMENT + MARGE)}px 0`,
+      }}>
       {/**
         * La marque, en tête du rail.
         *
@@ -573,6 +634,7 @@ export default function SideNav() {
       <Rangee nom={modeTheme === "clair" ? "Thème sombre" : "Thème clair"}
         onClick={() => basculerMode()}
         enfant={icon(modeTheme === "clair" ? ICONS.moon : ICONS.sun)} />
+      </div>
     </nav>
 
     {/* Hors du <nav> à dessein : son backdrop-filter en fait le bloc conteneur
