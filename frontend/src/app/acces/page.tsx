@@ -272,9 +272,16 @@ function Porte() {
               * sont carrés par construction : `md` en aurait fait un bouton large et vide
               * autour d'un dessin de dix-huit pixels.
               */}
+            {/**
+              * ⚠️ **Il ne se désactive pas une fois l'adresse prise.** Le champ se vide à la
+              * confirmation, donc la condition « pas d'adresse » redevenait vraie et le bouton
+              * passait en désactivé — c'est-à-dire à demi transparent, la coche avec. Le geste
+              * reste sans effet, le formulaire s'en charge : ce qui compte ici est que la coche
+              * se voie franchement.
+              */}
             <Button type="submit" variant="outline" size="icon-md"
               aria-label="Rejoindre la liste d'attente"
-              disabled={!email || inscription === "envoi"}>
+              disabled={inscrit ? false : (!email || inscription === "envoi")}>
               <Coche montree={inscrit} />
             </Button>
           </div>

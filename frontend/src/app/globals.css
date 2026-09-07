@@ -2108,3 +2108,21 @@ canvas + div {
   -webkit-mask-composite: source-in;
   mask-composite: intersect;
 }
+
+/* ⚠️ **Sur téléphone, la silhouette ne se voyait pas du tout — et pas faute d'encre.** Son
+   masque vaut `115vh`, soit près de mille pixels sur un écran qui en fait quatre cents de
+   large : ce qu'on en voyait était un fragment de courbe sans forme, uniforme, indistinguable
+   de la trame. Le logo n'y était pas « discret », il était absent.
+
+   ⚠️ **La mesure passe donc en largeur, pas en hauteur.** `vh` est le mauvais repère sur un
+   écran deux fois plus haut que large ; `130vw` donne une silhouette qui déborde d'un tiers,
+   assez pour se lire, et l'ancrage se resserre pour ramener le cœur du dessin dans l'écran.
+
+   Les deux pages d'entrée en profitent : elles partagent cette couche. */
+@media (max-width: 700px) {
+  .nv-silhouette {
+    --nv-logo-cote: min(130vw, 620px);
+    -webkit-mask-position: right -22% bottom -6%, right -22% bottom -6%;
+    mask-position: right -22% bottom -6%, right -22% bottom -6%;
+  }
+}
