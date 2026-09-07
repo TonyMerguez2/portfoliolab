@@ -350,13 +350,17 @@ export default function Home() {
         </div>
 
         {/**
+          * ⚠️ **Vingt-six pixels ne suffisaient plus.** L'écart datait du temps où le bouton
+          * était une pilule de 26 px de haut ; celui d'Appica en fait 48, et à masse doublée le
+          * même vide se lit comme un collage. Relevé à l'usage.
+          *
           * ⚠️ **La salutation est partie, et l'avatar avec.** « Bonsoir, Sacha » nommait la
           * personne juste sous une phrase qui promet un service : deux registres à trois
           * centimètres l'un de l'autre. Le bouton de profil et le « Se connecter » qui
           * l'accompagnaient ne sont pas perdus pour autant — **le rail porte les deux**, il
           * monte lui-même `ProfileModal` et `AuthModal`. Ils étaient en double.
           */}
-        <div style={{ height: "26px" }}/>
+        <div style={{ height: "44px" }}/>
 
 
         {/* Bouton */}
@@ -417,8 +421,16 @@ export default function Home() {
                 */}
               <Button size="lg" onClick={() => router.push("/portfolio")}>
                 <span data-icon="start" style={{ display: "inline-flex" }}>
-                  <AvatarNovac taille={20} couleur={apparence.couleur} forme={apparence.forme}
-                    skin={apparence.skin} />
+                  {/**
+                    * ⚠️ **La taille est écrite deux fois, et il le faut.** `taille` pose les
+                    * attributs `width`/`height` du SVG, mais le bouton d'Appica impose
+                    * `[&_svg:not([class*='size-'])]:size-5` à tout SVG qu'il contient — une
+                    * règle CSS, qui l'emporte sur un attribut. Sans le style en ligne, l'avatar
+                    * revenait à 20 px quoi qu'on demande, en silence. Le style en ligne est le
+                    * seul recours qui n'exige ni `!important` ni classe factice.
+                    */}
+                  <AvatarNovac taille={28} couleur={apparence.couleur} forme={apparence.forme}
+                    skin={apparence.skin} style={{ width: 28, height: 28 }} />
                 </span>
                 {portefeuilleOuvert?.name ? `Ouvrir ${portefeuilleOuvert.name}` : "Ouvrir mon portefeuille"}
                 <ArrowUpRight data-icon="end" />
