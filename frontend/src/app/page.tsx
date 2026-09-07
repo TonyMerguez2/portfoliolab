@@ -7,6 +7,15 @@ import ProfileModal from "@/components/ProfileModal";
 import { API_URL } from "@/lib/api";
 import { CLAIR, RAYONS } from "@/lib/palette";
 import { VERSION } from "@/lib/version";
+
+/**
+ * La phrase d'accueil.
+ *
+ * ⚠️ **Elle nomme ce que le produit fait, pas ce qu'il est.** « Find the optimal path »
+ * disait une intention sans dire un service ; celle-ci reprend les mots de la page
+ * publique, pour que les deux entrées du site promettent la même chose.
+ */
+const PHRASE = "Tout votre patrimoine, et ce qui le fait bouger.";
 import PiluleAction from "@/components/portfolio/PiluleAction";
 import PanneauCreation from "@/components/portfolio/PanneauCreation";
 export default function Home() {
@@ -42,7 +51,6 @@ export default function Home() {
   }, []);
   const targetMouse = useRef({ x: 0, y: 0 });
   const smoothMouse = useRef({ x: 0, y: 0 });
-  const fullTagline = "Find the optimal path.";
   const haloRef = useRef(0);
 
   useEffect(() => { darkRef.current = dark; }, [dark]);
@@ -173,6 +181,13 @@ export default function Home() {
       * disparue.
       */
     <div className="fixed inset-0 overflow-hidden">
+      {/**
+        * ⚠️ **`!important` n'est pas une facilité, c'est une nécessité ici.** L'enseigne porte
+        * son `display: flex` en style *en ligne*, et un style en ligne l'emporte sur n'importe
+        * quelle règle de feuille — la classe seule ne masquait rien, et l'enseigne continuait
+        * de s'afficher derrière la barre de recherche sur téléphone.
+        */}
+      <style>{`@media (max-width: 767px) { .nv-enseigne { display: none !important; } }`}</style>
 
 
       {/**
@@ -222,13 +237,70 @@ export default function Home() {
         style={{ inset: 0, zIndex: 0 }} />
 
       {/**
+        * L'enseigne : le logo, le nom, la version.
+        *
+        * ⚠️ **Elle se décale de la largeur du rail, pas d'une marge choisie à l'œil.** Le rail
+        * est fixe et large de 68 px (`LARGEUR`, dans `SideNav`) ; poser l'enseigne à 24 px du
+        * bord la ferait passer dessous. La valeur est donc la somme des deux, et elle suivra
+        * si le rail change.
+        *
+        * ⚠️ **Le nom n'est plus en gras.** En 800 au centre, il était le seul objet de la
+        * page et devait en porter le poids. Dans un coin, à 22 px, la même graisse crierait
+        * par-dessus la phrase qui est maintenant le sujet.
+        *
+        * ⚠️ **Sous 768 px, elle s'efface** : la barre de recherche y prend toute la largeur du
+        * haut et lui passe dessus. Rien n'est perdu — le rail porte le logo à trois centimètres
+        * de là, et c'est justement pourquoi le centre de la page ne le porte plus.
+        */}
+      <div className="nv-enseigne" style={{
+        position: "absolute", top: "26px", left: `${68 + 26}px`, zIndex: 10,
+        display: "flex", alignItems: "center", gap: "10px",
+      }}>
+        <span aria-hidden="true" style={{
+          width: "30px", height: "30px", flexShrink: 0, display: "block",
+          background: text, transition: "background 0.4s ease",
+          maskImage: "url(/logo-hivesync.svg)", WebkitMaskImage: "url(/logo-hivesync.svg)",
+          maskSize: "contain", WebkitMaskSize: "contain",
+          maskRepeat: "no-repeat", WebkitMaskRepeat: "no-repeat",
+          maskPosition: "center", WebkitMaskPosition: "center",
+        }} />
+        <span style={{
+          color: text, fontSize: "22px", fontWeight: 500, letterSpacing: "-0.01em",
+          transition: "color 0.4s ease",
+        }}>
+          Novac
+        </span>
+        {/**
+          * ⚠️ **La pastille se pose sur la couleur du texte, pas sur une teinte fixe.** Elle
+          * doit suivre le thème comme le reste du bloc ; un gris figé virerait au noir sur
+          * fond clair. Son fond et son bord sont donc le texte à faible opacité.
+          */}
+        <span style={{
+          marginLeft: "4px", padding: "5px 11px", borderRadius: RAYONS.plein,
+          border: `1px solid ${text}22`, background: `${text}0D`,
+          color: text, opacity: 0.68, fontSize: "12px", fontWeight: 500,
+          whiteSpace: "nowrap", transition: "color 0.4s ease, border-color 0.4s ease",
+        }}>
+          {VERSION}
+        </span>
+      </div>
+
+      {/**
         * ⚠️ **Le texte descend pour laisser voir le logo.** Centré comme lui, il se posait
         * pile dessus : la forme passait derrière les mots et l'on n'en lisait plus rien.
         * Signalé à l'usage. Le logo garde le milieu — c'est sa place quand il fait partie du
         * décor — et le bloc de texte s'installe dans le tiers bas, sous lui.
         */}
+      {/**
+        * ⚠️ **La colonne se centre dans l'espace libre, pas dans la fenêtre.** Le rail est
+        * posé par-dessus, large de 68 px : un contenu centré sur la fenêtre entière lui passe
+        * dessous. Invisible tant que le centre ne portait qu'un mot étroit ; avec une phrase,
+        * sur un écran de 390 px, la moitié gauche disparaissait derrière le rail et la droite
+        * sortait de l'écran. La marge latérale rend les 24 px de respiration que le texte
+        * n'avait plus.
+        */}
       <div className="relative z-10 h-full flex flex-col items-center justify-center"
-        style={{ gap: "0px" }}>
+        style={{ gap: "0px", paddingLeft: `${68 + 24}px`, paddingRight: "24px" }}>
 
         {/**
           * ⚠️ **Plus d'attente avant l'affichage : la mise en scène n'a plus d'objet.** Une
@@ -256,47 +328,35 @@ export default function Home() {
           */}
         <div style={{ textAlign: "center" }}>
           {/**
-            * ⚠️ **« Novac » en casse normale, sans le dessin à sa gauche.** Le mot fut en
-            * capitales espacées de 0,35 em — une enseigne, qui tenait la page seule. Puis
-            * flanqué du logo, qui le doublait. Le logo est parti à son tour : **le rail de
-            * navigation le porte déjà**, dans le même blanc, cent trente pixels plus haut, et
-            * cette page est derrière la porte à code — quiconque l'atteint voit donc le rail.
-            * La marque s'affichait deux fois à l'écran ; la seconde n'apprenait rien.
+            * ⚠️ **Une phrase, à la place de la marque.** Le centre portait « Novac » en très
+            * gros : le nom du produit annoncé à des gens déjà entrés — cette page est
+            * derrière la porte à code — et souvent connectés, que la page salue par leur
+            * prénom deux lignes plus bas. L'enseigne dit maintenant qui l'on est depuis le
+            * coin haut gauche, et le centre dit ce que l'on fait.
             *
-            * ⚠️ **Ce qui rend le retrait possible, c'est le 800.** En 700 le mot avait besoin
-            * d'un appui à sa gauche. Alléger la graisse sans remettre le dessin laisserait le
-            * bloc sans centre de gravité.
+            * ⚠️ **La baseline anglaise part avec.** « Find the optimal path. » était la seule
+            * ligne anglaise d'un produit entièrement français, et elle ne nommait aucune des
+            * choses que Novac sait faire. Deux phrases superposées se seraient concurrencées.
             *
-            * ⚠️ **`/acces` garde le sien** : page publique, sans rail, où le mot serait la
-            * seule marque visible pour qui ne connaît pas encore le produit.
-            *
-            * ⚠️ **C'est le bloc entier qui est centré, donc « Novac » ne l'est plus.** La
-            * pastille pèse à droite et pousse le mot vers la gauche. C'est voulu : une marque
-            * suivie de sa version se lit comme une seule enseigne, et centrer le mot seul
-            * ferait flotter la pastille hors de l'axe.
+            * ⚠️ **Le corps se règle sur la largeur, pas sur une valeur fixe.** À 60 px sur un
+            * portable, la phrase tiendrait sur quatre lignes et ne serait plus une phrase
+            * mais un paragraphe. `clamp` la laisse respirer sur grand écran sans casser le
+            * petit.
             */}
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: "12px" }}>
-            <h1 style={{ color: text, fontSize: "50px", fontWeight: 800, letterSpacing: "-0.025em", transition: "color 0.4s ease", margin: 0 }}>
-              Novac
-            </h1>
-            {/**
-              * ⚠️ **La pastille se pose sur la couleur du texte, pas sur une teinte fixe.**
-              * Elle doit suivre le thème comme le reste du bloc ; un gris figé virerait au
-              * noir sur fond clair. Son fond et son bord sont donc le texte à faible opacité.
-              */}
-            <span style={{
-              marginLeft: "8px", padding: "10px 17px", borderRadius: RAYONS.plein,
-              border: `1px solid ${text}22`, background: `${text}0D`,
-              color: text, opacity: 0.68,
-              fontSize: "16px", fontWeight: 500, letterSpacing: "0.005em",
-              whiteSpace: "nowrap", transition: "color 0.4s ease, border-color 0.4s ease",
-            }}>
-              {VERSION}
-            </span>
-          </div>
-          <p style={{ color: text, opacity: 0.7, fontSize: "12px", fontWeight: 300, letterSpacing: "0.22em", marginTop: "10px", marginRight: "-0.22em", transition: "color 0.4s ease" }}>
-            {fullTagline}
-          </p>
+          <h1 style={{
+            /**
+             * ⚠️ **`margin: 0 auto` centre la boîte ; `textAlign` ne centre que l'encre
+             * dedans.** Sans lui, le titre bridé à 16 caractères se colle à gauche de son
+             * enveloppe, qui occupe elle toute la colonne : la phrase partait vers la
+             * gauche pendant que la salutation et le bouton restaient au milieu.
+             */
+            color: text, margin: "0 auto", maxWidth: "min(16ch, 100%)",
+            fontSize: "clamp(32px, 4.6vw, 60px)", fontWeight: 700,
+            letterSpacing: "-0.03em", lineHeight: 1.08,
+            transition: "color 0.4s ease",
+          }}>
+            {PHRASE}
+          </h1>
         </div>
 
         <div style={{ height: "32px" }}/>
