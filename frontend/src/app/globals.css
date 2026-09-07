@@ -23,15 +23,17 @@
   que ses classes annonçaient `h-12 rounded-lg bg-primary`. Rien dans la console ne le signale ;
   seule la mesure le montre.
 */
-@source "../../node_modules/@appica/ui-react/dist/components/button";
-@source "../../node_modules/@appica/ui-react/dist/components/gradient-glow";
-@source "../../node_modules/@appica/ui-react/dist/components/autocomplete";
-@source "../../node_modules/@appica/ui-react/dist/internal";
+@source "../../node_modules/@appica/ui-react/dist";
 /*
-  ⚠️ **La portée est réduite au bouton, et ce n'est pas de la coquetterie.** Scruter tout
-  `dist` fait générer les utilitaires de leurs quarante composants : la feuille du site passait
-  de 54 à 231 Ko pour un seul bouton. Chaque composant d'Appica qu'on adoptera devra donc être
-  ajouté ici — sans quoi il sortira nu, comme le bouton l'a fait avant cette ligne.
+  ⚠️ **La portée couvre tout `dist`, et la restreindre a été essayé puis abandonné.** Un
+  dossier par composant coûte moins cher — la feuille tenait à 87 Ko contre 231 —, mais
+  **chaque composant tire des fichiers de variantes partagés qui vivent ailleurs**, et rien ne
+  le signale : le champ de recherche a perdu sa réaction au survol parce que ses styles de bord
+  sont dans `components/input`, que sa propre ligne ne couvrait pas. Le défaut ne se voit ni à
+  la compilation ni en console — il faut passer la souris dessus pour s'en apercevoir.
+
+  Trois fois de suite un composant est sorti incomplet pour cette raison. Le coût est réel et
+  assumé : une feuille plus lourde vaut mieux qu'une interface muette par endroits.
 */
 
 /*
