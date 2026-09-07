@@ -12,7 +12,12 @@ import { Input } from "@appica/ui-react/input";
 import { OTPField, OTPFieldInput } from "@appica/ui-react/otp-field";
 import { Chip } from "@appica/ui-react/chip";
 import { GradientGlow } from "@appica/ui-react/gradient-glow";
-import { ArrowUpRight } from "@appica/icons-react";
+import { ArrowUpRight, ChevronLeft, ChevronRight } from "@appica/icons-react";
+import { BorderBeam } from "@appica/ui-react/border-beam";
+import {
+  Carousel, CarouselContent, CarouselSlide,
+  CarouselPrev, CarouselNext, CarouselPagination,
+} from "@appica/ui-react/carousel";
 
 /**
  * La porte de l'alpha fermée : entrer avec un code, ou laisser son adresse.
@@ -95,6 +100,20 @@ export default function PageAcces() {
  */
 const LONGUEUR_CODE = 6;
 
+/**
+ * Les captures qui suivent la vidéo dans la galerie.
+ *
+ * ⚠️ **Le texte de remplacement décrit l'écran, il ne le nomme pas.** « tableau-de-bord.png »
+ * n'apprend rien à qui ne voit pas l'image ; ce qu'on y trouve, si.
+ */
+const APERCUS = [
+  { fichier: "tableau-de-bord.png", texte: "La vue générale : valeur totale, performance et score du patrimoine" },
+  { fichier: "graphique.png", texte: "La courbe d'un portefeuille, avec ses achats repérés" },
+  { fichier: "objectif.png", texte: "Un objectif d'épargne et sa projection" },
+  { fichier: "carte-actif.png", texte: "La fiche d'une action, avec son cours et sa position" },
+  { fichier: "solana.png", texte: "La fiche d'une cryptomonnaie" },
+];
+
 function Porte() {
   const parametres = useSearchParams();
 
@@ -175,7 +194,12 @@ function Porte() {
      * `public/apercus/` ; c'est la mise en page qui n'a plus d'endroit où la loger, pas le
      * fichier qui a disparu.
      */
-    <main style={{ position: "fixed", inset: 0, overflow: "hidden",
+    <main style={{ position: "relative", minHeight: "100vh",
+                   /* ⚠️ La page ne tenait plus dans l'écran une fois la galerie ajoutée : elle
+                      était `fixed` et coupait donc ce qui dépassait, sans barre de défilement
+                      ni indice. Elle défile maintenant, et les deux repères — l'enseigne et la
+                      mention — restent fixés à leur coin pour ne pas s'en aller avec. */
+                   paddingBottom: 96,
                    fontFamily: FONT, color: JETONS.surFond }}>
       <style>{STYLE_CHAMPS}</style>
 
@@ -187,7 +211,7 @@ function Porte() {
         * doit donc écrire son enseigne elle-même, aux mêmes mesures que le bandeau du site :
         * `top: 12`, hauteur 36, marge de 20.
         */}
-      <div style={{ position: "absolute", top: 12, left: 20, height: 36, zIndex: 2,
+      <div style={{ position: "fixed", top: 12, left: 20, height: 36, zIndex: 3,
                     display: "flex", alignItems: "center", gap: 10 }}>
         <Logo taille={30} />
         <span style={{ fontSize: 22, fontWeight: 600, letterSpacing: "-0.012em",
@@ -198,9 +222,9 @@ function Porte() {
         </Chip>
       </div>
 
-      <div style={{ position: "relative", zIndex: 1, height: "100%",
+      <div style={{ position: "relative", zIndex: 1,
                     display: "flex", flexDirection: "column", alignItems: "center",
-                    justifyContent: "center", padding: "0 24px", textAlign: "center" }}>
+                    padding: "clamp(90px, 16vh, 190px) 24px 0", textAlign: "center" }}>
 
         {/**
           * ⚠️ **Le titre nomme la version, il ne la répète pas.** « Alpha 0.1 » est écrit dans
@@ -357,11 +381,72 @@ function Porte() {
         </div>
       </div>
 
-      {/* ⚠️ Posée en absolu et non dans le flux : la colonne du milieu occupe toute la hauteur,
-          et la mention doit rester collée au bas de l'écran sans la comprimer. */}
-      <p style={{ position: "absolute", left: 0, right: 0, bottom: 22, zIndex: 1,
+      {/**
+        * La galerie : la démonstration, puis les captures.
+        *
+        * ⚠️ **La vidéo est la première diapositive, et il faut que ce soit elle.** Les captures
+        * montrent des écrans, la vidéo montre le produit en train de répondre — c'est la seule
+        * qui prouve qu'il fonctionne. La reléguer après trois images en ferait une pièce
+        * jointe.
+        *
+        * ⚠️ **Deux sources pour une vidéo, et l'ordre compte.** Le navigateur prend la première
+        * qu'il sait lire : `webm` d'abord, plus légère et mieux rendue, `mp4` en repli pour
+        * Safari. Les inverser ferait servir le mp4 à tout le monde.
+        *
+        * ⚠️ **Muette, en boucle, et jouée d'elle-même — les trois vont ensemble.** Une vidéo
+        * qui se lance avec le son est bloquée par tous les navigateurs ; `muted` est ce qui
+        * autorise `autoPlay`. `playsInline` évite qu'un téléphone la passe en plein écran.
+        */}
+      <div style={{ position: "relative", zIndex: 1, margin: "40px auto 0",
+                    width: "100%", maxWidth: 880, padding: "0 24px" }}>
+        <BorderBeam className="rounded-2xl">
+          <Carousel loop>
+            <CarouselContent>
+              <CarouselSlide>
+                <video
+                  className="aspect-3/2 w-full rounded-2xl object-cover"
+                  autoPlay muted loop playsInline preload="metadata"
+                  poster="/apercus/demonstration-affiche.jpg"
+                  aria-label="Le tableau de bord de Novac en fonctionnement">
+                  <source src="/apercus/demonstration.webm" type="video/webm" />
+                  <source src="/apercus/demonstration.mp4" type="video/mp4" />
+                </video>
+              </CarouselSlide>
+              {APERCUS.map(a => (
+                <CarouselSlide key={a.fichier}>
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={`/apercus/${a.fichier}`} alt={a.texte}
+                    className="aspect-3/2 w-full rounded-2xl object-cover" />
+                </CarouselSlide>
+              ))}
+            </CarouselContent>
+            <CarouselPrev render={
+              <Button variant="outline" size="icon-md" className="rounded-full">
+                <ChevronLeft />
+              </Button>
+            } />
+            <CarouselNext render={
+              <Button variant="outline" size="icon-md" className="rounded-full">
+                <ChevronRight />
+              </Button>
+            } />
+            <CarouselPagination className="absolute inset-x-0 top-full mt-5 justify-center" />
+          </Carousel>
+        </BorderBeam>
+      </div>
+
+      {/* ⚠️ Fixée et non posée dans le flux : la page défile désormais, et cette mention doit
+          rester lisible d'un bout à l'autre — c'est une mention légale, pas un pied de page
+          qu'on atteint si l'on veut bien descendre. Le rembourrage du bas de `main` lui réserve
+          sa place, sinon elle couvrirait la fin de la galerie. */}
+      {/* ⚠️ Un voile sous la mention : fixée, elle passe par-dessus la galerie, et une capture
+          claire la rendait illisible. Le dégradé s'éteint vers le haut pour ne pas dessiner de
+          bande. */}
+      <p style={{ position: "fixed", left: 0, right: 0, bottom: 0, zIndex: 3,
                   textAlign: "center", fontFamily: FONT, fontSize: 11,
-                  color: JETONS.surFondAttenue, lineHeight: 1.6, padding: "0 24px" }}>
+                  color: JETONS.surFondAttenue, lineHeight: 1.6, padding: "26px 24px 22px",
+                  margin: 0,
+                  background: `linear-gradient(to top, rgba(var(--nv-fond-rvb), 0.92) 40%, rgba(var(--nv-fond-rvb), 0))` }}>
         Novac est en cours de construction. Rien de ce qui s&apos;y affiche n&apos;est un
         conseil en investissement.
       </p>

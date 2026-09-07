@@ -76,7 +76,14 @@
     @apply antialiased text-slate-900;
     margin: 0;
     min-height: 100vh;
-    background: var(--nv-fond-degrade, var(--novac-bg));
+    /* ⚠️ **Une couleur de fond sous le dégradé, et ce n'est pas une ceinture de sécurité.**
+       `background-attachment: fixed` cale le dégradé sur la fenêtre : il ne peint donc que la
+       hauteur d'un écran. Tant qu'aucune page ne défilait, cela ne se voyait pas ; la porte de
+       l'alpha, devenue plus haute que l'écran, laissait apparaître **du blanc** sous le premier
+       écran — la toile n'étant peinte par personne au-delà. La couleur, elle, s'étend à toute
+       la page. C'est le premier arrêt du dégradé, donc la jointure est invisible. */
+    background-color: var(--nv-fond);
+    background-image: var(--nv-fond-degrade, var(--novac-bg));
     background-attachment: fixed;
     color: var(--novac-text-primary);
     font-family: Geist, -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", sans-serif;
