@@ -34,7 +34,7 @@ import { pilule } from "@/components/ui/saisie";
  * autre dialecte — la quatrième copie, exactement ce que ce fichier existe pour empêcher.
  */
 export default function PiluleAction({
-  libelle, onClick, fond, fondSurvol, title, placement,
+  libelle, onClick, fond, fondSurvol, title, placement, debut, fin,
 }: {
   libelle: string;
   onClick: () => void;
@@ -53,6 +53,18 @@ export default function PiluleAction({
    * `marginLeft: "auto"` qui pousse « Ajouter un compte » au bout de sa rangée.
    */
   placement?: React.CSSProperties;
+  /**
+   * Ce qui prend la place du signe « plus », à gauche du libellé.
+   *
+   * ⚠️ **Une porte laissée pour les objets, pas pour les décors.** Le « plus » dit qu'on
+   * ajoute ; quand le bouton ne fait qu'ouvrir une chose qui existe, il ment. La remplacer par
+   * la vignette de cette chose — un avatar de portefeuille, par exemple — dit *laquelle* on
+   * ouvre, ce qu'aucun glyphe ne sait faire. Y poser une icône de section ferait retomber dans
+   * le travers que le commentaire du « plus » décrit.
+   */
+  debut?: React.ReactNode;
+  /** Ce qui suit le libellé — une flèche de sortie, en pratique. */
+  fin?: React.ReactNode;
 }) {
   const ombre = "0 1px 3px rgba(0,0,0,0.30)";
   const ombreSurvol = "0 2px 6px rgba(0,0,0,0.35)";
@@ -86,12 +98,15 @@ export default function PiluleAction({
         * ⚠️ **Rendu à 14 et non à 24**, la taille d'export du modèle : elle dépasserait la
         * pilule, dont la hauteur tient celle de toute la rangée.
         */}
-      <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
-        stroke="currentColor" strokeWidth={1.5}
-        strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-        <path d="M12 5v14m-7-7h14" />
-      </svg>
+      {debut ?? (
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
+          stroke="currentColor" strokeWidth={1.5}
+          strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+          <path d="M12 5v14m-7-7h14" />
+        </svg>
+      )}
       {libelle}
+      {fin}
     </button>
   );
 }

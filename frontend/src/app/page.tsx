@@ -1,6 +1,9 @@
 "use client";
 import { recuperer } from "@/lib/requete";
 import { useRouter } from "next/navigation";
+import AvatarNovac from "@/components/AvatarNovac";
+import { lireApparenceAvatar } from "@/lib/useCouleurAvatar";
+import { useApp } from "@/lib/AppContext";
 import { FONT } from "@/lib/typography";
 import { useEffect, useRef, useState } from "react";
 import AuthModal from "@/components/AuthModal";
@@ -54,6 +57,18 @@ export default function Home() {
   const [portefeuilles, setPortefeuilles] = useState<any[] | null>(null);
   const aDesPortefeuilles = (portefeuilles?.length ?? 0) > 0;
   const router = useRouter();
+  const { activePortfolio } = useApp();
+  /**
+   * Le portefeuille que le bouton va réellement ouvrir.
+   *
+   * ⚠️ **La même règle que `/portfolio`, et il faut qu'elle le reste.** Cette page-là choisit
+   * celui de l'adresse, sinon le dernier ouvert, sinon le premier de la liste. Montrer ici
+   * l'avatar du premier alors qu'un autre s'ouvrira ferait mentir la vignette — et une
+   * vignette qui ment est pire qu'un glyphe neutre, puisqu'elle prétend nommer.
+   */
+  const portefeuilleOuvert =
+    portefeuilles?.find(p => String(p.id) === String(activePortfolio?.id)) ?? portefeuilles?.[0] ?? null;
+  const apparence = lireApparenceAvatar(portefeuilleOuvert);
   const [showAuth, setShowAuth] = useState(false);
   /**
    * ⚠️ **La demande de création survit à la connexion.** Le contrôle de session vivait au
@@ -376,9 +391,34 @@ export default function Home() {
             */}
           {aDesPortefeuilles ? (
             <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "14px" }}>
+              {/**
+                * ⚠️ **L'avatar remplace le glyphe, et il reste vivant.** `suivi` est laissé à
+                * son défaut : la tête continue de bouger et de suivre le curseur comme partout
+                * ailleurs. Le figer en aurait fait une icône — or c'est justement parce qu'il
+                * respire qu'on le reconnaît comme *son* portefeuille et non comme un
+                * pictogramme de portefeuille.
+                *
+                * ⚠️ **Dix-huit pixels dans une pilule qui en fait vingt-six.** Le reste est le
+                * rembourrage vertical ; à vingt, l'avatar touchait le bord et la pilule cessait
+                * d'être un objet posé pour devenir un cadre autour d'une image.
+                */}
               <PiluleAction
-                libelle="Ouvrir mon portefeuille"
+                libelle={portefeuilleOuvert?.name ? `Ouvrir ${portefeuilleOuvert.name}` : "Ouvrir mon portefeuille"}
                 onClick={() => router.push("/portfolio")}
+                debut={
+                  <AvatarNovac taille={18} couleur={apparence.couleur} forme={apparence.forme}
+                    skin={apparence.skin} style={{ marginLeft: -3 }} />
+                }
+                fin={
+                  /* La flèche de sortie du modèle : elle dit qu'on quitte cet écran, là où le
+                     « plus » disait qu'on ajoutait sans partir. */
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none"
+                    stroke="currentColor" strokeWidth={2}
+                    strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"
+                    style={{ marginRight: -2, opacity: 0.85 }}>
+                    <path d="M7 17 17 7M7 7h10v10" />
+                  </svg>
+                }
                 fond={CLAIR.accent} fondSurvol={CLAIR.accentFort}/>
               {/**
                 * ⚠️ **Un lien et non une seconde pilule.** Deux pilules côte à côte se
