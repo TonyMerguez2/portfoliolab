@@ -76,15 +76,11 @@
     @apply antialiased text-slate-900;
     margin: 0;
     min-height: 100vh;
-    /* ⚠️ **Une couleur de fond sous le dégradé, et ce n'est pas une ceinture de sécurité.**
-       `background-attachment: fixed` cale le dégradé sur la fenêtre : il ne peint donc que la
-       hauteur d'un écran. Tant qu'aucune page ne défilait, cela ne se voyait pas ; la porte de
-       l'alpha, devenue plus haute que l'écran, laissait apparaître **du blanc** sous le premier
-       écran — la toile n'étant peinte par personne au-delà. La couleur, elle, s'étend à toute
-       la page. C'est le premier arrêt du dégradé, donc la jointure est invisible. */
+    /* ⚠️ **Le corps ne porte que la couleur de base ; le dégradé est une couche à part.**
+       Voir `.nv-fond-page` et le commentaire de `PointsFond`. Cette couleur reste utile : elle
+       peint la toile au-delà de la fenêtre, là où une couche fixe ne va pas, et évite le blanc
+       qu'on voyait sous le premier écran d'une page qui défile. */
     background-color: var(--nv-fond);
-    background-image: var(--nv-fond-degrade, var(--novac-bg));
-    background-attachment: fixed;
     color: var(--novac-text-primary);
     font-family: Geist, -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", sans-serif;
   }
@@ -902,6 +898,16 @@
    de rendu, alors qu'un pointermove en produirait des dizaines par seconde.
    Même procédé que trackSpecular() sur les tuiles.
    ─────────────────────────────────────────────────────────────────────────── */
+/* Le dégradé de la page, calé sur la fenêtre. Voir le commentaire de `PointsFond` pour ce qui
+   l'a fait sortir du `<body>`. */
+.nv-fond-page {
+  position: fixed;
+  inset: 0;
+  z-index: -2;
+  pointer-events: none;
+  background: var(--nv-fond-degrade, var(--novac-bg));
+}
+
 .nv-points {
   position: fixed;
   inset: 0;
@@ -2159,25 +2165,17 @@ canvas + div {
   }
 }
 
-/* ⚠️ **La silhouette revient sur téléphone, mais éteinte de plus de moitié.** La retirer a
-   confirmé ce que trois réglages de taille et de position n'avaient pas su montrer : c'était
-   bien elle, et non la trame, qui faisait la tache de points vifs signalée trois fois. La
-   trame est uniforme horizontalement ; elle ne pouvait pas produire une zone bornée.
+/* ⚠️ **La silhouette reste retirée sur téléphone, et c'est un renoncement, pas un réglage.**
+   Cinq essais : absente, trop grande, resserrée, calée au coin, éteinte à 0,30 d'encre contre
+   0,76. À chaque fois la même tache de points plus vifs dans le haut de l'écran, signalée à
+   chaque fois. Elle disparaît quand la couche disparaît, et revient dès qu'elle revient — quel
+   que soit son réglage.
 
-   ⚠️ **Ce n'est donc pas sa taille qui était en cause, c'est son encre.** À 0,76 sur un écran
-   de poche, son cœur passe du fond à six fois sa densité en quelques centimètres : l'œil y lit
-   une lampe, pas une texture. À 0,30 — deux fois et demie la trame au lieu de six — la forme
-   se devine sans jamais s'allumer.
+   ⚠️ **Je ne l'ai jamais reproduite en émulation**, sur aucune largeur ni aucun réglage. Sans
+   moyen d'observer le rendu sur l'appareil concerné, je ne peux pas chercher plus loin : je
+   retire la couche plutôt que de continuer à deviner.
 
-   ⚠️ **Ancrée au coin, sans décalage en pourcentage.** Les décalages relatifs se calculaient
-   sur l'espace libre, donc sur une hauteur de fenêtre que Safari sur iPhone ne définit pas
-   comme les autres : la silhouette se retrouvait en haut de l'écran alors qu'elle était calée
-   en bas ailleurs. Un ancrage franc ne dépend d'aucune arithmétique. */
+   Le grand écran la garde entière ; cette règle ne touche que les largeurs de téléphone. */
 @media (max-width: 700px) {
-  .nv-silhouette {
-    --nv-point-logo: rgba(106, 114, 130, 0.30);
-    --nv-logo-cote: min(80vw, 380px);
-    -webkit-mask-position: right bottom, right bottom;
-    mask-position: right bottom, right bottom;
-  }
+  .nv-silhouette { display: none; }
 }

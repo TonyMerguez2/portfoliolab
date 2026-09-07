@@ -64,5 +64,21 @@ export default function PointsFond() {
     };
   }, []);
 
-  return <div ref={ref} className="nv-points" aria-hidden="true" />;
+  return (
+    <>
+      {/**
+        * ⚠️ **Le dégradé de page est une couche à lui, et non le fond du `<body>`.** Il y était,
+        * en `background-attachment: fixed` pour rester calé sur la fenêtre. Deux ennuis avec
+        * ça : Safari sur iPhone **ignore** cet attachement, et la page de la porte s'est mise à
+        * défiler — le dégradé s'étirait alors sur toute la hauteur du document, si bien que le
+        * premier écran n'en montrait que le tiers sombre du haut. D'où un site nettement plus
+        * sombre qu'avant, sans que rien n'ait changé de ses couleurs.
+        *
+        * Une couche `fixed` de la taille de la fenêtre n'a pas ce défaut : elle est calée par
+        * sa position, pas par une propriété que le navigateur peut ne pas honorer.
+        */}
+      <div className="nv-fond-page" aria-hidden="true" />
+      <div ref={ref} className="nv-points" aria-hidden="true" />
+    </>
+  );
 }
