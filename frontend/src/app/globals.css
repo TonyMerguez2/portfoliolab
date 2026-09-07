@@ -2131,6 +2131,19 @@ canvas + div {
    la matière.
 
    Les deux pages d'entrée en profitent : elles partagent cette couche. */
+/* ⚠️ **La lueur du curseur est retirée sur téléphone, en CSS et plus seulement en JavaScript.**
+   `PointsFond` s'abstenait déjà de suivre le pointeur quand l'appareil n'a pas de survol
+   — `(hover: hover) and (pointer: fine)` —, ce qui laissait le masque à −9999 px, donc éteint.
+   Mais la couche restait montée, avec son dégradé et son masque à composer à chaque peinture,
+   et deux cas passaient au travers : un appareil tactile qui déclare savoir survoler, et une
+   fenêtre de bureau réduite à la largeur d'un téléphone — où la lueur suit une vraie souris et
+   se lit comme un défaut sur un format qui n'en attend pas.
+
+   La retirer ici la supprime pour de bon : plus de couche, plus de masque à calculer. */
+@media (hover: none), (max-width: 700px) {
+  .nv-points::after { display: none; }
+}
+
 @media (max-width: 700px) {
   .nv-silhouette {
     --nv-logo-cote: min(88vw, 410px);
