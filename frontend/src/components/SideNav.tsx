@@ -114,18 +114,18 @@ const RANGEE = 40, ECART = 4, MARGE = 9;
  * position stable, ni entre deux visites, ni entre deux tailles d'écran. Ancré en haut, les
  * deux valeurs tombent à zéro.
  *
- * ⚠️ **C'est le départ de la cascade qu'on pose, et il s'aligne sur le bandeau.** Le champ de
- * recherche est en `position: fixed; top: 12px` ; la silhouette part du même douze, si bien
- * que le haut du rail et le haut du champ tiennent sur une ligne. Demandé à l'usage — « à même
- * marge que la barre de recherche ». C'était dix, deux pixels plus haut, ce qui suffisait à se
- * lire comme un alignement manqué.
+ * ⚠️ **Le rail ne tient plus le haut : il se centre sur la hauteur.** Il partait à 12 px pour
+ * que sa silhouette et le champ de recherche tiennent sur une ligne — un alignement demandé à
+ * l'usage, et juste tant que le coin haut gauche était à lui. Il ne l'est plus : l'enseigne
+ * s'y est installée, avec les mêmes 20 px de marge que le champ à l'autre bout. Deux objets ne
+ * peuvent pas occuper le même coin, et c'est le bandeau qui doit le tenir — il traverse la
+ * page de bord à bord, le rail non.
  *
- * ⚠️ **La première rangée, elle, tombe où la cascade la laisse.** Douze plus l'étalement plus
- * la marge, soit cent onze : elle n'est alignée sur rien, et ne peut pas l'être tant que le
- * pli fait quatre-vingt-dix. C'est le bord de la silhouette qui porte l'alignement, pas son
- * contenu.
+ * ⚠️ **Le centrage se fait sur la fenêtre, pas sur un `top` calculé.** `top: 50%` puis un
+ * décalage de la moitié de sa propre hauteur : le rail n'a pas de hauteur fixe — elle dépend
+ * du nombre de rangées, qui dépend de la session — et tout calcul en pixels aurait été faux
+ * dès qu'une rangée apparaît ou disparaît.
  */
-const HAUT = 12;
 
 /**
  * La silhouette du rail : un flanc droit, une cascade en S à chaque bout.
@@ -411,7 +411,7 @@ export default function SideNav() {
       data-avatar="curieux"
       ref={ancrerRail}
       style={{
-        position: "fixed", left: 0, top: HAUT,
+        position: "fixed", left: 0, top: "50%", transform: "translateY(-50%)",
         width: LARGEUR, zIndex: 60,
         display: "flex", flexDirection: "column", alignItems: "center", gap: ECART,
         /* ⚠️ Le rembourrage porte l'étalement des deux cascades : la découpe mange ces

@@ -5,7 +5,6 @@ import AuthModal from "@/components/AuthModal";
 import Header from "@/components/Header";
 import { API_URL } from "@/lib/api";
 import { CLAIR, RAYONS } from "@/lib/palette";
-import { VERSION } from "@/lib/version";
 
 /**
  * La phrase d'accueil.
@@ -172,118 +171,6 @@ export default function Home() {
       * disparue.
       */
     <div className="fixed inset-0 overflow-hidden">
-      {/**
-        * ⚠️ **`!important` n'est pas une facilité, c'est une nécessité ici.** L'enseigne porte
-        * son `display: flex` en style *en ligne*, et un style en ligne l'emporte sur n'importe
-        * quelle règle de feuille — la classe seule ne masquait rien, et l'enseigne continuait
-        * de s'afficher derrière la barre de recherche sur téléphone.
-        */}
-      <style>{`@media (max-width: 767px) { .nv-enseigne { display: none !important; } }`}</style>
-
-
-      {/**
-        * Le logo en filigrane.
-        *
-        * ⚠️ **Il ne cherche plus à être lu, et c'est le changement de fond.** Les versions
-        * précédentes le voulaient gravé dans la page : corps couleur du fond, bord marqué,
-        * éclats qui parcouraient son contour. Tout cela visait à le rendre presque invisible
-        * — ce qui est contradictoire pour une marque, dont le rôle sur un écran d'accueil est
-        * de dire qui l'on est. Le traitement était bon, la place était fausse.
-        *
-        * ⚠️ **Un filigrane, donc : très grand, très faible, débordant d'un angle.** Il devient
-        * une texture de fond et non un objet. Le débord est ce qui l'empêche de redevenir un
-        * objet : une forme entière, posée au milieu, se lit toujours comme quelque chose qu'on
-        * montre ; coupée par le bord de l'écran, elle se lit comme de la matière.
-        *
-        * ⚠️ **En bas à droite, à l'opposé du rail de navigation.** À gauche il aurait chevauché
-        * la barre latérale, dont le fond opaque l'aurait tranché net — un débord franc d'un
-        * côté, une coupure nette de l'autre.
-        *
-        * ⚠️ **Ni filtre, ni contour, ni animation.** Un filigrane est plat par définition :
-        * l'ombre interne servait à creuser, le liseré à faire vivre, et ni l'un ni l'autre
-        * n'a de sens sur une texture. Le `.nv-lisere-courant` de `globals.css` disparaît avec.
-        */}
-      {/**
-        * La silhouette du logo, dessinée par la trame de points.
-        *
-        * ⚠️ **Elle remplace le filigrane, qui est supprimé.** Le filigrane était un aplat
-        * masqué par le dessin : il éclaircissait le fond en forme de logo. Les deux ensemble
-        * faisaient deux logos décalés — l'un clair, l'autre piqueté — sans que rien ne
-        * l'explique. Le reflet animé qui parcourait son contour part avec lui : il n'avait de
-        * sens que sur un bord plein, et il n'y a plus de bord.
-        *
-        * ⚠️ **Ce ne sont pas des points ajoutés : ce sont les mêmes, rendus plus présents.**
-        * La couche reprend exactement le motif de `.nv-points` — même rayon, même pas de
-        * 14 px — dans une encre plus soutenue, et le logo lui sert de masque. Une seconde
-        * trame décalée d'un demi-pixel aurait moiré contre la première.
-        *
-        * ⚠️ **Le pas est ancré sur le coin de l'écran, comme la trame du fond.** `.nv-points`
-        * est en `position: fixed` et son motif part de l'origine du cadre. Cette couche est
-        * donc `fixed` elle aussi, à la taille de l'écran, et c'est le **masque** qu'on place
-        * et qu'on dimensionne — pas la boîte. Dimensionner la boîte aurait décalé la grille
-        * de points, et la silhouette se serait lue comme une seconde trame plutôt que comme
-        * la même, renforcée.
-        */}
-      <div aria-hidden="true" className="fixed pointer-events-none nv-silhouette"
-        style={{ inset: 0, zIndex: 0 }} />
-
-      {/**
-        * L'enseigne : le logo, le nom, la version.
-        *
-        * ⚠️ **Elle se décale de la largeur du rail, pas d'une marge choisie à l'œil.** Le rail
-        * est fixe et large de 68 px (`LARGEUR`, dans `SideNav`) ; poser l'enseigne à 24 px du
-        * bord la ferait passer dessous. La valeur est donc la somme des deux, et elle suivra
-        * si le rail change.
-        *
-        * ⚠️ **Le nom n'est plus en gras.** En 800 au centre, il était le seul objet de la
-        * page et devait en porter le poids. Dans un coin, à 22 px, la même graisse crierait
-        * par-dessus la phrase qui est maintenant le sujet.
-        *
-        * ⚠️ **Sous 768 px, elle s'efface** : la barre de recherche y prend toute la largeur du
-        * haut et lui passe dessus. Rien n'est perdu — le rail porte le logo à trois centimètres
-        * de là, et c'est justement pourquoi le centre de la page ne le porte plus.
-        */}
-      <div className="nv-enseigne" style={{
-        /**
-         * ⚠️ **Les quatre valeurs sont celles de la barre de recherche, pas des voisines.**
-         * `GlobalHeader` la pose en `fixed`, `top: 12px`, haute de 36 px, à 20 px du bord.
-         * L'enseigne reprend le même `top`, la même hauteur et la même marge — comptée
-         * depuis le rail — donc les deux se centrent sur la même ligne, à 30 px du haut, et
-         * y resteront si le header bouge. Un `top` réglé à l'œil aurait dérivé au premier
-         * changement de hauteur.
-         */
-        position: "fixed", top: "12px", left: `${68 + 20}px`, height: "36px", zIndex: 50,
-        display: "flex", alignItems: "center", gap: "10px",
-      }}>
-        <span aria-hidden="true" style={{
-          width: "30px", height: "30px", flexShrink: 0, display: "block",
-          background: text, transition: "background 0.4s ease",
-          maskImage: "url(/logo-hivesync.svg)", WebkitMaskImage: "url(/logo-hivesync.svg)",
-          maskSize: "contain", WebkitMaskSize: "contain",
-          maskRepeat: "no-repeat", WebkitMaskRepeat: "no-repeat",
-          maskPosition: "center", WebkitMaskPosition: "center",
-        }} />
-        <span style={{
-          color: text, fontSize: "22px", fontWeight: 500, letterSpacing: "-0.01em",
-          transition: "color 0.4s ease",
-        }}>
-          Novac
-        </span>
-        {/**
-          * ⚠️ **La pastille se pose sur la couleur du texte, pas sur une teinte fixe.** Elle
-          * doit suivre le thème comme le reste du bloc ; un gris figé virerait au noir sur
-          * fond clair. Son fond et son bord sont donc le texte à faible opacité.
-          */}
-        <span style={{
-          marginLeft: "4px", padding: "5px 11px", borderRadius: RAYONS.plein,
-          border: `1px solid ${text}22`, background: `${text}0D`,
-          color: text, opacity: 0.68, fontSize: "12px", fontWeight: 500,
-          whiteSpace: "nowrap", transition: "color 0.4s ease, border-color 0.4s ease",
-        }}>
-          {VERSION}
-        </span>
-      </div>
-
       {/**
         * ⚠️ **Le texte descend pour laisser voir le logo.** Centré comme lui, il se posait
         * pile dessus : la forme passait derrière les mots et l'on n'en lisait plus rien.

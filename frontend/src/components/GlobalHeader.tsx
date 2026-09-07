@@ -24,6 +24,7 @@ import { lireApparenceAvatar } from "@/lib/useCouleurAvatar";
  */
 const VIGNETTE = 28;
 import { JETONS, RAYONS } from "@/lib/palette";
+import { VERSION } from "@/lib/version";
 import { brandHex } from "@/lib/tileStyle";
 import { HAUTEUR_SAISIE, RAYON_SAISIE, champ } from "@/components/ui/saisie";
 import FenetreModale from "@/components/ui/FenetreModale";
@@ -759,6 +760,59 @@ export default function GlobalHeader() {
         * survol ne ferait plus rien. C'est la même contrainte que `.novac-bouton-doux`, dont
         * le commentaire de `globals.css` dit déjà pourquoi.
         */}
+      {/**
+        * L'enseigne : le logo, le nom, la version.
+        *
+        * ⚠️ **Elle est ici et non dans la page d'accueil.** Elle y a vécu une version, posée
+        * en absolu au-dessus du contenu : elle disparaissait donc dès qu'on quittait
+        * l'accueil, alors que le bandeau qui la fait tenir, lui, est sur toutes les pages.
+        * Deux moitiés d'un même bandeau ne peuvent pas vivre dans deux fichiers.
+        *
+        * ⚠️ **Ses marges sont celles du champ de recherche, en miroir.** Le champ est à
+        * `top: 12px, right: 20px`, haut de 36 ; l'enseigne prend le même douze, la même
+        * hauteur et le même vingt à gauche. Les deux extrémités du bandeau pèsent alors
+        * pareil, et se centrent sur la même ligne — vérifié à 30 px du haut de part et
+        * d'autre. Ce vingt-là n'est possible que parce que **le rail ne tient plus le coin** :
+        * il est centré verticalement, voir `SideNav`.
+        *
+        * ⚠️ **Sous 768 px, elle s'efface.** Le champ y occupe presque toute la largeur et lui
+        * passerait dessus. Le rail porte le logo, rien n'est perdu. La règle a besoin de
+        * `!important` : le `display: flex` est posé en ligne, et un style en ligne l'emporte
+        * sur n'importe quelle feuille.
+        */}
+      <style>{`@media (max-width: 767px) { .nv-enseigne { display: none !important; } }`}</style>
+      <div className="nv-enseigne" style={{
+        position: "fixed", top: "12px", left: "20px", height: "36px", zIndex: 50,
+        display: "flex", alignItems: "center", gap: "10px", pointerEvents: "none",
+      }}>
+        <span aria-hidden="true" style={{
+          width: "30px", height: "30px", flexShrink: 0, display: "block",
+          /* ⚠️ `surFond` et non `texte` : l'enseigne est posée sur le fond de page, hors
+             carte. Les deux se confondent en sombre et divergent en clair. */
+          background: JETONS.surFond,
+          maskImage: "url(/logo-hivesync.svg)", WebkitMaskImage: "url(/logo-hivesync.svg)",
+          maskSize: "contain", WebkitMaskSize: "contain",
+          maskRepeat: "no-repeat", WebkitMaskRepeat: "no-repeat",
+          maskPosition: "center", WebkitMaskPosition: "center",
+        }} />
+        <span style={{ color: JETONS.surFond, fontSize: "22px", fontWeight: 500, letterSpacing: "-0.01em" }}>
+          Novac
+        </span>
+        {/**
+          * ⚠️ **La pastille se pose sur la couleur du texte, pas sur une teinte fixe.** Elle
+          * doit suivre le thème comme le reste du bandeau ; un gris figé virerait au noir sur
+          * fond clair.
+          */}
+        <span style={{
+          marginLeft: "4px", padding: "5px 11px", borderRadius: RAYONS.plein,
+          border: `1px solid ${JETONS.bord}`, background: JETONS.carteCreuse,
+          color: JETONS.surFondAttenue, fontSize: "12px", fontWeight: 500,
+          whiteSpace: "nowrap",
+        }}>
+          {VERSION}
+        </span>
+      </div>
+
       <button type="button" onClick={() => setShowSearch(true)}
         className="novac-surface-saisie"
         aria-label="Rechercher un actif, un ETF, un indice"
