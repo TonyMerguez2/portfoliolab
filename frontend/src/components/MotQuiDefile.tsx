@@ -2,28 +2,41 @@
 import { useEffect, useState } from "react";
 
 /**
- * Un mot qui se remplace par le suivant, seul sur sa ligne.
+ * Un mot qui se remplace par le suivant, dans un emplacement de largeur fixe.
  *
- * ⚠️ **La ligne à lui seul est ce qui rend ce composant simple.** Une première version gardait
- * le verbe dans la phrase, à la suite de « et ce qui le fait ». Comme « performer » et
- * « grandir » ne mesurent pas la même chose et que le titre est centré, chaque changement
- * recalait la ligne entière : le texte qui précède glissait à chaque rotation. Pour l'empêcher,
- * cette version mesurait chaque mot sur un exemplaire invisible, attendait
- * `document.fonts.ready`, écoutait un `ResizeObserver` et animait la largeur de la boîte — une
- * machinerie entière au service d'un défaut de mise en page.
+ * ⚠️ **La boîte a une largeur fixe, et le mot déborde à droite s'il est plus long.** C'est là
+ * tout le mécanisme, et il tient en une ligne de style. Comme la largeur ne dépend plus du mot
+ * affiché, la mise en page de la phrase ne bouge jamais : le texte qui précède garde sa place
+ * au pixel, et le nombre de lignes ne peut plus changer. Le mot commence toujours au même
+ * endroit ; ses lettres continuent simplement plus ou moins loin vers la droite.
  *
- * ⚠️ **Isoler le verbe supprime la cause au lieu de la compenser.** Seul sur sa ligne, il ne
- * pousse plus rien : ce qui le précède est figé par construction, et sa propre largeur n'a plus
- * d'importance puisque la ligne se centre d'elle-même. Il ne reste qu'un fondu. Les mesures,
- * l'observateur, l'animation de largeur et le `!important` qui allait avec ont disparu — ainsi
- * que la règle qui isolait déjà le verbe sous 560 px, devenue le cas général.
+ * ⚠️ **Trois autres voies ont été essayées avant, et chacune échouait sur un point.**
+ * Une boîte ajustée au mot recalait la ligne entière à chaque rotation — le défaut d'origine.
+ * Une boîte mesurée puis animée en largeur rendait ce recalage fluide, mais c'était toujours un
+ * recalage, et cela demandait un exemplaire invisible par mot, `document.fonts.ready` et un
+ * `ResizeObserver`. Isoler le verbe sur sa propre ligne supprimait bien la cause, mais faisait
+ * passer le titre à trois lignes.
+ *
+ * ⚠️ **La largeur se donne en `ch`, jamais en pixels.** Le corps du titre est en `clamp`, donc
+ * il varie avec la fenêtre ; une largeur en pixels serait juste à une seule taille d'écran.
+ * L'unité `ch` suit le corps, et le débord reste proportionnel partout.
  *
  * ⚠️ **Le point final est passé ici, avec le mot.** Laissé dans la phrase, il restait immobile
  * pendant que le verbe s'efface : une ponctuation flottant seule au bout d'un vide, puis le mot
  * suivant venant s'y coller.
  */
-export default function MotQuiDefile({ mots, suffixe = "", intervalle = 2600, transition = 420, style }: {
+export default function MotQuiDefile({ mots, suffixe = "", largeur = "6ch", intervalle = 2600, transition = 420, style }: {
   mots: string[];
+  /**
+   * Largeur réservée au mot, en `ch`.
+   *
+   * ⚠️ **C'est elle qui décide du centrage apparent de la phrase.** Trop étroite, tous les mots
+   * débordent et la phrase penche à droite ; trop large, tous laissent un blanc et elle penche à
+   * gauche. La valeur juste est la moyenne des mots de la liste — mesurés à 60 px : évoluer 218,
+   * performer 288, résister 223, grandir 209, changer 238, soit 235 en moyenne pour un `ch` à
+   * 40 px. D'où six.
+   */
+  largeur?: string;
   /** Ce qui suit le mot et s'efface avec lui — un point final, en pratique. */
   suffixe?: string;
   /** Durée d'affichage d'un mot, transition comprise. */
@@ -64,7 +77,18 @@ export default function MotQuiDefile({ mots, suffixe = "", intervalle = 2600, tr
   }, [index, anime, mots.length, intervalle, transition]);
 
   return (
-    <span style={{ display: "block", ...style }}>
+    <span style={{
+      display: "inline-block", width: largeur, verticalAlign: "bottom",
+      /* ⚠️ **Le titre est centré, donc son alignement descend jusqu'ici.** Sans ce `left`, le
+         mot se centrait *dans* son emplacement : les courts partaient plus à droite que les
+         longs, et son début se déplaçait à chaque rotation — exactement ce que la largeur fixe
+         devait empêcher. */
+      textAlign: "left",
+      /* ⚠️ Le débordement doit rester visible — c'est lui qu'on cherche. Une valeur héritée de
+         `hidden` couperait les mots longs en plein milieu. */
+      whiteSpace: "nowrap", overflow: "visible",
+      ...style,
+    }}>
       <span style={{
         display: "inline-block", whiteSpace: "nowrap",
         opacity: sortant ? 0 : 1,

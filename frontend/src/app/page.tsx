@@ -13,7 +13,8 @@ import { CLAIR, RAYONS } from "@/lib/palette";
  * disait une intention sans dire un service ; celle-ci reprend les mots de la page
  * publique, pour que les deux entrées du site promettent la même chose.
  */
-const PHRASE_AVANT = "Tout votre patrimoine, et ce qui le fait ";
+const PHRASE_HAUT = "Tout votre patrimoine,";
+const PHRASE_BAS = "et ce qui le fait ";
 /**
  * ⚠️ **Les cinq verbes ne disent pas la même chose, et c'est voulu.** « Évoluer » et
  * « changer » décrivent, « performer » et « grandir » promettent, « résister » rassure. La
@@ -271,18 +272,25 @@ export default function Home() {
              * gauche pendant que la salutation et le bouton restaient au milieu.
              */
             /**
-             * ⚠️ **La largeur ne dépend plus des verbes.** Elle a valu 18 ch le temps que le
-             * verbe partage la ligne de « et ce qui le fait » : il fallait alors que la boîte
-             * contienne la plus longue des cinq versions, faute de quoi « performer » ajoutait
-             * une ligne à lui seul. Le verbe ayant sa ligne, seule la phrase fixe dicte la
-             * mesure, et 16 ch lui suffisent — c'est la valeur d'origine.
+             * ⚠️ **La largeur ne dépend plus des verbes.** Elle a valu 18 ch le temps que la
+             * boîte du verbe s'ajustait à son contenu : il fallait alors qu'elle contienne la
+             * plus longue des cinq versions, faute de quoi « performer » ajoutait une ligne à
+             * lui seul. Cette boîte ayant une largeur fixe, la phrase se découpe toujours
+             * pareil : 17 ch, mesurés sur « et ce qui le fait » suivi de l'emplacement de six
+             * caractères. À 16 ch l'emplacement ne tenait plus sur la ligne et passait à la
+             * suivante, ce qui rendait le titre à trois lignes.
              */
-            color: text, margin: "0 auto", maxWidth: "min(16ch, 100%)",
+            color: text, margin: "0 auto", maxWidth: "min(17ch, 100%)",
             fontSize: "clamp(28px, 4.6vw, 60px)", fontWeight: 700,
             letterSpacing: "-0.03em", lineHeight: 1.08,
             transition: "color 0.4s ease",
           }}>
-            {PHRASE_AVANT}<MotQuiDefile mots={VERBES} suffixe="." />
+            {/**
+              * ⚠️ **La coupure est posée, pas laissée au hasard de la largeur.** À 17 ch le
+              * navigateur cassait après « et », qui restait seul en bout de première ligne. La
+              * virgule est la seule coupure que la phrase porte naturellement.
+              */}
+            {PHRASE_HAUT}<br />{PHRASE_BAS}<MotQuiDefile mots={VERBES} suffixe="." />
           </h1>
         </div>
 
