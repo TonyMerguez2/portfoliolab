@@ -786,7 +786,7 @@ export default function GlobalHeader() {
         display: "flex", alignItems: "center", gap: "10px", pointerEvents: "none",
       }}>
         <span aria-hidden="true" style={{
-          width: "30px", height: "30px", flexShrink: 0, display: "block",
+          width: "34px", height: "34px", flexShrink: 0, display: "block",
           /* ⚠️ `surFond` et non `texte` : l'enseigne est posée sur le fond de page, hors
              carte. Les deux se confondent en sombre et divergent en clair. */
           background: JETONS.surFond,
@@ -795,7 +795,7 @@ export default function GlobalHeader() {
           maskRepeat: "no-repeat", WebkitMaskRepeat: "no-repeat",
           maskPosition: "center", WebkitMaskPosition: "center",
         }} />
-        <span style={{ color: JETONS.surFond, fontSize: "22px", fontWeight: 500, letterSpacing: "-0.01em" }}>
+        <span style={{ color: JETONS.surFond, fontSize: "22px", fontWeight: 600, letterSpacing: "-0.012em" }}>
           Novac
         </span>
         {/**
