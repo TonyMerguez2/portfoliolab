@@ -898,6 +898,45 @@
    de rendu, alors qu'un pointermove en produirait des dizaines par seconde.
    Même procédé que trackSpecular() sur les tuiles.
    ─────────────────────────────────────────────────────────────────────────── */
+/* ── L'animation d'entrée ───────────────────────────────────────────────────
+   Le logo se trace, puis se remplit, puis le voile s'efface. Le déroulé vient de
+   `swiftui-logo-draw` ; les durées et l'enchaînement sont dans `EntreeLogo`.
+
+   ⚠️ **Le tracé se joue sur un pointillé normalisé.** Le chemin déclare `pathLength: 1`, donc
+   un tiret de longueur 1 couvre exactement la forme : le décalage passe de 1 — tout le trait
+   hors du chemin, rien de visible — à 0. Sans cette normalisation, la valeur dépendrait de la
+   longueur réelle du dessin, à recalculer à chaque retouche du logo. */
+/* ⚠️ **Le voile est en CSS et non en React, pour qu'il existe dès la première peinture.**
+   Il est peint par la racine marquée `data-entree`, marque posée par le script du `<head>`. Le
+   composant `EntreeLogo` dessine le logo par-dessus une fois monté ; sans ce voile, la page
+   s'affichait pendant l'intervalle.
+
+   ⚠️ **Il se retire tout seul, sans que rien ne le lui demande.** L'animation finit sur
+   `visibility: hidden` en `forwards` : même si le JavaScript s'arrête après avoir posé la
+   marque, l'écran ne reste pas noir. */
+html[data-entree]::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: 99;
+  pointer-events: none;
+  background: var(--nv-fond);
+  animation: nv-entree-voile 450ms ease-in 1550ms forwards;
+}
+
+@keyframes nv-entree-trace {
+  from { stroke-dashoffset: 1; }
+  to   { stroke-dashoffset: 0; }
+}
+@keyframes nv-entree-encre {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+@keyframes nv-entree-voile {
+  from { opacity: 1; visibility: visible; }
+  to   { opacity: 0; visibility: hidden; }
+}
+
 /* Le dégradé de la page, calé sur la fenêtre. Voir le commentaire de `PointsFond` pour ce qui
    l'a fait sortir du `<body>`. */
 .nv-fond-page {

@@ -6,6 +6,7 @@ import "./globals.css";
 import GlobalHeader from "@/components/GlobalHeader";
 import SideNav from "@/components/SideNav";
 import PointsFond from "@/components/PointsFond";
+import EntreeLogo from "@/components/EntreeLogo";
 import CadreSite from "@/components/CadreSite";
 
 /**
@@ -36,6 +37,16 @@ export const metadata: Metadata = {
  * ne fait que lire une clé et écrire un attribut.
  */
 /**
+ * ⚠️ **L'entrée se décide ici, et pas dans le composant qui la dessine.** `EntreeLogo` ne se
+ * monte qu'après l'hydratation : entre la première peinture et ce montage, on voyait la page
+ * apparaître, puis se faire recouvrir par le voile, puis reparaître — un battement qui donne
+ * l'impression d'un chargement raté. Ce script tourne dans le `<head>`, donc **avant la
+ * première peinture** : il pose une marque sur la racine, et la feuille de style couvre l'écran
+ * dans le même souffle. Le composant n'a plus qu'à dessiner par-dessus.
+ *
+ * ⚠️ **C'est lui qui écrit la marque de visite, pas le composant.** Deux endroits qui décident
+ * finiraient par ne plus dire la même chose ; celui-ci décide, l'autre obéit.
+ *
  * ⚠️ **Deux marques pour un seul thème, et les deux sont posées avant l'hydratation.**
  * `data-theme` est celle du site ; `dark` est celle qu'attendent les composants d'Appica, dont
  * la variante sombre s'écrit `&:is(.dark *)`. La poser plus tard ferait paraître leurs
@@ -48,6 +59,14 @@ const SCRIPT_THEME = `(function(){try{
   }
   document.documentElement.setAttribute('data-theme', m);
   document.documentElement.classList.toggle('dark', m === 'sombre');
+  /* L'entrée : décidée ici, avant la première peinture. Voir le commentaire du script. */
+  try {
+    if (!sessionStorage.getItem('novac-entree-vue')
+        && !matchMedia('(prefers-reduced-motion: reduce)').matches) {
+      document.documentElement.setAttribute('data-entree', '');
+      sessionStorage.setItem('novac-entree-vue', '1');
+    }
+  } catch (e) { document.documentElement.setAttribute('data-entree', ''); }
 }catch(e){
   document.documentElement.setAttribute('data-theme','sombre');
   document.documentElement.classList.add('dark');
@@ -62,6 +81,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <script dangerouslySetInnerHTML={{ __html: SCRIPT_THEME }} />
       </head>
       <body className={geist.className}>
+        {/* ⚠️ Posée avant tout le reste et par-dessus : c'est un voile plein écran, monté une
+            fois par visite. Voir `EntreeLogo`. */}
+        <EntreeLogo />
         <PointsFond />
         <AppProvider>
           {/* L'avatar vit dans le bandeau, mais ce qu'il exprime vient des pages :
