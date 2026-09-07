@@ -172,6 +172,31 @@ export default function Home() {
       */
     <div className="fixed inset-0 overflow-hidden">
       {/**
+        * La silhouette du logo, dessinée par la trame de points.
+        *
+        * ⚠️ **Elle remplace le filigrane, qui est supprimé.** Le filigrane était un aplat
+        * masqué par le dessin : il éclaircissait le fond en forme de logo. Les deux ensemble
+        * faisaient deux logos décalés — l'un clair, l'autre piqueté — sans que rien ne
+        * l'explique. Le reflet animé qui parcourait son contour part avec lui : il n'avait de
+        * sens que sur un bord plein, et il n'y a plus de bord.
+        *
+        * ⚠️ **Ce ne sont pas des points ajoutés : ce sont les mêmes, rendus plus présents.**
+        * La couche reprend exactement le motif de `.nv-points` — même rayon, même pas de
+        * 14 px — dans une encre plus soutenue, et le logo lui sert de masque. Une seconde
+        * trame décalée d'un demi-pixel aurait moiré contre la première.
+        *
+        * ⚠️ **Le pas est ancré sur le coin de l'écran, comme la trame du fond.** `.nv-points`
+        * est en `position: fixed` et son motif part de l'origine du cadre. Cette couche est
+        * donc `fixed` elle aussi, à la taille de l'écran, et c'est le **masque** qu'on place
+        * et qu'on dimensionne — pas la boîte. Dimensionner la boîte aurait décalé la grille
+        * de points, et la silhouette se serait lue comme une seconde trame plutôt que comme
+        * la même, renforcée.
+        */}
+      <div aria-hidden="true" className="fixed pointer-events-none nv-silhouette"
+        style={{ inset: 0, zIndex: 0 }} />
+
+
+      {/**
         * ⚠️ **Le texte descend pour laisser voir le logo.** Centré comme lui, il se posait
         * pile dessus : la forme passait derrière les mots et l'on n'en lisait plus rien.
         * Signalé à l'usage. Le logo garde le milieu — c'est sa place quand il fait partie du
