@@ -5,7 +5,8 @@ import AuthModal from "@/components/AuthModal";
 import Header from "@/components/Header";
 import ProfileModal from "@/components/ProfileModal";
 import { API_URL } from "@/lib/api";
-import { CLAIR } from "@/lib/palette";
+import { CLAIR, RAYONS } from "@/lib/palette";
+import { VERSION } from "@/lib/version";
 import PiluleAction from "@/components/portfolio/PiluleAction";
 import PanneauCreation from "@/components/portfolio/PanneauCreation";
 export default function Home() {
@@ -261,18 +262,43 @@ export default function Home() {
             * « marque », le mot n'a plus qu'à la nommer. L'espacement tombe avec la casse, il
             * n'avait de sens qu'en capitales.
             */}
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: "18px" }}>
+          {/**
+            * ⚠️ **Les trois pièces forment un ensemble, pas trois éléments centrés.** Le logo
+            * dépasse le mot d'un bon quart — c'est lui qui donne sa hauteur au bloc, le mot
+            * s'y loge. Le rapport se tient entre le côté du logo et le corps du mot, jamais
+            * en pixels absolus : changer l'un sans l'autre casse l'assemblage.
+            *
+            * ⚠️ **C'est le bloc entier qui est centré, donc « Novac » ne l'est plus.** La
+            * pastille pèse à droite et pousse le mot vers la gauche. C'est voulu : une marque
+            * suivie de sa version se lit comme une seule enseigne, et centrer le mot seul
+            * ferait flotter la pastille hors de l'axe.
+            */}
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: "12px" }}>
             <span aria-hidden="true" style={{
-              width: "54px", height: "54px", flexShrink: 0, display: "block",
+              width: "60px", height: "60px", flexShrink: 0, display: "block",
               background: text, transition: "background 0.4s ease",
               maskImage: "url(/logo-hivesync.svg)", WebkitMaskImage: "url(/logo-hivesync.svg)",
               maskSize: "contain", WebkitMaskSize: "contain",
               maskRepeat: "no-repeat", WebkitMaskRepeat: "no-repeat",
               maskPosition: "center", WebkitMaskPosition: "center",
             }} />
-            <h1 style={{ color: text, fontSize: "52px", fontWeight: 700, letterSpacing: "-0.015em", transition: "color 0.4s ease", margin: 0 }}>
+            <h1 style={{ color: text, fontSize: "50px", fontWeight: 800, letterSpacing: "-0.025em", transition: "color 0.4s ease", margin: 0 }}>
               Novac
             </h1>
+            {/**
+              * ⚠️ **La pastille se pose sur la couleur du texte, pas sur une teinte fixe.**
+              * Elle doit suivre le thème comme le reste du bloc ; un gris figé virerait au
+              * noir sur fond clair. Son fond et son bord sont donc le texte à faible opacité.
+              */}
+            <span style={{
+              marginLeft: "8px", padding: "10px 17px", borderRadius: RAYONS.plein,
+              border: `1px solid ${text}22`, background: `${text}0D`,
+              color: text, opacity: 0.68,
+              fontSize: "16px", fontWeight: 500, letterSpacing: "0.005em",
+              whiteSpace: "nowrap", transition: "color 0.4s ease, border-color 0.4s ease",
+            }}>
+              {VERSION}
+            </span>
           </div>
           <p style={{ color: text, opacity: 0.7, fontSize: "12px", fontWeight: 300, letterSpacing: "0.22em", marginTop: "10px", marginRight: "-0.22em", transition: "color 0.4s ease" }}>
             {fullTagline}
