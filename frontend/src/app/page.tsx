@@ -3,7 +3,6 @@ import { recuperer } from "@/lib/requete";
 import { useEffect, useRef, useState } from "react";
 import AuthModal from "@/components/AuthModal";
 import Header from "@/components/Header";
-import ProfileModal from "@/components/ProfileModal";
 import { API_URL } from "@/lib/api";
 import { CLAIR, RAYONS } from "@/lib/palette";
 import { VERSION } from "@/lib/version";
@@ -39,7 +38,6 @@ export default function Home() {
    * temps de la connexion et ouvre le panneau dans la foulée.
    */
   const [creerApresConnexion, setCreerApresConnexion] = useState(false);
-  const [showProfile, setShowProfile] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [showTools, setShowTools] = useState(false);
   const [tickerData, setTickerData] = useState<{symbol: string, price: number, change: number}[]>([]);
@@ -141,13 +139,6 @@ export default function Home() {
 
 
 
-
-  const getGreeting = () => {
-    const h = new Date().getHours();
-    if (h >= 5 && h < 12) return "Bonjour";
-    if (h >= 12 && h < 18) return "Bon après-midi";
-    return "Bonsoir";
-  };
 
   /* ⚠️ `bg` est parti avec les couches de fond : la page laisse voir celui de
      l'application. `text` reste — il teinte le logo, qui est un masque. */
@@ -253,7 +244,15 @@ export default function Home() {
         * de là, et c'est justement pourquoi le centre de la page ne le porte plus.
         */}
       <div className="nv-enseigne" style={{
-        position: "absolute", top: "26px", left: `${68 + 26}px`, zIndex: 10,
+        /**
+         * ⚠️ **Les quatre valeurs sont celles de la barre de recherche, pas des voisines.**
+         * `GlobalHeader` la pose en `fixed`, `top: 12px`, haute de 36 px, à 20 px du bord.
+         * L'enseigne reprend le même `top`, la même hauteur et la même marge — comptée
+         * depuis le rail — donc les deux se centrent sur la même ligne, à 30 px du haut, et
+         * y resteront si le header bouge. Un `top` réglé à l'œil aurait dérivé au premier
+         * changement de hauteur.
+         */
+        position: "fixed", top: "12px", left: `${68 + 20}px`, height: "36px", zIndex: 50,
         display: "flex", alignItems: "center", gap: "10px",
       }}>
         <span aria-hidden="true" style={{
@@ -359,44 +358,15 @@ export default function Home() {
           </h1>
         </div>
 
-        <div style={{ height: "32px" }}/>
+        {/**
+          * ⚠️ **La salutation est partie, et l'avatar avec.** « Bonsoir, Sacha » nommait la
+          * personne juste sous une phrase qui promet un service : deux registres à trois
+          * centimètres l'un de l'autre. Le bouton de profil et le « Se connecter » qui
+          * l'accompagnaient ne sont pas perdus pour autant — **le rail porte les deux**, il
+          * monte lui-même `ProfileModal` et `AuthModal`. Ils étaient en double.
+          */}
+        <div style={{ height: "26px" }}/>
 
-        {/* Bonsoir + avatar */}
-        <div style={{
-          display: "flex", alignItems: "center", gap: "10px",
-        }}>
-          <p style={{ color: text, fontSize: "14px", fontWeight: 300, letterSpacing: "0.15em", opacity: 0.45, transition: "color 0.4s ease" }}>
-            {getGreeting()}{user ? `, ${user.username}` : ""}
-          </p>
-          {user && (
-            <button onClick={() => setShowProfile(true)}
-              className="w-8 h-8 flex items-center justify-center rounded-full overflow-hidden shrink-0"
-              style={{
-                border: dark ? "1px solid rgba(255,255,255,0.18)" : "1px solid rgba(4,17,36,0.14)",
-                backgroundColor: dark ? "rgba(255,255,255,0.07)" : "rgba(4,17,36,0.05)",
-                cursor: "pointer",
-              }}>
-              {user?.avatar_url
-                ? <img src={user.avatar_url.startsWith("/uploads") ? `${API_URL}${user.avatar_url}` : user.avatar_url} className="w-full h-full object-cover"/>
-                : <span style={{ fontSize: "11px", fontWeight: 700, color: text, opacity: 0.7 }}>{user.username?.charAt(0).toUpperCase()}</span>
-              }
-            </button>
-          )}
-          {!user && (
-            <button onClick={() => setShowAuth(true)}
-              style={{
-                fontSize: "10px", letterSpacing: "0.1em", color: text, opacity: 0.25,
-                background: "transparent", border: "none", cursor: "pointer", padding: 0,
-                transition: "opacity 0.2s",
-              }}
-              onMouseEnter={e => (e.currentTarget.style.opacity = "0.55")}
-              onMouseLeave={e => (e.currentTarget.style.opacity = "0.25")}>
-              Se connecter →
-            </button>
-          )}
-        </div>
-
-        <div style={{ height: "24px" }}/>
 
         {/* Bouton */}
         <div style={{
@@ -453,7 +423,6 @@ export default function Home() {
           setUser(u);
           if (creerApresConnexion) { setCreerApresConnexion(false); setCreation(true); }
         }}/>}
-      {showProfile && user && <ProfileModal dark={dark} user={user} onClose={() => setShowProfile(false)} onUpdate={(u: any) => setUser(u)}/>}
     </div>
   );
 }
