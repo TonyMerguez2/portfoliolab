@@ -2122,14 +2122,19 @@ canvas + div {
    de la trame. Le logo n'y était pas « discret », il était absent.
 
    ⚠️ **La mesure passe donc en largeur, pas en hauteur.** `vh` est le mauvais repère sur un
-   écran deux fois plus haut que large ; `130vw` donne une silhouette qui déborde d'un tiers,
-   assez pour se lire, et l'ancrage se resserre pour ramener le cœur du dessin dans l'écran.
+   écran deux fois plus haut que large.
+
+   ⚠️ **Et elle est passée par 130vw avant d'atterrir à 88.** Débordant d'un tiers, la
+   silhouette se lisait — mais elle occupait toute la largeur et la moitié de la hauteur, ce
+   qui en faisait le sujet de la page plutôt que son fond. Signalé à l'usage : « il prend toute
+   la place ». Sous la largeur de l'écran, et calée dans le coin bas droit, elle redevient de
+   la matière.
 
    Les deux pages d'entrée en profitent : elles partagent cette couche. */
 @media (max-width: 700px) {
   .nv-silhouette {
-    --nv-logo-cote: min(130vw, 620px);
-    -webkit-mask-position: right -22% bottom -6%, right -22% bottom -6%;
-    mask-position: right -22% bottom -6%, right -22% bottom -6%;
+    --nv-logo-cote: min(88vw, 410px);
+    -webkit-mask-position: right -10% bottom 4%, right -10% bottom 4%;
+    mask-position: right -10% bottom 4%, right -10% bottom 4%;
   }
 }
