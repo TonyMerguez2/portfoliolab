@@ -24,6 +24,7 @@ import { lireApparenceAvatar } from "@/lib/useCouleurAvatar";
  */
 const VIGNETTE = 28;
 import { JETONS, RAYONS } from "@/lib/palette";
+import { Chip } from "@appica/ui-react/chip";
 import {
   Autocomplete, AutocompleteInput, AutocompleteContent,
   AutocompleteEmpty, AutocompleteList, AutocompleteItem,
@@ -825,18 +826,21 @@ export default function GlobalHeader() {
           Novac
         </span>
         {/**
-          * ⚠️ **La pastille se pose sur la couleur du texte, pas sur une teinte fixe.** Elle
-          * doit suivre le thème comme le reste du bandeau ; un gris figé virerait au noir sur
-          * fond clair.
+          * ⚠️ **Rendu en `<span>` et non dans le bouton par défaut du composant.** `Chip` pose
+          * un `<button>` — pratique pour une étiquette qu'on filtre ou qu'on retire, faux ici :
+          * celle-ci ne fait qu'énoncer la version. Un bouton sans action prend le focus au
+          * clavier, s'annonce comme actionnable aux outils d'assistance, et ne répond pas quand
+          * on l'active. `render` remplace l'élément sans rien changer à l'apparence.
+          *
+          * ⚠️ **Changer la balise ne suffit pas : le composant pose `tabindex="0"` et
+          * `cursor-pointer` de lui-même.** Relevé sur le rendu, pas deviné — le `<span>` sortait
+          * avec `tabindex="0"`, donc dans l'ordre de tabulation, et une main au survol qui
+          * promet un clic. Les deux sont défaits ici : hors tabulation, curseur ordinaire.
           */}
-        <span style={{
-          marginLeft: "4px", padding: "5px 11px", borderRadius: RAYONS.plein,
-          border: `1px solid ${JETONS.bord}`, background: JETONS.carteCreuse,
-          color: JETONS.surFondAttenue, fontSize: "12px", fontWeight: 500,
-          whiteSpace: "nowrap",
-        }}>
+        <Chip render={<span />} size="sm" tabIndex={-1} className="cursor-default"
+          style={{ marginLeft: 4 }}>
           {VERSION}
-        </span>
+        </Chip>
       </div>
 
       {/**
