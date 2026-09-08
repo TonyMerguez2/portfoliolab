@@ -119,11 +119,22 @@ def envoyer_en_fond(destinataire: str, sujet: str, texte: str, html: str | None 
 #    différence du seul CSS — et les deux `meta` de `color-scheme`, qui déclarent le message
 #    déjà sombre et suffisent à désarmer l'inversion sur Apple Mail et iOS.
 #
-# ⚠️ **Le logo ne porte jamais rien d'essentiel.** Beaucoup de clients bloquent les images
-# par défaut ; `logo-novac.png` est blanc sur transparence, donc absent *et* invisible sur un
-# fond clair. Le mot « Novac » est écrit en texte juste à côté : c'est lui l'identité, l'image
-# n'est qu'un supplément. Son `alt` est vide pour la même raison — un texte de remplacement
-# blanc sur fond blanc ne sauverait rien.
+# ⚠️ **Le logo est une image, là où le site n'en utilise jamais.** Partout ailleurs la forme
+# sert de `mask-image` et prend la couleur du texte qui l'entoure — c'est ce qui garantit
+# qu'elle est toujours exactement du même blanc. Un courriel n'a pas de masques : il lui faut
+# une image déjà peinte. `logo-courriel.png` est donc `logo-hivesync.svg` rasterisé en
+# `#FFFFFF` pur, la couleur même de `_INTENSE`, à 90 px pour un affichage à 30 — soit 3×, ce
+# que réclament les écrans de téléphone.
+#
+# ⚠️ **Ce n'est pas `logo-novac.png`**, qui traîne dans `public/` et porte l'ancienne marque.
+# Plus aucune page ne le référence ; s'en servir ici affichait dans les courriels un logo que
+# le site n'utilise nulle part.
+#
+# ⚠️ **Le logo ne porte jamais rien d'essentiel.** Beaucoup de clients bloquent les images par
+# défaut, et l'image est blanche sur transparence, donc invisible si un client force le clair.
+# Le mot « Novac » est écrit en texte juste à côté : c'est lui l'identité, l'image n'est qu'un
+# supplément. Son `alt` est vide pour la même raison — un texte de remplacement blanc sur fond
+# blanc ne sauverait rien.
 
 #: Les couleurs, reprises de `globals.css`. En dur : un courriel n'a pas de variables CSS.
 _FOND = "#030712"          # --nv-fond
@@ -179,7 +190,7 @@ def page(titre: str, apercu: str, corps: str) -> str:
         <!-- Le bloc-marque, tel qu'il est en haut à gauche du site. -->
         <tr><td class="nv-marge" bgcolor="{_FOND}"
                 style="background-color:{_FOND};padding:0 40px 36px">
-          <img src="https://novac.fyi/logo-novac.png" width="30" height="30" alt=""
+          <img src="https://novac.fyi/logo-courriel.png" width="30" height="30" alt=""
                style="vertical-align:middle;border:0;display:inline-block">
           <span style="font-family:{_POLICE};font-size:20px;font-weight:600;
                        color:{_INTENSE};letter-spacing:-0.2px;vertical-align:middle;
@@ -286,9 +297,8 @@ SUJET_INSCRIPTION = "Vous êtes sur la liste d'attente de Novac"
 TEXTE_INSCRIPTION = """\
 Votre adresse est enregistrée sur la liste d'attente de Novac.
 
-Novac est un tableau de bord pour suivre son patrimoine entier — portefeuilles, comptes,
-objectifs — et comprendre ce qui le fait bouger. Il est en alpha fermée : nous ouvrons les
-accès par petits groupes.
+Tout votre patrimoine, et ce qui le fait évoluer, performer, résister ou grandir.
+Novac est en alpha fermée : nous ouvrons les accès par petits groupes.
 
 Vous recevrez un code dès qu'une place se libère. Rien d'autre ne vous sera envoyé.
 
@@ -306,7 +316,11 @@ HTML_INSCRIPTION = page(
                  f"style=\"color:{_INTENSE}\">alpha fermée</strong> : nous ouvrons les accès "
                  "par petits groupes, et vous recevrez un code dès qu'une place se libère.")
     + paragraphe("D'ici là, rien d'autre ne vous sera envoyé.")
-    + paragraphe("Novac réunit vos portefeuilles, vos comptes et vos objectifs sur un même "
-                 "tableau de bord, et montre ce qui les fait bouger.")
+    # ⚠️ **La promesse du site, mot pour mot** — voir `frontend/src/lib/phrase.ts`.
+    # L'énumération que portait cette phrase (« portefeuilles, comptes, objectifs ») la
+    # rétrécissait : on lit une liste comme la limite de ce que fait le produit. La phrase
+    # d'accueil est ouverte à dessein, et les deux doivent promettre la même chose.
+    + paragraphe(f"<strong style=\"color:{_INTENSE}\">Tout votre patrimoine</strong>, et ce "
+                 "qui le fait évoluer, performer, résister ou grandir.")
     + bouton("Découvrir Novac", "https://novac.fyi"),
 )
