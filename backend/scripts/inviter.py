@@ -32,41 +32,43 @@ from app.services import courriel
 SUJET = "Votre accès à Novac est ouvert"
 
 TEXTE = """\
-Bonjour,
-
 Une place s'est libérée : voici votre code d'accès à Novac.
 
     {code}
 
 Rendez-vous sur https://novac.fyi et saisissez-le dans « J'ai un code d'accès ».
 
-Novac est en alpha : des choses manquent, d'autres changeront. Si quelque chose vous gêne ou
-vous surprend, répondez à ce message — c'est précisément ce qu'on cherche à savoir.
+Novac est en alpha : des choses manquent, d'autres changeront. C'est précisément le moment
+où vos remarques comptent le plus.
 
 À bientôt,
 L'équipe Novac
 
 Rien de ce qui s'affiche sur Novac n'est un conseil en investissement.
+Cette adresse d'envoi ne reçoit pas de réponse.
 """
 
-HTML = """\
-<div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
-            font-size:15px;line-height:1.6;color:#1B2434;max-width:520px">
-  <p>Bonjour,</p>
-  <p>Une place s'est libérée&nbsp;: voici votre <strong>code d'accès</strong> à Novac.</p>
-  <p style="font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:18px;
-            background:#F1F3F7;border-radius:6px;padding:12px 16px;display:inline-block">
-     {code}</p>
-  <p>Rendez-vous sur <a href="https://novac.fyi" style="color:#1E6FD9">novac.fyi</a> et
-     saisissez-le dans «&nbsp;J'ai un code d'accès&nbsp;».</p>
-  <p>Novac est en alpha&nbsp;: des choses manquent, d'autres changeront. Si quelque chose vous
-     gêne ou vous surprend, répondez à ce message — c'est précisément ce qu'on cherche à
-     savoir.</p>
-  <p style="margin-top:24px">À bientôt,<br>L'équipe Novac</p>
-  <p style="margin-top:28px;font-size:12px;color:#6E7A91">
-     Rien de ce qui s'affiche sur Novac n'est un conseil en investissement.</p>
-</div>
-"""
+# ⚠️ **Plus aucune invitation à répondre.** Les messages partent de `no-reply@novac.fyi`, une
+# adresse que personne ne relève : la phrase « répondez à ce message » qui figurait ici
+# promettait un canal inexistant, et une réponse s'y serait perdue sans que ni son auteur ni
+# nous ne l'apprenions. Pour rouvrir ce canal, il faut d'abord une vraie boîte — voir
+# `NOVAC_COURRIEL_REPONSE` dans `app/services/courriel.py`.
+
+HTML = (
+    courriel.page(
+        SUJET,
+        "Votre code d'accès à l'alpha de Novac.",
+        courriel.titre("Votre accès est ouvert.")
+        + courriel.paragraphe("Une place s'est libérée. Voici votre code&nbsp;:")
+        + courriel.code("{code}")
+        + courriel.paragraphe("Saisissez-le dans «&nbsp;J'ai un code d'accès&nbsp;» sur "
+                              "novac.fyi.")
+        + courriel.bouton("Ouvrir Novac", "https://novac.fyi")
+        + courriel.paragraphe("Novac est en alpha&nbsp;: des choses manquent, d'autres "
+                              "changeront. C'est précisément le moment où vos remarques "
+                              "comptent le plus."),
+    )
+)
 
 
 def main() -> None:
@@ -91,7 +93,10 @@ def main() -> None:
         return
 
     texte = TEXTE.format(code=args.code)
-    html = HTML.format(code=args.code)
+    # ⚠️ **`replace` et non `format` :** le gabarit HTML porte une règle `@media`, donc de
+    # vraies accolades. `format` les prendrait pour des champs à remplir et lèverait un
+    # `KeyError` sur le premier sélecteur venu — au moment de l'envoi, pas au démarrage.
+    html = HTML.replace("{code}", args.code)
 
     if not args.vraiment:
         print(f"ESSAI À BLANC — {len(adresses)} destinataire(s), rien ne part.\n")
