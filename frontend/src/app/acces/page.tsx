@@ -1,5 +1,5 @@
 "use client";
-import { Suspense, useEffect, useRef, useState } from "react";
+import { Suspense, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { FONT, NUM } from "@/lib/typography";
 import { JETONS, RAYONS } from "@/lib/palette";
@@ -13,7 +13,6 @@ import { OTPField, OTPFieldInput } from "@appica/ui-react/otp-field";
 import { Chip } from "@appica/ui-react/chip";
 import { GradientGlow } from "@appica/ui-react/gradient-glow";
 import { ArrowUpRight } from "@appica/icons-react";
-import { BorderBeam } from "@appica/ui-react/border-beam";
 
 /**
  * La porte de l'alpha fermée : entrer avec un code, ou laisser son adresse.
@@ -26,12 +25,12 @@ import { BorderBeam } from "@appica/ui-react/border-beam";
  * ⚠️ **C'est la seule page que verront la plupart des visiteurs pendant l'alpha et la bêta.**
  * Elle porte donc l'identité du site — le filigrane du logo, le mot-symbole espacé de la page
  * d'accueil, les jetons de couleur, la police du reste — et non une mise en page de service.
- * Elle montre aussi trois aperçus de ce qu'on trouve derrière : demander une adresse sans rien
- * montrer, c'est demander de la confiance sans rien donner en échange.
  *
- * ⚠️ **Les chiffres des aperçus sont des exemples, et le disent.** Inventer des données en les
- * faisant passer pour un portefeuille réel serait une promesse fausse ; les taire rendrait les
- * dessins illisibles. Ils portent la mention « aperçu », une fois, en tête du bloc.
+ * ⚠️ **Elle ne montre plus rien du produit, et c'est un choix assumé.** Elle a porté une
+ * démonstration filmée, puis une galerie d'aperçus : demander une adresse sans rien montrer,
+ * c'est demander de la confiance sans rien donner en échange. Retirées à la demande. Ce qui
+ * reste doit donc tenir seul — d'où la colonne centrée, qui n'est plus l'en-tête d'une page
+ * mais la page entière.
  */
 
 /**
@@ -96,27 +95,6 @@ export default function PageAcces() {
  */
 const LONGUEUR_CODE = 6;
 
-/**
- * Le cadre de la vidéo : son format, une surface de panneau, les coins du faisceau.
- *
- * ⚠️ **16/10, le format de la vidéo.** Elle est filmée en 1600 × 1000 et servie en 1152 × 720 :
- * tout autre rapport lui ajouterait des bandes pour rien. Le cadre a porté un temps six pièces
- * de formats différents, ce qui obligeait à un compromis ; il n'en porte plus qu'une, dont il
- * prend exactement la mesure.
- *
- * ⚠️ **La surface reste, bien qu'il n'y ait plus de bande à couvrir.** Elle porte le fond du
- * lecteur avant que la première image n'arrive : sans elle, on verrait le fond de page à
- * travers, et le cadre semblerait vide le temps du chargement.
- */
-const cadreVideo: React.CSSProperties = {
-  aspectRatio: "16 / 10", width: "100%", overflow: "hidden",
-  /* ⚠️ **24 et non 16 : c'est le rayon du faisceau qui commande.** `BorderBeam` arrive en
-     `rounded-2xl`, soit 24 px, et ses couches suivent en `rounded-[inherit]`. Le cadre en
-     portait 16 : le faisceau décrivait donc un coin plus rond que le contenu qu'il entoure, et
-     l'écart se voyait aux quatre angles. Mesuré avant de corriger — 24 contre 16. */
-  borderRadius: 24, background: JETONS.carte,
-};
-
 function Porte() {
   const parametres = useSearchParams();
 
@@ -125,31 +103,6 @@ function Porte() {
   const [email, setEmail] = useState("");
   const [inscription, setInscription] = useState<EtatInscription>("repos");
   const [codeOuvert, setCodeOuvert] = useState(false);
-
-  /**
-   * ⚠️ **`autoPlay` ne suffit pas toujours, et son échec est silencieux.** Les navigateurs le
-   * refusent dans plusieurs cas — onglet ouvert en arrière-plan, économie d'énergie, première
-   * image pas encore décodée au moment où l'attribut est lu. Rien n'est signalé : la vidéo
-   * reste sur son affiche, immobile, et l'on croit à une image fixe. On redemande donc la
-   * lecture à chaque fois que le navigateur annonce pouvoir la tenir.
-   *
-   * ⚠️ **Le refus se rattrape en silence, lui aussi.** `play()` rend une promesse qui échoue
-   * si la politique du navigateur l'interdit ; ne pas l'attraper ferait remonter une erreur
-   * dans la console à chaque visite, pour une situation prévue.
-   */
-  const video = useRef<HTMLVideoElement>(null);
-  useEffect(() => {
-    const v = video.current;
-    if (!v) return;
-    const lancer = () => { v.play().catch(() => { /* refusé par le navigateur */ }); };
-    lancer();
-    v.addEventListener("canplay", lancer);
-    document.addEventListener("visibilitychange", lancer);
-    return () => {
-      v.removeEventListener("canplay", lancer);
-      document.removeEventListener("visibilitychange", lancer);
-    };
-  }, []);
 
   /**
    * ⚠️ **Le code est passé en argument, il n'est pas relu dans l'état.** Le champ à six cases
@@ -218,16 +171,29 @@ function Porte() {
      * franchit la porte changeait de site en la franchissant. Même fond, même phrase, même
      * enseigne — la porte annonce ce qu'elle ouvre.
      *
-     * ⚠️ **La vidéo de démonstration part avec la carte.** Elle existe toujours dans
-     * `public/apercus/` ; c'est la mise en page qui n'a plus d'endroit où la loger, pas le
-     * fichier qui a disparu.
+     * ⚠️ **La vidéo de démonstration n'est plus montée nulle part.** Elle a suivi la carte,
+     * puis a vécu seule en bas de page dans un cadre à faisceau, et elle en est retirée. Les
+     * fichiers restent dans `public/apercus/` — `demonstration.webm`, `.mp4` et son affiche —
+     * et ne sont plus servis : c'est la mise en page qui n'a plus d'endroit où les loger, pas
+     * les fichiers qui ont disparu.
      */
     <main style={{ position: "relative", minHeight: "100vh",
-                   /* ⚠️ La page ne tenait plus dans l'écran une fois la galerie ajoutée : elle
-                      était `fixed` et coupait donc ce qui dépassait, sans barre de défilement
-                      ni indice. Elle défile maintenant, et les deux repères — l'enseigne et la
-                      mention — restent fixés à leur coin pour ne pas s'en aller avec. */
-                   paddingBottom: 96,
+                   /* ⚠️ **La colonne se centre dans la hauteur, elle n'est plus posée en
+                      haut.** Tant que la galerie occupait le bas, un rembourrage haut suffisait
+                      à placer le texte ; sans elle, la page se lisait tassée sous l'enseigne
+                      avec un demi-écran de vide dessous.
+
+                      ⚠️ **Les deux rembourrages ne sont pas décoratifs : ils réservent la place
+                      des deux repères fixés.** 60 en haut pour l'enseigne — 12 de marge et 36 de
+                      hauteur — et 96 en bas pour la mention légale et son voile. Le centre
+                      tombe donc à 18 pixels au-dessus du milieu de l'écran, ce qui est le
+                      centre optique et non une erreur de calcul.
+
+                      ⚠️ `minHeight` et non `height` : sur un écran court, la colonne dépasse et
+                      la page défile plutôt que de couper. Elle était `fixed` autrefois, et
+                      rognait ce qui débordait sans barre ni indice. */
+                   display: "flex", flexDirection: "column", justifyContent: "center",
+                   paddingTop: 60, paddingBottom: 96,
                    fontFamily: FONT, color: JETONS.surFond }}>
       <style>{STYLE_CHAMPS}</style>
 
@@ -252,7 +218,7 @@ function Porte() {
 
       <div style={{ position: "relative", zIndex: 1,
                     display: "flex", flexDirection: "column", alignItems: "center",
-                    padding: "clamp(90px, 16vh, 190px) 24px 0", textAlign: "center" }}>
+                    padding: "0 24px", textAlign: "center" }}>
 
         {/**
           * ⚠️ **Le titre nomme la version, il ne la répète pas.** « Alpha 0.1 » est écrit dans
@@ -407,44 +373,6 @@ function Porte() {
             </GradientGlow>
           )}
         </div>
-      </div>
-
-      {/**
-        * La galerie : la démonstration, puis les captures.
-        *
-        * ⚠️ **La vidéo est la première diapositive, et il faut que ce soit elle.** Les captures
-        * montrent des écrans, la vidéo montre le produit en train de répondre — c'est la seule
-        * qui prouve qu'il fonctionne. La reléguer après trois images en ferait une pièce
-        * jointe.
-        *
-        * ⚠️ **Deux sources pour une vidéo, et l'ordre compte.** Le navigateur prend la première
-        * qu'il sait lire : `webm` d'abord, plus légère et mieux rendue, `mp4` en repli pour
-        * Safari. Les inverser ferait servir le mp4 à tout le monde.
-        *
-        * ⚠️ **Muette, en boucle, et jouée d'elle-même — les trois vont ensemble.** Une vidéo
-        * qui se lance avec le son est bloquée par tous les navigateurs ; `muted` est ce qui
-        * autorise `autoPlay`. `playsInline` évite qu'un téléphone la passe en plein écran.
-        */}
-      <div style={{ position: "relative", zIndex: 1, margin: "40px auto 0",
-                    width: "100%", maxWidth: 880, padding: "0 24px" }}>
-        <BorderBeam className="rounded-2xl">
-          {/**
-            * ⚠️ **Plus de carrousel : il n'y a qu'une pièce à montrer.** Il en a porté six — la
-            * vidéo puis cinq captures — et n'en garde qu'une à la demande. Le composant est
-            * donc retiré, avec ses flèches et sa pagination : trois commandes qui ne mènent
-            * nulle part se lisent comme une panne, pas comme une sobriété.
-            */}
-          <div style={cadreVideo}>
-            <video ref={video}
-              className="h-full w-full object-contain"
-              autoPlay muted loop playsInline preload="auto"
-              poster="/apercus/demonstration-affiche.jpg"
-              aria-label="Le tableau de bord de Novac en fonctionnement">
-              <source src="/apercus/demonstration.webm" type="video/webm" />
-              <source src="/apercus/demonstration.mp4" type="video/mp4" />
-            </video>
-          </div>
-        </BorderBeam>
       </div>
 
       {/* ⚠️ Fixée et non posée dans le flux : la page défile désormais, et cette mention doit
