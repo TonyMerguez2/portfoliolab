@@ -91,8 +91,16 @@ const STYLE = `
      s'arrête déjà sous le curseur ; sans cette marque, rien ne dit *lequel* des dix on
      s'apprête à ouvrir. Le symbole et le cours montent d'un cran, la variation garde sa
      couleur — c'est elle qui porte le sens. */
+  /* ⚠️ **Les teintes de repos sont ici, et pas en style en ligne.** Elles l'étaient, et la
+     règle de survol ci-dessous ne s'appliquait donc jamais : un style en ligne l'emporte sur
+     une classe, quelle que soit sa spécificité. Mesuré au survol — la pastille s'allumait,
+     le symbole restait au gris de repos. */
+  .nv-bandeau-symbole { color: var(--nv-sur-fond-faible); }
+  .nv-bandeau-cours { color: var(--nv-sur-fond-attenue); }
+  .nv-bandeau-logo { background: var(--nv-sur-fond-faible); transition: background 140ms ease; }
   .nv-bandeau-actif:hover .nv-bandeau-symbole,
   .nv-bandeau-actif:hover .nv-bandeau-cours { color: var(--nv-sur-fond); }
+  .nv-bandeau-actif:hover .nv-bandeau-logo { background: var(--nv-sur-fond); }
   /* ⚠️ **La pastille est le seul repère de surface qui reste.** Le bandeau n'a plus ni fond
      ni liseré : sans elle, survoler un actif ne changeait que la teinte de deux mots, ce qui
      se remarque à peine sur dix lignes qui défilent. Elle ne s'allume qu'au survol, donc elle
@@ -203,7 +211,20 @@ export default function BandeauActifs({ cliquable = false }: { cliquable?: boole
   return (
     <div className="nv-bandeau"
       style={{
-        position: "fixed", bottom: 0, left: 0, right: 0, zIndex: 4,
+        position: "fixed", bottom: 0, left: 0, right: 0,
+        /**
+         * ⚠️ **20, et c'est ce qui rend le bandeau cliquable.** Il était à 4, et sur l'accueil
+         * la colonne de contenu est en `z-10` avec `h-full` : elle couvre tout l'écran, fond
+         * transparent compris. Le bandeau se voyait donc parfaitement **et ne recevait aucun
+         * événement de souris** — ni survol, ni clic. Diagnostiqué par `elementsFromPoint` au
+         * milieu du bandeau, qui rendait la colonne en premier et le lien seulement en
+         * quatrième position.
+         *
+         * ⚠️ **20 et pas davantage.** L'enseigne et la recherche du site sont à 50, les
+         * fenêtres modales à 200 : passer au-dessus d'elles ferait flotter des cours par-dessus
+         * un formulaire ouvert.
+         */
+        zIndex: 20,
         overflow: "hidden",
         fontFamily: FONT,
         /* ⚠️ **Ni fond ni liseré : le dégradé de la page suffit.** Le bandeau portait une
@@ -237,12 +258,11 @@ export default function BandeauActifs({ cliquable = false }: { cliquable?: boole
               style={{ display: "inline-flex", alignItems: "center", gap: 8,
                        padding: "5px 10px", borderRadius: RAYONS.plein }}>
               {logos.has(a.ticker) && (
-                <span aria-hidden="true"
+                <span aria-hidden="true" className="nv-bandeau-logo"
                   style={{
                     width: COTE_LOGO, height: COTE_LOGO, flexShrink: 0, display: "block",
-                    /* La même encre que le symbole : la vignette est un mot de plus, pas une
-                       image posée à côté. */
-                    background: JETONS.surFondFaible,
+                    /* L'encre vient de la classe, comme celle du symbole : la vignette est un
+                       mot de plus, elle s'éclaircit avec lui. */
                     maskImage: `url(/logos/${a.ticker}.png)`,
                     WebkitMaskImage: `url(/logos/${a.ticker}.png)`,
                     maskSize: "contain", WebkitMaskSize: "contain",
@@ -251,12 +271,10 @@ export default function BandeauActifs({ cliquable = false }: { cliquable?: boole
                   }} />
               )}
               <span className="nv-bandeau-symbole"
-                style={{ fontSize: 11, fontWeight: 600, letterSpacing: "0.08em",
-                         color: JETONS.surFondFaible }}>
+                style={{ fontSize: 11, fontWeight: 600, letterSpacing: "0.08em" }}>
                 {a.symbole}
               </span>
-              <span className="nv-bandeau-cours"
-                style={{ ...NUM, fontSize: 11.5, color: JETONS.surFondAttenue }}>
+              <span className="nv-bandeau-cours" style={{ ...NUM, fontSize: 11.5 }}>
                 {a.cours.toLocaleString("fr-FR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
               </span>
               <span style={{ ...NUM, fontSize: 11.5, fontWeight: 500,
