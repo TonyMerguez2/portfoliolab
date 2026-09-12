@@ -23,6 +23,7 @@ import { CLAIR, RAYONS } from "@/lib/palette";
  * publique, pour que les deux entrées du site promettent la même chose.
  */
 import PiluleAction from "@/components/portfolio/PiluleAction";
+import BandeauActifs from "@/components/BandeauActifs";
 import PanneauCreation from "@/components/portfolio/PanneauCreation";
 import MotQuiDefile from "@/components/MotQuiDefile";
 import { PHRASE_HAUT, PHRASE_BAS, VERBES } from "@/lib/phrase";
@@ -382,7 +383,27 @@ export default function Home() {
             * maintenant celle qu'il attend, et la création passe au second rang sans
             * disparaître.
             */}
-          {aDesPortefeuilles ? (
+          {/**
+            * ⚠️ **Rien ne s'affiche tant qu'on ne sait pas, et la place est réservée.** Le
+            * commentaire de `portefeuilles` annonçait cette précaution, mais elle ne portait
+            * que sur le *libellé* : le choix de branche, lui, lisait `aDesPortefeuilles`, qui
+            * vaut `false` aussi longtemps que la réponse n'est pas là. Tout visiteur voyait
+            * donc la pilule bleue « Créer un portefeuille » pendant la seconde de chargement,
+            * puis la voyait remplacée par le bouton clair s'il avait des portefeuilles.
+            * Signalé à l'usage — « l'ancien bouton bleu pendant une seconde ».
+            *
+            * ⚠️ **Et l'attente ne peut pas montrer l'autre bouton non plus.** La requête part
+            * même sans session : les deux issues sont possibles à cet instant, donc n'importe
+            * lequel des deux boutons serait une promesse fausse une fois sur deux. Le seul
+            * état honnête est le vide.
+            *
+            * ⚠️ **81 pixels, la hauteur de la branche la plus haute** — bouton de 48, écart de
+            * 14, lien de 19. Sans cette réserve, l'arrivée du bouton remonterait le titre
+            * d'autant : c'est la même règle que le champ à six cases de la page d'accès.
+            */}
+          <div style={{ minHeight: 81, display: "flex", alignItems: "center",
+                        justifyContent: "center" }}>
+          {portefeuilles === null ? null : aDesPortefeuilles ? (
             <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "14px" }}>
               {/**
                 * ⚠️ **Le bouton d'Appica, et non la pilule du site.** Demandé explicitement.
@@ -462,6 +483,7 @@ export default function Home() {
               }}
               fond={CLAIR.accent} fondSurvol={CLAIR.accentFort}/>
           )}
+          </div>
         </div>
 
       </div>
@@ -485,6 +507,17 @@ export default function Home() {
           setUser(u);
           if (creerApresConnexion) { setCreerApresConnexion(false); setCreation(true); }
         }}/>}
+      {/**
+        * ⚠️ **Le bandeau d'actifs, le même composant que la page d'accès.** Il y a longtemps
+        * vécu ici en trois copies dont **aucune ne s'affichait** : le `ref` d'animation
+        * n'était attaché à aucun élément, et la seule copie qui rendait vraiment un bandeau
+        * — `components/Header.tsx` — n'est montée nulle part. Elles appelaient toutes une
+        * route qui, en production, ne menait nulle part.
+        *
+        * ⚠️ **Posé en dernier, donc au-dessus.** L'écran est `fixed inset-0` et ne défile
+        * pas ; le bandeau est fixé au bas de la fenêtre, dans le vide sous le bouton.
+        */}
+      <BandeauActifs />
     </div>
   );
 }
