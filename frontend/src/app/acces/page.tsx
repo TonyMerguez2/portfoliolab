@@ -5,6 +5,7 @@ import { FONT, NUM } from "@/lib/typography";
 import { JETONS, RAYONS } from "@/lib/palette";
 import { champ, HAUTEUR_SAISIE } from "@/components/ui/saisie";
 import MotQuiDefile from "@/components/MotQuiDefile";
+import BandeauActifs, { HAUTEUR_BANDEAU } from "@/components/BandeauActifs";
 import { PHRASE_HAUT, PHRASE_BAS, VERBES } from "@/lib/phrase";
 import { VERSION } from "@/lib/version";
 import { Button } from "@appica/ui-react/button";
@@ -193,7 +194,11 @@ function Porte() {
                       la page défile plutôt que de couper. Elle était `fixed` autrefois, et
                       rognait ce qui débordait sans barre ni indice. */
                    display: "flex", flexDirection: "column", justifyContent: "center",
-                   paddingTop: 60, paddingBottom: 96,
+                   /* ⚠️ Le bas réserve la mention légale *et* le bandeau d'actifs, qui
+                      sont tous deux fixés : sans cela la colonne centrée passerait
+                      dessous. 96 pour la mention et son voile, plus la hauteur du
+                      bandeau, qui la déclare lui-même. */
+                   paddingTop: 60, paddingBottom: 96 + HAUTEUR_BANDEAU,
                    fontFamily: FONT, color: JETONS.surFond }}>
       <style>{STYLE_CHAMPS}</style>
 
@@ -382,7 +387,7 @@ function Porte() {
       {/* ⚠️ Un voile sous la mention : fixée, elle passe par-dessus la galerie, et une capture
           claire la rendait illisible. Le dégradé s'éteint vers le haut pour ne pas dessiner de
           bande. */}
-      <p style={{ position: "fixed", left: 0, right: 0, bottom: 0, zIndex: 3,
+      <p style={{ position: "fixed", left: 0, right: 0, bottom: HAUTEUR_BANDEAU, zIndex: 3,
                   textAlign: "center", fontFamily: FONT, fontSize: 11,
                   color: JETONS.surFondAttenue, lineHeight: 1.6, padding: "26px 24px 22px",
                   margin: 0,
@@ -390,6 +395,18 @@ function Porte() {
         Novac est en cours de construction. Rien de ce qui s&apos;y affiche n&apos;est un
         conseil en investissement.
       </p>
+
+      {/**
+        * ⚠️ **Le bandeau est la seule chose de cette page qui vienne de l'API, et la porte a
+        * dû s'ouvrir pour lui.** `/api/v1/bandeau` est listé dans `OUVERTS` du middleware :
+        * il ne rend que des cours publics, le même instantané pour tous. Voir l'avertissement
+        * en tête de `backend/app/services/bandeau.py` avant d'y ajouter le moindre champ.
+        *
+        * ⚠️ **Il est posé en dernier et se peint donc au-dessus de la mention légale**, qui
+        * est relevée d'autant. L'inverse laissait le voile de la mention passer par-dessus le
+        * liseré du bandeau.
+        */}
+      <BandeauActifs />
     </main>
   );
 }

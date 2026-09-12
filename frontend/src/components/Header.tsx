@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { useApp } from "@/lib/AppContext";
 import { useEffect, useRef, useState } from "react";
 import { API_URL } from "@/lib/api";
+import BandeauActifs from "@/components/BandeauActifs";
 
 export default function Header({ dark, setDark, hideToggle, showLogo }: { dark: boolean, setDark: (d: boolean) => void, hideToggle?: boolean, showLogo?: boolean }) {
   const router = useRouter();
@@ -30,42 +31,7 @@ export default function Header({ dark, setDark, hideToggle, showLogo }: { dark: 
   };
   const [searchQuery, setSearchQuery] = useState("");
   const [showTools, setShowTools] = useState(false);
-  const [tickerData, setTickerData] = useState<{symbol: string, price: number, change: number}[]>([]);
-  const tickerRef = useRef<HTMLDivElement>(null);
-  const tickerPosRef = useRef(0);
-
   const text = "#F8F9FC"; // Toujours dark
-
-  useEffect(() => {
-    const fetch_prices = async () => {
-      try {
-        const res = await recuperer(`${API_URL}/ticker`);
-        const data = await res.json();
-        if (Array.isArray(data)) setTickerData(data);
-      } catch {}
-    };
-    fetch_prices();
-    const iv = setInterval(fetch_prices, 300000);
-    return () => clearInterval(iv);
-  }, []);
-
-  useEffect(() => {
-    if (!tickerRef.current || tickerData.length === 0) return;
-    let raf: number;
-    const el = tickerRef.current;
-    const speed = 0.5;
-    const timeout = setTimeout(() => {
-      const singleWidth = el.scrollWidth / 2;
-      const animate = () => {
-        tickerPosRef.current -= speed;
-        if (tickerPosRef.current <= -singleWidth) tickerPosRef.current += singleWidth;
-        el.style.transform = `translateX(${Math.round(tickerPosRef.current)}px)`;
-        raf = requestAnimationFrame(animate);
-      };
-      raf = requestAnimationFrame(animate);
-    }, 200);
-    return () => { cancelAnimationFrame(raf); clearTimeout(timeout); };
-  }, [tickerData]);
 
   return (
     <>
@@ -211,28 +177,15 @@ export default function Header({ dark, setDark, hideToggle, showLogo }: { dark: 
 
 
 
-      {/* Ticker */}
-      {tickerData.length > 0 && (
-        <div style={{
-          position: "fixed", bottom: 0, left: 0, right: 0, zIndex: 20,
-          background: dark ? "rgba(4,17,36,0.85)" : "rgba(243,246,252,0.85)",
-          backdropFilter: "blur(12px)", WebkitBackdropFilter: "blur(12px)",
-          borderTop: dark ? "1px solid rgba(255,255,255,0.06)" : "1px solid rgba(11,26,51,0.08)",
-          padding: "8px 0", overflow: "hidden",
-        }}>
-          <div ref={tickerRef} style={{ display: "flex", gap: "80px", whiteSpace: "nowrap", willChange: "transform" }}>
-            {[...tickerData, ...tickerData].map((d, i) => (
-              <span key={i} style={{ display: "inline-flex", alignItems: "center", gap: "8px" }}>
-                <span style={{ color: text, fontSize: "11px", fontWeight: 600, letterSpacing: "0.08em", opacity: 0.7 }}>{d.symbol}</span>
-                <span style={{ color: text, fontSize: "11px", opacity: 0.5 }}>{d.price.toLocaleString("fr-FR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
-                <span style={{ fontSize: "11px", fontWeight: 500, color: d.change >= 0 ? "#22c55e" : "#ef4444" }}>
-                  {d.change >= 0 ? "+" : ""}{d.change.toFixed(2)}%
-                </span>
-              </span>
-            ))}
-          </div>
-        </div>
-      )}
+      {/**
+        * ⚠️ **Le bandeau vient du composant partagé, et ce n'est pas qu'un déplacement.**
+        * Celui qui vivait ici peignait ses variations en `#22c55e` et `#ef4444` — deux verts
+        * et rouges qui n'existent nulle part ailleurs sur le site, quand la palette porte
+        * `--nv-positif` (#00D492) et `--nv-negatif` (#FF6467). Il lisait aussi le booléen
+        * `dark`, le système de thème abandonné. Et sa boucle sautait d'un écart à chaque
+        * tour : voir l'explication en tête de `BandeauActifs`.
+        */}
+      <BandeauActifs />
     </>
   );
 }

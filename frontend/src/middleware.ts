@@ -35,8 +35,17 @@ export const config = {
   ],
 };
 
-/** Les chemins que la porte laisse toujours passer. */
-const OUVERTS = ["/acces", "/api/acces", "/api/v1/liste-attente"];
+/**
+ * Les chemins que la porte laisse toujours passer.
+ *
+ * ⚠️ **`/api/v1/bandeau` est le seul à rendre des données, et il faut savoir pourquoi
+ * c'est sans danger.** Il ne sert que des cours de marché — dix symboles publics, le même
+ * instantané pour tout le monde. Aucune donnée de compte, aucun portefeuille, rien qui
+ * dépende de qui appelle. La porte de l'alpha protège ce qui est privé, pas le cours
+ * d'Apple. Y ajouter un champ venant d'un portefeuille le rendrait lisible sans code : voir
+ * l'avertissement en tête de `backend/app/services/bandeau.py`.
+ */
+const OUVERTS = ["/acces", "/api/acces", "/api/v1/liste-attente", "/api/v1/bandeau"];
 
 export async function middleware(requete: NextRequest) {
   const attendu = motDePasseAttendu();

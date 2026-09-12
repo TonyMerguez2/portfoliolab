@@ -23,7 +23,7 @@ _DELAI_PRECHAUFFAGE = 30
 from app.api.routes.backtest import router as backtest_router
 from app.api.routes.portfolios import router as portfolios_router
 from app.api.routes.auth import router as auth_router
-from app.api.routes.ticker import router as ticker_router
+from app.api.routes.bandeau import router as bandeau_router
 from app.api.routes.chaleur import router as chaleur_router
 from app.api.routes.capitalisations import router as capitalisations_router
 from app.api.routes.transactions import router as transactions_router
@@ -111,7 +111,7 @@ app.add_middleware(
 app.include_router(backtest_router)
 app.include_router(portfolios_router)
 app.include_router(auth_router)
-app.include_router(ticker_router)
+app.include_router(bandeau_router)
 app.include_router(chaleur_router)
 app.include_router(capitalisations_router)
 app.include_router(transactions_router)
