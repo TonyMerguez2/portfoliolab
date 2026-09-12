@@ -2,7 +2,7 @@
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { FONT, NUM } from "@/lib/typography";
-import { JETONS } from "@/lib/palette";
+import { JETONS, RAYONS } from "@/lib/palette";
 import { API_URL } from "@/lib/api";
 import { recuperer } from "@/lib/requete";
 
@@ -38,8 +38,14 @@ type Actif = { ticker: string; symbole: string; cours: number; variation: number
 /** Le côté de la vignette, en pixels. */
 const COTE_LOGO = 15;
 
-/** L'écart entre deux actifs. Porté par chaque élément — voir l'avertissement ci-dessus. */
-const ECART = 56;
+/**
+ * L'écart entre deux actifs. Porté par chaque élément — voir l'avertissement ci-dessus.
+ *
+ * ⚠️ **Descendu de 56 à 40 quand la pastille de survol est arrivée.** Celle-ci ajoute son
+ * propre rembourrage de 10 de chaque côté : garder 56 aurait éloigné les actifs de vingt
+ * pixels de plus sans qu'on l'ait demandé.
+ */
+const ECART = 40;
 
 /**
  * La hauteur du bandeau, liseré compris.
@@ -87,10 +93,21 @@ const STYLE = `
      couleur — c'est elle qui porte le sens. */
   .nv-bandeau-actif:hover .nv-bandeau-symbole,
   .nv-bandeau-actif:hover .nv-bandeau-cours { color: var(--nv-sur-fond); }
-  .nv-bandeau-actif:focus-visible {
-    outline: 1px solid var(--nv-texte-attenue);
-    outline-offset: 3px;
-    border-radius: 4px;
+  /* ⚠️ **La pastille est le seul repère de surface qui reste.** Le bandeau n'a plus ni fond
+     ni liseré : sans elle, survoler un actif ne changeait que la teinte de deux mots, ce qui
+     se remarque à peine sur dix lignes qui défilent. Elle ne s'allume qu'au survol, donc elle
+     ne rend pas le bandeau plus lourd au repos. */
+  .nv-bandeau-fond {
+    background: transparent;
+    transition: background 140ms ease;
+  }
+  .nv-bandeau-actif:hover .nv-bandeau-fond { background: var(--nv-bord-fort); }
+  /* Le focus clavier montre la même pastille, plus son anneau : sans elle, l'anneau
+     entourerait du vide au-dessus et en dessous du texte. */
+  .nv-bandeau-actif:focus-visible { outline: none; }
+  .nv-bandeau-actif:focus-visible .nv-bandeau-fond {
+    background: var(--nv-bord-fort);
+    box-shadow: 0 0 0 1px var(--nv-texte-attenue);
   }
 `;
 
@@ -216,7 +233,9 @@ export default function BandeauActifs({ cliquable = false }: { cliquable?: boole
         aria-hidden={cliquable ? undefined : "true"}>
         {[0, 1].map(copie => actifs.map(a => {
           const contenu = (
-            <>
+            <span className="nv-bandeau-fond"
+              style={{ display: "inline-flex", alignItems: "center", gap: 8,
+                       padding: "5px 10px", borderRadius: RAYONS.plein }}>
               {logos.has(a.ticker) && (
                 <span aria-hidden="true"
                   style={{
@@ -244,12 +263,15 @@ export default function BandeauActifs({ cliquable = false }: { cliquable?: boole
                              color: a.variation >= 0 ? JETONS.positif : JETONS.negatif }}>
                 {a.variation >= 0 ? "+" : ""}{a.variation.toFixed(2)} %
               </span>
-            </>
+            </span>
           );
 
           const cle = `${copie}-${a.ticker}`;
+          /* ⚠️ L'écart reste **dehors** et la pastille dedans : posés sur le même élément,
+             les 40 px auraient été peints avec le fond du survol, et la pastille aurait
+             débordé de quarante pixels à droite de l'actif qu'elle désigne. */
           const forme: React.CSSProperties = {
-            display: "inline-flex", alignItems: "center", gap: 8,
+            display: "inline-flex", alignItems: "center",
             paddingRight: ECART, whiteSpace: "nowrap", textDecoration: "none",
           };
 
