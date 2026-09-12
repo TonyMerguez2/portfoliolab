@@ -406,6 +406,12 @@ function Porte() {
         * est relevée d'autant. L'inverse laissait le voile de la mention passer par-dessus le
         * liseré du bandeau.
         */}
+      {/**
+        * ⚠️ **Pas cliquable ici, contrairement à l'accueil.** `/chart` est derrière la porte :
+        * un visiteur de cette page n'a pas de code, donc son clic partirait vers le graphique
+        * et le middleware le renverrait aussitôt sur cette même page. Un lien qui ramène où
+        * l'on est déjà se lit comme une panne, pas comme une porte fermée.
+        */}
       <BandeauActifs />
     </main>
   );

@@ -1,5 +1,6 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
+import Link from "next/link";
 import { FONT, NUM } from "@/lib/typography";
 import { JETONS } from "@/lib/palette";
 import { API_URL } from "@/lib/api";
@@ -80,6 +81,17 @@ const STYLE = `
   @media (prefers-reduced-motion: reduce) {
     .nv-bandeau-piste { animation: none; }
   }
+  /* ⚠️ **Le survol doit se voir sur l'actif visé, pas sur tout le bandeau.** La piste
+     s'arrête déjà sous le curseur ; sans cette marque, rien ne dit *lequel* des dix on
+     s'apprête à ouvrir. Le symbole et le cours montent d'un cran, la variation garde sa
+     couleur — c'est elle qui porte le sens. */
+  .nv-bandeau-actif:hover .nv-bandeau-symbole,
+  .nv-bandeau-actif:hover .nv-bandeau-cours { color: var(--nv-sur-fond); }
+  .nv-bandeau-actif:focus-visible {
+    outline: 1px solid var(--nv-texte-attenue);
+    outline-offset: 3px;
+    border-radius: 4px;
+  }
 `;
 
 /**
@@ -113,7 +125,7 @@ async function sonderLesLogos(actifs: Actif[]): Promise<Set<string>> {
   return new Set(trouves.filter((t): t is string => t !== null));
 }
 
-export default function BandeauActifs({ fixe = true }: { fixe?: boolean }) {
+export default function BandeauActifs({ cliquable = false }: { cliquable?: boolean }) {
   const [actifs, setActifs] = useState<Actif[]>([]);
   const [logos, setLogos] = useState<Set<string> | null>(null);
   const piste = useRef<HTMLDivElement>(null);
@@ -174,15 +186,14 @@ export default function BandeauActifs({ fixe = true }: { fixe?: boolean }) {
   return (
     <div className="nv-bandeau"
       style={{
-        ...(fixe
-          ? { position: "fixed", bottom: 0, left: 0, right: 0, zIndex: 4 }
-          : { position: "relative", width: "100%" }),
+        position: "fixed", bottom: 0, left: 0, right: 0, zIndex: 4,
         overflow: "hidden",
         fontFamily: FONT,
-        borderTop: `1px solid ${JETONS.bord}`,
-        background: `rgba(var(--nv-fond-rvb), 0.72)`,
-        backdropFilter: "blur(12px)",
-        WebkitBackdropFilter: "blur(12px)",
+        /* ⚠️ **Ni fond ni liseré : le dégradé de la page suffit.** Le bandeau portait une
+           surface opaque à 72 % et un flou d'arrière-plan — donc une barre posée *sur* la
+           page, avec sa propre teinte et son propre bord. Retiré à la demande : le bas du
+           `--nv-fond-degrade` est déjà le plus sombre de la page, les cours s'y lisent sans
+           qu'on ait besoin de les isoler. Ce qui reste du bandeau est son contenu. */
         height: HAUTEUR_BANDEAU,
         boxSizing: "border-box",
         display: "flex",
@@ -199,37 +210,67 @@ export default function BandeauActifs({ fixe = true }: { fixe?: boolean }) {
         WebkitMaskImage: "linear-gradient(to right, transparent 0, #000 min(72px, 10%), #000 calc(100% - min(72px, 10%)), transparent 100%)",
       }}>
       <style>{STYLE}</style>
-      <div ref={piste} className="nv-bandeau-piste" aria-hidden="true">
-        {[...actifs, ...actifs].map((a, i) => (
-          <span key={i} style={{ display: "inline-flex", alignItems: "center", gap: 8,
-                                 paddingRight: ECART, whiteSpace: "nowrap" }}>
-            {logos.has(a.ticker) && (
-              <span aria-hidden="true"
-                style={{
-                  width: COTE_LOGO, height: COTE_LOGO, flexShrink: 0, display: "block",
-                  /* La même encre que le symbole : la vignette est un mot de plus, pas une
-                     image posée à côté. */
-                  background: JETONS.surFondFaible,
-                  maskImage: `url(/logos/${a.ticker}.png)`,
-                  WebkitMaskImage: `url(/logos/${a.ticker}.png)`,
-                  maskSize: "contain", WebkitMaskSize: "contain",
-                  maskRepeat: "no-repeat", WebkitMaskRepeat: "no-repeat",
-                  maskPosition: "center", WebkitMaskPosition: "center",
-                }} />
-            )}
-            <span style={{ fontSize: 11, fontWeight: 600, letterSpacing: "0.08em",
-                           color: JETONS.surFondFaible }}>
-              {a.symbole}
-            </span>
-            <span style={{ ...NUM, fontSize: 11.5, color: JETONS.surFondAttenue }}>
-              {a.cours.toLocaleString("fr-FR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-            </span>
-            <span style={{ ...NUM, fontSize: 11.5, fontWeight: 500,
-                           color: a.variation >= 0 ? JETONS.positif : JETONS.negatif }}>
-              {a.variation >= 0 ? "+" : ""}{a.variation.toFixed(2)} %
-            </span>
-          </span>
-        ))}
+      <div ref={piste} className="nv-bandeau-piste"
+        /* Décoratif tant qu'on ne peut rien en faire ; dès qu'il porte des liens, c'est la
+           copie en double qui est masquée, pas la piste entière — voir plus bas. */
+        aria-hidden={cliquable ? undefined : "true"}>
+        {[0, 1].map(copie => actifs.map(a => {
+          const contenu = (
+            <>
+              {logos.has(a.ticker) && (
+                <span aria-hidden="true"
+                  style={{
+                    width: COTE_LOGO, height: COTE_LOGO, flexShrink: 0, display: "block",
+                    /* La même encre que le symbole : la vignette est un mot de plus, pas une
+                       image posée à côté. */
+                    background: JETONS.surFondFaible,
+                    maskImage: `url(/logos/${a.ticker}.png)`,
+                    WebkitMaskImage: `url(/logos/${a.ticker}.png)`,
+                    maskSize: "contain", WebkitMaskSize: "contain",
+                    maskRepeat: "no-repeat", WebkitMaskRepeat: "no-repeat",
+                    maskPosition: "center", WebkitMaskPosition: "center",
+                  }} />
+              )}
+              <span className="nv-bandeau-symbole"
+                style={{ fontSize: 11, fontWeight: 600, letterSpacing: "0.08em",
+                         color: JETONS.surFondFaible }}>
+                {a.symbole}
+              </span>
+              <span className="nv-bandeau-cours"
+                style={{ ...NUM, fontSize: 11.5, color: JETONS.surFondAttenue }}>
+                {a.cours.toLocaleString("fr-FR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+              </span>
+              <span style={{ ...NUM, fontSize: 11.5, fontWeight: 500,
+                             color: a.variation >= 0 ? JETONS.positif : JETONS.negatif }}>
+                {a.variation >= 0 ? "+" : ""}{a.variation.toFixed(2)} %
+              </span>
+            </>
+          );
+
+          const cle = `${copie}-${a.ticker}`;
+          const forme: React.CSSProperties = {
+            display: "inline-flex", alignItems: "center", gap: 8,
+            paddingRight: ECART, whiteSpace: "nowrap", textDecoration: "none",
+          };
+
+          if (!cliquable) return <span key={cle} style={forme}>{contenu}</span>;
+
+          /**
+           * ⚠️ **La copie en double ne doit exister que pour l'œil.** Elle n'est là que pour
+           * que la boucle n'ait pas de couture : la laisser dans l'ordre de tabulation
+           * donnerait vingt arrêts au clavier pour dix actifs, et un lecteur d'écran
+           * annoncerait chaque cours deux fois.
+           */
+          const double = copie === 1;
+          return (
+            <Link key={cle} href={`/chart?ticker=${encodeURIComponent(a.ticker)}`}
+              className="nv-bandeau-actif" style={forme}
+              aria-hidden={double ? "true" : undefined} tabIndex={double ? -1 : undefined}
+              aria-label={`${a.symbole}, ${a.cours} euros, ${a.variation >= 0 ? "en hausse" : "en baisse"} de ${Math.abs(a.variation).toFixed(2)} pour cent — voir le graphique`}>
+              {contenu}
+            </Link>
+          );
+        }))}
       </div>
     </div>
   );

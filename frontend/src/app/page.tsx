@@ -517,7 +517,9 @@ export default function Home() {
         * ⚠️ **Posé en dernier, donc au-dessus.** L'écran est `fixed inset-0` et ne défile
         * pas ; le bandeau est fixé au bas de la fenêtre, dans le vide sous le bouton.
         */}
-      <BandeauActifs />
+      {/* ⚠️ Cliquable ici, et seulement ici : on est derrière la porte, `/chart` est
+          atteignable. */}
+      <BandeauActifs cliquable />
     </div>
   );
 }
