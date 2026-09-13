@@ -4,7 +4,7 @@ import type { Projection } from "@/hooks/useProjection";
 import {
   anneeDuMois, bande, bornes, chemin, echelles, graduations, montantCourt,
 } from "@/lib/courbeProjection";
-import { echeanceEnClair, euros, pourcent, pourcentageLisible, type Objectif } from "@/lib/objectifs";
+import { echeanceEnClair, euros, pourcent, type Objectif } from "@/lib/objectifs";
 import { useTaille } from "@/lib/useTaille";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
@@ -96,22 +96,6 @@ function Pastille({ couleur, libelle, valeur }: {
         {valeur}
       </span>
     </span>
-  );
-}
-
-function Anneau({ part, couleur }: { part: number; couleur: string }) {
-  const r = 26, c = 2 * Math.PI * r;
-  return (
-    <svg width="68" height="68" viewBox="0 0 68 68" aria-hidden="true">
-      <circle cx="34" cy="34" r={r} fill="none" stroke={CLAIR.carteCreuse} strokeWidth="6" />
-      <circle cx="34" cy="34" r={r} fill="none" stroke={couleur} strokeWidth="6"
-        strokeLinecap="round" strokeDasharray={`${(part / 100) * c} ${c}`}
-        transform="rotate(-90 34 34)" />
-      <text x="34" y="38" textAnchor="middle"
-        style={{ ...NUM, fontSize: 15, fontWeight: 700, fill: CLAIR.texte }}>
-        {pourcentageLisible(part)}
-      </text>
-    </svg>
   );
 }
 
@@ -318,17 +302,6 @@ export default function ProjectionObjectif({
                     valeur={`${montantCourt(p.intervalle[0])} – ${montantCourt(p.intervalle[1])}`} />
                 )}
 
-                {p.probabilite != null && (
-                  <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
-                    <Anneau part={p.probabilite}
-                      couleur={p.probabilite >= 66 ? JETONS.positif
-                        : p.probabilite >= 33 ? JETONS.attention : JETONS.negatif} />
-                    <span style={{ fontFamily: FONT, fontSize: 9.5, color: CLAIR.texteFaible,
-                      lineHeight: 1.45, maxWidth: 120 }}>
-                      des tirages atteignent {p.requis != null ? euros(p.requis) : "la cible"}
-                    </span>
-                  </span>
-                )}
               </div>
             </div>
 
