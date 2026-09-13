@@ -38,6 +38,16 @@ export type Projection =
       seances_minimales: number;
       valeur_portefeuille: number | null;
       source_valeur: string;
+      /**
+       * Le point de départ de la projection — `montant_actuel`, déjà pondéré par la part
+       * affectée à l'objectif.
+       *
+       * ⚠️ **Ce n'est pas `valeur_portefeuille`.** Les deux diffèrent dès qu'une part
+       * seulement est affectée. C'est celui-ci qui sert à séparer les apports du rendement
+       * dans l'en-tête de la projection ; refaire la pondération côté écran aurait donné
+       * deux formules à tenir d'accord.
+       */
+      depart: number | null;
     };
 
 /**

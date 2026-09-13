@@ -46,14 +46,32 @@ const COURBES: { centile: string; libelle: string; couleur: string; tirets?: str
   { centile: "5", libelle: "5ᵉ centile", couleur: JETONS.negatif, tirets: "5 4" },
 ];
 
-function Mesure({ titre, valeur, note }: { titre: string; valeur: string; note?: string }) {
+/**
+ * Une pastille de l'en-tête : un point de couleur, un libellé, un montant.
+ *
+ * ⚠️ **Elle remplace une ligne de la colonne de mesures, elle ne s'y ajoute pas.** L'en-tête
+ * était une colonne de 168 pixels posée à gauche de la courbe : la courbe y perdait sa
+ * largeur, et les chiffres se lisaient de haut en bas alors qu'ils se comparent de gauche à
+ * droite. Tout est passé au-dessus, en rang.
+ */
+function Pastille({ couleur, libelle, valeur }: {
+  couleur?: string; libelle: string; valeur: string;
+}) {
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 1 }}>
-      <span style={{ fontFamily: FONT, fontSize: 9.5, color: CLAIR.texteFaible }}>{titre}</span>
-      <span style={{ ...NUM, fontSize: 15, fontWeight: 700, color: CLAIR.texte }}>{valeur}</span>
-      {note && <span style={{ fontFamily: FONT, fontSize: 9, color: CLAIR.texteFaible,
-        lineHeight: 1.4 }}>{note}</span>}
-    </div>
+    <span style={{
+      display: "inline-flex", alignItems: "center", gap: 7,
+      padding: "5px 11px", borderRadius: RAYONS.plein,
+      background: CLAIR.carteCreuse, whiteSpace: "nowrap",
+    }}>
+      {couleur && <span aria-hidden="true" style={{ width: 7, height: 7,
+        borderRadius: "50%", background: couleur, flexShrink: 0 }} />}
+      <span style={{ fontFamily: FONT, fontSize: 10.5, color: CLAIR.texteSecondaire }}>
+        {libelle}
+      </span>
+      <span style={{ ...NUM, fontSize: 11.5, fontWeight: 700, color: CLAIR.texte }}>
+        {valeur}
+      </span>
+    </span>
   );
 }
 
@@ -181,65 +199,119 @@ export default function ProjectionObjectif({
         const sansDispersion = p.volatilite == null;
 
         return (
-          <div style={{ display: "flex", gap: 14, flex: 1, minHeight: 0 }}>
-            {/* ── Colonne des mesures ──────────────────────────────────────── */}
-            <div style={{ display: "flex", flexDirection: "column", gap: 9, width: 168,
-              flexShrink: 0, overflowY: "auto" }}>
-              {/* ⚠️ « Versements cumulés » et non « valeur médiane » : ce n'est pas la
-                  même grandeur, et ce n'est pas une médiane. Le mot « médiane » sur une
-                  droite certaine laisserait chercher une dispersion qui n'existe pas. */}
-              <Mesure titre={p.objectif.sur_versements
-                ? `Versements cumulés dans ${ans} an${ans > 1 ? "s" : ""}`
-                : `Valeur médiane dans ${ans} an${ans > 1 ? "s" : ""}`}
-                valeur={p.mediane != null ? euros(p.mediane) : "—"}
-                note={p.objectif.projetee_en_euros_constants != null
-                  ? `soit ${euros(p.objectif.projetee_en_euros_constants)} d’aujourd’hui`
-                  : undefined} />
+          <div style={{ display: "flex", flexDirection: "column", gap: 10,
+            flex: 1, minHeight: 0 }}>
 
-              {/* ⚠️ « 90 % » et non 95 : c'est ce que les centiles 5 et 95 délimitent. La
-                  maquette annonçait 95 % au-dessus de bornes qui n'en couvrent que 90. */}
-              {p.intervalle && (
-                <Mesure titre={`Intervalle ${p.niveau_intervalle} %`}
-                  valeur={`${montantCourt(p.intervalle[0])} – ${montantCourt(p.intervalle[1])}`}
-                  note="d’après les tirages du modèle" />
-              )}
-
-              {p.probabilite != null && (
-                <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                  <Anneau part={p.probabilite}
-                    couleur={p.probabilite >= 66 ? JETONS.positif
-                      : p.probabilite >= 33 ? JETONS.attention : JETONS.negatif} />
-                  <span style={{ fontFamily: FONT, fontSize: 9.5, color: CLAIR.texteFaible,
-                    lineHeight: 1.45 }}>
-                    des tirages atteignent {p.requis != null ? euros(p.requis) : "la cible"}
+            {/* ── En-tête : le chiffre, sa décomposition, l'intervalle ─────── */}
+            {/**
+              * ⚠️ **Horizontal, et c'est le changement.** Les mesures occupaient une colonne
+              * de 168 pixels à gauche de la courbe. Deux défauts : la courbe perdait cette
+              * largeur sur un panneau qui n'en a pas de trop, et des grandeurs qui se
+              * comparent — apports contre rendement — se lisaient de haut en bas. Elles
+              * passent au-dessus, en rang, le montant en tête.
+              */}
+            <div style={{ display: "flex", alignItems: "flex-end", gap: 16,
+              flexWrap: "wrap", flexShrink: 0 }}>
+              <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+                {/* ⚠️ « Versements cumulés » et non « valeur médiane » : ce n'est pas la
+                    même grandeur, et ce n'est pas une médiane. Le mot « médiane » sur une
+                    droite certaine laisserait chercher une dispersion qui n'existe pas. */}
+                <span style={{ fontFamily: FONT, fontSize: 10.5, color: CLAIR.texteFaible }}>
+                  {p.objectif.sur_versements
+                    ? `Versements cumulés dans ${ans} an${ans > 1 ? "s" : ""}`
+                    : `Valeur médiane dans ${ans} an${ans > 1 ? "s" : ""}`}
+                </span>
+                {/* ⚠️ **Le chiffre est grand, mais il reste une médiane.** Le libellé
+                    au-dessus le dit, et l'intervalle à côté le borne : un montant seul, en
+                    très grand, se lirait comme une promesse. */}
+                <span style={{ ...NUM, fontSize: 30, fontWeight: 700, lineHeight: 1.1,
+                  color: CLAIR.texte }}>
+                  {p.mediane != null ? euros(p.mediane) : "—"}
+                </span>
+                {p.objectif.projetee_en_euros_constants != null && (
+                  <span style={{ fontFamily: FONT, fontSize: 10,
+                    color: CLAIR.texteFaible }}>
+                    soit {euros(p.objectif.projetee_en_euros_constants)} d’aujourd’hui
                   </span>
-                </div>
-              )}
+                )}
+              </div>
 
-              {/* ⚠️ La provenance de la volatilité, jamais tue : c'est elle qui décide si
-                  l'intervalle et la probabilité existent. */}
-              {/* ⚠️ **« sans_objet » n'est pas une panne, et se dit autrement.** Les trois
-                  autres motifs sont des empêchements — historique trop court, mesure
-                  impossible — et se teintent d'orange. Celui-ci est un choix de calcul :
-                  une somme de versements ne dépend d'aucun marché. L'afficher en orange
-                  avec « volatilité non mesurable » aurait fait passer un résultat exact
-                  pour un résultat dégradé. */}
-              <span style={{ fontFamily: FONT, fontSize: 9, lineHeight: 1.5,
-                color: sansDispersion && p.volatilite_source !== "sans_objet"
-                  ? JETONS.attention : CLAIR.texteFaible }}>
-                {p.volatilite_source === "sans_objet"
-                  ? "Aucune volatilité n’intervient : un cumul de versements ne dépend "
-                    + "d’aucun marché. Cette droite est exacte si le rythme est tenu."
-                  : p.volatilite_source === "mesuree"
-                  ? `Volatilité mesurée sur votre portefeuille : ${pourcent(p.volatilite!)} % par an, `
-                    + `sur ${p.seances_mesurees} séances.`
-                  : p.volatilite_source === "echantillon_court"
-                    ? `Historique trop court pour mesurer la volatilité `
-                      + `(${p.seances_mesurees} séances, ${p.seances_minimales} requises) : `
-                      + `ni intervalle ni probabilité.`
-                    : "Volatilité non mesurable : ni intervalle ni probabilité."}
-              </span>
+              <div style={{ display: "flex", gap: 8, flexWrap: "wrap",
+                alignItems: "center", marginLeft: "auto" }}>
+                {/**
+                  * ⚠️ **La décomposition vient du serveur, elle n'est pas refaite ici.**
+                  * `depart` est le montant déjà constitué et affecté à l'objectif, déjà
+                  * pondéré par la part choisie ; le recalculer depuis `valeur_portefeuille`
+                  * aurait donné deux formules de pondération à tenir d'accord.
+                  *
+                  * ⚠️ **Et le rendement peut être négatif.** Une médiane sous les apports
+                  * arrive — rendement attendu faible, horizon court — et l'afficher en vert
+                  * annoncerait un gain là où il y a une perte. La teinte suit le signe.
+                  */}
+                {(() => {
+                  if (p.mediane == null || p.depart == null || p.objectif.sur_versements) {
+                    return null;
+                  }
+                  const verses = (p.objectif.versement_mensuel ?? 0) * horizon;
+                  const apports = p.depart + verses;
+                  const rendement = p.mediane - apports;
+                  return (
+                    <>
+                      <Pastille couleur={JETONS.accent} libelle="Apports"
+                        valeur={euros(apports)} />
+                      <Pastille
+                        couleur={rendement >= 0 ? JETONS.positif : JETONS.negatif}
+                        libelle={rendement >= 0 ? "Rendement" : "Perte attendue"}
+                        valeur={euros(Math.abs(rendement))} />
+                    </>
+                  );
+                })()}
+
+                {/* ⚠️ « 90 % » et non 95 : c'est ce que les centiles 5 et 95 délimitent. La
+                    maquette annonçait 95 % au-dessus de bornes qui n'en couvrent que 90. */}
+                {p.intervalle && (
+                  <Pastille libelle={`Intervalle ${p.niveau_intervalle} %`}
+                    valeur={`${montantCourt(p.intervalle[0])} – ${montantCourt(p.intervalle[1])}`} />
+                )}
+
+                {p.probabilite != null && (
+                  <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
+                    <Anneau part={p.probabilite}
+                      couleur={p.probabilite >= 66 ? JETONS.positif
+                        : p.probabilite >= 33 ? JETONS.attention : JETONS.negatif} />
+                    <span style={{ fontFamily: FONT, fontSize: 9.5, color: CLAIR.texteFaible,
+                      lineHeight: 1.45, maxWidth: 120 }}>
+                      des tirages atteignent {p.requis != null ? euros(p.requis) : "la cible"}
+                    </span>
+                  </span>
+                )}
+              </div>
             </div>
+
+            {/* ⚠️ La provenance de la volatilité, jamais tue : c'est elle qui décide si
+                l'intervalle et la probabilité existent. Elle est passée sous l'en-tête,
+                là où le lecteur cherche pourquoi les deux pastilles manquent. */}
+            {/* ⚠️ **« sans_objet » n'est pas une panne, et se dit autrement.** Les trois
+                autres motifs sont des empêchements — historique trop court, mesure
+                impossible — et se teintent d'orange. Celui-ci est un choix de calcul : une
+                somme de versements ne dépend d'aucun marché. L'afficher en orange avec
+                « volatilité non mesurable » aurait fait passer un résultat exact pour un
+                résultat dégradé. */}
+            <span style={{ fontFamily: FONT, fontSize: 9.5, lineHeight: 1.5, flexShrink: 0,
+              color: sansDispersion && p.volatilite_source !== "sans_objet"
+                ? JETONS.attention : CLAIR.texteFaible }}>
+              {p.volatilite_source === "sans_objet"
+                ? "Aucune volatilité n’intervient : un cumul de versements ne dépend "
+                  + "d’aucun marché. Cette droite est exacte si le rythme est tenu."
+                : p.volatilite_source === "mesuree"
+                ? `Volatilité mesurée sur votre portefeuille : ${pourcent(p.volatilite!)} % par an, `
+                  + `sur ${p.seances_mesurees} séances.`
+                : p.volatilite_source === "echantillon_court"
+                  ? `Historique trop court pour mesurer la volatilité `
+                    + `(${p.seances_mesurees} séances, ${p.seances_minimales} requises) : `
+                    + `ni intervalle ni probabilité.`
+                  : "Volatilité non mesurable : ni intervalle ni probabilité."}
+            </span>
 
             {/* ── La courbe ────────────────────────────────────────────────── */}
             <div style={{ flex: 1, minWidth: 260, display: "flex",
@@ -263,6 +335,28 @@ export default function ProjectionObjectif({
                 // Indépendance financière » se lisait à l'écran ; l'apostrophe dépend du
                 // nom que l'épargnant a choisi, donc on ne la devine pas.
                 aria-label={`Projection de « ${p.objectif.nom} » sur ${ans} ans`}>
+                {/**
+                  * ⚠️ **L'aire sous la médiane, et rien d'autre.** La courbe était un trait
+                  * seul sur un fond vide : elle se lisait comme un tracé technique, pas
+                  * comme une trajectoire de patrimoine. L'aire lui donne son assise.
+                  *
+                  * ⚠️ **Elle s'arrête au bas de l'échelle, pas à zéro.** `bornes` ne part pas
+                  * toujours de zéro ; fermer le tracé sur zéro aurait fait déborder l'aire
+                  * hors du cadre dès que le plancher est plus haut.
+                  *
+                  * ⚠️ **Sous la bande d'incertitude, jamais dessus.** Les deux se
+                  * superposent ; peinte au-dessus, l'aire effacerait l'intervalle — or
+                  * c'est l'intervalle qui porte l'honnêteté du dessin.
+                  */}
+                <defs>
+                  <linearGradient id={`nv-aire-${p.objectif.id}`} x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor={JETONS.accent} stopOpacity="0.26" />
+                    <stop offset="100%" stopColor={JETONS.accent} stopOpacity="0" />
+                  </linearGradient>
+                </defs>
+                <path d={bande(p.mois, p.mois.map(() => bas), p.enveloppes["50"], x, y)}
+                  fill={`url(#nv-aire-${p.objectif.id})`} />
+
                 {graduations(bas, haut, nombreDeGraduations(cadre.hauteur)).map(v => (
                   <g key={v}>
                     <line x1={cadre.marge.gauche} x2={cadre.largeur - cadre.marge.droite}

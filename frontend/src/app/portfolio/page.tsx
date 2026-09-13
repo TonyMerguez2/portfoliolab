@@ -3272,15 +3272,19 @@ function PortfolioPageInner() {
                 silencieusement gonflé. Elle est donc descendue dans « Progression globale »,
                 au pied du nombre qu'elle concerne : c'est là qu'elle sert, et non en bandeau
                 au-dessus de cartes qui, elles, sont justes. */}
-            <div style={{ flexShrink: 0 }}>
-              <CartesObjectifs objectifs={listeObjectifs}
-                onAjouter={() => setSaisieObjectif({ mode: "creation" })}
-                onModifier={o => setSaisieObjectif({ mode: "edition", o })} />
-            </div>
           </>
         )}
 
-        {/* ── Rangée 2 : projection à gauche, deux cartes à droite ──────────── */}
+        {/* ── Rangée 1 : projection à gauche, deux cartes à droite ──────────── */}
+        {/* ⚠️ **La projection est passée devant les cartes d'objectifs, à la demande.**
+            L'onglet ouvrait sur la grille des objectifs, et la courbe venait après : on
+            lisait donc ce qu'on s'est fixé avant de voir où l'on va. L'ordre est inversé —
+            la projection d'abord, les cartes en pied — sans que rien d'autre bouge.
+
+            ⚠️ **Le partage reste à 1,7 contre 1, et ce n'est pas un oubli.** Il a été mesuré :
+            chaque retour à la ligne évité dans la colonne de droite lui rend une quinzaine de
+            pixels, et c'est là que le contenu manquait de place. Passer à 2 contre 1 pour
+            faire « deux tiers » rond reprendrait ces pixels à celui qui en avait besoin. */}
         {/* ⚠️ **La rangée absorbe toute la hauteur restante, au lieu de la subir.** Elle
             était en `flexShrink: 0` : chaque panneau prenait sa hauteur naturelle et leur
             somme décidait s'il fallait défiler — d'où les réglages au pixel de tout cet
@@ -3371,6 +3375,19 @@ function PortfolioPageInner() {
                 ? projection.projection.seances_mesurees : null} />
           </div>
         </div>
+
+        {/* ⚠️ **Les cartes ferment l'onglet, et gardent leur `flexShrink: 0`.** La rangée
+            au-dessus absorbe la hauteur disponible ; sans cette consigne, les cartes
+            céderaient les premières et se compresseraient au lieu de laisser la courbe
+            s'ajuster — or c'est la courbe qui sait se réduire, avec son plancher de
+            150 pixels. */}
+        {objectifs.etat === "pret" && objectifs.donnees && (
+          <div style={{ flexShrink: 0 }}>
+            <CartesObjectifs objectifs={listeObjectifs}
+              onAjouter={() => setSaisieObjectif({ mode: "creation" })}
+              onModifier={o => setSaisieObjectif({ mode: "edition", o })} />
+          </div>
+        )}
 
         {/* ⚠️ **La rangée « Dispersion des tirages » a été retirée.** Elle détaillait les
             trois centiles en trois cartes, ce que la courbe au-dessus dessine déjà avec sa

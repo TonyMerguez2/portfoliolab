@@ -627,6 +627,13 @@ async def projection(portfolio_id: str, objectif_id: str,
         "seances_minimales": JOURS_MINIMAUX,
         "valeur_portefeuille": v.valeur,
         "source_valeur": v.source,
+        # ⚠️ **Le point de départ de la projection, et non la valeur du portefeuille.** Les
+        # deux diffèrent dès qu'une part seulement est affectée à l'objectif : `depart` vaut
+        # `montant_actuel`, déjà pondéré. L'écran s'en sert pour séparer ce qui vient des
+        # apports de ce qui vient du rendement ; le recalculer côté client à partir de
+        # `valeur_portefeuille` aurait refait la pondération de son côté, et les deux
+        # formules auraient dérivé au premier changement de règle.
+        "depart": depart,
     }
 
 
@@ -675,7 +682,9 @@ def backtest_allocation(poids: dict[str, float]) -> dict | None:
         brut = yf.download(tickers, start="1990-01-01", progress=False,
                            auto_adjust=True, threads=True)["Close"]
         if brut is not None and len(brut):
-            if len(tickers) == 1:
+            # ⚠️ Le type, jamais le nombre — voir `services/volatilite.py`.
+            import pandas as pd
+            if isinstance(brut, pd.Series):
                 brut = brut.to_frame(tickers[0])
             vides = [c for c in brut.columns if brut[c].dropna().empty]
             brut = brut.drop(columns=vides).dropna()
@@ -798,7 +807,9 @@ async def parametres_suggeres(portfolio_id: str, db: Session = Depends(get_db),
             brut = yf.download(list(poids), start="2005-01-01", progress=False,
                                auto_adjust=True, threads=True)["Close"]
             if brut is not None and len(brut):
-                if len(poids) == 1:
+                # ⚠️ Le type, jamais le nombre — voir `services/volatilite.py`.
+                import pandas as pd
+                if isinstance(brut, pd.Series):
                     brut = brut.to_frame(list(poids)[0])
                 # ⚠️ **Les lignes sans historique sont écartées, et l'allocation
                 # renormalisée sur celles qui restent.** Sans cela, l'intersection des
