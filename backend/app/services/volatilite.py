@@ -24,6 +24,7 @@ import logging
 from datetime import date, timedelta
 
 import numpy as np
+import pandas as pd
 import yfinance as yf
 
 from app.services.portfolio_history import courbe_portefeuille
@@ -65,7 +66,13 @@ def volatilite_mesuree(
         return (None, "indisponible", 0)
     if brut is None or len(brut) == 0:                         # pragma: no cover
         return (None, "indisponible", 0)
-    if len(tickers) == 1:
+    # ⚠️ **Le type, jamais le nombre de tickers.** yfinance rendait une `Series` pour un
+    # ticker unique ; depuis la 1.4 il rend un `DataFrame` à colonnes multiples, et
+    # `["Close"]` en rend donc un aussi, déjà nommé par le ticker. Tester la longueur
+    # faisait appeler `to_frame` sur un `DataFrame` — `AttributeError`, et une 500 sur la
+    # projection de tout portefeuille à un seul actif. Cinq autres appels du dépôt testaient
+    # déjà le type : c'est cette forme-là qui est juste.
+    if isinstance(brut, pd.Series):
         brut = brut.to_frame(tickers[0])
 
     cours: dict[str, dict] = {}

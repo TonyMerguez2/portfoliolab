@@ -817,8 +817,13 @@ def get_history(
     if brut is None or len(brut) == 0:                        # pragma: no cover
         return {"points": [], "start": debut_reel.isoformat(), "twr_pct": None, "pnl_eur": None}
 
-    # yfinance rend une Series pour un ticker unique, un DataFrame au-delà.
-    if len(a_charger) == 1:
+    # ⚠️ Le type, jamais le nombre : depuis yfinance 1.4, `["Close"]` rend un `DataFrame`
+    # même pour un ticker unique, déjà nommé par lui. Voir `services/volatilite.py`.
+    # ⚠️ L'import est local, comme partout ailleurs dans ce module : `pandas` n'y est pas
+    # importé en tête, et le poser ici plutôt qu'en haut évite de changer le coût de
+    # chargement du module pour une seule ligne.
+    import pandas as pd
+    if isinstance(brut, pd.Series):
         brut = brut.to_frame(a_charger[0])
 
     cours: dict[str, dict] = {}
@@ -1730,7 +1735,10 @@ def get_history_par_compte(
     if brut is None or len(brut) == 0:                        # pragma: no cover
         return {"comptes": [], "start": debut_reel.isoformat(), "source": "indisponible"}
 
-    if len(tickers) == 1:
+    # ⚠️ Le type, jamais le nombre — voir `services/volatilite.py`. Import local, comme
+    # partout dans ce module.
+    import pandas as pd
+    if isinstance(brut, pd.Series):
         brut = brut.to_frame(tickers[0])
     cours: dict[str, dict] = {}
     for tk in tickers:
