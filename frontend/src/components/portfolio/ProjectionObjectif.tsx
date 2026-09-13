@@ -6,6 +6,9 @@ import {
 } from "@/lib/courbeProjection";
 import { echeanceEnClair, euros, pourcent, pourcentageLisible, type Objectif } from "@/lib/objectifs";
 import { useTaille } from "@/lib/useTaille";
+import {
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from "@appica/ui-react/select";
 import { CLAIR, JETONS, RAYONS } from "@/lib/palette";
 import { FONT, NUM } from "@/lib/typography";
 
@@ -25,7 +28,28 @@ import { FONT, NUM } from "@/lib/typography";
  * panne.
  */
 
-const MARGE = { haut: 12, bas: 22, gauche: 50, droite: 10 };
+/**
+ * Les marges du dessin.
+ *
+ * ⚠️ **Les valeurs sont à droite, et c'est ce qui aligne cette courbe sur les autres.** Le
+ * graphique de la vue générale est un `lightweight-charts` : son échelle de prix est à
+ * droite, sans liseré, avec 8 % de marge en haut et en bas. Celui-ci portait ses valeurs à
+ * gauche en corps 8,5 — deux graphiques du même écran qui ne se lisaient pas pareil.
+ */
+const MARGE = { haut: 14, bas: 26, gauche: 12, droite: 58 };
+
+/** Le corps des graduations, celui de `lightweight-charts` dans la vue générale. */
+const CORPS_AXE = 11;
+
+/**
+ * Le filet, à l'identique du préréglage « standard » partagé par les autres graphiques.
+ *
+ * ⚠️ **Exprimé en encre du thème, pas en `--nv-bord`.** `--nv-bord` vaut `#101828`, une
+ * couleur de liseré de carte : posée en filet sur le fond de page elle disparaît. Les
+ * graphiques du site tracent le leur en blanc à 7,5 % — voir `lib/grille.ts` — et
+ * `--nv-encre-rvb` porte exactement cette encre, blanche en sombre, ardoise en clair.
+ */
+const FILET = "rgba(var(--nv-encre-rvb), 0.075)";
 
 /** Sous cette hauteur, une courbe cesse d'être lisible : on ne la comprime pas plus. */
 const HAUTEUR_MINIMALE = 150;
@@ -136,15 +160,35 @@ export default function ProjectionObjectif({
       <TitreDeCarte style={{ marginBottom: 0 }} action={<>
         {/* Le choix de l'objectif projeté. Une liste et non un onglet : cinq objectifs
             tiennent dans un menu, pas dans une rangée d'onglets. */}
+        {/**
+          * ⚠️ **Le composant de la bibliothèque, et non un `<select>` habillé.** C'en était
+          * un, avec bord, fond et teinte posés à la main : sur un écran sombre il gardait la
+          * flèche et le menu du système, qui ne ressemblent à rien d'autre sur le site et
+          * changent d'un navigateur à l'autre. Le reste du produit passe déjà par Appica —
+          * boutons, champs, pastilles — et ce menu-ci en fait partie.
+          *
+          * ⚠️ **Une liste et non une rangée de pastilles.** Cinq objectifs tiennent dans un
+          * menu ; en onglets, ils déborderaient la ligne du titre dès le troisième nom un peu
+          * long.
+          */}
         {objectifs.length > 0 && (
-          <select value={choisi ?? ""} onChange={e => onChoisir(e.target.value)}
-            style={{
-              fontFamily: FONT, fontSize: 11, fontWeight: 600, padding: "4px 8px",
-              borderRadius: RAYONS.xs, border: `1px solid ${CLAIR.bord}`,
-              background: CLAIR.carteCreuse, color: CLAIR.accent, cursor: "pointer",
-            }}>
-            {objectifs.map(x => <option key={x.id} value={x.id}>{x.nom}</option>)}
-          </select>
+          <Select value={choisi ?? ""} size="sm" variant="soft"
+            onValueChange={(v: unknown) => onChoisir(String(v))}>
+            <SelectTrigger style={{ minWidth: 150 }}>
+              {/* ⚠️ **Le libellé se donne, il ne se devine pas.** `SelectValue` rend la
+                  *valeur* de l'élément choisi : ici l'identifiant de l'objectif, affiché tel
+                  quel — « 94b783be-2813-4e87… » à la place de « Retraite ». La fonction fait
+                  la correspondance. */}
+              <SelectValue>
+                {(v: unknown) => objectifs.find(o => o.id === String(v))?.nom ?? ""}
+              </SelectValue>
+            </SelectTrigger>
+            <SelectContent>
+              {objectifs.map(x => (
+                <SelectItem key={x.id} value={x.id}>{x.nom}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         )}
         {o && onParametres && (
           <button type="button" onClick={() => onParametres(o)}
@@ -360,10 +404,14 @@ export default function ProjectionObjectif({
                 {graduations(bas, haut, nombreDeGraduations(cadre.hauteur)).map(v => (
                   <g key={v}>
                     <line x1={cadre.marge.gauche} x2={cadre.largeur - cadre.marge.droite}
-                      y1={y(v)} y2={y(v)} stroke={CLAIR.bord} strokeWidth="1"
+                      y1={y(v)} y2={y(v)} stroke={FILET} strokeWidth="1"
                       />
-                    <text x={cadre.marge.gauche - 6} y={y(v) + 3} textAnchor="end"
-                      style={{ ...NUM, fontSize: 8.5, fill: CLAIR.texteFaible }}>
+                    {/* ⚠️ À droite du filet, pas à gauche : l'échelle de prix de la vue
+                        générale est à droite, et deux graphiques voisins qui posent leurs
+                        valeurs de deux côtés différents se lisent comme deux produits. */}
+                    <text x={cadre.largeur - cadre.marge.droite + 8} y={y(v) + 4}
+                      textAnchor="start"
+                      style={{ ...NUM, fontSize: CORPS_AXE, fill: CLAIR.texteSecondaire }}>
                       {montantCourt(v)}
                     </text>
                   </g>
@@ -381,26 +429,38 @@ export default function ProjectionObjectif({
                 {p.requis != null && p.requis <= haut && (
                   <line x1={cadre.marge.gauche} x2={cadre.largeur - cadre.marge.droite}
                     y1={y(p.requis)} y2={y(p.requis)} stroke={CLAIR.texteSecondaire}
-                    strokeWidth="1.2" strokeDasharray="3 3"
+                    strokeWidth="1.2" strokeDasharray="4 4"
                     />
                 )}
 
                 {COURBES.filter(c => !sansDispersion || c.centile === "50").map(c => (
                   <path key={c.centile}
                     d={chemin(p.mois, p.enveloppes[c.centile], x, y)}
-                    fill="none" stroke={c.couleur} strokeWidth="1.8"
-                    strokeDasharray={c.tirets} strokeLinejoin="round"
+                    fill="none" stroke={c.couleur} strokeWidth="2"
+                    strokeDasharray={c.tirets} strokeLinejoin="round" strokeLinecap="round"
                     />
                 ))}
 
-                {[p.mois[0], p.mois[Math.floor(p.mois.length / 2)],
-                  p.mois[p.mois.length - 1]].map((m, i) => (
-                  <text key={i} x={x(m)} y={cadre.hauteur - 7}
-                    textAnchor={i === 0 ? "start" : i === 2 ? "end" : "middle"}
-                    style={{ ...NUM, fontSize: 8.5, fill: CLAIR.texteFaible }}>
-                    {anneeDuMois(m)}
-                  </text>
-                ))}
+                {/**
+                  * ⚠️ **Le nombre d'années suit la largeur.** Il en affichait trois, quelle
+                  * que soit la place : sur un panneau large, deux repères pour vingt ans de
+                  * courbe, et l'œil n'a rien où se poser entre les deux. Un repère par
+                  * 130 pixels environ, trois au minimum, sept au plus — au-delà les années
+                  * se touchent.
+                  */}
+                {(() => {
+                  const utile = cadre.largeur - cadre.marge.gauche - cadre.marge.droite;
+                  const combien = Math.max(3, Math.min(7, Math.floor(utile / 130)));
+                  const pas = (p.mois.length - 1) / (combien - 1);
+                  return Array.from({ length: combien }, (_, i) =>
+                    p.mois[Math.round(i * pas)]).map((m, i, tout) => (
+                    <text key={m} x={x(m)} y={cadre.hauteur - 8}
+                      textAnchor={i === 0 ? "start" : i === tout.length - 1 ? "end" : "middle"}
+                      style={{ ...NUM, fontSize: CORPS_AXE, fill: CLAIR.texteSecondaire }}>
+                      {anneeDuMois(m)}
+                    </text>
+                  ));
+                })()}
               </svg>
               </div>
 
