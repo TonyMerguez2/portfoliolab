@@ -831,7 +831,11 @@ export default function GlobalHeader() {
         * 1,4 pixel de jeu.
         */}
       <div className="nv-enseigne" style={{
-        position: "fixed", top: "16px", left: "16px", height: "36px", zIndex: 50,
+        /* ⚠️ **40 et non 36 : c'est la hauteur du champ de recherche.** Les deux boîtes
+           partaient du même `top` mais faisaient 36 et 40 : leurs centres tombaient à 34 et
+           36, et le mot « Novac » se lisait deux pixels plus haut que la barre d'en face.
+           Mesuré, pas supposé. */
+        position: "fixed", top: "16px", left: "16px", height: "40px", zIndex: 50,
         display: "flex", alignItems: "center", gap: "10px", pointerEvents: "none",
       }}>
         <span style={{ color: JETONS.surFond, fontSize: "22px", fontWeight: 600, letterSpacing: "-0.012em" }}>
@@ -875,7 +879,7 @@ export default function GlobalHeader() {
         * actif trouvé par son nom quand on a tapé son symbole.
         */}
       {/* Même marge qu'à gauche, et pour la même raison géométrique — voir l'enseigne. */}
-      <div style={{ position: "fixed", top: "16px", right: "16px", zIndex: 50, width: "320px" }}>
+      <div className="nv-recherche" style={{ position: "fixed", top: "16px", right: "16px", zIndex: 50, width: "320px" }}>
         <Autocomplete
           items={elementsRecherche}
           value={localSearch}

@@ -1394,6 +1394,21 @@ canvas + div {
    pages au repli du panneau, et permet aux éléments fixes du header de s'y
    accrocher sans connaître le composant. La valeur de repli correspond au
    panneau déplié : avant hydratation, le contenu est donc déjà à sa place. */
+/**
+ * Le rayon du champ de recherche, concentrique à celui du cadre de page.
+ *
+ * ⚠️ **16, et c'est un calcul, pas un goût.** Deux rectangles arrondis emboîtés ne
+ * paraissent concentriques que si leurs rayons diffèrent de l'écart qui les sépare. Le coin
+ * intérieur du cadre a un rayon de 24 ; le champ est posé à 16 du bord de l'écran, le cadre
+ * s'arrête à 8, l'écart vaut donc 8. Le rayon du champ doit valoir 24 − 8 = 16. Il était à
+ * 14, celui du composant d'Appica : deux pixels d'écart, assez pour que la courbe du champ
+ * ne suive pas celle du cadre et que l'emboîtement se voie faux.
+ *
+ * ⚠️ Posé ici et non en style en ligne : l'enveloppe qui porte le rayon est rendue par
+ * `Autocomplete`, on ne l'atteint que par son `data-slot`.
+ */
+.nv-recherche [data-slot="autocomplete-input"] { border-radius: 16px; }
+
 .novac-shell {
   padding-left: var(--novac-nav-w, 232px);
   transition: padding-left 220ms cubic-bezier(0.4, 0, 0.2, 1);
