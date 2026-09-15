@@ -3,6 +3,7 @@ import { recuperer } from "@/lib/requete";
 import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { RAYONS } from "@/lib/palette";
 import { useApp } from "@/lib/AppContext";
 import ProfileModal from "@/components/ProfileModal";
 import AuthModal from "@/components/AuthModal";
@@ -120,6 +121,19 @@ const RACCORD = 47;
  */
 const FILET = 8;
 
+/**
+ * Le rayon des coins intérieurs du cadre.
+ *
+ * ⚠️ **Celui des cartes, `RAYONS.xl`, et pas un chiffre choisi à l'œil.** Le cadre avait les
+ * coins carrés quand tout le reste de l'écran est arrondi à 24 — cartes, panneaux, pastilles.
+ * Un angle droit au milieu d'angles adoucis se remarque d'autant plus qu'il est aux quatre
+ * coins de la page.
+ *
+ * ⚠️ Seuls les coins **intérieurs** sont arrondis : les coins extérieurs sont ceux de la
+ * fenêtre, et une fenêtre n'a pas de rayon.
+ */
+const RAYON_CADRE = RAYONS.xl;
+
 const COURSE = LARGEUR - FILET;
 const ETALEMENT = Math.sqrt(4 * RACCORD ** 2 - (COURSE - 2 * RACCORD) ** 2);
 /** Le côté d'une rangée, l'écart entre deux, et le rembourrage du rail. */
@@ -194,7 +208,7 @@ const RANGEE = 40, ECART = 4, MARGE = 9;
  * visible à chaque bout. Ici la découpe traverse, et la matière est continue.
  */
 const silhouette = (hRangees: number, hEcran: number, lEcran: number) => {
-  const l = LARGEUR, r = RACCORD, v = ETALEMENT, f = FILET;
+  const l = LARGEUR, r = RACCORD, v = ETALEMENT, f = FILET, k = RAYON_CADRE;
   // Les rangées sont centrées dans la fenêtre : les cascades se posent de part et d'autre.
   const haut = Math.max(f, (hEcran - hRangees) / 2);
   const bas = haut + hRangees;
@@ -209,7 +223,7 @@ const silhouette = (hRangees: number, hEcran: number, lEcran: number) => {
 
     // Le contour intérieur. Il descend le long du flanc gauche, contourne le corps du
     // menu, puis fait le tour par le bas, la droite et le haut.
-    `M${f},${f}`,
+    `M${f},${f + k}`,
     `L${f},${haut}`,
     // La cascade du haut : le creux part tangent au filet…
     `A${r},${r} 0 0 0 ${f + (l - f) / 2},${haut + v / 2}`,
@@ -223,9 +237,17 @@ const silhouette = (hRangees: number, hEcran: number, lEcran: number) => {
     `A${r},${r} 0 0 0 ${f},${bas}`,
     // Le filet reprend jusqu'au coin bas-gauche, puis le cadre se referme par le bas,
     // la droite et le haut.
-    `L${f},${hEcran - f}`,
-    `L${lEcran - f},${hEcran - f}`,
-    `L${lEcran - f},${f}`,
+    // Le filet reprend, puis le cadre se referme par le bas, la droite et le haut — chaque
+    // coin intérieur adouci au rayon des cartes. Balayage 0 partout : l'arc tourne dans le
+    // sens du parcours, et il doit combler le coin, pas le creuser.
+    `L${f},${hEcran - f - k}`,
+    `A${k},${k} 0 0 0 ${f + k},${hEcran - f}`,
+    `L${lEcran - f - k},${hEcran - f}`,
+    `A${k},${k} 0 0 0 ${lEcran - f},${hEcran - f - k}`,
+    `L${lEcran - f},${f + k}`,
+    `A${k},${k} 0 0 0 ${lEcran - f - k},${f}`,
+    `L${f + k},${f}`,
+    `A${k},${k} 0 0 0 ${f},${f + k}`,
     "Z",
   ].join(" ");
 };
