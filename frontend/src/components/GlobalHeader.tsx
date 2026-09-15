@@ -818,8 +818,20 @@ export default function GlobalHeader() {
         * sur n'importe quelle feuille.
         */}
       <style>{`@media (max-width: 767px) { .nv-enseigne { display: none !important; } }`}</style>
+      {/**
+        * ⚠️ **16 des deux bords, et ce n'est pas un chiffre rond choisi à l'œil.** L'enseigne
+        * était à `top: 12, left: 20` : quatre pixels sous le cadre, douze à sa gauche. Le
+        * déséquilibre se voyait depuis que le cadre fait le tour — l'élément frôlait le haut
+        * et flottait sur le côté.
+        *
+        * ⚠️ **Et en dessous de 15, le coin passe sous le cadre.** Le coin intérieur du cadre
+        * est un arc de rayon 24 centré à 32 pixels des deux bords ; un coin carré posé à `m`
+        * des deux bords en est à `√2 × (32 − m)`. À 12, cela fait 28,3 — plus que 24, donc le
+        * coin de l'élément est peint **sous** la matière du cadre. Il faut m ≥ 15 ; 16 laisse
+        * 1,4 pixel de jeu.
+        */}
       <div className="nv-enseigne" style={{
-        position: "fixed", top: "12px", left: "20px", height: "36px", zIndex: 50,
+        position: "fixed", top: "16px", left: "16px", height: "36px", zIndex: 50,
         display: "flex", alignItems: "center", gap: "10px", pointerEvents: "none",
       }}>
         <span style={{ color: JETONS.surFond, fontSize: "22px", fontWeight: 600, letterSpacing: "-0.012em" }}>
@@ -862,7 +874,8 @@ export default function GlobalHeader() {
         * relancerait un filtre sur des libellés déjà choisis, et masquerait par exemple un
         * actif trouvé par son nom quand on a tapé son symbole.
         */}
-      <div style={{ position: "fixed", top: "12px", right: "20px", zIndex: 50, width: "320px" }}>
+      {/* Même marge qu'à gauche, et pour la même raison géométrique — voir l'enseigne. */}
+      <div style={{ position: "fixed", top: "16px", right: "16px", zIndex: 50, width: "320px" }}>
         <Autocomplete
           items={elementsRecherche}
           value={localSearch}
