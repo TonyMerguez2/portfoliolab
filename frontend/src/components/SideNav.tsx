@@ -111,10 +111,14 @@ const RACCORD = 47;
  * reconnaît à sa surface, pas à un contour : la bande doit donc être assez large pour porter
  * cette surface.
  *
- * ⚠️ **Seize pixels, soit un quart du rail.** Assez pour se lire comme une colonne, pas assez
- * pour se disputer la place avec le corps du menu.
+ * ⚠️ **Seize pixels tant qu'il ne courait qu'à gauche ; huit depuis qu'il fait le tour.** Le
+ * raisonnement du dessus tenait pour une bande verticale isolée : seule sur un flanc, elle a
+ * besoin d'épaisseur pour se lire comme une colonne plutôt que comme une bordure de fenêtre.
+ * Fermée sur les quatre côtés, c'est l'inverse — un cadre n'a pas à prouver qu'il est de la
+ * matière, sa continuité le dit, et seize pixels tout autour reprenaient trente-deux pixels de
+ * large et autant de haut à la page.
  */
-const FILET = 16;
+const FILET = 8;
 
 const COURSE = LARGEUR - FILET;
 const ETALEMENT = Math.sqrt(4 * RACCORD ** 2 - (COURSE - 2 * RACCORD) ** 2);
@@ -189,30 +193,39 @@ const RANGEE = 40, ECART = 4, MARGE = 9;
  * deux rectangles voisins l'auraient reproduit à l'identique ou pas du tout, avec une jointure
  * visible à chaque bout. Ici la découpe traverse, et la matière est continue.
  */
-const silhouette = (hRangees: number, hEcran: number) => {
-  const l = LARGEUR, r = RACCORD, v = ETALEMENT;
+const silhouette = (hRangees: number, hEcran: number, lEcran: number) => {
+  const l = LARGEUR, r = RACCORD, v = ETALEMENT, f = FILET;
   // Les rangées sont centrées dans la fenêtre : les cascades se posent de part et d'autre.
-  const haut = Math.max(0, (hEcran - hRangees) / 2);
+  const haut = Math.max(f, (hEcran - hRangees) / 2);
   const bas = haut + hRangees;
   return [
-    // Le filet, du haut de l'écran jusqu'à l'amorce de la cascade.
-    `M${FILET},0`,
-    `L${FILET},${haut}`,
+    /* ⚠️ **Deux contours, et c'est la règle « evenodd » qui peint entre les deux.** Le tracé
+       ne décrit plus une colonne mais un cadre : le premier contour est la fenêtre entière,
+       le second est ce qui reste à nu. Un seul contour aurait demandé de longer le cadre en
+       aller-retour, avec quatre coins à recoudre à la main ; ici les coins sont deux
+       rectangles. */
+    // Le contour extérieur : la fenêtre, d'un bord à l'autre.
+    "M0,0", `L${lEcran},0`, `L${lEcran},${hEcran}`, `L0,${hEcran}`, "Z",
+
+    // Le contour intérieur. Il descend le long du flanc gauche, contourne le corps du
+    // menu, puis fait le tour par le bas, la droite et le haut.
+    `M${f},${f}`,
+    `L${f},${haut}`,
     // La cascade du haut : le creux part tangent au filet…
-    `A${r},${r} 0 0 0 ${FILET + (l - FILET) / 2},${haut + v / 2}`,
+    `A${r},${r} 0 0 0 ${f + (l - f) / 2},${haut + v / 2}`,
     // …puis le bombé reprend sa tangente et arrive tangent au flanc.
     `A${r},${r} 0 0 1 ${l},${haut + v}`,
     // Le flanc, droit sur toute la hauteur des rangées.
     `L${l},${bas - v}`,
     // La cascade du bas, la même en miroir : le bombé quitte le flanc…
-    `A${r},${r} 0 0 1 ${FILET + (l - FILET) / 2},${bas - v / 2}`,
+    `A${r},${r} 0 0 1 ${f + (l - f) / 2},${bas - v / 2}`,
     // …et le creux rejoint le filet, tangent lui aussi.
-    `A${r},${r} 0 0 0 ${FILET},${bas}`,
-    // Le filet reprend, jusqu'au bas de l'écran.
-    `L${FILET},${hEcran}`,
-    // Puis le bord gauche referme le tracé.
-    `L0,${hEcran}`,
-    "L0,0",
+    `A${r},${r} 0 0 0 ${f},${bas}`,
+    // Le filet reprend jusqu'au coin bas-gauche, puis le cadre se referme par le bas,
+    // la droite et le haut.
+    `L${f},${hEcran - f}`,
+    `L${lEcran - f},${hEcran - f}`,
+    `L${lEcran - f},${f}`,
     "Z",
   ].join(" ");
 };
@@ -392,7 +405,11 @@ export default function SideNav() {
     if (!el) return;
     const poser = () => {
       const h = el.getBoundingClientRect().height;
-      if (h > 0) setDecoupe(`path("${silhouette(h, window.innerHeight)}")`);
+      // ⚠️ `evenodd` est indispensable : sans lui, le contour intérieur serait peint
+      //    avec le reste et le cadre deviendrait un voile plein écran.
+      if (h > 0) {
+        setDecoupe(`path(evenodd, "${silhouette(h, window.innerHeight, window.innerWidth)}")`);
+      }
     };
     poser();
     const ro = new ResizeObserver(poser);
@@ -478,12 +495,22 @@ export default function SideNav() {
       aria-label="Navigation principale"
       data-avatar="curieux"
       style={{
-        position: "fixed", left: 0, top: 0, height: "100vh",
-        width: LARGEUR, zIndex: 60,
+        position: "fixed", left: 0, top: 0, right: 0, bottom: 0,
+        zIndex: 60,
+        /* ⚠️ **La boîte couvre la fenêtre entière, la découpe n'en garde que le cadre.** Elle
+           faisait la largeur du rail tant que le filet ne courait qu'à gauche ; pour border
+           les quatre côtés il faut bien que la matière s'étende partout. Ce qui n'est pas
+           dans le cadre est découpé — donc ni peint, ni cliquable : le reste de la page
+           reçoit ses clics comme avant. */
         /* ⚠️ Le rail occupe toute la hauteur pour porter son filet ; ses rangées, elles, restent
            au centre. C'est `justifyContent` qui les y tient — l'ancien centrage par `top: 50%`
-           n'a plus lieu d'être, la boîte ne se dimensionne plus sur le contenu. */
-        display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
+           n'a plus lieu d'être, la boîte ne se dimensionne plus sur le contenu.
+
+           ⚠️ **`alignItems` passe à `flex-start`, et ce n'est pas un détail.** Centré dans une
+           boîte large de 68 pixels, le contenu tombait dans le rail ; centré dans une boîte
+           large comme la fenêtre, il tomberait au milieu de l'écran. C'est l'enveloppe des
+           rangées qui porte désormais la largeur du rail. */
+        display: "flex", flexDirection: "column", alignItems: "flex-start", justifyContent: "center",
 
         /* ⚠️ **La découpe emporte aussi l'infobulle, et `overflow` n'y peut rien.** Un
            `clip-path` coupe tous les descendants, positionnés ou non : la bulle des noms sort
@@ -493,6 +520,13 @@ export default function SideNav() {
            sous les rangées, plutôt que sur le rail lui-même ; ce n'est pas la silhouette, et
            cela déplace le bloc conteneur dont les modales plus bas se tiennent à l'écart. */
         clipPath: decoupe, WebkitClipPath: decoupe,
+        /* ⚠️ **Le cadre ne prend pas les clics, seules les rangées le font.** Une découpe
+           borne aussi le test de survol : la boîte couvrant la fenêtre, ses huit pixels de
+           bordure devenaient une lisière morte tout autour de la page — un lien à deux
+           pixels du bord ne répondait plus. Tant que le filet ne courait qu'à gauche, sous
+           le rail, personne ne s'en apercevait ; sur quatre côtés, si. La matière est donc
+           rendue transparente aux clics, et l'enveloppe des rangées les reprend. */
+        pointerEvents: "none",
         ...FLOU,
       }}
     >
@@ -509,6 +543,10 @@ export default function SideNav() {
       <div ref={ancrerRail} style={{
         display: "flex", flexDirection: "column", alignItems: "center", gap: ECART,
         padding: `${Math.round(ETALEMENT + MARGE)}px 0`,
+        /* Le rail a perdu sa largeur en devenant cadre : c'est ici qu'elle vit maintenant. */
+        width: LARGEUR, flexShrink: 0,
+        /* Les rangées reprennent ce que le cadre a lâché — voir son commentaire. */
+        pointerEvents: "auto",
       }}>
       {/**
         * La marque, en tête du rail.
