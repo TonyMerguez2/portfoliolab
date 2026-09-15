@@ -150,7 +150,9 @@ async function sonderLesLogos(actifs: Actif[]): Promise<Set<string>> {
   return new Set(trouves.filter((t): t is string => t !== null));
 }
 
-export default function BandeauActifs({ cliquable = false }: { cliquable?: boolean }) {
+export default function BandeauActifs(
+  { cliquable = false, marge = 0 }: { cliquable?: boolean; marge?: number },
+) {
   const [actifs, setActifs] = useState<Actif[]>([]);
   const [logos, setLogos] = useState<Set<string> | null>(null);
   const piste = useRef<HTMLDivElement>(null);
@@ -211,7 +213,13 @@ export default function BandeauActifs({ cliquable = false }: { cliquable?: boole
   return (
     <div className="nv-bandeau"
       style={{
-        position: "fixed", bottom: 0, left: 0, right: 0,
+        /**
+         * ⚠️ **Le bandeau se retire du bord quand un cadre l'entoure.** Collé à `bottom: 0`,
+         * ses huit derniers pixels passaient **sous** la matière du cadre, et ses cours se
+         * lisaient à quatre pixels de la bordure. `marge` vaut l'épaisseur du cadre là où il
+         * existe, zéro sur la page d'accès qui n'en a pas.
+         */
+        position: "fixed", bottom: marge, left: marge, right: marge,
         /**
          * ⚠️ **20, et c'est ce qui rend le bandeau cliquable.** Il était à 4, et sur l'accueil
          * la colonne de contenu est en `z-10` avec `h-full` : elle couvre tout l'écran, fond
@@ -244,8 +252,14 @@ export default function BandeauActifs({ cliquable = false }: { cliquable?: boole
            de 72 mangeaient 38 % de la largeur : il ne restait qu'un actif et demi lisible au
            centre. Le fondu suit donc la largeur, et se borne à 72 px sur grand écran, où un
            fondu proportionnel serait devenu une bande grise. */
-        maskImage: "linear-gradient(to right, transparent 0, #000 min(72px, 10%), #000 calc(100% - min(72px, 10%)), transparent 100%)",
-        WebkitMaskImage: "linear-gradient(to right, transparent 0, #000 min(72px, 10%), #000 calc(100% - min(72px, 10%)), transparent 100%)",
+        /* ⚠️ **Le fondu court sur 96 px et non 72, pour que le bandeau soit éteint avant
+           l'arc.** Le coin intérieur du cadre a un rayon de 24 : sur ces 24 premiers pixels,
+           la matière mord dans le bandeau de plus en plus haut. Un fondu qui ne commençait
+           qu'après laissait un cours net se faire trancher par la courbe. Il faut donc que le
+           bandeau ait déjà perdu l'essentiel de son encre là où la courbe le rattrape — d'où
+           un fondu qui part du bord et s'étale bien au-delà des 24 px de l'arc. */
+        maskImage: "linear-gradient(to right, transparent 0, #000 min(96px, 14%), #000 calc(100% - min(96px, 14%)), transparent 100%)",
+        WebkitMaskImage: "linear-gradient(to right, transparent 0, #000 min(96px, 14%), #000 calc(100% - min(96px, 14%)), transparent 100%)",
       }}>
       <style>{STYLE}</style>
       <div ref={piste} className="nv-bandeau-piste"

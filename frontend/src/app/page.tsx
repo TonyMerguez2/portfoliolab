@@ -519,7 +519,10 @@ export default function Home() {
         */}
       {/* ⚠️ Cliquable ici, et seulement ici : on est derrière la porte, `/chart` est
           atteignable. */}
-      <BandeauActifs cliquable />
+      {/* ⚠️ `marge` vaut l'épaisseur du cadre : le bandeau se pose dessus au lieu de passer
+          dessous, et ses extrémités se font découper par l'arc des coins. La page d'accès,
+          elle, n'a pas de cadre et garde donc zéro. */}
+      <BandeauActifs cliquable marge={8} />
     </div>
   );
 }
