@@ -357,7 +357,12 @@
 
   /* La barre latérale. Elle est translucide et floute ce qui passe dessous :
      ses fonds ne peuvent donc pas être les jetons de carte, qui sont opaques. */
-  --nv-barre-fond:        rgba(3,7,18,0.80);
+  /* ⚠️ **Opaque, et de l'encre exacte d'une carte.** Le rail était à 80 % avec un flou
+     d'arrière-plan : la page transparaissait, et comme son dégradé va de #030712 aux bords
+     à #0B101B au milieu, le cadre se détachait au centre et disparaissait aux extrémités.
+     Mesuré sur les pixels rendus avant de changer. À 100 %, il porte la même couleur que
+     l'intérieur d'un `Cadre` — `--nv-carte` — partout sur son tour. */
+  --nv-barre-fond:        #030712;
   --nv-barre-survol:      rgba(255,255,255,0.045);
   --nv-barre-actif:       rgba(255,255,255,0.11);
   --nv-barre-actif-bord:  rgba(255,255,255,0.10);
@@ -466,7 +471,8 @@
 
   /* La barre suit la page. L'état actif quitte le blanc translucide pour
      l'accent : sur fond clair, un voile blanc sur blanc ne marque rien. */
-  --nv-barre-fond:        rgba(255,255,255,0.82);
+  /* Opaque aussi en clair, et de l'encre d'une carte — voir le thème sombre. */
+  --nv-barre-fond:        #FFFFFF;
   --nv-barre-survol:      rgba(15,23,42,0.04);
   --nv-barre-actif:       rgba(11,99,231,0.10);
   --nv-barre-actif-bord:  rgba(11,99,231,0.22);
