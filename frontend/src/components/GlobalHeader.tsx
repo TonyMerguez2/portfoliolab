@@ -835,7 +835,18 @@ export default function GlobalHeader() {
            partaient du même `top` mais faisaient 36 et 40 : leurs centres tombaient à 34 et
            36, et le mot « Novac » se lisait deux pixels plus haut que la barre d'en face.
            Mesuré, pas supposé. */
-        position: "fixed", top: "16px", left: "16px", height: "40px", zIndex: 50,
+        /* ⚠️ **30 à gauche, quand la recherche est à 16 à droite — et l'écart est voulu.**
+           Les deux ne sont pas le même genre d'objet. La recherche est une boîte arrondie de
+           rayon 16, concentrique à l'arc de 24 du cadre : l'écart reste de 8 px tout le long
+           de la courbe, et l'œil lit un emboîtement. L'enseigne est du texte nu, qui n'a
+           aucune forme pour épouser une courbe — posé à 16, il laissait un vide en croissant
+           au-dessus du « N ». Reculé à 30, il est franchement à l'intérieur du coin plutôt
+           qu'à son bord.
+
+           ⚠️ **Le `top` ne bouge pas, lui.** Le reculer aussi aurait mieux réparti le vide,
+           mais aurait descendu le mot de six pixels sous la ligne de la barre de recherche —
+           l'alignement qu'on venait de régler. */
+        position: "fixed", top: "16px", left: "30px", height: "40px", zIndex: 50,
         display: "flex", alignItems: "center", gap: "10px", pointerEvents: "none",
       }}>
         <span style={{ color: JETONS.surFond, fontSize: "22px", fontWeight: 600, letterSpacing: "-0.012em" }}>
