@@ -9,6 +9,7 @@ import { TRENDING } from "@/lib/assets";
 import { trierActifs } from "@/lib/triActifs";
 import type { OrdreActifs } from "@/lib/triActifs";
 import AssetLogo from "@/components/AssetLogo";
+import AlertesMacro from "@/components/AlertesMacro";
 import AvatarNovac from "@/components/AvatarNovac";
 import { lireApparenceAvatar } from "@/lib/useCouleurAvatar";
 
@@ -890,7 +891,14 @@ export default function GlobalHeader() {
         * actif trouvé par son nom quand on a tapé son symbole.
         */}
       {/* Même marge qu'à gauche, et pour la même raison géométrique — voir l'enseigne. */}
-      <div className="nv-recherche" style={{ position: "fixed", top: "16px", right: "16px", zIndex: 50, width: "320px" }}>
+      {/* ⚠️ **La cloche et le champ dans une même boîte ancrée à droite.** Le champ garde
+          ses 320 px et sa marge de 16 ; la cloche s'ajoute à sa gauche sans le déplacer,
+          puisque c'est le bord droit qui est fixé. Deux boîtes fixes séparées auraient
+          demandé de recopier la largeur du champ dans la position de la cloche. */}
+      <div className="nv-recherche" style={{ position: "fixed", top: "16px", right: "16px",
+        zIndex: 50, display: "flex", alignItems: "center", gap: "10px" }}>
+        <AlertesMacro />
+        <div style={{ width: "320px" }}>
         <Autocomplete
           items={elementsRecherche}
           value={localSearch}
@@ -929,6 +937,7 @@ export default function GlobalHeader() {
             </AutocompleteList>
           </AutocompleteContent>
         </Autocomplete>
+        </div>
       </div>
 
       {showSearch && (

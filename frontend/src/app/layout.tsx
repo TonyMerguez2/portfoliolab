@@ -8,6 +8,7 @@ import SideNav from "@/components/SideNav";
 import PointsFond from "@/components/PointsFond";
 import EntreeLogo from "@/components/EntreeLogo";
 import CadreSite from "@/components/CadreSite";
+import { ToastProvider, Toaster } from "@appica/ui-react/toast";
 
 /**
  * Police de l'application.
@@ -85,6 +86,11 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             fois par visite. Voir `EntreeLogo`. */}
         <EntreeLogo />
         <PointsFond />
+        {/* ⚠️ **Le fournisseur enveloppe tout, et il le faut.** `useToastManager` ne
+            s'appelle que sous lui, et c'est le bandeau — donc un enfant de `CadreSite` —
+            qui annonce les alertes. Le `Toaster`, lui, se porte tout seul dans la fenêtre :
+            il n'a pas à vivre près du composant qui l'alimente. */}
+        <ToastProvider>
         <AppProvider>
           {/* L'avatar vit dans le bandeau, mais ce qu'il exprime vient des pages :
               le fournisseur doit donc envelopper les deux. */}
@@ -95,6 +101,11 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             </CadreSite>
           </AvatarProvider>
         </AppProvider>
+        {/* ⚠️ `progress={false}` : la barre de décompte annonce une disparition automatique,
+            or l'alerte ne disparaît pas — elle passe dans la liste de la cloche. Montrer un
+            compte à rebours ferait croire qu'on va la perdre. */}
+        <Toaster progress={false} />
+        </ToastProvider>
       </body>
     </html>
   );
