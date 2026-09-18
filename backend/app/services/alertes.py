@@ -6,11 +6,11 @@ calendrier macro de `evenements.py` sait déjà quelles zones concernent un port
 déduites de ses tickers — et à quelle date chaque publication tombe. Une alerte n'est que
 cette échéance, vue à travers l'état du compte : annoncée ou non, écartée ou non.
 
-⚠️ **Trois jours, resserré à la demande depuis sept.** Le raisonnement d'origine tenait :
-au-delà d'une semaine, une décision annoncée n'est plus une alerte mais une ligne
-d'agenda, et l'onglet « Événements » la montre déjà. Trois jours va plus loin dans le même
-sens — ne rester que ce qui est imminent. Conséquence à connaître : la macro se tait la
-plupart du temps, et ce sont les alertes de performance qui font le quotidien.
+⚠️ **Une semaine.** Au-delà, une décision de taux annoncée trois semaines à l'avance n'est
+plus une alerte mais une ligne d'agenda — et l'onglet « Événements » la montre déjà. En
+deçà, prévenir la veille au soir d'une publication du matin laisse trop peu de temps pour
+en faire quoi que ce soit. Essayée à trois jours, la borne rendait la macro muette la
+plupart du temps ; sept est le compromis retenu.
 
 ⚠️ **La fenêtre part d'aujourd'hui inclus** : une publication du jour même reste la plus
 utile de toutes.
@@ -34,7 +34,7 @@ from app.services.evenements import evenements_macro_du_flux
 logger = logging.getLogger(__name__)
 
 #: L'horizon d'une alerte macro, en jours, aujourd'hui compris.
-FENETRE_JOURS = 3
+FENETRE_JOURS = 7
 
 
 #: Combien de temps une série de variations resservie.

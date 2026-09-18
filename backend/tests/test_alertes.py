@@ -48,13 +48,13 @@ def test_la_cle_ne_bouge_pas_d_un_appel_a_l_autre():
 
 
 def test_la_fenetre_ecarte_le_lointain_et_le_passe(db, monkeypatch):
-    """La borne est à trois jours : le dernier jour passe, le suivant non."""
+    """La borne est à sept jours : le dernier jour passe, le suivant non."""
     monkeypatch.setattr(service, "evenements_macro_du_flux",
                         lambda t, r: [ev(-1, "Passée"), ev(0, "Aujourd’hui"),
-                                      ev(3, "Dans trois jours"), ev(4, "Trop loin")])
+                                      ev(7, "Dans une semaine"), ev(8, "Trop loin")])
     vues = service.alertes(db, "essai-1", ["AAPL"], date(2026, 9, 18))
     libelles = [a["libelle"] for a in vues]
-    assert libelles == ["Aujourd’hui", "Dans trois jours"]
+    assert libelles == ["Aujourd’hui", "Dans une semaine"]
 
 
 def test_une_alerte_est_neuve_puis_ne_l_est_plus(db, monkeypatch):
