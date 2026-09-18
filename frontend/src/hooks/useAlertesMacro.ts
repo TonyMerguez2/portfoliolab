@@ -8,8 +8,14 @@ import { enTetesAuth } from "@/lib/session";
 /** Une échéance macro qui concerne le portefeuille, telle que le serveur la rend. */
 export type AlerteMacro = {
   cle: string;
+  /** « economique » pour une échéance du calendrier, « performance » pour une ligne du jour. */
+  nature?: "economique" | "performance";
   date: string;
   libelle: string;
+  /** La variation en clair, pour les seules alertes de performance : « +3,10 % aujourd’hui ». */
+  detail?: string | null;
+  /** La variation du jour, en pourcentage, quand l'alerte en porte une. */
+  variation?: number | null;
   /** Jours d'ici là. Zéro le jour même. */
   jours: number | null;
   /** Code de zone à deux lettres — « us », « eu » — pour le drapeau. */

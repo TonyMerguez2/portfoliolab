@@ -66,9 +66,14 @@ _echec_le = 0.0
 
 
 def _calculer() -> dict[str, Any]:
+    # ⚠️ **Cinq jours et non deux.** Les dix symboles d'ici sont américains ou crypto, et
+    # `2d` leur suffit — mais le même appel, mesuré sur des ETF parisiens, ne rend qu'une
+    # seule clôture : la fenêtre est calendaire et la séance européenne n'y tombe qu'une
+    # fois. Le jour où un titre d'Euronext entre dans la liste, il disparaîtrait du bandeau
+    # sans rien signaler. Cinq jours traversent un week-end et un férié.
     cours = yf.download(
         SYMBOLES,
-        period="2d",
+        period="5d",
         interval="1d",
         progress=False,
         auto_adjust=False,

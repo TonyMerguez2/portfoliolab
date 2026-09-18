@@ -46,12 +46,17 @@ function Ligne({ a, onSupprimer }: { a: AlerteMacro; onSupprimer: (cle: string) 
       {a.pays && <DrapeauPays pays={a.pays} taille={16} />}
       <span style={{ display: "flex", flexDirection: "column", gap: 1, minWidth: 0, flex: 1 }}>
         <span style={{ fontFamily: FONT, fontSize: 12, color: JETONS.texte }}>{a.libelle}</span>
-        <span style={{ fontFamily: FONT, fontSize: 10.5, color: JETONS.texteFaible }}>
-          {echeance(a.jours)}
+        <span style={{ fontFamily: FONT, fontSize: 10.5,
+                       /* La variation porte sa couleur ; l'échéance garde l'encre discrète. */
+                       color: a.variation == null ? JETONS.texteFaible
+                         : a.variation >= 0 ? JETONS.positif : JETONS.negatif }}>
+          {a.nature === "performance" && a.detail ? a.detail : echeance(a.jours)}
           {/* ⚠️ L'origine est dite, parce que les deux n'ont pas la même garantie : le
               relevé vient d'une page officielle, le flux tient quatre semaines et ses
               dates sont parfois indicatives. */}
-          {a.source ? ` · ${a.source}` : ""}
+          {a.source ? (
+            <span style={{ color: JETONS.texteFaible }}> · {a.source}</span>
+          ) : ""}
         </span>
       </span>
       <Button size="icon-sm" variant="ghost" aria-label={`Écarter « ${a.libelle} »`}
@@ -70,7 +75,12 @@ export default function AlertesMacro() {
   const annoncer = useCallback((a: AlerteMacro) => {
     toast.add({
       title: a.libelle,
-      description: `Échéance ${echeance(a.jours)}.`,
+      /* ⚠️ **Deux natures, deux phrases.** « Échéance aujourd'hui » sous une variation
+         déjà survenue serait un contresens : l'une annonce ce qui vient, l'autre constate
+         ce qui est arrivé. */
+      description: a.nature === "performance" && a.detail
+        ? a.detail
+        : `Échéance ${echeance(a.jours)}.`,
     });
   }, [toast]);
 
@@ -105,7 +115,7 @@ export default function AlertesMacro() {
         <p style={{ margin: "6px 0 2px", fontFamily: FONT, fontSize: 10.5,
                     letterSpacing: "0.06em", textTransform: "uppercase",
                     color: JETONS.texteFaible }}>
-          Échéances macroéconomiques
+          Alertes
         </p>
         <ul style={{ margin: 0, padding: 0, listStyle: "none", maxHeight: 320,
                      overflowY: "auto" }}>
@@ -113,8 +123,8 @@ export default function AlertesMacro() {
         </ul>
         <p style={{ margin: "9px 0 0", fontFamily: FONT, fontSize: 9.5, lineHeight: 1.5,
                     color: JETONS.texteFaible }}>
-          Les zones affichées sont déduites des titres détenus. Écarter une échéance la
-          retire définitivement, sur tous vos appareils.
+          Les zones macroéconomiques sont déduites des titres détenus ; les variations sont
+          celles du jour. Écarter une alerte la retire définitivement, sur tous vos appareils.
         </p>
       </PopoverContent>
     </Popover>
