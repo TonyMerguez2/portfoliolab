@@ -1422,13 +1422,23 @@ canvas + div {
   /* Le débord vit ici, et non en style en ligne : une requête de média ne s'écrit pas dans
      un attribut `style`, et c'est elle qui l'annule plus bas. */
   margin-left: -62px;
-  /* ⚠️ **Plus de retrait à droite, et c'est un retour en arrière assumé.** La bande s'était
-     arrêtée au bord de la carte du graphique, 296 px avant celui de la page, pour répondre à
-     la colonne étroite d'en dessous. À l'écran, elle ne se lisait pas comme alignée mais
-     comme **rognée** : un vide au-dessus de la colonne de droite, sous la barre de
-     recherche, que rien ne justifie. Elle reprend toute la largeur. */
+
 }
 .nv-bande-angle-carte { border-bottom-left-radius: 33px !important; }
+
+/**
+ * Le retrait à droite : la bande s'arrête au bord de la carte du graphique.
+ *
+ * ⚠️ **296, et c'est une mesure.** La colonne de droite est **fixe** — 272 px de carte à
+ * 1 280 comme à 1 600 de fenêtre, vérifié aux deux — et 24 la séparent de la carte du
+ * graphique. Un pourcentage aurait dérivé dès qu'on change de taille d'écran.
+ *
+ * ⚠️ **Classe à part de `.nv-bande-angle`, et il le faut.** Le débord à gauche dépend de la
+ * cascade du rail, donc de la hauteur de la fenêtre, et s'annule quand elle remonte. Le
+ * retrait à droite ne dépend que de la colonne d'en dessous : les réunir aurait fait perdre
+ * l'alignement à droite sur les écrans courts, sans aucune raison.
+ */
+.nv-bande-large { margin-right: 296px; }
 
 /**
  * ⚠️ **La bande ne passe plus jamais à la ligne, et c'est l'identité qui cède.** Elle

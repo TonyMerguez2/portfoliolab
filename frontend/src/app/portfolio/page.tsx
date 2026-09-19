@@ -2121,7 +2121,7 @@ function PortfolioPageInner() {
         * dans le bombé du rail — jeu mesuré à **−39 px**. Huit pixels d'écart en moins par
         * intervalle en rendent quarante-huit, ce qui remet tout sur une ligne.
         */}
-      <Cadre classeCadre={debordOk ? "nv-bande-angle" : undefined}
+      <Cadre classeCadre={`nv-bande-large${debordOk ? " nv-bande-angle" : ""}`}
         classeCarte={debordOk ? "nv-bande-angle-carte" : undefined}
         style={{ padding: "13px 18px", flexShrink: 0, display: "flex", alignItems: "flex-start", gap: 14, flexWrap: "nowrap" }}>
         {/* Identité du portefeuille. La maquette met ici une illustration
