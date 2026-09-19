@@ -283,6 +283,30 @@ const PERIODS: Period[] = ["24h", "1S", "1M", "3M", "6M", "1A", "3A", "Max"];
 
 /** Retrait latéral commun à la bande, aux onglets et au contenu. */
 const MARGE = 10;
+/**
+ * Le retrait du contenu à droite et en bas, là où la page touche le cadre.
+ *
+ * ⚠️ **Il vaut le double du jeu, parce qu'il part de plus loin.** À gauche la coque écarte
+ * déjà le contenu de 68 px — toute la largeur du rail, filet compris — et `MARGE` ne mesure
+ * que ce qui reste. À droite et en bas il n'y a pas de rail : le contenu va jusqu'au bord de
+ * l'écran, et il doit franchir le filet du cadre (8) avant de garder son jeu (8). Écrire
+ * `MARGE` des quatre côtés laissait les cartes de droite à **2 px** du filet, quand
+ * l'enseigne, la recherche et la bande de tête en gardent 8.
+ */
+const FILET_CADRE = 8, JEU_CADRE = 8;
+const MARGE_CADRE = FILET_CADRE + JEU_CADRE;
+/**
+ * Ce que le rail des comptes déborde sous ses cartes.
+ *
+ * ⚠️ **Dix pixels de rembourrage transparent, et ils font apparaître une barre de
+ * défilement.** Le rail porte `padding: 10px 0` avec les marges négatives qui vont avec,
+ * pour que le soulèvement au survol ait où aller. Rien ne s'y voit, mais le navigateur, lui,
+ * compte ces pixels : la vue Résumé se croyait trop pleine, sortait sa barre, et celle-ci
+ * reprenait 6 px de largeur — la colonne de droite s'en trouvait décalée du bord, ce qu'on
+ * cherchait justement à corriger. Le retrait du bas lui fait donc sa place, et le cale-pied
+ * de la page ne garde que le reste.
+ */
+const DEBORD_DOSSIERS = 10;
 
 /**
  * De combien la bande de tête déborde à gauche, et se retire à droite.
@@ -310,15 +334,19 @@ const DEBORD_PAGE = 62;
 /** La géométrie du rail, telle que `SideNav` la dessine. */
 const RAIL_FILET = 8, RAIL_RACCORD = 47, RAIL_CENTRE_X = 55;
 const LARGEUR_RAIL = 68;
-/** Le congé bas-gauche de la bande, et le jeu qu'elle doit garder avec le rail. */
-const BANDE_CONGE = 39, BANDE_JEU = 8, BANDE_GAUCHE = 16;
 /**
- * ⚠️ **Le jeu sous la bande, et il ne vaut pas celui de gauche.** Huit à gauche, dix en
- * dessous : un jeu vertical égal au jeu horizontal paraît plus serré qu'il ne l'est,
- * parce que le bombé du rail s'éloigne de part et d'autre du point de mesure alors que
- * le filet de gauche reste droit sur toute la hauteur.
+ * Le congé bas-gauche de la bande, et le jeu qu'elle garde avec le rail.
+ *
+ * ⚠️ **Les trois valeurs n'en font qu'une : elles décrivent un emboîtement, pas trois
+ * réglages.** Le congé vaut le rayon du creux moins le jeu, et le bord gauche place le
+ * centre de ce congé sur celui du creux. Écrites à la main — 39, 8, 16 — elles étaient
+ * justes et ne disaient pas pourquoi : changer le jeu sans recalculer les deux autres
+ * aurait laissé deux arcs de rayons quelconques côte à côte, c'est-à-dire un vide qui
+ * s'ouvre puis se pince le long de la courbe.
  */
-const BANDE_JEU_DESSOUS = 10;
+const BANDE_JEU = 8;
+const BANDE_CONGE = RAIL_RACCORD - BANDE_JEU;        // 39
+const BANDE_GAUCHE = RAIL_CENTRE_X - BANDE_CONGE;    // 16
 
 /**
  * Le débord de la bande est-il tenable à cette hauteur de fenêtre ?
@@ -364,39 +392,36 @@ function bordBande(basBande: number, y: number): number {
 }
 
 /**
- * Où le bas de la bande doit tomber pour garder `BANDE_JEU_DESSOUS` sous elle.
+ * Où le bas de la bande doit tomber pour se loger dans le creux du rail.
  *
- * ⚠️ **Le point de mesure n'est pas sous le bord plat, mais à l'aplomb de l'inflexion du
- * S.** C'est là que le rail monte le plus haut — vérifié sur le rendu : le jeu mesuré
- * descend à 23 px vers x = 38 et remonte à 34 de part et d'autre. Prendre la verticale
- * sous le coin, ou sous le bord plat, aurait donné une bande trop longue de douze pixels.
+ * ⚠️ **Il ne se cherche pas, il se pose : les deux arcs partagent leur centre.** Le creux
+ * du rail est un arc de rayon `RAIL_RACCORD` centré en `(RAIL_CENTRE_X, cascade)` ; le
+ * congé de la bande, lui, a son centre en `(BANDE_GAUCHE + BANDE_CONGE, bas − BANDE_CONGE)`
+ * — soit la même abscisse, par construction. Poser `bas = cascade + BANDE_CONGE` superpose
+ * les deux centres, et le vide entre les deux arcs devient un anneau d'épaisseur
+ * constante : le jeu, perpendiculairement, sur toute la courbe. C'est l'emboîtement de la
+ * barre de recherche dans le coin du cadre, transposé d'un angle à une courbe.
  *
- * ⚠️ **Le jeu est affine en `bas`**, puisque descendre la bande translate tout son
- * contour : on cherche donc le minimum une fois, sans bande, et on en retranche le jeu
- * voulu. Une recherche par essais successifs aurait fait le même résultat en cent fois
- * plus d'opérations, à chaque redimensionnement.
+ * ⚠️ **Chercher le point le plus proche donnait un contour, pas un emboîtement.** La
+ * version d'avant posait le bord à dix pixels du point où le rail monte le plus haut : la
+ * distance était juste en ce point et nulle part ailleurs, l'écart s'ouvrait le long de la
+ * courbe, et le coin de la bande flottait au-dessus du creux au lieu d'y entrer.
  */
 function basVise(cascade: number): number {
-  let creux = Infinity;
-  for (let y = cascade; y <= cascade + RAIL_ETALEMENT; y += 0.25) {
-    const x = bordRail(cascade, y);
-    /* ⚠️ **Les abscisses où la bande n'est pas ne comptent pas.** Le haut de la cascade
-       est encore au ras du filet, à x = 8, quand la bande commence à 16 : rien n'est au-
-       dessus de ce bout de rail, et pourtant il donnait le minimum — la bande s'arrêtait
-       douze pixels trop haut, jeu mesuré à 18 au lieu de 10. */
-    if (x < BANDE_GAUCHE) continue;
-    /* Le retrait du congé à cette abscisse : ce dont le bas de la bande remonte ici. */
-    const dx = BANDE_GAUCHE + BANDE_CONGE - x;
-    const retrait = dx <= 0 ? 0
-      : BANDE_CONGE - Math.sqrt(Math.max(0, BANDE_CONGE ** 2 - dx * dx));
-    if (y + retrait < creux) creux = y + retrait;
-  }
-  return creux - BANDE_JEU_DESSOUS;
+  return cascade + BANDE_CONGE;
 }
 
 function debordTenable(cascade: number, hautBande: number, basBande: number): boolean {
   for (let y = hautBande; y <= basBande; y += 0.5) {
-    if (bordBande(basBande, y) - bordRail(cascade, y) < BANDE_JEU) return false;
+    /**
+     * ⚠️ **Un demi-pixel de tolérance, et il est structurel.** Le bord gauche de la bande
+     * est droit et se tient à exactement `BANDE_JEU` du filet ; or le creux du rail
+     * commence à s'écarter dès son premier pixel. Juste sous le départ de la cascade, le
+     * jeu mesure donc **7,976** — vérifié sur le rendu, à y = 154 — et une comparaison
+     * stricte refusait le débord pour vingt-quatre millièmes de pixel. Ce qu'il faut
+     * interdire, c'est une vraie pénétration, pas l'épaisseur d'un arrondi.
+     */
+    if (bordBande(basBande, y) - bordRail(cascade, y) < BANDE_JEU - 0.5) return false;
   }
   return true;
 }
@@ -413,7 +438,18 @@ function debordTenable(cascade: number, hautBande: number, basBande: number): bo
  * liquidités » sous un total de 16 998,72 €, alors que la somme des deux fait 16 999.
  */
 /** La hauteur de l'avatar du portefeuille. */
-const DIAMETRE_ROND = 63;
+/**
+ * ⚠️ **Les tailles de la bande de tête suivent sa hauteur.** Elle mesurait 115 px et en
+ * fait 128 depuis qu'elle se loge dans le creux du rail : aux anciennes tailles, le contenu
+ * gardait ses proportions d'avant et laissait treize pixels de vide sous lui — une bande
+ * qui a l'air d'attendre quelque chose. Les valeurs ci-dessous remplissent la hauteur
+ * disponible ; elles se relisent ensemble, parce qu'elles se répondent.
+ */
+const DIAMETRE_ROND = 72;
+/** Les intitulés de section — « Valeur totale », « Performance », « NOVAC Score ». */
+const TAILLE_INTITULE = 12.5;
+/** La mention sous chaque chiffre : capital investi, période, date. */
+const TAILLE_MENTION = 11.5;
 
 /**
  * Le diamètre de l'anneau de score, **calculé pour ne pas grandir la rangée**.
@@ -428,7 +464,13 @@ const DIAMETRE_ROND = 63;
  * depuis que l'un est passé sous son titre : les égaler ne rangeait plus rien et coûtait
  * la hauteur du bandeau.
  */
-const DIAMETRE_ANNEAU_SCORE = 50;
+/**
+ * ⚠️ **63, pour que le bas de l'anneau tombe sur celui des mentions.** Le bloc du score
+ * pose son anneau sous l'intitulé — 19 px de titre, 6 de marge — quand les autres blocs
+ * poussent leur mention tout en bas de la hauteur commune. Les deux se rejoignent quand
+ * `19 + 6 + diamètre` vaut cette hauteur, soit 88 : c'est la mesure, pas un arrondi.
+ */
+const DIAMETRE_ANNEAU_SCORE = 63;
 
 
 
@@ -2101,7 +2143,30 @@ function PortfolioPageInner() {
     juger();
     const t = setTimeout(juger, 300);   // le rail publie sa valeur après son premier rendu
     window.addEventListener("resize", juger);
-    return () => { clearTimeout(t); window.removeEventListener("resize", juger); };
+    /**
+     * ⚠️ **Le rail déplace son creux sans que la fenêtre bouge.** Déployé au survol, ses
+     * rangées changent de hauteur : la cascade passe de 152 à 174, mesuré. La bande ne
+     * s'en apercevait pas — elle ne se rejugeait qu'à ses propres rendus et au
+     * redimensionnement — et restait sur une mesure périmée : plus de débord du tout, ou
+     * une hauteur calculée pour un creux qui n'est plus là, jusqu'au prochain rendu
+     * quelconque. On écoute donc la variable elle-même, là où le rail l'écrit.
+     */
+    const oeil = new MutationObserver(juger);
+    oeil.observe(document.documentElement, { attributes: true, attributeFilter: ["style"] });
+    /**
+     * ⚠️ **La bande change de taille après qu'on l'a mesurée.** Au montage elle est plus
+     * haute qu'elle ne finira — le compteur de la valeur se pose, les polices se
+     * substituent — et le rendez-vous à 300 ms tombait avant. La mesure restait donc celle
+     * d'une bande trop longue pour le creux : débord refusé, et plus rien pour y revenir
+     * puisque la page ne se rendait plus. C'est sa taille qu'il faut écouter, pas un
+     * délai choisi au jugé.
+     */
+    const toise = new ResizeObserver(juger);
+    if (bandeRef.current?.firstElementChild) toise.observe(bandeRef.current.firstElementChild);
+    return () => {
+      clearTimeout(t); window.removeEventListener("resize", juger);
+      oeil.disconnect(); toise.disconnect();
+    };
   });
 
   if (!portfolio && !loading) {
@@ -2174,7 +2239,7 @@ function PortfolioPageInner() {
           vue Résumé et touchait les deux bords. */}
       {/* ⚠️ La référence est posée ici et non sur `Cadre`, qui ne transmet pas de `ref` :
           c'est son premier enfant — l'anneau — qu'on mesure. */}
-      <div ref={bandeRef} style={{ padding: `0 ${MARGE}px`, flexShrink: 0 }}>
+      <div ref={bandeRef} style={{ padding: `0 ${MARGE_CADRE}px 0 ${MARGE}px`, flexShrink: 0 }}>
       {/**
         * ⚠️ **La bande sort de la colonne, à droite comme à gauche.** Elle occupait toute la
         * largeur de la page pendant que le contenu sous elle se partage en deux : une grande
@@ -2240,7 +2305,12 @@ function PortfolioPageInner() {
           * L'avatar et la pastille, eux, gardent leur `flexShrink: 0` plus bas.
           */}
         {portfolio && (
-          <div style={{ display: "flex", alignItems: "center", alignSelf: "center", gap: ECART_IDENTITE, minWidth: 0, flexShrink: 1 }}>
+          /* ⚠️ **Il prend aussi la place libre, et pas seulement la sienne.** La rangée ne
+             remplit pas toujours la bande : mesuré, 38 px restaient inutilisés à droite
+             pendant que le nom du portefeuille s'élidait en « Por… » — l'avatar ouvre sa
+             bulle, le bloc déborde, et le texte cède alors qu'il y avait de quoi le loger
+             quelques centimètres plus loin. Aucun des autres blocs ne réclame ce vide. */
+          <div style={{ display: "flex", alignItems: "center", alignSelf: "center", gap: ECART_IDENTITE, minWidth: 0, flexShrink: 1, flexGrow: 1 }}>
             {/* Le personnage et ce qu'il dit ne font qu'une case pour la rangée : un seul
                 écart avant le nom, que la parole soit ouverte ou fermée. */}
             <div style={{ display: "flex", alignItems: "center", flexShrink: 0 }}>
@@ -2462,7 +2532,7 @@ function PortfolioPageInner() {
         au-dessus du chiffre qu'en dessous. */}
     <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
       <span style={{ display: "flex", alignItems: "center", gap: 6 }}>
-        <p style={{ margin: 0, fontSize: 11.5, fontWeight: 500, color: CLAIR.texteSecondaire }}>Valeur totale</p>
+        <p style={{ margin: 0, fontSize: TAILLE_INTITULE, fontWeight: 500, color: CLAIR.texteSecondaire }}>Valeur totale</p>
         <button onClick={() => setMasque(v => !v)}
           aria-label={masque ? "Afficher les montants" : "Masquer les montants"}
           style={{ background: "none", border: "none", cursor: "pointer", padding: 0, display: "flex", color: CLAIR.texteFaible }}>
@@ -2490,7 +2560,7 @@ function PortfolioPageInner() {
       </div>
     ) : (
       <div style={{
-        fontSize: 32, fontWeight: 600, fontFamily: FONT, letterSpacing: "-0.02em",
+        fontSize: 38, fontWeight: 600, fontFamily: FONT, letterSpacing: "-0.02em",
         // ⚠️ Marges automatiques hautes et basses : le nombre tient le milieu entre son
         // intitulé et la ligne du capital investi, comme celui de la performance à sa
         // droite. Il se posait sous le titre et laissait tout le vide en dessous.
@@ -2559,7 +2629,12 @@ function PortfolioPageInner() {
     ) : surTransactions && prixDeRevient != null ? (
       // La mention reste le dernier enfant du bloc étiré : ce sont les marges du nombre
       // au-dessus qui absorbent le vide, elle n'a plus à le faire.
-      <div style={{ fontSize: 11, fontFamily: FONT, color: CLAIR.texteAttenue }}>
+      /* ⚠️ **Sur une seule ligne, et c'est la hauteur de la bande qui en dépend.** Le
+         resserrement de la colonne de droite a rendu ce bloc six pixels plus étroit ; la
+         mention y est passée à deux lignes, la bande a grandi de douze — et à cette hauteur
+         son coin n'entrait plus dans le creux du rail, donc plus de débord du tout. Un
+         repli de texte qui décide d'un emboîtement à l'autre bout de la page. */
+      <div style={{ fontSize: TAILLE_MENTION, fontFamily: FONT, color: CLAIR.texteAttenue, whiteSpace: "nowrap" }}>
         {masque ? "•••• €" : `${prixDeRevient.toLocaleString("fr-FR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €`} investis
         {/* ⚠️ Un point médian entre le capital et la date : ce sont deux faits distincts,
             et « 4 959,91 € investis depuis fév. 2026 » se lisait comme une seule phrase où
@@ -2590,7 +2665,14 @@ function PortfolioPageInner() {
             sont trois mentions de même rang : posées à trois hauteurs, elles faisaient
             trois blocs qui se terminent au hasard de leur contenu. Le bloc prend donc
             toute la rangée et sa mention descend d'elle-même. */}
-        <div style={{ minWidth: 150, alignSelf: "stretch", display: "flex", flexDirection: "column" }}>
+        {/**
+          * ⚠️ **185 et non 150, sinon la pastille tombe sous le montant.** Le montant grandi
+          * et sa pastille demandent 163 px côte à côte ; à 150, la rangée se repliait en
+          * deux lignes et ce bloc devenait le plus haut de la bande — 99 px contre 88 pour
+          * le score. La bande entière suivait, et à cette hauteur son coin n'entrait plus
+          * dans le creux du rail. La largeur d'un bloc décidait d'un emboîtement.
+          */}
+        <div style={{ minWidth: 185, alignSelf: "stretch", display: "flex", flexDirection: "column" }}>
           {/**
             * ⚠️ **La période est écrite dans le titre, comme celle d'à côté.** Ce bloc et
             * « Comparaison » répondent tous deux à « combien ai-je gagné » et affichaient
@@ -2616,7 +2698,7 @@ function PortfolioPageInner() {
             * ici resterait en dehors du partage et se lirait comme deux pixels de plus
             * au-dessus du chiffre qu'en dessous. Mesuré : 7,3 contre 5,3.
             */}
-          <p style={{ margin: 0, fontSize: 11.5, fontWeight: 500, color: CLAIR.texteSecondaire }}>
+          <p style={{ margin: 0, fontSize: TAILLE_INTITULE, fontWeight: 500, color: CLAIR.texteSecondaire }}>
             Performance
           </p>
     {/* P&L total depuis achat */}
@@ -2683,7 +2765,7 @@ function PortfolioPageInner() {
             mention du bas. Les marges hautes et basses en `auto` se partagent l'espace
             libre à parts égales : le chiffre se place au milieu de ce qui reste entre le
             titre et « Depuis le début », quelle que soit la hauteur de la rangée. */}
-        <div style={{ marginTop: "auto", marginBottom: "auto", fontSize: 18, fontFamily: FONT, color: plCol, fontWeight: 600, display: "flex", alignItems: "center", gap: 8 }}>
+        <div style={{ marginTop: "auto", marginBottom: "auto", fontSize: 21, fontFamily: FONT, color: plCol, fontWeight: 600, display: "flex", alignItems: "center", gap: 8 }}>
           {/* Deux décimales, comme la valeur totale juste au-dessus. Arrondi à
               l'euro, ce gain ne se recoupait pas avec elle : 3 447,92 € moins
               3 256,73 € de capital font 191,19 €, pas 191. */}
@@ -2727,7 +2809,7 @@ function PortfolioPageInner() {
         {/* ⚠️ Aucun rembourrage haut : il s'ajoutait à l'espace sous le montant et faussait
             le partage des marges automatiques — 5 px au-dessus du chiffre contre 3 en
             dessous, alors qu'elles sont censées être égales par construction. */}
-        <div style={{ fontSize: 11, fontFamily: FONT, color: CLAIR.texteAttenue }}>
+        <div style={{ fontSize: TAILLE_MENTION, fontFamily: FONT, color: CLAIR.texteAttenue }}>
           {/* La mention suit le chiffre : « Aujourd'hui », « Sur 1 semaine »… et
               « Depuis le début » seulement quand le chiffre parle bien de toute la
               détention. Un gain d'une semaine sous « Depuis le début » serait un mensonge
@@ -2761,7 +2843,7 @@ function PortfolioPageInner() {
             */}
           <div style={{ display: "flex", alignSelf: "stretch", alignItems: "flex-start", gap: 12, minWidth: 170 }}>
             <div>
-              <p style={{ margin: "0 0 6px", fontSize: 11.5, fontWeight: 500, color: CLAIR.texteSecondaire }}>NOVAC Score</p>
+              <p style={{ margin: "0 0 6px", fontSize: TAILLE_INTITULE, fontWeight: 500, color: CLAIR.texteSecondaire }}>NOVAC Score</p>
               {/* ⚠️ **La note est dans l'anneau, « /100 » et la mention dehors.** L'anneau
                   dit déjà la proportion ; y empiler le dénominateur et le qualificatif
                   aurait demandé trois tailles de texte dans soixante-trois pixels. */}
@@ -2772,7 +2854,7 @@ function PortfolioPageInner() {
                     ras de son bas : les deux formes se terminent sur la même ligne au
                     lieu de flotter au gré de l'écart choisi. */}
                 <div style={{ display: "flex", flexDirection: "column", justifyContent: "space-between", alignSelf: "stretch", alignItems: "flex-start" }}>
-                  <span style={{ fontSize: 12, color: CLAIR.texteFaible, fontFamily: FONT }}>/100</span>
+                  <span style={{ fontSize: 13, color: CLAIR.texteFaible, fontFamily: FONT }}>/100</span>
                   <span style={pastille(scoreColor(scoreSante))}>
                     {bandeSante ?? scoreLabel(scoreSante)}
                   </span>
@@ -2794,7 +2876,7 @@ function PortfolioPageInner() {
           combien on a, puis on choisit ce qu'on veut en voir.
           Au niveau de la page et non dans la vue Résumé — laissée dedans,
           elle disparaissait dès qu'on changeait d'onglet, donc sans retour. */}
-      <div style={{ padding: `8px ${MARGE}px 0`, flexShrink: 0, ...anim(40) }}>
+      <div style={{ padding: `8px ${MARGE_CADRE}px 0 ${MARGE}px`, flexShrink: 0, ...anim(40) }}>
         <PortfolioTabs active={dashView} onChange={setDashView} />
       </div>
 
@@ -2821,7 +2903,7 @@ function PortfolioPageInner() {
         * conditionnelle : la courbe aurait changé de hauteur à l'ouverture d'un dossier, ce
         * que la rangée s'échine justement à éviter en se calant sur les 26 pixels de
         * l'en-tête de la grille. */}
-      <div style={{ display: dashView === "resume" ? "flex" : "none", flexDirection: "column", height: "100%", gap: 8, padding: `8px ${MARGE}px ${MARGE}px`, overflowY: "auto", overflowX: "hidden" }}>
+      <div style={{ display: dashView === "resume" ? "flex" : "none", flexDirection: "column", height: "100%", gap: 8, padding: `8px ${MARGE_CADRE}px ${DEBORD_DOSSIERS}px ${MARGE}px`, overflowY: "auto", overflowX: "hidden" }}>
 
         <div style={{ display: "flex", flex: 1, minHeight: 0, gap: 0, alignItems: "stretch" }}>
 
@@ -3307,7 +3389,16 @@ function PortfolioPageInner() {
             * courbe. Un nombre écrit ici aurait cessé d'être vrai au premier ajustement de
             * l'en-tête ou de la carte — il se déduit donc des deux.
             */}
-          <Cadre style={{ padding: "13px 15px", flex: "0 0 auto", height: HAUTEUR_DOSSIERS, display: "flex", flexDirection: "column", overflow: "hidden" }}>
+          {/**
+            * ⚠️ **Son coin bas-droit se loge dans celui du cadre de page.** C'est la seule
+            * carte de la vue à toucher deux bords à la fois : avec le rayon commun de 24,
+            * son angle coupait la courbe du cadre au lieu de la suivre. Concentrique —
+            * 24 moins les 8 du jeu pour l'anneau, 8 de moins encore pour la carte — le vide
+            * entre les deux garde la même épaisseur sur tout l'arc, comme la barre de
+            * recherche dans le coin haut-droit.
+            */}
+          <Cadre classeCadre="nv-coin-cadre" classeCarte="nv-coin-cadre-carte"
+            style={{ padding: "13px 15px", flex: "0 0 auto", height: HAUTEUR_DOSSIERS, display: "flex", flexDirection: "column", overflow: "hidden" }}>
             <PanneauActivite
               portfolioId={portfolio?.id}
               refreshKey={txRefreshKey}
@@ -3677,8 +3768,16 @@ function PortfolioPageInner() {
 
       </div>{/* fin MAIN wrapper */}
 
-      {/* Bottom padding */}
-      <div style={{ height: 10, flexShrink: 0 }} />
+      {/**
+        * Le retrait du bas, pour toutes les vues à la fois.
+        *
+        * ⚠️ **Il était compté deux fois, et jamais au bon total.** Dix pixels ici, dix autres
+        * en rembourrage de la vue Résumé : les cartes s'arrêtaient à 20 px du bord de
+        * l'écran, soit 12 du filet, quand le jeu est de 8 partout ailleurs. Et la vue
+        * Transactions, qui n'a pas ce rembourrage, s'arrêtait à 10. Le retrait se décide
+        * maintenant ici seul, et vaut le même pour toutes les vues.
+        */}
+      <div style={{ height: MARGE_CADRE - DEBORD_DOSSIERS, flexShrink: 0 }} />
 
       {formCompte && (
         <FormulaireCompte

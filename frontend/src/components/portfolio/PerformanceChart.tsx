@@ -26,7 +26,6 @@ import {
 import Segments from "@/components/ui/Segments";
 import BoutonOutil from "@/components/ui/BoutonOutil";
 import MarqueMode from "@/components/charts/MarqueMode";
-import FiligraneNovac from "@/components/charts/FiligraneNovac";
 import { API_URL as API } from "@/lib/api";
 import { marqueAvatar } from "@/lib/avatarEtats";
 
@@ -3012,8 +3011,6 @@ export default function PerformanceChart({
           // signal que le prochain clic ne déplacera pas la vue.
           cursor: stickerArme ? "crosshair" : undefined,
         }} />
-        {/* Le filigrane, sous les légendes et transparent aux gestes — voir `FiligraneNovac`. */}
-        <FiligraneNovac />
         {/* Repères d'opération, en surcouche.
             Le greffon de la bibliothèque les fait entrer dans l'échelle des
             prix : sur un portefeuille parti de zéro, loger les pastilles sous

@@ -1427,6 +1427,21 @@ canvas + div {
 .nv-bande-angle-carte { border-bottom-left-radius: 33px !important; }
 
 /**
+ * Le coin bas-droit d'une carte posée dans l'angle du cadre de page.
+ *
+ * ⚠️ **Concentrique, sinon l'angle coupe la courbe.** Le cadre ouvre son coin intérieur à
+ * 24 ; une carte tenue à 8 px de lui doit donc s'arrondir à 16, et sa couche intérieure,
+ * 6 px plus loin, à 10. Aux rayons communs — 24 et 18 — les deux arcs partaient du même
+ * coin avec des rayons différents : le vide entre eux s'ouvrait puis se pinçait, et la
+ * carte paraissait posée de travers.
+ *
+ * ⚠️ `!important` parce que `styleCadreExterieur` écrit son rayon en style en ligne : une
+ * classe seule ne l'atteint pas. Même raison que pour la bande de tête juste au-dessus.
+ */
+.nv-coin-cadre { border-bottom-right-radius: 16px !important; }
+.nv-coin-cadre-carte { border-bottom-right-radius: 10px !important; }
+
+/**
  * Le retrait à droite : la bande s'arrête au bord de la carte du graphique.
  *
  * ⚠️ **296, et c'est une mesure.** La colonne de droite est **fixe** — 272 px de carte à
