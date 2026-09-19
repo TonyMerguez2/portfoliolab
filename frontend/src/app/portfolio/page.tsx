@@ -299,6 +299,14 @@ const MARGE = 10;
  * en ligne interdit. Il y est documenté.
  */
 
+/**
+ * De combien la page recule à gauche pour que la bande de tête ne soit pas découpée.
+ *
+ * Même valeur que le débord de la bande, dans `.nv-bande-angle` : elle doit pouvoir sortir
+ * de sa colonne sans sortir de la zone que `overflow: hidden` épargne.
+ */
+const DEBORD_PAGE = 62;
+
 /** La géométrie du rail, telle que `SideNav` la dessine. */
 const RAIL_FILET = 8, RAIL_RACCORD = 47, RAIL_CENTRE_X = 55;
 /** Le congé bas-gauche de la bande, et le jeu qu'elle doit garder avec le rail. */
@@ -2045,6 +2053,23 @@ function PortfolioPageInner() {
       background: "transparent", color: CLAIR.texte,
       fontFamily: FONT, boxSizing: "border-box",
       paddingTop: 62, overflow: "hidden",
+      /**
+       * ⚠️ **La page recule de 62 à gauche et se rembourre d'autant : sans cela, la bande
+       * était coupée.** Elle prend un débord de 62 px pour atteindre le rail, ce qui la fait
+       * sortir de cette boîte — que `overflow: hidden` découpe. Le résultat se voyait :
+       * l'avatar tranché net par une verticale. Et `getBoundingClientRect` n'en disait rien,
+       * puisqu'il rend la boîte de mise en page, pas ce qui est peint : elle annonçait 16
+       * pendant que le rendu s'arrêtait à 68. C'est `elementFromPoint` qui l'a montré — la
+       * bande n'était atteignable qu'à partir de 70.
+       *
+       * La marge négative déplace le bord de la boîte, le rembourrage remet le contenu où il
+       * était : les enfants ne bougent pas d'un pixel, mais la découpe, elle, commence
+       * soixante-deux pixels plus à gauche.
+       *
+       * ⚠️ `overflow: hidden` reste : c'est lui qui interdit à l'onglet de faire défiler la
+       * page entière, et chaque vue gère son propre défilement.
+       */
+      marginLeft: -DEBORD_PAGE, paddingLeft: DEBORD_PAGE,
     }}>
 
       {/* ── Bande de tête ─────────────────────────────────────────────────
