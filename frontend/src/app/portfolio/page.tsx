@@ -309,8 +309,16 @@ const DEBORD_PAGE = 62;
 
 /** La géométrie du rail, telle que `SideNav` la dessine. */
 const RAIL_FILET = 8, RAIL_RACCORD = 47, RAIL_CENTRE_X = 55;
+const LARGEUR_RAIL = 68;
 /** Le congé bas-gauche de la bande, et le jeu qu'elle doit garder avec le rail. */
 const BANDE_CONGE = 39, BANDE_JEU = 8, BANDE_GAUCHE = 16;
+/**
+ * ⚠️ **Le jeu sous la bande, et il ne vaut pas celui de gauche.** Huit à gauche, dix en
+ * dessous : un jeu vertical égal au jeu horizontal paraît plus serré qu'il ne l'est,
+ * parce que le bombé du rail s'éloigne de part et d'autre du point de mesure alors que
+ * le filet de gauche reste droit sur toute la hauteur.
+ */
+const BANDE_JEU_DESSOUS = 10;
 
 /**
  * Le débord de la bande est-il tenable à cette hauteur de fenêtre ?
@@ -323,28 +331,77 @@ const BANDE_CONGE = 39, BANDE_JEU = 8, BANDE_GAUCHE = 16;
  *
  * On calcule donc le jeu réel, et le débord ne s'applique que s'il tient.
  */
+/**
+ * Le bord du rail à cette ordonnée.
+ *
+ * ⚠️ **La cascade est un S, pas un arc.** Ce fichier n'en prenait que le premier demi-arc
+ * et prolongeait par la pleine largeur : à 47 px sous le départ il donnait le rail à 68,
+ * quand le rendu le montre à 45. Le tracé de `SideNav` enchaîne deux arcs de même rayon —
+ * un creux tangent au filet, puis un bombé tangent au flanc, qui se rejoignent à
+ * mi-chemin. C'est le second, le bombé, qui s'approche le plus de la bande ; l'ignorer
+ * faisait mesurer le jeu au mauvais endroit.
+ */
+const RAIL_ETALEMENT = Math.sqrt(
+  4 * RAIL_RACCORD ** 2 - (LARGEUR_RAIL - RAIL_FILET - 2 * RAIL_RACCORD) ** 2);
+function bordRail(cascade: number, y: number): number {
+  const d = y - cascade;
+  if (d <= 0) return RAIL_FILET;
+  if (d <= RAIL_ETALEMENT / 2)                       // le creux, centré à droite du filet
+    return RAIL_CENTRE_X - Math.sqrt(Math.max(0, RAIL_RACCORD ** 2 - d * d));
+  if (d <= RAIL_ETALEMENT) {                         // le bombé, centré à gauche du flanc
+    const e = RAIL_ETALEMENT - d;
+    return LARGEUR_RAIL - RAIL_RACCORD + Math.sqrt(Math.max(0, RAIL_RACCORD ** 2 - e * e));
+  }
+  return LARGEUR_RAIL;
+}
+
+/** Le bord gauche de la bande à cette ordonnée, congé bas-gauche compris. */
+function bordBande(basBande: number, y: number): number {
+  const depart = basBande - BANDE_CONGE;
+  if (y <= depart) return BANDE_GAUCHE;
+  const d = y - depart;
+  return BANDE_GAUCHE + BANDE_CONGE - Math.sqrt(Math.max(0, BANDE_CONGE ** 2 - d * d));
+}
+
+/**
+ * Où le bas de la bande doit tomber pour garder `BANDE_JEU_DESSOUS` sous elle.
+ *
+ * ⚠️ **Le point de mesure n'est pas sous le bord plat, mais à l'aplomb de l'inflexion du
+ * S.** C'est là que le rail monte le plus haut — vérifié sur le rendu : le jeu mesuré
+ * descend à 23 px vers x = 38 et remonte à 34 de part et d'autre. Prendre la verticale
+ * sous le coin, ou sous le bord plat, aurait donné une bande trop longue de douze pixels.
+ *
+ * ⚠️ **Le jeu est affine en `bas`**, puisque descendre la bande translate tout son
+ * contour : on cherche donc le minimum une fois, sans bande, et on en retranche le jeu
+ * voulu. Une recherche par essais successifs aurait fait le même résultat en cent fois
+ * plus d'opérations, à chaque redimensionnement.
+ */
+function basVise(cascade: number): number {
+  let creux = Infinity;
+  for (let y = cascade; y <= cascade + RAIL_ETALEMENT; y += 0.25) {
+    const x = bordRail(cascade, y);
+    /* ⚠️ **Les abscisses où la bande n'est pas ne comptent pas.** Le haut de la cascade
+       est encore au ras du filet, à x = 8, quand la bande commence à 16 : rien n'est au-
+       dessus de ce bout de rail, et pourtant il donnait le minimum — la bande s'arrêtait
+       douze pixels trop haut, jeu mesuré à 18 au lieu de 10. */
+    if (x < BANDE_GAUCHE) continue;
+    /* Le retrait du congé à cette abscisse : ce dont le bas de la bande remonte ici. */
+    const dx = BANDE_GAUCHE + BANDE_CONGE - x;
+    const retrait = dx <= 0 ? 0
+      : BANDE_CONGE - Math.sqrt(Math.max(0, BANDE_CONGE ** 2 - dx * dx));
+    if (y + retrait < creux) creux = y + retrait;
+  }
+  return creux - BANDE_JEU_DESSOUS;
+}
+
 function debordTenable(cascade: number, hautBande: number, basBande: number): boolean {
-  const bordRail = (y: number) => {
-    if (y <= cascade) return RAIL_FILET;
-    const d = y - cascade;
-    return d <= RAIL_RACCORD
-      ? RAIL_CENTRE_X - Math.sqrt(Math.max(0, RAIL_RACCORD ** 2 - d * d))
-      : LARGEUR_RAIL;
-  };
-  const bordBande = (y: number) => {
-    const depart = basBande - BANDE_CONGE;
-    if (y <= depart) return BANDE_GAUCHE;
-    const d = y - depart;
-    return BANDE_GAUCHE + BANDE_CONGE - Math.sqrt(Math.max(0, BANDE_CONGE ** 2 - d * d));
-  };
   for (let y = hautBande; y <= basBande; y += 0.5) {
-    if (bordBande(y) - bordRail(y) < BANDE_JEU) return false;
+    if (bordBande(basBande, y) - bordRail(cascade, y) < BANDE_JEU) return false;
   }
   return true;
 }
 
 /** La largeur du rail, à laquelle sa cascade aboutit. */
-const LARGEUR_RAIL = 68;
 
 /**
  * Un montant en euros, aux centimes près.
@@ -1996,6 +2053,22 @@ function PortfolioPageInner() {
    */
   const bandeRef = useRef<HTMLDivElement | null>(null);
   const [debordOk, setDebordOk] = useState(false);
+  /**
+   * ⚠️ **La bande descend jusqu'à dix pixels au-dessus du bombé du rail.** Elle gardait
+   * ses 8 px à gauche mais **22,5** en dessous — mesuré sur le rendu, en suivant le bord
+   * bas à chaque abscisse jusqu'à toucher le rail. Deux jeux pour un même emboîtement, et
+   * c'est le grand qui se voit : le coin de la bande flotte au-dessus du creux au lieu de
+   * s'y poser.
+   *
+   * ⚠️ **La hauteur se déduit du tracé du rail, elle ne s'approche pas à l'œil.**
+   * `basVise` cherche le point où la cascade monte le plus près du bas de la bande et
+   * pose le bord dix pixels au-dessus. Un nombre trouvé à tâtons n'aurait été juste
+   * qu'à une seule taille de fenêtre.
+   *
+   * ⚠️ **Elle suit la fenêtre, parce que le rail la suit.** Les rangées sont centrées :
+   * le creux descend quand l'écran s'allonge.
+   */
+  const [hauteurBande, setHauteurBande] = useState<number | undefined>(undefined);
   useEffect(() => {
     const juger = () => {
       const el = bandeRef.current?.firstElementChild as HTMLElement | null | undefined;
@@ -2005,7 +2078,25 @@ function PortfolioPageInner() {
       if (!el || !Number.isFinite(cascade)) { setDebordOk(false); return; }
       const r = el.getBoundingClientRect();
       if (r.height <= 0) return;
-      setDebordOk(debordTenable(cascade, r.top, r.bottom));
+      /* ⚠️ `minHeight` et non `height` : si le contenu demandait davantage que le creux
+         n'en laisse, c'est lui qui commande — une bande tronquée serait un défaut plus
+         grave qu'un jeu inégal. `Cadre` la pose sur l'anneau, qui porte le congé et se
+         loge dans le creux : c'est bien lui qu'on mesure ici. */
+      const vise = Math.round(basVise(cascade) - r.top);
+
+      /* ⚠️ **Le bas jugé est le plus bas des deux, et cela n'a rien d'une précaution.**
+         Juger sur le bas courant ferait dépendre `debordOk` de la hauteur que cet effet
+         vient lui-même d'imposer : sans la consigne la bande est plus courte, donc plus
+         facilement tenable, on la pose — et la voilà jugée trop longue, on la retire, elle
+         redevient tenable. Deux états qui se rappellent l'un l'autre à chaque rendu. Pris
+         comme le plus bas des deux, le bas jugé vaut la même chose des deux côtés de la
+         bascule, et la question ne se repose plus. */
+      const bas = Math.max(r.bottom, r.top + vise);
+      const tenable = debordTenable(cascade, r.top, bas);
+      setDebordOk(tenable);
+      /* Sans débord la bande ne longe pas le rail : l'étirer prendrait la place du
+         graphique pour rien. */
+      setHauteurBande(tenable ? vise : undefined);
     };
     juger();
     const t = setTimeout(juger, 300);   // le rail publie sa valeur après son premier rendu
@@ -2123,7 +2214,8 @@ function PortfolioPageInner() {
         */}
       <Cadre classeCadre={`nv-bande-large${debordOk ? " nv-bande-angle" : ""}`}
         classeCarte={debordOk ? "nv-bande-angle-carte" : undefined}
-        style={{ padding: "13px 18px", flexShrink: 0, display: "flex", alignItems: "flex-start", gap: 14, flexWrap: "nowrap" }}>
+        style={{ padding: "13px 18px", flexShrink: 0, display: "flex", alignItems: "flex-start", gap: 14, flexWrap: "nowrap",
+          minHeight: hauteurBande }}>
         {/* Identité du portefeuille. La maquette met ici une illustration
             décorative ; elle ne dit rien qu'on ne sache déjà. Ces pixels
             répondent plutôt à une question que la mise en page a fait
