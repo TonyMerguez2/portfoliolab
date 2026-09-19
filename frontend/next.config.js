@@ -9,6 +9,24 @@ const nextConfig = {
   devIndicators: false,
 
   /**
+   * Où la construction dépose son résultat.
+   *
+   * ⚠️ **Un dossier réglable, parce que le site tombait pendant chaque déploiement.** Le
+   * serveur sert le contenu de `.next` et le lit en continu ; construire dedans sous un
+   * serveur vivant lui retire ses fichiers sous les pieds. On l'arrêtait donc le temps de
+   * la construction — trois à quatre minutes pendant lesquelles **tout** répondait 502,
+   * pages comme appels d'API, puisque ces derniers passent par le même serveur. Relevé
+   * dans le journal de Caddy pendant qu'un visiteur s'en servait, avec à la clé un
+   * enregistrement perdu.
+   *
+   * La construction va maintenant dans un dossier neuf, serveur vivant, et le
+   * déploiement ne fait plus que renommer deux dossiers entre un arrêt et un démarrage :
+   * une à deux secondes au lieu de quatre minutes. Sans cette variable, rien ne change —
+   * `npm run start` et `npm run dev` lisent `.next` comme avant.
+   */
+  distDir: process.env.NOVAC_DIST || ".next",
+
+  /**
    * Le frontal relaie l'API, au lieu que le navigateur l'appelle directement.
    *
    * ⚠️ C'est ce qui rend le site consultable depuis un autre appareil sans
