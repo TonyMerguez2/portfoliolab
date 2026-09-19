@@ -1395,6 +1395,23 @@ canvas + div {
    accrocher sans connaître le composant. La valeur de repli correspond au
    panneau déplié : avant hydratation, le contenu est donc déjà à sa place. */
 /**
+ * Le coin bas-gauche de la bande de tête, emboîté dans l'angle du rail.
+ *
+ * ⚠️ **39, et c'est le rail qui le dicte.** Sa cascade est un arc **concave** de rayon 47
+ * centré à 55 px du bord de l'écran. La courbe qui reste à 8 px de lui, du côté de la
+ * page, est donc un arc de 47 − 8 = **39**, centré au même endroit. Et comme la bande
+ * commence à 16, un congé de 39 place son centre à 16 + 39 = 55 : les deux arcs partagent
+ * leur axe vertical, ce qui est la condition pour qu'ils paraissent emboîtés.
+ *
+ * ⚠️ **Deux règles et non une : le cadre a deux couches.** L'anneau extérieur porte 39, la
+ * carte intérieure 39 − 6, l'épaisseur de l'anneau — c'est la même soustraction que
+ * `styleCarteInterieure` applique aux trois autres coins. N'en poser qu'une aurait donné
+ * un anneau carré autour d'une carte arrondie.
+ */
+.nv-bande-angle { border-bottom-left-radius: 39px; }
+.nv-bande-angle-carte { border-bottom-left-radius: 33px; }
+
+/**
  * Le rayon du champ de recherche, concentrique à celui du cadre de page.
  *
  * ⚠️ **16, et c'est un calcul, pas un goût.** Deux rectangles arrondis emboîtés ne

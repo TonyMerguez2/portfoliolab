@@ -285,6 +285,18 @@ const PERIODS: Period[] = ["24h", "1S", "1M", "3M", "6M", "1A", "3A", "Max"];
 const MARGE = 10;
 
 /**
+ * De combien la bande de tête déborde à gauche, et se retire à droite.
+ *
+ * ⚠️ **Deux nombres mesurés sur le rendu, pas déduits d'une formule.** À gauche, la carte
+ * partait à 85 px du bord de l'écran — le retrait de la coque pour le rail, celui de la
+ * page, et l'épaisseur du cadre double. La poser à 16, comme l'enseigne et la recherche,
+ * demande d'en reprendre 69. À droite, l'écart jusqu'au bord de la carte du graphique vaut
+ * 296 : la colonne de droite est fixe — 272 px à 1280 comme à 1600 — et 24 la séparent.
+ */
+const DEBORD_GAUCHE = 69;
+const RETRAIT_DROIT = 296;
+
+/**
  * Un montant en euros, aux centimes près.
  *
  * ⚠️ **`euros()` arrondit, et c'est juste pour ce qu'il sert — pas ici.** Il habille des
@@ -1979,6 +1991,22 @@ function PortfolioPageInner() {
           vue Résumé et touchait les deux bords. */}
       <div style={{ padding: `0 ${MARGE}px`, flexShrink: 0 }}>
       {/**
+        * ⚠️ **La bande sort de la colonne, à droite comme à gauche.** Elle occupait toute la
+        * largeur de la page pendant que le contenu sous elle se partage en deux : une grande
+        * carte à gauche, une colonne étroite à droite. Son bord droit ne répondait donc à
+        * rien, et son bord gauche s'arrêtait au retrait de la coque, loin du rail.
+        *
+        * ⚠️ **296 à droite, et c'est une mesure, pas un réglage.** La colonne de droite est
+        * **fixe** — vérifié à deux largeurs de fenêtre, 272 px de carte à 1280 comme à 1600 —
+        * donc l'écart entre le bord de la bande et celui de la carte du graphique vaut
+        * toujours 296 : les 272 de la colonne, plus les 24 qui l'en séparent. Un pourcentage
+        * aurait dérivé dès que la fenêtre change.
+        *
+        * ⚠️ **69 à gauche, pour poser le bord à 16 px de l'écran.** C'est le filet du cadre
+        * de page (8) plus le même jeu que l'enseigne et la recherche (8) — la bande entre
+        * dans le coin comme eux, sans toucher la matière.
+        */}
+      {/**
         * ⚠️ **Les blocs s'alignent par le haut, et non par le milieu.** Leurs quatre
         * titres — « Valeur totale », « Gains / pertes », « Comparaison », « Santé du
         * portefeuille » — partagent police, graisse et couleur : l'œil les lit comme une
@@ -1991,7 +2019,17 @@ function PortfolioPageInner() {
         * un titre : aligné par le haut, il montait de cinq pixels au-dessus d'une rangée
         * de textes, et c'est lui qui aurait alors paru décalé.
         */}
-      <Cadre style={{ padding: "13px 18px", flexShrink: 0, display: "flex", alignItems: "flex-start", gap: 22, flexWrap: "wrap" }}>
+      {/**
+        * ⚠️ **L'écart passe de 22 à 14, et c'est le rétrécissement qui l'impose.** Mesurés
+        * sur le rendu, les quatre blocs demandent 855 px de contenu ; avec six écarts de 22
+        * il faut 987, quand la bande rétrécie n'en offre que 915. Le NOVAC Score tombait donc
+        * sur une seconde ligne, la bande passait de 101 à 189 px de haut, et son bas entrait
+        * dans le bombé du rail — jeu mesuré à **−39 px**. Huit pixels d'écart en moins par
+        * intervalle en rendent quarante-huit, ce qui remet tout sur une ligne.
+        */}
+      <Cadre classeCadre="nv-bande-angle" classeCarte="nv-bande-angle-carte"
+        style={{ padding: "13px 18px", flexShrink: 0, display: "flex", alignItems: "flex-start", gap: 14, flexWrap: "wrap",
+        marginLeft: -DEBORD_GAUCHE, marginRight: RETRAIT_DROIT }}>
         {/* Identité du portefeuille. La maquette met ici une illustration
             décorative ; elle ne dit rien qu'on ne sache déjà. Ces pixels
             répondent plutôt à une question que la mise en page a fait
@@ -2002,8 +2040,21 @@ function PortfolioPageInner() {
             non un titre. La rangée s'aligne par le haut pour que les quatre intitulés de
             section tiennent sur une ligne ; l'avatar, lui, n'appartient pas à cette
             ligne-là et se serait mis à flotter au-dessus d'elle. */}
+        {/**
+          * ⚠️ **Le bloc d'identité cède maintenant, et c'est ce qui garde la bande sur une
+          * ligne.** Il était en `flexShrink: 0` : sa largeur dépendait donc du nom du
+          * portefeuille et de la bulle de l'avatar quand il parle. Mesuré après le
+          * rétrécissement de la bande : il demandait 271 px, et les quatre blocs 939 pour
+          * 915 disponibles — le NOVAC Score tombait à la ligne, la bande doublait de
+          * hauteur et son bas entrait dans le bombé du rail. Pire, cela survenait pour
+          * *certains* portefeuilles seulement, selon la longueur du nom : une mise en page
+          * qui change avec la donnée.
+          *
+          * Il se comprime donc, et le nom s'élide — il porte déjà `textOverflow: ellipsis`.
+          * L'avatar et la pastille, eux, gardent leur `flexShrink: 0` plus bas.
+          */}
         {portfolio && (
-          <div style={{ display: "flex", alignItems: "center", alignSelf: "center", gap: ECART_IDENTITE, minWidth: 0, flexShrink: 0 }}>
+          <div style={{ display: "flex", alignItems: "center", alignSelf: "center", gap: ECART_IDENTITE, minWidth: 0, flexShrink: 1 }}>
             {/* Le personnage et ce qu'il dit ne font qu'une case pour la rangée : un seul
                 écart avant le nom, que la parole soit ouverte ou fermée. */}
             <div style={{ display: "flex", alignItems: "center", flexShrink: 0 }}>
