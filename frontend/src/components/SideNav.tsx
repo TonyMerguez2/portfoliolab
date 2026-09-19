@@ -451,6 +451,18 @@ export default function SideNav() {
     poser();
     const ro = new ResizeObserver(poser);
     ro.observe(el);
+    /**
+     * ⚠️ **Le document est observé lui aussi, et c'est ce qui manquait.** Ce calcul tient à
+     * deux mesures : la hauteur des rangées, et celle de la fenêtre. Or les rangées ne
+     * changent jamais de taille — 555 px, quelle que soit la fenêtre —, si bien que le seul
+     * rappel était l'évènement `resize`. Une première mesure prise avant que la fenêtre ait
+     * sa hauteur définitive restait donc en place indéfiniment : constaté sur une fenêtre de
+     * 1035 px de haut, le rail publiait une cascade de **0** au lieu de 240, et la bande de
+     * tête du tableau de bord, qui s'y fie pour se loger dans le creux, renonçait à son
+     * débord sans que rien ne le dise. Un `ResizeObserver` sur la racine se déclenche à
+     * chaque changement de taille du cadre d'affichage, y compris au premier calage.
+     */
+    ro.observe(document.documentElement);
     window.addEventListener("resize", poser);
     return () => { ro.disconnect(); window.removeEventListener("resize", poser); };
   }, []);

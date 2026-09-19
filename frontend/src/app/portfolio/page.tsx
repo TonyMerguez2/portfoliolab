@@ -2124,7 +2124,21 @@ function PortfolioPageInner() {
          n'en laisse, c'est lui qui commande — une bande tronquée serait un défaut plus
          grave qu'un jeu inégal. `Cadre` la pose sur l'anneau, qui porte le congé et se
          loge dans le creux : c'est bien lui qu'on mesure ici. */
-      const vise = Math.round(basVise(cascade) - r.top);
+      /**
+       * ⚠️ **Elle ne s'allonge que si le creux est sur son chemin.** S'emboîter n'a de sens
+       * que quand le bord bas tombe déjà dans l'évasement du rail : c'est là que le coin
+       * chevauchait le bombé. Sur une fenêtre haute le creux descend — 240 px sur 1035,
+       * quand la bande s'arrête à 192 — et aller le chercher lui faisait **239 px de haut
+       * pour 130 de contenu**, une bande aux trois quarts vide. Au-dessus du creux, son bord
+       * gauche longe le filet droit du cadre à 8 px, et son coin s'arrondit dans le vide :
+       * il n'y a rien à épouser.
+       *
+       * ⚠️ **Le bas observé décide, et il ne se contredit pas.** Consigne posée, le bas vaut
+       * `cascade + congé`, donc toujours sous la cascade : la réponse ne change pas. Sans
+       * consigne, il vaut la hauteur naturelle, et elle non plus ne bouge pas. Aucun des
+       * deux états ne rappelle l'autre.
+       */
+      const vise = r.bottom > cascade ? Math.round(basVise(cascade) - r.top) : 0;
 
       /* ⚠️ **Le bas jugé est le plus bas des deux, et cela n'a rien d'une précaution.**
          Juger sur le bas courant ferait dépendre `debordOk` de la hauteur que cet effet
@@ -2138,7 +2152,7 @@ function PortfolioPageInner() {
       setDebordOk(tenable);
       /* Sans débord la bande ne longe pas le rail : l'étirer prendrait la place du
          graphique pour rien. */
-      setHauteurBande(tenable ? vise : undefined);
+      setHauteurBande(tenable && vise > 0 ? vise : undefined);
     };
     juger();
     const t = setTimeout(juger, 300);   // le rail publie sa valeur après son premier rendu
