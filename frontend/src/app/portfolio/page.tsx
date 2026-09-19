@@ -347,8 +347,6 @@ const LARGEUR_RAIL = 68;
 const BANDE_JEU = 8;
 const BANDE_CONGE = RAIL_RACCORD - BANDE_JEU;        // 39
 const BANDE_GAUCHE = RAIL_CENTRE_X - BANDE_CONGE;    // 16
-/** Au-delà, l'arc mange le bord gauche entier et la bande cesse d'être un rectangle. */
-const BANDE_CONGE_MAX = 96;
 
 /**
  * Le débord de la bande est-il tenable à cette hauteur de fenêtre ?
@@ -413,34 +411,54 @@ function basVise(cascade: number): number {
   return cascade + BANDE_CONGE;
 }
 
+
 /**
- * Le plus petit congé qui dégage la bande du rail, ou `null` s'il n'y en a pas.
+ * Le contour de la bande quand son bord gauche doit épouser le rail.
  *
- * ⚠️ **Parce que renoncer au débord est le pire des trois choix.** La règle précédente
- * était binaire : ou la bande tenait au-dessus du creux avec son congé de 39, ou elle
- * rentrait dans sa colonne. Or elle n'y tient qu'à partir d'une fenêtre d'environ 861 px
- * de haut — en dessous, son bas de 192 descend plus bas que `cascade + 39`. Sur un écran
- * plus court, on voyait donc la bande se poser correctement pendant le chargement, quand
- * elle est encore courte, puis sauter dans sa colonne dès que les données la remplissent.
- * Signalé à l'usage, et c'est exactement ce que ça donnait.
+ * ⚠️ **Un congé circulaire ne peut pas longer une courbe en S.** Quand le renflement du
+ * rail monte dans la hauteur de la bande, le bord gauche doit reculer — de 16 à 62 px sur
+ * les soixante derniers pixels, mesuré sur une fenêtre de 820. N'importe quelle forme le
+ * fait ; la question est de savoir si elle recule **parallèlement** au rail. Un arc de
+ * cercle, non : sa courbure n'a rien à voir avec celle du bombé, l'écart s'ouvre au milieu
+ * et le coin se lit comme une langue posée à côté du creux, pas dedans. Signalé à l'usage,
+ * et c'était juste.
  *
- * ⚠️ **Un congé plus grand écarte le coin du bombé sans rien déplacer d'autre.** Le bord
- * gauche reste à 8 px du filet, le bas reste où le contenu le met ; seul l'angle s'ouvre
- * davantage pour contourner le renflement. C'est la solution que la demande d'origine
- * proposait elle-même — « même s'il faut changer le radius ».
+ * ⚠️ **La forme est donc celle du rail, décalée du jeu.** `bordRail` donne le profil,
+ * `BANDE_JEU` l'écarte, et l'écart reste le même sur toute la descente — c'est la
+ * définition d'un emboîtement. Les trois autres coins gardent le rayon du cadre.
  *
- * ⚠️ **Plafonné, parce qu'au-delà ce n'est plus un coin.** Passé la moitié de la hauteur
- * de la bande, l'arc mange son bord gauche entier et la forme cesse de se lire comme un
- * rectangle arrondi. S'il faut plus que cela, c'est que la bande ne peut vraiment pas se
- * loger là, et le débord tombe.
+ * ⚠️ **Le liseré de l'anneau disparaît le long de cette courbe**, puisqu'un découpage coupe
+ * aussi la bordure. C'est le prix de la forme : elle ne s'obtient pas en CSS autrement. Le
+ * reste du contour le garde, et le voile entre les deux couches continue de dessiner le
+ * cadre double.
  */
-function congeQuiDegage(cascade: number, hautBande: number, basBande: number): number | null {
-  const plafond = Math.min(BANDE_CONGE_MAX, basBande - hautBande);
-  for (let c = BANDE_CONGE; c <= plafond; c += 1) {
-    if (debordTenable(cascade, hautBande, basBande, c)) return c;
-  }
-  return null;
+function silhouetteBande(cascade: number, haut: number, largeur: number, hauteur: number,
+  rayon: number, retrait = 0): string {
+  /* Le bord gauche à cette ordonnée locale, décalé du jeu et ramené dans la boîte. */
+  const bord = (yLocal: number) =>
+    Math.max(0, bordRail(cascade, haut + yLocal + retrait) + BANDE_JEU - BANDE_GAUCHE - retrait);
+
+  const r = Math.max(0, rayon);
+  /* ⚠️ Un pixel, pas deux. La ligne brisée qui approche la courbe passe **à l'intérieur**
+     de celle-ci, du côté du rail : à deux pixels d'échantillon, le jeu descendait à 6,5 au
+     plus serré au lieu de 8. Doubler le nombre de points ne coûte rien, ce tracé n'étant
+     recalculé qu'au redimensionnement. */
+  const pas = 1;
+  const m: string[] = [`M ${r},0`];
+  m.push(`L ${largeur - r},0`);
+  m.push(`A ${r},${r} 0 0 1 ${largeur},${r}`);
+  m.push(`L ${largeur},${hauteur - r}`);
+  m.push(`A ${r},${r} 0 0 1 ${largeur - r},${hauteur}`);
+  /* Le bas, puis la remontée le long du rail — de bas en haut, sens du tracé. */
+  for (let y = hauteur; y >= 0; y -= pas) m.push(`L ${arrondi(bord(y))},${y}`);
+  m.push(`L 0,${r}`);
+  m.push(`A ${r},${r} 0 0 1 ${r},0`);
+  m.push("Z");
+  return m.join(" ");
 }
+
+/** Deux décimales suffisent, et le tracé ne pèse alors pas trois fois son poids. */
+function arrondi(v: number): number { return Math.round(v * 100) / 100; }
 
 function debordTenable(cascade: number, hautBande: number, basBande: number,
   conge = BANDE_CONGE): boolean {
@@ -2143,8 +2161,14 @@ function PortfolioPageInner() {
    * le creux descend quand l'écran s'allonge.
    */
   const [hauteurBande, setHauteurBande] = useState<number | undefined>(undefined);
-  /** Le congé bas-gauche retenu : 39 quand il suffit, davantage pour contourner le bombé. */
-  const [congeBande, setCongeBande] = useState(BANDE_CONGE);
+  /**
+   * Le découpage de la bande, quand son bord gauche doit épouser le profil du rail.
+   *
+   * ⚠️ `null` tant que le congé de 39 suffit : on garde alors le rayon CSS, qui laisse au
+   * liseré de l'anneau tout son contour. Le découpage ne sort que là où la forme simple ne
+   * peut plus longer le bombé.
+   */
+  const [decoupeBande, setDecoupeBande] = useState<{ anneau: string; carte: string } | null>(null);
   useEffect(() => {
     const juger = () => {
       const el = bandeRef.current?.firstElementChild as HTMLElement | null | undefined;
@@ -2192,18 +2216,39 @@ function PortfolioPageInner() {
        * colonne. L'ordre compte : essayer d'abord le grand congé donnerait un coin ouvert
        * là où une poignée de pixels de hauteur suffisait.
        */
-      let conge: number | null = debordTenable(cascade, r.top, bas) ? BANDE_CONGE : null;
-      let hauteur = vise;
-      if (conge === null) {
-        /* Sans la consigne de hauteur : c'est elle qu'on vient de juger intenable. */
-        conge = congeQuiDegage(cascade, r.top, r.bottom);
-        hauteur = 0;
+      /**
+       * ⚠️ **Deux réponses, et la seconde ne se discute pas plus que la première.** Si la
+       * bande tient au-dessus du bombé, le congé de 39 suffit et l'on garde le rayon CSS —
+       * le liseré fait alors tout le tour. Sinon son bord gauche doit reculer, et il ne
+       * peut le faire proprement qu'en suivant le profil du rail : le découpage prend le
+       * relais. Élargir le congé, essayé entre les deux, donnait un arc dont la courbure
+       * n'avait rien à voir avec celle du creux — un écart qui s'ouvre au milieu, et une
+       * forme qui se lit comme une langue à côté du creux plutôt que dedans.
+       */
+      const simple = debordTenable(cascade, r.top, bas);
+      if (simple) {
+        setDebordOk(true);
+        setDecoupeBande(null);
+        setHauteurBande(vise > 0 ? vise : undefined);
+        return;
       }
-      setDebordOk(conge !== null);
-      setCongeBande(conge ?? BANDE_CONGE);
-      /* Sans débord la bande ne longe pas le rail : l'étirer prendrait la place du
-         graphique pour rien. */
-      setHauteurBande(conge !== null && hauteur > 0 ? hauteur : undefined);
+      /* Le découpage travaille sur la hauteur naturelle : la consigne qu'on vient de juger
+         intenable ne s'applique pas. */
+      const h = r.bottom - r.top;
+      const anneau = silhouetteBande(cascade, r.top, r.width, h, RAYONS.xl);
+      /* La carte est 7 px à l'intérieur — 6 de retrait, 1 de liseré. */
+      const carte = silhouetteBande(cascade, r.top, r.width - 14, h - 14, RAYONS.lg, 7);
+      setDebordOk(true);
+      /**
+       * ⚠️ **Le même tracé doit rendre le même objet, sinon rien ne s'arrête.** Cet effet
+       * tourne à chaque rendu ; poser un objet neuf à chaque passage empêche React de
+       * renoncer au rendu suivant, et la page part en boucle — « Maximum update depth
+       * exceeded », constaté aussitôt. On ne remplace donc la valeur que si les deux
+       * chaînes ont changé.
+       */
+      setDecoupeBande(prec =>
+        prec && prec.anneau === anneau && prec.carte === carte ? prec : { anneau, carte });
+      setHauteurBande(undefined);
     };
     juger();
     const t = setTimeout(juger, 300);   // le rail publie sa valeur après son premier rendu
@@ -2304,13 +2349,15 @@ function PortfolioPageInner() {
           vue Résumé et touchait les deux bords. */}
       {/* ⚠️ La référence est posée ici et non sur `Cadre`, qui ne transmet pas de `ref` :
           c'est son premier enfant — l'anneau — qu'on mesure. */}
-      {/* ⚠️ **Le congé est posé ici, sur le conteneur, et non sur l'une des deux couches.**
-          Il se calcule au rendu — la feuille de style ne peut pas le connaître — et il en
-          faut deux versions, l'anneau et la carte six pixels plus loin. Une variable CSS
-          s'hérite : posée au-dessus des deux, chacune y prend ce qui la concerne, et
-          `Cadre` n'a pas à apprendre un troisième canal. */}
+      {/* ⚠️ **Le découpage est posé ici, sur le conteneur, et non sur l'une des deux
+          couches.** Il se calcule au rendu — la feuille de style ne peut pas connaître la
+          position du rail — et il en faut deux versions, l'anneau et la carte sept pixels
+          plus loin. Une variable CSS s'hérite : posée au-dessus des deux, chacune y prend
+          ce qui la concerne, et `Cadre` n'a pas à apprendre un troisième canal. */}
       <div ref={bandeRef} style={{ padding: `0 ${MARGE_CADRE}px 0 ${MARGE}px`, flexShrink: 0,
-        ["--nv-bande-conge" as string]: `${congeBande}px` } as React.CSSProperties}>
+        ["--nv-bande-decoupe" as string]: decoupeBande ? `path("${decoupeBande.anneau}")` : "none",
+        ["--nv-bande-decoupe-carte" as string]: decoupeBande ? `path("${decoupeBande.carte}")` : "none",
+      } as React.CSSProperties}>
       {/**
         * ⚠️ **La bande sort de la colonne, à droite comme à gauche.** Elle occupait toute la
         * largeur de la page pendant que le contenu sous elle se partage en deux : une grande

@@ -1418,16 +1418,19 @@ canvas + div {
  * coin d'un seul panneau, c'est le composant partagé qu'on aurait payé.
  */
 .nv-bande-angle {
-  /* ⚠️ Le congé est calculé au rendu — voir `congeQuiDegage` : 39 quand il suffit, plus
-     large quand il faut contourner le bombé du rail. Le repli de 39 garde la règle lisible
-     seule, et couvre le premier rendu, avant toute mesure. */
-  border-bottom-left-radius: var(--nv-bande-conge, 39px) !important;
+  border-bottom-left-radius: 39px !important;
+  /* ⚠️ Le découpage ne sort que là où le congé ne suffit plus — voir `silhouetteBande`.
+     `none` le reste du temps, et le rayon ci-dessus fait seul le travail, liseré compris. */
+  clip-path: var(--nv-bande-decoupe, none);
   /* Le débord vit ici, et non en style en ligne : une requête de média ne s'écrit pas dans
      un attribut `style`, et c'est elle qui l'annule plus bas. */
   margin-left: -62px;
 
 }
-.nv-bande-angle-carte { border-bottom-left-radius: calc(var(--nv-bande-conge, 39px) - 6px) !important; }
+.nv-bande-angle-carte {
+  border-bottom-left-radius: 33px !important;
+  clip-path: var(--nv-bande-decoupe-carte, none);
+}
 
 /**
  * Le coin bas-droit d'une carte posée dans l'angle du cadre de page.
