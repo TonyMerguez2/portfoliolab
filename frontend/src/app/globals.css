@@ -1419,10 +1419,14 @@ canvas + div {
  */
 .nv-bande-angle {
   border-bottom-left-radius: 39px !important;
-  /* Le débord et le retrait vivent ici, et non en style en ligne : une requête de média ne
-     s'écrit pas dans un attribut `style`, et c'est elle qui les annule plus bas. */
+  /* Le débord vit ici, et non en style en ligne : une requête de média ne s'écrit pas dans
+     un attribut `style`, et c'est elle qui l'annule plus bas. */
   margin-left: -62px;
-  margin-right: 296px;
+  /* ⚠️ **Plus de retrait à droite, et c'est un retour en arrière assumé.** La bande s'était
+     arrêtée au bord de la carte du graphique, 296 px avant celui de la page, pour répondre à
+     la colonne étroite d'en dessous. À l'écran, elle ne se lisait pas comme alignée mais
+     comme **rognée** : un vide au-dessus de la colonne de droite, sous la barre de
+     recherche, que rien ne justifie. Elle reprend toute la largeur. */
 }
 .nv-bande-angle-carte { border-bottom-left-radius: 33px !important; }
 
@@ -1451,7 +1455,6 @@ canvas + div {
 @media (max-width: 1220px) {
   .nv-bande-angle {
     margin-left: 0;
-    margin-right: 0;
     border-bottom-left-radius: 24px !important;
   }
   .nv-bande-angle-carte { border-bottom-left-radius: 18px !important; }
