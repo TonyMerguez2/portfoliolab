@@ -2277,9 +2277,22 @@ function PortfolioPageInner() {
         * dans le bombé du rail — jeu mesuré à **−39 px**. Huit pixels d'écart en moins par
         * intervalle en rendent quarante-huit, ce qui remet tout sur une ligne.
         */}
+      {/**
+        * ⚠️ **La rangée répartit ce qui reste, au lieu de l'empiler à un bout.** Les quatre
+        * blocs demandent une largeur fixe ; la bande, elle, suit le bord droit de la carte
+        * du graphique et s'élargit avec la fenêtre. Mesuré à 1 600 : **337 px** de vide —
+        * après le NOVAC Score si personne ne les réclame, ou juste après l'avatar dès
+        * qu'un bloc porte un `flexGrow`. Dans les deux cas un trou, et d'autant plus large
+        * que l'écran l'est. Répartis, ils deviennent des gouttières, et les filets
+        * séparateurs se posent au milieu de chacune — ce qu'un séparateur est censé faire.
+        *
+        * `gap` reste : c'est lui qui tient l'écart minimal quand la rangée est pleine et
+        * qu'il n'y a plus rien à répartir.
+        */}
       <Cadre classeCadre={`nv-bande-large${debordOk ? " nv-bande-angle" : ""}`}
         classeCarte={debordOk ? "nv-bande-angle-carte" : undefined}
-        style={{ padding: "13px 18px", flexShrink: 0, display: "flex", alignItems: "flex-start", gap: 14, flexWrap: "nowrap",
+        style={{ padding: "13px 18px", flexShrink: 0, display: "flex", alignItems: "flex-start",
+          gap: 14, flexWrap: "nowrap", justifyContent: "space-between",
           minHeight: hauteurBande }}>
         {/* Identité du portefeuille. La maquette met ici une illustration
             décorative ; elle ne dit rien qu'on ne sache déjà. Ces pixels
@@ -2305,12 +2318,14 @@ function PortfolioPageInner() {
           * L'avatar et la pastille, eux, gardent leur `flexShrink: 0` plus bas.
           */}
         {portfolio && (
-          /* ⚠️ **Il prend aussi la place libre, et pas seulement la sienne.** La rangée ne
-             remplit pas toujours la bande : mesuré, 38 px restaient inutilisés à droite
-             pendant que le nom du portefeuille s'élidait en « Por… » — l'avatar ouvre sa
-             bulle, le bloc déborde, et le texte cède alors qu'il y avait de quoi le loger
-             quelques centimètres plus loin. Aucun des autres blocs ne réclame ce vide. */
-          <div style={{ display: "flex", alignItems: "center", alignSelf: "center", gap: ECART_IDENTITE, minWidth: 0, flexShrink: 1, flexGrow: 1 }}>
+          /* ⚠️ **Il ne prend que sa place, et surtout pas celle qui reste.** Un `flexGrow`
+             a été posé ici pour loger le nom du portefeuille quand l'avatar ouvre sa bulle
+             et que le texte s'élide en « Por… ». Il n'y change rien — une bulle ouverte fait
+             *déborder* la rangée, et c'est `flexShrink` qui s'applique alors, pas
+             `flexGrow` — mais il versait dans ce bloc tout l'espace libre des autres cas :
+             un trou entre le nom et le premier séparateur, d'autant plus large que la
+             fenêtre l'est. L'élision du nom reste donc à traiter ailleurs. */
+          <div style={{ display: "flex", alignItems: "center", alignSelf: "center", gap: ECART_IDENTITE, minWidth: 0, flexShrink: 1 }}>
             {/* Le personnage et ce qu'il dit ne font qu'une case pour la rangée : un seul
                 écart avant le nom, que la parole soit ouverte ou fermée. */}
             <div style={{ display: "flex", alignItems: "center", flexShrink: 0 }}>
