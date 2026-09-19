@@ -4,7 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { couleurGrille, ecrireStyleGrille, lireStyleGrille, LIBELLE_GRILLE, STYLES_GRILLE, type StyleGrille } from "@/lib/grille";
 import {
-  createChart, AreaSeries, CandlestickSeries, LineSeries, ColorType, CrosshairMode, LineStyle,
+  createChart, AreaSeries, CandlestickSeries, LineSeries, ColorType, CrosshairMode, LineStyle, LineType,
   type Logical, type MouseEventParams,
   type IChartApi, type ISeriesApi, type UTCTimestamp,
 } from "lightweight-charts";
@@ -2003,6 +2003,19 @@ export default function PerformanceChart({
       topColor: colorRef.current + "55",
       bottomColor: colorRef.current + "00",
       lineWidth: 2,
+      /**
+       * ⚠️ **La courbe est lissée, et la bibliothèque sait le faire — inutile de la
+       * redessiner.** Le style visé vient d'un `Sparkline` qui interpole ses points par une
+       * spline cardinale ; `LineType.Curved` fait la même chose ici, sur le tracé natif,
+       * et laisse intacts le curseur, l'échelle, les repères d'opération et l'aplat.
+       *
+       * ⚠️ **Le lissage invente des valeurs entre les points, par construction.** Sur une
+       * série dense — un an de cours quotidiens — cela ne se voit pas. Sur une série
+       * creuse, la courbe peut passer au-dessus d'un sommet ou sous un creux qui n'existent
+       * pas. C'est acceptable pour une valeur de portefeuille, qu'on lit comme une
+       * tendance ; ce le serait beaucoup moins pour des bougies, qui gardent leur tracé.
+       */
+      lineType: LineType.Curved,
       lastValueVisible: true,
       priceLineVisible: false,
       crosshairMarkerVisible: false,
