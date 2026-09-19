@@ -436,6 +436,15 @@ export default function SideNav() {
       //    avec le reste et le cadre deviendrait un voile plein écran.
       if (h > 0) {
         setDecoupe(`path(evenodd, "${silhouette(h, window.innerHeight, window.innerWidth)}")`);
+        /**
+         * ⚠️ **Le rail publie où commence sa cascade, parce qu'il est seul à le savoir.**
+         * Elle dépend de la hauteur de la fenêtre — les rangées sont centrées — et remonte
+         * donc quand l'écran raccourcit : mesurée à 152 px sur 860 de haut, à 122 sur 800.
+         * La bande de tête du tableau de bord doit s'en écarter ; sans cette valeur, elle
+         * devait deviner, et son coin chevauchait le bombé de 36 px sur une fenêtre courte.
+         */
+        document.documentElement.style.setProperty(
+          "--nv-rail-cascade", `${Math.max(0, (window.innerHeight - h) / 2)}`);
       }
     };
     poser();

@@ -294,10 +294,49 @@ const MARGE = 10;
  * 296 : la colonne de droite est fixe — 272 px à 1280 comme à 1600 — et 24 la séparent.
  */
 /*
- * Le débord à gauche (62) et le retrait à droite (296) de la bande de tête vivent dans
- * `.nv-bande-angle`, dans la feuille de style : une requête de média doit pouvoir les
- * annuler sur fenêtre étroite, ce qu'un style en ligne interdit. Ils sont documentés là-bas.
+ * Le débord à gauche de la bande de tête vit dans `.nv-bande-angle`, dans la feuille de
+ * style : une requête de média doit pouvoir l'annuler sur fenêtre étroite, ce qu'un style
+ * en ligne interdit. Il y est documenté.
  */
+
+/** La géométrie du rail, telle que `SideNav` la dessine. */
+const RAIL_FILET = 8, RAIL_RACCORD = 47, RAIL_CENTRE_X = 55;
+/** Le congé bas-gauche de la bande, et le jeu qu'elle doit garder avec le rail. */
+const BANDE_CONGE = 39, BANDE_JEU = 8, BANDE_GAUCHE = 16;
+
+/**
+ * Le débord de la bande est-il tenable à cette hauteur de fenêtre ?
+ *
+ * ⚠️ **La question se pose parce que la cascade du rail remonte quand l'écran raccourcit.**
+ * Les rangées sont centrées : sa cascade commence à 152 px sur une fenêtre de 860, à 122 sur
+ * une de 800. Dans le premier cas la bande la frôle à 8 px ; dans le second son coin plonge
+ * dedans — **−36 px**, mesuré. Un congé fixe ne peut pas couvrir les deux, et un congé assez
+ * grand pour le pire cas vaudrait renoncer au débord sur toutes les fenêtres.
+ *
+ * On calcule donc le jeu réel, et le débord ne s'applique que s'il tient.
+ */
+function debordTenable(cascade: number, hautBande: number, basBande: number): boolean {
+  const bordRail = (y: number) => {
+    if (y <= cascade) return RAIL_FILET;
+    const d = y - cascade;
+    return d <= RAIL_RACCORD
+      ? RAIL_CENTRE_X - Math.sqrt(Math.max(0, RAIL_RACCORD ** 2 - d * d))
+      : LARGEUR_RAIL;
+  };
+  const bordBande = (y: number) => {
+    const depart = basBande - BANDE_CONGE;
+    if (y <= depart) return BANDE_GAUCHE;
+    const d = y - depart;
+    return BANDE_GAUCHE + BANDE_CONGE - Math.sqrt(Math.max(0, BANDE_CONGE ** 2 - d * d));
+  };
+  for (let y = hautBande; y <= basBande; y += 0.5) {
+    if (bordBande(y) - bordRail(y) < BANDE_JEU) return false;
+  }
+  return true;
+}
+
+/** La largeur du rail, à laquelle sa cascade aboutit. */
+const LARGEUR_RAIL = 68;
 
 /**
  * Un montant en euros, aux centimes près.
@@ -1941,6 +1980,31 @@ function PortfolioPageInner() {
     transition: `opacity 440ms ease ${delay}ms, transform 440ms ease ${delay}ms`,
   });
 
+  /**
+   * ⚠️ **Le débord se décide à la mesure, pas au média.** La cascade du rail remonte avec la
+   * hauteur de la fenêtre, et c'est elle qui décide si le coin de la bande a la place de
+   * s'emboîter — voir `debordTenable`. `SideNav` publie sa position ; on la relit à chaque
+   * redimensionnement, et la bande porte sa classe seulement quand le jeu de 8 px tient.
+   */
+  const bandeRef = useRef<HTMLDivElement | null>(null);
+  const [debordOk, setDebordOk] = useState(false);
+  useEffect(() => {
+    const juger = () => {
+      const el = bandeRef.current?.firstElementChild as HTMLElement | null | undefined;
+      const brut = getComputedStyle(document.documentElement)
+        .getPropertyValue("--nv-rail-cascade").trim();
+      const cascade = parseFloat(brut);
+      if (!el || !Number.isFinite(cascade)) { setDebordOk(false); return; }
+      const r = el.getBoundingClientRect();
+      if (r.height <= 0) return;
+      setDebordOk(debordTenable(cascade, r.top, r.bottom));
+    };
+    juger();
+    const t = setTimeout(juger, 300);   // le rail publie sa valeur après son premier rendu
+    window.addEventListener("resize", juger);
+    return () => { clearTimeout(t); window.removeEventListener("resize", juger); };
+  });
+
   if (!portfolio && !loading) {
     return (
       <div style={{ display: "flex", alignItems: "center", justifyContent: "center",
@@ -1992,7 +2056,9 @@ function PortfolioPageInner() {
           Le retrait latéral vaut MARGE, comme les onglets et le contenu :
           remontée au niveau de la page, la bande avait perdu le retrait de la
           vue Résumé et touchait les deux bords. */}
-      <div style={{ padding: `0 ${MARGE}px`, flexShrink: 0 }}>
+      {/* ⚠️ La référence est posée ici et non sur `Cadre`, qui ne transmet pas de `ref` :
+          c'est son premier enfant — l'anneau — qu'on mesure. */}
+      <div ref={bandeRef} style={{ padding: `0 ${MARGE}px`, flexShrink: 0 }}>
       {/**
         * ⚠️ **La bande sort de la colonne, à droite comme à gauche.** Elle occupait toute la
         * largeur de la page pendant que le contenu sous elle se partage en deux : une grande
@@ -2030,7 +2096,8 @@ function PortfolioPageInner() {
         * dans le bombé du rail — jeu mesuré à **−39 px**. Huit pixels d'écart en moins par
         * intervalle en rendent quarante-huit, ce qui remet tout sur une ligne.
         */}
-      <Cadre classeCadre="nv-bande-angle" classeCarte="nv-bande-angle-carte"
+      <Cadre classeCadre={debordOk ? "nv-bande-angle" : undefined}
+        classeCarte={debordOk ? "nv-bande-angle-carte" : undefined}
         style={{ padding: "13px 18px", flexShrink: 0, display: "flex", alignItems: "flex-start", gap: 14, flexWrap: "nowrap" }}>
         {/* Identité du portefeuille. La maquette met ici une illustration
             décorative ; elle ne dit rien qu'on ne sache déjà. Ces pixels
