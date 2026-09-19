@@ -1427,6 +1427,20 @@ canvas + div {
 .nv-bande-angle-carte { border-bottom-left-radius: 33px !important; }
 
 /**
+ * ⚠️ **La bande ne passe plus jamais à la ligne, et c'est l'identité qui cède.** Elle
+ * repassait à deux lignes dès que l'avatar parle : sa bulle porte le bloc d'identité de 208
+ * à 323 px, le besoin à 958 pour 908 disponibles. La bande gagnait alors quatre-vingts
+ * pixels et son bas retombait dans le bombé du rail — c'est-à-dire que la mise en page
+ * dépendait de ce que l'avatar avait à dire.
+ *
+ * ⚠️ **Et c'est bien l'identité qui doit céder, pas les chiffres.** Son nom porte déjà une
+ * élision ; « 12 111,35 € » comprimé se couperait au milieu. Les trois blocs de mesure et
+ * les filets qui les séparent gardent donc leur largeur.
+ */
+.nv-bande-angle-carte > * { flex-shrink: 0; }
+.nv-bande-angle-carte > :first-child { flex-shrink: 1; min-width: 0; }
+
+/**
  * ⚠️ **Sous 1 220 px, la bande rentre dans le rang.** Mesuré : son contenu demande 879 px de
  * carte, rembourrage compris ; en dessous il passe à la ligne, la bande gagne quatre-vingts
  * pixels de haut, et son bas plonge dans le bombé du rail — **−52 px** de jeu relevés à

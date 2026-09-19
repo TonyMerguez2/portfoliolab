@@ -2031,7 +2031,7 @@ function PortfolioPageInner() {
         * intervalle en rendent quarante-huit, ce qui remet tout sur une ligne.
         */}
       <Cadre classeCadre="nv-bande-angle" classeCarte="nv-bande-angle-carte"
-        style={{ padding: "13px 18px", flexShrink: 0, display: "flex", alignItems: "flex-start", gap: 14, flexWrap: "wrap" }}>
+        style={{ padding: "13px 18px", flexShrink: 0, display: "flex", alignItems: "flex-start", gap: 14, flexWrap: "nowrap" }}>
         {/* Identité du portefeuille. La maquette met ici une illustration
             décorative ; elle ne dit rien qu'on ne sache déjà. Ces pixels
             répondent plutôt à une question que la mise en page a fait
