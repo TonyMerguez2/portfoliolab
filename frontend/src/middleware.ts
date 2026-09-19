@@ -59,7 +59,16 @@ export async function middleware(requete: NextRequest) {
   if (cookie && memeChaine(cookie, await empreinte())) return NextResponse.next();
 
   if (chemin.startsWith("/api/")) {
-    return NextResponse.json({ detail: "Alpha fermée" }, { status: 401 });
+    /**
+     * ⚠️ **Un en-tête pour dire que c'est la porte, et non la session.** Les deux répondent
+     * 401 : celui-ci parce que le visiteur n'a pas le code de l'alpha, celui de l'API parce
+     * que son jeton ne vaut plus rien. Le client réagit à l'un en ouvrant la connexion et
+     * en effaçant la session — sur celui-ci, il effacerait une session parfaitement valide.
+     * Lire le corps pour les distinguer consommerait la réponse ; un en-tête se lit sans y
+     * toucher.
+     */
+    return NextResponse.json({ detail: "Alpha fermée" },
+      { status: 401, headers: { "x-novac-porte": "fermee" } });
   }
 
   /**

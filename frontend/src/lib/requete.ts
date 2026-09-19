@@ -1,3 +1,5 @@
+import { fermerSession } from "@/lib/session";
+
 /**
  * Un `fetch` qui ne pose jamais deux fois la même question en même temps.
  *
@@ -52,9 +54,62 @@ function cle(url: string, init?: RequestInit): string {
   return `${init?.method ?? "GET"} ${url} ${entetes.get("Authorization") ?? ""}`;
 }
 
+/**
+ * L'évènement qui annonce une session expirée. `SideNav` l'écoute et ouvre la connexion.
+ *
+ * ⚠️ **Un évènement plutôt qu'une redirection, parce que ce fichier ne sait pas où il
+ * tourne.** Il est importé par des pages, des composants et des tests ; y appeler un routeur
+ * l'attacherait à Next, et `window.location` ferait perdre la page en cours. L'évènement
+ * laisse l'interface décider — ici, une fenêtre de connexion par-dessus la page, d'où l'on
+ * revient à l'endroit d'où l'on vient.
+ */
+export const SESSION_EXPIREE = "novac:session-expiree";
+
+/**
+ * Une réponse 401 dit-elle que la session est finie ?
+ *
+ * ⚠️ **Trois conditions, et aucune n'est de trop.** Il faut que l'appel ait porté un jeton —
+ * sans quoi un 401 sur une route publique consultée hors session effacerait ce qu'il n'y a
+ * pas ; il faut que ce ne soit pas la porte de l'alpha, qui répond 401 elle aussi et le dit
+ * par son en-tête ; et il faut exclure la route de connexion elle-même, dont le 401 signifie
+ * « mauvais mot de passe » et refermerait la fenêtre qu'on vient d'ouvrir.
+ */
+function sessionFinie(url: string, init: RequestInit | undefined, r: Response): boolean {
+  if (r.status !== 401) return false;
+  if (r.headers.get("x-novac-porte") === "fermee") return false;
+  if (/\/auth\/(login|register)\b/.test(url)) return false;
+  return new Headers(init?.headers).has("Authorization");
+}
+
+/**
+ * Efface la session et l'annonce, une fois pour toute une rafale.
+ *
+ * ⚠️ **Le garde-fou n'est pas cosmétique : une page en lance quinze d'un coup.** Le tableau
+ * de bord demande portefeuilles, positions, comptes, transactions, objectifs, évènements…
+ * dans la même poignée de millisecondes. Sans lui, un jeton périmé faisait quinze effacements
+ * et quinze ouvertures de la fenêtre de connexion.
+ */
+let annonceFaite = false;
+function annoncerSessionFinie(): void {
+  /* ⚠️ Ce module sert aussi au rendu serveur, où il n'y a ni `window` ni stockage : un 401
+     y est un fait de transport, pas une session à fermer. */
+  if (typeof window === "undefined") return;
+  if (annonceFaite) return;
+  annonceFaite = true;
+  fermerSession();
+  window.dispatchEvent(new Event(SESSION_EXPIREE));
+}
+
+/** Après une reconnexion, la prochaine expiration doit pouvoir s'annoncer à son tour. */
+export function rearmerSession(): void { annonceFaite = false; }
+
+function surveiller(url: string, init: RequestInit | undefined, p: Promise<Response>): Promise<Response> {
+  return p.then(r => { if (sessionFinie(url, init, r)) annoncerSessionFinie(); return r; });
+}
+
 export function recuperer(url: string, init?: RequestInit): Promise<Response> {
   const methode = (init?.method ?? "GET").toUpperCase();
-  if (methode !== "GET") return fetch(url, init);
+  if (methode !== "GET") return surveiller(url, init, fetch(url, init));
 
   const k = cle(url, init);
   const deja = enCours.get(k);
@@ -77,7 +132,7 @@ export function recuperer(url: string, init?: RequestInit): Promise<Response> {
     return deja.promesse.then(r => r.clone());
   }
 
-  const entree: Entree = { promesse: fetch(url, init), rendue: null };
+  const entree: Entree = { promesse: surveiller(url, init, fetch(url, init)), rendue: null };
   enCours.set(k, entree);
 
   entree.promesse.then(

@@ -7,6 +7,7 @@ import { RAYONS } from "@/lib/palette";
 import { useApp } from "@/lib/AppContext";
 import ProfileModal from "@/components/ProfileModal";
 import AuthModal from "@/components/AuthModal";
+import { SESSION_EXPIREE, rearmerSession } from "@/lib/requete";
 import { Avatar, AvatarImage, AvatarFallback, AvatarBadge } from "@appica/ui-react/avatar";
 import { UserFilled } from "@appica/icons-react";
 import { basculerMode, useModeTheme } from "@/lib/theme";
@@ -456,6 +457,21 @@ export default function SideNav() {
   const [user, setUser] = useState<{ username?: string; email?: string; avatar_url?: string } | null>(null);
   const [showProfile, setShowProfile] = useState(false);
   const [showAuth, setShowAuth] = useState(false);
+  /**
+   * ⚠️ **La connexion s'ouvre d'elle-même quand la session tombe.** Sans cela, un jeton
+   * périmé laissait la page se charger normalement, lancer ses quinze appels, se prendre
+   * quinze 401 — relevés dans le journal du serveur — et afficher un tableau de bord vide.
+   * Rien à l'écran ne disait qu'il fallait se reconnecter : le site paraissait en panne.
+   *
+   * ⚠️ **Ici et non dans chaque page, parce que le rail est partout.** Le transport annonce
+   * l'expiration sans savoir où il tourne (voir `SESSION_EXPIREE`) ; ce composant est le
+   * seul point commun à tous les écrans qui demandent des données.
+   */
+  useEffect(() => {
+    const ouvrir = () => { setUser(null); setShowAuth(true); };
+    window.addEventListener(SESSION_EXPIREE, ouvrir);
+    return () => window.removeEventListener(SESSION_EXPIREE, ouvrir);
+  }, []);
 
   useEffect(() => {
     try {
@@ -745,6 +761,8 @@ export default function SideNav() {
           onAuth={(u: { username?: string; email?: string; avatar_url?: string }) => {
             setUser(u);
             setShowAuth(false);
+            /* La session repart : la prochaine expiration doit pouvoir s'annoncer. */
+            rearmerSession();
             // Les portefeuilles appartiennent au compte : ce qui est affiché
             // vient de l'ancienne session, ou de personne. Un rechargement
             // complet plutôt qu'un router.refresh() — l'état des pages vit
