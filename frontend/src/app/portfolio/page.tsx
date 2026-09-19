@@ -347,6 +347,8 @@ const LARGEUR_RAIL = 68;
 const BANDE_JEU = 8;
 const BANDE_CONGE = RAIL_RACCORD - BANDE_JEU;        // 39
 const BANDE_GAUCHE = RAIL_CENTRE_X - BANDE_CONGE;    // 16
+/** Au-delà, l'arc mange le bord gauche entier et la bande cesse d'être un rectangle. */
+const BANDE_CONGE_MAX = 96;
 
 /**
  * Le débord de la bande est-il tenable à cette hauteur de fenêtre ?
@@ -384,11 +386,11 @@ function bordRail(cascade: number, y: number): number {
 }
 
 /** Le bord gauche de la bande à cette ordonnée, congé bas-gauche compris. */
-function bordBande(basBande: number, y: number): number {
-  const depart = basBande - BANDE_CONGE;
+function bordBande(basBande: number, y: number, conge = BANDE_CONGE): number {
+  const depart = basBande - conge;
   if (y <= depart) return BANDE_GAUCHE;
   const d = y - depart;
-  return BANDE_GAUCHE + BANDE_CONGE - Math.sqrt(Math.max(0, BANDE_CONGE ** 2 - d * d));
+  return BANDE_GAUCHE + conge - Math.sqrt(Math.max(0, conge ** 2 - d * d));
 }
 
 /**
@@ -411,7 +413,37 @@ function basVise(cascade: number): number {
   return cascade + BANDE_CONGE;
 }
 
-function debordTenable(cascade: number, hautBande: number, basBande: number): boolean {
+/**
+ * Le plus petit congé qui dégage la bande du rail, ou `null` s'il n'y en a pas.
+ *
+ * ⚠️ **Parce que renoncer au débord est le pire des trois choix.** La règle précédente
+ * était binaire : ou la bande tenait au-dessus du creux avec son congé de 39, ou elle
+ * rentrait dans sa colonne. Or elle n'y tient qu'à partir d'une fenêtre d'environ 861 px
+ * de haut — en dessous, son bas de 192 descend plus bas que `cascade + 39`. Sur un écran
+ * plus court, on voyait donc la bande se poser correctement pendant le chargement, quand
+ * elle est encore courte, puis sauter dans sa colonne dès que les données la remplissent.
+ * Signalé à l'usage, et c'est exactement ce que ça donnait.
+ *
+ * ⚠️ **Un congé plus grand écarte le coin du bombé sans rien déplacer d'autre.** Le bord
+ * gauche reste à 8 px du filet, le bas reste où le contenu le met ; seul l'angle s'ouvre
+ * davantage pour contourner le renflement. C'est la solution que la demande d'origine
+ * proposait elle-même — « même s'il faut changer le radius ».
+ *
+ * ⚠️ **Plafonné, parce qu'au-delà ce n'est plus un coin.** Passé la moitié de la hauteur
+ * de la bande, l'arc mange son bord gauche entier et la forme cesse de se lire comme un
+ * rectangle arrondi. S'il faut plus que cela, c'est que la bande ne peut vraiment pas se
+ * loger là, et le débord tombe.
+ */
+function congeQuiDegage(cascade: number, hautBande: number, basBande: number): number | null {
+  const plafond = Math.min(BANDE_CONGE_MAX, basBande - hautBande);
+  for (let c = BANDE_CONGE; c <= plafond; c += 1) {
+    if (debordTenable(cascade, hautBande, basBande, c)) return c;
+  }
+  return null;
+}
+
+function debordTenable(cascade: number, hautBande: number, basBande: number,
+  conge = BANDE_CONGE): boolean {
   for (let y = hautBande; y <= basBande; y += 0.5) {
     /**
      * ⚠️ **Un demi-pixel de tolérance, et il est structurel.** Le bord gauche de la bande
@@ -421,7 +453,7 @@ function debordTenable(cascade: number, hautBande: number, basBande: number): bo
      * stricte refusait le débord pour vingt-quatre millièmes de pixel. Ce qu'il faut
      * interdire, c'est une vraie pénétration, pas l'épaisseur d'un arrondi.
      */
-    if (bordBande(basBande, y) - bordRail(cascade, y) < BANDE_JEU - 0.5) return false;
+    if (bordBande(basBande, y, conge) - bordRail(cascade, y) < BANDE_JEU - 0.5) return false;
   }
   return true;
 }
@@ -2111,6 +2143,8 @@ function PortfolioPageInner() {
    * le creux descend quand l'écran s'allonge.
    */
   const [hauteurBande, setHauteurBande] = useState<number | undefined>(undefined);
+  /** Le congé bas-gauche retenu : 39 quand il suffit, davantage pour contourner le bombé. */
+  const [congeBande, setCongeBande] = useState(BANDE_CONGE);
   useEffect(() => {
     const juger = () => {
       const el = bandeRef.current?.firstElementChild as HTMLElement | null | undefined;
@@ -2148,11 +2182,28 @@ function PortfolioPageInner() {
          comme le plus bas des deux, le bas jugé vaut la même chose des deux côtés de la
          bascule, et la question ne se repose plus. */
       const bas = Math.max(r.bottom, r.top + vise);
-      const tenable = debordTenable(cascade, r.top, bas);
-      setDebordOk(tenable);
+
+      /**
+       * ⚠️ **Trois réponses possibles, prises dans cet ordre, de la plus discrète à la plus
+       * visible.** L'emboîtement concentrique d'abord : il ne change que la hauteur, et
+       * laisse au coin son congé de 39. S'il ne tient pas — bande trop haute pour la place
+       * au-dessus du bombé —, on ouvre l'angle juste assez pour le contourner, sans rien
+       * déplacer d'autre. Et seulement si même cela échoue, la bande rentre dans sa
+       * colonne. L'ordre compte : essayer d'abord le grand congé donnerait un coin ouvert
+       * là où une poignée de pixels de hauteur suffisait.
+       */
+      let conge: number | null = debordTenable(cascade, r.top, bas) ? BANDE_CONGE : null;
+      let hauteur = vise;
+      if (conge === null) {
+        /* Sans la consigne de hauteur : c'est elle qu'on vient de juger intenable. */
+        conge = congeQuiDegage(cascade, r.top, r.bottom);
+        hauteur = 0;
+      }
+      setDebordOk(conge !== null);
+      setCongeBande(conge ?? BANDE_CONGE);
       /* Sans débord la bande ne longe pas le rail : l'étirer prendrait la place du
          graphique pour rien. */
-      setHauteurBande(tenable && vise > 0 ? vise : undefined);
+      setHauteurBande(conge !== null && hauteur > 0 ? hauteur : undefined);
     };
     juger();
     const t = setTimeout(juger, 300);   // le rail publie sa valeur après son premier rendu
@@ -2253,7 +2304,13 @@ function PortfolioPageInner() {
           vue Résumé et touchait les deux bords. */}
       {/* ⚠️ La référence est posée ici et non sur `Cadre`, qui ne transmet pas de `ref` :
           c'est son premier enfant — l'anneau — qu'on mesure. */}
-      <div ref={bandeRef} style={{ padding: `0 ${MARGE_CADRE}px 0 ${MARGE}px`, flexShrink: 0 }}>
+      {/* ⚠️ **Le congé est posé ici, sur le conteneur, et non sur l'une des deux couches.**
+          Il se calcule au rendu — la feuille de style ne peut pas le connaître — et il en
+          faut deux versions, l'anneau et la carte six pixels plus loin. Une variable CSS
+          s'hérite : posée au-dessus des deux, chacune y prend ce qui la concerne, et
+          `Cadre` n'a pas à apprendre un troisième canal. */}
+      <div ref={bandeRef} style={{ padding: `0 ${MARGE_CADRE}px 0 ${MARGE}px`, flexShrink: 0,
+        ["--nv-bande-conge" as string]: `${congeBande}px` } as React.CSSProperties}>
       {/**
         * ⚠️ **La bande sort de la colonne, à droite comme à gauche.** Elle occupait toute la
         * largeur de la page pendant que le contenu sous elle se partage en deux : une grande
