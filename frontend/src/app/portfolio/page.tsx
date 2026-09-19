@@ -293,8 +293,11 @@ const MARGE = 10;
  * demande d'en reprendre 69. À droite, l'écart jusqu'au bord de la carte du graphique vaut
  * 296 : la colonne de droite est fixe — 272 px à 1280 comme à 1600 — et 24 la séparent.
  */
-const DEBORD_GAUCHE = 69;
-const RETRAIT_DROIT = 296;
+/*
+ * Le débord à gauche (62) et le retrait à droite (296) de la bande de tête vivent dans
+ * `.nv-bande-angle`, dans la feuille de style : une requête de média doit pouvoir les
+ * annuler sur fenêtre étroite, ce qu'un style en ligne interdit. Ils sont documentés là-bas.
+ */
 
 /**
  * Un montant en euros, aux centimes près.
@@ -2028,8 +2031,7 @@ function PortfolioPageInner() {
         * intervalle en rendent quarante-huit, ce qui remet tout sur une ligne.
         */}
       <Cadre classeCadre="nv-bande-angle" classeCarte="nv-bande-angle-carte"
-        style={{ padding: "13px 18px", flexShrink: 0, display: "flex", alignItems: "flex-start", gap: 14, flexWrap: "wrap",
-        marginLeft: -DEBORD_GAUCHE, marginRight: RETRAIT_DROIT }}>
+        style={{ padding: "13px 18px", flexShrink: 0, display: "flex", alignItems: "flex-start", gap: 14, flexWrap: "wrap" }}>
         {/* Identité du portefeuille. La maquette met ici une illustration
             décorative ; elle ne dit rien qu'on ne sache déjà. Ces pixels
             répondent plutôt à une question que la mise en page a fait

@@ -1408,8 +1408,40 @@ canvas + div {
  * `styleCarteInterieure` applique aux trois autres coins. N'en poser qu'une aurait donné
  * un anneau carré autour d'une carte arrondie.
  */
-.nv-bande-angle { border-bottom-left-radius: 39px; }
-.nv-bande-angle-carte { border-bottom-left-radius: 33px; }
+/*
+ * ⚠️ **`!important`, et c'est la seule issue ici.** `styleCadreExterieur` et
+ * `styleCarteInterieure` écrivent `borderRadius` en **style en ligne** : une classe, quelle
+ * que soit sa spécificité, ne peut pas l'emporter. Mesuré à l'écran avant de l'ajouter —
+ * les deux classes étaient bien posées sur les éléments, la règle bien présente dans la
+ * feuille, et le rayon calculé valait quand même 24. L'alternative aurait été d'ouvrir une
+ * porte dans `Cadre` pour surcharger le style de chacune de ses deux couches ; pour un seul
+ * coin d'un seul panneau, c'est le composant partagé qu'on aurait payé.
+ */
+.nv-bande-angle {
+  border-bottom-left-radius: 39px !important;
+  /* Le débord et le retrait vivent ici, et non en style en ligne : une requête de média ne
+     s'écrit pas dans un attribut `style`, et c'est elle qui les annule plus bas. */
+  margin-left: -62px;
+  margin-right: 296px;
+}
+.nv-bande-angle-carte { border-bottom-left-radius: 33px !important; }
+
+/**
+ * ⚠️ **Sous 1 220 px, la bande rentre dans le rang.** Mesuré : son contenu demande 879 px de
+ * carte, rembourrage compris ; en dessous il passe à la ligne, la bande gagne quatre-vingts
+ * pixels de haut, et son bas plonge dans le bombé du rail — **−52 px** de jeu relevés à
+ * 880 px de fenêtre. Plutôt que de tracer un contour qui suivrait le rail sur toute cette
+ * hauteur, elle abandonne son débord : elle redevient une bande de colonne, qui ne touche
+ * rien. Le seuil vient du calcul — 1 280 − (951 − 879) = 1 208 — arrondi au-dessus.
+ */
+@media (max-width: 1220px) {
+  .nv-bande-angle {
+    margin-left: 0;
+    margin-right: 0;
+    border-bottom-left-radius: 24px !important;
+  }
+  .nv-bande-angle-carte { border-bottom-left-radius: 18px !important; }
+}
 
 /**
  * Le rayon du champ de recherche, concentrique à celui du cadre de page.
