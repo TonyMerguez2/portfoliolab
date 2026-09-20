@@ -401,7 +401,24 @@
   --nv-fond-profond:      #F3F4F6;
   /* Même correction, même méthode, pour le thème clair — voir la note du thème sombre. */
   /* À plat aussi en clair, et sur la teinte du centre — voir le thème sombre. */
-  --nv-fond-degrade:      #F9FAFB;
+  /**
+   * ⚠️ **Le fond clair recule, sinon les cartes ne se détachent plus.** À #F9FAFB il ne
+   * séparait la page des cartes blanches que de **1,8 point de L\***, quand le thème sombre
+   * en met 2,8 entre les siennes — et un écart de deux points au ras du blanc ne dessine
+   * aucun bord, là où le même écart au ras du noir se lit comme un creux. Les conteneurs
+   * flottaient donc sans contour, signalé à l'usage : « les conteneurs ressortent moins que
+   * sur le mode sombre ».
+   *
+   * ⚠️ **4,6 points, et non 2,8 comme en sombre.** Égaliser la mesure aurait raté l'effet :
+   * une surface sombre sur un fond plus clair se lit comme un trou, une surface blanche sur
+   * un fond presque blanc ne se lit pas du tout. Il faut davantage d'écart du côté clair
+   * pour obtenir la même lecture.
+   *
+   * ⚠️ **Le creux des cartes ne bouge pas.** Il valait la couleur du fond par coïncidence,
+   * pas par règle — en sombre il ne l'a jamais valu. Laissé à #F9FAFB, il se range
+   * naturellement entre le fond et le blanc des cartes, et les trois niveaux se lisent.
+   */
+  --nv-fond-degrade:      #EFF2F7;
   --nv-fond-plateau:      #F3F4F6;
   --nv-carte:             #FFFFFF;
   --nv-carte-creuse:      #F9FAFB;

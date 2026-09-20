@@ -2169,6 +2169,16 @@ function PortfolioPageInner() {
    * peut plus longer le bombé.
    */
   const [decoupeBande, setDecoupeBande] = useState<{ anneau: string; carte: string } | null>(null);
+  /**
+   * Le relevé de géométrie, affiché sur `?geo=1`.
+   *
+   * ⚠️ **Il existe parce que trois corrections de suite ont visé à côté.** L'emboîtement de
+   * la bande dépend de la hauteur de la fenêtre et de celle du contenu ; sans ces deux
+   * nombres, on corrige l'écran qu'on a sous les yeux et l'on casse celui d'en face. Les
+   * demander de vive voix suppose une console ouverte ; une adresse suffit.
+   */
+  const releve = searchParams.get("geo") === "1";
+  const [geo, setGeo] = useState<Record<string, string | number | boolean> | null>(null);
   useEffect(() => {
     const juger = () => {
       const el = bandeRef.current?.firstElementChild as HTMLElement | null | undefined;
@@ -2226,6 +2236,20 @@ function PortfolioPageInner() {
        * forme qui se lit comme une langue à côté du creux plutôt que dedans.
        */
       const simple = debordTenable(cascade, r.top, bas);
+      if (releve) {
+        const mesures = {
+          fenetre: `${window.innerWidth} x ${window.innerHeight}`,
+          cascade: Math.round(cascade * 10) / 10,
+          bandeHaut: Math.round(r.top), bandeBas: Math.round(r.bottom),
+          bandeHauteur: Math.round(r.height), bandeGauche: Math.round(r.left),
+          basVise: Math.round(basVise(cascade)), consigne: vise,
+          emboitementSimple: simple,
+        };
+        /* ⚠️ Même précaution que pour le découpage : un objet neuf à chaque passage
+           empêcherait React de renoncer au rendu suivant, et la page partirait en boucle. */
+        const cle = JSON.stringify(mesures);
+        setGeo(prec => (prec && JSON.stringify(prec) === cle ? prec : mesures));
+      }
       if (simple) {
         setDebordOk(true);
         setDecoupeBande(null);
@@ -2349,6 +2373,14 @@ function PortfolioPageInner() {
           vue Résumé et touchait les deux bords. */}
       {/* ⚠️ La référence est posée ici et non sur `Cadre`, qui ne transmet pas de `ref` :
           c'est son premier enfant — l'anneau — qu'on mesure. */}
+      {geo && (
+        <div style={{ position: "fixed", right: 12, bottom: 12, zIndex: 200,
+          background: "rgba(0,0,0,0.82)", color: "#fff", fontFamily: "ui-monospace, monospace",
+          fontSize: 12, lineHeight: 1.5, padding: "10px 14px", borderRadius: 10,
+          pointerEvents: "none", whiteSpace: "pre" }}>
+          {Object.entries(geo).map(([k, v]) => `${k.padEnd(18)}${v}`).join("\n")}
+        </div>
+      )}
       {/* ⚠️ **Le découpage est posé ici, sur le conteneur, et non sur l'une des deux
           couches.** Il se calcule au rendu — la feuille de style ne peut pas connaître la
           position du rail — et il en faut deux versions, l'anneau et la carte sept pixels
