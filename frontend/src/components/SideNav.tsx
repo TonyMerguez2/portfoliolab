@@ -208,10 +208,12 @@ const RANGEE = 40, ECART = 4, MARGE = 9;
  * deux rectangles voisins l'auraient reproduit à l'identique ou pas du tout, avec une jointure
  * visible à chaque bout. Ici la découpe traverse, et la matière est continue.
  */
-const silhouette = (hRangees: number, hEcran: number, lEcran: number) => {
+const silhouette = (hRangees: number, hEcran: number, lEcran: number,
+  depart: number | null = null) => {
   const l = LARGEUR, r = RACCORD, v = ETALEMENT, f = FILET, k = RAYON_CADRE;
-  // Les rangées sont centrées dans la fenêtre : les cascades se posent de part et d'autre.
-  const haut = Math.max(f, (hEcran - hRangees) / 2);
+  // Les rangées sont centrées dans la fenêtre, sauf si une page demande où poser le creux :
+  // les cascades se posent alors de part et d'autre de ce départ.
+  const haut = depart ?? Math.max(f, (hEcran - hRangees) / 2);
   const bas = haut + hRangees;
   return [
     /* ⚠️ **Deux contours, et c'est la règle « evenodd » qui peint entre les deux.** Le tracé
@@ -421,6 +423,14 @@ export default function SideNav() {
    */
   const [decoupe, setDecoupe] = useState("");
   /**
+   * Où poser les rangées quand une page impose la position du creux.
+   *
+   * ⚠️ **Le dessin et le contenu doivent se déplacer ensemble.** Le flanc large n'existe que
+   * pour loger les icônes : déplacer le creux sans déplacer les rangées les laisserait
+   * dépasser du renflement d'un côté et flotter de l'autre. `null` rend le centrage.
+   */
+  const [hautRangees, setHautRangees] = useState<number | null>(null);
+  /**
    * ⚠️ **On mesure le contenu, pas le rail : le rail fait maintenant toute la hauteur.** Il
    * était haut comme ses rangées, et sa propre boîte suffisait donc à placer les plis. Depuis
    * que le filet le prolonge d'un bord à l'autre, sa hauteur vaut celle de la fenêtre et ne dit
@@ -431,12 +441,43 @@ export default function SideNav() {
    */
   const ancrerRail = useCallback((el: HTMLElement | null) => {
     if (!el) return;
+    /**
+     * Où le creux doit commencer, quand une page le demande.
+     *
+     * ⚠️ **La bande de tête et le creux étaient placés par deux règles indépendantes.** La
+     * bande finit où son contenu s'arrête sous la barre de recherche ; le creux commençait
+     * là où les rangées, centrées dans la fenêtre, laissaient la place. Les deux ne
+     * coïncidaient qu'à une seule hauteur de fenêtre — environ 860 px. Partout ailleurs, ou
+     * la bande entrait dans le renflement, ou elle s'arrêtait avant et son coin s'arrondissait
+     * dans le vide. Aucun rayon ne rattrape cela : c'est la position qui est en cause.
+     *
+     * ⚠️ **C'est donc le creux qui cède, et les rangées le suivent.** Elles perdent leur
+     * centrage vertical — sur une fenêtre haute elles paraîtront un peu hautes —, mais la
+     * bande garde sa taille et l'emboîtement tient à toutes les hauteurs. Arbitrage tranché
+     * à la demande, l'autre branche étant une bande qui s'allonge jusqu'à 239 px pour 130 px
+     * de contenu.
+     *
+     * ⚠️ **Les pages sans bande n'en demandent pas**, et le centrage d'origine s'applique
+     * alors — le rail ne connaît pas le tableau de bord, il lit une intention.
+     */
+    const creuxDemande = (hRangees: number) => {
+      const brut = getComputedStyle(document.documentElement)
+        .getPropertyValue("--nv-rail-creux").trim();
+      const v = parseFloat(brut);
+      if (!Number.isFinite(v)) return null;
+      /* Le flanc doit tenir dans la fenêtre : sans cette borne, une demande trop basse
+         ferait sortir la cascade du bas par le bord de l'écran. */
+      return Math.min(Math.max(FILET, v), Math.max(FILET, window.innerHeight - hRangees - FILET));
+    };
+
     const poser = () => {
       const h = el.getBoundingClientRect().height;
       // ⚠️ `evenodd` est indispensable : sans lui, le contour intérieur serait peint
       //    avec le reste et le cadre deviendrait un voile plein écran.
       if (h > 0) {
-        setDecoupe(`path(evenodd, "${silhouette(h, window.innerHeight, window.innerWidth)}")`);
+        const creux = creuxDemande(h);
+        setDecoupe(`path(evenodd, "${silhouette(h, window.innerHeight, window.innerWidth, creux)}")`);
+        setHautRangees(creux);
         /**
          * ⚠️ **Le rail publie où commence sa cascade, parce qu'il est seul à le savoir.**
          * Elle dépend de la hauteur de la fenêtre — les rangées sont centrées — et remonte
@@ -444,8 +485,13 @@ export default function SideNav() {
          * La bande de tête du tableau de bord doit s'en écarter ; sans cette valeur, elle
          * devait deviner, et son coin chevauchait le bombé de 36 px sur une fenêtre courte.
          */
-        document.documentElement.style.setProperty(
-          "--nv-rail-cascade", `${Math.max(0, (window.innerHeight - h) / 2)}`);
+        /* ⚠️ On n'écrit que si la valeur change : l'observateur ci-dessous surveille ces
+           mêmes styles, et réécrire à l'identique le relancerait sans fin. */
+        const cascade = `${creux ?? Math.max(0, (window.innerHeight - h) / 2)}`;
+        const racine = document.documentElement;
+        if (racine.style.getPropertyValue("--nv-rail-cascade").trim() !== cascade) {
+          racine.style.setProperty("--nv-rail-cascade", cascade);
+        }
       }
     };
     poser();
@@ -463,8 +509,17 @@ export default function SideNav() {
      * chaque changement de taille du cadre d'affichage, y compris au premier calage.
      */
     ro.observe(document.documentElement);
+    /**
+     * ⚠️ **La demande de creux arrive après coup, et rien ne la signalait.** Une page la
+     * publie quand sa bande est mesurée — donc après le premier dessin du rail —, or ni la
+     * hauteur des rangées ni celle de la fenêtre n'ont alors changé : aucun des deux
+     * observateurs ne se déclenchait, et le rail gardait son creux centré. Vérifié : cascade
+     * publiée à 222 quand la page en demandait 122.
+     */
+    const oeil = new MutationObserver(poser);
+    oeil.observe(document.documentElement, { attributes: true, attributeFilter: ["style"] });
     window.addEventListener("resize", poser);
-    return () => { ro.disconnect(); window.removeEventListener("resize", poser); };
+    return () => { ro.disconnect(); oeil.disconnect(); window.removeEventListener("resize", poser); };
   }, []);
   const [user, setUser] = useState<{ username?: string; email?: string; avatar_url?: string } | null>(null);
   const [showProfile, setShowProfile] = useState(false);
@@ -574,7 +629,8 @@ export default function SideNav() {
            boîte large de 68 pixels, le contenu tombait dans le rail ; centré dans une boîte
            large comme la fenêtre, il tomberait au milieu de l'écran. C'est l'enveloppe des
            rangées qui porte désormais la largeur du rail. */
-        display: "flex", flexDirection: "column", alignItems: "flex-start", justifyContent: "center",
+        display: "flex", flexDirection: "column", alignItems: "flex-start",
+        justifyContent: hautRangees === null ? "center" : "flex-start",
 
         /* ⚠️ **La découpe emporte aussi l'infobulle, et `overflow` n'y peut rien.** Un
            `clip-path` coupe tous les descendants, positionnés ou non : la bulle des noms sort
@@ -609,6 +665,9 @@ export default function SideNav() {
         padding: `${Math.round(ETALEMENT + MARGE)}px 0`,
         /* Le rail a perdu sa largeur en devenant cadre : c'est ici qu'elle vit maintenant. */
         width: LARGEUR, flexShrink: 0,
+        /* ⚠️ Le décalage suit le creux demandé : le flanc large et les icônes qu'il loge ne
+           se déplacent qu'ensemble. Sans demande, `justifyContent` recentre comme avant. */
+        marginTop: hautRangees ?? 0,
         /* Les rangées reprennent ce que le cadre a lâché — voir son commentaire. */
         pointerEvents: "auto",
       }}>

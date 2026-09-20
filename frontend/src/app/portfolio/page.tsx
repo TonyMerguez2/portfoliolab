@@ -2177,6 +2177,16 @@ function PortfolioPageInner() {
    * nombres, on corrige l'écran qu'on a sous les yeux et l'on casse celui d'en face. Les
    * demander de vive voix suppose une console ouverte ; une adresse suffit.
    */
+  /**
+   * ⚠️ **La demande de creux est retirée au démontage, et seulement là.** Les pages sans
+   * bande de tête — graphique, marchés, paramètres — doivent retrouver un rail centré. Ce
+   * nettoyage ne peut pas vivre dans l'effet de mesure : celui-ci tourne à chaque rendu, et
+   * sa purge effacerait la demande aussitôt posée, à chaque fois.
+   */
+  useEffect(() => () => {
+    document.documentElement.style.removeProperty("--nv-rail-creux");
+  }, []);
+
   const releve = searchParams.get("geo") === "1";
   const [geo, setGeo] = useState<Record<string, string | number | boolean> | null>(null);
   useEffect(() => {
@@ -2206,7 +2216,26 @@ function PortfolioPageInner() {
        * consigne, il vaut la hauteur naturelle, et elle non plus ne bouge pas. Aucun des
        * deux états ne rappelle l'autre.
        */
-      const vise = r.bottom > cascade ? Math.round(basVise(cascade) - r.top) : 0;
+      /**
+       * ⚠️ **La bande ne va plus chercher le creux : c'est lui qui vient à elle.** Les deux
+       * étaient placés par deux règles indépendantes — la bande sous la barre de recherche,
+       * le creux au centre de la fenêtre — et ne coïncidaient qu'à une seule hauteur d'écran.
+       * On publie donc où le creux doit commencer, et `SideNav` y pose sa cascade et ses
+       * rangées. L'emboîtement devient exact à toutes les hauteurs, sans que la bande ait à
+       * s'allonger pour peu de contenu.
+       *
+       * ⚠️ **On n'écrit que si la valeur change.** Cet effet écoute les styles de la racine,
+       * qu'il modifie lui-même : réécrire la même valeur relancerait l'observateur, donc
+       * l'effet, indéfiniment.
+       */
+      const creux = `${Math.round(r.bottom - BANDE_CONGE)}`;
+      const racine = document.documentElement;
+      if (racine.style.getPropertyValue("--nv-rail-creux").trim() !== creux) {
+        racine.style.setProperty("--nv-rail-creux", creux);
+      }
+
+      /* Plus de consigne de hauteur : le creux s'aligne sur la bande, pas l'inverse. */
+      const vise = 0;
 
       /* ⚠️ **Le bas jugé est le plus bas des deux, et cela n'a rien d'une précaution.**
          Juger sur le bas courant ferait dépendre `debordOk` de la hauteur que cet effet
