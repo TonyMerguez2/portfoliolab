@@ -70,12 +70,40 @@ export function poserBadge(
   if (getComputedStyle(hote).position === "static") hote.style.position = "relative";
   hote.appendChild(el);
 
+  /**
+   * ⚠️ **Rien de ce badge ne doit pouvoir abattre la page.** Il est décoratif, mais il
+   * interroge la bibliothèque — coordonnée, largeur d'échelle, hauteur de l'axe des dates,
+   * formateur — depuis un abonnement qu'elle déclenche elle-même, et ses accesseurs lèvent
+   * « Value is null » dès que son modèle interne n'est pas encore, ou n'est plus, en état :
+   * série vide, panneau non mesuré, graphique en cours de destruction. Remontée depuis le
+   * site, sur un écran d'erreur pleine page — pour une étiquette de prix.
+   *
+   * ⚠️ **J'ai d'abord accusé l'animation de tracé**, livrée en même temps, et je l'ai
+   * corrigée puis retirée : l'erreur est revenue à l'identique. Elle venait d'ici.
+   *
+   * ⚠️ **Le remède est de se taire, pas de deviner laquelle des questions a échoué.** Un
+   * badge qui disparaît une image est invisible ; une page blanche ne l'est pas.
+   */
+  let signale = false;
   const placer = () => {
+    try { placerVraiment(); }
+    catch (err) {
+      el.style.visibility = "hidden";
+      /* Une fois, pas à chaque image : ce calcul repasse à chaque déplacement de la vue. */
+      if (!signale) { signale = true; console.warn("Badge de cours : pose impossible", err); }
+    }
+  };
+
+  const placerVraiment = () => {
     const etat = lire();
     if (!etat) { el.style.visibility = "hidden"; return; }
+    /* L'ordonnée d'abord : elle est rendue sans rien exiger, et vaut `null` hors cadre.
+       Les mesures du graphique ne sont demandées qu'ensuite, une fois qu'on sait qu'il y a
+       quelque chose à poser. */
     const y = serie.priceToCoordinate(etat.valeur);
+    if (y == null) { el.style.visibility = "hidden"; return; }
     const largeur = chart.priceScale("right").width();
-    if (y == null || !(largeur > 0)) { el.style.visibility = "hidden"; return; }
+    if (!(largeur > 0)) { el.style.visibility = "hidden"; return; }
     el.textContent = etat.texte;
     el.style.width = `${largeur}px`;
     el.style.background = etat.fond;
