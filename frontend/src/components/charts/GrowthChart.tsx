@@ -23,6 +23,7 @@ import {
 import { buildComparison, previousSessionClose } from "@/lib/chart/comparison";
 import { couleurGrille, LIBELLE_GRILLE, STYLES_GRILLE, type StyleGrille } from "@/lib/grille";
 import { API_URL } from "@/lib/api";
+import { poserBadge, encreLisible, type Badge } from "@/lib/chart/badgeCours";
 import { resoudreJeton } from "@/lib/theme";
 import Segments from "@/components/ui/Segments";
 import BoutonOutil from "@/components/ui/BoutonOutil";
@@ -345,6 +346,8 @@ export default function GrowthChart({
 
   // Refs
   const containerRef       = useRef<HTMLDivElement>(null);
+  /** Le badge de dernière valeur et le tracé progressif — voir leurs modules. */
+  const badgeRef           = useRef<Badge | null>(null);
   const chartWrapRef       = useRef<HTMLDivElement>(null);
   const chartRef           = useRef<IChartApi | null>(null);
   const areaSeriesRef      = useRef<ISeriesApi<"Area"> | null>(null);
@@ -735,7 +738,8 @@ export default function GrowthChart({
         bottomColor: portfolioColor + "00",
         lineWidth: 2,
         crosshairMarkerVisible: false,
-        lastValueVisible: true,
+        /* L'étiquette native n'arrondit que deux coins sur quatre — voir `poserBadge`. */
+        lastValueVisible: false,
         priceLineVisible: false,
         priceFormat: {
           type: "custom",
@@ -753,6 +757,26 @@ export default function GrowthChart({
         baseLineStyle: LineStyle.Dashed,
       });
       areaSeriesRef.current = area;
+
+      /* ⚠️ Le dernier point **portant une valeur** : pendant le tracé progressif, la fin de
+         la série est laissée vide, et lire le dernier élément ferait disparaître le badge
+         le temps de l'animation au lieu de le faire avancer avec elle. */
+      badgeRef.current = poserBadge(chart, area, containerRef.current!, () => {
+        if (area.options().visible === false) return null;
+        const pts = area.data() as readonly { value?: number }[];
+        let dernier: { value?: number } | undefined;
+        for (let i = pts.length - 1; i >= 0; i--) {
+          if (typeof pts[i]?.value === "number") { dernier = pts[i]; break; }
+        }
+        if (!dernier || typeof dernier.value !== "number") return null;
+        const fond = portfolioColor;
+        return {
+          valeur: dernier.value,
+          texte: area.priceFormatter().format(dernier.value),
+          fond,
+          encre: encreLisible(fond),
+        };
+      });
 
       const candle = chart.addSeries(CandlestickSeries, {
         upColor: candleUpColor, downColor: candleDownColor,
@@ -921,6 +945,8 @@ export default function GrowthChart({
 
       return () => {
         clearTimeout(rangeDebounce);
+        badgeRef.current?.detruire();
+        badgeRef.current = null;
         chart.remove();
         chartRef.current = null;
         areaSeriesRef.current = null;
@@ -1131,7 +1157,7 @@ export default function GrowthChart({
               } else {
                 candle.applyOptions({ visible: false });
                 candle.setData([]);
-                area.setData(dedupByTime(lineData.map(p => ({ time: t(p.date), value: p.value }))));
+                safeSetData(area, dedupByTime(lineData.map(p => ({ time: t(p.date), value: p.value }))));
                 bm.setData([]);
                 area.applyOptions({ visible: true, priceFormat: rawFmt, priceScaleId: "right" });
                 chartPctModeRef.current = false;
@@ -1157,7 +1183,7 @@ export default function GrowthChart({
               } else {
                 candle.applyOptions({ visible: false });
                 candle.setData([]);
-                area.setData(aData);
+                safeSetData(area, aData);
                 area.applyOptions({ visible: true, priceFormat: rawFmt, priceScaleId: "right" });
               }
               bm.applyOptions({ priceScaleId: "left", priceFormat: rawFmt });
@@ -1195,7 +1221,7 @@ export default function GrowthChart({
             } else {
               candle.applyOptions({ visible: false });
               candle.setData([]);
-              area.setData([...wsPrefix, ...aData] as any);
+              safeSetData(area, [...wsPrefix, ...aData]);
               area.applyOptions({ visible: true, priceFormat: rawFmt, priceScaleId: "right" });
             }
             bm.setData([]);
@@ -1216,7 +1242,7 @@ export default function GrowthChart({
         const bmData = benchmarkData.length
           ? dedupByTime(filterDate(benchmarkData).map(p => ({ time: toTs(p.date), value: p.value as number })))
           : [];
-        area.setData(aData);
+        safeSetData(area, aData);
         candle.setData([]);
         bm.setData(bmData);
         area.applyOptions({ visible: true, priceFormat: rawFmtPortfolio });

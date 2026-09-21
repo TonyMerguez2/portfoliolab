@@ -65,6 +65,9 @@ export function poserBadge(
     pointerEvents: "none",
     visibility: "hidden",
   } satisfies Partial<CSSStyleDeclaration>);
+  /* ⚠️ L'hôte doit être un repère de position, sinon le badge se cale sur un ancêtre
+     lointain et part ailleurs sur la page. On ne le force que s'il n'en est pas déjà un. */
+  if (getComputedStyle(hote).position === "static") hote.style.position = "relative";
   hote.appendChild(el);
 
   const placer = () => {
@@ -77,9 +80,21 @@ export function poserBadge(
     el.style.width = `${largeur}px`;
     el.style.background = etat.fond;
     el.style.color = etat.encre;
+    /**
+     * ⚠️ **Retenu dans le cadre, comme l'étiquette native.** `priceToCoordinate` rend une
+     * ordonnée même quand la valeur sort de la plage affichée : il suffit de reculer dans
+     * l'historique pour que le dernier cours passe loin au-dessus du haut. Mesuré à
+     * **−371 px** sur la vue longue de SPY — le badge partait au-dessus de la page. La
+     * bibliothèque, elle, cale son étiquette contre le bord ; on fait de même.
+     *
+     * ⚠️ **Le bas s'arrête à l'échelle des dates**, dont la hauteur se demande au
+     * graphique : sans cela, le badge se poserait par-dessus les années.
+     */
+    const bas = hote.clientHeight - chart.timeScale().height() - HAUTEUR;
+    const pose = Math.min(Math.max(0, y - HAUTEUR / 2), Math.max(0, bas));
     /* ⚠️ Arrondi au pixel : la bibliothèque rend des ordonnées fractionnaires, et un badge
        posé à 462,4 px fait baver son texte sur deux rangées de pixels. */
-    el.style.transform = `translateY(${Math.round(y - HAUTEUR / 2)}px)`;
+    el.style.transform = `translateY(${Math.round(pose)}px)`;
     el.style.visibility = "visible";
   };
 

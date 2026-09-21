@@ -17,7 +17,6 @@ import { RAYONS, JETONS, CLAIR } from "@/lib/palette";
 import { FlecheTendance, pastille } from "@/components/portfolio/PastilleVariation";
 import { agregerEnBougies } from "@/lib/chart/series";
 import { poserBadge, encreLisible, type Badge } from "@/lib/chart/badgeCours";
-import { tracerProgressivement } from "@/lib/chart/traceProgressif";
 import { ancresParJour, dominante, jourAncre } from "@/lib/chart/reperes";
 import { cleSource } from "@/lib/chart/sourceSerie";
 import {
@@ -721,8 +720,6 @@ export default function PerformanceChart({
    * de vue, de mode — et le premier cadrage confirmé, qui est la véritable arrivée de la
    * courbe à l'écran.
    */
-  const cleTraceRef = useRef<string | null>(null);
-  const arretTraceRef = useRef<(() => void) | null>(null);
   const bougieRef = useRef<ISeriesApi<"Candlestick"> | null>(null);
   /** L'axe des prix est-il affiché ? Voir l'effet d'alimentation. */
   const axeVisibleRef = useRef(true);
@@ -2246,8 +2243,6 @@ export default function PerformanceChart({
     return () => {
       ro.disconnect();
       chart.unsubscribeClick(surClic);
-      arretTraceRef.current?.();
-      arretTraceRef.current = null;
       badgeRef.current?.detruire();
       badgeRef.current = null;
       chart.remove();
@@ -2319,26 +2314,12 @@ export default function PerformanceChart({
                          : (p.patrimoine as number) - p.value]));
 
     const bougies = mode === "bougie" ? agregerEnBougies(data) : [];
-    /* Un tracé en cours n'a plus d'objet dès que la donnée change : on le termine avant
-       de poser la suivante, plutôt que de laisser deux animations se disputer la série. */
-    arretTraceRef.current?.();
-    arretTraceRef.current = null;
     if (mode === "bougie") {
       serie.setData([]);
       bougieRef.current?.setData(bougies);
     } else {
       bougieRef.current?.setData([]);
-      /* ⚠️ Tant que le cadrage n'est pas confirmé les séries sont invisibles : tracer là
-         reviendrait à jouer l'animation derrière un rideau, et le vrai premier affichage
-         n'en aurait plus. La clé n'est donc retenue qu'une fois le cadre prêt. */
-      const cle = `${period}|${vue}|${mode}`;
-      const nouveau = cadrePret && cleTraceRef.current !== cle;
-      if (cadrePret) cleTraceRef.current = cle;
-      if (nouveau && data.length) {
-        arretTraceRef.current = tracerProgressivement(chart, serie, data);
-      } else {
-        serie.setData(data);
-      }
+      serie.setData(data);
     }
 
     /**
