@@ -2075,8 +2075,15 @@ export default function PerformanceChart({
     badgeRef.current = poserBadge(chart, serie, el, () => {
       const s = serieRef.current;
       if (!s || s.options().visible === false) return null;
-      const points = s.data();
-      const dernier = points[points.length - 1] as { value?: number } | undefined;
+      /* ⚠️ **Le dernier point *portant une valeur*, et non le dernier point.** Pendant le
+         tracé progressif, la série garde sa longueur entière et ce qui n'est pas encore
+         atteint est laissé vide : lire la fin donnerait un vide, et le badge disparaîtrait
+         le temps de l'animation au lieu d'avancer avec elle. */
+      const points = s.data() as readonly { value?: number }[];
+      let dernier: { value?: number } | undefined;
+      for (let i = points.length - 1; i >= 0; i--) {
+        if (typeof points[i]?.value === "number") { dernier = points[i]; break; }
+      }
       if (!dernier || typeof dernier.value !== "number") return null;
       const fond = colorRef.current;
       return {

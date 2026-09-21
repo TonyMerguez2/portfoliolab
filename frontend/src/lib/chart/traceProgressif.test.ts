@@ -11,7 +11,7 @@ import { tracerProgressivement, type Horloge } from "@/lib/chart/traceProgressif
  * tronquée à l'écran — un défaut bien pire que l'absence d'animation.
  */
 describe("tracerProgressivement", () => {
-  const points = Array.from({ length: 40 }, (_, i) => ({ value: 100 + i }));
+  const points = Array.from({ length: 40 }, (_, i) => ({ time: 1000 + i, value: 100 + i }));
 
   /** Une horloge à la main : on avance le temps, rien n'attend d'image. */
   function horlogeManuelle() {
@@ -27,24 +27,32 @@ describe("tracerProgressivement", () => {
   }
 
   function serieFactice() {
-    const poses: number[] = [];
+    const poses: number[] = [], valeurs: number[] = [];
     let opts: Record<string, unknown> = { visible: true, autoscaleInfoProvider: "origine" };
     return {
-      poses,
+      poses, valeurs,
       options: () => opts,
       applyOptions: (o: Record<string, unknown>) => { opts = { ...opts, ...o }; },
-      setData: (d: unknown[]) => { poses.push(d.length); },
+      setData: (d: unknown[]) => {
+        poses.push(d.length);
+        /* Ce qui compte n'est plus la longueur mais le nombre de points **portant une
+           valeur** : la série garde sa taille du début à la fin. */
+        valeurs.push((d as { value?: number }[]).filter(p => typeof p.value === "number").length);
+      },
       lu: () => opts,
     };
   }
 
+  /**
+   * ⚠️ Le graphique ne sert plus qu'à la signature : depuis que les points non atteints
+   * sont laissés vides, l'étendue temporelle ne bouge plus et il n'y a plus de cadrage
+   * horizontal à forcer. Une échelle qui explose si on la touche le prouve.
+   */
   function chartFactice() {
-    const plages: unknown[] = [];
     return {
-      plages,
       timeScale: () => ({
-        getVisibleLogicalRange: () => ({ from: 0, to: 39 }),
-        setVisibleLogicalRange: (p: unknown) => { plages.push(p); },
+        getVisibleLogicalRange: () => { throw new Error("le tracé ne doit plus y toucher"); },
+        setVisibleLogicalRange: () => { throw new Error("le tracé ne doit plus y toucher"); },
       }),
     };
   }
@@ -55,13 +63,13 @@ describe("tracerProgressivement", () => {
     vi.stubGlobal("matchMedia", () => ({ matches: true }));
     const s = serieFactice(), c = chartFactice();
     tracerProgressivement(c as never, s as never, points);
-    expect(s.poses).toEqual([40]);
+    expect(s.valeurs).toEqual([40]);
   });
 
   it("pose la série entière d'emblée quand elle est trop courte pour se voir", () => {
     const s = serieFactice(), c = chartFactice();
     tracerProgressivement(c as never, s as never, points.slice(0, 5));
-    expect(s.poses).toEqual([5]);
+    expect(s.valeurs).toEqual([5]);
   });
 
   it("part de deux points et croît sans jamais reculer", () => {
@@ -69,16 +77,13 @@ describe("tracerProgressivement", () => {
     const { h, avancer } = horlogeManuelle();
     tracerProgressivement(c as never, s as never, points, { duree: 100, horloge: h });
     for (const t of [0, 20, 45]) avancer(t);
-    /* La première pose est la mesure de cadrage, la deuxième le point de départ. */
-    const apresMesure = s.poses.slice(1);
-    expect(apresMesure[0]).toBe(2);
-    for (let i = 1; i < apresMesure.length; i++) {
-      expect(apresMesure[i]).toBeGreaterThanOrEqual(apresMesure[i - 1]!);
+    expect(s.valeurs[0]).toBe(2);
+    for (let i = 1; i < s.valeurs.length; i++) {
+      expect(s.valeurs[i]).toBeGreaterThanOrEqual(s.valeurs[i - 1]!);
     }
-    /* À mi-course l'adoucissement a déjà posé l'essentiel, sans tout poser. */
-    const dernier = apresMesure[apresMesure.length - 1]!;
-    expect(dernier).toBeGreaterThan(2);
-    expect(dernier).toBeLessThanOrEqual(40);
+    /* La série garde sa longueur du premier au dernier instant : c'est ce qui dispense
+       de tout cadrage horizontal. */
+    expect(new Set(s.poses)).toEqual(new Set([40]));
   });
 
   it("finit sur la série entière et rend les deux cadrages", () => {
@@ -86,12 +91,11 @@ describe("tracerProgressivement", () => {
     const { h, avancer, enAttente } = horlogeManuelle();
     tracerProgressivement(c as never, s as never, points, { duree: 100, horloge: h });
     avancer(0);
-    expect(s.lu().autoscaleInfoProvider).not.toBe("origine");   // gelé pendant
+    expect(s.lu().autoscaleInfoProvider).not.toBe("origine");   // gelée pendant
     avancer(100);
-    expect(s.poses[s.poses.length - 1]).toBe(40);
-    expect(s.lu().autoscaleInfoProvider).toBe("origine");        // rendu après
+    expect(s.valeurs[s.valeurs.length - 1]).toBe(40);
+    expect(s.lu().autoscaleInfoProvider).toBe("origine");        // rendue après
     expect(enAttente()).toBe(false);
-    expect(c.plages.length).toBeGreaterThan(0);                  // plage réimposée
   });
 
   it("ne laisse pas la courbe tronquée quand on l'annule en route", () => {
@@ -100,11 +104,11 @@ describe("tracerProgressivement", () => {
     const arreter = tracerProgressivement(c as never, s as never, points, { duree: 100, horloge: h });
     avancer(30);
     arreter();
-    expect(s.poses[s.poses.length - 1]).toBe(40);
+    expect(s.valeurs[s.valeurs.length - 1]).toBe(40);
     expect(s.lu().autoscaleInfoProvider).toBe("origine");
   });
 
-  it("rend la série visible après l'avoir mesurée cachée", () => {
+  it("ne masque jamais la série : il n'y a plus rien à mesurer en cachette", () => {
     const s = serieFactice(), c = chartFactice();
     const { h } = horlogeManuelle();
     tracerProgressivement(c as never, s as never, points, { duree: 100, horloge: h });

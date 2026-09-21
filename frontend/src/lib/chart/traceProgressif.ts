@@ -1,22 +1,25 @@
 import type { IChartApi, ISeriesApi, SeriesType } from "lightweight-charts";
 
 /**
- * Le tracé progressif d'une courbe : les points sont donnés à la série par tranches
- * croissantes, si bien que la ligne s'écrit de gauche à droite.
+ * Le tracé progressif d'une courbe : les points pas encore atteints sont remplacés par du
+ * vide, si bien que la ligne s'écrit de gauche à droite sans que rien d'autre ne bouge.
  *
- * ⚠️ **Deux cadrages sont gelés pendant le tracé, et sans eux l'effet se retourne.** Une
- * série incomplète occupe moins de temps et couvre moins de valeurs : laissée à
- * elle-même, la bibliothèque recadre à chaque tranche, et au lieu d'une ligne qui avance
- * on voit une ligne courte qui s'étire et se déforme jusqu'à la fin. On mesure donc
- * l'étendue de la **série entière** d'abord, puis on la réimpose à chaque image.
+ * ⚠️ **Du vide, et non une série plus courte.** La première version donnait `slice(0, n)`
+ * à la série. Mais une série plus courte occupe moins de temps : la bibliothèque recadrait
+ * à chaque tranche, et il fallait lui réimposer la plage à chaque image — ce qu'elle refuse
+ * quand la série n'a que deux points. Elle lève alors **« Value is null »**, remontée depuis
+ * le site en production. Les points vides — un instant sans valeur, que la bibliothèque
+ * accepte partout — gardent l'étendue temporelle intacte du premier au dernier instant :
+ * il n'y a plus de cadrage horizontal à forcer, donc plus rien à casser.
  *
- * ⚠️ **La série est mesurée sans être montrée.** Pour connaître son cadrage il faut la
- * poser en entier ; la laisser visible ferait paraître la courbe achevée le temps d'une
- * image, juste avant qu'elle ne reparte de son premier point.
+ * ⚠️ **L'échelle verticale, elle, reste à geler.** Elle ne voit que les valeurs posées, et
+ * grandirait à mesure qu'elles arrivent : la courbe s'écraserait vers le bas en avançant.
+ * On mesure donc les bornes de la série entière une fois, et on les impose le temps du
+ * tracé.
  *
  * ⚠️ **L'horloge est injectable**, ce qui permet d'éprouver la progression sans écran :
- * qu'elle soit croissante, qu'elle finisse sur la série complète, et que les cadrages
- * soient rendus à la fin comme à l'annulation.
+ * qu'elle soit croissante, qu'elle finisse sur la série complète, et que l'échelle soit
+ * rendue à la fin comme à l'annulation.
  */
 export type Horloge = {
   maintenant: () => number;
@@ -57,7 +60,7 @@ function mouvementRefuse(): boolean {
 export function tracerProgressivement(
   chart: IChartApi,
   serie: ISeriesApi<SeriesType>,
-  donnees: readonly Point[],
+  donnees: readonly (Point & { time: unknown })[],
   options: { duree?: number; horloge?: Horloge } = {},
 ): () => void {
   const poserTout = () => serie.setData(donnees as never[]);
@@ -66,26 +69,19 @@ export function tracerProgressivement(
   const duree = options.duree ?? DUREE;
   const horloge = options.horloge ?? HORLOGE;
 
-  // ── Cadrages, mesurés sur la série entière ────────────────────────────────
-  const visibleAvant = serie.options().visible !== false;
-  serie.applyOptions({ visible: false });
-  poserTout();
-  const ts = chart.timeScale();
-  const plage = ts.getVisibleLogicalRange();
+  // ── L'échelle verticale, gelée sur la série entière ───────────────────────
   const b = bornes(donnees);
   const echelleAvant = serie.options().autoscaleInfoProvider;
   if (b) serie.applyOptions({
     autoscaleInfoProvider: () => ({ priceRange: { minValue: b.min, maxValue: b.max } }),
   });
+  const rendre = () => serie.applyOptions({ autoscaleInfoProvider: echelleAvant });
 
-  const rendre = () => {
-    serie.applyOptions({ autoscaleInfoProvider: echelleAvant });
-    if (plage) ts.setVisibleLogicalRange(plage);
-  };
+  /** La série entière, dont tout ce qui suit le n-ième point est laissé vide. */
+  const jusqua = (n: number) =>
+    donnees.map((p, i) => (i < n ? p : { time: p.time })) as never[];
 
-  serie.setData(donnees.slice(0, 2) as never[]);
-  serie.applyOptions({ visible: visibleAvant });
-  if (plage) ts.setVisibleLogicalRange(plage);
+  serie.setData(jusqua(2));
 
   // ── Progression ───────────────────────────────────────────────────────────
   /* ⚠️ Sentinelle négative et non zéro : un premier instant à `0` — l'origine d'une
@@ -99,8 +95,7 @@ export function tracerProgressivement(
     /* Sortie douce : la ligne part vite et se pose, plutôt que de s'arrêter net. */
     const adouci = 1 - Math.pow(1 - part, 3);
     const n = Math.max(2, Math.round(adouci * donnees.length));
-    serie.setData(donnees.slice(0, n) as never[]);
-    if (plage) ts.setVisibleLogicalRange(plage);
+    serie.setData(jusqua(n));
     if (part < 1) { trame = horloge.planifier(pas); return; }
     trame = 0;
     poserTout();
