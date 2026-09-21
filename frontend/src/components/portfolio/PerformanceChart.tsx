@@ -16,6 +16,7 @@ import { useModeTheme, resoudreJeton } from "@/lib/theme";
 import { RAYONS, JETONS, CLAIR } from "@/lib/palette";
 import { FlecheTendance, pastille } from "@/components/portfolio/PastilleVariation";
 import { agregerEnBougies } from "@/lib/chart/series";
+import { poserBadge, encreLisible, type Badge } from "@/lib/chart/badgeCours";
 import { ancresParJour, dominante, jourAncre } from "@/lib/chart/reperes";
 import { cleSource } from "@/lib/chart/sourceSerie";
 import {
@@ -709,6 +710,7 @@ export default function PerformanceChart({
   const glowRef = useRef<HTMLCanvasElement>(null);
   const chartRef = useRef<IChartApi | null>(null);
   const serieRef = useRef<ISeriesApi<"Area"> | null>(null);
+  const badgeRef = useRef<Badge | null>(null);
   const bougieRef = useRef<ISeriesApi<"Candlestick"> | null>(null);
   /** L'axe des prix est-il affiché ? Voir l'effet d'alimentation. */
   const axeVisibleRef = useRef(true);
@@ -1933,12 +1935,17 @@ export default function PerformanceChart({
     let trame = 0;
     const surPlage = () => {
       calculer();
+      /* ⚠️ Le badge se replace ici et nulle part ailleurs : la bibliothèque n'émet rien
+         quand l'échelle se recadre seule — nouvelle donnée, changement de période — mais
+         ce calcul-là, lui, repasse à chacun de ces moments. */
+      badgeRef.current?.rafraichir();
       if (trame) return;
       trame = requestAnimationFrame(() => { trame = 0; calculerStickers(); });
     };
 
     calculer();
     calculerStickers();
+    badgeRef.current?.rafraichir();
     const ts = chart.timeScale();
     ts.subscribeVisibleLogicalRangeChange(surPlage);
     // Le redimensionnement passe par le même chemin. Aucun risque de boucle :
@@ -2016,7 +2023,19 @@ export default function PerformanceChart({
        * tendance ; ce le serait beaucoup moins pour des bougies, qui gardent leur tracé.
        */
       lineType: LineType.Curved,
-      lastValueVisible: true,
+      /**
+       * ⚠️ **L'étiquette native est éteinte, remplacée par la nôtre.** La bibliothèque la
+       * peint avec les rayons `[r, 0, 0, r]` — relevé dans son code : seuls les deux coins
+       * extérieurs sont arrondis, les deux qui font face au graphique restent carrés, et
+       * aucune option ne l'ouvre. Voir `poserBadge`.
+       *
+       * ⚠️ **Les graduations, elles, restent.** Ne pas confondre avec la censure des
+       * montants, qui passe par le formateur justement pour que badge et graduations se
+       * taisent ensemble : ici seul le badge change de main, l'échelle continue de dire
+       * l'ordre de grandeur. Et notre badge lit `priceFormatter()` de la série, donc le
+       * même format que la graduation — y compris les « •••• » du mode masqué.
+       */
+      lastValueVisible: false,
       priceLineVisible: false,
       crosshairMarkerVisible: false,
       priceFormat: { type: "price", precision: 0, minMove: 1 },
@@ -2027,6 +2046,35 @@ export default function PerformanceChart({
         const b = bornesRef.current;
         return b ? { priceRange: { minValue: b.min, maxValue: b.max } } : null;
       },
+    });
+
+    /**
+     * Le badge de dernière valeur, posé au-dessus de l'échelle.
+     *
+     * ⚠️ **Il lit la série plutôt qu'un état à part.** `data()` rend ce que la série porte
+     * à l'instant même, et `priceFormatter()` le format de l'échelle : rien à tenir à jour,
+     * donc rien qui puisse diverger de ce que le graphique affiche — ni à la censure des
+     * montants, ni au changement de période.
+     *
+     * ⚠️ **Muet quand la série est masquée.** En vue bougies ou par compte, l'aire est
+     * cachée mais garde ses données : sans ce test, le badge annoncerait une valeur que
+     * plus aucune courbe ne montre.
+     */
+    badgeRef.current = poserBadge(chart, serie, el, () => {
+      const s = serieRef.current;
+      if (!s || s.options().visible === false) return null;
+      const points = s.data();
+      const dernier = points[points.length - 1] as { value?: number } | undefined;
+      if (!dernier || typeof dernier.value !== "number") return null;
+      const fond = colorRef.current;
+      return {
+        valeur: dernier.value,
+        texte: s.priceFormatter().format(dernier.value),
+        fond,
+        /* L'encre suit le fond : les teintes de courbe vont du cyan clair au rouge
+           soutenu, et un blanc posé sur la plus claire d'entre elles ne se lirait pas. */
+        encre: encreLisible(fond),
+      };
     });
 
     // Série bougies, créée d'emblée et laissée vide : la basculer revient
@@ -2179,6 +2227,8 @@ export default function PerformanceChart({
     return () => {
       ro.disconnect();
       chart.unsubscribeClick(surClic);
+      badgeRef.current?.detruire();
+      badgeRef.current = null;
       chart.remove();
       chartRef.current = null;
       serieRef.current = null;
