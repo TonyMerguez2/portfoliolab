@@ -260,7 +260,7 @@ export default function PanneauActivite({
           vide="Aucune opération"
           dessin={operation && (
             <AssetLogo ticker={operation.ticker} type={operation.asset_type}
-              size={32} radius={10} {...REPLI_LOGO} bare />
+              size={32} radius={10} {...REPLI_LOGO} plaque />
           )}
           titre={operation?.ticker}
           precision={operation
@@ -293,7 +293,7 @@ export default function PanneauActivite({
           dernier
           dessin={resultats?.ticker && (
             <AssetLogo ticker={resultats.ticker} type="EQUITY" size={32} radius={10}
-              {...REPLI_LOGO} bare />
+              {...REPLI_LOGO} plaque />
           )}
           titre={resultats
             ? (resultats.nom_societe ?? resultats.ticker ?? resultats.libelle) ?? undefined

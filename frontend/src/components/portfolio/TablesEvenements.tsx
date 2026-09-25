@@ -107,7 +107,7 @@ export function DividendesAVenir({
                     <span style={{ display: "inline-flex", alignItems: "center", gap: 7 }}>
                       <AssetLogo ticker={e.ticker ?? ""} size={20} radius={5}
                         fallbackBg={CLAIR.carteCreuse} fallbackBorder={CLAIR.bord}
-                        fallbackTextColor={CLAIR.texteSecondaire} bare />
+                        fallbackTextColor={CLAIR.texteSecondaire} plaque />
                       <strong style={{ color: CLAIR.texte }}>{e.ticker}</strong>
                     </span>
                   </td>
@@ -198,7 +198,7 @@ export function ProchainsResultats({
                 }}>
                 <AssetLogo ticker={e.ticker ?? ""} size={26} radius={7}
                   fallbackBg={CLAIR.carteCreuse} fallbackBorder={CLAIR.bord}
-                  fallbackTextColor={CLAIR.texteSecondaire} bare />
+                  fallbackTextColor={CLAIR.texteSecondaire} plaque />
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ fontFamily: FONT, fontSize: 11.5, fontWeight: 700, color: CLAIR.texte }}>
                     {e.ticker}

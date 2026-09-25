@@ -60,9 +60,23 @@ export default function FilAriane({
         listStyle: "none", margin: 0, padding: 0,
       }}>
         <li>
-          <button type="button" onClick={onRacine} style={lien}>{racine}</button>
+          <button type="button" onClick={onRacine} className="nv-fil-lien" style={lien}>{racine}</button>
         </li>
-        <li aria-hidden="true" style={{ color: CLAIR.texteFaible, fontSize: 12, lineHeight: 1 }}>/</li>
+        {/**
+          * ⚠️ **Un chevron plutôt qu'une barre oblique.** C'est le séparateur de leur
+          * composant, et il vaut mieux que le trait : la barre se lit comme un caractère —
+          * elle s'aligne sur la ligne de base, prend la graisse du texte et se confond avec
+          * un nom qui en contiendrait un. Le chevron est un signe de direction, et il dit
+          * le sens du chemin. Le tracé est le leur, à l'unité près.
+          */}
+        <li aria-hidden="true" style={{
+          display: "flex", alignItems: "center", justifyContent: "center",
+          minWidth: 14, color: CLAIR.texteFaible,
+        }}>
+          <svg width="14" height="14" viewBox="0 0 14 14" fill="currentColor" aria-hidden="true">
+            <path d="M4.808 3.058c.244-.244.641-.244.885 0l3.5 3.5c.244.244.244.641 0 .885l-3.5 3.5c-.244.244-.641.244-.885 0s-.244-.641 0-.885L7.865 7 4.808 3.942c-.244-.244-.244-.641 0-.885z" />
+          </svg>
+        </li>
         <li aria-current="page" style={{ display: "flex", alignItems: "center", gap: 6, minWidth: 0 }}>
           {couleur && (
             <span aria-hidden="true" style={{

@@ -5,6 +5,7 @@ import type { RVB } from "@/lib/couleur";
 import { analyseFaite, aspectConnu, filtreDuDessin, fondPastille as fondDeLaPastille, margeDuDessin, retenirAspect, retenirTeinte, teinteConnue } from "@/lib/couleursLogos";
 import type { AspectLogo } from "@/lib/couleursLogos";
 import { LOGOS_LOCAUX } from "@/lib/logosLocaux";
+import { tileSurface } from "@/lib/tileStyle";
 
 const _idxCache  = new Map<string, number>();
 /* La teinte dominante vit désormais dans `lib/couleursLogos`, pour que les surfaces qui
@@ -354,6 +355,21 @@ interface Props {
   fallbackTextColor: string;
   bare?: boolean; // no background/border — use inside cards that already have their own surface
   /**
+   * La plaque des cartes d'actif, sous le logo.
+   *
+   * ⚠️ **Elle est demandée, et elle contredit une demande antérieure.** Le voile teinté
+   * posé sous *tous* les logos avait été retiré — « un dessin posé nu, propre », voir la
+   * note de `fondPastille`. Il revient ici **sur demande de l'appelant seulement**, pour
+   * les listes où le logo se retrouve seul sur un fond de carte et manque de corps. Les
+   * autres emplacements gardent le dessin nu.
+   *
+   * ⚠️ **C'est la surface des cartes, pas une teinte approchée** : `tileSurface` est la
+   * fonction même qui habille la carte d'un actif, d'où « la même couleur et tout ».
+   * L'ombre portée et le flou d'arrière-plan sont les seuls écartés : une ombre de 44 px
+   * sous une pastille de 32 baverait sur toute la ligne de la liste.
+   */
+  plaque?: boolean;
+  /**
    * La couleur de la surface sur laquelle ce logo est posé, si l'appelant la connaît.
    *
    * ⚠️ **Facultative à dessein : seule la carte de chaleur en a besoin.** Partout ailleurs le
@@ -368,7 +384,7 @@ interface Props {
 
 function AssetLogoInner({
   ticker, type, size = 32, radius = 8,
-  style, fallbackBg, fallbackBorder, fallbackTextColor, bare, fondSurface, onColorExtracted,
+  style, fallbackBg, fallbackBorder, fallbackTextColor, bare, plaque, fondSurface, onColorExtracted,
 }: Props) {
   const urls      = resolveUrls(ticker, type);
   const cachedIdx  = _idxCache.get(ticker);
@@ -498,12 +514,17 @@ function AssetLogoInner({
   const marge = margeDuDessin(size, aspect);
   const containerBg  = bare ? fondPastille : status !== "ok" ? fallbackBg : fondPastille;
   const containerBdr = "none";
+  /* La teinte connue est celle qu'ont déjà les cartes : même source, donc même couleur. */
+  const surfaceTuile = plaque ? tileSurface(ticker, radius, teinteConnue(ticker) ?? undefined) : null;
 
   return (
-    <div style={{
+    <div className={plaque ? "novac-tile" : undefined} style={{
       width: size, height: size, borderRadius: radius, flexShrink: 0,
       position: "relative", overflow: "hidden",
-      background: containerBg,
+      background: surfaceTuile ? surfaceTuile.background : containerBg,
+      /* `novac-tile::before` peint le liseré à partir de `currentColor`, comme sur les
+         cartes : la teinte se pose donc ici. */
+      color: surfaceTuile ? (teinteConnue(ticker) ?? undefined) : undefined,
       border: status === "failed" ? `1px solid ${fallbackBorder}` : containerBdr,
       display: "flex", alignItems: "center", justifyContent: "center",
       ...style,
