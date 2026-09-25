@@ -103,6 +103,8 @@ export default function Segments<T extends string>({
   sousEnLigne?: boolean;
 }) {
   const petit = taille === "sm";
+  // Leur échelle nommée, déjà en v4 : rounded-sm vaut 12 px, rounded-md 14.
+  const rayon = petit ? 12 : RAYONS.md;
   /**
    * La glissière : la pastille retenue est un seul objet qui se déplace, et non un fond
    * qui s'allume ici pendant qu'il s'éteint là.
@@ -172,17 +174,21 @@ export default function Segments<T extends string>({
    */
   const actifOption = options.find(o => o.valeur === valeur);
   const surface = actifOption?.styleActif;
+  /**
+   * ⚠️ **Aucune clé ne vaut `undefined` ici.** Ce bloc est étalé après le rayon de la
+   * glissière : une clé absente n'est pas ignorée, elle **écrase** ce qui précède. La
+   * glissière s'est retrouvée avec des coins carrés sur toutes les pistes sans
+   * `styleActif`, c'est-à-dire presque toutes — vu à l'écran, rayon calculé à `0px`.
+   */
   const peinture: CSSProperties = {
     background: surface?.background ?? surface?.backgroundColor ?? JETONS.segmentActif,
-    borderRadius: surface?.borderRadius,
+    borderRadius: surface?.borderRadius ?? rayon,
     boxShadow: surface?.boxShadow ?? JETONS.segmentOmbre,
   };
   const ecriture: CSSProperties | undefined = surface && (() => {
     const { background: _f, backgroundColor: _fc, borderRadius: _r, boxShadow: _o, ...reste } = surface;
     return reste;
   })();
-  // Leur échelle nommée, déjà en v4 : rounded-sm vaut 12 px, rounded-md 14.
-  const rayon = petit ? 12 : RAYONS.md;
   const avecSous = options.some(o => o.sous != null);
   const deuxLignes = avecSous && !sousEnLigne;
 
@@ -255,8 +261,7 @@ export default function Segments<T extends string>({
               transition: "background 250ms, color 250ms",
               ...(actif ? ecriture : undefined),
             }}
-            onMouseEnter={e => { if (!actif && !eteint) e.currentTarget.style.background = JETONS.segmentSurvol; }}
-            onMouseLeave={e => { if (!actif) e.currentTarget.style.background = "transparent"; }}>
+            >
             <span>{o.libelle}</span>
             {o.sous != null && <span>{o.sous}</span>}
           </button>
