@@ -1486,6 +1486,24 @@ canvas + div {
  * ⚠️ `!important` parce que `styleCadreExterieur` écrit son rayon en style en ligne : une
  * classe seule ne l'atteint pas. Même raison que pour la bande de tête juste au-dessus.
  */
+/**
+ * La compression d'une pastille de piste sous le doigt.
+ *
+ * ⚠️ **Elle porte sur les lettres seules, et c'est ce qui la rend possible.** Depuis que la
+ * surface retenue est peinte par la glissière, sous les boutons, le bouton lui-même n'est
+ * plus qu'une boîte transparente : le comprimer ne comprime que son texte, jamais le fond.
+ * L'élan de la courbe — elle dépasse puis revient — est celui de leur composant.
+ */
+.nv-segment { transition: transform 250ms cubic-bezier(0.175, 0.885, 0.32, 1.5); }
+.nv-segment:active { transform: scale(0.97) translateY(1px); transition-duration: 100ms; }
+
+/* ⚠️ Le mouvement se supprime sur demande du système, glissière comprise : ce réglage vaut
+   pour tout ce qui bouge, pas seulement pour les grandes animations. */
+@media (prefers-reduced-motion: reduce) {
+  .nv-segment, .nv-segment:active { transition: none; transform: none; }
+  [role="tablist"] > span[aria-hidden="true"] { transition: none !important; }
+}
+
 .nv-coin-cadre { border-bottom-right-radius: 16px !important; }
 .nv-coin-cadre-carte { border-bottom-right-radius: 10px !important; }
 

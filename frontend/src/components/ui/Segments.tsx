@@ -1,4 +1,5 @@
 "use client";
+import { useLayoutEffect, useRef, useState } from "react";
 import type { CSSProperties, ReactNode } from "react";
 import { FONT } from "@/lib/typography";
 import { JETONS, RAYONS } from "@/lib/palette";
@@ -102,13 +103,92 @@ export default function Segments<T extends string>({
   sousEnLigne?: boolean;
 }) {
   const petit = taille === "sm";
+  /**
+   * La glissière : la pastille retenue est un seul objet qui se déplace, et non un fond
+   * qui s'allume ici pendant qu'il s'éteint là.
+   *
+   * ⚠️ **Un fondu croisé ne dit pas la même chose qu'un glissement.** Deux fonds qui se
+   * relaient laissent croire à deux objets ; un seul qui se déplace dit qu'il n'y en a
+   * qu'un, et le trajet montre d'où l'on vient. C'est ce que fait la variante « pill » de
+   * leur composant, d'où viennent déjà les valeurs de cette piste.
+   *
+   * ⚠️ **Mesurée après coup, et non calculée.** Les pastilles n'ont pas la même largeur —
+   * « 24h » et « Compte courant BNP » — et la retenue change parfois de contenu en le
+   * devenant, la période affichant alors son rendement. Additionner des rembourrages
+   * aurait donné une glissière juste sur les cas simples et fausse partout ailleurs.
+   */
+  const piste = useRef<HTMLDivElement>(null);
+  const [glissiere, setGlissiere] = useState<{ x: number; y: number; l: number; h: number } | null>(null);
+  /**
+   * ⚠️ **Le premier placement ne s'anime pas.** Sans cela, la glissière part du coin
+   * haut-gauche de la piste à chaque affichage de la page et rejoint l'option retenue —
+   * un mouvement que personne n'a demandé, et qui annonce un changement qui n'a pas eu lieu.
+   */
+  const pose = useRef(false);
+  const [anime, setAnime] = useState(false);
+
+  /**
+   * ⚠️ **Sans liste de dépendances, et c'est voulu.** La pastille retenue change parfois de
+   * contenu *en le devenant* — la période affiche alors son rendement — donc sa largeur ne
+   * se déduit d'aucune des valeurs que cet effet pourrait surveiller. Poser `[]` figerait la
+   * glissière à sa première mesure ; poser `[valeur]` la laisserait en retard d'un rendu sur
+   * le contenu. Ce qui rend l'absence de liste **sûre**, c'est que `mesurer` rend le même
+   * objet quand la mesure n'a pas changé : React renonce alors au rendu suivant, et la
+   * chaîne s'arrête d'elle-même. C'est précisément ce garde-fou que l'avertissement
+   * ci-dessous réclame, et il est là.
+   */
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useLayoutEffect(() => {
+    const p = piste.current;
+    const cible = p?.querySelector<HTMLElement>('[data-retenu="1"]');
+    if (!p || !cible) { setGlissiere(null); return; }
+    /**
+     * ⚠️ **La même mesure doit rendre le même objet, sinon rien ne s'arrête.** Cet effet
+     * tourne à chaque rendu — il le faut, la pastille retenue changeant parfois de contenu
+     * en le devenant — et poser un objet neuf à chaque passage empêche React de renoncer au
+     * rendu suivant : « Maximum update depth exceeded », vu à l'écran dès le premier essai.
+     */
+    const mesurer = () => {
+      const m = { x: cible.offsetLeft, y: cible.offsetTop, l: cible.offsetWidth, h: cible.offsetHeight };
+      setGlissiere(prec =>
+        prec && prec.x === m.x && prec.y === m.y && prec.l === m.l && prec.h === m.h ? prec : m);
+    };
+    mesurer();
+    if (!pose.current) { pose.current = true; requestAnimationFrame(() => setAnime(true)); }
+    /* La piste vit dans des cadres qui changent de largeur : une pastille de texte suit. */
+    const oeil = new ResizeObserver(mesurer);
+    oeil.observe(p); oeil.observe(cible);
+    return () => oeil.disconnect();
+  });
+
+  /**
+   * ⚠️ **La surface de l'option retenue passe à la glissière, ses lettres restent au
+   * bouton.** `styleActif` sert à une option qui porte un résultat — la période active
+   * devient la pastille de performance du bandeau — et apporte donc son propre fond, son
+   * rayon, son rembourrage. Laissé sur le bouton, ce fond opaque recouvrirait la glissière
+   * et le glissement se verrait sauter. On lui prend donc ce qui **peint**, et on lui
+   * laisse ce qui **écrit** : le rembourrage reste au bouton, puisque c'est lui qui donne
+   * à la glissière sa taille en la lui faisant mesurer.
+   */
+  const actifOption = options.find(o => o.valeur === valeur);
+  const surface = actifOption?.styleActif;
+  const peinture: CSSProperties = {
+    background: surface?.background ?? surface?.backgroundColor ?? JETONS.segmentActif,
+    borderRadius: surface?.borderRadius,
+    boxShadow: surface?.boxShadow ?? JETONS.segmentOmbre,
+  };
+  const ecriture: CSSProperties | undefined = surface && (() => {
+    const { background: _f, backgroundColor: _fc, borderRadius: _r, boxShadow: _o, ...reste } = surface;
+    return reste;
+  })();
   // Leur échelle nommée, déjà en v4 : rounded-sm vaut 12 px, rounded-md 14.
   const rayon = petit ? 12 : RAYONS.md;
   const avecSous = options.some(o => o.sous != null);
   const deuxLignes = avecSous && !sousEnLigne;
 
   return (
-    <div role="tablist" aria-label={ariaLabel} style={{
+    <div ref={piste} role="tablist" aria-label={ariaLabel} style={{
+      position: "relative",
       // gap-0.5 et p-0.5 chez eux, soit 2 px de part et d'autre.
       display: "inline-flex", gap: 2, padding: 2,
       background: JETONS.segmentPiste,
@@ -117,12 +197,25 @@ export default function Segments<T extends string>({
       // elle vaut la largeur de ses options, pas davantage.
       flexShrink: 0, boxSizing: "border-box",
     }}>
+      {glissiere && (
+        <span aria-hidden="true" style={{
+          position: "absolute", left: 0, top: 0,
+          width: glissiere.l, height: glissiere.h,
+          transform: `translate(${glissiere.x}px, ${glissiere.y}px)`,
+          borderRadius: rayon,
+          transition: anime ? "transform 250ms, width 250ms, height 250ms, background 250ms" : "none",
+          pointerEvents: "none",
+          ...peinture,
+        }} />
+      )}
       {options.map(o => {
         const actif = o.valeur === valeur;
         const eteint = !!o.desactive;
         return (
           <button key={o.valeur} type="button" role="tab" aria-selected={actif}
             aria-disabled={eteint || undefined}
+            data-retenu={actif ? "1" : undefined}
+            className="nv-segment"
             onClick={() => { if (!eteint) onChange(o.valeur); }} aria-label={o.titre}
             {...o.attributs}
             style={{
@@ -142,14 +235,25 @@ export default function Segments<T extends string>({
               display: "inline-flex", flexDirection: deuxLignes ? "column" : "row",
               alignItems: "center", justifyContent: "center",
               gap: deuxLignes ? 1 : avecSous ? 5 : 0,
-              background: actif ? JETONS.segmentActif : "transparent",
+              /**
+               * La surface retenue est peinte par la glissière, sous les boutons.
+               *
+               * ⚠️ **Sauf tant qu'elle n'est pas mesurée.** La mesure demande un DOM : au
+               * rendu serveur, et à la toute première image avant hydratation, la glissière
+               * n'existe pas — et la piste n'aurait alors aucune option en relief. Le
+               * bouton garde donc son fond dans ce seul cas. Le passage de l'un à l'autre
+               * se fait dans la même image, la mesure ayant lieu avant l'affichage : il n'y
+               * a pas de clignotement.
+               */
+              position: "relative", zIndex: 1,
+              background: actif && !glissiere ? peinture.background : "transparent",
+              boxShadow: actif && !glissiere ? peinture.boxShadow : undefined,
               color: actif ? JETONS.segmentEncre : JETONS.segmentInactif,
-              boxShadow: actif ? JETONS.segmentOmbre : "none",
               // ⚠️ L'option éteinte garde sa place et son libellé, en retrait : retirée,
               // la rangée changerait de forme selon l'âge du portefeuille.
               opacity: eteint ? 0.35 : 1,
               transition: "background 250ms, color 250ms",
-              ...(actif ? o.styleActif : undefined),
+              ...(actif ? ecriture : undefined),
             }}
             onMouseEnter={e => { if (!actif && !eteint) e.currentTarget.style.background = JETONS.segmentSurvol; }}
             onMouseLeave={e => { if (!actif) e.currentTarget.style.background = "transparent"; }}>
