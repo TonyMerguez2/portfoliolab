@@ -2678,22 +2678,22 @@ export default function PerformanceChart({
              */
             attributs: marqueAvatar(anterieure ? null : pct),
             /**
-             * ⚠️ **La pastille retenue *est* la pastille de performance du bandeau — le même
-             * style, pas une imitation.** Trois tentatives avant ça, toutes refusées à la vue :
-             * une pastille de variation enfermée dans la pastille blanche ; puis la pastille
-             * blanche colorée avec la variation à 13 px en graisse 700 ; puis la même au
-             * rapport de taille du bandeau. À chaque fois « les proportions ne sont pas les
-             * mêmes » — parce qu'on reprenait une partie des réglages et pas l'objet. Ici
-             * `pastille()` est posé tel quel sur le bouton : fond, encre, 11,5 px, graisse 600,
-             * 3 × 9 px de rembourrage, arrondi, interligne. Le libellé et la variation
-             * héritent tout ; rien n'est redit.
+             * ⚠️ **La pastille retenue garde le gabarit de la piste, et n'emprunte que la
+             * couleur.** Elle a longtemps été la pastille de performance du bandeau posée
+             * telle quelle — `pastille()` apportait alors son fond, son encre, ses 11,5 px,
+             * son rembourrage de 3 × 9 et sa hauteur libre. C'était l'aboutissement de trois
+             * essais, et c'est ce qui a fini par se voir : à hauteur libre, le bouton retenu
+             * fait 20 px dans une piste qui en fixe 22, donc **plus fin que ses voisins**.
+             * Signalé à l'usage — « le bouton sélectionné est trop fin, qu'il soit pareil que
+             * les autres ».
              *
-             * ⚠️ **Hauteur libre et centrée dans la rangée.** La piste fixe ses boutons à
-             * 22 px ; la pastille du bandeau en fait 20. Elle se pose donc à sa propre hauteur,
-             * centrée, un pixel de jour de chaque côté — c'est le prix d'être identique.
+             * ⚠️ **Le fond reste, parce qu'il porte un sens.** Vert ou rouge, il dit le signe
+             * de la période retenue ; c'est la seule chose de la pastille du bandeau qui
+             * informe. Le reste ne faisait que la copier, et la copie coûtait deux pixels de
+             * hauteur sur la commande la plus touchée du graphique.
              */
             styleActif: actif && pct != null && !anterieure
-              ? { ...pastille(pct >= 0 ? CLAIR.positif : CLAIR.negatif), height: "auto", alignSelf: "center" }
+              ? { background: pct >= 0 ? CLAIR.positif : CLAIR.negatif, color: CLAIR.carte }
               : undefined,
             sous: actif && pct != null && !anterieure
               ? <span style={{ display: "inline-flex", alignItems: "baseline", gap: 4 }}>

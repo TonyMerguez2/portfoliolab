@@ -1818,8 +1818,12 @@ export default function GrowthChart({
               : anterieure
                 ? `L'historique ne remonte qu'au ${new Date(premierJour!).toLocaleDateString("fr-FR")}`
                 : !isActive && pct != null ? `${LONG[key]} : ${fmt(pct)}` : undefined,
+            /* ⚠️ Seule la couleur est empruntée à la pastille du bandeau : elle dit le signe
+               de la période. Son gabarit, lui, rendait le bouton retenu plus fin que ses
+               voisins — 20 px dans une piste qui en fixe 22. Voir la note jumelle dans
+               `PerformanceChart`. */
             styleActif: montre
-              ? { ...pastille(pct! >= 0 ? CLAIR.positif : CLAIR.negatif), height: "auto", alignSelf: "center" as const }
+              ? { background: pct! >= 0 ? CLAIR.positif : CLAIR.negatif, color: CLAIR.carte }
               : undefined,
             sous: montre
               ? <span style={{ display: "inline-flex", alignItems: "baseline", gap: 4 }}>
