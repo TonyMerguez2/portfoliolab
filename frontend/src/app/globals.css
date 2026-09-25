@@ -370,6 +370,20 @@
      Mesuré sur les pixels rendus avant de changer. À 100 %, il porte la même couleur que
      l'intérieur d'un `Cadre` — `--nv-carte` — partout sur son tour. */
   --nv-barre-fond:        #030712;
+
+  /**
+   * Les trois couches d'une tuile qui ne sont pas sa teinte.
+   *
+   * ⚠️ **Elles étaient écrites en dur, donc sombres dans les deux thèmes.** Le fond
+   * `rgba(2,10,24,0.38)` assombrit la tuile : c'est juste sur un thème sombre, et cela
+   * ternit la carte en clair — le lavis de couleur y devient un gris verdâtre, signalé à
+   * l'usage sur les cartes d'actif de la page graphique comme du tableau de bord. L'éclat
+   * blanc, lui, ne se voit plus une fois la carte claire.
+   */
+  --nv-tuile-fond:        rgba(2,10,24,0.38);
+  --nv-tuile-eclat:       rgba(255,255,255,0.085);
+  --nv-tuile-eclat-doux:  rgba(255,255,255,0.035);
+  --nv-tuile-ombre:       rgba(0,0,0,0.28);
   --nv-barre-survol:      rgba(255,255,255,0.045);
   --nv-barre-actif:       rgba(255,255,255,0.11);
   --nv-barre-actif-bord:  rgba(255,255,255,0.10);
@@ -498,6 +512,17 @@
      l'accent : sur fond clair, un voile blanc sur blanc ne marque rien. */
   /* Opaque aussi en clair, et de l'encre d'une carte — voir le thème sombre. */
   --nv-barre-fond:        #FFFFFF;
+
+  /**
+   * ⚠️ **En clair, la tuile s'éclaircit au lieu de s'assombrir.** Le voile blanc laisse la
+   * teinte de l'actif se lire comme une couleur franche sur du blanc, là où le voile sombre
+   * la tirait vers le gris. L'ombre portée s'allège dans la même proportion : une ombre de
+   * thème sombre, posée sur un fond clair, se lit comme une salissure.
+   */
+  --nv-tuile-fond:        rgba(255,255,255,0.58);
+  --nv-tuile-eclat:       rgba(255,255,255,0.65);
+  --nv-tuile-eclat-doux:  rgba(255,255,255,0.28);
+  --nv-tuile-ombre:       rgba(15,23,42,0.10);
   --nv-barre-survol:      rgba(15,23,42,0.04);
   --nv-barre-actif:       rgba(11,99,231,0.10);
   --nv-barre-actif-bord:  rgba(11,99,231,0.22);

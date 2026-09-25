@@ -1491,7 +1491,14 @@ function ChartContent() {
         })()}
 
         {/* Content */}
-        <div style={{ flex:1, minHeight:0, padding:"10px 20px 10px", display:"flex", flexDirection:"column", overflow:"hidden" }}>
+        {/**
+          * ⚠️ **Seize à droite et en bas, huit du filet.** Les panneaux s'arrêtaient à
+          * **2 px** du cadre de page — mesuré, 890 contre 892 — là où l'enseigne, la
+          * recherche et les cartes du tableau de bord en gardent 8. Le filet en prend 8 à
+          * lui seul, d'où le double. À gauche, la coque a déjà écarté le contenu de toute
+          * la largeur du rail : les 20 y mesurent autre chose et ne bougent pas.
+          */}
+        <div style={{ flex:1, minHeight:0, padding:"10px 16px 16px 20px", display:"flex", flexDirection:"column", overflow:"hidden" }}>
           {loading && (
             <div style={{ flex:1, display:"flex", alignItems:"center", justifyContent:"center" }}>
               <div style={{ color:"rgba(var(--nv-encre-rvb), 0.25)", fontSize:"12px", letterSpacing:"0.1em" }}>Chargement···</div>
@@ -2069,9 +2076,15 @@ function ChartContent() {
 
               {/* Sidebar */}
               {ticker && sidebarOpen && (
-                <div style={{ ...styleCadreExterieur(), display:"flex", flexDirection:"column", minHeight:0 }}>
+                /* ⚠️ **Le coin bas-droit se loge dans celui du cadre de page.** C'est le
+                   panneau qui touche les deux bords ; au rayon commun de 24, son angle
+                   coupait la courbe du cadre au lieu de la suivre. Concentrique — 24 moins
+                   les 8 du jeu pour l'anneau, 8 de moins encore pour la carte — le vide
+                   entre les deux garde la même épaisseur sur tout l'arc. Même règle que la
+                   carte « Activité » du tableau de bord, et même paire de classes. */
+                <div className="nv-coin-cadre" style={{ ...styleCadreExterieur(), display:"flex", flexDirection:"column", minHeight:0 }}>
                   <div
-                  className={chartDisplayMode === "black" ? undefined : "chart-glass-container"}
+                  className={`nv-coin-cadre-carte${chartDisplayMode === "black" ? "" : " chart-glass-container"}`}
                   style={{
                     width:336,
                     flexShrink:0,

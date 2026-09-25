@@ -196,17 +196,18 @@ export function tileSurface(ticker: string, radius = 18, colorHex?: string): {
       // pas. Petit et contrasté, à l'inverse des lavis — c'est ce qui le rend
       // sûr : un dégradé de 180 px ne traverse pas assez de surface pour que
       // ses paliers se lisent en anneaux.
-      `radial-gradient(circle 180px at var(--tile-mx, 18%) var(--tile-my, 8%), rgba(255,255,255,0.085) 0%, rgba(255,255,255,0.035) 42%, rgba(255,255,255,0) 72%)`,
+      `radial-gradient(circle 180px at var(--tile-mx, 18%) var(--tile-my, 8%), var(--nv-tuile-eclat) 0%, var(--nv-tuile-eclat-doux) 42%, rgba(255,255,255,0) 72%)`,
       `radial-gradient(ellipse 260% 300% at 0% 0%, ${voile(88)} 0%, ${voile(77)} 18%, ${voile(59)} 36%, ${voile(41)} 54%, ${voile(23)} 72%, ${voile(10)} 88%, ${voile(0)} 100%)`,
       `radial-gradient(ellipse 260% 300% at 100% 100%, ${voile(76)} 0%, ${voile(66)} 18%, ${voile(51)} 36%, ${voile(35)} 54%, ${voile(20)} 72%, ${voile(9)} 88%, ${voile(0)} 100%)`,
-      // Assombrissement de fond, volontairement plus léger qu'avant : la tuile
-      // laisse davantage passer ce qu'il y a derrière.
-      "rgba(2,10,24,0.38)",
+      // Le voile de fond, volontairement léger : la tuile laisse davantage passer ce qu'il
+      // y a derrière. Il suit le thème — sombre en sombre, blanc en clair — faute de quoi
+      // il tire la teinte de l'actif vers le gris sur un fond clair.
+      "var(--nv-tuile-fond)",
     ].join(", "),
     backdropFilter: "blur(24px) saturate(1.6) brightness(1.06)",
     WebkitBackdropFilter: "blur(24px) saturate(1.6) brightness(1.06)",
     border: "none",
-    boxShadow: `0 14px 44px rgba(0,0,0,0.28), 0 0 28px ${voile(16)}`,
+    boxShadow: `0 14px 44px var(--nv-tuile-ombre), 0 0 28px ${voile(16)}`,
     overflow: "hidden",
     boxSizing: "border-box",
   };
