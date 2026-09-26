@@ -1582,8 +1582,23 @@ export default function GrowthChart({
         : { minHeight: 0, overflow: "hidden" }
       }
     >
-      {/* Header */}
-      <div className="flex items-center justify-between px-2 py-1 shrink-0 gap-2">
+      {/**
+        * ⚠️ **Le bandeau s'emboîte dans les angles hauts de la carte — voir `emboitement`.**
+        * Ses pastilles se tenaient à 27 px du bord et 19 du haut : le rembourrage de la
+        * carte, plus le sien. Elles se posent maintenant à 6, l'écart qui rend les deux
+        * rayons concentriques, comme sur le graphique du tableau de bord.
+        *
+        * ⚠️ **Le repli de chaque variable vaut le rembourrage que cette ligne s'applique
+        * déjà**, si bien que les marges s'annulent là où rien n'est publié. Ce composant sert
+        * dans quatre conteneurs — la carte principale de la page graphique, celle du second
+        * actif en comparaison, le plein écran, l'ancien tableau de bord — et trois d'entre
+        * eux n'ont ni le même rembourrage ni le même rayon. Seul celui qui publie voit ses
+        * pastilles bouger.
+        */}
+      <div className="flex items-center justify-between shrink-0 gap-2" style={{
+        padding: "4px 8px",
+        margin: "calc(var(--nv-emboite-haut, 4px) - 4px) calc(var(--nv-emboite-droite, 8px) - 8px) 0 calc(var(--nv-emboite-gauche, 8px) - 8px)",
+      }}>
         <div className="flex items-center min-w-0">{leftSlot ?? null}</div>
 
         <div className="flex items-center gap-1.5 shrink-0">
@@ -1834,7 +1849,11 @@ export default function GrowthChart({
         });
         return (
           <div style={{ display: "flex", overflowX: "auto", scrollbarWidth: "none", padding: "6px 0", flexShrink: 0 }}>
-            <div style={{ flexShrink: 0 }}>
+            {/* ⚠️ Centré comme sous le graphique du tableau de bord, et par le même moyen :
+                `margin: 0 auto` et non `justify-content`, qui rendrait le début du rail
+                inatteignable au défilement dans un cadre étroit. Voir `barrePeriodes` dans
+                `PerformanceChart` pour le détail. */}
+            <div style={{ flexShrink: 0, margin: "0 auto" }}>
               <Segments
                 taille="sm"
                 sousEnLigne
@@ -1859,7 +1878,9 @@ export default function GrowthChart({
         */}
       {!hideControls && ticker && (
         <div style={{ display: "flex", overflowX: "auto", scrollbarWidth: "none", padding: "0 0 6px", flexShrink: 0 }}>
-          <div style={{ flexShrink: 0 }}>
+          {/* ⚠️ Centré avec le rail des périodes, qu'il suit immédiatement : les deux rails
+              forment une pile, et n'en centrer qu'un aurait cassé leur bord commun. */}
+          <div style={{ flexShrink: 0, margin: "0 auto" }}>
             <Segments
               taille="sm"
               ariaLabel="Pas des barres"

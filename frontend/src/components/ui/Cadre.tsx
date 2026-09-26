@@ -1,6 +1,7 @@
 "use client";
 import type { CSSProperties, ReactNode } from "react";
 import { styleCadreExterieur, styleCarteInterieure } from "@/lib/palette";
+import { emboitement } from "@/lib/emboitement";
 
 /**
  * Un panneau, avec le cadre double du concept.
@@ -117,6 +118,14 @@ export default function Cadre({
         ...styleCarteInterieure(),
         ...(teinte ? { border: `1px solid ${teinte.bord}` } : {}),
         ...carte,
+        /**
+         * ⚠️ **La carte publie de quoi emboîter ses pastilles d'angle — voir `emboitement`.**
+         * L'en-tête qui les porte est partagé par tous les onglets et ne peut pas savoir à
+         * quel rembourrage il est posé ; c'est donc la carte qui l'annonce. Posé après
+         * `carte` : le rembourrage vient de l'appelant, la correction doit se calculer sur
+         * celui-là et non sur un réglage par défaut qu'il aurait remplacé.
+         */
+        ...emboitement((carte as { padding?: string | number }).padding),
       }}>
         {children}
       </div>

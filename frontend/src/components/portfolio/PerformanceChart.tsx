@@ -2741,11 +2741,12 @@ export default function PerformanceChart({
          * 6 de côté pour 9 en haut, la courbe du coin ne suivrait toujours pas. Les 3 px
          * repris en haut reviennent au tracé, qui est le seul `flex: 1` de la colonne.
          *
-         * ⚠️ **Ces sept et trois pixels sont ceux du rembourrage de la carte du tableau de
-         * bord**, unique appelant de ce composant : `8px 12px 6px` plus un filet. Ils se
-         * relisent là-bas si ce rembourrage change.
+         * ⚠️ **Les trois pixels et les sept ne sont pas écrits ici, la carte les publie.**
+         * Ils valent son rembourrage moins six, et ce rembourrage est à elle — voir
+         * `emboitement`. Dans un conteneur qui ne publie rien, les marges valent zéro et le
+         * bandeau reste où il est.
          */
-        margin: "-3px -7px 4px",
+        margin: "var(--nv-emboite-haut, 0px) var(--nv-emboite-droite, 0px) 4px var(--nv-emboite-gauche, 0px)",
         /**
          * ⚠️ Position de référence pour l'encart, et hauteur plancher.
          *

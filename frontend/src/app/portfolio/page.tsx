@@ -19,6 +19,7 @@ import {
 } from "@/lib/analyse";
 import { bandeDuScore } from "@/lib/portfolio-score/types";
 import PerformanceChart from "@/components/portfolio/PerformanceChart";
+import { emboitement } from "@/lib/emboitement";
 import AssetGrid from "@/components/portfolio/AssetGrid";
 import CarteCompte, { APERCUS_MAX, CARTE_COMPTE } from "@/components/portfolio/CarteCompte";
 import CarteActif from "@/components/portfolio/CarteActif";
@@ -3118,6 +3119,10 @@ function PortfolioPageInner() {
           <div style={{
             ...styleCarteInterieure(),
             padding: "8px 12px 6px",
+            /* ⚠️ Cette carte est bâtie à la main et non par `Cadre` : elle publie donc
+               elle-même de quoi emboîter les pastilles de son bandeau de tête dans ses
+               angles. Le rembourrage est juste au-dessus, les deux se lisent ensemble. */
+            ...emboitement("8px 12px 6px"),
             display: "flex", flexDirection: "column",
             position: "relative", overflow: "hidden",
           }}>

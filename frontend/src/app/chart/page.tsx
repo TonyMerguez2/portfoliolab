@@ -4,6 +4,7 @@ import BoutonOutil from "@/components/ui/BoutonOutil";
 import { FONT } from "@/lib/typography";
 import { JETONS } from "@/lib/palette";
 import Segments from "@/components/ui/Segments";
+import { emboitement } from "@/lib/emboitement";
 import MarqueMode from "@/components/charts/MarqueMode";
 import { useState, useEffect, useMemo, useRef, Suspense } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
@@ -1528,6 +1529,11 @@ function ChartContent() {
               <div className={chartDisplayMode === "black" ? undefined : "chart-glass-container"} data-glass-edge="" style={{
                 ...styleCarteInterieure(),
                 padding:"14px 18px 10px",
+                /* ⚠️ Carte bâtie à la main et non par `Cadre` : elle publie elle-même de quoi
+                   emboîter les pastilles de son bandeau dans ses angles. Le rembourrage est
+                   juste au-dessus, les deux se lisent ensemble. La carte du second actif, en
+                   comparaison, ne publie rien : son rayon de 30 demanderait un autre écart. */
+                ...emboitement("14px 18px 10px"),
                 display:"flex", flexDirection:"column", position:"relative", overflow:"hidden",
                 background:chartDisplayMode === "black" ? "linear-gradient(180deg, #0b0b0b 0%, #070707 100%)" : "var(--nv-carte)",
                 backdropFilter:chartDisplayMode === "black" ? "none" : "blur(28px) saturate(1.2)", WebkitBackdropFilter:chartDisplayMode === "black" ? "none" : "blur(28px) saturate(1.2)",

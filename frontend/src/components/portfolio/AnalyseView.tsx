@@ -435,8 +435,10 @@ function Carte({ children, style }: { children: React.ReactNode; style?: React.C
 }
 
 /** L'en-tête commun à toutes les cartes — voir `TitreDeCarte`. */
-function Titre({ children, action, sous }: { children: React.ReactNode; action?: React.ReactNode; sous?: React.ReactNode }) {
-  return <TitreDeCarte action={action} sous={sous}>{children}</TitreDeCarte>;
+function Titre({ children, action, actionEnLigne, sous }: {
+  children: React.ReactNode; action?: React.ReactNode; actionEnLigne?: boolean; sous?: React.ReactNode;
+}) {
+  return <TitreDeCarte action={action} actionEnLigne={actionEnLigne} sous={sous}>{children}</TitreDeCarte>;
 }
 
 /**
@@ -643,6 +645,9 @@ export default function AnalyseView({ analyse: a, etat, visible = true }: {
       <div style={{ display: "flex", flexShrink: 0 }}>
         <Carte style={{ flex: 1 }}>
           <Titre sous="Les trois constats les plus saillants, calculés sur vos positions — pas un conseil en investissement."
+            /* ⚠️ Du texte nu : il reste sur la ligne du titre au lieu de s'emboîter dans
+               l'angle — voir `actionEnLigne`. */
+            actionEnLigne
             action={
               <a href="/simulation" style={{ fontFamily: FONT, fontSize: 11, fontWeight: 500,
                                             color: JETONS.accent, textDecoration: "none", whiteSpace: "nowrap" }}>
