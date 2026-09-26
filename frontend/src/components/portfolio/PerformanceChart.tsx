@@ -2724,7 +2724,28 @@ export default function PerformanceChart({
           droite, sur la même ligne et donc à la même marge. */}
       <div style={{
         display: "flex", alignItems: "flex-start", justifyContent: "flex-end",
-        gap: 10, marginBottom: 4,
+        gap: 10,
+        /**
+         * ⚠️ **Les pastilles des deux coins remontent dans l'angle du cadre, par marge
+         * négative.** La carte rembourre à 12 px sur les côtés et 8 en haut, plus son filet
+         * d'un pixel : les pistes se posaient donc à 13 px des bords et 9 du haut. Or un
+         * angle ne s'emboîte proprement que si les deux rayons sont concentriques —
+         * `rayon extérieur = écart + rayon intérieur`. La carte arrondit à 18, les pistes à
+         * 12 : l'écart juste est **6**, et c'est déjà la règle du cadre lui-même, dont
+         * l'anneau de 24 rembourre de 6 pour une carte de 18. À 13, la courbe du coin
+         * passait loin de celle de la pastille et l'ensemble paraissait posé de travers.
+         * Signalé à l'usage, capture à l'appui.
+         *
+         * ⚠️ **Les trois marges bougent ensemble, pas les seuls côtés.** Rapprocher des
+         * bords gauche et droit sans toucher au haut laisserait l'angle non concentric :
+         * 6 de côté pour 9 en haut, la courbe du coin ne suivrait toujours pas. Les 3 px
+         * repris en haut reviennent au tracé, qui est le seul `flex: 1` de la colonne.
+         *
+         * ⚠️ **Ces sept et trois pixels sont ceux du rembourrage de la carte du tableau de
+         * bord**, unique appelant de ce composant : `8px 12px 6px` plus un filet. Ils se
+         * relisent là-bas si ce rembourrage change.
+         */
+        margin: "-3px -7px 4px",
         /**
          * ⚠️ Position de référence pour l'encart, et hauteur plancher.
          *
