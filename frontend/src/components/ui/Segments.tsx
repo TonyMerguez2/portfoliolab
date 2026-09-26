@@ -240,7 +240,9 @@ export default function Segments<T extends string>({
               // sans ce centrage, un pictogramme se posait deux pixels bas.
               display: "inline-flex", flexDirection: deuxLignes ? "column" : "row",
               alignItems: "center", justifyContent: "center",
-              gap: deuxLignes ? 1 : avecSous ? 5 : 0,
+              /* ⚠️ Quatre, comme l'écart interne du contenu de variation : cinq ici et
+                 quatre à l'intérieur faisaient deux rythmes dans une même pastille. */
+              gap: deuxLignes ? 1 : avecSous ? 4 : 0,
               /**
                * La surface retenue est peinte par la glissière, sous les boutons.
                *

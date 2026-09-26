@@ -42,7 +42,14 @@ export const pastille = (couleur: string, taille = TAILLE_REFERENCE): React.CSSP
   const k = taille / TAILLE_REFERENCE;
   return {
     fontFamily: FONT, fontSize: taille, fontWeight: 600, color: CLAIR.carte,
-    background: couleur, borderRadius: 999,
+    background: couleur,
+    /**
+     * ⚠️ **Le rayon est celui d'une pastille de piste, plus l'ovale d'avant.** L'ovale était
+     * la silhouette propre de cette pastille, et je l'avais gardée en alignant seulement les
+     * proportions. Refusé : « je veux pas d'écart subtil, ça doit être identique ». Les deux
+     * pastilles vertes sont désormais le même objet jusqu'à la forme.
+     */
+    borderRadius: 12 * k,
     /**
      * ⚠️ **La boîte est celle d'une pastille de piste : 22 px de haut, 10 de rembourrage.**
      * Elle faisait 19,8 sur 9, pour un contenu identique à celui de la période retenue :
@@ -53,8 +60,7 @@ export const pastille = (couleur: string, taille = TAILLE_REFERENCE): React.CSSP
      *
      * ⚠️ **C'est la pastille qui monte, pas la piste qui descend.** La période a été calée
      * sur le standard des pastilles de piste à la demande ; l'aligner en sens inverse
-     * reviendrait à défaire cela. Le rayon, lui, reste ovale : c'est la silhouette propre à
-     * cette pastille, et la remarque portait sur les proportions, pas sur la forme.
+     * reviendrait à défaire cela.
      */
     height: 22 * k, padding: `0 ${10 * k}px`, boxSizing: "border-box",
     whiteSpace: "nowrap", lineHeight: 1.2,
