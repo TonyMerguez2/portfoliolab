@@ -92,6 +92,38 @@ export function FlecheTendance({ hausse, taille = TAILLE_REFERENCE }:
  * La flèche se lit d'un coup d'œil, le signe se lit quand on s'arrête sur la valeur ; l'un
  * sert le survol de la page, l'autre la lecture attentive.
  */
+/**
+ * Le contenu d'une variation : la flèche et le nombre, à la même échelle.
+ *
+ * ⚠️ **Il existe parce que ce contenu était écrit deux fois, et différemment.** La pastille
+ * du bandeau tirait sa typographie de `pastille()` — 11,5 px, graisse 600, écart de 4,
+ * alignement sur la ligne de base — tandis que le sous-libellé de la période retenue était
+ * composé à la main dans un bouton de piste, dont il héritait 11 px en graisse 500, centré
+ * et à 5 d'écart. Quatre écarts pour deux objets censés être le même, relevés à la mesure.
+ * Seule la flèche coïncidait, parce qu'elle seule venait déjà d'une fonction commune.
+ *
+ * ⚠️ **Le texte peut être fourni**, la page d'un actif abrégeant les grands pourcentages
+ * — « +551k% » plutôt que cinq chiffres. C'est la seule chose que l'appelant garde : la
+ * taille, la graisse, l'écart et l'alignement viennent d'ici, et de nulle part ailleurs.
+ */
+export function ContenuVariation({ pct, taille = TAILLE_REFERENCE, texte }: {
+  pct: number;
+  taille?: number;
+  texte?: string;
+}) {
+  const k = taille / TAILLE_REFERENCE;
+  return (
+    <span style={{
+      display: "inline-flex", alignItems: "baseline", gap: 4 * k,
+      fontFamily: FONT, fontSize: taille, fontWeight: 600, lineHeight: 1.2,
+      whiteSpace: "nowrap",
+    }}>
+      <FlecheTendance hausse={pct >= 0} taille={taille} />
+      {texte ?? `${pct >= 0 ? "+" : ""}${pct.toFixed(2)} %`}
+    </span>
+  );
+}
+
 export default function PastilleVariation({ pct, couleur, surMontantDe = MONTANT_REFERENCE }: {
   pct: number;
   couleur: string;
@@ -101,8 +133,7 @@ export default function PastilleVariation({ pct, couleur, surMontantDe = MONTANT
   const taille = surMontantDe * RAPPORT;
   return (
     <span style={pastille(couleur, taille)}>
-      <FlecheTendance hausse={pct >= 0} taille={taille} />
-      {pct >= 0 ? "+" : ""}{pct.toFixed(2)} %
+      <ContenuVariation pct={pct} taille={taille} />
     </span>
   );
 }

@@ -28,7 +28,7 @@ import { resoudreJeton } from "@/lib/theme";
 import Segments from "@/components/ui/Segments";
 import BoutonOutil from "@/components/ui/BoutonOutil";
 import FiligraneNovac from "@/components/charts/FiligraneNovac";
-import { FlecheTendance, pastille } from "@/components/portfolio/PastilleVariation";
+import { FlecheTendance, pastille, ContenuVariation } from "@/components/portfolio/PastilleVariation";
 import { CLAIR } from "@/lib/palette";
 
 // Fetch config par intervalle — charge tout le disponible Yahoo en un seul fetch
@@ -1825,11 +1825,10 @@ export default function GrowthChart({
             styleActif: montre
               ? { background: pct! >= 0 ? CLAIR.positif : CLAIR.negatif, color: CLAIR.carte }
               : undefined,
+            /* ⚠️ Même composant que la pastille du bandeau du tableau de bord. Le texte
+               reste d'ici : cette page abrège les grands pourcentages. */
             sous: montre
-              ? <span style={{ display: "inline-flex", alignItems: "baseline", gap: 4 }}>
-                  <FlecheTendance hausse={pct! >= 0} />
-                  {fmt(pct!).replace("%", " %")}
-                </span>
+              ? <ContenuVariation pct={pct!} texte={fmt(pct!).replace("%", " %")} />
               : undefined,
           };
         });

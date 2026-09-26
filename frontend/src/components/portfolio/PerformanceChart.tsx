@@ -14,7 +14,7 @@ import { enTetesAuth } from "@/lib/session";
 import { COULEUR_OP, COULEUR_OP_CLAIR, GLYPHE_OP, type TypeOp } from "@/lib/journal";
 import { useModeTheme, resoudreJeton } from "@/lib/theme";
 import { RAYONS, JETONS, CLAIR } from "@/lib/palette";
-import { FlecheTendance, pastille } from "@/components/portfolio/PastilleVariation";
+import { FlecheTendance, pastille, ContenuVariation } from "@/components/portfolio/PastilleVariation";
 import { agregerEnBougies } from "@/lib/chart/series";
 import { poserBadge, encreLisible, type Badge } from "@/lib/chart/badgeCours";
 import { ancresParJour, dominante, jourAncre } from "@/lib/chart/reperes";
@@ -2695,11 +2695,10 @@ export default function PerformanceChart({
             styleActif: actif && pct != null && !anterieure
               ? { background: pct >= 0 ? CLAIR.positif : CLAIR.negatif, color: CLAIR.carte }
               : undefined,
+            /* ⚠️ Le même contenu que la pastille du bandeau, par le même composant : voir
+               `ContenuVariation`, qui existe parce qu'il était écrit deux fois. */
             sous: actif && pct != null && !anterieure
-              ? <span style={{ display: "inline-flex", alignItems: "baseline", gap: 4 }}>
-                  <FlecheTendance hausse={pct >= 0} />
-                  {pct >= 0 ? "+" : ""}{pct.toFixed(2)} %
-                </span>
+              ? <ContenuVariation pct={pct} />
               : undefined,
           };
         })}
