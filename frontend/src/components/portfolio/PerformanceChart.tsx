@@ -2641,18 +2641,27 @@ export default function PerformanceChart({
    */
   const barrePeriodes = (
     /**
-     * ⚠️ **Calée à gauche, sur la marge du bouton « Total » du haut.** Elle a été centrée
-     * d'abord ; demandé ensuite de l'aligner sur la piste des comptes, pour que les deux
-     * rangées de commandes du cadre partent du même bord. Les deux vivent dans le même
-     * conteneur, sans rembourrage propre : un `margin: 0` suffit, et le bord gauche est le
-     * même au pixel.
+     * ⚠️ **Centrée dans le cadre.** Elle l'a été, puis calée à gauche sur la piste des
+     * comptes pour que les deux rangées de commandes partent du même bord, puis recentrée :
+     * c'est la dernière demande qui vaut. Seule rangée sous le tracé, elle laissait une
+     * grande plage vide à sa droite, et le bord commun ne se lisait pas d'une rangée à
+     * l'autre à travers tout le graphique.
      *
-     * Le défilement horizontal reste pour les cadres étroits — vu à 800 px de large, la piste
-     * dépassait du cadre, et il faut pouvoir atteindre « Max ».
+     * ⚠️ **Le centrage se fait par `margin: 0 auto` sur la piste, pas par
+     * `justify-content: center` sur le conteneur.** Ce conteneur défile horizontalement pour
+     * les cadres étroits — vu à 800 px de large, la piste dépassait et il faut pouvoir
+     * atteindre « Max ». Or une piste centrée par `justify-content` déborde *des deux côtés*
+     * quand elle est plus large que son cadre, et son début devient inatteignable : le
+     * défilement ne remonte pas avant l'origine. Une marge automatique, elle, se résout à
+     * zéro dès qu'il n'y a plus de place — la piste repart du bord gauche et se parcourt
+     * entièrement.
+     *
+     * ⚠️ **La hauteur de la rangée ne bouge pas** : les deux rembourrages de 2 px restent,
+     * demandé explicitement — le centrage est horizontal, et lui seul.
      */
     <div style={{ display: "flex", overflowX: "auto", scrollbarWidth: "none",
                   paddingTop: 2, paddingBottom: 2 }}>
-      <div style={{ flexShrink: 0 }}>
+      <div style={{ flexShrink: 0, margin: "0 auto" }}>
       <Segments
         taille="sm"
         sousEnLigne
