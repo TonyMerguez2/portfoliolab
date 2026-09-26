@@ -108,8 +108,32 @@ cd /srv/novac/portfoliolab/backend && ./venv/bin/python scripts/liste_attente.py
 
 ## Vivre avec
 
-**Déployer une version** — `./deploiement/mettre-a-jour.sh`, qui construit avant de
-redémarrer et joue les tests au passage.
+**Déployer une version** — rien à faire : un `push` sur `chore/react-19` déclenche la forge,
+qui vérifie, construit, envoie le résultat et bascule. Voir
+[le workflow](../.github/workflows/deployer.yml) et `recevoir.sh`.
+
+⚠️ **On ne construit plus sur la machine de production, et ce n'est pas un confort.**
+`next build` y tenait un processus à 2,5 Go pour 3,8 Go de mémoire, API et serveur vivant
+compris : la construction ne passait qu'en débordant sur le fichier d'échange — huit à dix
+minutes au lieu de deux. Elle est déjà tombée, trois `oom-kill` d'affilée le 19 septembre
+2026, avant que ce fichier d'échange n'existe. La marge restante n'était plus de la mémoire
+mais du disque lent, et chaque page ajoutée la grignotait.
+
+**Ouvrir la machine à la forge**, une fois pour toutes — trois gestes :
+
+```bash
+ssh-keygen -t ed25519 -N "" -C forge-novac -f ~/.ssh/novac-forge
+ssh root@novac.fyi 'bash -s' < deploiement/preparer-la-forge.sh <<< "$(cat ~/.ssh/novac-forge.pub)"
+pbcopy < ~/.ssh/novac-forge   # puis coller dans le secret NOVAC_SSH_CLE de GitHub
+```
+
+Le secret se pose dans *Settings → Secrets and variables → Actions → New repository secret*.
+Tant qu'il n'y est pas, la forge vérifie et construit, et s'arrête avant d'envoyer quoi que
+ce soit — sans échouer.
+
+**Déployer sans la forge** — `./deploiement/mettre-a-jour.sh` construit sur la machine et
+bascule, comme avant. Il reste là pour le jour où la forge est indisponible ; il coûte les
+dix minutes décrites plus haut.
 
 **Lire la liste d'attente** — `scripts/liste_attente.py`, avec `--csv` pour l'exporter.
 Aucune route web ne la rend : c'est le seul chemin, à dessein.

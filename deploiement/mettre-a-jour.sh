@@ -1,8 +1,15 @@
 #!/usr/bin/env bash
 #
-# Déployer une nouvelle version. À lancer sur le serveur, en tant que `novac`.
+# Déployer une nouvelle version **sans la forge**. À lancer sur le serveur, en tant que
+# `novac`.
 #
 #   cd /srv/novac/portfoliolab && ./deploiement/mettre-a-jour.sh
+#
+# ⚠️ **Ce n'est plus le chemin normal.** Les déploiements passent par `deployer.yml` et
+# `recevoir.sh` : la forge vérifie, construit et n'envoie que le résultat. Ce script-ci
+# construit sur la machine de production, ce qu'elle ne sait plus faire confortablement —
+# 2,5 Go pour 3,8 disponibles, huit à dix minutes, et trois `oom-kill` au compteur avant que
+# le fichier d'échange n'existe. Il reste pour le jour où la forge est indisponible.
 #
 # ⚠️ **Construire avant de redémarrer, jamais l'inverse.** `npm run start` sert le contenu
 # de `.next` : redémarrer sans construire relance l'ancienne version sans rien signaler, et
