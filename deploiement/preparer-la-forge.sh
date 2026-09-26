@@ -2,9 +2,13 @@
 #
 # Ouvrir la machine à la forge, une fois pour toutes.
 #
-# À lancer **en root sur le serveur**, la clé publique de la forge sur l'entrée standard :
+# À lancer **en root sur le serveur**, la clé publique de la forge en argument :
 #
-#   ssh root@novac.fyi 'bash -s' < deploiement/preparer-la-forge.sh <<< "$(cat ~/.ssh/novac-forge.pub)"
+#   ssh root@novac.fyi "bash -s -- '$(cat ~/.ssh/novac-forge.pub)'" < deploiement/preparer-la-forge.sh
+#
+# ⚠️ **La clé passe en argument et non sur l'entrée standard**, qui porte déjà le script
+# lui-même : les deux se disputeraient le même canal, et `bash` lirait la clé à la place du
+# script. Essayé, et le message d'erreur ne dit pas ça.
 #
 # ⚠️ **La forge entre par `novac`, jamais par root.** Une clé de déploiement finit dans les
 # secrets d'une forge ; si elle fuit, elle ne doit ouvrir que ce qu'il faut pour déployer.
@@ -18,8 +22,8 @@
 
 set -euo pipefail
 
-CLE=$(cat)
-[ -n "$CLE" ] || { echo "Aucune clé publique sur l'entrée standard."; exit 1; }
+CLE="${1:-}"
+[ -n "$CLE" ] || { echo "Aucune clé publique en argument."; exit 1; }
 case "$CLE" in
   ssh-ed25519\ *|ssh-rsa\ *|ecdsa-sha2-*) ;;
   *) echo "Ceci ne ressemble pas à une clé publique SSH."; exit 1 ;;
@@ -58,5 +62,8 @@ else
 fi
 
 echo "── Vérification ──"
-sudo -u novac sudo -n -l | grep -c "systemctl restart novac" | xargs -I{} echo "{} commande(s) autorisée(s) pour novac."
+# `|| true` : `grep -c` sort en erreur quand il ne compte rien, et `set -e` ferait passer
+# une vérification muette pour un échec du script entier.
+n=$(sudo -u novac sudo -n -l 2>/dev/null | grep -c "systemctl restart novac" || true)
+echo "$n commande(s) autorisée(s) pour novac."
 echo "Prêt. Il reste à poser la clé privée dans les secrets de la forge, sous le nom NOVAC_SSH_CLE."

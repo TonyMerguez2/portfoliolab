@@ -123,7 +123,7 @@ mais du disque lent, et chaque page ajoutée la grignotait.
 
 ```bash
 ssh-keygen -t ed25519 -N "" -C forge-novac -f ~/.ssh/novac-forge
-ssh root@novac.fyi 'bash -s' < deploiement/preparer-la-forge.sh <<< "$(cat ~/.ssh/novac-forge.pub)"
+ssh root@novac.fyi "bash -s -- '$(cat ~/.ssh/novac-forge.pub)'" < deploiement/preparer-la-forge.sh
 pbcopy < ~/.ssh/novac-forge   # puis coller dans le secret NOVAC_SSH_CLE de GitHub
 ```
 
