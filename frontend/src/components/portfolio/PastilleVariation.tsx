@@ -42,9 +42,23 @@ export const pastille = (couleur: string, taille = TAILLE_REFERENCE): React.CSSP
   const k = taille / TAILLE_REFERENCE;
   return {
     fontFamily: FONT, fontSize: taille, fontWeight: 600, color: CLAIR.carte,
-    background: couleur, borderRadius: 999, padding: `${3 * k}px ${9 * k}px`,
+    background: couleur, borderRadius: 999,
+    /**
+     * ⚠️ **La boîte est celle d'une pastille de piste : 22 px de haut, 10 de rembourrage.**
+     * Elle faisait 19,8 sur 9, pour un contenu identique à celui de la période retenue :
+     * même police, même flèche, même écart — mais serrés dans une boîte plus petite. À
+     * l'œil, les mêmes éléments paraissaient donc **plus gros et plus près des bords** d'un
+     * côté que de l'autre, et les deux pastilles n'occupaient pas la même place. Signalé à
+     * l'usage, deux captures à l'appui.
+     *
+     * ⚠️ **C'est la pastille qui monte, pas la piste qui descend.** La période a été calée
+     * sur le standard des pastilles de piste à la demande ; l'aligner en sens inverse
+     * reviendrait à défaire cela. Le rayon, lui, reste ovale : c'est la silhouette propre à
+     * cette pastille, et la remarque portait sur les proportions, pas sur la forme.
+     */
+    height: 22 * k, padding: `0 ${10 * k}px`, boxSizing: "border-box",
     whiteSpace: "nowrap", lineHeight: 1.2,
-    display: "inline-flex", alignItems: "baseline", gap: 4 * k,
+    display: "inline-flex", alignItems: "center", gap: 4 * k,
   };
 };
 
