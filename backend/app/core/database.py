@@ -3,7 +3,34 @@ from sqlalchemy.orm import DeclarativeBase, Session
 from datetime import datetime
 import sqlite3, os
 
-DB_PATH = os.path.join(os.path.dirname(__file__), "..", "..", "portfoliolab.db")
+
+def _chemin_base() -> str:
+    """
+    Où se trouve la base. `NOVAC_BASE` la déplace ; sinon, `backend/portfoliolab.db`.
+
+    ⚠️ **Cette surcharge existe parce que les tests écrivaient dans la base du site.**
+    Le chemin était calculé en dur et `tests/conftest.py` ne le remplaçait pas : le seul
+    import d'un modèle déclenche le `create_all` du bas de ce fichier, plus la migration
+    douce et la reprise des soldes, sur la base ainsi désignée. Mesuré le 18 septembre
+    2026 sur le serveur, un `pytest tests/test_alertes.py` a créé `alerte_macro_etat`
+    dans `/srv/novac/portfoliolab/backend/portfoliolab.db` — la base réelle du site — et
+    les tests d'alertes y ont écrit leurs lignes d'essai. Rien n'a été perdu ce jour-là
+    parce que leur fixture nettoyait derrière elle ; rien ne le garantissait.
+
+    ⚠️ **Lue une fois, à l'import**, puisque le moteur est construit juste en dessous.
+    Poser la variable après coup ne déplace plus rien : c'est ce qui oblige `conftest.py`
+    à la poser au chargement, avant tout import de `app.*`, et non dans une fixture.
+
+    ⚠️ **Sans la variable, rien ne change** — le serveur n'en pose aucune et continue de
+    lire la base à côté de `backend/`. Une surcharge obligatoire aurait demandé de
+    toucher à l'unité systemd pour réparer les tests, c'est-à-dire de risquer la
+    production pour protéger l'atelier.
+    """
+    return os.environ.get("NOVAC_BASE") or os.path.join(
+        os.path.dirname(__file__), "..", "..", "portfoliolab.db")
+
+
+DB_PATH = _chemin_base()
 engine = create_engine(f"sqlite:///{DB_PATH}", connect_args={"check_same_thread": False})
 
 # SQLite ne respecte les FK et CASCADE que si ce PRAGMA est activé par connexion
