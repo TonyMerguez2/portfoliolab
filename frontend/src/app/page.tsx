@@ -2,6 +2,7 @@
 import { recuperer } from "@/lib/requete";
 import { useRouter } from "next/navigation";
 import AvatarNovac from "@/components/AvatarNovac";
+import SilhouetteNovac from "@/components/SilhouetteNovac";
 import { Button } from "@appica/ui-react/button";
 import { GradientGlow } from "@appica/ui-react/gradient-glow";
 import { ArrowUpRight } from "@appica/icons-react";
@@ -240,8 +241,7 @@ export default function Home() {
         * de points, et la silhouette se serait lue comme une seconde trame plutôt que comme
         * la même, renforcée.
         */}
-      <div aria-hidden="true" className="fixed pointer-events-none nv-silhouette"
-        style={{ inset: 0, zIndex: 0 }} />
+      <SilhouetteNovac />
 
 
       {/**

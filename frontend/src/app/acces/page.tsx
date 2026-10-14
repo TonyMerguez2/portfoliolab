@@ -5,6 +5,7 @@ import { FONT, NUM } from "@/lib/typography";
 import { JETONS, RAYONS } from "@/lib/palette";
 import { champ, HAUTEUR_SAISIE } from "@/components/ui/saisie";
 import MotQuiDefile from "@/components/MotQuiDefile";
+import SilhouetteNovac from "@/components/SilhouetteNovac";
 import BandeauActifs, { HAUTEUR_BANDEAU } from "@/components/BandeauActifs";
 import { PHRASE_HAUT, PHRASE_BAS, VERBES } from "@/lib/phrase";
 import { VERSION } from "@/lib/version";
@@ -519,8 +520,7 @@ function Decor() {
    * écran n'encombre rien : l'accueil garde le sien sur téléphone, cette page fait pareil,
    * sans quoi « le même fond » ne serait vrai que sur grand écran.
    */
-  return <div aria-hidden="true" className="nv-silhouette"
-    style={{ position: "fixed", inset: 0, pointerEvents: "none", zIndex: 0 }} />;
+  return <SilhouetteNovac />;
 }
 
 
